@@ -7,7 +7,7 @@ import type {
 	SuiSignAndExecuteTransactionInput,
 	SuiSignAndExecuteTransactionOutput,
 } from '@mysten/wallet-standard';
-import { signAndExecuteTransaction, signTransaction } from '@mysten/wallet-standard';
+import { signTransaction } from '@mysten/wallet-standard';
 import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 
@@ -37,24 +37,40 @@ type UseSignAndExecuteTransactionError =
 	| WalletNotConnectedError
 	| Error;
 
-type UseSignAndExecuteTransactionMutationOptions = Omit<
+type ExecuteTransactionResult =
+	| {
+			digest: string;
+			rawEffects?: number[];
+	  }
+	| {
+			effects?: {
+				bcs?: string;
+			};
+	  };
+
+type UseSignAndExecuteTransactionMutationOptions<Result extends ExecuteTransactionResult> = Omit<
 	UseMutationOptions<
-		UseSignAndExecuteTransactionResult,
+		Result,
 		UseSignAndExecuteTransactionError,
 		UseSignAndExecuteTransactionArgs,
 		unknown
 	>,
 	'mutationFn'
->;
+> & {
+	execute?: ({ bytes, signature }: { bytes: string; signature: string }) => Promise<Result>;
+};
 
 /**
  * Mutation hook for prompting the user to sign and execute a transaction.
  */
-export function useSignAndExecuteTransaction({
+export function useSignAndExecuteTransaction<
+	Result extends ExecuteTransactionResult = UseSignAndExecuteTransactionResult,
+>({
 	mutationKey,
+	execute,
 	...mutationOptions
-}: UseSignAndExecuteTransactionMutationOptions = {}): UseMutationResult<
-	UseSignAndExecuteTransactionResult,
+}: UseSignAndExecuteTransactionMutationOptions<Result> = {}): UseMutationResult<
+	Result,
 	UseSignAndExecuteTransactionError,
 	UseSignAndExecuteTransactionArgs
 > {
@@ -62,9 +78,35 @@ export function useSignAndExecuteTransaction({
 	const currentAccount = useCurrentAccount();
 	const client = useSuiClient();
 
+	const executeTransaction: ({
+		bytes,
+		signature,
+	}: {
+		bytes: string;
+		signature: string;
+	}) => Promise<ExecuteTransactionResult> =
+		execute ??
+		(async ({ bytes, signature }) => {
+			const { digest, rawEffects } = await client.executeTransactionBlock({
+				transactionBlock: bytes,
+				signature,
+				options: {
+					showRawEffects: true,
+				},
+			});
+
+			return {
+				digest,
+				rawEffects,
+				effects: toB64(new Uint8Array(rawEffects!)),
+				bytes,
+				signature,
+			};
+		});
+
 	return useMutation({
 		mutationKey: walletMutationKeys.signAndExecuteTransaction(mutationKey),
-		mutationFn: async ({ transaction, ...signTransactionArgs }) => {
+		mutationFn: async ({ transaction, ...signTransactionArgs }): Promise<Result> => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');
 			}
@@ -72,7 +114,7 @@ export function useSignAndExecuteTransaction({
 			const signerAccount = signTransactionArgs.account ?? currentAccount;
 			if (!signerAccount) {
 				throw new WalletNoAccountSelectedError(
-					'No wallet account is selected to sign and execute the transaction with.',
+					'No wallet account is selected to sign the transaction with.',
 				);
 			}
 
@@ -84,29 +126,9 @@ export function useSignAndExecuteTransaction({
 				!currentWallet.features['sui:signTransaction'] &&
 				!currentWallet.features['sui:signTransactionBlock']
 			) {
-				if (
-					!currentWallet.features['sui:signAndExecuteTransaction'] &&
-					!currentWallet.features['sui:signAndExecuteTransactionBlock']
-				) {
-					throw new WalletFeatureNotSupportedError(
-						"This wallet doesn't support the `signAndExecuteTransaction` feature.",
-					);
-				}
-				return signAndExecuteTransaction(currentWallet, {
-					...signTransactionArgs,
-					transaction: {
-						async toJSON() {
-							return typeof transaction === 'string'
-								? transaction
-								: await transaction.toJSON({
-										supportedIntents,
-										client,
-								  });
-						},
-					},
-					account: signerAccount,
-					chain: signTransactionArgs.chain ?? signerAccount.chains[0],
-				});
+				throw new WalletFeatureNotSupportedError(
+					"This wallet doesn't support the `signTransaction` feature.",
+				);
 			}
 
 			const { signature, bytes } = await signTransaction(currentWallet, {
@@ -125,24 +147,25 @@ export function useSignAndExecuteTransaction({
 				chain: signTransactionArgs.chain ?? signerAccount.chains[0],
 			});
 
-			const { rawEffects, digest } = await client.executeTransactionBlock({
-				transactionBlock: bytes,
-				signature,
-				options: {
-					showRawEffects: true,
-				},
-			});
+			const result = await executeTransaction({ bytes, signature });
 
-			const effects = toB64(new Uint8Array(rawEffects!));
+			let effects: string;
 
-			await reportEffects({ effects });
+			if ('effects' in result && result.effects?.bcs) {
+				effects = result.effects.bcs;
+			} else if ('rawEffects' in result) {
+				effects = toB64(new Uint8Array(result.rawEffects!));
+			} else {
+				throw new Error('Could not parse effects from transaction result.');
+			}
 
-			return {
-				digest,
-				bytes,
-				signature,
-				effects,
-			};
+			try {
+				await reportEffects({ effects });
+			} catch (error) {
+				console.warn('Failed to report transaction effects:', error);
+			}
+
+			return result as Result;
 		},
 		...mutationOptions,
 	});
