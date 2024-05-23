@@ -563,8 +563,6 @@ title: Module `0xb::message`
     <b>let</b> token_type = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
     <b>let</b> amount = <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>);
 
-    // TODO: add test case for invalid chain id
-    // TODO: replace <b>with</b> `chain_ids::is_valid_chain_id()`
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
     <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
 
@@ -629,7 +627,6 @@ Emergency op payload is just a single byte
     <b>let</b> blocklist_type = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
     <b>let</b> <b>mut</b> address_count = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
 
-    // TODO: add test case for 0 value
     <b>assert</b>!(address_count != 0, <a href="message.md#0xb_message_EEmptyList">EEmptyList</a>);
 
     <b>let</b> <b>mut</b> validator_eth_addresses = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
@@ -676,7 +673,6 @@ Emergency op payload is just a single byte
     <b>let</b> sending_chain = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
     <b>let</b> limit = <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>);
 
-    // TODO: add test case for invalid chain id
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(sending_chain);
     <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
 
@@ -844,9 +840,6 @@ Token Transfer Message Format:
     token_type: u8,
     amount: u64
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
-    // TODO: add test case for invalid chain id
-    // TODO: add test case for invalid chain id
-    // TODO: replace <b>with</b> `chain_ids::is_valid_chain_id()`
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(source_chain);
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
 
@@ -905,8 +898,6 @@ Emergency Op Message Format:
     seq_num: u64,
     op_type: u8,
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
-    // TODO: add test case for invalid chain id
-    // TODO: replace <b>with</b> `chain_ids::is_valid_chain_id()`
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(source_chain);
 
     <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
@@ -953,8 +944,6 @@ Blocklist Message Format:
     blocklist_type: u8,
     validator_ecdsa_addresses: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;,
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
-    // TODO: add test case for invalid chain id
-    // TODO: replace <b>with</b> `chain_ids::is_valid_chain_id()`
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(source_chain);
 
     <b>let</b> address_length = validator_ecdsa_addresses.length();
@@ -1011,9 +1000,6 @@ Update bridge limit Message Format:
     sending_chain: u8,
     new_limit: u64,
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
-    // TODO: add test case for invalid chain id
-    // TODO: add test case for invalid chain id
-    // TODO: replace <b>with</b> `chain_ids::is_valid_chain_id()`
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(receiving_chain);
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(sending_chain);
 
@@ -1062,8 +1048,6 @@ Update asset price message
     seq_num: u64,
     new_price: u64,
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
-    // TODO: add test case for invalid chain id
-    // TODO: replace <b>with</b> `chain_ids::is_valid_chain_id()`
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(source_chain);
 
     <b>let</b> <b>mut</b> payload = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[token_id];
