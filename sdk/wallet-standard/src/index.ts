@@ -7,3 +7,4 @@ export { type Wallet, signAndExecuteTransaction, signTransaction } from './walle
 export * from './features/index.js';
 export * from './detect.js';
 export * from './chains.js';
+export * from './types.js';

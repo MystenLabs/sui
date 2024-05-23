@@ -47,6 +47,10 @@ export class SerialTransactionExecutor {
 		}
 	};
 
+	async buildTransaction(transaction: Transaction) {
+		return this.#queue.runTask(() => this.#buildTransaction(transaction));
+	}
+
 	#buildTransaction = async (transaction: Transaction) => {
 		const gasCoin = await this.#cache.cache.getCustom<{
 			objectId: string;
@@ -64,6 +68,10 @@ export class SerialTransactionExecutor {
 		return this.#cache.buildTransaction({ transaction: copy });
 	};
 
+	resetCache() {
+		return this.#cache.reset();
+	}
+
 	executeTransaction(transaction: Transaction | Uint8Array) {
 		return this.#queue.runTask(async () => {
 			const bytes = isTransaction(transaction)
@@ -77,7 +85,7 @@ export class SerialTransactionExecutor {
 					transaction: bytes,
 				})
 				.catch(async (error) => {
-					await this.#cache.reset();
+					await this.resetCache();
 					throw error;
 				});
 
