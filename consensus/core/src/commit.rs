@@ -341,7 +341,7 @@ impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CommittedSubDag(leader={}, index={}, blocks=[",
+            "CommittedSubDag(leader={}, ref={}, blocks=[",
             self.leader, self.commit_ref
         )?;
         for (idx, block) in self.blocks.iter().enumerate() {
@@ -350,7 +350,7 @@ impl Display for CommittedSubDag {
             }
             write!(f, "{}", block.digest())?;
         }
-        write!(f, "], digest={})", self.commit_ref.digest)
+        write!(f, "])")
     }
 }
 
