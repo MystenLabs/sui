@@ -94,7 +94,7 @@ impl CommitObserver {
             }
             tracing::debug!(
                 "Sending to execution commit {} leader {}",
-                committed_sub_dag.commit_index,
+                committed_sub_dag.commit_ref,
                 committed_sub_dag.leader
             );
             sent_sub_dags.push(committed_sub_dag);
@@ -283,7 +283,7 @@ mod tests {
                 expected_stored_refs.push(block.reference());
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_index, idx as CommitIndex + 1);
+            assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
         }
 
         // Check commits sent over consensus output channel is accurate
@@ -291,7 +291,7 @@ mod tests {
         while let Ok(subdag) = receiver.try_recv() {
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_index as usize;
+            processed_subdag_index = subdag.commit_ref.index as usize;
             if processed_subdag_index == leaders.len() {
                 break;
             }
@@ -302,7 +302,10 @@ mod tests {
 
         // Check commits have been persisted to storage
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
-        assert_eq!(last_commit.index(), commits.last().unwrap().commit_index);
+        assert_eq!(
+            last_commit.index(),
+            commits.last().unwrap().commit_ref.index
+        );
         let all_stored_commits = mem_store
             .scan_commits((0..CommitIndex::MAX).into())
             .unwrap();
@@ -377,7 +380,7 @@ mod tests {
             tracing::info!("Processed {subdag}");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_index as usize;
+            processed_subdag_index = subdag.commit_ref.index as usize;
             if processed_subdag_index == expected_last_processed_index {
                 break;
             }
@@ -413,7 +416,7 @@ mod tests {
             tracing::info!("{subdag} was sent but not processed by consumer");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_index as usize;
+            processed_subdag_index = subdag.commit_ref.index as usize;
             if processed_subdag_index == expected_last_sent_index {
                 break;
             }
@@ -449,7 +452,7 @@ mod tests {
             tracing::info!("Processed {subdag} on resubmission");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_index as usize;
+            processed_subdag_index = subdag.commit_ref.index as usize;
             if processed_subdag_index == expected_last_sent_index {
                 break;
             }
@@ -517,7 +520,7 @@ mod tests {
             tracing::info!("Processed {subdag}");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_index as usize;
+            processed_subdag_index = subdag.commit_ref.index as usize;
             if processed_subdag_index == expected_last_processed_index {
                 break;
             }

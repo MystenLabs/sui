@@ -443,6 +443,12 @@ struct FeatureFlags {
     // Resolve Move abort locations to the package id instead of the runtime module ID.
     #[serde(skip_serializing_if = "is_false")]
     resolve_abort_locations_to_package_id: bool,
+
+    // Enables the use of the Mysticeti committed sub dag digest to the `ConsensusCommitInfo` in checkpoints.
+    // When disabled the default digest is used instead. It's important to have this guarded behind
+    // a flag as it will lead to checkpoint forks.
+    #[serde(skip_serializing_if = "is_false")]
+    mysticeti_use_committed_subdag_digest: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1331,6 +1337,10 @@ impl ProtocolConfig {
 
     pub fn resolve_abort_locations_to_package_id(&self) -> bool {
         self.feature_flags.resolve_abort_locations_to_package_id
+    }
+
+    pub fn mysticeti_use_committed_subdag_digest(&self) -> bool {
+        self.feature_flags.mysticeti_use_committed_subdag_digest
     }
 }
 

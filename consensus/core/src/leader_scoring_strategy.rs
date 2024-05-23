@@ -356,8 +356,11 @@ mod tests {
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
-            let subdag =
-                dag_builder.get_subdag(leader, last_committed_rounds.clone(), commit_index);
+            let (subdag, _commit) = dag_builder.get_sub_dag_and_commit(
+                leader,
+                last_committed_rounds.clone(),
+                commit_index,
+            );
             for block in subdag.blocks.iter() {
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
