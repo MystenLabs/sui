@@ -274,12 +274,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         | E::Dereference(base_exp)
         | E::UnaryExp(_, base_exp)
         | E::Borrow(_, base_exp, _)
-        | E::TempBorrow(_, base_exp)
-        | E::AutocompleteDotAccess {
-            base_exp,
-            methods: _,
-            fields: _,
-        } => exp(context, base_exp),
+        | E::TempBorrow(_, base_exp) => exp(context, base_exp),
         E::Mutate(el, er) => {
             exp(context, el);
             exp(context, er)
@@ -529,5 +524,6 @@ pub fn ide_annotation(context: &mut Context, annotation: &mut IDEAnnotation) {
             }
         }
         IDEAnnotation::ExpandedLambda => (),
+        IDEAnnotation::AutocompleteInfo(_) => (),
     }
 }

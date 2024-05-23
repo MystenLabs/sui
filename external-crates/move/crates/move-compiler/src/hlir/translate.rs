@@ -15,12 +15,7 @@ use crate::{
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, VariantName,
     },
-    shared::{
-        process_binops,
-        string_utils::{debug_print, format_oxford_list},
-        unique_map::UniqueMap,
-        *,
-    },
+    shared::{process_binops, string_utils::debug_print, unique_map::UniqueMap, *},
     sui_mode::ID_FIELD_NAME,
     typing::ast as T,
     FullyCompiledProgram,
@@ -1687,28 +1682,6 @@ fn value(
             assert!(context.env.has_errors());
             make_exp(HE::UnresolvedError)
         }
-        E::AutocompleteDotAccess {
-            base_exp: _,
-            methods,
-            fields,
-        } => {
-            if !(context.env.ide_mode()) {
-                context
-                    .env
-                    .add_diag(ice!((eloc, "Found autocomplete outside of IDE mode")));
-            };
-            let names = methods
-                .into_iter()
-                .map(|(m, f)| format!("{m}::{f}"))
-                .chain(fields.into_iter().map(|n| format!("{n}")))
-                .collect::<Vec<_>>();
-            let msg = format!(
-                "Autocompletes to: {}",
-                format_oxford_list!("or", "'{}'", names)
-            );
-            context.env.add_diag(diag!(IDE::Autocomplete, (eloc, msg)));
-            make_exp(HE::UnresolvedError)
-        }
     };
     maybe_freeze(context, block, expected_type.cloned(), preresult)
 }
@@ -2049,7 +2022,6 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError
-        | E::AutocompleteDotAccess { .. }
         | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
 
         E::Value(_) | E::Unit { .. } => (),

@@ -222,11 +222,6 @@ pub trait TypingVisitorContext {
             E::TempBorrow(_, e) => self.visit_exp(e),
             E::Cast(e, _) => self.visit_exp(e),
             E::Annotate(e, _) => self.visit_exp(e),
-            E::AutocompleteDotAccess {
-                base_exp,
-                methods: _,
-                fields: _,
-            } => self.visit_exp(base_exp),
             E::Unit { .. }
             | E::Value(_)
             | E::Move { .. }
