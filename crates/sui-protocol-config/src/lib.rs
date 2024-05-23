@@ -2238,6 +2238,9 @@ impl ProtocolConfig {
                         cfg.random_beacon_dkg_timeout_round = Some(3000);
                         cfg.random_beacon_min_round_interval_ms = Some(200);
                     }
+
+                    // Enable the committed sub dag digest inclusion on the commit output
+                    cfg.feature_flags.mysticeti_use_committed_subdag_digest = true;
                 }
                 // Use this template when making changes:
                 //
