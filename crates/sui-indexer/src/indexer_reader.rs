@@ -1505,17 +1505,10 @@ impl<U: R2D2Connection> IndexerReader<U> {
             .package_obj_type_cache
             .lock()
             .unwrap()
-            .cache_get_or_set_with(
-                r#"{ format!("{}{}", package_id, obj_type) }"#.to_string(),
-                || {
-                    get_single_obj_id_from_package_publish(
-                        self,
-                        package_id,
-                        coin_metadata_type.clone(),
-                    )
+            .cache_get_or_set_with(format!("{}{}", package_id, coin_metadata_type), || {
+                get_single_obj_id_from_package_publish(self, package_id, coin_metadata_type.clone())
                     .unwrap()
-                },
-            );
+            });
         if let Some(id) = coin_metadata_obj_id {
             let metadata_object = self.get_object(&id, None)?;
             Ok(metadata_object.and_then(|v| SuiCoinMetadata::try_from(v).ok()))
@@ -1540,17 +1533,10 @@ impl<U: R2D2Connection> IndexerReader<U> {
             .package_obj_type_cache
             .lock()
             .unwrap()
-            .cache_get_or_set_with(
-                r#"{ format!("{}{}", package_id, treasury_cap_type) }"#.to_string(),
-                || {
-                    get_single_obj_id_from_package_publish(
-                        self,
-                        package_id,
-                        treasury_cap_type.clone(),
-                    )
+            .cache_get_or_set_with(format!("{}{}", package_id, treasury_cap_type), || {
+                get_single_obj_id_from_package_publish(self, package_id, treasury_cap_type.clone())
                     .unwrap()
-                },
-            )
+            })
             .ok_or(IndexerError::GenericError(format!(
                 "Cannot find treasury cap for type {}",
                 treasury_cap_type
