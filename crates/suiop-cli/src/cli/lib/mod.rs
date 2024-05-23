@@ -6,6 +6,7 @@ mod oauth;
 
 pub use autocomplete::FilePathCompleter;
 pub use oauth::get_oauth_token;
+pub mod utils;
 
 pub fn get_api_server() -> String {
     // if env var is set, use that
