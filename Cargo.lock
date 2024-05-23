@@ -12198,6 +12198,7 @@ dependencies = [
  "sui-genesis-builder",
  "sui-json-rpc-types",
  "sui-macros",
+ "sui-move",
  "sui-move-build",
  "sui-network",
  "sui-protocol-config",
