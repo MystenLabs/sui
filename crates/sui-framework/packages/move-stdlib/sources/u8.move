@@ -3,44 +3,29 @@
 
 #[defines_primitive(u8)]
 module std::u8 {
-     /// Return the larger of `x` and `y`
+    /// Return the larger of `x` and `y`
     public fun max(x: u8, y: u8): u8 {
-        if (x > y) x
-        else y
+        std::macros::num_max!(x, y)
     }
 
     /// Return the smaller of `x` and `y`
     public fun min(x: u8, y: u8): u8 {
-        if (x < y) x
-        else y
+        std::macros::num_min!(x, y)
     }
 
     /// Return the absolute value of x - y
     public fun diff(x: u8, y: u8): u8 {
-        if (x > y) x - y
-        else y - x
+        std::macros::num_diff!(x, y)
     }
 
     /// Calculate x / y, but round up the result.
     public fun divide_and_round_up(x: u8, y: u8): u8 {
-        if (x % y == 0) x / y
-        else x / y + 1
+        std::macros::num_divide_and_round_up!(x, y)
     }
 
     /// Return the value of a base raised to a power
-    public fun pow(mut base: u8, mut exponent: u8): u8 {
-        let mut res = 1;
-        while (exponent >= 1) {
-            if (exponent % 2 == 0) {
-                base = base * base;
-                exponent = exponent / 2;
-            } else {
-                res = res * base;
-                exponent = exponent - 1;
-            }
-        };
-
-        res
+    public fun pow(base: u8, exponent: u8): u8 {
+        std::macros::num_pow!(base, exponent)
     }
 
     /// Get a nearest lower integer Square Root for `x`. Given that this
@@ -69,20 +54,6 @@ module std::u8 {
     /// math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
     /// ```
     public fun sqrt(x: u8): u8 {
-        let mut bit = 1u16 << 8;
-        let mut res = 0u16;
-        let mut x = x as u16;
-
-        while (bit != 0) {
-            if (x >= res + bit) {
-                x = x - (res + bit);
-                res = (res >> 1) + bit;
-            } else {
-                res = res >> 1;
-            };
-            bit = bit >> 2;
-        };
-
-        res as u8
+        std::macros::num_sqrt!<u8, u16>(x, 8)
     }
 }
