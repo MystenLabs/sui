@@ -1398,6 +1398,7 @@
                 "recompute_has_public_transfer_in_execution": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "reshare_at_same_initial_version": false,
+                "resolve_abort_locations_to_package_id": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,

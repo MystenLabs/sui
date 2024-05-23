@@ -32,7 +32,7 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
         }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
             let abort_location_id = if resolve_abort_location_to_package_id {
-                state_view.relocate(id).unwrap_or(id.clone())
+                state_view.relocate(id).unwrap_or_else(|_| id.clone())
             } else {
                 id.clone()
             };
