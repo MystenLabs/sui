@@ -7,36 +7,20 @@ use graphviz_rust::dot_structures::*;
 use graphviz_rust::printer::DotPrinter;
 use graphviz_rust::printer::PrinterContext;
 use regex::Regex;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+use std::hash::Hash;
 use std::io::{BufRead, BufReader, Write};
-use std::path::Display;
-use std::sync::atomic::AtomicU64;
 use std::{
-    alloc::System,
-    collections::{BTreeMap, HashMap, HashSet},
-    time::{Instant, SystemTime},
+    collections::{hash_map, BTreeMap, HashMap, HashSet},
+    time::SystemTime,
 };
 use sui_types::base_types::ConciseableName;
 use sui_types::committee::StakeUnit;
-use tempfile::tempfile;
+use tempfile::tempdir;
 use tracing::error;
 
 use sui_types::base_types::AuthorityName;
-
-// An event with an associated stake
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct StakedEvent {
-    /// How much stake is required to cause this event
-    pub required_stake: Option<StakeUnit>,
-
-    /// How much stake does this event provide (usually the voting stake of the
-    /// validator that emmitted the event)
-    pub provided_stake: Option<StakeUnit>,
-
-    /// The event itself
-    pub event: Event,
-}
 
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug, Clone)]
 pub struct Event {
@@ -62,13 +46,23 @@ impl Event {
         Self { name, tags, id: 0 }
     }
 
-    pub fn into_staked(mut self) -> (Option<StakeUnit>, Option<StakeUnit>, Self) {
-        let provided_stake = self.tags.remove(&"stake".into());
-        let required_stake = self.tags.remove(&"required_stake".into());
+    pub fn into_event_and_metadata(mut self) -> (Self, EventMetadata) {
+        let provided_stake = self
+            .tags
+            .remove(&"stake".into())
+            .map(|s| s.try_into().unwrap());
+        let required_stake = self
+            .tags
+            .remove(&"required_stake".into())
+            .map(|s| s.try_into().unwrap());
+
         (
-            provided_stake.map(|s| s.try_into().unwrap()),
-            required_stake.map(|s| s.try_into().unwrap()),
             self,
+            EventMetadata {
+                provided_stake,
+                required_stake,
+                ..Default::default()
+            },
         )
     }
 
@@ -155,11 +149,6 @@ impl From<&'static str> for Str {
     fn from(value: &'static str) -> Self {
         Str::Static(value)
     }
-}
-
-pub struct EventMetadata {
-    // when was it caused?
-    pub time: Instant,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
@@ -321,24 +310,59 @@ macro_rules! if_events_enabled {
     };
 }
 
-struct EventMetadata {}
+#[derive(Debug, Clone, Default)]
+pub struct EventMetadata {
+    /// How much stake does this event provide to events it causes?
+    pub provided_stake: Option<StakeUnit>,
+
+    /// How much stake is required to cause this event
+    pub required_stake: Option<StakeUnit>,
+
+    /// How much causal stake has been observed so far?
+    pub observed_stake: StakeUnit,
+    /// Map of all events that have provided stake
+    pub staking_events: HashMap<Event, StakeUnit>,
+}
+
+impl EventMetadata {
+    pub fn is_fully_staked(&self) -> bool {
+        self.required_stake
+            .map(|required| self.observed_stake >= required)
+            .unwrap_or(true)
+    }
+}
+
+struct Edge {
+    cause: Event,
+    effect: Event,
+    edge: Arc<Mutex<EventMetadata>>,
+}
 
 #[derive(Default, Debug)]
 struct AnalysisState {
-    // causes that are waiting for events
+    // causes that are waiting for the events they cause
     future_causes: HashMap<Event, EventMetadata>,
 
-    // map from cause to future event
-    waiting_causes: HashMap<Event, Event>,
+    // events for which an expected cause has not yet been observed
+    waiting_causes: HashMap<
+        Event,
+        (
+            Event,         // the cause we are expecting
+            EventMetadata, // metadata for the event
+        ),
+    >,
 
-    graph: HashSet<(Event, Event)>,
+    dangling_causes: HashSet<Event>,
+    dangling_events: HashSet<Event>,
+    graph: HashMap<(Event, Event)>,
 
+    //graph: HashSet<(Event, Event)>,
     seen: HashSet<Event>,
 }
 
 impl AnalysisState {
     fn process_event(&mut self, source: Source, event: Event, cause: Option<Event>) {
-        let (stake, required_stake, mut event) = event.into_staked();
+        let (event, metadata) = event.into_event_and_metadata();
         event.maybe_set_source(source);
 
         // events can be emitted multiple times, but we only want to process them once
@@ -348,15 +372,40 @@ impl AnalysisState {
 
         // This is very confusing, because `event` can be a cause of other events,
         if let Some(cause) = cause {
-            dbg!(&cause);
-            if self.future_causes.remove(&cause) {
-                // the cause happened in the past
-                self.graph.insert((cause.clone(), event.clone()));
-            } else {
+            let mut entry = self.future_causes.entry(cause.clone());
+            match &mut entry {
+                hash_map::Entry::Occupied(e) => {
+                    let metadata = e.get_mut();
+                    if let Some(required_stake) = metadata.required_stake {
+                        let staking_entry = metadata.staking_events.entry(cause.clone());
+                        let hash_map::Entry::Vacant(mut staking_entry) = staking_entry else {
+                            // cause cannot already be in staking_events because we de-dup events
+                            panic!("cause cannot already be in staking_events");
+                        };
+                        let Some(provided_stake) = provided_stake else {
+                            eprintln!(
+                                "Error: event {} is expected to provide stake, but did not",
+                                event
+                            );
+                            return;
+                        };
+
+                        staking_entry.insert(provided_stake);
+                        metadata.observed_stake += provided_stake;
+                        self.graph.insert((cause.clone(), event.clone()));
+                    } else {
+                        // if no stake is required, the event is caused immediately
+                        e.remove();
+                        self.graph.insert((cause.clone(), event.clone()));
+                    };
+                }
+
                 // we are expecting the cause to happen at some point,
                 // but it hasn't happened yet. When it does happen, a graph
                 // edge will be inserted
-                self.waiting_causes.insert(cause.clone(), event.clone());
+                hash_map::Entry::Vacant(_) => {
+                    self.waiting_causes.insert(cause.clone(), event.clone());
+                }
             }
         }
 
@@ -366,7 +415,7 @@ impl AnalysisState {
         }
 
         // this event may cause other things to happen later
-        self.future_causes.insert(event);
+        self.future_causes.insert(event, metadata);
     }
 
     // Dump any causes that have never been consumed, and any expected events
@@ -436,7 +485,7 @@ impl AnalysisState {
         .unwrap();
 
         // write graph to tempfile, use open to open it
-        let dir = tempfile::tempdir().unwrap();
+        let dir = tempdir().unwrap();
 
         let dotfile = dir.path().join("graph.pdf");
         dbg!(&dotfile);
