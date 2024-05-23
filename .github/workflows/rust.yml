@@ -64,8 +64,6 @@ jobs:
       - name: Set environment variables
         run: |
           echo "CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG=true" >> $GITHUB_ENV
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
       - name: cargo test
         run: |
           export PATH=$HOME/.foundry/bin:$PATH
