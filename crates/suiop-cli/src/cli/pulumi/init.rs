@@ -27,7 +27,7 @@ impl ProjectType {
         let suiops_path = ensure_in_suiops_repo()?;
         info!("suipop path: {}", suiops_path);
         // inquire params from user
-        let project_name = project_name
+        let mut project_name = project_name
             .unwrap_or_else(|| {
                 Text::new("project name:")
                     .prompt()
@@ -36,8 +36,20 @@ impl ProjectType {
             .trim()
             .to_string();
 
-        // Validate project name
-        validate_project_name(&project_name).map_err(|e| anyhow!("{}", e))?;
+        // Loop until project_name user input is valid
+        loop {
+            match validate_project_name(&project_name) {
+                Ok(_) => break,
+                Err(msg) => {
+                    println!("Validation error: {msg}");
+                    project_name = Text::new("Please enter a valid project name:")
+                        .prompt()
+                        .expect("couldn't get project name")
+                        .trim()
+                        .to_string();
+                }
+            }
+        }
 
         // create dir
         let project_subdir = match self {
