@@ -213,11 +213,24 @@ impl NetworkClient for AnemoClient {
 
     async fn fetch_latest_blocks(
         &self,
-        _peer: AuthorityIndex,
-        _authorities: Vec<AuthorityIndex>,
-        _timeout: Duration,
+        peer: AuthorityIndex,
+        authorities: Vec<AuthorityIndex>,
+        timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
-        unimplemented!("Unimplemented")
+        let mut client = self.get_client(peer, timeout).await?;
+        let request = FetchLatestBlocksRequest { authorities };
+        let response = client
+            .fetch_latest_blocks(anemo::Request::new(request).with_timeout(timeout))
+            .await
+            .map_err(|e: Status| {
+                if e.status() == StatusCode::RequestTimeout {
+                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks timeout: {e:?}"))
+                } else {
+                    ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
+                }
+            })?;
+        let body = response.into_body();
+        Ok(body.blocks)
     }
 }
 

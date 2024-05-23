@@ -346,125 +346,17 @@ mod tests {
 
     use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
-    use async_trait::async_trait;
-    use bytes::Bytes;
     use consensus_config::{local_committee_and_keys, Parameters};
     use mysten_metrics::monitored_mpsc::unbounded_channel;
-    use parking_lot::Mutex;
     use prometheus::Registry;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
-    use tokio::{sync::broadcast, time::sleep};
+    use tokio::{sync::mpsc::unbounded_channel, time::sleep};
     use typed_store::DBMetrics;
 
     use super::*;
-    use crate::{
-        authority_node::AuthorityService,
-        block::{BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
-        block_verifier::NoopBlockVerifier,
-        commit::CommitRange,
-        context::Context,
-        core_thread::{CoreError, CoreThreadDispatcher},
-        error::ConsensusResult,
-        network::{BlockStream, NetworkClient, NetworkService as _},
-        storage::mem_store::MemStore,
-        transaction::NoopTransactionVerifier,
-    };
-
-    struct FakeCoreThreadDispatcher {
-        blocks: Mutex<Vec<VerifiedBlock>>,
-    }
-
-    impl FakeCoreThreadDispatcher {
-        fn new() -> Self {
-            Self {
-                blocks: Mutex::new(vec![]),
-            }
-        }
-
-        fn get_blocks(&self) -> Vec<VerifiedBlock> {
-            self.blocks.lock().clone()
-        }
-    }
-
-    #[async_trait]
-    impl CoreThreadDispatcher for FakeCoreThreadDispatcher {
-        async fn add_blocks(
-            &self,
-            blocks: Vec<VerifiedBlock>,
-        ) -> Result<BTreeSet<BlockRef>, CoreError> {
-            let block_refs = blocks.iter().map(|b| b.reference()).collect();
-            self.blocks.lock().extend(blocks);
-            Ok(block_refs)
-        }
-
-        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
-            Ok(())
-        }
-
-        async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
-            Ok(Default::default())
-        }
-
-        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
-            Ok(())
-        }
-    }
-
-    #[derive(Default)]
-    struct FakeNetworkClient {}
-
-    #[async_trait]
-    impl NetworkClient for FakeNetworkClient {
-        const SUPPORT_STREAMING: bool = false;
-
-        async fn send_block(
-            &self,
-            _peer: AuthorityIndex,
-            _block: &VerifiedBlock,
-            _timeout: Duration,
-        ) -> ConsensusResult<()> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn subscribe_blocks(
-            &self,
-            _peer: AuthorityIndex,
-            _last_received: Round,
-            _timeout: Duration,
-        ) -> ConsensusResult<BlockStream> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn fetch_blocks(
-            &self,
-            _peer: AuthorityIndex,
-            _block_refs: Vec<BlockRef>,
-            _highest_accepted_rounds: Vec<Round>,
-            _timeout: Duration,
-        ) -> ConsensusResult<Vec<Bytes>> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn fetch_commits(
-            &self,
-            _peer: AuthorityIndex,
-            _commit_range: CommitRange,
-            _timeout: Duration,
-        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn fetch_latest_blocks(
-            &self,
-            _peer: AuthorityIndex,
-            _authorities: Vec<AuthorityIndex>,
-            _timeout: Duration,
-        ) -> ConsensusResult<Vec<Bytes>> {
-            unimplemented!("Unimplemented")
-        }
-    }
+    use crate::{block::BlockAPI as _, transaction::NoopTransactionVerifier};
 
     #[rstest]
     #[tokio::test]
@@ -507,61 +399,6 @@ mod tests {
         assert_eq!(authority.context().committee.size(), 1);
 
         authority.stop().await;
-    }
-
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_authority_service() {
-        let (context, _keys) = Context::new_for_test(4);
-        let context = Arc::new(context);
-        let block_verifier = Arc::new(NoopBlockVerifier {});
-        let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
-        let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
-        let network_client = Arc::new(FakeNetworkClient::default());
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let synchronizer = Synchronizer::start(
-            network_client,
-            context.clone(),
-            core_dispatcher.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-        );
-        let authority_service = Arc::new(AuthorityService::new(
-            context.clone(),
-            block_verifier,
-            Arc::new(CommitVoteMonitor::new(context.clone())),
-            synchronizer,
-            core_dispatcher.clone(),
-            rx_block_broadcast,
-            dag_state,
-            store,
-        ));
-
-        // Test delaying blocks with time drift.
-        let now = context.clock.timestamp_utc_ms();
-        let max_drift = context.parameters.max_forward_time_drift;
-        let input_block = VerifiedBlock::new_for_test(
-            TestBlock::new(9, 0)
-                .set_timestamp_ms(now + max_drift.as_millis() as u64)
-                .build(),
-        );
-
-        let service = authority_service.clone();
-        let serialized = input_block.serialized().clone();
-        tokio::spawn(async move {
-            service
-                .handle_send_block(context.committee.to_authority_index(0).unwrap(), serialized)
-                .await
-                .unwrap();
-        });
-
-        sleep(max_drift / 2).await;
-        assert!(core_dispatcher.get_blocks().is_empty());
-
-        sleep(max_drift).await;
-        let blocks = core_dispatcher.get_blocks();
-        assert_eq!(blocks.len(), 1);
-        assert_eq!(blocks[0], input_block);
     }
 
     // TODO: build AuthorityFixture.

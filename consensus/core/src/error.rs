@@ -56,6 +56,9 @@ pub enum ConsensusError {
     #[error("Too many blocks have been requested from authority {0}")]
     TooManyFetchBlocksRequested(AuthorityIndex),
 
+    #[error("Too many authorities have been provided from authority {0}")]
+    TooManyAuthoritiesProvided(AuthorityIndex),
+
     #[error("Provided size of highest accepted rounds parameter, {0}, is different than committee size, {1}")]
     InvalidSizeOfHighestAcceptedRounds(usize, usize),
 
