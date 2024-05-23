@@ -5,10 +5,9 @@ import { toB64 } from '@mysten/bcs';
 import type { Input } from 'valibot';
 import { parse } from 'valibot';
 
-import type { bcs } from '../bcs/index.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import { Argument } from './data/internal.js';
-import type { CallArg } from './data/internal.js';
+import type { CallArg, Command } from './data/internal.js';
 import type { Transaction } from './Transaction.js';
 
 export type TransactionArgument =
@@ -24,8 +23,8 @@ export enum UpgradePolicy {
 	DEP_ONLY = 192,
 }
 
-type TransactionShape<T extends (typeof bcs.Transaction.$inferType)['$kind']> = { $kind: T } & {
-	[K in T]: Extract<typeof bcs.Transaction.$inferType, { [K in T]: any }>[T];
+type TransactionShape<T extends Command['$kind']> = { $kind: T } & {
+	[K in T]: Extract<Command, { [K in T]: any }>[T];
 };
 
 /**
@@ -150,6 +149,29 @@ export const Commands = {
 			MakeMoveVec: {
 				type: type ?? null,
 				elements: elements.map((o) => parse(Argument, o)),
+			},
+		};
+	},
+	Intent({
+		name,
+		inputs = {},
+		data = {},
+	}: {
+		name: string;
+		inputs?: Record<string, Input<typeof Argument> | Input<typeof Argument>[]>;
+		data?: Record<string, unknown>;
+	}): TransactionShape<'$Intent'> {
+		return {
+			$kind: '$Intent',
+			$Intent: {
+				name,
+				inputs: Object.fromEntries(
+					Object.entries(inputs).map(([key, value]) => [
+						key,
+						Array.isArray(value) ? value.map((o) => parse(Argument, o)) : parse(Argument, value),
+					]),
+				),
+				data,
 			},
 		};
 	},

@@ -206,7 +206,7 @@ export function mapProgramableTransaction(
 	return {
 		inputs: programableTransaction.inputs.map(mapTransactionInput),
 		kind: 'ProgrammableTransaction',
-		transactions: programableTransaction.transactions.map(mapTransaction),
+		transactions: programableTransaction.commands.map(mapTransaction),
 	};
 }
 
@@ -250,7 +250,7 @@ function mapTransactionInput(input: typeof bcs.CallArg.$inferType): SuiCallArg {
 	throw new Error(`Unknown object type: ${input.Object}`);
 }
 
-function mapTransaction(transaction: typeof bcs.Transaction.$inferType): SuiTransaction {
+function mapTransaction(transaction: typeof bcs.Command.$inferType): SuiTransaction {
 	switch (transaction.$kind) {
 		case 'MoveCall': {
 			return {

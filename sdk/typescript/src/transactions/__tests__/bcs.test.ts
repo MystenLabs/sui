@@ -117,7 +117,7 @@ it('can serialize transaction data with a programmable transaction', () => {
 							},
 						},
 					],
-					transactions: [
+					commands: [
 						{
 							$kind: 'MoveCall',
 							MoveCall: {
