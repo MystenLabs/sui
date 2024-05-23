@@ -382,7 +382,7 @@ pub fn ptb_description() -> clap::Command {
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
             --"upgrade" <MOVE_PACKAGE_PATH>
-            "Upgrade the move package. It takes as input the folder where the package exists."
+            "Upgrade the Move package. It takes as input the folder where the package exists."
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
             --"preview"

@@ -129,7 +129,9 @@ const MAX_PROTOCOL_VERSION: u64 = 47;
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 // Version 46: Enable native bridge in testnet
 //             Enable resharing at the same initial shared version.
-// Version 47: Enable random beacon in testnet.
+// Version 47: Use tonic networking for Mysticeti.
+//             Resolve Move abort locations to the package id instead of the runtime module ID.
+//             Enable random beacon in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -437,6 +439,10 @@ struct FeatureFlags {
     // Enable resharing of shared objects using the same initial shared version
     #[serde(skip_serializing_if = "is_false")]
     reshare_at_same_initial_version: bool,
+
+    // Resolve Move abort locations to the package id instead of the runtime module ID.
+    #[serde(skip_serializing_if = "is_false")]
+    resolve_abort_locations_to_package_id: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1322,6 +1328,10 @@ impl ProtocolConfig {
     pub fn reshare_at_same_initial_version(&self) -> bool {
         self.feature_flags.reshare_at_same_initial_version
     }
+
+    pub fn resolve_abort_locations_to_package_id(&self) -> bool {
+        self.feature_flags.resolve_abort_locations_to_package_id
+    }
 }
 
 #[cfg(not(msim))]
@@ -2205,6 +2215,12 @@ impl ProtocolConfig {
                     cfg.feature_flags.reshare_at_same_initial_version = true;
                 }
                 47 => {
+                    // Use tonic networking for Mysticeti.
+                    cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
+
+                    // Enable resolving abort code IDs to package ID instead of runtime module ID
+                    cfg.feature_flags.resolve_abort_locations_to_package_id = true;
+
                     // Enable random beacon on testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.random_beacon = true;

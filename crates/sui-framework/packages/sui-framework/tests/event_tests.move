@@ -12,7 +12,7 @@ module sui::event_tests {
 
     #[test]
     fun test_no_emit() {
-        assert!(event::events_by_type<S1>().is_empty(), 0);
+        assert!(event::events_by_type<S1>().is_empty());
         assert_eq(event::num_events(), 0)
     }
 
@@ -21,7 +21,7 @@ module sui::event_tests {
         let e0 = S1(0);
         event::emit(e0);
         assert_eq(event::events_by_type<S1>()[0], e0);
-        assert!(event::events_by_type<S2>().is_empty(), 0);
+        assert!(event::events_by_type<S2>().is_empty());
         assert_eq(event::num_events(), 1);
         let e1 = S1(1);
         event::emit(e1);

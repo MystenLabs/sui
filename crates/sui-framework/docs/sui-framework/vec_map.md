@@ -19,6 +19,7 @@ title: Module `0x2::vec_map`
 -  [Function `is_empty`](#0x2_vec_map_is_empty)
 -  [Function `destroy_empty`](#0x2_vec_map_destroy_empty)
 -  [Function `into_keys_values`](#0x2_vec_map_into_keys_values)
+-  [Function `from_keys_values`](#0x2_vec_map_from_keys_values)
 -  [Function `keys`](#0x2_vec_map_keys)
 -  [Function `get_idx_opt`](#0x2_vec_map_get_idx_opt)
 -  [Function `get_idx`](#0x2_vec_map_get_idx)
@@ -151,6 +152,16 @@ Trying to destroy a map that is not empty
 
 
 <pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EMapNotEmpty">EMapNotEmpty</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="0x2_vec_map_EUnequalLengths"></a>
+
+Trying to construct a map from keys and values of different lengths
+
+
+<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EUnequalLengths">EUnequalLengths</a>: u64 = 5;
 </code></pre>
 
 
@@ -483,6 +494,45 @@ The output keys and values are stored in insertion order, *not* sorted by key.
     };
     contents.<a href="../sui-framework/vec_map.md#0x2_vec_map_destroy_empty">destroy_empty</a>();
     (keys, values)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_vec_map_from_keys_values"></a>
+
+## Function `from_keys_values`
+
+Construct a new <code><a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a></code> from two vectors, one for keys and one for values.
+The key value pairs are associated via their indices in the vectors, e.g. the key at index i
+in <code>keys</code> is associated with the value at index i in <code>values</code>.
+The key value pairs are stored in insertion order (the original vectors ordering)
+and are *not* sorted.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_from_keys_values">from_keys_values</a>&lt;K: <b>copy</b>, V&gt;(keys: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;, values: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;V&gt;): <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_from_keys_values">from_keys_values</a>&lt;K: <b>copy</b>, V&gt;(
+    <b>mut</b> keys: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;,
+    <b>mut</b> values: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;V&gt;,
+): <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt; {
+    <b>assert</b>!(keys.length() == values.length(), <a href="../sui-framework/vec_map.md#0x2_vec_map_EUnequalLengths">EUnequalLengths</a>);
+    keys.reverse();
+    values.reverse();
+    <b>let</b> <b>mut</b> map = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">empty</a>();
+    <b>while</b> (!keys.<a href="../sui-framework/vec_map.md#0x2_vec_map_is_empty">is_empty</a>()) map.<a href="../sui-framework/vec_map.md#0x2_vec_map_insert">insert</a>(keys.pop_back(), values.pop_back());
+    keys.<a href="../sui-framework/vec_map.md#0x2_vec_map_destroy_empty">destroy_empty</a>();
+    values.<a href="../sui-framework/vec_map.md#0x2_vec_map_destroy_empty">destroy_empty</a>();
+    map
 }
 </code></pre>
 

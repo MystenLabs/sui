@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Configuration } from './configuration';
-import { lint } from './configuration';
+import { lint, inlayHintsForType } from './configuration';
 import * as vscode from 'vscode';
-import * as lc from 'vscode-languageclient';
+import * as lc from 'vscode-languageclient/node';
 import { log } from './log';
 import { sync as commandExistsSync } from 'command-exists';
 import { IndentAction } from 'vscode';
@@ -15,6 +15,8 @@ export class Context {
     private client: lc.LanguageClient | undefined;
 
     private lintLevel: string;
+
+    private inlayHintsType: boolean;
 
     // The vscode-languageclient module reads a configuration option named
     // "<extension-name>.trace.server" to determine whether to log messages. If a trace output
@@ -31,6 +33,7 @@ export class Context {
     ) {
         this.client = client;
         this.lintLevel = lint();
+        this.inlayHintsType = inlayHintsForType();
         this.traceOutputChannel = vscode.window.createOutputChannel(
             'Move Language Server Trace',
         );
@@ -130,6 +133,7 @@ export class Context {
             traceOutputChannel: this.traceOutputChannel,
             initializationOptions: {
                 lintLevel: this.lintLevel,
+                inlayHintsType: this.inlayHintsType,
             },
         };
 
@@ -140,13 +144,13 @@ export class Context {
             clientOptions,
         );
         log.info('Starting client...');
-        const disposable = client.start();
-        this.extensionContext.subscriptions.push(disposable);
+        const res = client.start();
+        this.extensionContext.subscriptions.push({ dispose: async () => client.stop() });
         this.client = client;
 
         // Wait for the Move Language Server initialization to complete,
         // especially the first symbol table parsing is completed
-        await this.client.onReady();
+        return res;
     }
 
     /**
@@ -173,11 +177,15 @@ export class Context {
      */
     registerOnDidChangeConfiguration(): void {
         vscode.workspace.onDidChangeConfiguration(async event => {
-            const changed = event.affectsConfiguration('move.lint');
+            const changed = event.affectsConfiguration('move.lint') ||
+                            event.affectsConfiguration('move.inlay-hints.type');
             if (changed) {
                 const newLintLevel = lint();
-                if (this.lintLevel !== newLintLevel) {
+                const newInlayHintsType = inlayHintsForType();
+                if (this.lintLevel !== newLintLevel ||
+                    this.inlayHintsType !== newInlayHintsType) {
                     this.lintLevel = newLintLevel;
+                    this.inlayHintsType = newInlayHintsType;
                     try {
                         await this.stopClient();
                         await this.startClient();

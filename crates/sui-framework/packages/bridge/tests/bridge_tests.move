@@ -192,7 +192,7 @@ module bridge::bridge_tests {
         let mut bridge = scenario.take_shared<Bridge>();
         let inner = bridge.test_load_inner_mut();
         inner.assert_not_paused(UNEXPECTED_ERROR);
-        assert!(inner.inner_token_transfer_records().length() == 0, UNEXPECTED_ERROR + 1);
+        assert!(inner.inner_token_transfer_records().length() == 0);
 
         test_scenario::return_shared(bridge);
         scenario.end();
@@ -318,7 +318,7 @@ module bridge::bridge_tests {
 
         abort TEST_DONE
     }
-    
+
     #[test]
     #[expected_failure(abort_code = bridge::bridge::EBridgeUnavailable)]
     fun test_execute_send_token_frozen() {
@@ -327,8 +327,8 @@ module bridge::bridge_tests {
         let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(chain_id, ctx);
 
-        assert!(!bridge.test_load_inner_mut().inner_paused(), UNEXPECTED_ERROR);
-        freeze_bridge(&mut bridge, UNEXPECTED_ERROR + 1);
+        assert!(!bridge.test_load_inner_mut().inner_paused());
+        freeze_bridge(&mut bridge, UNEXPECTED_ERROR);
 
         let eth_address = x"0000000000000000000000000000000000000000";
         let btc: Coin<BTC> = coin::mint_for_testing<BTC>(1, ctx);
@@ -387,56 +387,45 @@ module bridge::bridge_tests {
             inner.test_get_current_seq_num_and_increment(
                 message_types::committee_blocklist(),
             ) == 0,
-            UNEXPECTED_ERROR,
         );
         assert!(
             inner.sequence_nums()[&message_types::committee_blocklist()] == 1,
-            UNEXPECTED_ERROR + 1,
         );
         assert!(
             inner.test_get_current_seq_num_and_increment(
                 message_types::committee_blocklist(),
             ) == 1,
-            UNEXPECTED_ERROR + 2,
         );
         // other message type nonce does not change
         assert!(
             !inner.sequence_nums().contains(&message_types::token()),
-            UNEXPECTED_ERROR + 3,
         );
         assert!(
             !inner.sequence_nums().contains(&message_types::emergency_op()),
-            UNEXPECTED_ERROR + 4,
         );
         assert!(
             !inner.sequence_nums().contains(&message_types::update_bridge_limit()),
-            UNEXPECTED_ERROR + 5,
         );
         assert!(
             !inner.sequence_nums().contains(&message_types::update_asset_price()),
-            UNEXPECTED_ERROR + 6,
         );
         assert!(
             inner.test_get_current_seq_num_and_increment(message_types::token()) == 0,
-            UNEXPECTED_ERROR + 7,
         );
         assert!(
             inner.test_get_current_seq_num_and_increment(
                 message_types::emergency_op(),
             ) == 0,
-            UNEXPECTED_ERROR + 8,
         );
         assert!(
             inner.test_get_current_seq_num_and_increment(
                 message_types::update_bridge_limit(),
             ) == 0,
-            UNEXPECTED_ERROR + 6,
         );
         assert!(
             inner.test_get_current_seq_num_and_increment(
                 message_types::update_asset_price(),
             ) == 0,
-            UNEXPECTED_ERROR + 7,
         );
 
         destroy(bridge);
@@ -459,7 +448,6 @@ module bridge::bridge_tests {
                     chain_ids::sui_mainnet(),
                 ),
             ) != 1,
-            UNEXPECTED_ERROR,
         );
         // now shrink to 1 for SUI mainnet -> ETH mainnet
         let msg = message::create_update_bridge_limit_message(
@@ -479,7 +467,6 @@ module bridge::bridge_tests {
                     chain_ids::sui_mainnet()
                 ),
             ) == 1,
-            UNEXPECTED_ERROR + 1,
         );
         // other routes are not impacted
         assert!(
@@ -489,7 +476,6 @@ module bridge::bridge_tests {
                     chain_ids::sui_testnet(),
                 ),
             ) != 1,
-            UNEXPECTED_ERROR + 2,
         );
 
         destroy(bridge);
@@ -532,7 +518,6 @@ module bridge::bridge_tests {
         // Assert the starting limit is a different value
         assert!(
             inner.inner_treasury().notional_value<BTC>() != 1_001_000_000,
-            UNEXPECTED_ERROR,
         );
         // now change it to 100_001_000
         let msg = message::create_update_asset_price_message(
@@ -545,15 +530,9 @@ module bridge::bridge_tests {
         inner.test_execute_update_asset_price(payload);
 
         // should be 1_001_000_000 now
-        assert!(
-            inner.inner_treasury().notional_value<BTC>() == 1_001_000_000,
-            UNEXPECTED_ERROR + 1,
-        );
+        assert!(inner.inner_treasury().notional_value<BTC>() == 1_001_000_000);
         // other assets are not impacted
-        assert!(
-            inner.inner_treasury().notional_value<ETH>() != 1_001_000_000,
-            UNEXPECTED_ERROR + 2,
-        );
+        assert!(inner.inner_treasury().notional_value<ETH>() != 1_001_000_000);
 
         destroy(bridge);
         scenario.end();
@@ -566,11 +545,11 @@ module bridge::bridge_tests {
         let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(chain_id, ctx);
 
-        assert!(!bridge.test_load_inner_mut().inner_paused(), UNEXPECTED_ERROR);
+        assert!(!bridge.test_load_inner_mut().inner_paused());
         freeze_bridge(&mut bridge, UNEXPECTED_ERROR + 1);
 
-        assert!(bridge.test_load_inner_mut().inner_paused(), UNEXPECTED_ERROR + 2);
-        unfreeze_bridge(&mut bridge, UNEXPECTED_ERROR + 3);
+        assert!(bridge.test_load_inner_mut().inner_paused());
+        unfreeze_bridge(&mut bridge, UNEXPECTED_ERROR + 2);
 
         destroy(bridge);
         scenario.end();
@@ -601,7 +580,7 @@ module bridge::bridge_tests {
         let inner = bridge.test_load_inner_mut();
 
         // initially it's unfrozen
-        assert!(!inner.inner_paused(), UNEXPECTED_ERROR);
+        assert!(!inner.inner_paused());
         // freeze it
         let msg = message::create_emergency_op_message(
             chain_ids::sui_testnet(),
@@ -612,7 +591,7 @@ module bridge::bridge_tests {
         inner.test_execute_emergency_op(payload);
 
         // should be frozen now
-        assert!(inner.inner_paused(), UNEXPECTED_ERROR + 1);
+        assert!(inner.inner_paused());
 
         // freeze it again, should abort
         let msg = message::create_emergency_op_message(
@@ -653,12 +632,8 @@ module bridge::bridge_tests {
         assert!(
             bridge.test_get_token_transfer_action_status(chain_id, 10)
                 == transfer_status_pending(),
-            UNEXPECTED_ERROR,
         );
-        assert!(
-            bridge.test_get_token_transfer_action_signatures(chain_id, 10) == option::none(),
-            UNEXPECTED_ERROR + 1,
-        );
+        assert!(bridge.test_get_token_transfer_action_signatures(chain_id, 10) == option::none());
 
         // Test when ready for claim
         let message = message::create_token_bridge_message(
@@ -678,19 +653,16 @@ module bridge::bridge_tests {
         assert!(
             bridge.test_get_token_transfer_action_status(chain_id, 11)
                 == transfer_status_approved(),
-            UNEXPECTED_ERROR + 2,
         );
         assert!(
             bridge.test_get_token_transfer_action_signatures(chain_id, 11)
                 == option::some(vector[]),
-            UNEXPECTED_ERROR + 3,
         );
         assert!(
             bridge.test_get_parsed_token_transfer_message(chain_id, 11)
                 == option::some(
                     to_parsed_token_transfer_message(&message)
                 ),
-            UNEXPECTED_ERROR + 4,
         );
 
         // Test when already claimed
@@ -711,36 +683,30 @@ module bridge::bridge_tests {
         assert!(
             bridge.test_get_token_transfer_action_status(chain_id, 12)
                 == transfer_status_claimed(),
-            UNEXPECTED_ERROR + 5,
         );
         assert!(
             bridge.test_get_token_transfer_action_signatures(chain_id, 12)
                 == option::some(vector[b"1234"]),
-            UNEXPECTED_ERROR + 6,
         );
         assert!(
             bridge.test_get_parsed_token_transfer_message(chain_id, 12)
                 == option::some(
                     to_parsed_token_transfer_message(&message)
                 ),
-            UNEXPECTED_ERROR + 7,
         );
 
         // Test when message not found
         assert!(
             bridge.test_get_token_transfer_action_status(chain_id, 13)
                 == transfer_status_not_found(),
-            UNEXPECTED_ERROR + 8,
         );
         assert!(
             bridge.test_get_token_transfer_action_signatures(chain_id, 13)
                 == option::none(),
-            UNEXPECTED_ERROR + 9,
         );
         assert!(
             bridge.test_get_parsed_token_transfer_message(chain_id, 13)
                 == option::none(),
-            UNEXPECTED_ERROR + 10,
         );
 
         destroy(bridge);
@@ -748,4 +714,3 @@ module bridge::bridge_tests {
         scenario.end();
     }
 }
-

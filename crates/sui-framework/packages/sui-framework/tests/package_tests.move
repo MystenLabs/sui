@@ -20,9 +20,9 @@ module sui::package_tests {
         let mut scenario = test_scenario::begin(@0x1);
         let pub = package::test_claim(TEST_OTW {}, scenario.ctx());
 
-        assert!(pub.from_package<CustomType>(), 0);
-        assert!(pub.from_package<Scenario>(), 0);
-        assert!(&@0x2.to_ascii_string() == pub.published_package(), 0);
+        assert!(pub.from_package<CustomType>());
+        assert!(pub.from_package<Scenario>());
+        assert!(&@0x2.to_ascii_string() == pub.published_package());
 
         pub.burn_publisher();
         scenario.end();
@@ -33,10 +33,10 @@ module sui::package_tests {
         let mut scenario = test_scenario::begin(@0x1);
         let pub = package::test_claim(TEST_OTW {}, scenario.ctx());
 
-        assert!(pub.from_module<CustomType>(), 0);
-        assert!(pub.from_module<Scenario>() == false, 0);
+        assert!(pub.from_module<CustomType>());
+        assert!(pub.from_module<Scenario>() == false);
 
-        assert!(&b"package_tests".to_ascii_string() == pub.published_module(), 0);
+        assert!(&b"package_tests".to_ascii_string() == pub.published_module());
 
         pub.burn_publisher();
         scenario.end();
@@ -47,11 +47,11 @@ module sui::package_tests {
         let mut scenario = test_scenario::begin(@0x1);
         let mut cap = package::test_publish(@0x42.to_id(), scenario.ctx());
 
-        assert!(cap.upgrade_policy() == package::compatible_policy(), 0);
+        assert!(cap.upgrade_policy() == package::compatible_policy());
         cap.only_additive_upgrades();
-        assert!(cap.upgrade_policy() == package::additive_policy(), 1);
+        assert!(cap.upgrade_policy() == package::additive_policy());
         cap.only_dep_upgrades();
-        assert!(cap.upgrade_policy() == package::dep_only_policy(), 2);
+        assert!(cap.upgrade_policy() == package::dep_only_policy());
         cap.make_immutable();
 
         scenario.end();
@@ -105,7 +105,7 @@ module sui::package_tests {
         test_utils::assert_eq(ticket.ticket_policy(), package::dep_only_policy());
         let receipt = ticket.test_upgrade();
         cap.commit_upgrade(receipt);
-        assert!(cap.version() == version + 1, 0);
+        assert!(cap.version() == version + 1);
 
         cap.make_immutable();
         scenario.end();
@@ -118,7 +118,7 @@ module sui::package_tests {
         let mut cap = package::test_publish(@0x42.to_id(), scenario.ctx());
 
         cap.only_dep_upgrades();
-        assert!(cap.upgrade_policy() == package::dep_only_policy(), 1);
+        assert!(cap.upgrade_policy() == package::dep_only_policy());
 
         cap.only_additive_upgrades();
         abort 0

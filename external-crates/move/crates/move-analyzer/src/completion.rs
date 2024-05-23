@@ -52,9 +52,9 @@ fn keywords() -> Vec<CompletionItem> {
         .chain(PRIMITIVE_TYPES.iter())
         .map(|label| {
             let kind = if label == &"copy" || label == &"move" {
-                CompletionItemKind::Operator
+                CompletionItemKind::OPERATOR
             } else {
-                CompletionItemKind::Keyword
+                CompletionItemKind::KEYWORD
             };
             completion_item(label, kind)
         })
@@ -65,7 +65,7 @@ fn keywords() -> Vec<CompletionItem> {
 fn primitive_types() -> Vec<CompletionItem> {
     PRIMITIVE_TYPES
         .iter()
-        .map(|label| completion_item(label, CompletionItemKind::Keyword))
+        .map(|label| completion_item(label, CompletionItemKind::KEYWORD))
         .collect()
 }
 
@@ -73,7 +73,7 @@ fn primitive_types() -> Vec<CompletionItem> {
 fn builtins() -> Vec<CompletionItem> {
     BUILTINS
         .iter()
-        .map(|label| completion_item(label, CompletionItemKind::Function))
+        .map(|label| completion_item(label, CompletionItemKind::FUNCTION))
         .collect()
 }
 
@@ -122,12 +122,12 @@ fn identifiers(buffer: &str, symbols: &Symbols, path: &Path) -> Vec<CompletionIt
                     .iter()
                     .any(|m| m.functions().contains_key(&Symbol::from(*label)))
                 {
-                    completion_item(label, CompletionItemKind::Function)
+                    completion_item(label, CompletionItemKind::FUNCTION)
                 } else {
-                    completion_item(label, CompletionItemKind::Text)
+                    completion_item(label, CompletionItemKind::TEXT)
                 }
             } else {
-                completion_item(label, CompletionItemKind::Text)
+                completion_item(label, CompletionItemKind::TEXT)
             }
         })
         .collect()
@@ -190,17 +190,17 @@ fn context_specific_lbrace(
         let Some(def_info) = symbols.def_info(&def_loc) else {
             continue;
         };
-        let DefInfo::Struct(_, _, _, _, abilities, _, _) = def_info else {
+        let DefInfo::Struct(.., abilities, _, _, _) = def_info else {
             continue;
         };
         if abilities.has_ability_(Ability_::Key) {
             let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
             let init_completion = CompletionItem {
                 label: "id: UID".to_string(),
-                kind: Some(CompletionItemKind::Snippet),
+                kind: Some(CompletionItemKind::SNIPPET),
                 documentation: Some(Documentation::String("Object snippet".to_string())),
                 insert_text: Some(obj_snippet),
-                insert_text_format: Some(InsertTextFormat::Snippet),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
                 ..Default::default()
             };
             completions.push(init_completion);
@@ -253,7 +253,7 @@ fn context_specific_no_trigger(
             let Some(def_info) = symbols.def_info(&def_loc) else {
                 break;
             };
-            let DefInfo::Function(mod_ident, v, _, _, _, _, _, _) = def_info else {
+            let DefInfo::Function(mod_ident, v, ..) = def_info else {
                 // not a function
                 break;
             };
@@ -289,12 +289,12 @@ fn context_specific_no_trigger(
 
             let init_completion = CompletionItem {
                 label: INIT_FN_NAME.to_string(),
-                kind: Some(CompletionItemKind::Snippet),
+                kind: Some(CompletionItemKind::SNIPPET),
                 documentation: Some(Documentation::String(
                     "Module initializer snippet".to_string(),
                 )),
                 insert_text: Some(init_snippet),
-                insert_text_format: Some(InsertTextFormat::Snippet),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
                 ..Default::default()
             };
             completions.push(init_completion);

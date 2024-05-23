@@ -16,7 +16,7 @@ bag::add(&mut bag1, 1, true);
 bag::add(&mut bag2, 0, false);
 bag::add(&mut bag2, 1, true);
 // bag1 does not equal bag2, despite having the same entries
-assert!(&bag1 != &bag2, 0);
+assert!(&bag1 != &bag2);
 ```
 At it's core, <code>sui::bag</code> is a wrapper around <code>UID</code> that allows for access to
 <code>sui::dynamic_field</code> while preventing accidentally stranding field values. A <code>UID</code> can be
