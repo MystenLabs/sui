@@ -96,7 +96,7 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
 
     /// Fetches serialized commits from a peer, with index in [start, end].
     /// Returns a tuple of both the serialized commits, and serialized blocks that contain
-    /// votes certifiying the last commit.
+    /// votes certifying the last commit.
     async fn fetch_commits(
         &self,
         peer: AuthorityIndex,
