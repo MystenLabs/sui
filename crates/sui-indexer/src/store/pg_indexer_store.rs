@@ -11,6 +11,7 @@ use std::time::Instant;
 use async_trait::async_trait;
 use core::result::Result::Ok;
 use diesel::dsl::max;
+use diesel::prelude::*;
 use diesel::r2d2::R2D2Connection;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;

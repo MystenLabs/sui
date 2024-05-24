@@ -102,7 +102,13 @@ pub mod diesel_macro {
                     .downcast_mut::<PoolConnection<diesel::PgConnection>>()
                     .unwrap();
 
-                    diesel::sql_query("SET work_mem = '4GB';")
+                    #[derive(QueryableByName, Debug)]
+                    struct ShowSetting {
+                        #[diesel(sql_type = diesel::sql_types::Text)]
+                        work_mem: String,
+                    }
+
+                    diesel::sql_query("SET work_mem = '2GB';")
                         .execute(pg_pool_conn)
                         .map_err(|e| {
                             tracing::error!("Error setting work_mem: {:?}, retrying...", e);
@@ -111,17 +117,18 @@ pub mod diesel_macro {
                                 retry_after: None,
                             }
                         })?;
-                    // // Check the current work_mem setting
-                    // let current_work_mem: String = diesel::sql_query("SHOW work_mem;")
-                    //     .get_result::<i64>(pg_pool_conn)
-                    //     .map_err(|e| {
-                    //         tracing::error!("Error showing work_mem: {:?}, retrying...", e);
-                    //         backoff::Error::Transient {
-                    //             err: IndexerError::PostgresWriteError(e.to_string()),
-                    //             retry_after: None,
-                    //         }
-                    //     })?
-                    //     .get(0);
+                    // Check the current work_mem setting
+                    let current_work_mem: ShowSetting = diesel::sql_query("SHOW work_mem;")
+                        .get_result::<ShowSetting>(pg_pool_conn)
+                        .map_err(|e| {
+                            tracing::error!("Error showing work_mem: {:?}, retrying...", e);
+                            backoff::Error::Transient {
+                                err: IndexerError::PostgresWriteError(e.to_string()),
+                                retry_after: None,
+                            }
+                        })?;
+                    tracing::error!("Current work_mem setting: {:?}", current_work_mem);
+
                     pg_pool_conn
                         .build_transaction()
                         .read_write()
