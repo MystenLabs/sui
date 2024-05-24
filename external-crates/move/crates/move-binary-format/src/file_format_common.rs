@@ -19,6 +19,57 @@ use std::{
     mem::size_of,
 };
 
+// Static assertions about the encoding of the flavor into the version of the binary format.
+const _: () = {
+    let x = BinaryFlavor::shift_and_flavor(0u32);
+    // Make sure that the flavoring is added in the correct position in the u32.
+    // It should always be `0x05XX_XXXX` where `XX_XXXX` is the version digits.
+    assert!(x == 0x0500_0000u32);
+    // Make sure that the flavoring is extracted correctly.
+    assert!(BinaryFlavor::mask_and_shift_to_unflavor(x) == BinaryFlavor::SUI_FLAVOR);
+};
+
+/// Encoding of a the flavor into the version of the binary format for versions >= 7.
+pub struct BinaryFlavor;
+impl BinaryFlavor {
+    pub const FLAVOR_MASK: u32 = 0xFF00_0000;
+    pub const VERSION_MASK: u32 = 0x00FF_FFFF;
+    // The Sui flavor is 0x05
+    pub const SUI_FLAVOR: u8 = 0x05;
+    const SHIFT_AMOUNT: u8 = 24;
+
+    pub fn encode_version(unflavored_version: u32) -> u32 {
+        if unflavored_version <= VERSION_6 {
+            return unflavored_version;
+        }
+
+        debug_assert!(unflavored_version & Self::VERSION_MASK == unflavored_version);
+        Self::shift_and_flavor(unflavored_version)
+    }
+
+    pub fn decode_version(flavored_version: u32) -> u32 {
+        if flavored_version <= VERSION_6 {
+            return flavored_version;
+        }
+        flavored_version & Self::VERSION_MASK
+    }
+
+    pub fn decode_flavor(flavored_version: u32) -> Option<u8> {
+        if flavored_version <= VERSION_6 {
+            return None;
+        }
+        Some(Self::mask_and_shift_to_unflavor(flavored_version))
+    }
+
+    const fn mask_and_shift_to_unflavor(flavored: u32) -> u8 {
+        ((flavored & Self::FLAVOR_MASK) >> Self::SHIFT_AMOUNT) as u8
+    }
+
+    const fn shift_and_flavor(unflavored: u32) -> u32 {
+        (Self::SUI_FLAVOR as u32) << Self::SHIFT_AMOUNT | unflavored
+    }
+}
+
 /// Constant values for the binary format header.
 ///
 /// The binary header is magic +  version info + table count.

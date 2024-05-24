@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::*;
-use sui_package_resolver::StructDef;
+use sui_package_resolver::{DataDef, MoveData};
 
 use crate::error::Error;
 
@@ -24,24 +24,24 @@ pub(crate) struct MoveStruct {
 
 #[derive(SimpleObject)]
 pub(crate) struct MoveStructTypeParameter {
-    constraints: Vec<MoveAbility>,
-    is_phantom: bool,
+    pub(crate) constraints: Vec<MoveAbility>,
+    pub(crate) is_phantom: bool,
 }
 
 /// Information for a particular field on a Move struct.
 #[derive(SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct MoveField {
-    name: String,
+    pub(crate) name: String,
     #[graphql(skip)]
-    type_: OpenMoveType,
+    pub(crate) type_: OpenMoveType,
 }
 
-/// Description of a type, defined in a Move module.
+/// Description of a struct type, defined in a Move module.
 #[Object]
 impl MoveStruct {
     /// The module this struct was originally defined in.
-    async fn module(&self, ctx: &Context<'_>) -> Result<MoveModule> {
+    pub(crate) async fn module(&self, ctx: &Context<'_>) -> Result<MoveModule> {
         let Some(module) = MoveModule::query(
             ctx,
             self.defining_id,
@@ -62,25 +62,25 @@ impl MoveStruct {
     }
 
     /// The struct's (unqualified) type name.
-    async fn name(&self) -> &str {
+    pub(crate) async fn name(&self) -> &str {
         &self.name
     }
 
     /// Abilities this struct has.
-    async fn abilities(&self) -> Option<&Vec<MoveAbility>> {
+    pub(crate) async fn abilities(&self) -> Option<&Vec<MoveAbility>> {
         Some(&self.abilities)
     }
 
     /// Constraints on the struct's formal type parameters.  Move bytecode does not name type
     /// parameters, so when they are referenced (e.g. in field types) they are identified by their
     /// index in this list.
-    async fn type_parameters(&self) -> Option<&Vec<MoveStructTypeParameter>> {
+    pub(crate) async fn type_parameters(&self) -> Option<&Vec<MoveStructTypeParameter>> {
         Some(&self.type_parameters)
     }
 
     /// The names and types of the struct's fields.  Field types reference type parameters, by their
     /// index in the defining struct's `typeParameters` list.
-    async fn fields(&self) -> Option<&Vec<MoveField>> {
+    pub(crate) async fn fields(&self) -> Option<&Vec<MoveField>> {
         Some(&self.fields)
     }
 }
@@ -97,9 +97,9 @@ impl MoveStruct {
     pub(crate) fn new(
         module: String,
         name: String,
-        def: StructDef,
+        def: DataDef,
         checkpoint_viewed_at: u64,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         let type_parameters = def
             .type_params
             .into_iter()
@@ -109,8 +109,15 @@ impl MoveStruct {
             })
             .collect();
 
-        let fields = def
-            .fields
+        let MoveData::Struct(fields) = def.data else {
+            // This should never happen, as the data should always be a struct if we're calling
+            // this function. Signal an internal error if it does.
+            return Err(Error::Internal(format!(
+                "Expected struct data, but got: {:?}",
+                def.data
+            )));
+        };
+        let fields = fields
             .into_iter()
             .map(|(name, signature)| MoveField {
                 name,
@@ -118,7 +125,7 @@ impl MoveStruct {
             })
             .collect();
 
-        MoveStruct {
+        Ok(MoveStruct {
             defining_id: SuiAddress::from(def.defining_id),
             module,
             name,
@@ -126,6 +133,6 @@ impl MoveStruct {
             type_parameters,
             fields,
             checkpoint_viewed_at,
-        }
+        })
     }
 }
