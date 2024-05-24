@@ -45,7 +45,7 @@ use crate::schema::{
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
     insert_or_ignore_into, on_conflict_do_update, read_only_blocking,
-    transactional_blocking_with_retry,
+    transactional_blocking_multiple_with_retry, transactional_blocking_with_retry,
 };
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
@@ -72,9 +72,9 @@ macro_rules! chunk {
 // TODO: I think with the `per_db_tx` params, `PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX`
 // is now less relevant. We should do experiments and remove it if it's true.
 const PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX: usize = 1000;
-// The amount of rows to update in one DB transcation
+// The amount of rows to update in one DB transaction
 const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
-// The amount of rows to update in one DB transcation, for objects particularly
+// The amount of rows to update in one DB transaction, for objects particularly
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
 const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;
@@ -89,7 +89,7 @@ FROM (
     SELECT *,
            ROW_NUMBER() OVER (PARTITION BY object_id ORDER BY object_version DESC) as rn
     FROM objects_history
-    WHERE checkpoint_sequence_number >= $1 AND checkpoint_sequence_number < $2
+    WHERE checkpoint_sequence_number >= {start_cp} AND checkpoint_sequence_number < {end_cp}
 ) as subquery
 WHERE rn = 1
 ON CONFLICT (object_id) DO UPDATE
@@ -487,30 +487,18 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
 
     fn update_objects_snapshot(&self, start_cp: u64, end_cp: u64) -> Result<(), IndexerError> {
         let work_mem_gb = std::env::var("INDEXER_PG_WORK_MEM")
-            .unwrap_or_else(|_e| "16".to_string())
+            .unwrap_or_else(|_e| "4".to_string())
             .parse::<i64>()
             .unwrap();
-        let pg_work_mem_query_string = format!("SET work_mem = '{}GB'", work_mem_gb);
-        let pg_work_mem_query = pg_work_mem_query_string.as_str();
-        transactional_blocking_with_retry!(
+        let pg_work_mem_query = format!("SET work_mem = '{}GB'", work_mem_gb);
+        let snapshot_update_query = UPDATE_OBJECTS_SNAPSHOT_QUERY
+            .replace("{start_cp}", &start_cp.to_string())
+            .replace("{end_cp}", &end_cp.to_string());
+        transactional_blocking_multiple_with_retry!(
             &self.blocking_cp,
-            |conn| { RunQueryDsl::execute(diesel::sql_query(pg_work_mem_query), conn,) },
+            [pg_work_mem_query.clone(), snapshot_update_query.clone()],
             PG_DB_COMMIT_SLEEP_DURATION
-        )?;
-
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
-                RunQueryDsl::execute(
-                    diesel::sql_query(UPDATE_OBJECTS_SNAPSHOT_QUERY)
-                        .bind::<diesel::sql_types::BigInt, _>(start_cp as i64)
-                        .bind::<diesel::sql_types::BigInt, _>(end_cp as i64),
-                    conn,
-                )
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )?;
-        Ok(())
+        )
     }
 
     fn persist_checkpoints(&self, checkpoints: Vec<IndexedCheckpoint>) -> Result<(), IndexerError> {

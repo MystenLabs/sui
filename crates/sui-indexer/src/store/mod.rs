@@ -150,6 +150,93 @@ pub mod diesel_macro {
     }
 
     #[macro_export]
+    macro_rules! transactional_blocking_multiple_with_retry {
+        ($pool:expr, [$($query:expr),+], $max_elapsed:expr) => {{
+            use $crate::db::get_pool_connection;
+            use $crate::db::PoolConnection;
+            use $crate::errors::IndexerError;
+            use diesel::RunQueryDsl;
+            let mut backoff = backoff::ExponentialBackoff::default();
+            backoff.max_elapsed_time = Some($max_elapsed);
+            let result = match backoff::retry(backoff, || {
+                #[cfg(feature = "postgres-feature")]
+                {
+                    let mut pool_conn =
+                        get_pool_connection($pool).map_err(|e| backoff::Error::Transient {
+                            err: IndexerError::PostgresWriteError(e.to_string()),
+                            retry_after: None,
+                        })?;
+                    for query in &[$($query),+] {
+                        pool_conn
+                        .as_any_mut()
+                        .downcast_mut::<PoolConnection<diesel::PgConnection>>()
+                        .unwrap()
+                        .build_transaction()
+                        .read_write()
+                        .run(
+                            |conn| {
+                                RunQueryDsl::execute(diesel::sql_query(query), conn,)
+                            },
+                        )
+                        .map_err(|e| {
+                            tracing::error!(
+                                "Error with persisting data into DB: {:?}, retrying...",
+                                e
+                            );
+                            backoff::Error::Transient {
+                                err: IndexerError::PostgresWriteError(e.to_string()),
+                                retry_after: None,
+                            }
+                        }).map_err(|e| backoff::Error::Transient {
+                            err: IndexerError::PostgresWriteError(e.to_string()),
+                            retry_after: None,
+                        })?;
+                    }
+                    Ok(())
+                }
+                #[cfg(feature = "mysql-feature")]
+                #[cfg(not(feature = "postgres-feature"))]
+                {
+                    use diesel::Connection;
+                    let mut pool_conn =
+                        get_pool_connection($pool).map_err(|e| backoff::Error::Transient {
+                            err: IndexerError::PostgresWriteError(e.to_string()),
+                            retry_after: None,
+                        })?;
+                    for query in &[$($query),+] {
+                        pool_conn
+                        .as_any_mut()
+                        .downcast_mut::<PoolConnection<diesel::MysqlConnection>>()
+                        .unwrap()
+                        .transaction(
+                            |conn| {
+                                RunQueryDsl::execute(diesel::sql_query(query), conn)
+                            },
+                        )
+                        .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
+                        .map_err(|e| {
+                            tracing::error!(
+                                "Error with persisting data into DB: {:?}, retrying...",
+                                e
+                            );
+                            backoff::Error::Transient {
+                                err: IndexerError::PostgresWriteError(e.to_string()),
+                                retry_after: None,
+                            }
+                        })?;
+                    }
+                    Ok(())
+                }
+            }) {
+                Ok(v) => Ok(v),
+                Err(backoff::Error::Transient { err, .. }) => Err(err),
+                Err(backoff::Error::Permanent(err)) => Err(err),
+            };
+            result
+        }};
+    }
+
+    #[macro_export]
     macro_rules! spawn_read_only_blocking {
         ($pool:expr, $query:expr, $repeatable_read:expr) => {{
             use downcast::Any;
@@ -320,5 +407,6 @@ pub mod diesel_macro {
     pub use run_query_repeatable;
     pub use run_query_repeatable_async;
     pub use spawn_read_only_blocking;
+    pub use transactional_blocking_multiple_with_retry;
     pub use transactional_blocking_with_retry;
 }
