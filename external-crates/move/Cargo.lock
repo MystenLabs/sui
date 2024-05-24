@@ -1515,6 +1515,32 @@ name = "move-abstract-stack"
 version = "0.0.1"
 
 [[package]]
+name = "move-analyzer"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "clap 4.5.4",
+ "codespan-reporting",
+ "crossbeam",
+ "derivative",
+ "dunce",
+ "im",
+ "itertools",
+ "lsp-server",
+ "lsp-types",
+ "move-command-line-common",
+ "move-compiler",
+ "move-ir-types",
+ "move-package",
+ "move-symbol-pool",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "url",
+ "vfs",
+]
+
+[[package]]
 name = "move-binary-format"
 version = "0.0.3"
 dependencies = [
@@ -1914,32 +1940,6 @@ dependencies = [
  "move-symbol-pool",
  "once_cell",
  "serde",
-]
-
-[[package]]
-name = "move-lsp"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "clap 4.5.4",
- "codespan-reporting",
- "crossbeam",
- "derivative",
- "dunce",
- "im",
- "itertools",
- "lsp-server",
- "lsp-types",
- "move-command-line-common",
- "move-compiler",
- "move-ir-types",
- "move-package",
- "move-symbol-pool",
- "serde_json",
- "sha2",
- "tempfile",
- "url",
- "vfs",
 ]
 
 [[package]]

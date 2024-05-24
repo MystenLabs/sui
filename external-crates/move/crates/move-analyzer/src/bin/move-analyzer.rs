@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use move_lsp::analyzer;
+use move_analyzer::analyzer;
 
 #[derive(Parser)]
 #[clap(author, version, about)]

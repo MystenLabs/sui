@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::*;
-use move_lsp::analyzer;
+use move_analyzer::analyzer;
 
 // Define the `GIT_REVISION` and `VERSION` consts
 bin_version::bin_version!();

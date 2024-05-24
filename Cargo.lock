@@ -6569,12 +6569,28 @@ version = "0.0.1"
 
 [[package]]
 name = "move-analyzer"
-version = "1.27.0"
+version = "1.0.0"
 dependencies = [
- "bin-version",
+ "anyhow",
  "clap",
- "move-lsp",
- "tokio",
+ "codespan-reporting",
+ "crossbeam",
+ "derivative",
+ "dunce",
+ "im",
+ "itertools 0.10.5",
+ "lsp-server",
+ "lsp-types",
+ "move-command-line-common",
+ "move-compiler",
+ "move-ir-types",
+ "move-package",
+ "move-symbol-pool",
+ "serde_json",
+ "sha2 0.9.9",
+ "tempfile",
+ "url",
+ "vfs",
 ]
 
 [[package]]
@@ -6929,32 +6945,6 @@ dependencies = [
  "move-symbol-pool",
  "once_cell",
  "serde",
-]
-
-[[package]]
-name = "move-lsp"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "clap",
- "codespan-reporting",
- "crossbeam",
- "derivative",
- "dunce",
- "im",
- "itertools 0.10.5",
- "lsp-server",
- "lsp-types",
- "move-command-line-common",
- "move-compiler",
- "move-ir-types",
- "move-package",
- "move-symbol-pool",
- "serde_json",
- "sha2 0.9.9",
- "tempfile",
- "url",
- "vfs",
 ]
 
 [[package]]
@@ -13090,6 +13080,16 @@ dependencies = [
  "sui-types",
  "sui-verifier-latest",
  "tempfile",
+]
+
+[[package]]
+name = "sui-move-lsp"
+version = "1.27.0"
+dependencies = [
+ "bin-version",
+ "clap",
+ "move-analyzer",
+ "tokio",
 ]
 
 [[package]]
