@@ -13575,6 +13575,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with 2.1.0",
+ "sui-protocol-config",
  "sui-sdk 0.0.0",
  "sui-types",
  "tap",

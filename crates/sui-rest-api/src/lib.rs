@@ -100,6 +100,14 @@ impl RestService {
                 system::GET_SYSTEM_STATE_SUMMARY_PATH,
                 get(system::get_system_state_summary),
             )
+            .route(
+                system::GET_CURRENT_PROTOCOL_CONFIG_PATH,
+                get(system::get_current_protocol_config),
+            )
+            .route(
+                system::GET_PROTOCOL_CONFIG_PATH,
+                get(system::get_protocol_config),
+            )
             .with_state(self.clone())
             .merge(rest_router(store))
             .pipe(|router| {
