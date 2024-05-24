@@ -46,10 +46,12 @@ impl MetricsCallbackMaker {
             .with_label_values(&[&route])
             .inc();
         let request_size = request.size();
-        self.metrics
-            .request_size
-            .with_label_values(&[&route])
-            .observe(request_size as f64);
+        if request_size > 0 {
+            self.metrics
+                .request_size
+                .with_label_values(&[&route])
+                .observe(request_size as f64);
+        }
         if request_size > self.excessive_message_size {
             self.metrics
                 .excessive_size_requests
@@ -85,10 +87,12 @@ impl MetricsResponseCallback {
     // Update response metrics.
     pub(crate) fn on_response(self, response: &dyn SizedResponse) {
         let response_size = response.size();
-        self.metrics
-            .response_size
-            .with_label_values(&[&self.route])
-            .observe(response_size as f64);
+        if response_size > 0 {
+            self.metrics
+                .response_size
+                .with_label_values(&[&self.route])
+                .observe(response_size as f64);
+        }
         if response_size > self.excessive_message_size {
             self.metrics
                 .excessive_size_responses

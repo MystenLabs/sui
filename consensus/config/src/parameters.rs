@@ -199,7 +199,11 @@ impl TonicParameters {
     }
 
     fn default_message_size_limit() -> usize {
-        8 << 20
+        32 << 20
+    }
+
+    pub fn excessive_message_size(&self) -> usize {
+        self.message_size_limit * 3 / 4
     }
 }
 
