@@ -2118,16 +2118,29 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
                 .with_message("Bad binary header".to_string()));
         }
         // load binary version
-        let version = match read_u32(&mut cursor) {
+        let flavored_version = match read_u32(&mut cursor) {
             Ok(v) => v,
             Err(_) => {
                 return Err(PartialVMError::new(StatusCode::MALFORMED)
                     .with_message("Bad binary header".to_string()));
             }
         };
-        if version < binary_config.min_binary_format_version
-            || version > u32::min(binary_config.max_binary_format_version, VERSION_MAX)
-        {
+
+        let version = BinaryFlavor::decode_version(flavored_version);
+        let flavor = BinaryFlavor::decode_flavor(flavored_version);
+
+        // Version is below minimum supported version
+        if version < binary_config.min_binary_format_version {
+            return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION));
+        }
+
+        // Version is greater than maximum supported version
+        if version > u32::min(binary_config.max_binary_format_version, VERSION_MAX) {
+            return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION));
+        }
+
+        // Bad flavor to the version: for version 7 and above, only SUI_FLAVOR is supported
+        if version >= VERSION_7 && flavor != Some(BinaryFlavor::SUI_FLAVOR) {
             return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION));
         }
 

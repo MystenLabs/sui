@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 47;
+const MAX_PROTOCOL_VERSION: u64 = 48;
 
 // Record history of protocol version allocations here:
 //
@@ -132,6 +132,7 @@ const MAX_PROTOCOL_VERSION: u64 = 47;
 // Version 47: Use tonic networking for Mysticeti.
 //             Resolve Move abort locations to the package id instead of the runtime module ID.
 //             Enable random beacon in testnet.
+// Version 48: Enable Move enums on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2253,6 +2254,11 @@ impl ProtocolConfig {
 
                     // Enable the committed sub dag digest inclusion on the commit output
                     cfg.feature_flags.mysticeti_use_committed_subdag_digest = true;
+                }
+                48 => {
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.move_binary_format_version = Some(7);
+                    }
                 }
                 // Use this template when making changes:
                 //
