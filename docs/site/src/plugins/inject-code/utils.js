@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Pass in an array of lines from code source.
-// Return the array without blank lines in beg or end.
+// Return the array without blank lines in beg or end
+// but leave whitespace indentation alone.
 exports.trimContent = (content) => {
   let arr = content.split("\n");
   let start = 0;
@@ -43,7 +44,7 @@ const removeComments = (text, options) => {
     element.toLowerCase().includes("nocomment"),
   );
   if (cont) {
-    return text.replace(/^\s*\/\/\/?.*$(?:\r\n?|\n)?/gm, "");
+    return text.replace(/^\s*\/\/.*$(?:\r\n?|\n)?/gm, "");
   } else {
     return text;
   }
@@ -79,6 +80,7 @@ exports.processOptions = (text, options) => {
 
 // When including a function, struct by name
 // Need to catch the stuff that comes before
+// For example, comments, #[] style directives, and so on
 
 exports.capturePrepend = (match, text) => {
   const numSpaces = match[1]
