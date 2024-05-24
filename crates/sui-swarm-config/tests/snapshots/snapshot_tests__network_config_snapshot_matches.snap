@@ -108,9 +108,13 @@ validator_configs:
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
         - TestIssuer
         - Twitch
@@ -239,9 +243,13 @@ validator_configs:
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
         - TestIssuer
         - Twitch
@@ -370,9 +378,13 @@ validator_configs:
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
         - TestIssuer
         - Twitch
@@ -501,9 +513,13 @@ validator_configs:
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
         - TestIssuer
         - Twitch
@@ -632,9 +648,13 @@ validator_configs:
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
         - TestIssuer
         - Twitch
@@ -763,9 +783,13 @@ validator_configs:
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
         - TestIssuer
         - Twitch
@@ -894,9 +918,13 @@ validator_configs:
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
         - TestIssuer
         - Twitch
