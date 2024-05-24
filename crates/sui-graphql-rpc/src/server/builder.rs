@@ -11,6 +11,7 @@ use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::{DataLoader, Db};
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::types::datatype::IMoveDatatype;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -456,6 +457,7 @@ fn schema_builder() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
         .register_output_type::<IMoveObject>()
         .register_output_type::<IObject>()
         .register_output_type::<IOwner>()
+        .register_output_type::<IMoveDatatype>()
 }
 
 /// Return the string representation of the schema used by this server.

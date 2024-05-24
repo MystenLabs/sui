@@ -11,6 +11,8 @@ use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
 
 use super::cursor::{JsonCursor, Page};
+use super::datatype::MoveDatatype;
+use super::move_enum::MoveEnum;
 use super::move_function::MoveFunction;
 use super::move_struct::MoveStruct;
 use super::object::Object;
@@ -199,6 +201,149 @@ impl MoveModule {
         }
     }
 
+    /// Look-up the definition of a enum defined in this module, by its name.
+    #[graphql(name = "enum")]
+    async fn enum_(&self, name: String) -> Result<Option<MoveEnum>> {
+        self.enum_impl(name).extend()
+    }
+
+    /// Iterate through the enums defined in this module.
+    async fn enums(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CStruct>,
+        last: Option<u64>,
+        before: Option<CStruct>,
+    ) -> Result<Option<Connection<String, MoveEnum>>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let after = page.after().map(|a| a.name.as_str());
+        let before = page.before().map(|b| b.name.as_str());
+        let enum_range = self.parsed.enums(after, before);
+
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(self.checkpoint_viewed_at);
+
+        let mut connection = Connection::new(false, false);
+        let enum_names = if page.is_from_front() {
+            enum_range.take(page.limit()).collect()
+        } else {
+            let mut names: Vec<_> = enum_range.rev().take(page.limit()).collect();
+            names.reverse();
+            names
+        };
+
+        connection.has_previous_page = enum_names
+            .first()
+            .is_some_and(|fst| self.parsed.enums(None, Some(fst)).next().is_some());
+
+        connection.has_next_page = enum_names
+            .last()
+            .is_some_and(|lst| self.parsed.enums(Some(lst), None).next().is_some());
+
+        for name in enum_names {
+            let Some(enum_) = self.enum_impl(name.to_string()).extend()? else {
+                return Err(Error::Internal(format!(
+                    "Cannot deserialize enum {name} in module {}::{}",
+                    self.storage_id,
+                    self.parsed.name(),
+                )))
+                .extend();
+            };
+
+            let cursor = JsonCursor::new(ConsistentNamedCursor {
+                name: name.to_string(),
+                c: checkpoint_viewed_at,
+            })
+            .encode_cursor();
+            connection.edges.push(Edge::new(cursor, enum_));
+        }
+
+        if connection.edges.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(connection))
+        }
+    }
+
+    /// Look-up the definition of a datatype (struct or enum) defined in this module, by its name.
+    async fn datatype(&self, name: String) -> Result<Option<MoveDatatype>> {
+        match self.struct_impl(name.clone()) {
+            Ok(Some(s)) => Ok(Some(MoveDatatype::Struct(s))),
+            Ok(None) => self
+                .enum_impl(name)
+                .map(|x| x.map(MoveDatatype::Enum))
+                .extend(),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Iterate through the datatypes (enmums and structs) defined in this module.
+    async fn datatypes(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CStruct>,
+        last: Option<u64>,
+        before: Option<CStruct>,
+    ) -> Result<Option<Connection<String, MoveDatatype>>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let after = page.after().map(|a| a.name.as_str());
+        let before = page.before().map(|b| b.name.as_str());
+        let datatype_range = self.parsed.datatypes(after, before);
+
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(self.checkpoint_viewed_at);
+
+        let mut connection = Connection::new(false, false);
+        let datatype_names = if page.is_from_front() {
+            datatype_range.take(page.limit()).collect()
+        } else {
+            let mut names: Vec<_> = datatype_range.rev().take(page.limit()).collect();
+            names.reverse();
+            names
+        };
+
+        connection.has_previous_page = datatype_names
+            .first()
+            .is_some_and(|fst| self.parsed.datatypes(None, Some(fst)).next().is_some());
+
+        connection.has_next_page = datatype_names
+            .last()
+            .is_some_and(|lst| self.parsed.datatypes(Some(lst), None).next().is_some());
+
+        for name in datatype_names {
+            let datatype = match self.struct_impl(name.to_string()) {
+                Ok(None) => self
+                    .enum_impl(name.to_string())
+                    .map(|x| x.map(MoveDatatype::Enum))
+                    .extend()?,
+                Ok(Some(s)) => Some(MoveDatatype::Struct(s)),
+                Err(e) => return Err(e.into()),
+            }
+            .ok_or_else(|| {
+                Error::Internal(format!(
+                    "Cannot deserialize datatype {name} in module {}::{}",
+                    self.storage_id,
+                    self.parsed.name(),
+                ))
+            })?;
+
+            let cursor = JsonCursor::new(ConsistentNamedCursor {
+                name: name.to_string(),
+                c: checkpoint_viewed_at,
+            })
+            .encode_cursor();
+            connection.edges.push(Edge::new(cursor, datatype));
+        }
+
+        if connection.edges.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(connection))
+        }
+    }
+
     /// Look-up the signature of a function defined in this module, by its name.
     async fn function(&self, name: String) -> Result<Option<MoveFunction>> {
         self.function_impl(name).extend()
@@ -289,12 +434,29 @@ impl MoveModule {
             Err(e) => return Err(Error::Internal(e.to_string())),
         };
 
-        Ok(Some(MoveStruct::new(
+        MoveStruct::new(
             self.parsed.name().to_string(),
             name,
             def,
             self.checkpoint_viewed_at,
-        )))
+        )
+        .map(Option::Some)
+    }
+
+    fn enum_impl(&self, name: String) -> Result<Option<MoveEnum>, Error> {
+        let def = match self.parsed.enum_def(&name) {
+            Ok(Some(def)) => def,
+            Ok(None) => return Ok(None),
+            Err(e) => return Err(Error::Internal(e.to_string())),
+        };
+
+        MoveEnum::new(
+            self.parsed.name().to_string(),
+            name,
+            def,
+            self.checkpoint_viewed_at,
+        )
+        .map(Option::Some)
     }
 
     pub(crate) fn function_impl(&self, name: String) -> Result<Option<MoveFunction>, Error> {

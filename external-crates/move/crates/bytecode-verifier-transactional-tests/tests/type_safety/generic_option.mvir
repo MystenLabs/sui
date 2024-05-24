@@ -37,3 +37,42 @@ module 0x42.Option {
         return Self.unwrap_or<Self.T<E>>(Self.none<Self.T<E>>(), Self.none<E>());
     }
 }
+
+//# publish
+
+// example using generics in a few common/interesting/non-trivial ways -- with actual enums!
+module 0x43.Option {
+    enum T<E> has copy, drop, store {
+        None { },
+        Some { v: E }
+    }
+
+    public none<E: store>(): Self.T<E> {
+    label b0:
+        return T.None<E> { };
+    }
+
+    public some<E: store>(e: E): Self.T<E> {
+    label b0:
+        return T.Some<E> { v: move(e) };
+    }
+
+    public unwrap_or<E: copy + drop + store>(x: Self.T<E>, e: E): E {
+        let v: E;
+    label b0:
+        variant_switch T (&x) {
+            None : b1,
+            Some : b2,
+        };
+    label b1:
+        T.Some<E> { v: v } = move(x);
+        return move(v);
+    label b2:
+        return move(e);
+    }
+
+    public really_none<E: copy + drop + store>(): Self.T<E> {
+    label b0:
+        return Self.unwrap_or<Self.T<E>>(Self.none<Self.T<E>>(), Self.none<E>());
+    }
+}

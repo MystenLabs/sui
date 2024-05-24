@@ -10,7 +10,7 @@ use std::sync::Arc;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
+use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use schemars::JsonSchema;
@@ -300,10 +300,10 @@ impl MoveObject {
     /// The `resolver` value must contain the module that declares `self.type_` and the (transitive)
     /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
     pub fn get_layout(&self, resolver: &impl GetModule) -> Result<MoveStructLayout, SuiError> {
-        Self::get_layout_from_struct_tag(self.type_().clone().into(), resolver)
+        Self::get_struct_layout_from_struct_tag(self.type_().clone().into(), resolver)
     }
 
-    pub fn get_layout_from_struct_tag(
+    pub fn get_struct_layout_from_struct_tag(
         struct_tag: StructTag,
         resolver: &impl GetModule,
     ) -> Result<MoveStructLayout, SuiError> {
@@ -380,11 +380,10 @@ impl MoveObject {
             let layout = layout_resolver.get_annotated_layout(&self.type_().clone().into())?;
 
             let mut traversal = BalanceTraversal::default();
-            MoveStruct::visit_deserialize(&self.contents, &layout, &mut traversal).map_err(
-                |e| SuiError::ObjectSerializationError {
+            MoveValue::visit_deserialize(&self.contents, &layout.into_layout(), &mut traversal)
+                .map_err(|e| SuiError::ObjectSerializationError {
                     error: e.to_string(),
-                },
-            )?;
+                })?;
 
             Ok(traversal.finish())
         }
