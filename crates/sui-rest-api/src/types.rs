@@ -4,6 +4,9 @@
 /// Chain ID of the current chain
 pub const X_SUI_CHAIN_ID: &str = "x-sui-chain-id";
 
+/// Chain name of the current chain
+pub const X_SUI_CHAIN: &str = "x-sui-chain";
+
 /// Current checkpoint height
 pub const X_SUI_CHECKPOINT_HEIGHT: &str = "x-sui-checkpoint-height";
 

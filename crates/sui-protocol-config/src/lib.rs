@@ -240,6 +240,16 @@ impl Default for Chain {
     }
 }
 
+impl Chain {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Chain::Mainnet => "mainnet",
+            Chain::Testnet => "testnet",
+            Chain::Unknown => "unknown",
+        }
+    }
+}
+
 pub struct Error(pub String);
 
 /// Records on/off feature flags that may vary at each protocol version.
