@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    clever_error_rendering::render_clever_error_opt,
     client_ptb::ptb::PTB,
     displays::Pretty,
     key_identity::{get_identity_address, KeyIdentity},
@@ -2723,10 +2724,15 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
                 anyhow!("Effects from SuiTransactionBlockResult should not be empty")
             })?;
             if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
-                return Err(anyhow!(
-                    "Error executing transaction: {:#?}",
-                    effects.status()
-                ));
+                let error_string = if let Some(parsed_abort) =
+                    render_clever_error_opt(&format!("{:?}", effects.status()), client.read_api())
+                        .await
+                {
+                    parsed_abort
+                } else {
+                    format!("{:#?}", effects.status())
+                };
+                return Err(anyhow!("Error executing transaction: {error_string}",));
             }
             Ok(SuiClientCommandResult::TransactionBlock(response))
         }
