@@ -12,6 +12,7 @@ export const walletMutationKeys = {
 	signTransaction: formMutationKeyFn('sign-transaction'),
 	signAndExecuteTransaction: formMutationKeyFn('sign-and-execute-transaction'),
 	switchAccount: formMutationKeyFn('switch-account'),
+	reportTransactionEffects: formMutationKeyFn('report-transaction-effects'),
 };
 
 function formMutationKeyFn(baseEntity: string) {

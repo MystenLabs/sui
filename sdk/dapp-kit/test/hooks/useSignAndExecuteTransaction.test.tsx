@@ -119,6 +119,8 @@ describe('useSignAndExecuteTransaction', () => {
 		});
 		expect(reportEffects).toHaveBeenCalledWith({
 			effects: 'ChQe',
+			chain: 'sui:testnet',
+			account: mockWallet.accounts[0],
 		});
 
 		const call = signTransaction.mock.calls[0];
