@@ -108,6 +108,7 @@ impl RestService {
                 system::GET_PROTOCOL_CONFIG_PATH,
                 get(system::get_protocol_config),
             )
+            .route(system::GET_GAS_INFO_PATH, get(system::get_gas_info))
             .with_state(self.clone())
             .merge(rest_router(store))
             .pipe(|router| {
