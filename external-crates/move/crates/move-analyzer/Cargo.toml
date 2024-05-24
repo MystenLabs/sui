@@ -1,5 +1,5 @@
 [package]
-name = "move-analyzer"
+name = "move-lsp"
 version = "1.0.0"
 authors = ["Diem Association <opensource@diem.com>"]
 description = "A language server for Move"

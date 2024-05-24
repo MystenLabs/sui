@@ -5,6 +5,7 @@
 #[macro_use(sp)]
 extern crate move_ir_types;
 
+pub mod analyzer;
 pub mod completion;
 pub mod context;
 pub mod diagnostics;
