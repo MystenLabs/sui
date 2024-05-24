@@ -270,6 +270,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
+    pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
@@ -661,6 +662,11 @@ impl AuthorityMetrics {
             consensus_handler_congested_transactions: register_int_counter_with_registry!(
                 "consensus_handler_congested_transactions",
                 "Number of transactions deferred by consensus handler due to congestion",
+                registry,
+            ).unwrap(),
+            consensus_handler_cancelled_transactions: register_int_counter_with_registry!(
+                "consensus_handler_cancelled_transactions",
+                "Number of transactions cancelled by consensus handler",
                 registry,
             ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(
