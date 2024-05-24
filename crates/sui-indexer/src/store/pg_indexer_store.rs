@@ -486,19 +486,19 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
     }
 
     fn update_objects_snapshot(&self, start_cp: u64, end_cp: u64) -> Result<(), IndexerError> {
-        let work_mem_gb = std::env::var("INDEXER_PG_WORK_MEM")
-            .unwrap_or_else(|_e| "4".to_string())
-            .parse::<i64>()
-            .unwrap();
-        let pg_work_mem_query = format!("SET work_mem = '{}GB'", work_mem_gb);
-        let snapshot_update_query = UPDATE_OBJECTS_SNAPSHOT_QUERY
-            .replace("{start_cp}", &start_cp.to_string())
-            .replace("{end_cp}", &end_cp.to_string());
-        transactional_blocking_multiple_with_retry!(
+        transactional_blocking_with_retry!(
             &self.blocking_cp,
-            [pg_work_mem_query.clone(), snapshot_update_query.clone()],
+            |conn| {
+                RunQueryDsl::execute(
+                    diesel::sql_query(UPDATE_OBJECTS_SNAPSHOT_QUERY)
+                        .bind::<diesel::sql_types::BigInt, _>(start_cp as i64)
+                        .bind::<diesel::sql_types::BigInt, _>(end_cp as i64),
+                    conn,
+                )
+            },
             PG_DB_COMMIT_SLEEP_DURATION
-        )
+        )?;
+        Ok(())
     }
 
     fn persist_checkpoints(&self, checkpoints: Vec<IndexedCheckpoint>) -> Result<(), IndexerError> {

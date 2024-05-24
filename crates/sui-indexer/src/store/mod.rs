@@ -91,15 +91,38 @@ pub mod diesel_macro {
             let result = match backoff::retry(backoff, || {
                 #[cfg(feature = "postgres-feature")]
                 {
+
                     let mut pool_conn =
                         get_pool_connection($pool).map_err(|e| backoff::Error::Transient {
                             err: IndexerError::PostgresWriteError(e.to_string()),
                             retry_after: None,
                         })?;
-                    pool_conn
-                        .as_any_mut()
-                        .downcast_mut::<PoolConnection<diesel::PgConnection>>()
-                        .unwrap()
+                    let pg_pool_conn = pool_conn
+                    .as_any_mut()
+                    .downcast_mut::<PoolConnection<diesel::PgConnection>>()
+                    .unwrap();
+
+                    diesel::sql_query("SET work_mem = '4GB';")
+                        .execute(pg_pool_conn)
+                        .map_err(|e| {
+                            tracing::error!("Error setting work_mem: {:?}, retrying...", e);
+                            backoff::Error::Transient {
+                                err: IndexerError::PostgresWriteError(e.to_string()),
+                                retry_after: None,
+                            }
+                        })?;
+                    // // Check the current work_mem setting
+                    // let current_work_mem: String = diesel::sql_query("SHOW work_mem;")
+                    //     .get_result::<i64>(pg_pool_conn)
+                    //     .map_err(|e| {
+                    //         tracing::error!("Error showing work_mem: {:?}, retrying...", e);
+                    //         backoff::Error::Transient {
+                    //             err: IndexerError::PostgresWriteError(e.to_string()),
+                    //             retry_after: None,
+                    //         }
+                    //     })?
+                    //     .get(0);
+                    pg_pool_conn
                         .build_transaction()
                         .read_write()
                         .run($query)
