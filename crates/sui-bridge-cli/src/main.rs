@@ -5,8 +5,11 @@ use clap::*;
 use ethers::providers::Middleware;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
+use std::collections::HashMap;
+use std::str::from_utf8;
 use std::sync::Arc;
 use sui_bridge::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
+use sui_bridge::crypto::BridgeAuthorityPublicKey;
 use sui_bridge::eth_transaction_builder::build_eth_transaction;
 use sui_bridge::sui_client::SuiClient;
 use sui_bridge::sui_transaction_builder::build_sui_transaction;
@@ -21,8 +24,13 @@ use sui_bridge_cli::{
 };
 use sui_config::Config;
 use sui_sdk::SuiClient as SuiSdkClient;
+use sui_sdk::SuiClientBuilder;
 use sui_types::bridge::BridgeChainId;
+use sui_types::bridge::MoveTypeCommitteeMemberRegistration;
+use sui_types::committee::TOTAL_VOTING_POWER;
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::Signature;
+use sui_types::crypto::ToFromBytes;
 use sui_types::transaction::Transaction;
 
 #[tokio::main]
@@ -185,6 +193,77 @@ async fn main() -> anyhow::Result<()> {
             println!("Config Proxy Address: {:?}", config_address);
             println!("Vault Address: {:?}", vault_address);
             return Ok(());
+        }
+
+        BridgeCommand::PrintBridgeRegistrationInfo { sui_rpc_url } => {
+            let sui_bridge_client = SuiClient::<SuiSdkClient>::new(&sui_rpc_url).await?;
+            let bridge_summary = sui_bridge_client
+                .get_bridge_summary()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to get bridge summary: {:?}", e))?;
+            let move_type_bridge_committee = bridge_summary.committee;
+            let sui_client = SuiClientBuilder::default().build(sui_rpc_url).await?;
+            let stakes = sui_client
+                .governance_api()
+                .get_committee_info(None)
+                .await?
+                .validators
+                .into_iter()
+                .collect::<HashMap<_, _>>();
+            let names = sui_client
+                .governance_api()
+                .get_latest_sui_system_state()
+                .await?
+                .active_validators
+                .into_iter()
+                .map(|summary| {
+                    let protocol_key =
+                        AuthorityPublicKeyBytes::from_bytes(&summary.protocol_pubkey_bytes)
+                            .unwrap();
+                    (summary.sui_address, (protocol_key, summary.name))
+                })
+                .collect::<HashMap<_, _>>();
+            let mut authorities = vec![];
+            for (_, member) in move_type_bridge_committee.member_registration {
+                let MoveTypeCommitteeMemberRegistration {
+                    sui_address,
+                    bridge_pubkey_bytes,
+                    http_rest_url,
+                } = member;
+                let Ok(pubkey) = BridgeAuthorityPublicKey::from_bytes(&bridge_pubkey_bytes) else {
+                    println!(
+                        "Invalid bridge pubkey for validator {}: {:?}",
+                        sui_address, bridge_pubkey_bytes
+                    );
+                    continue;
+                };
+                let Ok(base_url) = from_utf8(&http_rest_url) else {
+                    println!(
+                        "Invalid bridge http url for validator: {}: {:?}",
+                        sui_address, http_rest_url
+                    );
+                    continue;
+                };
+                let base_url = base_url.to_string();
+
+                let (protocol_key, name) = names.get(&sui_address).unwrap();
+                let stake = stakes.get(protocol_key).unwrap();
+                authorities.push((name, sui_address, pubkey, base_url, stake));
+            }
+            let total_stake = authorities
+                .iter()
+                .map(|(_, _, _, _, stake)| **stake)
+                .sum::<u64>();
+            println!(
+                "Total registered stake: {}%",
+                total_stake as f32 / TOTAL_VOTING_POWER as f32 * 100.0
+            );
+            for (name, sui_address, pubkey, base_url, stake) in authorities {
+                println!(
+                    "Name: {}, Sui Address: {}, Bridge Authority Pubkey: {}, Bridge Node URL: {}, Stake: {}",
+                    name, sui_address, pubkey, base_url, stake
+                );
+            }
         }
 
         BridgeCommand::Client { config_path, cmd } => {
