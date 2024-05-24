@@ -1,8 +1,0 @@
-error[E13003]: feature is under active development
-  ┌─ tests/development/enums/matching/simple_enum_ref_match.move:3:17
-  │
-3 │     public enum Box<T> { B { x: T } }
-  │                 ^^^ Enums are not supported in bytecode.
-  │
-  = This feature is currently in development.
-

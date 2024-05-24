@@ -1,7 +1,7 @@
 //# publish
 
 // This file contains tests checking that type arguments used in phantom position
-// (phantom arguments) are not considered when deriving the abilities for a struct.
+// (phantom arguments) are not considered when deriving the abilities for a struct or enum.
 
 module 0x1.M1 {
     struct NoAbilities { a: bool }
@@ -70,5 +70,77 @@ module 0x1.M9 {
     f(): Self.RequireStore<Self.HasStore<M1.NoAbilities, M1.NoAbilities>> {
     label b0:
         return RequireStore<Self.HasStore<M1.NoAbilities, M1.NoAbilities>> { a: true };
+    }
+}
+
+//# publish
+
+module 0x2.M1 {
+    enum NoAbilities { V { a: bool } }
+}
+
+//# publish
+module 0x2.M2 {
+    import 0x2.M1;
+
+    enum HasDrop<phantom T1, T2> has drop { V { a: bool } }
+
+    // `WriteRef` requires drop
+    f(ref: &mut Self.HasDrop<M1.NoAbilities, M1.NoAbilities>) {
+    label b0:
+        *move(ref) = HasDrop.V<M1.NoAbilities, M1.NoAbilities> { a : true };
+        return;
+    }
+}
+
+//# publish
+module 0x2.M3 {
+    import 0x2.M1;
+
+    enum HasDrop<phantom T1, T2> has drop { V { a: bool } }
+
+    // `Pop` requires drop
+    f() {
+    label b0:
+        _ = HasDrop.V<M1.NoAbilities, M1.NoAbilities> { a: true };
+        return;
+    }
+ }
+
+//# publish
+ module 0x2.M4 {
+    import 0x2.M1;
+
+    enum HasDrop<phantom T1, T2> has drop { V { a: bool } }
+
+    // Leaving value in local requires drop
+    f(x: Self.HasDrop<M1.NoAbilities, M1.NoAbilities>) {
+    label b0:
+        return;
+    }
+ }
+
+//# publish
+ module 0x2.M5 {
+    import 0x2.M1;
+    enum HasCopy<phantom T1, T2> has copy { V { a : bool } }
+
+    // `CopyLoc` requires copy
+    f(x: Self.HasCopy<M1.NoAbilities, M1.NoAbilities>): Self.HasCopy<M1.NoAbilities, M1.NoAbilities> * Self.HasCopy<M1.NoAbilities, M1.NoAbilities> {
+    label b0:
+        return (copy(x), move(x));
+    }
+ }
+
+//# publish
+module 0x2.M9 {
+    import 0x2.M1;
+
+    enum HasStore<phantom T1, T2> has store { V { a: bool } }
+    enum RequireStore<T: store> { V { a: bool } }
+
+    f(): Self.RequireStore<Self.HasStore<M1.NoAbilities, M1.NoAbilities>> {
+    label b0:
+        return RequireStore.V<Self.HasStore<M1.NoAbilities, M1.NoAbilities>> { a: true };
     }
 }

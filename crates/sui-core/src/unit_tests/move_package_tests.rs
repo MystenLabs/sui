@@ -20,7 +20,7 @@ macro_rules! type_origin_table {
     {$($module:ident :: $type:ident => $pkg:expr),* $(,)?} => {{
         vec![$(TypeOrigin {
             module_name: stringify!($module).to_string(),
-            struct_name: stringify!($type).to_string(),
+            datatype_name: stringify!($type).to_string(),
             package: $pkg,
         },)*]
     }}

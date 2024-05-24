@@ -411,3 +411,45 @@ fn deserialize_empty_enum_fails() {
     CompiledModule::deserialize_with_config(&bin, &BinaryConfig::with_extraneous_bytes_check(true))
         .unwrap_err();
 }
+
+#[test]
+fn serialize_deserialize_v6_no_flavor() {
+    let module = basic_test_module();
+    let mut bin = vec![];
+    module.serialize_with_version(VERSION_6, &mut bin).unwrap();
+    let v6_bytes = VERSION_6.to_le_bytes();
+    let v6_flavor_bytes = BinaryFlavor::encode_version(VERSION_6).to_le_bytes();
+    // assert that no flavoring is added to v6
+    assert_eq!(v6_bytes, v6_flavor_bytes);
+    assert_eq!(
+        bin[BinaryConstants::MOVE_MAGIC_SIZE..BinaryConstants::MOVE_MAGIC_SIZE + v6_bytes.len()],
+        v6_bytes
+    );
+    let module = CompiledModule::deserialize_with_defaults(&bin).unwrap();
+    assert_eq!(module.version, VERSION_6);
+}
+
+#[test]
+fn serialize_deserialize_v7_with_no_flavor() {
+    let module = basic_test_module();
+    let mut bin = vec![];
+    module.serialize_with_version(VERSION_7, &mut bin).unwrap();
+    let v7_bytes = VERSION_7.to_le_bytes();
+    // Override the version bytes to not have the flavor
+    for (i, b) in v7_bytes.iter().enumerate() {
+        bin[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    // Deserialization will now fail because the version is not encoded with the flavor and the
+    // version is >= 7.
+    let x = CompiledModule::deserialize_with_defaults(&bin).unwrap_err();
+    assert_eq!(x.major_status(), StatusCode::UNKNOWN_VERSION);
+}
+
+#[test]
+fn serialize_deserialize_v7_with_flavor() {
+    let module = basic_test_module_with_enum();
+    let mut bin = vec![];
+    module.serialize_with_version(VERSION_7, &mut bin).unwrap();
+    let x = CompiledModule::deserialize_with_defaults(&bin).unwrap();
+    assert_eq!(x, module);
+}

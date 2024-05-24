@@ -1,8 +1,0 @@
-error[E04036]: non-exhaustive pattern
-  ┌─ tests/development/enums/matching/counterexample_guards.move:9:16
-  │
-9 │         match (Option::Some(0)) {
-  │                ^^^^^^^^^^^^^^^ Pattern 'Option::Some(_)' not covered
-  │
-  = Match arms with guards are not considered for coverage.
-

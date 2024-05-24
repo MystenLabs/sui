@@ -1,0 +1,13 @@
+processed 2 tasks
+
+task 0 'publish'. lines 1-23:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::MonomorphicEnums'. Got VMError: {
+    major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
+    sub_status: None,
+    location: 0x1::MonomorphicEnums,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 1 'run'. lines 25-35:
+Error: Dependency not provided for 0000000000000000000000000000000000000000000000000000000000000001.MonomorphicEnums
