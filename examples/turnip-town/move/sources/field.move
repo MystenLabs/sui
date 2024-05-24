@@ -1,47 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// # Field
+/// Defines the `Field` type, which represents a single instance of the game.
+/// Fields are installed as Kiosk Apps on the player's Kiosk. The player that
+/// owns the Kiosk is said to own the installed `Field`.
 ///
-/// Defines the `Field` type, which is responsible for one instance of
-/// the game.  `Field`s are stored centrally, in a `Game` instance,
-/// and a `Deed` is created that gives its owner access to that
-/// `Field` through the `Game`.
-///
-/// Although `Field` is not an object, an `address` is generated for
-/// it, to identify it in the `Game`.  This `address` is also stored
-/// in its `Deed`.
-///
-/// Any field owner can sow or harvest turnips from the field, but
-/// simulating growth and watering can only be done via the `Game`
-/// which decides the cadence of simulation and how much water to
-/// dispense.
+/// Only the owner is able to sow turnips in the field, and take water from
+/// their field (which can be used anywhere, including other players' fields).
+/// Any player can visit a field to water turnips and harvest them, but
+/// harvested turnips always go to the field owner's kiosk.
 module turnip_town::field {
-    use std::option::{Self, Option};
-    use std::vector;
-    use sui::math;
-    use sui::object::{Self, UID};
-    use sui::package;
-    use sui::transfer;
-    use sui::transfer_policy;
-    use sui::tx_context::{Self, TxContext};
-
     use turnip_town::turnip::{Self, Turnip};
+    use turnip_town::water::Water;
 
-    friend turnip_town::game;
+    // === Types ===
 
-    struct FIELD has drop {}
+    public struct Field has store {
+        slots: vector<Slot>,
+    }
 
-    struct Field has store {
-        slots: vector<Option<Turnip>>,
+    /// A slot is a single position in the field.
+    public struct Slot has store {
+        /// The turnip growing at this position in the field.
+        turnip: Option<Turnip>,
+
+        /// The water left over at this position, this is consumed over time.
         water: u64,
+
+        /// The last epoch this slot was simulated at.
+        last_updated: u64,
     }
 
-    /// Deed of ownership for a particular field in the game.
-    struct Deed has key, store {
-        id: UID,
-        field: address,
-    }
+    // === Constants ===
+
+    /// Field width (number of slots)
+    const WIDTH: u64 = 4;
+
+    /// Field height (number of slots)
+    const HEIGHT: u64 = 4;
+
+    // === Errors ===
 
     /// Trying to plant in a non-existent slot.
     const EOutOfBounds: u64 = 0;
@@ -58,512 +56,172 @@ module turnip_town::field {
     /// Turnip is too small to harvest
     const ETooSmall: u64 = 4;
 
-    const WIDTH: u64 = 4;
-    const HEIGHT: u64 = 4;
+    // === Protected Functions ===
 
-    fun init(otw: FIELD, ctx: &mut TxContext) {
-        let publisher = package::claim(otw, ctx);
-
-        // Make `Deed`'s transferable between Kiosks, but without any
-        // additional rules.
-        let (policy, cap) = transfer_policy::new<Deed>(&publisher, ctx);
-        transfer::public_share_object(policy);
-        transfer::public_transfer(cap, tx_context::sender(ctx));
-        package::burn_publisher(publisher);
-    }
-
-    public fun deed_field(deed: &Deed): address {
-        deed.field
-    }
-
-    /// Plant a fresh turnip at position (i, j) in `field`.
-    ///
-    /// Fails if the position is out of bounds or there is already a
-    /// turnip there.
-    public fun sow(field: &mut Field, i: u64, j: u64, ctx: &mut TxContext) {
-        assert!(i < WIDTH && j < HEIGHT, EOutOfBounds);
-
-        let ix = i + j * HEIGHT;
-        let slot = vector::borrow_mut(&mut field.slots, ix);
-
-        assert!(option::is_none(slot), EAlreadyFilled);
-        option::fill(slot, turnip::fresh(ctx));
-    }
-
-    /// Harvest the turnip at position (i, j).
-    ///
-    /// Fails if the position is out of bounds, if no turnip exists
-    /// there or the turnip was too small to harvest.
-    public fun harvest(field: &mut Field, i: u64, j: u64): Turnip {
-        assert!(i < WIDTH && j < HEIGHT, EOutOfBounds);
-
-        let ix = i + j * HEIGHT;
-        let slot = vector::borrow_mut(&mut field.slots, ix);
-        assert!(option::is_some(slot), ENotFilled);
-
-        let turnip = option::extract(slot);
-        assert!(turnip::can_harvest(&turnip), ETooSmall);
-
-        turnip
-    }
-
-    /* Protected Functions ****************************************************/
-
-    /// Create a brand new field.  Protected to prevent `Field`s being
-    /// created but not attached to a game.
-    public(friend) fun new(ctx: &mut TxContext): (Deed, Field) {
-        let field = tx_context::fresh_object_address(ctx);
-
-        let slots = vector[];
+    /// Create a brand new field.
+    public(package) fun new(ctx: &TxContext): Field {
+        let mut slots = vector[];
         let total = WIDTH * HEIGHT;
-        while (vector::length(&slots) < total) {
-            vector::push_back(&mut slots, option::none());
+        while (slots.length() < total) {
+            slots.push_back(Slot {
+                turnip: option::none(),
+                water: 0,
+                last_updated: ctx.epoch(),
+            });
         };
 
-        (
-            Deed { id: object::new(ctx), field },
-            Field { slots, water: 0 },
-        )
+        Field { slots }
     }
 
-    /// Destroy an empty field.  Protected to prevent `Field` being
-    /// destroyed without its associated `Deed` being destroyed.
-    ///
-    /// Fails if there are any turnips left in the `field`.
-    public(friend) fun burn_field(field: Field) {
-        let Field { slots, water: _ } = field;
+    /// Destroy a field with turnips potentially in it, as long as they could
+    /// not be harvested.
+    public(package) fun burn(mut field: Field, ctx: &TxContext) {
+        field.simulate(ctx);
+
+        let Field { mut slots } = field;
 
         while (!vector::is_empty(&slots)) {
-            let turnip = vector::pop_back(&mut slots);
-            assert!(option::is_none(&turnip), ENotEmpty);
-            option::destroy_none(turnip);
+            let Slot { turnip, water: _, last_updated: _ } = slots.pop_back();
+            if (turnip.is_some()) {
+                let turnip = turnip.destroy_some();
+                assert!(!turnip.can_harvest(), ENotEmpty);
+                turnip.consume();
+            } else {
+                turnip.destroy_none();
+            }
         };
 
         vector::destroy_empty(slots)
     }
 
-    /// Destroy the deed for a field.  Protected to prevent `Deed`
-    /// being destroyed without its associated `Field` being
-    /// destroyed.
-    public(friend) fun burn_deed(deed: Deed) {
-        let Deed { id, field: _ } = deed;
-        object::delete(id);
+    /// Plant a fresh turnip at position (i, j) in `field`.
+    ///
+    /// Fails if the position is out of bounds or there is already a turnip
+    /// there.
+    public(package) fun sow(
+        field: &mut Field,
+        i: u64,
+        j: u64,
+        ctx: &mut TxContext,
+    ) {
+        let slot = field.slot_mut(i, j, ctx);
+
+        assert!(slot.turnip.is_none(), EAlreadyFilled);
+        slot.turnip.fill(turnip::fresh(ctx));
+        slot.last_updated = ctx.epoch();
     }
 
-    /// Add water to the field.  Protected so the game can control how
-    /// much water is given.
-    public(friend) fun water(field: &mut Field, amount: u64) {
-        field.water = field.water + amount;
+    /// Add water at position (i, j) in `field`.
+    ///
+    /// Fails if the postion is out-of-bounds. It is valid to water a slot
+    /// without a turnip.
+    public(package) fun water(
+        field: &mut Field,
+        i: u64,
+        j: u64,
+        water: Water,
+        ctx: &TxContext,
+    ) {
+        let slot = field.slot_mut(i, j, ctx);
+        slot.water = slot.water + water.value();
     }
 
-    /// Simulates turnips growing.  Protected as only the game module
-    /// can control when simulation occurs.
-    public(friend) fun simulate_growth(field: &mut Field, is_sunny: bool) {
-        let (total_size, count) = count_turnips(field);
+    /// Harvest the turnip at position (i, j).
+    ///
+    /// Fails if the position is out of bounds, if no turnip exists there or the
+    /// turnip was too small to harvest.
+    public(package) fun harvest(
+        field: &mut Field,
+        i: u64,
+        j: u64,
+        ctx: &TxContext,
+    ): Turnip {
+        let slot = field.slot_mut(i, j, ctx);
 
-        // Not enough water to maintain freshness
-        if (field.water < total_size) {
-            field.water = 0;
-            debit_field_freshness(field);
-        } else {
-            field.water = field.water - total_size;
-            credit_field_freshness(field);
-        };
+        assert!(slot.turnip.is_some(), ENotFilled);
+        let turnip = slot.turnip.extract();
 
-        if (is_sunny) {
-            let total_growth = math::min(20 * count, field.water);
-            grow_turnips(field, total_growth / count / 2);
-            field.water = field.water - total_growth;
-        };
-
-        if (field.water > 0) {
-            debit_field_freshness(field);
-        };
-
-        clean_up_field(field);
+        assert!(turnip.can_harvest(), ETooSmall);
+        turnip
     }
 
-    /* Private Functions ***************************************************/
-    /* (Helpers for `simulate_growth`) */
-
-    fun count_turnips(field: &Field): (u64, u64) {
-        let slots = &field.slots;
-        let len = vector::length(slots);
-
-        let (i, size, count) = (0, 0, 0);
-        while (i < len) {
-            let slot = vector::borrow(slots, i);
-            if (option::is_some(slot)) {
-                let turnip = option::borrow(slot);
-                size = size + turnip::size(turnip);
-                count = count + 1;
+    /// Bring all the slots in the field up-to-date with the current epoch.
+    public fun simulate(field: &mut Field, ctx: &TxContext) {
+        let mut j = 0;
+        while (j < HEIGHT) {
+            let mut i = 0;
+            while (i < WIDTH) {
+                // Calling slot_mut has the effect of bringing the slot
+                // up-to-date before returning a reference to it (which is
+                // immediately discarded).
+                let _ = field.slot_mut(i, j, ctx);
+                i = i + 1;
             };
-            i = i + 1;
-        };
-
-        (size, count)
+            j = j + 1;
+        }
     }
 
-    fun grow_turnips(field: &mut Field, growth: u64) {
-        let slots = &mut field.slots;
-        let len = vector::length(slots);
+    // === Private Functions ===
 
-        let i = 0;
-        while (i < len) {
-            let slot = vector::borrow_mut(slots, i);
-            if (option::is_some(slot)) {
-                let turnip = option::borrow_mut(slot);
-                turnip::grow(turnip, growth);
-            };
-            i = i + 1;
-        };
-    }
+    /// Return the slot at position (i, j), up-to-date as of the epoch in `ctx`.
+    ///
+    ///  Fails if (i, j) is out-of-bounds.
+    fun slot_mut(field: &mut Field, i: u64, j: u64, ctx: &TxContext): &mut Slot {
+        assert!(i < WIDTH && j < HEIGHT, EOutOfBounds);
 
-    fun debit_field_freshness(field: &mut Field) {
-        let slots = &mut field.slots;
-        let len = vector::length(slots);
+        let epoch = ctx.epoch();
+        let ix = i + j * WIDTH;
+        let slot = &mut field.slots[ix];
+        let days = epoch - slot.last_updated;
+        slot.last_updated = epoch;
 
-        let i = 0;
-        while (i < len) {
-            let slot = vector::borrow_mut(slots, i);
-            if (option::is_some(slot)) {
-                let turnip = option::borrow_mut(slot);
-                turnip::debit_freshness(turnip);
-            };
-            i = i + 1;
+        if (slot.turnip.is_some()) {
+            let turnip = slot.turnip.borrow_mut();
+            turnip.simulate(&mut slot.water, days);
+            if (!turnip.is_fresh()) {
+                slot.turnip.extract().consume();
+            }
         };
 
+        slot
     }
 
-    fun credit_field_freshness(field: &mut Field) {
-        let slots = &mut field.slots;
-        let len = vector::length(slots);
-
-        let i = 0;
-        while (i < len) {
-            let slot = vector::borrow_mut(slots, i);
-            if (option::is_some(slot)) {
-                let turnip = option::borrow_mut(slot);
-                turnip::credit_freshness(turnip);
-            };
-            i = i + 1;
-        };
-    }
-
-    fun clean_up_field(field: &mut Field) {
-        let slots = &mut field.slots;
-        let len = vector::length(slots);
-
-        let i = 0;
-        while (i < len) {
-            let slot = vector::borrow_mut(slots, i);
-            if (option::is_some(slot)) {
-                if (!turnip::is_fresh(option::borrow(slot))) {
-                    turnip::consume(option::extract(slot))
-                }
-            };
-            i = i + 1;
-        };
-    }
-
-    /* Tests ******************************************************************/
-    use sui::test_scenario as ts;
+    // === Test Helpers ===
 
     #[test_only]
-    fun borrow_mut(field: &mut Field, i: u64, j: u64): &mut Turnip {
-        option::borrow_mut(vector::borrow_mut(&mut field.slots, i + j * WIDTH))
+    #[syntax(index)]
+    /// General access to slots in the field, but only exposed for tests.
+    public fun borrow(field: &Field, i: u64, j: u64): &Turnip {
+        field.slots[i + j *  WIDTH].turnip.borrow()
     }
 
-    #[test]
-    fun test_burn() {
-        let ts = ts::begin(@0xA);
-        let (deed, field) = new(ts::ctx(&mut ts));
-
-        burn_field(field);
-        burn_deed(deed);
-        ts::end(ts);
+    #[test_only]
+    #[syntax(index)]
+    /// General access to slots in the field, but only exposed for tests.
+    public fun borrow_mut(field: &mut Field, i: u64, j: u64): &mut Turnip {
+        field.slots[i + j *  WIDTH].turnip.borrow_mut()
     }
 
-    #[test]
-    #[expected_failure(abort_code = ENotEmpty)]
-    fun test_burn_failure() {
-        let ts = ts::begin(@0xA);
-        let (deed, field) = new(ts::ctx(&mut ts));
-
-        // Sow a turnip, now the field is not empty.
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-
-        burn_field(field);
-        burn_deed(deed);
-        ts::end(ts);
+    #[test_only]
+    public fun is_empty(field: &mut Field, i: u64, j: u64): bool {
+        field.slots[i + j *  WIDTH].turnip.is_none()
     }
 
-    #[test]
-    fun test_sow_and_harvest() {
-        let ts = ts::begin(@0xA);
-        let (deed, field) = new(ts::ctx(&mut ts));
+    #[test_only]
+    /// Clean-up the field even if it contains turnips in it.
+    public fun destroy_for_test(field: Field) {
+        let Field { mut slots } = field;
 
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-
-        // Update the sown turnip to be big enough to harvest.
-        turnip::prepare_for_harvest(borrow_mut(&mut field, 0, 0));
-
-        let turnip = harvest(&mut field, 0, 0);
-        turnip::consume(turnip);
-
-        burn_field(field);
-        burn_deed(deed);
-        ts::end(ts);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = EOutOfBounds)]
-    fun test_sow_out_of_bounds() {
-        let ts = ts::begin(@0xA);
-        let (_deed, field) = new(ts::ctx(&mut ts));
-
-        sow(&mut field, WIDTH + 1, 0, ts::ctx(&mut ts));
-        abort 1337
-    }
-
-    #[test]
-    #[expected_failure(abort_code = EAlreadyFilled)]
-    fun test_sow_overlap() {
-        let ts = ts::begin(@0xA);
-        let (_deed, field) = new(ts::ctx(&mut ts));
-
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-        abort 1337
-    }
-
-    #[test]
-    #[expected_failure(abort_code = EOutOfBounds)]
-    fun test_harvest_out_of_bounds() {
-        let ts = ts::begin(@0xA);
-        let (_deed, field) = new(ts::ctx(&mut ts));
-
-        let _turnip = harvest(&mut field, WIDTH + 1, 0);
-        abort 1337
-    }
-
-    #[test]
-    #[expected_failure(abort_code = ETooSmall)]
-    fun test_harvest_too_small() {
-        let ts = ts::begin(@0xA);
-        let (_deed, field) = new(ts::ctx(&mut ts));
-
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-        let _turnip = harvest(&mut field, 0, 0);
-        abort 1337
-    }
-
-    #[test]
-    #[expected_failure(abort_code = ENotFilled)]
-    fun test_harvest_non_existent() {
-        let ts = ts::begin(@0xA);
-        let (_deed, field) = new(ts::ctx(&mut ts));
-
-        let _turnip = harvest(&mut field, 0, 0);
-        abort 1337
-    }
-
-    #[test]
-    fun test_simulation_growth() {
-        let ts = ts::begin(@0xA);
-        let (deed, field) = new(ts::ctx(&mut ts));
-
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-
-        // Update the sown turnip to be big enough to harvest (even
-        // without growing)
-        let turnip = borrow_mut(&mut field, 0, 0);
-        turnip::prepare_for_harvest(turnip);
-        let size = turnip::size(turnip);
-
-        let is_sunny = true;
-        water(&mut field, size + 10);
-        simulate_growth(&mut field, is_sunny);
-
-        // All the water should be used up.
-        assert!(field.water == 0, 0);
-
-        let turnip = harvest(&mut field, 0, 0);
-
-        // Turnip grows by half its excess water usage.
-        assert!(turnip::size(&turnip) == size + 5, 0);
-
-        turnip::consume(turnip);
-        burn_field(field);
-        burn_deed(deed);
-        ts::end(ts);
-    }
-
-    #[test]
-    fun test_simulation_dry() {
-        let ts = ts::begin(@0xA);
-        let (deed, field) = new(ts::ctx(&mut ts));
-
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-
-        // Update the sown turnip to be big enough to harvest (even
-        // without growing)
-        let turnip = borrow_mut(&mut field, 0, 0);
-        turnip::prepare_for_harvest(turnip);
-        let size = turnip::size(turnip);
-
-        // Not enough water to maintain freshness
-        let is_sunny = true;
-        water(&mut field, size - 1);
-        simulate_growth(&mut field, is_sunny);
-
-        // All the water should be used up.
-        assert!(field.water == 0, 0);
-
-        let turnip = harvest(&mut field, 0, 0);
-
-        // Turnip does not grow, and it gets less fresh
-        assert!(turnip::size(&turnip) == size, 0);
-        assert!(turnip::freshness(&turnip) == 50_00, 0);
-
-        turnip::consume(turnip);
-        burn_field(field);
-        burn_deed(deed);
-        ts::end(ts);
-    }
-
-    #[test]
-    fun test_simulation_rot() {
-        let ts = ts::begin(@0xA);
-        let (deed, field) = new(ts::ctx(&mut ts));
-
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-
-        // Update the sown turnip to be big enough to harvest (even
-        // without growing)
-        let turnip = borrow_mut(&mut field, 0, 0);
-        turnip::prepare_for_harvest(turnip);
-        let size = turnip::size(turnip);
-
-        // Not enough water to maintain freshness
-        let is_sunny = true;
-        water(&mut field, size - 1);
-        simulate_growth(&mut field, is_sunny);
-
-        // All the water should be used up.
-        assert!(field.water == 0, 0);
-
-        let turnip = harvest(&mut field, 0, 0);
-
-        // Turnip does not grow, and it gets less fresh
-        assert!(turnip::size(&turnip) == size, 0);
-        assert!(turnip::freshness(&turnip) == 50_00, 0);
-
-        turnip::consume(turnip);
-        burn_field(field);
-        burn_deed(deed);
-        ts::end(ts);
-    }
-
-    #[test]
-    fun test_simulation_not_sunny() {
-        let ts = ts::begin(@0xA);
-        let (deed, field) = new(ts::ctx(&mut ts));
-
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-
-        // Update the sown turnip to be big enough to harvest (even
-        // without growing)
-        let turnip = borrow_mut(&mut field, 0, 0);
-        turnip::prepare_for_harvest(turnip);
-        let size = turnip::size(turnip);
-
-        // If the weather is not sunny, then nothing grows
-        let is_sunny = false;
-        water(&mut field, size + 10);
-        simulate_growth(&mut field, is_sunny);
-
-        // The water that would have been used for growth remain.
-        assert!(field.water == 10, 0);
-
-        let turnip = harvest(&mut field, 0, 0);
-
-        // Turnip does not grow, and gets less fresh
-        assert!(turnip::size(&turnip) == size, 0);
-        assert!(turnip::freshness(&turnip) == 50_00, 0);
-
-        turnip::consume(turnip);
-        burn_field(field);
-        burn_deed(deed);
-        ts::end(ts);
-    }
-
-    #[test]
-    fun test_simulation_multi() {
-        let ts = ts::begin(@0xA);
-        let (deed, field) = new(ts::ctx(&mut ts));
-
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-        sow(&mut field, 1, 0, ts::ctx(&mut ts));
-
-        // Update the sown turnips to be big enough to harvest (even
-        // without growing)
-        turnip::prepare_for_harvest(borrow_mut(&mut field, 0, 0));
-        turnip::prepare_for_harvest(borrow_mut(&mut field, 1, 0));
-
-        // Make the second turnip bigger, for variety
-        turnip::prepare_for_harvest(borrow_mut(&mut field, 1, 0));
-
-        let s0 = turnip::size(borrow_mut(&mut field, 0, 0));
-        let s1 = turnip::size(borrow_mut(&mut field, 1, 0));
-
-        let is_sunny = true;
-        water(&mut field, s0 + s1 + 10);
-        simulate_growth(&mut field, is_sunny);
-
-        // All the water should be used up.
-        assert!(field.water == 0, 0);
-
-        let t0 = harvest(&mut field, 0, 0);
-        let t1 = harvest(&mut field, 1, 0);
-
-        // Turnips only grow by 2, because there are 5 units of water
-        // for each, and we grow by half that, rounded down.
-        assert!(turnip::size(&t0) == s0 + 2, 0);
-        assert!(turnip::size(&t1) == s1 + 2, 0);
-
-        turnip::consume(t0);
-        turnip::consume(t1);
-
-        burn_field(field);
-        burn_deed(deed);
-        ts::end(ts);
-    }
-
-    #[test]
-    fun test_simulation_cleanup() {
-        let ts = ts::begin(@0xA);
-        let (deed, field) = new(ts::ctx(&mut ts));
-
-        sow(&mut field, 0, 0, ts::ctx(&mut ts));
-        turnip::prepare_for_harvest(borrow_mut(&mut field, 0, 0));
-
-        let is_sunny = true;
-        let expected_freshness = 50_00;
-        while (expected_freshness != 0) {
-            simulate_growth(&mut field, is_sunny);
-            let turnip = borrow_mut(&mut field, 0, 0);
-            assert!(expected_freshness == turnip::freshness(turnip), 0);
-            expected_freshness = expected_freshness / 2;
+        while (!vector::is_empty(&slots)) {
+            let Slot { turnip, water: _, last_updated: _ } = slots.pop_back();
+            if (turnip.is_some()) {
+                let turnip = turnip.destroy_some();
+                turnip.consume();
+            } else {
+                turnip.destroy_none();
+            }
         };
 
-        // The turnip was cleaned up once its freshness reached zero.
-        simulate_growth(&mut field, is_sunny);
-        assert!(expected_freshness == 0, 0);
-        assert!(option::is_none(vector::borrow(&mut field.slots, 0)), 0);
-
-        burn_field(field);
-        burn_deed(deed);
-        ts::end(ts);
+        vector::destroy_empty(slots)
     }
 }

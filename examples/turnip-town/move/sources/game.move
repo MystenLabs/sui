@@ -1,163 +1,150 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// # Game
+/// Acts as an entrypoint to Turnip Town, as a Kiosk app.
 ///
-/// The `game` module is the entrypoint for Turnip Town.  On publish,
-/// it creates a central table of all active game instances, and
-/// protects access to a game instance (a `Field`) via its `Deed`.
-///
-/// `simulate_weather` is an admin-only operation that the game admin
-/// uses to progress the simulation of the game on a given field
-/// (identified by its ID).
+/// Other modules in this package expose public(package) functions, which this
+/// module calls into after performing the appropriate authorization checks.
 module turnip_town::game {
-    use sui::object::{Self, UID};
-    use sui::table::{Self, Table};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
-    use turnip_town::admin::{Self, AdminCap};
-    use turnip_town::field::{Self, Deed, Field};
+    use sui::kiosk::{Kiosk, KioskOwnerCap};
+    use sui::kiosk_extension as app;
+    use sui::transfer_policy::TransferPolicy;
+    use turnip_town::field::{Self, Field};
     use turnip_town::turnip::Turnip;
+    use turnip_town::water::{Self, Water, Well};
 
-    struct Game has key, store {
-        id: UID,
-        fields: Table<address, Field>,
+    // === Types ===
+
+    /// Kiosk App witness -- doubles as a dynamic field key for holding the game
+    /// state.
+    public struct EXT() has drop;
+
+    /// Key for storing the game state in the Kiosk App's bag.
+    public struct KEY() has copy, drop, store;
+
+    public struct Game has store {
+        field: Field,
+        well: Well,
     }
 
-    /// No corresponding field for the deed.
-    const ENoSuchField: u64 = 0;
+    // === Constants ===
 
-    /// Admin does not have permissions to update the game.
-    const ENotAuthorized: u64 = 1;
-
-    /// How much water a field gets when watered by a player.
-    const WATER_INCREMENT: u64 = 1000;
-
-    fun init(ctx: &mut TxContext) {
-        let game = Game {
-            id: object::new(ctx),
-            fields: table::new(ctx),
-        };
-
-        transfer::public_transfer(
-            admin::mint(object::id(&game), ctx),
-            tx_context::sender(ctx),
-        );
-
-        transfer::share_object(game);
-    }
-
-    /// Create a new field to the `game`.  The field starts off empty
-    /// (no plants, no water).  Returns the deed that gives a player
-    /// control of that field.
-    public fun new(game: &mut Game, ctx: &mut TxContext): Deed {
-        let (deed, field) = field::new(ctx);
-
-        table::add(
-            &mut game.fields,
-            field::deed_field(&deed),
-            field,
-        );
-
-        deed
-    }
-
-    /// Destroy the field owned by `deed`.
+    /// Kiosk App permisions
     ///
-    /// Fails if that field is not empty, or if the field has somehow
-    /// already been deleted.
-    public fun burn(deed: Deed, game: &mut Game) {
-        let faddr = field::deed_field(&deed);
-        assert!(table::contains(&game.fields, faddr), ENoSuchField);
+    /// place: To support placing harvested turnips into the kiosk.
+    const PERMISSIONS: u128 = 1;
 
-        let field = table::remove(&mut game.fields, faddr);
-        field::burn_field(field);
-        field::burn_deed(deed);
+    // === Errors ===
+
+    /// Game is already installed.
+    const EAlreadyInstalled: u64 = 0;
+
+    /// Game is not installed on this Kiosk.
+    const ENotInstalled: u64 = 1;
+
+    /// Action can only be performed by the kiosk owner.
+    const ENotAuthorized: u64 = 2;
+
+    // === Public Functions ===
+
+    /// Install Turnip Town as a Kiosk App (adds the extension and sets up a new
+    /// game state). Each kiosk can host at most one game instance.
+    public fun add(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext) {
+        assert!(kiosk.has_access(cap), ENotAuthorized);
+        assert!(!app::is_installed<EXT>(kiosk), EAlreadyInstalled);
+        app::add(EXT(), kiosk, cap, PERMISSIONS, ctx);
+        let bag = app::storage_mut(EXT(), kiosk);
+        bag.add(KEY(), Game {
+            field: field::new(ctx),
+            well: water::well(ctx),
+        });
     }
 
-    /// Sow a turnip at position (i, j) of the field owned by `deed`
-    /// in `game`.
-    ///
-    /// Fails if the field does not exist for this `deed`, or there is
-    /// already a turnip at that position.
+    /// Uninstall Turnip Town as a Kiosk App. The field must be empty (any
+    /// eligible turnips harvested) for this operation to succeed.
+    public fun remove(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &TxContext) {
+        assert!(kiosk.has_access(cap), ENotAuthorized);
+        assert!(app::is_installed<EXT>(kiosk), ENotInstalled);
+        let Game { field, well: _ } = app::storage_mut(EXT(), kiosk).remove(KEY());
+        field.burn(ctx);
+    }
+
+    /// Sow a seed at slot `(i, j)` of the field in the game installed on
+    /// `kiosk`. This is an authorized action, so can only be performed by the
+    /// owner of the kiosk, and only works if the kiosk has the game installed,
+    /// and the slot does not already contain a turnip.
     public fun sow(
-        deed: &Deed,
-        game: &mut Game,
+        kiosk: &mut Kiosk,
+        cap: &KioskOwnerCap,
         i: u64,
         j: u64,
         ctx: &mut TxContext,
     ) {
-        let faddr = field::deed_field(deed);
-        assert!(table::contains(&game.fields, faddr), ENoSuchField);
-
-        let field = table::borrow_mut(&mut game.fields, faddr);
-        field::sow(field, i, j, ctx);
+        assert!(kiosk.has_access(cap), ENotAuthorized);
+        game_mut(kiosk).field.sow(i, j, ctx)
     }
 
-    /// Water the field owned by `deed`.
+    /// Fetch water from the well of the game installed on `kiosk`. This is an
+    /// authorized action, so can only be performed by the owner of the kiosk,
+    /// and only works if the kiosk has the game installed.
     ///
-    /// Fails if the field does not exist for this `deed`.
-    public fun water(deed: &Deed, game: &mut Game) {
-        let faddr = field::deed_field(deed);
-        assert!(table::contains(&game.fields, faddr), ENoSuchField);
-
-        let field = table::borrow_mut(&mut game.fields, faddr);
-        field::water(field, WATER_INCREMENT);
+    /// Access to water is limited to a fixed quantity in each epoch. Attempts
+    /// to access more water than is available will fail.
+    public fun fetch_water(
+        kiosk: &mut Kiosk,
+        cap: &KioskOwnerCap,
+        amount: u64,
+        ctx: &TxContext,
+    ): Water {
+        assert!(kiosk.has_access(cap), ENotAuthorized);
+        game_mut(kiosk).well.fetch(amount, ctx)
     }
 
-    /// Harvest a turnip at position (i, j) of the field owned by
-    /// `deed`.
-    ///
-    /// Fails if the field for this `deed` does not exist, there is no
-    /// turnip to harvest at this position or that turnip is too small
-    /// to harvest.
-    public fun harvest(deed: &Deed, game: &mut Game, i: u64, j: u64): Turnip {
-        let faddr = field::deed_field(deed);
-        assert!(table::contains(&game.fields, faddr), ENoSuchField);
-
-        let field = table::borrow_mut(&mut game.fields, faddr);
-        field::harvest(field, i, j)
-    }
-
-    /// Admin-only operation for the game service to simulate weather.
-    ///
-    /// Rain is simulated by adding `rain_amount` to the field's water
-    /// supply. The water supply is then shared among all turnips in
-    /// the field.
-    ///
-    /// Turnips gain 5% freshness (up to a max of 100%) for each
-    /// simulation tick they have enough water for.
-    ///
-    /// Every turnip needs water equal to its size to remain fresh.
-    /// If there is not enough water to keep all turnips fresh, then
-    /// freshness halves (turnips dry).
-    ///
-    /// If it `is_sunny` and there is water left over, it is
-    /// distributed evenly between the turnips, to grow them.  Every 2
-    /// units of water increases turnip size by 1, up to 10 size
-    /// units.
-    ///
-    /// If there is water left over, then freshness also halves
-    /// (turnips rot).
-    ///
-    /// If freshness drops to zero, the turnip has died and will be
-    /// removed.
-    ///
-    /// Fails if the field (represented by its address in the game's table)
-    /// does not exist.
-    public fun simulate_weather(
-        admin: &AdminCap,
-        game: &mut Game,
-        rain_amount: u64,
-        is_sunny: bool,
-        faddr: address,
+    /// Water the turnip at cell `(i, j)` on the field in the game installed on
+    /// `kiosk`. This operation can only be performed on kiosks where the game
+    /// has been installed, and where the field contains a turnip at the given
+    /// position.
+    public fun water(
+        kiosk: &mut Kiosk,
+        i: u64,
+        j: u64,
+        water: Water,
+        ctx: &TxContext,
     ) {
-        assert!(admin::is_authorized(admin, object::id(game)), ENotAuthorized);
-        assert!(table::contains(&game.fields, faddr), ENoSuchField);
+        game_mut(kiosk).field.water(i, j, water, ctx)
+    }
 
-        let field = table::borrow_mut(&mut game.fields, faddr);
-        field::water(field, rain_amount);
-        field::simulate_growth(field, is_sunny);
+    /// Harvest a turnip growing at position `(i, j)` on the field in the game
+    /// installed on `kiosk`. This action can only be performed on kiosks where
+    /// the game has been installed.
+    ///
+    /// The harvested Kiosk is placed in the owning field (regardless of who
+    /// harvested it), and its ID is returned.
+    public fun harvest(
+        kiosk: &mut Kiosk,
+        policy: &TransferPolicy<Turnip>,
+        i: u64,
+        j: u64,
+        ctx: &TxContext,
+    ): ID {
+        let turnip = game_mut(kiosk).field.harvest(i, j, ctx);
+        let id = object::id(&turnip);
+        app::place(EXT(), kiosk, turnip, policy);
+        id
+    }
+
+    /// Run the simulation across all turnips in the field of the game installed
+    /// on `kiosk`, so that its state is accurate up to the current epoch.
+    ///
+    /// This action can be performed by anyone.
+    public fun simulate(kiosk: &mut Kiosk, ctx: &TxContext) {
+        game_mut(kiosk).field.simulate(ctx)
+    }
+
+    // === Private Functions ===
+
+    fun game_mut(kiosk: &mut Kiosk): &mut Game {
+        assert!(app::is_installed<EXT>(kiosk), ENotInstalled);
+        &mut app::storage_mut(EXT(), kiosk)[KEY()]
     }
 }
