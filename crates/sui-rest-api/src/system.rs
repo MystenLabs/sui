@@ -571,3 +571,32 @@ impl From<ProtocolConfig> for ProtocolConfigResponse {
         }
     }
 }
+
+pub const GET_GAS_INFO_PATH: &str = "/system/gas";
+
+pub async fn get_gas_info(
+    accept: AcceptFormat,
+    State(state): State<StateReader>,
+) -> Result<Json<GasInfo>> {
+    match accept {
+        AcceptFormat::Json => {}
+        _ => {
+            return Err(RestError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "invalid accept type",
+            ))
+        }
+    }
+
+    let reference_gas_price = state.get_system_state_summary()?.reference_gas_price;
+
+    Ok(Json(GasInfo {
+        reference_gas_price,
+    }))
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct GasInfo {
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
+    reference_gas_price: u64,
+}
