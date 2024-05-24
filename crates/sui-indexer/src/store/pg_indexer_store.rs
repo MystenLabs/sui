@@ -89,7 +89,7 @@ FROM (
     SELECT *,
            ROW_NUMBER() OVER (PARTITION BY object_id ORDER BY object_version DESC) as rn
     FROM objects_history
-    WHERE checkpoint_sequence_number >= {start_cp} AND checkpoint_sequence_number < {end_cp}
+    WHERE checkpoint_sequence_number >= $1 AND checkpoint_sequence_number < $2
 ) as subquery
 WHERE rn = 1
 ON CONFLICT (object_id) DO UPDATE
