@@ -587,13 +587,16 @@ impl SuiNode {
             state_snapshot_handle.is_some(),
         )?;
 
-        let mut pruning_config = config.authority_store_pruning_config;
+        // `genesis` is immutably borrowed from config. So we have to clone a copy here.
+        let mut config = config.clone();
         if !epoch_store
             .protocol_config()
             .simplified_unwrap_then_delete()
         {
             // We cannot prune tombstones if simplified_unwrap_then_delete is not enabled.
-            pruning_config.set_killswitch_tombstone_pruning(true);
+            config
+                .authority_store_pruning_config
+                .set_killswitch_tombstone_pruning(true);
         }
 
         let state = AuthorityState::new(
@@ -921,7 +924,7 @@ impl SuiNode {
                         .prune_and_compact_before_upload
                         .unwrap_or(true),
                     config.indirect_objects_threshold,
-                    config.authority_store_pruning_config,
+                    config.authority_store_pruning_config.clone(),
                     prometheus_registry,
                     state_snapshot_enabled,
                 )?;
