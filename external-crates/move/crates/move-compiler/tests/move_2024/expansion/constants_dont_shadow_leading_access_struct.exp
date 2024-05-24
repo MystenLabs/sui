@@ -5,5 +5,5 @@ error[E03006]: unexpected name in this position
    │                   - But 'S' is an struct
    ·
 15 │             S::foo(); // resolves to struct
-   │             ^ Invalid constructor. Expected an enum
+   │             ^ Invalid construction. Expected an enum
 

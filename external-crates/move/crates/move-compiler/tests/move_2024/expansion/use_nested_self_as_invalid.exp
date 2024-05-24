@@ -37,5 +37,5 @@ error[E03006]: unexpected name in this position
    │            - But 'X' is an struct
 10 │     fun bar() {
 11 │         X::foo();
-   │         ^ Invalid constructor. Expected an enum
+   │         ^ Invalid construction. Expected an enum
 
