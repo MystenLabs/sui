@@ -60,7 +60,7 @@ impl Build {
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
         }
-        .build(rerooted_path.clone())?;
+        .build(rerooted_path.clone())?; // XX
         if dump_bytecode_as_base64 {
             check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
             if !with_unpublished_deps {

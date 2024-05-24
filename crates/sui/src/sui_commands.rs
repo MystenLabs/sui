@@ -335,7 +335,7 @@ impl SuiCommand {
                 package_path,
                 build_config,
                 cmd,
-            } => execute_move_command(package_path, build_config, cmd),
+            } => execute_move_command(package_path, build_config, cmd), // XX
             SuiCommand::BridgeInitialize {
                 network_config,
                 client_config,
