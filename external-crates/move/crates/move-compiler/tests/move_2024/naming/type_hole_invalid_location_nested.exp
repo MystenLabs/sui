@@ -10,14 +10,6 @@ error[E03021]: invalid type annotation
 4 │     public struct S { f: Pair<_, bool> }
   │                               ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
 
-error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_2024/naming/type_hole_invalid_location_nested.move:5:5
-  │
-5 │     public enum E { P(Pair<_, _>), S { f: vector<_> } }
-  │     ^^^^^^ Enums are under development and should not be used right now.
-  │
-  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
 error[E03021]: invalid type annotation
   ┌─ tests/move_2024/naming/type_hole_invalid_location_nested.move:5:28
   │
