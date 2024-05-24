@@ -1,0 +1,41 @@
+processed 6 tasks
+
+task 1 'publish'. lines 6-31:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6262400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 33-33:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'view-object'. lines 35-35:
+Owner: Account Address ( _ )
+Version: 3
+Contents: Test::f::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    data: Test::f::F::V1{},
+}
+
+task 4 'run'. lines 37-37:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 5 'view-object'. lines 39-39:
+Owner: Account Address ( _ )
+Version: 4
+Contents: Test::f::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    data: Test::f::F::V4{
+        x: 42u64,
+    },
+}

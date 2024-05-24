@@ -1108,7 +1108,7 @@ impl CommonSerializer {
 
     fn serialize_header(&mut self, binary: &mut BinaryData) -> Result<()> {
         serialize_magic(binary)?;
-        write_u32(binary, self.major_version)?;
+        write_u32(binary, BinaryFlavor::encode_version(self.major_version))?;
         Ok(())
     }
 
