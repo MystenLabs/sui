@@ -2269,7 +2269,8 @@ impl ProtocolConfig {
 
                     // Enable the committed sub dag digest inclusion on the commit output
                     cfg.feature_flags.mysticeti_use_committed_subdag_digest = true;
-
+                }
+                48 => {
                     // enable vdf in devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_vdf = true;
