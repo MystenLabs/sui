@@ -63,3 +63,22 @@ proptest! {
         }
     }
 }
+
+#[test]
+fn test_flavor() {
+    for i in 1..=6 {
+        let encoded = BinaryFlavor::encode_version(i);
+        assert_eq!(encoded, i);
+        assert_eq!(BinaryFlavor::decode_version(encoded), i);
+        assert_eq!(BinaryFlavor::decode_flavor(encoded), None);
+    }
+
+    for i in 7..1024 {
+        let flavored = BinaryFlavor::encode_version(i);
+        assert_eq!(BinaryFlavor::decode_version(flavored), i);
+        assert_eq!(
+            BinaryFlavor::decode_flavor(flavored),
+            Some(BinaryFlavor::SUI_FLAVOR)
+        );
+    }
+}

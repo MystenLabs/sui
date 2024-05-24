@@ -1002,7 +1002,7 @@ TypeArgumentError:
 TypeOrigin:
   STRUCT:
     - module_name: STR
-    - struct_name: STR
+    - datatype_name: STR
     - package:
         TYPENAME: ObjectID
 TypeTag:

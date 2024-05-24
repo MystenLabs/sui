@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 47;
+const MAX_PROTOCOL_VERSION: u64 = 48;
 
 // Record history of protocol version allocations here:
 //
@@ -132,6 +132,7 @@ const MAX_PROTOCOL_VERSION: u64 = 47;
 // Version 47: Use tonic networking for Mysticeti.
 //             Resolve Move abort locations to the package id instead of the runtime module ID.
 //             Enable random beacon in testnet.
+// Version 48: Enable Move enums on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -622,6 +623,10 @@ pub struct ProtocolConfig {
     binary_field_handles: Option<u16>,
     binary_field_instantiations: Option<u16>,
     binary_friend_decls: Option<u16>,
+    binary_enum_defs: Option<u16>,
+    binary_enum_def_instantiations: Option<u16>,
+    binary_variant_handles: Option<u16>,
+    binary_variant_instantiation_handles: Option<u16>,
 
     /// Maximum size of the `contents` part of an object, in bytes. Enforced by the Sui adapter when effects are produced.
     max_move_object_size: Option<u64>,
@@ -713,6 +718,9 @@ pub struct ProtocolConfig {
 
     /// Maximum depth of a Move value within the VM.
     max_move_value_depth: Option<u64>,
+
+    /// Maximum number of variants in an enum. Enforced by the bytecode verifier at signing.
+    max_move_enum_variants: Option<u64>,
 
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
@@ -1493,6 +1501,10 @@ impl ProtocolConfig {
             binary_field_handles: None,
             binary_field_instantiations: None,
             binary_friend_decls: None,
+            binary_enum_defs: None,
+            binary_enum_def_instantiations: None,
+            binary_variant_handles: None,
+            binary_variant_instantiation_handles: None,
             max_move_object_size: Some(250 * 1024),
             max_move_package_size: Some(100 * 1024),
             max_publish_or_upgrade_per_ptb: None,
@@ -1758,6 +1770,7 @@ impl ProtocolConfig {
             // Limits the length of a Move identifier
             max_move_identifier_len: None,
             max_move_value_depth: None,
+            max_move_enum_variants: None,
 
             gas_rounding_step: None,
 
@@ -2242,6 +2255,11 @@ impl ProtocolConfig {
                     // Enable the committed sub dag digest inclusion on the commit output
                     cfg.feature_flags.mysticeti_use_committed_subdag_digest = true;
                 }
+                48 => {
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.move_binary_format_version = Some(7);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2281,7 +2299,7 @@ impl ProtocolConfig {
             max_dependency_depth: Some(self.max_dependency_depth() as usize),
             max_fields_in_struct: Some(self.max_fields_in_struct() as usize),
             max_function_definitions: Some(self.max_function_definitions() as usize),
-            max_struct_definitions: Some(self.max_struct_definitions() as usize),
+            max_data_definitions: Some(self.max_struct_definitions() as usize),
             max_constant_vector_len: Some(self.max_move_vector_len()),
             max_back_edges_per_function,
             max_back_edges_per_module,
@@ -2291,6 +2309,7 @@ impl ProtocolConfig {
             reject_mutable_random_on_entry_functions: self
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
+            max_variants_in_enum: self.max_move_enum_variants_as_option(),
         }
     }
 

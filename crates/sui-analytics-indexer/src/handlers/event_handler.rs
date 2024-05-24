@@ -3,17 +3,18 @@
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
+use move_core_types::annotated_value::MoveValue;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use std::path::Path;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
-use crate::handlers::{get_move_struct, AnalyticsHandler};
+use crate::handlers::AnalyticsHandler;
 use crate::package_store::{LocalDBPackageStore, PackageCache};
 use crate::tables::EventEntry;
 use crate::FileType;
-use sui_json_rpc_types::SuiMoveStruct;
+use sui_json_rpc_types::type_and_fields_from_move_event_data;
 use sui_package_resolver::Resolver;
 use sui_rest_api::CheckpointData;
 use sui_types::digests::TransactionDigest;
@@ -112,14 +113,14 @@ impl EventHandler {
                 type_,
                 contents,
             } = event;
-            let move_struct = get_move_struct(type_, contents, &state.resolver).await?;
-            let (_struct_tag, sui_move_struct) = match move_struct.into() {
-                SuiMoveStruct::WithTypes { type_, fields } => {
-                    (type_, SuiMoveStruct::WithFields(fields))
-                }
-                fields => (type_.clone(), fields),
-            };
-            let event_json = sui_move_struct.to_json_value();
+            let layout = state
+                .resolver
+                .type_layout(move_core_types::language_storage::TypeTag::Struct(
+                    Box::new(type_.clone()),
+                ))
+                .await?;
+            let move_value = MoveValue::simple_deserialize(contents, &layout)?;
+            let (_, event_json) = type_and_fields_from_move_event_data(move_value)?;
             let entry = EventEntry {
                 transaction_digest: digest.base58_encode(),
                 event_index: idx as u64,
