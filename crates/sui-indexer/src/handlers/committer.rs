@@ -113,8 +113,8 @@ where
         }
         // this is a one-way flip in case indexer falls behind again, so that the objects snapshot
         // table will not be populated by both committer and async snapshot processor at the same time.
-        if latest_committed_cp + OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG > latest_fn_cp {
-            info!("Flipping object_snapshot_backfill_mode to false because objects_snapshot is close to up-to-date.");
+        if object_snapshot_backfill_mode && latest_committed_cp + OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG > latest_fn_cp {
+            info!("Flipping object_snapshot_backfill_mode to false because objects_snapshot is close to up-to-date.");   
             object_snapshot_backfill_mode = false;
         }
     }
