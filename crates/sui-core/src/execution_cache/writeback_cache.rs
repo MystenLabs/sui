@@ -97,6 +97,12 @@ enum ObjectEntry {
     Wrapped,
 }
 
+impl ObjectEntry {
+    fn is_live(&self) -> bool {
+        matches!(self, ObjectEntry::Object(_))
+    }
+}
+
 #[cfg(test)]
 impl ObjectEntry {
     fn unwrap_object(&self) -> &Object {
@@ -219,6 +225,13 @@ struct CachedCommittedData {
     // See module level comment for an explanation of caching strategy.
     object_cache: MokaCache<ObjectID, Arc<Mutex<CachedVersionMap<ObjectEntry>>>>,
 
+    // We separately cache the latest version of each object. Although this seems
+    // redundant, it is the only way to support populating the cache after a read.
+    // We cannot simply insert objects that we read off the disk into `object_cache`,
+    // since that may violate the no-missing-versions property.
+    // `object_by_id_cache` is also written to on writes so that it is always coherent.
+    object_by_id_cache: MokaCache<ObjectID, Arc<Mutex<(SequenceNumber, ObjectEntry)>>>,
+
     // See module level comment for an explanation of caching strategy.
     marker_cache: MokaCache<MarkerKey, Arc<Mutex<CachedVersionMap<MarkerValue>>>>,
 
@@ -238,6 +251,10 @@ struct CachedCommittedData {
 impl CachedCommittedData {
     fn new() -> Self {
         let object_cache = MokaCache::builder()
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
+            .build();
+        let object_by_id_cache = MokaCache::builder()
             .max_capacity(MAX_CACHE_SIZE)
             .max_capacity(MAX_CACHE_SIZE)
             .build();
@@ -268,6 +285,7 @@ impl CachedCommittedData {
 
         Self {
             object_cache,
+            object_by_id_cache,
             marker_cache,
             transactions,
             transaction_effects,
@@ -398,7 +416,10 @@ impl WritebackCache {
             .objects
             .entry(*object_id)
             .or_default()
-            .insert(version, object);
+            .insert(version, object.clone());
+        self.cached
+            .object_by_id_cache
+            .insert(*object_id, Arc::new(Mutex::new((version, object))));
     }
 
     async fn write_marker_value(
@@ -485,6 +506,17 @@ impl WritebackCache {
         &self,
         object_id: &ObjectID,
     ) -> CacheResult<(SequenceNumber, ObjectEntry)> {
+        if let Some(entry) = self.cached.object_by_id_cache.get(object_id) {
+            let entry = entry.lock();
+            let (latest_version, latest_object) = &*entry;
+            if latest_object.is_live() {
+                return CacheResult::Hit((*latest_version, latest_object.clone()));
+            } else {
+                assert_eq!(*latest_version, SequenceNumber::from_u64(0));
+                return CacheResult::NegativeHit;
+            }
+        }
+
         Self::with_locked_cache_entries(
             &self.dirty.objects,
             &self.cached.object_cache,
@@ -507,9 +539,7 @@ impl WritebackCache {
                 ObjectEntry::Object(object) => CacheResult::Hit((version, object)),
                 ObjectEntry::Deleted | ObjectEntry::Wrapped => CacheResult::NegativeHit,
             },
-            CacheResult::NegativeHit => {
-                panic!("cannot have negative hit when getting latest object")
-            }
+            CacheResult::NegativeHit => CacheResult::NegativeHit,
             CacheResult::Miss => CacheResult::Miss,
         }
     }
@@ -865,6 +895,61 @@ impl WritebackCache {
         }
     }
 
+    // Updates the latest object id cache with an entry that was read from the db.
+    // Writes bypass this function, because an object write is guaranteed to be the
+    // most recent version (and cannot race with any other writes to that object id)
+    //
+    // If there are racing calls to this function, it is guaranteed that after a call
+    // has returned, reads from that thread will not observe a lower version than the
+    // one they inserted
+    fn cache_latest_object_by_id(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        object: ObjectEntry,
+    ) {
+        // Warning: tricky code!
+        let entry = self
+            .cached
+            .object_by_id_cache
+            .entry(*object_id)
+            // only one racing insert will call the closure
+            .or_insert_with(|| Arc::new(Mutex::new((version, object.clone()))));
+
+        // We may be racing with another thread that observed an older version of the object
+        if !entry.is_fresh() {
+            // !is_fresh means we lost the race, and actual_entry holds the entry that was
+            // inserted by the other thread. We need to check if we have a more recent version
+            // than the other reader.
+            // This could also mean that the entry was inserted by a transaction write. This
+            // could occur in the following case:
+            //
+            // THREAD 1            | THREAD 2
+            // reads object at v1  |
+            //                     | tx writes object at v2
+            // tries to cache v1
+            //
+            // Thread 1 will see that v2 is already in the cache
+
+            // this point because there should have been a cache hit.)
+            let mut entry = entry.value().lock();
+            // Ensure only the latest version is inserted.
+            if version > entry.0 {
+                *entry = (version, object);
+            }
+        }
+    }
+
+    fn cache_object_not_found(&self, object_id: &ObjectID) {
+        // when caching non-existence, we use version 0. Since that is less than OBJECT_START_VERSION
+        // it is guaranteed to lose the race with any reader than finds an extant version.
+        self.cache_latest_object_by_id(
+            object_id,
+            SequenceNumber::from_u64(0),
+            ObjectEntry::Deleted,
+        );
+    }
+
     fn clear_state_end_of_epoch_impl(&self, _execution_guard: &ExecutionLockWriteGuard<'_>) {
         info!("clearing state at end of epoch");
         assert!(
@@ -987,7 +1072,13 @@ impl ObjectCacheRead for WritebackCache {
         match self.get_object_by_id_cache_only(id) {
             CacheResult::Hit((_, object)) => Ok(Some(object)),
             CacheResult::NegativeHit => Ok(None),
-            CacheResult::Miss => Ok(self.store.get_object(id)?),
+            CacheResult::Miss => {
+                let obj = self.store.get_object(id)?;
+                if obj.is_none() {
+                    self.cache_object_not_found(id);
+                }
+                Ok(obj)
+            }
         }
     }
 
@@ -1060,9 +1151,7 @@ impl ObjectCacheRead for WritebackCache {
                 ObjectEntry::Deleted => (object_id, version, ObjectDigest::OBJECT_DIGEST_DELETED),
                 ObjectEntry::Wrapped => (object_id, version, ObjectDigest::OBJECT_DIGEST_WRAPPED),
             })),
-            CacheResult::NegativeHit => {
-                panic!("cannot have negative hit when getting latest object or tombstone")
-            }
+            CacheResult::NegativeHit => Ok(None),
             CacheResult::Miss => self.store.get_latest_object_ref_or_tombstone(object_id),
         }
     }
@@ -1094,9 +1183,7 @@ impl ObjectCacheRead for WritebackCache {
                     ),
                 }))
             }
-            CacheResult::NegativeHit => {
-                panic!("cannot have negative hit when getting latest object or tombstone")
-            }
+            CacheResult::NegativeHit => Ok(None),
             CacheResult::Miss => self.store.get_latest_object_or_tombstone(object_id),
         }
     }
@@ -1104,13 +1191,14 @@ impl ObjectCacheRead for WritebackCache {
     fn find_object_lt_or_eq_version(
         &self,
         object_id: ObjectID,
-        version: SequenceNumber,
+        version_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
         macro_rules! check_cache_entry {
             ($objects: expr) => {
                 if let Some(objects) = $objects {
-                    if let Some((_, object)) =
-                        objects.all_versions_lt_or_eq_descending(&version).next()
+                    if let Some((_, object)) = objects
+                        .all_versions_lt_or_eq_descending(&version_bound)
+                        .next()
                     {
                         if let ObjectEntry::Object(object) = object {
                             return Ok(Some(object.clone()));
@@ -1123,6 +1211,24 @@ impl ObjectCacheRead for WritebackCache {
             };
         }
 
+        // if we have the latest version cached, and it is within the bound, we are done
+        if let Some(latest) = self.cached.object_by_id_cache.get(&object_id) {
+            let latest = latest.lock();
+            let (latest_version, entry) = &*latest;
+            if entry.is_live() {
+                if *latest_version <= version_bound {
+                    if let ObjectEntry::Object(object) = entry {
+                        return Ok(Some(object.clone()));
+                    } else {
+                        return Ok(None);
+                    }
+                }
+            } else {
+                assert_eq!(*latest_version, SequenceNumber::from_u64(0));
+                return Ok(None);
+            }
+        }
+
         Self::with_locked_cache_entries(
             &self.dirty.objects,
             &self.cached.object_cache,
@@ -1130,7 +1236,24 @@ impl ObjectCacheRead for WritebackCache {
             |dirty_entry, cached_entry| {
                 check_cache_entry!(dirty_entry);
                 check_cache_entry!(cached_entry);
-                self.store.find_object_lt_or_eq_version(object_id, version)
+
+                // Much of the time, the query will be for the very latest object version, so
+                // try that first.
+                if let Some(obj) = self.store.get_object(&object_id)? {
+                    let obj_version = obj.version();
+                    // we can always cache the latest object, even if it is not within the bound
+                    self.cache_latest_object_by_id(&object_id, obj_version, obj.clone().into());
+                    if obj_version <= version_bound {
+                        Ok(Some(obj))
+                    } else {
+                        // the latest object exceeded the bound, so now we have to do a scan
+                        self.store
+                            .find_object_lt_or_eq_version(object_id, version_bound)
+                    }
+                } else {
+                    self.cache_object_not_found(&object_id);
+                    Ok(None)
+                }
             },
         )
     }
