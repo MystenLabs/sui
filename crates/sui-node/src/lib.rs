@@ -427,7 +427,7 @@ impl SuiNode {
         DBMetrics::init(&prometheus_registry);
         mysten_metrics::init_metrics(&prometheus_registry);
 
-        let genesis = config.genesis()?;
+        let genesis = config.genesis()?.clone();
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let genesis_committee = genesis.committee()?;
@@ -447,7 +447,7 @@ impl SuiNode {
             .expect("Database read should not fail at init.");
 
         let store =
-            AuthorityStore::open(perpetual_tables, genesis, &config, &prometheus_registry).await?;
+            AuthorityStore::open(perpetual_tables, &genesis, &config, &prometheus_registry).await?;
 
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
@@ -587,8 +587,6 @@ impl SuiNode {
             state_snapshot_handle.is_some(),
         )?;
 
-        // `genesis` is immutably borrowed from config. So we have to clone a copy here.
-        let mut config = config.clone();
         if !epoch_store
             .protocol_config()
             .simplified_unwrap_then_delete()
