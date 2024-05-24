@@ -94,8 +94,8 @@ impl TonicClient {
             .get_channel(self.network_keypair.clone(), peer, timeout)
             .await?;
         Ok(ConsensusServiceClient::new(channel)
-            .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit))
+            .max_encoding_message_size(config.max_message_size())
+            .max_decoding_message_size(config.max_message_size()))
     }
 }
 
@@ -569,8 +569,8 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             // tcp keepalive is unsupported by msim
             .add_service(
                 ConsensusServiceServer::new(service)
-                    .max_encoding_message_size(config.message_size_limit)
-                    .max_decoding_message_size(config.message_size_limit),
+                    .max_encoding_message_size(config.max_message_size())
+                    .max_decoding_message_size(config.max_message_size()),
             )
             .into_service();
 
