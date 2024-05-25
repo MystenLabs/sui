@@ -32,6 +32,7 @@ feature_flags:
   simple_conservation_checks: true
   loaded_child_object_format_type: true
   receive_objects: true
+  random_beacon: true
   bridge: true
   enable_effects_v2: true
   narwhal_certificate_v2: true
@@ -49,6 +50,8 @@ feature_flags:
   zklogin_max_epoch_upper_bound_delta: 30
   mysticeti_leader_scoring_and_schedule: true
   reshare_at_same_initial_version: true
+  resolve_abort_locations_to_package_id: true
+  mysticeti_use_committed_subdag_digest: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -267,6 +270,9 @@ consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
 random_beacon_reduction_allowed_delta: 800
+random_beacon_reduction_lower_bound: 1600
+random_beacon_dkg_timeout_round: 3000
+random_beacon_min_round_interval_ms: 200
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
 

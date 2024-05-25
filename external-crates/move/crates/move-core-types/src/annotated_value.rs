@@ -7,7 +7,8 @@ use crate::{
     annotated_visitor::{visit_struct, visit_value, Error as VError, Visitor},
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
-    runtime_value as R, u256,
+    runtime_value::{self as R, MOVE_STRUCT_FIELDS, MOVE_STRUCT_TYPE},
+    u256, VARIANT_COUNT_MAX,
 };
 use anyhow::Result as AResult;
 use serde::{
@@ -16,22 +17,40 @@ use serde::{
     Deserialize, Serialize,
 };
 use std::{
-    convert::From,
+    collections::BTreeMap,
     fmt::{self, Debug},
 };
 
 /// In the `WithTypes` configuration, a Move struct gets serialized into a Serde struct with this name
 pub const MOVE_STRUCT_NAME: &str = "struct";
 
-/// In the `WithTypes` configuration, a Move struct gets serialized into a Serde struct with this as the first field
-pub const MOVE_STRUCT_TYPE: &str = "type";
+/// In the `WithTypes` configuration, a Move enum/struct gets serialized into a Serde struct with this as the first field
+pub const MOVE_DATA_TYPE: &str = "type";
 
 /// In the `WithTypes` configuration, a Move struct gets serialized into a Serde struct with this as the second field
-pub const MOVE_STRUCT_FIELDS: &str = "fields";
+pub const MOVE_DATA_FIELDS: &str = "fields";
+
+/// In the `WithTypes` configuration, a Move enum gets serialized into a Serde struct with this as the second field
+/// In the `WithFields` configuration, this is the first field of the serialized enum
+pub const MOVE_VARIANT_NAME: &str = "variant_name";
+
+/// Field name for the tag of the variant
+pub const MOVE_VARIANT_TAG_NAME: &str = "variant_tag";
+
+/// In the `WithTypes` configuration, a Move enum gets serialized into a Serde struct with this name
+pub const MOVE_ENUM_NAME: &str = "enum";
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MoveStruct {
     pub type_: StructTag,
+    pub fields: Vec<(Identifier, MoveValue)>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct MoveVariant {
+    pub type_: StructTag,
+    pub variant_name: Identifier,
+    pub tag: u16,
     pub fields: Vec<(Identifier, MoveValue)>,
 }
 
@@ -49,6 +68,7 @@ pub enum MoveValue {
     U16(u16),
     U32(u32),
     U256(u256::U256),
+    Variant(MoveVariant),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +88,27 @@ pub struct MoveStructLayout {
     /// An decorated representation with both types and human-readable field names
     pub type_: StructTag,
     pub fields: Vec<MoveFieldLayout>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoveEnumLayout {
+    pub type_: StructTag,
+    pub variants: BTreeMap<(Identifier, u16), Vec<MoveFieldLayout>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MoveDatatypeLayout {
+    Struct(MoveStructLayout),
+    Enum(MoveEnumLayout),
+}
+
+impl MoveDatatypeLayout {
+    pub fn into_layout(self) -> MoveTypeLayout {
+        match self {
+            Self::Struct(s) => MoveTypeLayout::Struct(s),
+            Self::Enum(e) => MoveTypeLayout::Enum(e),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,6 +137,8 @@ pub enum MoveTypeLayout {
     U32,
     #[serde(rename(serialize = "u256", deserialize = "u256"))]
     U256,
+    #[serde(rename(serialize = "enum", deserialize = "enum"))]
+    Enum(MoveEnumLayout),
 }
 
 impl MoveValue {
@@ -146,6 +189,7 @@ impl MoveValue {
     pub fn undecorate(self) -> R::MoveValue {
         match self {
             Self::Struct(s) => R::MoveValue::Struct(s.undecorate()),
+            Self::Variant(v) => R::MoveValue::Variant(v.undecorate()),
             Self::Vector(vals) => {
                 R::MoveValue::Vector(vals.into_iter().map(MoveValue::undecorate).collect())
             }
@@ -204,7 +248,7 @@ impl MoveStruct {
     }
 
     pub fn into_fields(self) -> Vec<MoveValue> {
-        self.fields.into_iter().map(|(_, f)| f).collect()
+        self.fields.into_iter().map(|(_, v)| v).collect()
     }
 
     pub fn undecorate(self) -> R::MoveStruct {
@@ -214,6 +258,41 @@ impl MoveStruct {
                 .map(MoveValue::undecorate)
                 .collect(),
         )
+    }
+}
+
+impl MoveVariant {
+    pub fn new(
+        type_: StructTag,
+        variant_name: Identifier,
+        tag: u16,
+        fields: Vec<(Identifier, MoveValue)>,
+    ) -> Self {
+        Self {
+            type_,
+            variant_name,
+            tag,
+            fields,
+        }
+    }
+
+    pub fn simple_deserialize(blob: &[u8], ty: &MoveEnumLayout) -> AResult<Self> {
+        Ok(bcs::from_bytes_seed(ty, blob)?)
+    }
+
+    pub fn into_fields(self) -> Vec<MoveValue> {
+        self.fields.into_iter().map(|(_, v)| v).collect()
+    }
+
+    pub fn undecorate(self) -> R::MoveVariant {
+        R::MoveVariant {
+            tag: self.tag,
+            fields: self
+                .into_fields()
+                .into_iter()
+                .map(MoveValue::undecorate)
+                .collect(),
+        }
     }
 }
 
@@ -248,6 +327,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
                 AccountAddress::deserialize(deserializer).map(MoveValue::Signer)
             }
             MoveTypeLayout::Struct(ty) => Ok(MoveValue::Struct(ty.deserialize(deserializer)?)),
+            MoveTypeLayout::Enum(ty) => Ok(MoveValue::Variant(ty.deserialize(deserializer)?)),
             MoveTypeLayout::Vector(layout) => Ok(MoveValue::Vector(
                 deserializer.deserialize_seq(VectorElementVisitor(layout))?,
             )),
@@ -327,10 +407,81 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveStructLayout {
     }
 }
 
+impl<'d> serde::de::DeserializeSeed<'d> for &MoveEnumLayout {
+    type Value = MoveVariant;
+    fn deserialize<D: serde::de::Deserializer<'d>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        let (variant_name, tag, fields) =
+            deserializer.deserialize_tuple(2, DecoratedEnumFieldVisitor(&self.variants))?;
+        Ok(MoveVariant {
+            type_: self.type_.clone(),
+            variant_name,
+            tag,
+            fields,
+        })
+    }
+}
+
+struct DecoratedEnumFieldVisitor<'a>(&'a BTreeMap<(Identifier, u16), Vec<MoveFieldLayout>>);
+
+impl<'d, 'a> serde::de::Visitor<'d> for DecoratedEnumFieldVisitor<'a> {
+    type Value = (Identifier, u16, Vec<(Identifier, MoveValue)>);
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Enum")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'d>,
+    {
+        let tag = match seq.next_element_seed(&MoveTypeLayout::U8)? {
+            Some(MoveValue::U8(tag)) if tag as u64 <= VARIANT_COUNT_MAX => tag as u16,
+            Some(MoveValue::U8(tag)) => return Err(A::Error::invalid_length(tag as usize, &self)),
+            Some(val) => {
+                return Err(A::Error::invalid_type(
+                    serde::de::Unexpected::Other(&format!("{val:?}")),
+                    &self,
+                ))
+            }
+            None => return Err(A::Error::invalid_length(0, &self)),
+        };
+
+        let Some(((variant_name, _), variant_layout)) =
+            self.0.iter().find(|((_, v_tag), _)| *v_tag == tag)
+        else {
+            return Err(A::Error::invalid_length(tag as usize, &self));
+        };
+
+        let Some(fields) = seq.next_element_seed(&DecoratedVariantFieldLayout(variant_layout))?
+        else {
+            return Err(A::Error::invalid_length(1, &self));
+        };
+
+        Ok((variant_name.clone(), tag, fields))
+    }
+}
+
+struct DecoratedVariantFieldLayout<'a>(&'a Vec<MoveFieldLayout>);
+
+impl<'d, 'a> serde::de::DeserializeSeed<'d> for &DecoratedVariantFieldLayout<'a> {
+    type Value = Vec<(Identifier, MoveValue)>;
+
+    fn deserialize<D: serde::de::Deserializer<'d>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_tuple(self.0.len(), DecoratedStructFieldVisitor(self.0))
+    }
+}
+
 impl serde::Serialize for MoveValue {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             MoveValue::Struct(s) => s.serialize(serializer),
+            MoveValue::Variant(v) => v.serialize(serializer),
             MoveValue::Bool(b) => serializer.serialize_bool(*b),
             MoveValue::U8(i) => serializer.serialize_u8(*i),
             MoveValue::U16(i) => serializer.serialize_u16(*i),
@@ -378,6 +529,19 @@ impl serde::Serialize for MoveStruct {
     }
 }
 
+impl serde::Serialize for MoveVariant {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Serialize an enum as:
+        // enum { "type": 0xC::module::enum_type, "variant_name": name, "variant_tag": tag, "fields": { ... } }
+        let mut t = serializer.serialize_struct(MOVE_ENUM_NAME, 4)?;
+        t.serialize_field(MOVE_DATA_TYPE, &self.type_.to_string())?;
+        t.serialize_field(MOVE_VARIANT_NAME, &self.variant_name.to_string())?;
+        t.serialize_field(MOVE_VARIANT_TAG_NAME, &MoveValue::U16(self.tag))?;
+        t.serialize_field(MOVE_DATA_FIELDS, &MoveFields(&self.fields))?;
+        t.end()
+    }
+}
+
 impl fmt::Display for MoveTypeLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         use MoveTypeLayout::*;
@@ -395,6 +559,8 @@ impl fmt::Display for MoveTypeLayout {
             Vector(typ) => write!(f, "vector<{typ}>"),
             Struct(s) if f.alternate() => write!(f, "{s:#}"),
             Struct(s) => write!(f, "{s}"),
+            Enum(e) if f.alternate() => write!(f, "{e:#}"),
+            Enum(e) => write!(f, "enum {}", e),
         }
     }
 }
@@ -426,6 +592,31 @@ impl fmt::Display for MoveStructLayout {
     }
 }
 
+impl fmt::Display for MoveEnumLayout {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        use DebugAsDisplay as DD;
+        write!(f, "enum {} ", self.type_)?;
+        let mut vmap = f.debug_set();
+        for ((variant_name, _), fields) in self.variants.iter() {
+            vmap.entry(&DD(&MoveVariantDisplay(variant_name.as_str(), fields)));
+        }
+        vmap.finish()
+    }
+}
+
+struct MoveVariantDisplay<'a>(&'a str, &'a [MoveFieldLayout]);
+
+impl<'a> fmt::Display for MoveVariantDisplay<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        use DebugAsDisplay as DD;
+        let mut map = f.debug_struct(self.0);
+        for field in self.1 {
+            map.field(field.name.as_str(), &DD(&field.layout));
+        }
+        map.finish()
+    }
+}
+
 impl From<&MoveTypeLayout> for TypeTag {
     fn from(val: &MoveTypeLayout) -> TypeTag {
         match val {
@@ -443,12 +634,19 @@ impl From<&MoveTypeLayout> for TypeTag {
                 TypeTag::Vector(Box::new(inner_type.into()))
             }
             MoveTypeLayout::Struct(v) => TypeTag::Struct(Box::new(v.into())),
+            MoveTypeLayout::Enum(e) => TypeTag::Struct(Box::new(e.into())),
         }
     }
 }
 
 impl From<&MoveStructLayout> for StructTag {
     fn from(val: &MoveStructLayout) -> StructTag {
+        val.type_.clone()
+    }
+}
+
+impl From<&MoveEnumLayout> for StructTag {
+    fn from(val: &MoveEnumLayout) -> StructTag {
         val.type_.clone()
     }
 }
@@ -476,6 +674,7 @@ impl fmt::Display for MoveValue {
                 list.finish()
             }
             MoveValue::Struct(s) => fmt::Display::fmt(s, f),
+            MoveValue::Variant(v) => fmt::Display::fmt(v, f),
         }
     }
 }
@@ -487,6 +686,24 @@ impl fmt::Display for MoveStruct {
         write!(f, " ")?;
         let mut map = f.debug_map();
         for (field, value) in &self.fields {
+            map.entry(&DD(field), &DD(value));
+        }
+        map.finish()
+    }
+}
+
+impl fmt::Display for MoveVariant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use DebugAsDisplay as DD;
+        let MoveVariant {
+            type_,
+            variant_name,
+            tag: _,
+            fields,
+        } = self;
+        write!(f, "{}::{}", type_, variant_name)?;
+        let mut map = f.debug_map();
+        for (field, value) in fields {
             map.entry(&DD(field), &DD(value));
         }
         map.finish()

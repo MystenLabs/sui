@@ -6,10 +6,13 @@ Command `disassemble --package Test --name m`:
 module 43.m {
 
 
+
+
 public aborts() {
 B0:
 	0: LdU64(42)
 	1: Abort
+
 }
 }
 Command `build -p dep`:

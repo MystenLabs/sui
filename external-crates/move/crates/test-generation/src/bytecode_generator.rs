@@ -869,7 +869,7 @@ impl<'a> BytecodeGenerator<'a> {
             SignatureToken::U32 => vec![Bytecode::LdU32(0)],
             SignatureToken::U256 => vec![Bytecode::LdU256(Box::new(U256::zero()))],
             SignatureToken::Bool => vec![Bytecode::LdFalse],
-            SignatureToken::Struct(handle_idx) => {
+            SignatureToken::Datatype(handle_idx) => {
                 let struct_def_idx = module
                     .module
                     .struct_defs()
@@ -897,8 +897,8 @@ impl<'a> BytecodeGenerator<'a> {
                 )));
                 bytecodes
             }
-            SignatureToken::StructInstantiation(struct_inst) => {
-                let (handle_idx, instantiation) = &**struct_inst;
+            SignatureToken::DatatypeInstantiation(inst) => {
+                let (handle_idx, instantiation) = &**inst;
                 let struct_def_idx = module
                     .module
                     .struct_defs()

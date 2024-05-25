@@ -240,7 +240,7 @@ fn parse_field_ident(tokens: &mut Lexer) -> Result<FieldIdent, ParseError<Loc, a
         start_loc,
         end_loc,
         FieldIdent_ {
-            struct_name: StructName(name),
+            struct_name: DatatypeName(name),
             type_actuals,
             field,
         },
@@ -572,9 +572,11 @@ fn parse_unary_exp(tokens: &mut Lexer) -> Result<Exp, ParseError<Loc, anyhow::Er
 //     <f: Sp<QualifiedFunctionName>> <exp: Sp<CallOrTerm>> => Exp::FunctionCall(f, Box::new(exp)),
 // }
 
-fn parse_call(tokens: &mut Lexer) -> Result<Exp, ParseError<Loc, anyhow::Error>> {
-    let start_loc = tokens.start_loc();
-    let f = parse_qualified_function_name(tokens)?;
+fn parse_call(
+    tokens: &mut Lexer,
+    f: FunctionCall,
+    start_loc: usize,
+) -> Result<Exp, ParseError<Loc, anyhow::Error>> {
     let exp = parse_call_or_term(tokens)?;
     let end_loc = tokens.previous_end_loc();
     Ok(spanned(
@@ -601,7 +603,6 @@ fn parse_call_or_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyho
         | Tok::VecUnpack(_)
         | Tok::VecSwap
         | Tok::Freeze
-        | Tok::DotNameValue
         | Tok::ToU8
         | Tok::ToU16
         | Tok::ToU32
@@ -611,6 +612,26 @@ fn parse_call_or_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyho
             let f = parse_qualified_function_name(tokens)?;
             let exp = parse_call_or_term(tokens)?;
             Ok(Exp_::FunctionCall(f, Box::new(exp)))
+        }
+        Tok::DotNameValue => {
+            let f = parse_qualified_function_name(tokens)?;
+            if tokens.peek() == Tok::LBrace {
+                let FunctionCall_::ModuleFunctionCall {
+                    module: ModuleName(enum_name),
+                    name: FunctionName(variant_name),
+                    type_actuals,
+                } = f.value
+                else {
+                    return Err(ParseError::InvalidToken {
+                        location: f.loc,
+                        message: "Invalid variant pack call".to_string(),
+                    });
+                };
+                parse_variant_pack_(tokens, enum_name, variant_name, type_actuals)
+            } else {
+                let exp = parse_call_or_term(tokens)?;
+                Ok(Exp_::FunctionCall(f, Box::new(exp)))
+            }
         }
         _ => parse_term_(tokens),
     }
@@ -653,7 +674,24 @@ fn parse_pack_(
     let fs = parse_comma_list(tokens, &[Tok::RBrace], parse_field_exp, true)?;
     consume_token(tokens, Tok::RBrace)?;
     Ok(Exp_::Pack(
-        StructName(name),
+        DatatypeName(name),
+        type_actuals,
+        fs.into_iter().collect::<Vec<_>>(),
+    ))
+}
+
+fn parse_variant_pack_(
+    tokens: &mut Lexer,
+    enum_name: Symbol,
+    variant_name: Symbol,
+    type_actuals: Vec<Type>,
+) -> Result<Exp_, ParseError<Loc, anyhow::Error>> {
+    consume_token(tokens, Tok::LBrace)?;
+    let fs = parse_comma_list(tokens, &[Tok::RBrace], parse_field_exp, true)?;
+    consume_token(tokens, Tok::RBrace)?;
+    Ok(Exp_::PackVariant(
+        DatatypeName(enum_name),
+        VariantName(variant_name),
         type_actuals,
         fs.into_iter().collect::<Vec<_>>(),
     ))
@@ -716,13 +754,13 @@ fn parse_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error
 
 fn parse_qualified_struct_ident(
     tokens: &mut Lexer,
-) -> Result<QualifiedStructIdent, ParseError<Loc, anyhow::Error>> {
+) -> Result<QualifiedDatatypeIdent, ParseError<Loc, anyhow::Error>> {
     let module_dot_struct = parse_dot_name(tokens)?;
     let v: Vec<&str> = module_dot_struct.split('.').collect();
     assert!(v.len() == 2);
     let m: ModuleName = ModuleName(Symbol::from(v[0]));
-    let n: StructName = StructName(Symbol::from(v[1]));
-    Ok(QualifiedStructIdent::new(m, n))
+    let n: DatatypeName = DatatypeName(Symbol::from(v[1]));
+    Ok(QualifiedDatatypeIdent::new(m, n))
 }
 
 // ModuleName: ModuleName = {
@@ -914,11 +952,58 @@ fn parse_unpack_(
     consume_token(tokens, Tok::Equal)?;
     let e = parse_exp(tokens)?;
     Ok(Statement_::Unpack(
-        StructName(name),
+        DatatypeName(name),
         type_actuals,
         bindings.into_iter().collect(),
         Box::new(e),
     ))
+}
+
+// <enum>.<variant>("<" <type_actuals> ">")? { <bindings> } (&|&mut)? = <exp>
+fn parse_variant_unpack_(
+    tokens: &mut Lexer,
+    enum_name: Symbol,
+    variant_name: Symbol,
+    type_actuals: Vec<Type>,
+    unpack_type: UnpackType,
+) -> Result<Statement_, ParseError<Loc, anyhow::Error>> {
+    consume_token(tokens, Tok::LBrace)?;
+    let bindings = parse_comma_list(tokens, &[Tok::RBrace], parse_field_bindings, true)?;
+    consume_token(tokens, Tok::RBrace)?;
+    consume_token(tokens, Tok::Equal)?;
+    let e = parse_exp(tokens)?;
+    Ok(Statement_::UnpackVariant(
+        DatatypeName(enum_name),
+        VariantName(variant_name),
+        type_actuals,
+        bindings.into_iter().collect(),
+        Box::new(e),
+        unpack_type,
+    ))
+}
+
+// variant_switch <enum_name> e { (<variant_name> => <lbl>)* }
+fn parse_variant_switch_(tokens: &mut Lexer) -> Result<Statement_, ParseError<Loc, anyhow::Error>> {
+    let name = parse_name(tokens)?;
+    let e = parse_exp(tokens)?;
+    consume_token(tokens, Tok::LBrace)?;
+    let lbls = parse_comma_list(tokens, &[Tok::RBrace], parse_variant_switch_arm, true)?;
+    consume_token(tokens, Tok::RBrace)?;
+    Ok(Statement_::VariantSwitch(
+        DatatypeName(name),
+        lbls,
+        Box::new(e),
+    ))
+}
+
+// <variant_name> : <lbl>
+fn parse_variant_switch_arm(
+    tokens: &mut Lexer,
+) -> Result<(VariantName, BlockLabel), ParseError<Loc, anyhow::Error>> {
+    let v = parse_name(tokens)?;
+    consume_token(tokens, Tok::Colon)?;
+    let lbl = parse_label(tokens)?;
+    Ok((VariantName(v), lbl))
 }
 
 /// Parses a statement.
@@ -993,6 +1078,10 @@ fn parse_statement_(tokens: &mut Lexer) -> Result<Statement_, ParseError<Loc, an
             let (name, tys) = parse_name_and_type_actuals(tokens)?;
             parse_unpack_(tokens, name, tys)
         }
+        Tok::VariantSwitch => {
+            consume_token(tokens, Tok::VariantSwitch)?;
+            parse_variant_switch_(tokens)
+        }
         Tok::VecPack(_)
         | Tok::VecLen
         | Tok::VecImmBorrow
@@ -1002,13 +1091,67 @@ fn parse_statement_(tokens: &mut Lexer) -> Result<Statement_, ParseError<Loc, an
         | Tok::VecUnpack(_)
         | Tok::VecSwap
         | Tok::Freeze
-        | Tok::DotNameValue
         | Tok::ToU8
         | Tok::ToU16
         | Tok::ToU32
         | Tok::ToU64
         | Tok::ToU128
-        | Tok::ToU256 => Ok(Statement_::Exp(Box::new(parse_call(tokens)?))),
+        | Tok::DotNameValue
+        | Tok::ToU256 => {
+            let start_loc = tokens.start_loc();
+            let f = parse_qualified_function_name(tokens)?;
+            if tokens.peek() == Tok::LBrace {
+                let FunctionCall_::ModuleFunctionCall {
+                    module: ModuleName(enum_name),
+                    name: FunctionName(variant_name),
+                    type_actuals,
+                } = f.value
+                else {
+                    return Err(ParseError::InvalidToken {
+                        location: f.loc,
+                        message: "Invalid variant unpack call".to_string(),
+                    });
+                };
+                parse_variant_unpack_(
+                    tokens,
+                    enum_name,
+                    variant_name,
+                    type_actuals,
+                    UnpackType::ByValue,
+                )
+            } else {
+                Ok(Statement_::Exp(Box::new(parse_call(tokens, f, start_loc)?)))
+            }
+        }
+        x @ (Tok::Amp | Tok::AmpMut) => {
+            let start_loc = current_token_loc(tokens);
+            tokens.advance()?;
+            let f = parse_qualified_function_name(tokens)?;
+            if tokens.peek() == Tok::LBrace {
+                let FunctionCall_::ModuleFunctionCall {
+                    module: ModuleName(enum_name),
+                    name: FunctionName(variant_name),
+                    type_actuals,
+                } = f.value
+                else {
+                    return Err(ParseError::InvalidToken {
+                        location: f.loc,
+                        message: "Invalid variant unpack call".to_string(),
+                    });
+                };
+                let unpack_type = match x {
+                    Tok::Amp => UnpackType::ByImmRef,
+                    Tok::AmpMut => UnpackType::ByMutRef,
+                    _ => unreachable!(),
+                };
+                parse_variant_unpack_(tokens, enum_name, variant_name, type_actuals, unpack_type)
+            } else {
+                Err(ParseError::InvalidToken {
+                    location: start_loc,
+                    message: format!("invalid token kind for statement {:?}", x),
+                })
+            }
+        }
         Tok::LParen => {
             tokens.advance()?;
             let start = tokens.start_loc();
@@ -1214,7 +1357,7 @@ fn parse_type(tokens: &mut Lexer) -> Result<Type, ParseError<Loc, anyhow::Error>
         Tok::DotNameValue => {
             let s = parse_qualified_struct_ident(tokens)?;
             let tys = parse_type_actuals(tokens)?;
-            Type::Struct(s, tys)
+            Type::Datatype(s, tys)
         }
         Tok::Amp => {
             tokens.advance()?;
@@ -1249,7 +1392,7 @@ fn parse_type_var(tokens: &mut Lexer) -> Result<TypeVar, ParseError<Loc, anyhow:
 
 fn parse_type_parameter_with_phantom_decl(
     tokens: &mut Lexer,
-) -> Result<StructTypeParameter, ParseError<Loc, anyhow::Error>> {
+) -> Result<DatatypeTypeParameter, ParseError<Loc, anyhow::Error>> {
     let is_phantom = if tokens.peek() == Tok::NameValue && tokens.content() == "phantom" {
         tokens.advance()?;
         true
@@ -1575,6 +1718,72 @@ fn parse_struct_decl(
     ))
 }
 
+// EnumDecl: EnumDefinition = {
+//     "enum" <name_and_type_parameters:
+//     NameAndTypeFormals> ("has" <Ability> ("," <Ability)*)? "{" <data: Comma<VariantDecl>> "}"
+//     => { ... }
+// }
+fn parse_enum_decl(tokens: &mut Lexer) -> Result<EnumDefinition, ParseError<Loc, anyhow::Error>> {
+    let start_loc = tokens.start_loc();
+
+    consume_token(tokens, Tok::Enum)?;
+
+    let (name, type_parameters) =
+        parse_name_and_type_parameters(tokens, parse_type_parameter_with_phantom_decl)?;
+
+    let mut abilities = BTreeSet::new();
+    if tokens.peek() == Tok::NameValue && tokens.content() == "has" {
+        tokens.advance()?;
+        let abilities_vec =
+            parse_comma_list(tokens, &[Tok::LBrace, Tok::Semicolon], parse_ability, false)?;
+        for (ability, location) in abilities_vec {
+            let was_new_element = abilities.insert(ability);
+            if !was_new_element {
+                return Err(ParseError::User {
+                    location,
+                    error: anyhow!("Duplicate ability '{}'", ability),
+                });
+            }
+        }
+    }
+
+    consume_token(tokens, Tok::LBrace)?;
+    let variants = parse_comma_list(tokens, &[Tok::RBrace], parse_variant_decl, true)?;
+    consume_token(tokens, Tok::RBrace)?;
+    let end_loc = tokens.previous_end_loc();
+    Ok(spanned(
+        tokens.file_hash(),
+        start_loc,
+        end_loc,
+        EnumDefinition_::new(abilities, name, type_parameters, variants),
+    ))
+}
+
+// VariantDecl: VariantDecl = {
+//     <name_and_type_parameters:
+//     NameAndTypeFormals> "{" <data: Comma<FieldDecl>> "}"
+//     => { ... }
+// }
+fn parse_variant_decl(
+    tokens: &mut Lexer,
+) -> Result<VariantDefinition, ParseError<Loc, anyhow::Error>> {
+    let start_loc = tokens.start_loc();
+
+    let name = parse_name(tokens)?;
+
+    consume_token(tokens, Tok::LBrace)?;
+    let fields = parse_comma_list(tokens, &[Tok::RBrace], parse_field_decl, true)?;
+    consume_token(tokens, Tok::RBrace)?;
+
+    let end_loc = tokens.previous_end_loc();
+    Ok(spanned(
+        tokens.file_hash(),
+        start_loc,
+        end_loc,
+        VariantDefinition_::new(name, fields),
+    ))
+}
+
 // ModuleIdent: ModuleIdent = {
 //     <a: AccountAddress> "." <m: ModuleName> => ModuleIdent::new(m, a),
 // }
@@ -1636,6 +1845,7 @@ fn parse_import_decl(
 //         <friends: (FriendDecl)*>
 //         <imports: (ImportDecl)*>
 //         <structs: (StructDecl)*>
+//         <enums: (EnumDecl)*>
 //         <functions: (FunctionDecl)*>
 //     "}" =>? ModuleDefinition::new(n, imports, structs, functions),
 // }
@@ -1643,6 +1853,10 @@ fn parse_import_decl(
 fn is_struct_decl(tokens: &mut Lexer) -> Result<bool, ParseError<Loc, anyhow::Error>> {
     let t = tokens.peek();
     Ok(t == Tok::Struct || (t == Tok::Native && tokens.lookahead()? == Tok::Struct))
+}
+
+fn is_enum_decl(tokens: &mut Lexer) -> bool {
+    tokens.peek() == Tok::Enum
 }
 
 fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, anyhow::Error>> {
@@ -1666,6 +1880,11 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
         structs.push(parse_struct_decl(tokens)?);
     }
 
+    let mut enums: Vec<EnumDefinition> = vec![];
+    while is_enum_decl(tokens) {
+        enums.push(parse_enum_decl(tokens)?);
+    }
+
     let mut functions: Vec<(FunctionName, Function)> = vec![];
     while tokens.peek() != Tok::RBrace {
         functions.push(parse_function_decl(tokens)?);
@@ -1682,6 +1901,7 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
         imports,
         vec![],
         structs,
+        enums,
         vec![],
         functions,
     ))

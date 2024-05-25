@@ -46,6 +46,8 @@ feature_flags:
   consensus_network: Tonic
   zklogin_max_epoch_upper_bound_delta: 30
   reshare_at_same_initial_version: true
+  resolve_abort_locations_to_package_id: true
+  mysticeti_use_committed_subdag_digest: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

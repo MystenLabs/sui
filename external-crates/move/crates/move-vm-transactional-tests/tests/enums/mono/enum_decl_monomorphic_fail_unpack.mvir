@@ -1,0 +1,35 @@
+//# publish
+module 0x1.MonomorphicEnums {
+    enum EnumWithTwoVariants {
+        One { },
+        Two { x: u64 }
+    }
+
+    public f(): u64 {
+        let x: Self.EnumWithTwoVariants;
+        let y: u64;
+        label b0:
+            x = EnumWithTwoVariants.Two { x: 42 };
+            variant_switch EnumWithTwoVariants (&x) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            return 0;
+        label b2:
+            EnumWithTwoVariants.Two { x: y } = move(x);
+            return move(y);
+    }
+}
+
+//# run
+module 0x2.m {
+import 0x1.MonomorphicEnums;
+entry foo() {
+    let x: u64;
+    label b0:
+        x = MonomorphicEnums.f();
+        assert(move(x) == 42, 100);
+        return;
+}
+}

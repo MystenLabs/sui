@@ -187,6 +187,36 @@ impl Visitor for BoundedVisitor {
             fields,
         }))
     }
+
+    fn visit_variant(
+        &mut self,
+        driver: &mut annotated_visitor::VariantDriver<'_, '_, '_>,
+    ) -> Result<Self::Value, Self::Error> {
+        let type_ = driver.enum_layout().type_.clone().into();
+
+        self.debit_type_size(&type_)?;
+        self.debit(driver.variant_name().len())?;
+
+        for field in driver.variant_layout() {
+            self.debit(field.name.len())?;
+        }
+
+        let mut fields = vec![];
+        while let Some((field, elem)) = driver.next_field(self)? {
+            fields.push((field.name.clone(), elem));
+        }
+
+        let TypeTag::Struct(type_) = type_ else {
+            unreachable!("SAFETY: type_ was derived from a StructTag.");
+        };
+
+        Ok(A::MoveValue::Variant(A::MoveVariant {
+            type_: *type_,
+            fields,
+            variant_name: driver.variant_name().to_owned(),
+            tag: driver.tag(),
+        }))
+    }
 }
 
 impl Default for BoundedVisitor {

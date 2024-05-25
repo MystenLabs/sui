@@ -42,7 +42,7 @@ impl Clock {
         use SignatureToken as S;
         match s {
             S::MutableReference(inner) => Self::is_mutable(view, inner),
-            S::Struct(idx) => resolve_struct(view, *idx) == RESOLVED_SUI_CLOCK,
+            S::Datatype(idx) => resolve_struct(view, *idx) == RESOLVED_SUI_CLOCK,
             _ => false,
         }
     }

@@ -10,7 +10,7 @@ use crate::{
 use fail::fail_point;
 use move_binary_format::{
     errors::*,
-    file_format::{Bytecode, FunctionHandleIndex, FunctionInstantiationIndex},
+    file_format::{Bytecode, FunctionHandleIndex, FunctionInstantiationIndex, JumpTableInner},
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -29,8 +29,8 @@ use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
     values::{
-        self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value, Vector,
-        VectorRef,
+        self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value, Variant,
+        VariantRef, Vector, VectorRef,
     },
     views::TypeView,
 };
@@ -992,7 +992,7 @@ impl Frame {
             }
             Bytecode::PackGeneric(si_idx) => {
                 let field_count = resolver.field_instantiation_count(*si_idx);
-                let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
+                let ty = resolver.instantiate_struct_type(*si_idx, ty_args)?;
                 Self::check_depth_of_type(resolver, &ty)?;
                 gas_meter.charge_pack(
                     true,
@@ -1272,10 +1272,88 @@ impl Frame {
                 gas_meter.charge_vec_swap(make_ty!(ty))?;
                 vec_ref.swap(idx1, idx2, ty)?;
             }
+            Bytecode::PackVariant(vidx) => {
+                let (field_count, variant_tag) = resolver.variant_field_count_and_tag(*vidx);
+                let enum_type = resolver.get_enum_type(*vidx);
+                Self::check_depth_of_type(resolver, &enum_type)?;
+                gas_meter.charge_pack(
+                    false,
+                    interpreter.operand_stack.last_n(field_count as usize)?,
+                )?;
+                let args = interpreter.operand_stack.popn(field_count)?;
+                interpreter
+                    .operand_stack
+                    .push(Value::variant(Variant::pack(variant_tag, args)))?;
+            }
+            Bytecode::PackVariantGeneric(vidx) => {
+                let (field_count, variant_tag) =
+                    resolver.variant_instantiantiation_field_count_and_tag(*vidx);
+                let ty = resolver.instantiate_enum_type(*vidx, ty_args)?;
+                Self::check_depth_of_type(resolver, &ty)?;
+                gas_meter.charge_pack(
+                    true,
+                    interpreter.operand_stack.last_n(field_count as usize)?,
+                )?;
+                let args = interpreter.operand_stack.popn(field_count)?;
+                interpreter
+                    .operand_stack
+                    .push(Value::variant(Variant::pack(variant_tag, args)))?;
+            }
+            Bytecode::UnpackVariant(vidx) => {
+                let variant = interpreter.operand_stack.pop_as::<Variant>()?;
+                let (_, variant_tag) = resolver.variant_field_count_and_tag(*vidx);
+                gas_meter.charge_unpack(false, variant.field_views())?;
+                variant.check_tag(variant_tag)?;
+                for value in variant.unpack()? {
+                    interpreter.operand_stack.push(value)?;
+                }
+            }
+            Bytecode::UnpackVariantImmRef(vidx) | Bytecode::UnpackVariantMutRef(vidx) => {
+                let reference = interpreter.operand_stack.pop_as::<VariantRef>()?;
+                let (_, variant_tag) = resolver.variant_field_count_and_tag(*vidx);
+                reference.check_tag(variant_tag)?;
+                let references = reference.unpack_variant()?;
+                gas_meter.charge_unpack(false, references.iter())?;
+                for reference in references {
+                    interpreter.operand_stack.push(reference)?;
+                }
+            }
+            Bytecode::UnpackVariantGeneric(vidx) => {
+                let variant = interpreter.operand_stack.pop_as::<Variant>()?;
+                gas_meter.charge_unpack(true, variant.field_views())?;
+                let (_, variant_tag) =
+                    resolver.variant_instantiantiation_field_count_and_tag(*vidx);
+                variant.check_tag(variant_tag)?;
+                for value in variant.unpack()? {
+                    interpreter.operand_stack.push(value)?;
+                }
+            }
+            Bytecode::UnpackVariantGenericImmRef(vidx)
+            | Bytecode::UnpackVariantGenericMutRef(vidx) => {
+                let reference = interpreter.operand_stack.pop_as::<VariantRef>()?;
+                let (_, variant_tag) =
+                    resolver.variant_instantiantiation_field_count_and_tag(*vidx);
+                reference.check_tag(variant_tag)?;
+                let references = reference.unpack_variant()?;
+                gas_meter.charge_unpack(true, references.iter())?;
+                for reference in references {
+                    interpreter.operand_stack.push(reference)?;
+                }
+            }
+            Bytecode::VariantSwitch(jump_table_index) => {
+                let reference = interpreter.operand_stack.pop_as::<VariantRef>()?;
+                gas_meter.charge_variant_switch(&reference)?;
+                let tag = reference.get_tag()?;
+                let JumpTableInner::Full(jump_table) =
+                    &function.jump_tables()[jump_table_index.0 as usize].jump_table;
+                *pc = jump_table[tag as usize];
+                return Ok(InstrRet::Branch);
+            }
         }
 
         Ok(InstrRet::Ok)
     }
+
     fn execute_code_impl(
         &mut self,
         resolver: &Resolver,
@@ -1400,8 +1478,8 @@ impl Frame {
             Type::Reference(ty) | Type::MutableReference(ty) | Type::Vector(ty) => {
                 Self::check_depth_of_type_impl(resolver, ty, check_depth!(1), max_depth)?
             }
-            Type::Struct(si) => {
-                let struct_type = resolver.loader().get_struct_type(*si).ok_or_else(|| {
+            Type::Datatype(si) => {
+                let struct_type = resolver.loader().get_type(*si).ok_or_else(|| {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Struct Definition not resolved".to_string())
                 })?;
@@ -1411,8 +1489,8 @@ impl Frame {
                     .ok_or_else(|| { PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED) })?
                     .solve(&[])?)
             }
-            Type::StructInstantiation(struct_inst) => {
-                let (si, ty_args) = &**struct_inst;
+            Type::DatatypeInstantiation(inst) => {
+                let (si, ty_args) = &**inst;
                 // Calculate depth of all type arguments, and make sure they themselves are not too deep.
                 let ty_arg_depths = ty_args
                     .iter()
@@ -1421,7 +1499,7 @@ impl Frame {
                         Self::check_depth_of_type_impl(resolver, ty, check_depth!(0), max_depth)
                     })
                     .collect::<PartialVMResult<Vec<_>>>()?;
-                let struct_type = resolver.loader().get_struct_type(*si).ok_or_else(|| {
+                let struct_type = resolver.loader().get_type(*si).ok_or_else(|| {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Struct Definition not resolved".to_string())
                 })?;
