@@ -638,6 +638,7 @@ impl KeyToolCommand {
                         )?;
                         let skp = keystore.get_key(&sui_address)?;
                         let key = Key::from(skp);
+                        keystore.add_key(alias, skp.copy())?;
                         CommandOutput::Import(key)
                     }
                 }
