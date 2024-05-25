@@ -635,10 +635,10 @@ impl KeyToolCommand {
                             &input_string,
                             key_scheme,
                             derivation_path,
+                            alias,
                         )?;
                         let skp = keystore.get_key(&sui_address)?;
                         let key = Key::from(skp);
-                        keystore.add_key(alias, skp.copy())?;
                         CommandOutput::Import(key)
                     }
                 }
