@@ -5,9 +5,10 @@ use std::{collections::HashSet, sync::Arc};
 
 use parking_lot::RwLock;
 
+use crate::commit::sort_sub_dag_blocks;
 use crate::{
-    block::{BlockAPI, BlockTimestampMs, Round, VerifiedBlock},
-    commit::{Commit, CommitIndex, CommittedSubDag, TrustedCommit},
+    block::{BlockAPI, VerifiedBlock},
+    commit::{Commit, CommittedSubDag, TrustedCommit},
     dag_state::DagState,
 };
 
@@ -23,15 +24,19 @@ impl Linearizer {
         Self { dag_state }
     }
 
-    /// Collect the sub-dag from a specific leader excluding any duplicates or
+    /// Collect the sub-dag and the corresponding commit from a specific leader excluding any duplicates or
     /// blocks that have already been committed (within previous sub-dags).
-    fn collect_sub_dag(
+    fn collect_sub_dag_and_commit(
         &mut self,
         leader_block: VerifiedBlock,
-        last_commit_index: CommitIndex,
-        last_commit_timestamp_ms: BlockTimestampMs,
-        last_committed_rounds: Vec<Round>,
-    ) -> CommittedSubDag {
+    ) -> (CommittedSubDag, TrustedCommit) {
+        // Grab latest commit state from dag state
+        let dag_state = self.dag_state.read();
+        let last_commit_index = dag_state.last_commit_index();
+        let last_commit_digest = dag_state.last_commit_digest();
+        let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
+        let last_committed_rounds = dag_state.last_committed_rounds();
+
         let mut to_commit = Vec::new();
         let mut committed = HashSet::new();
 
@@ -40,7 +45,6 @@ impl Linearizer {
         let mut buffer = vec![leader_block];
         assert!(committed.insert(leader_block_ref));
 
-        let dag_state = self.dag_state.read();
         while let Some(x) = buffer.pop() {
             to_commit.push(x.clone());
 
@@ -68,12 +72,37 @@ impl Linearizer {
                 assert!(committed.insert(ancestor.reference()));
             }
         }
-        CommittedSubDag::new(
+
+        drop(dag_state);
+
+        // Sort the blocks of the sub-dag blocks
+        sort_sub_dag_blocks(&mut to_commit);
+
+        // Create the Commit.
+        let commit = Commit::new(
+            last_commit_index + 1,
+            last_commit_digest,
+            timestamp_ms,
+            leader_block_ref,
+            to_commit
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+        );
+        let serialized = commit
+            .serialize()
+            .unwrap_or_else(|e| panic!("Failed to serialize commit: {}", e));
+        let commit = TrustedCommit::new_trusted(commit, serialized);
+
+        // Create the corresponding committed sub dag
+        let sub_dag = CommittedSubDag::new(
             leader_block_ref,
             to_commit,
             timestamp_ms,
-            last_commit_index + 1,
-        )
+            commit.reference(),
+        );
+
+        (sub_dag, commit)
     }
 
     // This function should be called whenever a new commit is observed. This will
@@ -85,41 +114,8 @@ impl Linearizer {
     ) -> Vec<CommittedSubDag> {
         let mut committed_sub_dags = vec![];
         for leader_block in committed_leaders {
-            // Grab latest commit state from dag state
-            let dag_state = self.dag_state.read();
-            let last_commit_index = dag_state.last_commit_index();
-            let last_commit_digest = dag_state.last_commit_digest();
-            let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
-            let last_committed_rounds = dag_state.last_committed_rounds();
-            drop(dag_state);
-
-            // Collect the sub-dag generated using each of these leaders.
-            let mut sub_dag = self.collect_sub_dag(
-                leader_block,
-                last_commit_index,
-                last_commit_timestamp_ms,
-                last_committed_rounds,
-            );
-
-            // [Optional] sort the sub-dag using a deterministic algorithm.
-            sub_dag.sort();
-
-            // Summarize CommittedSubDag into Commit.
-            let commit = Commit::new(
-                sub_dag.commit_index,
-                last_commit_digest,
-                sub_dag.timestamp_ms,
-                sub_dag.leader,
-                sub_dag
-                    .blocks
-                    .iter()
-                    .map(|block| block.reference())
-                    .collect(),
-            );
-            let serialized = commit
-                .serialize()
-                .unwrap_or_else(|e| panic!("Failed to serialize commit: {}", e));
-            let commit = TrustedCommit::new_trusted(commit, serialized);
+            // Collect the sub-dag generated using each of these leaders and the corresponding commit.
+            let (sub_dag, commit) = self.collect_sub_dag_and_commit(leader_block);
 
             // Buffer commit in dag state for persistence later.
             // This also updates the last committed rounds.
@@ -149,6 +145,7 @@ mod tests {
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
+        CommitIndex,
     };
 
     #[tokio::test]
@@ -192,7 +189,7 @@ mod tests {
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_index, idx as CommitIndex + 1);
+            assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
         }
     }
 
@@ -279,7 +276,7 @@ mod tests {
         tracing::info!("{subdag:?}");
         assert_eq!(subdag.leader, leader.reference());
         assert_eq!(subdag.timestamp_ms, leader.timestamp_ms());
-        assert_eq!(subdag.commit_index, expected_second_commit.index());
+        assert_eq!(subdag.commit_ref.index, expected_second_commit.index());
 
         // Using the same sorting as used in CommittedSubDag::sort
         blocks.sort_by(|a, b| a.round.cmp(&b.round).then_with(|| a.author.cmp(&b.author)));

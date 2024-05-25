@@ -5,6 +5,7 @@ use crate::gas_charger::GasCharger;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::StructTag;
 use move_core_types::resolver::ResourceResolver;
+use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
@@ -110,8 +111,12 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     pub fn update_object_version_and_prev_tx(&mut self) {
-        self.execution_results
-            .update_version_and_previous_tx(self.lamport_timestamp, self.tx_digest);
+        self.execution_results.update_version_and_previous_tx(
+            self.lamport_timestamp,
+            self.tx_digest,
+            &self.input_objects,
+            self.protocol_config.reshare_at_same_initial_version(),
+        );
 
         #[cfg(debug_assertions)]
         {
@@ -935,6 +940,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
         if obj_opt.is_some() {
             Ok(obj_opt.cloned())
         } else {
+            let _scope = monitored_scope("Execution::read_child_object");
             self.store
                 .read_child_object(parent, child, child_version_upper_bound)
         }

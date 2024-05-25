@@ -131,6 +131,8 @@ impl ExecutionResultsV2 {
         &mut self,
         lamport_version: SequenceNumber,
         prev_tx: TransactionDigest,
+        input_objects: &BTreeMap<ObjectID, Object>,
+        reshare_at_initial_version: bool,
     ) {
         for (id, obj) in self.written_objects.iter_mut() {
             // TODO: We can now get rid of the following logic by passing in lamport version
@@ -168,6 +170,23 @@ impl ExecutionResultsV2 {
                         "Initial version should be blank before this point for {id:?}",
                     );
                     *initial_shared_version = lamport_version;
+                }
+
+                // Update initial_shared_version for reshared objects
+                if reshare_at_initial_version {
+                    if let Some(Owner::Shared {
+                        initial_shared_version: previous_initial_shared_version,
+                    }) = input_objects.get(id).map(|obj| &obj.owner)
+                    {
+                        debug_assert!(!self.created_object_ids.contains(id));
+                        debug_assert!(!self.deleted_object_ids.contains(id));
+                        debug_assert!(
+                            *initial_shared_version == SequenceNumber::new()
+                                || *initial_shared_version == *previous_initial_shared_version
+                        );
+
+                        *initial_shared_version = *previous_initial_shared_version;
+                    }
                 }
             }
 

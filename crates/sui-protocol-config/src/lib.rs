@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 46;
+const MAX_PROTOCOL_VERSION: u64 = 48;
 
 // Record history of protocol version allocations here:
 //
@@ -128,6 +128,11 @@ const MAX_PROTOCOL_VERSION: u64 = 46;
 //             Enable native bridge in devnet
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 // Version 46: Enable native bridge in testnet
+//             Enable resharing at the same initial shared version.
+// Version 47: Use tonic networking for Mysticeti.
+//             Resolve Move abort locations to the package id instead of the runtime module ID.
+//             Enable random beacon in testnet.
+// Version 48: Enable Move enums on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -431,6 +436,20 @@ struct FeatureFlags {
     // Controls leader scoring & schedule change in Mysticeti consensus.
     #[serde(skip_serializing_if = "is_false")]
     mysticeti_leader_scoring_and_schedule: bool,
+
+    // Enable resharing of shared objects using the same initial shared version
+    #[serde(skip_serializing_if = "is_false")]
+    reshare_at_same_initial_version: bool,
+
+    // Resolve Move abort locations to the package id instead of the runtime module ID.
+    #[serde(skip_serializing_if = "is_false")]
+    resolve_abort_locations_to_package_id: bool,
+
+    // Enables the use of the Mysticeti committed sub dag digest to the `ConsensusCommitInfo` in checkpoints.
+    // When disabled the default digest is used instead. It's important to have this guarded behind
+    // a flag as it will lead to checkpoint forks.
+    #[serde(skip_serializing_if = "is_false")]
+    mysticeti_use_committed_subdag_digest: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -604,6 +623,10 @@ pub struct ProtocolConfig {
     binary_field_handles: Option<u16>,
     binary_field_instantiations: Option<u16>,
     binary_friend_decls: Option<u16>,
+    binary_enum_defs: Option<u16>,
+    binary_enum_def_instantiations: Option<u16>,
+    binary_variant_handles: Option<u16>,
+    binary_variant_instantiation_handles: Option<u16>,
 
     /// Maximum size of the `contents` part of an object, in bytes. Enforced by the Sui adapter when effects are produced.
     max_move_object_size: Option<u64>,
@@ -695,6 +718,9 @@ pub struct ProtocolConfig {
 
     /// Maximum depth of a Move value within the VM.
     max_move_value_depth: Option<u64>,
+
+    /// Maximum number of variants in an enum. Enforced by the bytecode verifier at signing.
+    max_move_enum_variants: Option<u64>,
 
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
@@ -1312,6 +1338,18 @@ impl ProtocolConfig {
     pub fn mysticeti_leader_scoring_and_schedule(&self) -> bool {
         self.feature_flags.mysticeti_leader_scoring_and_schedule
     }
+
+    pub fn reshare_at_same_initial_version(&self) -> bool {
+        self.feature_flags.reshare_at_same_initial_version
+    }
+
+    pub fn resolve_abort_locations_to_package_id(&self) -> bool {
+        self.feature_flags.resolve_abort_locations_to_package_id
+    }
+
+    pub fn mysticeti_use_committed_subdag_digest(&self) -> bool {
+        self.feature_flags.mysticeti_use_committed_subdag_digest
+    }
 }
 
 #[cfg(not(msim))]
@@ -1463,6 +1501,10 @@ impl ProtocolConfig {
             binary_field_handles: None,
             binary_field_instantiations: None,
             binary_friend_decls: None,
+            binary_enum_defs: None,
+            binary_enum_def_instantiations: None,
+            binary_variant_handles: None,
+            binary_variant_instantiation_handles: None,
             max_move_object_size: Some(250 * 1024),
             max_move_package_size: Some(100 * 1024),
             max_publish_or_upgrade_per_ptb: None,
@@ -1728,6 +1770,7 @@ impl ProtocolConfig {
             // Limits the length of a Move identifier
             max_move_identifier_len: None,
             max_move_value_depth: None,
+            max_move_enum_variants: None,
 
             gas_rounding_step: None,
 
@@ -2190,6 +2233,32 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.bridge = true;
                     }
+
+                    // Enable resharing at same initial version
+                    cfg.feature_flags.reshare_at_same_initial_version = true;
+                }
+                47 => {
+                    // Use tonic networking for Mysticeti.
+                    cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
+
+                    // Enable resolving abort code IDs to package ID instead of runtime module ID
+                    cfg.feature_flags.resolve_abort_locations_to_package_id = true;
+
+                    // Enable random beacon on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(3000);
+                        cfg.random_beacon_min_round_interval_ms = Some(200);
+                    }
+
+                    // Enable the committed sub dag digest inclusion on the commit output
+                    cfg.feature_flags.mysticeti_use_committed_subdag_digest = true;
+                }
+                48 => {
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.move_binary_format_version = Some(7);
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -2230,7 +2299,7 @@ impl ProtocolConfig {
             max_dependency_depth: Some(self.max_dependency_depth() as usize),
             max_fields_in_struct: Some(self.max_fields_in_struct() as usize),
             max_function_definitions: Some(self.max_function_definitions() as usize),
-            max_struct_definitions: Some(self.max_struct_definitions() as usize),
+            max_data_definitions: Some(self.max_struct_definitions() as usize),
             max_constant_vector_len: Some(self.max_move_vector_len()),
             max_back_edges_per_function,
             max_back_edges_per_module,
@@ -2240,6 +2309,7 @@ impl ProtocolConfig {
             reject_mutable_random_on_entry_functions: self
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
+            max_variants_in_enum: self.max_move_enum_variants_as_option(),
         }
     }
 

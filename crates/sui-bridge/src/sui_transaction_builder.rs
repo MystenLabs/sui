@@ -22,13 +22,13 @@ use crate::{
     types::{BridgeAction, VerifiedCertifiedBridgeAction},
 };
 
-// TODO: pass in gas price
 pub fn build_sui_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
     bridge_object_arg: ObjectArg,
     sui_token_type_tags: &HashMap<u8, TypeTag>,
+    rgp: u64,
 ) -> BridgeResult<TransactionData> {
     // TODO: Check chain id?
     match action.data() {
@@ -39,6 +39,7 @@ pub fn build_sui_transaction(
             true,
             bridge_object_arg,
             sui_token_type_tags,
+            rgp,
         ),
         BridgeAction::SuiToEthBridgeAction(_) => build_token_bridge_approve_transaction(
             client_address,
@@ -47,30 +48,35 @@ pub fn build_sui_transaction(
             false,
             bridge_object_arg,
             sui_token_type_tags,
+            rgp,
         ),
         BridgeAction::BlocklistCommitteeAction(_) => build_committee_blocklist_approve_transaction(
             client_address,
             gas_object_ref,
             action,
             bridge_object_arg,
+            rgp,
         ),
         BridgeAction::EmergencyAction(_) => build_emergency_op_approve_transaction(
             client_address,
             gas_object_ref,
             action,
             bridge_object_arg,
+            rgp,
         ),
         BridgeAction::LimitUpdateAction(_) => build_limit_update_approve_transaction(
             client_address,
             gas_object_ref,
             action,
             bridge_object_arg,
+            rgp,
         ),
         BridgeAction::AssetPriceUpdateAction(_) => build_asset_price_update_approve_transaction(
             client_address,
             gas_object_ref,
             action,
             bridge_object_arg,
+            rgp,
         ),
         BridgeAction::EvmContractUpgradeAction(_) => {
             // It does not need a Sui tranaction to execute EVM contract upgrade
@@ -81,6 +87,7 @@ pub fn build_sui_transaction(
             gas_object_ref,
             action,
             bridge_object_arg,
+            rgp,
         ),
         BridgeAction::AddTokensOnEvmAction(_) => {
             // It does not need a Sui tranaction to add tokens on EVM
@@ -89,7 +96,6 @@ pub fn build_sui_transaction(
     }
 }
 
-// TODO: pass in gas price
 fn build_token_bridge_approve_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
@@ -97,6 +103,7 @@ fn build_token_bridge_approve_transaction(
     claim: bool,
     bridge_object_arg: ObjectArg,
     sui_token_type_tags: &HashMap<u8, TypeTag>,
+    rgp: u64,
 ) -> BridgeResult<TransactionData> {
     let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -207,17 +214,16 @@ fn build_token_bridge_approve_transaction(
         vec![*gas_object_ref],
         pt,
         100_000_000,
-        // TODO: use reference gas price
-        1500,
+        rgp,
     ))
 }
 
-// TODO: pass in gas price
 fn build_emergency_op_approve_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
     bridge_object_arg: ObjectArg,
+    rgp: u64,
 ) -> BridgeResult<TransactionData> {
     let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
 
@@ -268,17 +274,16 @@ fn build_emergency_op_approve_transaction(
         vec![*gas_object_ref],
         pt,
         100_000_000,
-        // TODO: use reference gas price
-        1500,
+        rgp,
     ))
 }
 
-// TODO: pass in gas price
 fn build_committee_blocklist_approve_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
     bridge_object_arg: ObjectArg,
+    rgp: u64,
 ) -> BridgeResult<TransactionData> {
     let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
 
@@ -336,17 +341,16 @@ fn build_committee_blocklist_approve_transaction(
         vec![*gas_object_ref],
         pt,
         100_000_000,
-        // TODO: use reference gas price
-        1500,
+        rgp,
     ))
 }
 
-// TODO: pass in gas price
 fn build_limit_update_approve_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
     bridge_object_arg: ObjectArg,
+    rgp: u64,
 ) -> BridgeResult<TransactionData> {
     let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
 
@@ -400,17 +404,16 @@ fn build_limit_update_approve_transaction(
         vec![*gas_object_ref],
         pt,
         100_000_000,
-        // TODO: use reference gas price
-        1500,
+        rgp,
     ))
 }
 
-// TODO: pass in gas price
 fn build_asset_price_update_approve_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
     bridge_object_arg: ObjectArg,
+    rgp: u64,
 ) -> BridgeResult<TransactionData> {
     let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
 
@@ -464,17 +467,16 @@ fn build_asset_price_update_approve_transaction(
         vec![*gas_object_ref],
         pt,
         100_000_000,
-        // TODO: use reference gas price
-        1500,
+        rgp,
     ))
 }
 
-// TODO: pass in gas price
 pub fn build_add_tokens_on_sui_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
     bridge_object_arg: ObjectArg,
+    rgp: u64,
 ) -> BridgeResult<TransactionData> {
     let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
 
@@ -541,8 +543,7 @@ pub fn build_add_tokens_on_sui_transaction(
         vec![*gas_object_ref],
         pt,
         100_000_000,
-        // TODO: use reference gas price
-        1500,
+        rgp,
     ))
 }
 
@@ -605,7 +606,7 @@ mod tests {
     use sui_types::crypto::ToFromBytes;
     use test_cluster::TestClusterBuilder;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_build_sui_transaction_for_token_transfer() {
         telemetry_subscribers::init_for_testing();
         let mut bridge_keys = vec![];
@@ -681,7 +682,7 @@ mod tests {
         .await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_build_sui_transaction_for_emergency_op() {
         telemetry_subscribers::init_for_testing();
         let mut bridge_keys = vec![];
@@ -750,7 +751,7 @@ mod tests {
         assert!(!summary.is_frozen);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_build_sui_transaction_for_committee_blocklist() {
         telemetry_subscribers::init_for_testing();
         let mut bridge_keys = vec![];
@@ -838,7 +839,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_build_sui_transaction_for_limit_update() {
         telemetry_subscribers::init_for_testing();
         let mut bridge_keys = vec![];
@@ -907,7 +908,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_build_sui_transaction_for_price_update() {
         telemetry_subscribers::init_for_testing();
         let mut bridge_keys = vec![];

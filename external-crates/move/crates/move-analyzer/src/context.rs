@@ -12,4 +12,6 @@ pub struct Context {
     pub connection: Connection,
     /// Symbolication information
     pub symbols: Arc<Mutex<Symbols>>,
+    /// Are inlay type hints enabled?
+    pub inlay_type_hints: bool,
 }

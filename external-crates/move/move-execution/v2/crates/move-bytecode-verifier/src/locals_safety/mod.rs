@@ -160,6 +160,20 @@ fn execute_inner(
         | Bytecode::VecPopBack(_)
         | Bytecode::VecUnpack(..)
         | Bytecode::VecSwap(_) => (),
+        Bytecode::PackVariant(_)
+        | Bytecode::PackVariantGeneric(_)
+        | Bytecode::UnpackVariant(_)
+        | Bytecode::UnpackVariantGeneric(_)
+        | Bytecode::UnpackVariantImmRef(_)
+        | Bytecode::UnpackVariantGenericImmRef(_)
+        | Bytecode::UnpackVariantMutRef(_)
+        | Bytecode::UnpackVariantGenericMutRef(_)
+        | Bytecode::VariantSwitch(_) => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Unexpected variant opcode in version 2".to_string()),
+            );
+        }
     };
     Ok(())
 }

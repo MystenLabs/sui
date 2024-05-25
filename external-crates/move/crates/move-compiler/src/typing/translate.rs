@@ -29,7 +29,7 @@ use crate::{
     },
     sui_mode,
     typing::{
-        ast as T,
+        ast::{self as T, IDEInfo, MacroCallInfo},
         core::{
             self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
@@ -490,6 +490,10 @@ mod check_valid_constant {
                 sequence(context, seq);
                 return;
             }
+            E::IDEAnnotation(_, er) => {
+                exp(context, er);
+                return;
+            }
             E::UnaryExp(_, er) => {
                 exp(context, er);
                 return;
@@ -772,7 +776,7 @@ fn variant_def(
         for declared_ability in enum_abilities {
             let required = declared_ability.value.requires();
             let msg = format!(
-                "Invalid field type. The struct was declared with the ability '{}' so all fields \
+                "Invalid field type. The enum was declared with the ability '{}' so all fields \
                  require the ability '{}'",
                 declared_ability, required
             );
@@ -1629,7 +1633,13 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             context.maybe_exit_macro_argument(eloc, from_macro_argument);
             res
         }
-
+        NE::IDEAnnotation(info, e) => {
+            let new_info = match info {
+                N::IDEInfo::ExpandedLambda => IDEInfo::ExpandedLambda,
+            };
+            let new_exp = exp(context, e);
+            (new_exp.ty.clone(), TE::IDEAnnotation(new_info, new_exp))
+        }
         NE::Lambda(_) => {
             if context
                 .env
@@ -4256,6 +4266,7 @@ fn macro_method_call(
         loc,
         m,
         f,
+        Some(method),
         type_arguments,
         args,
         return_ty,
@@ -4279,7 +4290,7 @@ fn macro_module_call(
         .collect();
     let (type_arguments, args, return_ty) =
         macro_call_impl(context, loc, m, f, macro_call_loc, fty, argloc, args);
-    expand_macro(context, loc, m, f, type_arguments, args, return_ty)
+    expand_macro(context, loc, m, f, None, type_arguments, args, return_ty)
 }
 
 fn macro_call_impl(
@@ -4411,6 +4422,7 @@ fn expand_macro(
     call_loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
+    method_name: Option<Name>,
     type_args: Vec<N::Type>,
     args: Vec<macro_expand::Arg>,
     return_ty: Type,
@@ -4422,7 +4434,8 @@ fn expand_macro(
         assert!(context.env.has_errors());
         return (context.error_type(call_loc), TE::UnresolvedError);
     }
-    let res = match macro_expand::call(context, call_loc, m, f, type_args, args, return_ty) {
+    let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
+    {
         None => {
             assert!(context.env.has_errors());
             (context.error_type(call_loc), TE::UnresolvedError)
@@ -4450,12 +4463,30 @@ fn expand_macro(
                     sp(b.loc, TS::Bind(b, lvalue_ty, Box::new(e)))
                 })
                 .collect();
+            let by_value_args = seq.iter().cloned().collect::<Vec<_>>();
             // add the body
             let body = exp(context, body);
             let ty = body.ty.clone();
             seq.push_back(sp(body.exp.loc, TS::Seq(body)));
             let use_funs = N::UseFuns::new(context.current_call_color());
-            let e_ = TE::Block((use_funs, seq));
+            let block = TE::Block((use_funs, seq));
+            let e_ = if context.env.ide_mode() {
+                TE::IDEAnnotation(
+                    T::IDEInfo::MacroCallInfo(MacroCallInfo {
+                        module: m,
+                        name: f,
+                        method_name,
+                        type_arguments: type_args.clone(),
+                        by_value_args,
+                    }),
+                    Box::new(T::Exp {
+                        ty: ty.clone(),
+                        exp: sp(call_loc, block),
+                    }),
+                )
+            } else {
+                block
+            };
             (ty, e_)
         }
     };

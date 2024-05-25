@@ -31,7 +31,7 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
 }
 
 task 4 'view-object'. lines 40-40:
-Owner: Shared
+Owner: Shared( 3 )
 Version: 3
 Contents: tto::M1::A {
     id: sui::object::UID {
@@ -89,7 +89,7 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
 }
 
 task 9 'view-object'. lines 50-50:
-Owner: Shared
+Owner: Shared( 3 )
 Version: 4
 Contents: tto::M1::A {
     id: sui::object::UID {

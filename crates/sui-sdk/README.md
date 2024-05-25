@@ -5,7 +5,7 @@ This crate provides the Sui Rust SDK, containing APIs to interact with the Sui n
 Add the `sui-sdk` dependency as following:
 
 ```toml
-sui-sdk = { git = "https://github.com/mystenlabs/sui", package = "sui-sdk"}
+sui_sdk = { git = "https://github.com/mystenlabs/sui", package = "sui-sdk"}
 tokio = { version = "1.2", features = ["full"] }
 anyhow = "1.0"
 ```

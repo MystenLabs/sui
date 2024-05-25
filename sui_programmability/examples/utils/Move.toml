@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2024.beta"
 
 [dependencies]
-Sui = { local = "../../../crates/sui-framework//packages/sui-framework" }
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
 
 [addresses]
-utils =  "0x0"
+utils = "0x0"

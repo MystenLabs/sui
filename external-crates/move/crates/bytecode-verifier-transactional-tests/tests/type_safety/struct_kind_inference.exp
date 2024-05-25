@@ -1,4 +1,4 @@
-processed 5 tasks
+processed 10 tasks
 
 task 0 'publish'. lines 1-12:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M1'. Got VMError: {
@@ -41,6 +41,51 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     major_status: COPYLOC_WITHOUT_COPY_ABILITY,
     sub_status: None,
     location: 0x1::M5,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 5 'publish'. lines 64-75:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M1'. Got VMError: {
+    major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
+    sub_status: None,
+    location: 0x2::M1,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 6 'publish'. lines 77-88:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M2'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x2::M2,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 7 'publish'. lines 90-100:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M3'. Got VMError: {
+    major_status: READREF_WITHOUT_COPY_ABILITY,
+    sub_status: None,
+    location: 0x2::M3,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 8 'publish'. lines 102-113:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M4'. Got VMError: {
+    major_status: WRITEREF_WITHOUT_DROP_ABILITY,
+    sub_status: None,
+    location: 0x2::M4,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 9 'publish'. lines 115-125:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M5'. Got VMError: {
+    major_status: COPYLOC_WITHOUT_COPY_ABILITY,
+    sub_status: None,
+    location: 0x2::M5,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 0)],
 }

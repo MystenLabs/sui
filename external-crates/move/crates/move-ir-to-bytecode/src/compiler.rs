@@ -7,10 +7,11 @@ use anyhow::{bail, format_err, Result};
 use move_binary_format::{
     file_format::{
         Ability, AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant,
-        ConstantPoolIndex, FieldDefinition, FunctionDefinition, FunctionSignature, ModuleHandle,
-        Signature, SignatureToken, StructDefinition, StructDefinitionIndex, StructFieldInformation,
-        StructHandleIndex, StructTypeParameter, TableIndex, TypeParameterIndex, TypeSignature,
-        Visibility,
+        ConstantPoolIndex, DatatypeHandleIndex, DatatypeTyParameter, EnumDefinition,
+        EnumDefinitionIndex, FieldDefinition, FunctionDefinition, FunctionSignature,
+        JumpTableInner, ModuleHandle, Signature, SignatureToken, StructDefinition,
+        StructDefinitionIndex, StructFieldInformation, TableIndex, TypeParameterIndex,
+        TypeSignature, VariantDefinition, VariantJumpTable, VariantJumpTableIndex, Visibility,
     },
     file_format_common::VERSION_MAX,
 };
@@ -51,6 +52,12 @@ macro_rules! record_src_loc {
             .source_map
             .add_struct_field_mapping($idx, $field.loc)?;
     }};
+    (variant: $context:expr, $idx: expr, $variant:expr, $field_locs:expr) => {{
+        let source_name = ($variant.value.name.0.as_str().to_owned(), $variant.loc);
+        $context
+            .source_map
+            .add_enum_variant_mapping($idx, source_name, $field_locs)?;
+    }};
     (function_type_formals: $context:expr, $var:expr) => {
         for (ty_var, _) in $var.iter() {
             let source_name = (ty_var.value.0.as_str().to_owned(), ty_var.loc);
@@ -81,6 +88,20 @@ macro_rules! record_src_loc {
         $context
             .source_map
             .add_top_level_struct_mapping($context.current_struct_definition_index(), $location)?;
+    };
+    (enum_type_formals: $context:expr, $var:expr) => {
+        for (_, ty_var, _) in $var.iter() {
+            let source_name = (ty_var.value.0.as_str().to_owned(), ty_var.loc);
+            $context.source_map.add_enum_type_parameter_mapping(
+                $context.current_enum_definition_index(),
+                source_name,
+            )?;
+        }
+    };
+    (enum_decl: $context:expr, $location:expr) => {
+        $context
+            .source_map
+            .add_top_level_enum_mapping($context.current_enum_definition_index(), $location)?;
     };
     (const_decl: $context:expr, $const_index:expr, $name:expr) => {
         $context.source_map.add_const_mapping($const_index, $name)?;
@@ -354,15 +375,25 @@ pub fn compile_module<'a>(
         module.explicit_dependency_declarations,
     )?;
 
-    // Explicitly declare all structs as they will be included even if not used
+    // Explicitly declare all structs and enums as they will be included even if not used
     for s in &module.structs {
         let abilities = abilities(&s.value.abilities);
-        let ident = QualifiedStructIdent {
+        let ident = QualifiedDatatypeIdent {
             module: self_name,
             name: s.value.name.clone(),
         };
-        let type_parameters = struct_type_parameters(&s.value.type_formals);
-        context.declare_struct_handle_index(ident, abilities, type_parameters)?;
+        let type_parameters = datatype_type_parameters(&s.value.type_formals);
+        context.declare_datatype_handle_index(ident, abilities, type_parameters)?;
+    }
+
+    for s in &module.enums {
+        let abilities = abilities(&s.value.abilities);
+        let ident = QualifiedDatatypeIdent {
+            module: self_name,
+            name: s.value.name.clone(),
+        };
+        let type_parameters = datatype_type_parameters(&s.value.type_formals);
+        context.declare_datatype_handle_index(ident, abilities, type_parameters)?;
     }
 
     for ir_constant in module.constants {
@@ -389,12 +420,13 @@ pub fn compile_module<'a>(
 
     // Compile definitions
     let struct_defs = compile_structs(&mut context, &self_name, module.structs)?;
+    let enum_defs = compile_enums(&mut context, &self_name, module.enums)?;
     let function_defs = compile_functions(&mut context, &self_name, module.functions)?;
 
     let (
         MaterializedPools {
             module_handles,
-            struct_handles,
+            datatype_handles,
             function_handles,
             field_handles,
             signatures,
@@ -403,7 +435,10 @@ pub fn compile_module<'a>(
             constant_pool,
             function_instantiations,
             struct_def_instantiations,
+            enum_def_instantiations,
             field_instantiations,
+            variant_handles,
+            variant_instantiation_handles,
         },
         _compiled_deps,
         source_map,
@@ -412,7 +447,7 @@ pub fn compile_module<'a>(
         version: VERSION_MAX,
         module_handles,
         self_module_handle_idx,
-        struct_handles,
+        datatype_handles,
         function_handles,
         field_handles,
         friend_decls,
@@ -426,15 +461,47 @@ pub fn compile_module<'a>(
         metadata: vec![],
         struct_defs,
         function_defs,
+        enum_defs,
+        enum_def_instantiations,
+        variant_handles,
+        variant_instantiation_handles,
     };
     set_module_version(&mut compiled_module, module.specified_version);
     Ok((compiled_module, source_map))
 }
 
 fn set_module_version(module: &mut CompiledModule, version: Option<u32>) {
+    // If a version override is provide always respect that no matter what.
     if let Some(version) = version.or_else(get_bytecode_version_from_env) {
         module.version = version;
+        return;
     }
+
+    // Leave this const, and the const assertion here as a reminder to update this code if the
+    // version changes
+    #[allow(clippy::assertions_on_constants)]
+    const PRE_MAX_VERSION: u32 = {
+        assert!(
+            VERSION_MAX == 7,
+            "Need to update this code if the version changes"
+        );
+        VERSION_MAX - 1
+    };
+    let version = if module.enum_defs.is_empty()
+        && module.enum_def_instantiations.is_empty()
+        && module.variant_handles.is_empty()
+        && module.variant_instantiation_handles.is_empty()
+        && module.function_defs.iter().all(|f| {
+            f.code
+                .as_ref()
+                .map(|c| c.jump_tables.is_empty())
+                .unwrap_or(true)
+        }) {
+        PRE_MAX_VERSION
+    } else {
+        VERSION_MAX
+    };
+    module.version = version;
 }
 
 // Note: DO NOT try to recover from this function as it zeros out the `outer_contexts` dependencies
@@ -449,7 +516,7 @@ fn compile_explicit_dependency_declarations(
     for dependency in dependencies {
         let ModuleDependency {
             name: mname,
-            structs,
+            datatypes,
             functions,
         } = dependency;
         let current_module = outer_context.module_ident(&mname)?;
@@ -460,16 +527,16 @@ fn compile_explicit_dependency_declarations(
         )?;
         compile_imports(&mut context, imports.clone())?;
         let self_module_handle_idx = context.module_handle_index(&mname)?;
-        for struct_dep in structs {
-            let StructDependency {
+        for data_dep in datatypes {
+            let DatatypeDependency {
                 abilities: abs,
                 name,
                 type_formals: tys,
-            } = struct_dep;
-            let sname = QualifiedStructIdent::new(mname, name);
+            } = data_dep;
+            let sname = QualifiedDatatypeIdent::new(mname, name);
             let ability_set = abilities(&abs);
-            let kinds = struct_type_parameters(&tys);
-            context.declare_struct_handle_index(sname, ability_set, kinds)?;
+            let kinds = datatype_type_parameters(&tys);
+            context.declare_datatype_handle_index(sname, ability_set, kinds)?;
         }
         for function_dep in functions {
             let FunctionDependency { name, signature } = function_dep;
@@ -480,7 +547,7 @@ fn compile_explicit_dependency_declarations(
         let (
             MaterializedPools {
                 module_handles,
-                struct_handles,
+                datatype_handles,
                 function_handles,
                 field_handles,
                 signatures,
@@ -489,7 +556,10 @@ fn compile_explicit_dependency_declarations(
                 constant_pool,
                 function_instantiations,
                 struct_def_instantiations,
+                enum_def_instantiations,
                 field_instantiations,
+                variant_handles,
+                variant_instantiation_handles,
             },
             compiled_deps,
             _source_map,
@@ -498,7 +568,7 @@ fn compile_explicit_dependency_declarations(
             version: VERSION_MAX,
             module_handles,
             self_module_handle_idx,
-            struct_handles,
+            datatype_handles,
             function_handles,
             field_handles,
             friend_decls: vec![],
@@ -512,6 +582,10 @@ fn compile_explicit_dependency_declarations(
             metadata: vec![],
             struct_defs: vec![],
             function_defs: vec![],
+            enum_defs: vec![],
+            enum_def_instantiations,
+            variant_handles,
+            variant_instantiation_handles,
         };
         dependencies_acc = compiled_deps;
         dependencies_acc.insert(
@@ -557,10 +631,10 @@ fn type_parameter_indexes<'a>(
     Ok(m)
 }
 
-fn struct_type_parameters(ast_tys: &[ast::StructTypeParameter]) -> Vec<StructTypeParameter> {
+fn datatype_type_parameters(ast_tys: &[ast::DatatypeTypeParameter]) -> Vec<DatatypeTyParameter> {
     ast_tys
         .iter()
-        .map(|(is_phantom, _, abs)| StructTypeParameter {
+        .map(|(is_phantom, _, abs)| DatatypeTyParameter {
             constraints: abilities(abs),
             is_phantom: *is_phantom,
         })
@@ -621,14 +695,14 @@ fn compile_type(
                 SignatureToken::Reference(inner_token)
             }
         }
-        Type::Struct(ident, tys) => {
-            let sh_idx = context.struct_handle_index(ident.clone())?;
+        Type::Datatype(ident, tys) => {
+            let sh_idx = context.datatype_handle_index(ident.clone())?;
 
             if tys.is_empty() {
-                SignatureToken::Struct(sh_idx)
+                SignatureToken::Datatype(sh_idx)
             } else {
                 let tokens = compile_types(context, type_parameters, tys)?;
-                SignatureToken::StructInstantiation(Box::new((sh_idx, tokens)))
+                SignatureToken::DatatypeInstantiation(Box::new((sh_idx, tokens)))
             }
         }
         Type::TypeParameter(ty_var) => {
@@ -671,11 +745,11 @@ fn compile_structs(
 ) -> Result<Vec<StructDefinition>> {
     let mut struct_defs = vec![];
     for s in structs {
-        let sident = QualifiedStructIdent {
+        let sident = QualifiedDatatypeIdent {
             module: *self_name,
             name: s.value.name.clone(),
         };
-        let sh_idx = context.struct_handle_index(sident.clone())?;
+        let sh_idx = context.datatype_handle_index(sident.clone())?;
         record_src_loc!(struct_decl: context, s.loc);
         record_src_loc!(struct_type_formals: context, &s.value.type_formals);
         let m = type_parameter_indexes(s.value.type_formals.iter().map(|formal| &formal.1))?;
@@ -692,7 +766,7 @@ fn compile_structs(
 fn compile_fields(
     context: &mut Context,
     type_parameters: &HashMap<TypeVar_, TypeParameterIndex>,
-    sh_idx: StructHandleIndex,
+    sh_idx: DatatypeHandleIndex,
     sd_idx: StructDefinitionIndex,
     sfields: StructDefinitionFields,
 ) -> Result<StructFieldInformation> {
@@ -713,6 +787,64 @@ fn compile_fields(
             StructFieldInformation::Declared(decl_fields)
         }
     })
+}
+
+fn compile_enums(
+    context: &mut Context,
+    self_name: &ModuleName,
+    enums: Vec<ast::EnumDefinition>,
+) -> Result<Vec<EnumDefinition>> {
+    let mut enum_defs = vec![];
+    for s in enums {
+        let sident = QualifiedDatatypeIdent {
+            module: *self_name,
+            name: s.value.name.clone(),
+        };
+        let eh_idx = context.datatype_handle_index(sident.clone())?;
+        record_src_loc!(enum_decl: context, s.loc);
+        record_src_loc!(enum_type_formals: context, &s.value.type_formals);
+        let m = type_parameter_indexes(s.value.type_formals.iter().map(|formal| &formal.1))?;
+        let ed_idx = context.declare_enum_definition_index(s.value.name)?;
+        let variant_definitions = compile_variants(context, &m, eh_idx, ed_idx, s.value.variants)?;
+        enum_defs.push(EnumDefinition {
+            enum_handle: eh_idx,
+            variants: variant_definitions,
+        });
+    }
+    Ok(enum_defs)
+}
+
+fn compile_variants(
+    context: &mut Context,
+    type_parameters: &HashMap<TypeVar_, TypeParameterIndex>,
+    eh_idx: DatatypeHandleIndex,
+    ed_idx: EnumDefinitionIndex,
+    variants: Vec<ast::VariantDefinition>,
+) -> Result<Vec<VariantDefinition>> {
+    let mut variant_outputs = vec![];
+    for (i, variant) in variants.into_iter().enumerate() {
+        let variant_name = context.identifier_index(variant.value.name.0)?;
+        let field_count = variant.value.fields.len();
+        context.declare_variant(eh_idx, ed_idx, variant.value.name.clone(), field_count, i);
+        let mut decl_fields = vec![];
+        let mut field_locs = vec![];
+        for (f, ty) in variant.value.fields.into_iter() {
+            let name = context.identifier_index(f.value.0)?;
+            field_locs.push(f.loc);
+            let sig_token = compile_type(context, type_parameters, &ty)?;
+            decl_fields.push(FieldDefinition {
+                name,
+                signature: TypeSignature(sig_token),
+            });
+        }
+        record_src_loc!(variant: context, ed_idx, variant, field_locs);
+        variant_outputs.push(VariantDefinition {
+            variant_name,
+            fields: decl_fields,
+        })
+    }
+
+    Ok(variant_outputs)
 }
 
 fn compile_functions(
@@ -836,9 +968,11 @@ fn compile_function_body(
         record_src_loc!(local: context, var_);
     }
 
+    let (code, jump_tables) = compile_blocks(context, &mut function_frame, blocks)?;
     Ok(CodeUnit {
         locals: context.signature_index(locals_signature)?,
-        code: compile_blocks(context, &mut function_frame, blocks)?,
+        code,
+        jump_tables,
     })
 }
 
@@ -850,8 +984,9 @@ fn compile_blocks(
     context: &mut Context,
     function_frame: &mut FunctionFrame,
     blocks: Vec<Block>,
-) -> Result<Vec<Bytecode>> {
+) -> Result<(Vec<Bytecode>, Vec<VariantJumpTable>)> {
     let mut code = vec![];
+    let mut jump_tables = vec![];
     let mut label_to_index: HashMap<BlockLabel_, u16> = HashMap::new();
     for block in blocks {
         compile_block(
@@ -859,12 +994,13 @@ fn compile_blocks(
             function_frame,
             &mut label_to_index,
             &mut code,
+            &mut jump_tables,
             block.value,
         )?;
     }
     let fake_to_actual = context.build_index_remapping(label_to_index);
-    remap_branch_offsets(&mut code, &fake_to_actual);
-    Ok(code)
+    remap_branch_offsets(&mut code, &mut jump_tables, &fake_to_actual);
+    Ok((code, jump_tables))
 }
 
 /// Translates a block's statements to bytecode instructions.
@@ -873,12 +1009,20 @@ fn compile_block(
     function_frame: &mut FunctionFrame,
     label_to_index: &mut HashMap<BlockLabel_, u16>,
     code: &mut Vec<Bytecode>,
+    jump_tables: &mut Vec<VariantJumpTable>,
     block: Block_,
 ) -> Result<()> {
     label_to_index.insert(block.label.value.clone(), code.len() as u16);
     context.label_index(block.label.value)?;
     for statement in block.statements {
-        compile_statement(context, function_frame, label_to_index, code, statement)?;
+        compile_statement(
+            context,
+            function_frame,
+            label_to_index,
+            code,
+            jump_tables,
+            statement,
+        )?;
     }
     Ok(())
 }
@@ -893,6 +1037,7 @@ fn compile_statement(
     function_frame: &mut FunctionFrame,
     label_to_index: &mut HashMap<BlockLabel_, u16>,
     code: &mut Vec<Bytecode>,
+    jump_tables: &mut Vec<VariantJumpTable>,
     statement: Statement,
 ) -> Result<()> {
     make_push_instr!(context, code);
@@ -979,8 +1124,86 @@ fn compile_statement(
                 push_instr!(field_.loc, st_loc);
             }
         }
+        Statement_::UnpackVariant(name, variant_name, tys, bindings, e, unpack_type) => {
+            let tokens = Signature(compile_types(
+                context,
+                function_frame.type_parameters(),
+                &tys,
+            )?);
+
+            compile_expression(context, function_frame, code, *e)?;
+
+            let def_idx = context.enum_definition_index(&name)?;
+            let qname = QualifiedDatatypeIdent {
+                module: ModuleName::module_self(),
+                name,
+            };
+            let dt_idx = context.datatype_handle_index(qname)?;
+            let (eh_idx, tag) = context.variant(dt_idx, variant_name)?;
+            if tys.is_empty() {
+                let handle_idx = context.variant_handle_index(eh_idx, tag as u16)?;
+                let bytecode = match unpack_type {
+                    UnpackType::ByValue => Bytecode::UnpackVariant(handle_idx),
+                    UnpackType::ByImmRef => Bytecode::UnpackVariantImmRef(handle_idx),
+                    UnpackType::ByMutRef => Bytecode::UnpackVariantMutRef(handle_idx),
+                };
+                push_instr!(statement.loc, bytecode);
+            } else {
+                let type_parameters_id = context.signature_index(tokens)?;
+                let eh_idx = context.enum_instantiation_index(def_idx, type_parameters_id)?;
+                let handle_idx = context.variant_instantiation_handle_index(eh_idx, tag as u16)?;
+                let bytecode = match unpack_type {
+                    UnpackType::ByValue => Bytecode::UnpackVariantGeneric(handle_idx),
+                    UnpackType::ByImmRef => Bytecode::UnpackVariantGenericImmRef(handle_idx),
+                    UnpackType::ByMutRef => Bytecode::UnpackVariantGenericMutRef(handle_idx),
+                };
+
+                push_instr!(statement.loc, bytecode);
+            }
+            function_frame.pop()?;
+
+            for (field_, lhs_variable) in bindings.iter().rev() {
+                let loc_idx = function_frame.get_local(&lhs_variable.value)?;
+                let st_loc = Bytecode::StLoc(loc_idx);
+                push_instr!(field_.loc, st_loc);
+            }
+        }
+        Statement_::VariantSwitch(name, lbls, e) => {
+            compile_expression(context, function_frame, code, *e)?;
+            let def_idx = context.enum_definition_index(&name)?;
+            let qname = QualifiedDatatypeIdent {
+                module: ModuleName::module_self(),
+                name,
+            };
+            let eh_idx = context.datatype_handle_index(qname)?;
+            let idx = compile_jump_table(context, jump_tables, def_idx, eh_idx, lbls)?;
+            push_instr!(statement.loc, Bytecode::VariantSwitch(idx));
+        }
     }
     Ok(())
+}
+
+fn compile_jump_table(
+    context: &mut Context,
+    jump_tables: &mut Vec<VariantJumpTable>,
+    def_idx: EnumDefinitionIndex,
+    eh_idx: DatatypeHandleIndex,
+    lbls: Vec<(VariantName, BlockLabel)>,
+) -> Result<VariantJumpTableIndex> {
+    let mut jump_table = vec![];
+    for (i, (name, lbl)) in lbls.into_iter().enumerate() {
+        let (_, tag) = context.variant(eh_idx, name.clone())?;
+        if i != tag {
+            bail!("Variant switch defined out of order for variant {}", name);
+        }
+        jump_table.push(context.label_index(lbl.value)?);
+    }
+    let jt_idx = VariantJumpTableIndex(jump_tables.len() as TableIndex);
+    jump_tables.push(VariantJumpTable {
+        head_enum: def_idx,
+        jump_table: JumpTableInner::Full(jump_table),
+    });
+    Ok(jt_idx)
 }
 
 fn compile_lvalues(
@@ -1099,11 +1322,11 @@ fn compile_expression(
             let def_idx = context.struct_definition_index(&name)?;
 
             let self_name = ModuleName::module_self();
-            let ident = QualifiedStructIdent {
+            let ident = QualifiedDatatypeIdent {
                 module: self_name,
                 name: name.clone(),
             };
-            let sh_idx = context.struct_handle_index(ident)?;
+            let sh_idx = context.datatype_handle_index(ident)?;
 
             let num_fields = fields.len();
             for (field_order, (field, e)) in fields.into_iter().enumerate() {
@@ -1218,11 +1441,11 @@ fn compile_expression(
             // field instruction that references the correct field handle index.
             // We can't know what the index of the field is without determining
             // the type of the underlying struct.
-            let struct_ident = QualifiedStructIdent {
+            let struct_ident = QualifiedDatatypeIdent {
                 module: ModuleName::module_self(),
                 name: field.value.struct_name,
             };
-            let sh_idx = context.struct_handle_index(struct_ident)?;
+            let sh_idx = context.datatype_handle_index(struct_ident)?;
             let (def_idx, _, field_offset) = context.field(sh_idx, field.value.field.value)?;
 
             function_frame.pop()?;
@@ -1263,6 +1486,39 @@ fn compile_expression(
             for e in exps {
                 compile_expression(context, function_frame, code, e)?;
             }
+        }
+        Exp_::PackVariant(name, variant_name, ast_tys, fields) => {
+            let sig_tys = compile_types(context, function_frame.type_parameters(), &ast_tys)?;
+            let tokens = Signature(sig_tys);
+            let type_actuals_id = context.signature_index(tokens)?;
+            let def_idx = context.enum_definition_index(&name)?;
+
+            let self_name = ModuleName::module_self();
+            let ident = QualifiedDatatypeIdent {
+                module: self_name,
+                name: name.clone(),
+            };
+            let sh_idx = context.datatype_handle_index(ident)?;
+            let num_fields = fields.len();
+            let (eh_idx, tag) = context.variant(sh_idx, variant_name)?;
+
+            for (_, e) in fields.into_iter() {
+                compile_expression(context, function_frame, code, e)?;
+            }
+
+            if ast_tys.is_empty() {
+                let handle = context.variant_handle_index(eh_idx, tag as u16)?;
+                push_instr!(exp.loc, Bytecode::PackVariant(handle));
+            } else {
+                let ei_idx = context.enum_instantiation_index(def_idx, type_actuals_id)?;
+                let handle = context.variant_instantiation_handle_index(ei_idx, tag as u16)?;
+                push_instr!(exp.loc, Bytecode::PackVariantGeneric(handle));
+            }
+
+            for _ in 0..num_fields {
+                function_frame.pop()?;
+            }
+            function_frame.push()?;
         }
     };
     Ok(())
@@ -1430,7 +1686,7 @@ fn compile_constant(_context: &mut Context, ty: Type, value: MoveValue) -> Resul
             Type::TypeParameter(_) => {
                 bail!("Type parameters are not supported in constant type layouts")
             }
-            Type::Struct(_ident, _tys) => {
+            Type::Datatype(_ident, _tys) => {
                 bail!("TODO Structs are not *yet* supported in constant type layouts")
             }
         })
@@ -1467,17 +1723,25 @@ fn compile_function_body_bytecode(
     let sig_idx = context.signature_index(locals_signature)?;
 
     let mut code = vec![];
+    let mut jump_tables = vec![];
     let mut label_to_index: HashMap<BlockLabel_, u16> = HashMap::new();
     for (label, block) in blocks {
         label_to_index.insert(label.clone(), code.len() as u16);
         context.label_index(label)?;
-        compile_bytecode_block(context, &mut function_frame, &mut code, block)?;
+        compile_bytecode_block(
+            context,
+            &mut function_frame,
+            &mut code,
+            &mut jump_tables,
+            block,
+        )?;
     }
     let fake_to_actual = context.build_index_remapping(label_to_index);
-    remap_branch_offsets(&mut code, &fake_to_actual);
+    remap_branch_offsets(&mut code, &mut jump_tables, &fake_to_actual);
     Ok(CodeUnit {
         locals: sig_idx,
         code,
+        jump_tables,
     })
 }
 
@@ -1485,10 +1749,11 @@ fn compile_bytecode_block(
     context: &mut Context,
     function_frame: &mut FunctionFrame,
     code: &mut Vec<Bytecode>,
+    jump_tables: &mut Vec<VariantJumpTable>,
     block: BytecodeBlock,
 ) -> Result<()> {
     for instr in block {
-        compile_bytecode(context, function_frame, code, instr)?
+        compile_bytecode(context, function_frame, code, jump_tables, instr)?
     }
     Ok(())
 }
@@ -1497,6 +1762,7 @@ fn compile_bytecode(
     context: &mut Context,
     function_frame: &mut FunctionFrame,
     code: &mut Vec<Bytecode>,
+    jump_tables: &mut Vec<VariantJumpTable>,
     sp!(loc, instr_): IRBytecode,
 ) -> Result<()> {
     make_push_instr!(context, code);
@@ -1589,11 +1855,11 @@ fn compile_bytecode(
             Bytecode::ImmBorrowLoc(function_frame.get_local(&v_)?)
         }
         IRBytecode_::MutBorrowField(name, tys, sp!(_, field_)) => {
-            let qualified_struct_name = QualifiedStructIdent {
+            let qualified_struct_name = QualifiedDatatypeIdent {
                 module: ModuleName::module_self(),
                 name,
             };
-            let sh_idx = context.struct_handle_index(qualified_struct_name)?;
+            let sh_idx = context.datatype_handle_index(qualified_struct_name)?;
             let (def_idx, _, field_offset) = context.field(sh_idx, field_)?;
 
             let fh_idx = context.field_handle_index(def_idx, field_offset as u16)?;
@@ -1611,11 +1877,11 @@ fn compile_bytecode(
             }
         }
         IRBytecode_::ImmBorrowField(name, tys, sp!(_, field_)) => {
-            let qualified_struct_name = QualifiedStructIdent {
+            let qualified_struct_name = QualifiedDatatypeIdent {
                 module: ModuleName::module_self(),
                 name,
             };
-            let sh_idx = context.struct_handle_index(qualified_struct_name)?;
+            let sh_idx = context.datatype_handle_index(qualified_struct_name)?;
             let (def_idx, _, field_offset) = context.field(sh_idx, field_)?;
 
             let fh_idx = context.field_handle_index(def_idx, field_offset as u16)?;
@@ -1713,18 +1979,92 @@ fn compile_bytecode(
 
             Bytecode::LdU64(bitset_builder.build().bits)
         }
+        IRBytecode_::PackVariant(name, variant_name, tys) => {
+            let tokens = Signature(compile_types(
+                context,
+                function_frame.type_parameters(),
+                &tys,
+            )?);
+            let type_actuals_id = context.signature_index(tokens)?;
+            let def_idx = context.enum_definition_index(&name)?;
+            let qualified_enum_name = QualifiedDatatypeIdent {
+                module: ModuleName::module_self(),
+                name,
+            };
+            let dt_idx = context.datatype_handle_index(qualified_enum_name)?;
+            let (eh_idx, tag) = context.variant(dt_idx, variant_name)?;
+            if tys.is_empty() {
+                let handle = context.variant_handle_index(eh_idx, tag as u16)?;
+                Bytecode::PackVariant(handle)
+            } else {
+                let ei_idx = context.enum_instantiation_index(def_idx, type_actuals_id)?;
+                let handle = context.variant_instantiation_handle_index(ei_idx, tag as u16)?;
+                Bytecode::PackVariantGeneric(handle)
+            }
+        }
+        IRBytecode_::UnpackVariant(name, variant_name, tys, unpack_type) => {
+            let tokens = Signature(compile_types(
+                context,
+                function_frame.type_parameters(),
+                &tys,
+            )?);
+            let type_actuals_id = context.signature_index(tokens)?;
+            let def_idx = context.enum_definition_index(&name)?;
+            let qualified_enum_name = QualifiedDatatypeIdent {
+                module: ModuleName::module_self(),
+                name,
+            };
+            let dt_idx = context.datatype_handle_index(qualified_enum_name)?;
+            let (eh_idx, tag) = context.variant(dt_idx, variant_name)?;
+            if tys.is_empty() {
+                let handle = context.variant_handle_index(eh_idx, tag as u16)?;
+                match unpack_type {
+                    UnpackType::ByValue => Bytecode::UnpackVariant(handle),
+                    UnpackType::ByImmRef => Bytecode::UnpackVariantImmRef(handle),
+                    UnpackType::ByMutRef => Bytecode::UnpackVariantMutRef(handle),
+                }
+            } else {
+                let ei_idx = context.enum_instantiation_index(def_idx, type_actuals_id)?;
+                let handle = context.variant_instantiation_handle_index(ei_idx, tag as u16)?;
+                match unpack_type {
+                    UnpackType::ByValue => Bytecode::UnpackVariantGeneric(handle),
+                    UnpackType::ByImmRef => Bytecode::UnpackVariantGenericImmRef(handle),
+                    UnpackType::ByMutRef => Bytecode::UnpackVariantGenericMutRef(handle),
+                }
+            }
+        }
+        IRBytecode_::VariantSwitch(name, lbls) => {
+            let def_idx = context.enum_definition_index(&name)?;
+            let qname = QualifiedDatatypeIdent {
+                module: ModuleName::module_self(),
+                name,
+            };
+            let eh_idx = context.datatype_handle_index(qname)?;
+            let table_idx = compile_jump_table(context, jump_tables, def_idx, eh_idx, lbls)?;
+            Bytecode::VariantSwitch(table_idx)
+        }
     };
     push_instr!(loc, ff_instr);
     Ok(())
 }
 
-fn remap_branch_offsets(code: &mut Vec<Bytecode>, fake_to_actual: &HashMap<u16, u16>) {
+fn remap_branch_offsets(
+    code: &mut Vec<Bytecode>,
+    jump_tables: &mut [VariantJumpTable],
+    fake_to_actual: &HashMap<u16, u16>,
+) {
     for instr in code {
         match instr {
             Bytecode::BrTrue(offset) | Bytecode::BrFalse(offset) | Bytecode::Branch(offset) => {
                 *offset = fake_to_actual[offset]
             }
             _ => (),
+        }
+    }
+    for jt in jump_tables.iter_mut() {
+        let JumpTableInner::Full(ref mut jump_table) = jt.jump_table;
+        for offset in jump_table.iter_mut() {
+            *offset = fake_to_actual[offset]
         }
     }
 }

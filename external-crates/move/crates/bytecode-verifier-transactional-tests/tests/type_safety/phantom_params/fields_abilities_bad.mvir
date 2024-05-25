@@ -40,3 +40,43 @@ module 0x1.M5 {
 
     struct S has key { a: M1.HasStore<M1.NoAbilities, M1.NoAbilities> }
 }
+
+//# publish
+
+module 0x2.M1 {
+    enum NoAbilities { V{ a: bool } }
+
+    enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
+    enum HasCopy<phantom T1, T2> has copy { V{ a : bool }}
+    enum HasStore<phantom T1, T2> has store { V{ a : bool } }
+    enum HasKey<phantom T1, T2> has key { V{ a : bool } }
+
+}
+
+//# publish
+module 0x2.M2 {
+    import 0x2.M1;
+
+    enum S has drop { V{ a: M1.HasDrop<M1.NoAbilities, M1.NoAbilities> }}
+}
+
+//# publish
+module 0x2.M3 {
+    import 0x2.M1;
+
+    enum S has copy { V{ a: M1.HasCopy<M1.NoAbilities, M1.NoAbilities> }}
+}
+
+//# publish
+module 0x2.M4 {
+    import 0x2.M1;
+
+    enum S has store { V{ a: M1.HasStore<M1.NoAbilities, M1.NoAbilities> }}
+}
+
+//# publish
+module 0x2.M5 {
+    import 0x2.M1;
+
+    enum S has key { V{ a: M1.HasStore<M1.NoAbilities, M1.NoAbilities> }}
+}

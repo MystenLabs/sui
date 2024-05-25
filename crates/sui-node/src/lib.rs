@@ -427,7 +427,7 @@ impl SuiNode {
         DBMetrics::init(&prometheus_registry);
         mysten_metrics::init_metrics(&prometheus_registry);
 
-        let genesis = config.genesis()?;
+        let genesis = config.genesis()?.clone();
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let genesis_committee = genesis.committee()?;
@@ -447,7 +447,7 @@ impl SuiNode {
             .expect("Database read should not fail at init.");
 
         let store =
-            AuthorityStore::open(perpetual_tables, genesis, &config, &prometheus_registry).await?;
+            AuthorityStore::open(perpetual_tables, &genesis, &config, &prometheus_registry).await?;
 
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
@@ -587,13 +587,14 @@ impl SuiNode {
             state_snapshot_handle.is_some(),
         )?;
 
-        let mut pruning_config = config.authority_store_pruning_config;
         if !epoch_store
             .protocol_config()
             .simplified_unwrap_then_delete()
         {
             // We cannot prune tombstones if simplified_unwrap_then_delete is not enabled.
-            pruning_config.set_killswitch_tombstone_pruning(true);
+            config
+                .authority_store_pruning_config
+                .set_killswitch_tombstone_pruning(true);
         }
 
         let state = AuthorityState::new(
@@ -921,7 +922,7 @@ impl SuiNode {
                         .prune_and_compact_before_upload
                         .unwrap_or(true),
                     config.indirect_objects_threshold,
-                    config.authority_store_pruning_config,
+                    config.authority_store_pruning_config.clone(),
                     prometheus_registry,
                     state_snapshot_enabled,
                 )?;
@@ -1827,7 +1828,6 @@ pub async fn build_http_server(
             prometheus_registry,
             config.policy_config.clone(),
             config.firewall_config.clone(),
-            config.with_client_ip_injection,
         );
 
         let kv_store = build_kv_store(&state, config, prometheus_registry)?;

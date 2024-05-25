@@ -180,12 +180,6 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub firewall_config: Option<RemoteFirewallConfig>,
 
-    /// Only applicable to nodes running json rpc server.
-    /// If true, node will inject client IP into headers
-    /// in validator requests for eligible rpc endpoints.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub with_client_ip_injection: Option<bool>,
-
     #[serde(default)]
     pub execution_cache: ExecutionCacheConfig,
 }
@@ -220,6 +214,10 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Apple".to_string(),
         "Slack".to_string(),
         "TestIssuer".to_string(),
+        "Microsoft".to_string(),
+        "KarrierOne".to_string(),
+        "Credenza3".to_string(),
+        "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(),
     ]);
     let providers = BTreeSet::from([
         "Google".to_string(),
@@ -566,7 +564,7 @@ impl Default for CheckpointExecutorConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct AuthorityStorePruningConfig {
     /// number of the latest epoch dbs to retain

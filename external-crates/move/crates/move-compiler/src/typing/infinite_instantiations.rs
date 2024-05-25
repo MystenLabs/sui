@@ -266,6 +266,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         E::Loop { body: eloop, .. } => exp(context, eloop),
         E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
+        E::IDEAnnotation(_, er) => exp(context, er),
         E::Assign(_, _, er) => exp(context, er),
 
         E::Builtin(_, base_exp)

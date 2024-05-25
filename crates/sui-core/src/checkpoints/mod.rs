@@ -1172,7 +1172,7 @@ impl CheckpointBuilder {
             debug!(
                 ?last_checkpoint_seq,
                 "Waiting for {:?} certificates to appear in consensus",
-                all_effects_and_transaction_sizes.len()
+                all_effects.len()
             );
 
             for (effects, transaction_and_size) in all_effects

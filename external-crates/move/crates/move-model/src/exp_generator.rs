@@ -6,7 +6,7 @@ use num::BigUint;
 
 use crate::{
     ast::{TempIndex, Value},
-    model::{FunctionEnv, GlobalEnv, Loc, NodeId, QualifiedInstId, StructId},
+    model::{DatatypeId, FunctionEnv, GlobalEnv, Loc, NodeId, QualifiedInstId},
     symbol::Symbol,
     ty::Type,
 };
@@ -71,7 +71,7 @@ pub trait ExpGenerator<'env> {
 
     /// Get's the memory associated with a Call(Global,..) or Call(Exists, ..) node. Crashes
     /// if the node is not typed as expected.
-    fn get_memory_of_node(&self, node_id: NodeId) -> QualifiedInstId<StructId> {
+    fn get_memory_of_node(&self, node_id: NodeId) -> QualifiedInstId<DatatypeId> {
         // We do have a call `f<R<..>>` so extract the type from the function instantiation.
         let rty = &self.global_env().get_node_instantiation(node_id)[0];
         let (mid, sid, inst) = rty.require_struct();

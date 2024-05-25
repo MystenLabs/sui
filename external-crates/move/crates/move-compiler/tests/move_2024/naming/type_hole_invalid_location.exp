@@ -10,14 +10,6 @@ error[E03021]: invalid type annotation
 3 │     public struct S { f: _ }
   │                          ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
 
-error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:4:5
-  │
-4 │     public enum E { P(_), S { f: _ } }
-  │     ^^^^^^ Enums are under development and should not be used right now.
-  │
-  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
 error[E03021]: invalid type annotation
   ┌─ tests/move_2024/naming/type_hole_invalid_location.move:4:23
   │

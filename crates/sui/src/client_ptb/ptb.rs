@@ -342,7 +342,7 @@ pub fn ptb_description() -> clap::Command {
             \n --assign a none\
             \n --move-call std::option::is_none <u64> a"
         )
-        .value_names(["PACKAGE::MODULE::FUNCTION", "TYPE", "FUNCTION_ARGS"]))
+        .value_names(["PACKAGE::MODULE::FUNCTION", "TYPE_ARGS", "FUNCTION_ARGS"]))
         .arg(arg!(
             --"split-coins" <SPLIT_COINS>
             "Split the coin into N coins as per the given array of amounts."
@@ -362,7 +362,7 @@ pub fn ptb_description() -> clap::Command {
         .long_help(
             "Transfer objects to the specified address.\
             \n\nExamples:\
-            \n --transfer-objects [obj1, obj2, obj3] @address 
+            \n --transfer-objects [obj1, obj2, obj3] @address
             \n --split-coins gas [1000, 5000, 75000]\
             \n --assign new_coins # bound new_coins to result of split-coins to use next\
             \n --transfer-objects [new_coins.0, new_coins.1, new_coins.2] @to_address"
@@ -382,7 +382,7 @@ pub fn ptb_description() -> clap::Command {
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
             --"upgrade" <MOVE_PACKAGE_PATH>
-            "Upgrade the move package. It takes as input the folder where the package exists."
+            "Upgrade the Move package. It takes as input the folder where the package exists."
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
             --"preview"

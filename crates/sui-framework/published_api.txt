@@ -1753,6 +1753,9 @@ is_empty
 into_keys
 	public fun
 	0x2::vec_set
+from_keys
+	public fun
+	0x2::vec_set
 keys
 	public fun
 	0x2::vec_set
@@ -1988,6 +1991,9 @@ destroy_empty
 	public fun
 	0x2::vec_map
 into_keys_values
+	public fun
+	0x2::vec_map
+from_keys_values
 	public fun
 	0x2::vec_map
 keys

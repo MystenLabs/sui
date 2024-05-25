@@ -698,6 +698,12 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
         ),
         ("event", "emit", make_native!(event::emit)),
         (
+            "event",
+            "events_by_type",
+            make_native!(event::get_events_by_type),
+        ),
+        ("event", "num_events", make_native!(event::num_events)),
+        (
             "groth16",
             "verify_groth16_proof_internal",
             make_native!(groth16::verify_groth16_proof_internal),
