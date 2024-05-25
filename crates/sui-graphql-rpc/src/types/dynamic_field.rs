@@ -108,8 +108,6 @@ impl DynamicField {
             let obj = MoveObject::query(
                 ctx,
                 self.df_object_id,
-                // TODO (RPC-131): The dynamic object field value's version should be bounded by
-                // the field's parent version, not the version of the field object itself.
                 if let Some(parent_version) = self.parent_version {
                     Object::under_parent(parent_version, self.super_.super_.checkpoint_viewed_at)
                 } else {
