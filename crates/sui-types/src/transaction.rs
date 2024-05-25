@@ -1562,12 +1562,6 @@ impl VersionedProtocolMessage for TransactionData {
             });
         }
 
-        if !protocol_config.random_beacon() && self.uses_randomness() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "randomness is not enabled on this network".to_string(),
-            });
-        }
-
         // Now check interior versioned data
         self.kind()
             .check_version_and_features_supported(protocol_config)?;
