@@ -53,6 +53,18 @@ pub(crate) struct Object {
     pub kind: ObjectKind,
     /// The checkpoint sequence number at which this was viewed at.
     pub checkpoint_viewed_at: u64,
+    /// Optional root parent object version if this is a dynamic field.
+    ///
+    /// This enables consistent dynamic field reads in the case of chained dynamic object fields,
+    /// e.g., `Parent -> DOF1 -> DOF2`. In such cases, the object versions may end up like
+    /// `Parent >= DOF1, DOF2` but `DOF1 < DOF2`. Thus, database queries for dynamic fields must
+    /// bound the object versions by the version of the root object of the tree.
+    ///
+    /// Essentially, lamport timestamps of objects are updated for all top-level mutable objects
+    /// provided as inputs to a transaction as well as any mutated dynamic child objects. However,
+    /// any dynamic child objects that were loaded but not actually mutated don't end up having
+    /// their versions updated.
+    root_version: Option<u64>,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
@@ -462,7 +474,7 @@ impl Object {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_field(ctx, name, Some(self.version_impl()))
+            .dynamic_field(ctx, name, self.root_version())
             .await
     }
 
@@ -479,7 +491,7 @@ impl Object {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_object_field(ctx, name, Some(self.version_impl()))
+            .dynamic_object_field(ctx, name, self.root_version())
             .await
     }
 
@@ -496,7 +508,7 @@ impl Object {
         before: Option<Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_fields(ctx, first, after, last, before, Some(self.version_impl()))
+            .dynamic_fields(ctx, first, after, last, before, self.root_version())
             .await
     }
 
@@ -676,11 +688,23 @@ impl Object {
         address: SuiAddress,
         native: NativeObject,
         checkpoint_viewed_at: u64,
+        root_version: Option<u64>,
     ) -> Object {
+        let root_version = root_version.or_else(|| Self::infer_root_version(&native));
         Object {
             address,
             kind: ObjectKind::NotIndexed(native),
             checkpoint_viewed_at,
+            root_version,
+        }
+    }
+
+    fn infer_root_version(native: &NativeObject) -> Option<u64> {
+        match native.as_inner().owner {
+            NativeOwner::AddressOwner(_) | NativeOwner::Shared { .. } => {
+                Some(native.as_inner().version().into())
+            }
+            _ => None,
         }
     }
 
@@ -700,6 +724,10 @@ impl Object {
             K::NotIndexed(native) | K::Indexed(native, _) => native.version().value(),
             K::WrappedOrDeleted(stored) => stored.object_version as u64,
         }
+    }
+
+    pub(crate) fn root_version(&self) -> Option<u64> {
+        self.root_version
     }
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.
@@ -766,7 +794,8 @@ impl Object {
             // To maintain consistency, the returned cursor should have the same upper-bound as the
             // checkpoint found on the cursor.
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
-            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
+            let object =
+                Object::try_from_stored_history_object(stored, checkpoint_viewed_at, None)?;
             conn.edges.push(Edge::new(cursor, downcast(object)?));
         }
 
@@ -857,6 +886,7 @@ impl Object {
     pub(crate) fn try_from_stored_history_object(
         history_object: StoredHistoryObject,
         checkpoint_viewed_at: u64,
+        root_version: Option<u64>,
     ) -> Result<Self, Error> {
         let address = addr(&history_object.object_id)?;
 
@@ -881,10 +911,13 @@ impl Object {
                     Error::Internal(format!("Failed to deserialize object {address}"))
                 })?;
 
+                let root_version =
+                    root_version.or_else(|| Self::infer_root_version(&native_object));
                 Ok(Self {
                     address,
                     kind: ObjectKind::Indexed(native_object, history_object),
                     checkpoint_viewed_at,
+                    root_version,
                 })
             }
             NativeObjectStatus::WrappedOrDeleted => Ok(Self {
@@ -896,6 +929,7 @@ impl Object {
                     checkpoint_sequence_number: history_object.checkpoint_sequence_number,
                 }),
                 checkpoint_viewed_at,
+                root_version: None,
             }),
         }
     }
@@ -1167,8 +1201,14 @@ impl Loader<HistoricalKey> for Db {
                 continue;
             }
 
-            let object =
-                Object::try_from_stored_history_object(stored.clone(), key.checkpoint_viewed_at)?;
+            let object = Object::try_from_stored_history_object(
+                stored.clone(),
+                key.checkpoint_viewed_at,
+                // This will infer the `Object::root_version` if it's not a child object, but if it
+                // is, it will be set to `None`, so dynamic object queries will be bounded by
+                // `checkpoint_viewed_at`.
+                None,
+            )?;
             result.insert(*key, object);
         }
 
@@ -1255,8 +1295,13 @@ impl Loader<LatestAtKey> for Db {
             for (group_key, stored) in
                 group.map_err(|e| Error::Internal(format!("Failed to fetch objects: {e}")))?
             {
-                let object =
-                    Object::try_from_stored_history_object(stored, group_key.checkpoint_viewed_at)?;
+                let object = Object::try_from_stored_history_object(
+                    stored,
+                    group_key.checkpoint_viewed_at,
+                    // If `LatestAtKey::parent_version` is set, it must have been correctly
+                    // propagated from the `Object::root_version` of some object.
+                    group_key.parent_version,
+                )?;
 
                 let key = LatestAtKey {
                     id: object.address,
