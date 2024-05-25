@@ -222,11 +222,7 @@ impl CheckpointExecutor {
         let mut next_to_schedule = highest_executed
             .as_ref()
             .map(|c| c.sequence_number() + 1)
-            .unwrap_or_else(|| {
-                // TODO this invariant may no longer hold once we introduce snapshots
-                assert_eq!(epoch_store.epoch(), 0);
-                0
-            });
+            .unwrap_or_else(|| 0);
         let mut pending: CheckpointExecutionBuffer = FuturesOrdered::new();
 
         let mut now_time = Instant::now();
