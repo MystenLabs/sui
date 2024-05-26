@@ -14,6 +14,7 @@ mod tests {
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::client::ClientError;
     use sui_graphql_rpc::config::ConnectionConfig;
+    use sui_graphql_rpc::config::Limits;
     use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use sui_types::digests::ChainIdentifier;
@@ -61,9 +62,12 @@ mod tests {
             .with_env()
             .init();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
-                .await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            None,
+        )
+        .await;
 
         cluster
             .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
@@ -320,9 +324,12 @@ mod tests {
             .with_env()
             .init();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
-                .await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            None,
+        )
+        .await;
 
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
@@ -431,9 +438,12 @@ mod tests {
             .with_env()
             .init();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
-                .await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            None,
+        )
+        .await;
 
         let test_cluster = &cluster.validator_fullnode_handle;
         test_cluster.wait_for_epoch_all_nodes(1).await;
@@ -545,9 +555,12 @@ mod tests {
             .with_env()
             .init();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
-                .await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            None,
+        )
+        .await;
 
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
@@ -639,9 +652,12 @@ mod tests {
             .with_env()
             .init();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
-                .await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            None,
+        )
+        .await;
 
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
@@ -710,9 +726,12 @@ mod tests {
             .with_env()
             .init();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
-                .await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            None,
+        )
+        .await;
 
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
@@ -799,9 +818,12 @@ mod tests {
             .with_env()
             .init();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
-                .await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            None,
+        )
+        .await;
 
         cluster
             .validator_fullnode_handle
@@ -846,9 +868,12 @@ mod tests {
         let _guard = telemetry_subscribers::TelemetryConfig::new()
             .with_env()
             .init();
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
-                .await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            None,
+        )
+        .await;
         cluster
             .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
             .await;
@@ -858,6 +883,10 @@ mod tests {
         test_timeout_impl(wallet).await;
         cluster.cleanup_resources().await
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_mutation_payload() {}
 
     #[tokio::test]
     #[serial]
@@ -898,12 +927,402 @@ mod tests {
             .init();
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
         let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None, None)
+                .await;
 
         cluster
             .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
             .await;
         test_health_check_impl().await;
         cluster.cleanup_resources().await
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_query_mutation_payload() {
+        test_query_mutation_payload_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_query_mutation_payload_vars_fail() {
+        // Set max mutation payload size to 10 bytes
+        // This request should fail as we're passing the actual txBytes and sigs corresponding to a
+        // transfer sui transaction. The combined length of those is higher than 10 bytes
+        let limits = Limits {
+            max_query_payload_size: 100,
+            max_mutation_payload_size: 10,
+            ..Default::default()
+        };
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            Some(limits),
+        )
+        .await;
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let recipient = addresses[1];
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let signed_tx = cluster
+            .validator_fullnode_handle
+            .wallet
+            .sign_transaction(&tx);
+        let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
+        let tx_bytes = tx_bytes.encoded();
+        let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();
+
+        let mutation = r#"{ executeTransactionBlock(txBytes: $tx,  signatures: $sigs) { effects { transactionBlock { digest } status } errors}}"#;
+
+        let variables = vec![
+            GraphqlQueryVariable {
+                name: "tx".to_string(),
+                ty: "String!".to_string(),
+                value: json!(tx_bytes),
+            },
+            GraphqlQueryVariable {
+                name: "sigs".to_string(),
+                ty: "[String!]!".to_string(),
+                value: json!(sigs),
+            },
+        ];
+        let res = cluster
+            .graphql_client
+            .execute_mutation_to_graphql(mutation.to_string(), variables)
+            .await
+            .unwrap();
+        assert!(!res.errors().is_empty());
+        let err: Vec<_> = res
+            .response_body()
+            .errors
+            .iter()
+            .map(|e| e.message.to_string())
+            .collect();
+        assert_eq!(err,
+            vec!["Mutation payload (txBytes + signatures) size of executeTransactionBlock node is too large. The maximum allowed is 10 bytes".to_string()]
+);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_query_mutation_payload_vars_pass() {
+        // Set max mutation payload size to 450 bytes
+        // This request should pass as we're passing the actual txBytes and sigs corresponding to a
+        // transfer sui transaction
+        let limits = Limits {
+            max_query_payload_size: 180,
+            max_mutation_payload_size: 450,
+            ..Default::default()
+        };
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            Some(limits),
+        )
+        .await;
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let recipient = addresses[1];
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let signed_tx = cluster
+            .validator_fullnode_handle
+            .wallet
+            .sign_transaction(&tx);
+        let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
+        let tx_bytes = tx_bytes.encoded();
+        let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();
+
+        let mutation = r#"{ executeTransactionBlock(txBytes: $tx,  signatures: $sigs) { effects { transactionBlock { digest } status } errors}}"#;
+
+        let variables = vec![
+            GraphqlQueryVariable {
+                name: "tx".to_string(),
+                ty: "String!".to_string(),
+                value: json!(tx_bytes),
+            },
+            GraphqlQueryVariable {
+                name: "sigs".to_string(),
+                ty: "[String!]!".to_string(),
+                value: json!(sigs),
+            },
+        ];
+        let res = cluster
+            .graphql_client
+            .execute_mutation_to_graphql(mutation.to_string(), variables)
+            .await
+            .unwrap();
+        assert!(res.errors().is_empty());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_query_mutation_payload_vars_read_part_fail() {
+        // Set max mutation payload size to 450 bytes and query payload to 150
+        // This request should fail because the read part of the request is too large
+        let limits = Limits {
+            max_query_payload_size: 150,
+            max_mutation_payload_size: 450,
+            ..Default::default()
+        };
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            Some(limits),
+        )
+        .await;
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let recipient = addresses[1];
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let signed_tx = cluster
+            .validator_fullnode_handle
+            .wallet
+            .sign_transaction(&tx);
+        let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
+        let tx_bytes = tx_bytes.encoded();
+        let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();
+
+        let mutation = r#"{ executeTransactionBlock(txBytes: $tx,  signatures: $sigs) { effects { transactionBlock { digest } status } errors}}"#;
+
+        let variables = vec![
+            GraphqlQueryVariable {
+                name: "tx".to_string(),
+                ty: "String!".to_string(),
+                value: json!(tx_bytes),
+            },
+            GraphqlQueryVariable {
+                name: "sigs".to_string(),
+                ty: "[String!]!".to_string(),
+                value: json!(sigs),
+            },
+        ];
+        let res = cluster
+            .graphql_client
+            .execute_mutation_to_graphql(mutation.to_string(), variables)
+            .await
+            .unwrap();
+        assert!(!res.errors().is_empty());
+        let err: Vec<_> = res
+            .response_body()
+            .errors
+            .iter()
+            .map(|e| e.message.to_string())
+            .collect();
+        assert_eq!(err, vec!["Mutation payload txBytes + sigantures size OK. The read part of the request is too large. Maximum allowed is 150".to_string()]);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_transaction_dry_run_payload_check_fail() {
+        // Set max mutation payload size to 450 bytes and query payload to 100
+        // This request should fail because the read part of the request is too large
+        let limits = Limits {
+            max_query_payload_size: 100,
+            max_mutation_payload_size: 450,
+            ..Default::default()
+        };
+
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            Some(limits),
+        )
+        .await;
+
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let recipient = addresses[1];
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let tx_bytes = Base64::encode(bcs::to_bytes(&tx).unwrap());
+
+        let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
+                transaction {
+                    digest
+                    sender {
+                        address
+                    }
+                    gasInput {
+                        gasSponsor {
+                            address
+                        }
+                        gasPrice
+                    }
+                }
+                error
+                results {
+                    mutatedReferences {
+                        input {
+                            __typename
+                            ... on Input {
+                                ix
+                            }
+                            ... on Result {
+                                cmd
+                                ix
+                            }
+                        }
+                        type {
+                            repr
+                        }
+                    }
+                    returnValues {
+                        type {
+                            repr
+                        }
+                        bcs
+                    }
+                }
+            }
+        }"#;
+        let variables = vec![GraphqlQueryVariable {
+            name: "tx".to_string(),
+            ty: "String!".to_string(),
+            value: json!(tx_bytes),
+        }];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), false, variables, vec![])
+            .await
+            .unwrap();
+        assert!(!res.errors().is_empty());
+        let err: Vec<_> = res
+            .response_body()
+            .errors
+            .iter()
+            .map(|e| e.message.to_string())
+            .collect();
+        assert_eq!(
+            err,
+            vec!["Read query payload is too large. The maximum allowed is 100 bytes"]
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_transaction_dry_run_payload_check_1_fail() {
+        // Set max mutation payload size to 50 bytes and query payload to 1500
+        // This request should fail because the txBytes of the request is too large
+        let limits = Limits {
+            max_query_payload_size: 1500,
+            max_mutation_payload_size: 50,
+            ..Default::default()
+        };
+
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::default(),
+            None,
+            Some(limits),
+        )
+        .await;
+
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let recipient = addresses[1];
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let tx_bytes = Base64::encode(bcs::to_bytes(&tx).unwrap());
+
+        let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
+                transaction {
+                    digest
+                    sender {
+                        address
+                    }
+                    gasInput {
+                        gasSponsor {
+                            address
+                        }
+                        gasPrice
+                    }
+                }
+                error
+                results {
+                    mutatedReferences {
+                        input {
+                            __typename
+                            ... on Input {
+                                ix
+                            }
+                            ... on Result {
+                                cmd
+                                ix
+                            }
+                        }
+                        type {
+                            repr
+                        }
+                    }
+                    returnValues {
+                        type {
+                            repr
+                        }
+                        bcs
+                    }
+                }
+            }
+        }"#;
+        let variables = vec![GraphqlQueryVariable {
+            name: "tx".to_string(),
+            ty: "String!".to_string(),
+            value: json!(tx_bytes),
+        }];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), false, variables, vec![])
+            .await
+            .unwrap();
+        assert!(!res.errors().is_empty());
+        let err: Vec<_> = res
+            .response_body()
+            .errors
+            .iter()
+            .map(|e| e.message.to_string())
+            .collect();
+        assert_eq!(
+            err,
+            vec![
+                "The payload txBytes size of dryRunTransactionBlock node is too large. The maximum allowed is 50 bytes"
+                    .to_string()
+            ]
+        );
     }
 }
