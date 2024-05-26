@@ -301,11 +301,11 @@ async fn test_custom_property_check_unpublished_dependencies() {
         .resolution_graph_for_package(&path, &mut std::io::sink())
         .expect("Could not build resolution graph.");
 
-    let SuiError::ModulePublishFailure { error } =
-        check_unpublished_dependencies(&gather_published_ids(&resolution_graph).1.unpublished)
-            .err()
-            .unwrap()
-    else {
+    let SuiError::ModulePublishFailure { error } = check_unpublished_dependencies(
+        &gather_published_ids(&resolution_graph, None).1.unpublished,
+    )
+    .err()
+    .unwrap() else {
         panic!("Expected ModulePublishFailure")
     };
 

@@ -47,9 +47,9 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
-    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
+    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies,
 };
-use sui_package_management::LockCommand;
+use sui_package_management::{LockCommand, PublishedAtError};
 use sui_replay::ReplayToolCommand;
 use sui_sdk::{
     apis::ReadApi,
@@ -864,6 +864,11 @@ impl SuiClientCommands {
                         .map_err(|e| SuiError::ModulePublishFailure {
                             error: format!("Failed to canonicalize package path: {}", e),
                         })?;
+                let env_alias = context
+                    .config
+                    .get_active_env()
+                    .map(|e| e.alias.clone())
+                    .ok();
                 let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
                     upgrade_package(
                         client.read_api(),
@@ -872,6 +877,7 @@ impl SuiClientCommands {
                         upgrade_capability,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
+                        env_alias,
                     )
                     .await?;
                 let tx_kind = client
@@ -1622,6 +1628,7 @@ pub(crate) async fn upgrade_package(
     upgrade_capability: ObjectID,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
+    env_alias: Option<String>,
 ) -> Result<(ObjectID, Vec<Vec<u8>>, PackageDependencies, [u8; 32], u8), anyhow::Error> {
     let (dependencies, compiled_modules, compiled_package, package_id) = compile_package(
         read_api,
@@ -1634,12 +1641,25 @@ pub(crate) async fn upgrade_package(
 
     let package_id = package_id.map_err(|e| match e {
         PublishedAtError::NotPresent => {
-            anyhow!("No 'published-at' field in manifest for package to be upgraded.")
+            anyhow!("No 'published-at' field in Move.toml or Move.lock for package to be upgraded.")
         }
         PublishedAtError::Invalid(v) => anyhow!(
-            "Invalid 'published-at' field in manifest of package to be upgraded. \
+            "Invalid 'published-at' field in Move.toml or Move.lock of package to be upgraded. \
                          Expected an on-chain address, but found: {v:?}"
         ),
+        PublishedAtError::Conflict(id_lock, id_manifest) => {
+            let env_alias = format!("(currently {})", env_alias.unwrap_or_default());
+            anyhow!(
+                "Conflicting published package address: `Move.toml` contains published-at address \
+                 {id_manifest} but `Move.lock` file contains published-at address {id_lock}. \
+                 You may want to:
+
+                 - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
+                 - update the `Move.lock` address using the `sui manage-package` command to be the same as the `Move.toml`; OR
+                 - check that your `sui active-env` {env_alias} corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
+                 - contact the maintainer if this package is a dependency and request resolving the conflict."
+            )
+        }
     })?;
 
     let resp = read_api
@@ -1700,7 +1720,8 @@ pub(crate) async fn compile_package(
         print_diags_to_stderr,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
-    let (package_id, dependencies) = gather_published_ids(&resolution_graph);
+    let chain_id = read_api.get_chain_identifier().await.ok();
+    let (package_id, dependencies) = gather_published_ids(&resolution_graph, chain_id);
     check_invalid_dependencies(&dependencies.invalid)?;
     if !with_unpublished_dependencies {
         check_unpublished_dependencies(&dependencies.unpublished)?;
