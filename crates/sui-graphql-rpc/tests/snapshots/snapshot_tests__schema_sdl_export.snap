@@ -3511,7 +3511,16 @@ type ServiceConfig {
 	"""
 	requestTimeoutMs: Int!
 	"""
-	Maximum length of a query payload string.
+	The maximum bytes allowed for txBytes and signatures in the request body of a GraphQL
+	executeTransactionBlock mutation request.
+	It is the value of the maximum transaction bytes (including the signatures) allowed by the
+	protocol, plus the Base64 overhead (roughly 1/3 of the original string).
+	"""
+	maxMutationPayloadSize: Int!
+	"""
+	The maximum bytes allowed for the JSON object in the request body of a GraphQL read query.
+	In case of mutations or dryRunTransactionBlocks the txBytes and signatures are not
+	included in this limit.
 	"""
 	maxQueryPayloadSize: Int!
 	"""
