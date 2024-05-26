@@ -8,7 +8,8 @@ use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
 use async_graphql::extensions::{Extension, ExtensionContext, ExtensionFactory};
 use async_graphql::parser::types::{
-    Directive, ExecutableDocument, Field, FragmentDefinition, Selection, SelectionSet,
+    Directive, ExecutableDocument, Field, FragmentDefinition, OperationType, Selection,
+    SelectionSet,
 };
 use async_graphql::{value, Name, Pos, Positioned, Response, ServerResult, Value, Variables};
 use async_graphql_value::Value as GqlValue;
@@ -127,7 +128,37 @@ impl Extension for QueryLimitsChecker {
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
-        if query.len() > cfg.limits.max_query_payload_size as usize {
+        // Document layout of the query
+        let doc = next.run(ctx, query, variables).await?;
+
+        let is_mutation = doc
+            .operations
+            .iter()
+            .any(|(_, operation)| operation.node.ty == OperationType::Mutation);
+
+        if is_mutation && query.len() > cfg.limits.max_mutation_payload_size as usize {
+            metrics
+                .request_metrics
+                .query_payload_too_large_size
+                .observe(query.len() as f64);
+            info!(
+                query_id = %query_id,
+                session_id = %session_id,
+                error_code = code::BAD_USER_INPUT,
+                "Mutation payload is too large: {}",
+                query.len()
+            );
+
+            return Err(graphql_error(
+                code::BAD_USER_INPUT,
+                format!(
+                    "Mutation payload is too large. The maximum allowed is {} bytes",
+                    cfg.limits.max_mutation_payload_size
+                ),
+            ));
+        }
+
+        if !is_mutation && query.len() > cfg.limits.max_query_payload_size as usize {
             metrics
                 .request_metrics
                 .query_payload_too_large_size
@@ -148,9 +179,6 @@ impl Extension for QueryLimitsChecker {
                 ),
             ));
         }
-
-        // Document layout of the query
-        let doc = next.run(ctx, query, variables).await?;
 
         // TODO: Limit the complexity of fragments early on
 

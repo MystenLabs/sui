@@ -68,7 +68,9 @@ pub struct Limits {
     pub max_query_nodes: u32,
     /// Maximum number of output nodes allowed in the response.
     pub max_output_nodes: u64,
-    /// Maximum size (in bytes) of a GraphQL request.
+    /// Maximum size (in bytes) of a GraphQL mutation request.
+    pub max_mutation_payload_size: u32,
+    /// Maximum size (in bytes) of a GraphQL read request.
     pub max_query_payload_size: u32,
     /// Queries whose EXPLAIN cost are more than this will be logged. Given in the units used by the
     /// database (where 1.0 is roughly the cost of a sequential page access).
@@ -254,6 +256,11 @@ impl ServiceConfig {
     /// Maximum time in milliseconds that will be spent to serve one query request.
     async fn request_timeout_ms(&self) -> u64 {
         self.limits.request_timeout_ms
+    }
+
+    /// Maximum mutation payload size in bytes.
+    async fn max_mutation_payload_size(&self) -> u32 {
+        self.limits.max_mutation_payload_size
     }
 
     /// Maximum length of a query payload string.
@@ -452,6 +459,10 @@ impl Default for Limits {
             max_type_nodes: 256,
             // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1988>
             max_move_value_depth: 128,
+            // This value is set to be the size of the max transaction bytes allowed + base64
+            // overhead + the max query payload overhead + the max signature size (on a multisig).
+            // The base64 overhead is roughly 4/3 of the original string.
+            max_mutation_payload_size: 174_667 + 5_000 + 1_350,
         }
     }
 }
@@ -503,6 +514,7 @@ mod tests {
                 max-query-depth = 100
                 max-query-nodes = 300
                 max-output-nodes = 200000
+                max-mutation-payload-size = 131000
                 max-query-payload-size = 2000
                 max-db-query-cost = 50
                 default-page-size = 20
@@ -522,6 +534,7 @@ mod tests {
                 max_query_depth: 100,
                 max_query_nodes: 300,
                 max_output_nodes: 200000,
+                max_mutation_payload_size: 131_000,
                 max_query_payload_size: 2000,
                 max_db_query_cost: 50,
                 default_page_size: 20,
@@ -585,6 +598,7 @@ mod tests {
                 max-query-depth = 42
                 max-query-nodes = 320
                 max-output-nodes = 200000
+                max-mutation-payload-size = 131000
                 max-query-payload-size = 200
                 max-db-query-cost = 20
                 default-page-size = 10
@@ -607,6 +621,7 @@ mod tests {
                 max_query_depth: 42,
                 max_query_nodes: 320,
                 max_output_nodes: 200000,
+                max_mutation_payload_size: 131_000,
                 max_query_payload_size: 200,
                 max_db_query_cost: 20,
                 default_page_size: 10,
