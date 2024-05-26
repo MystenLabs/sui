@@ -119,6 +119,14 @@ impl StateReader {
         })
     }
 
+    pub fn checkpoint_iter(
+        &self,
+        direction: Direction,
+        start: CheckpointSequenceNumber,
+    ) -> CheckpointIter {
+        CheckpointIter::new(self.clone(), direction, start)
+    }
+
     pub fn transaction_iter(
         &self,
         direction: Direction,
@@ -249,4 +257,59 @@ pub struct CursorInfo {
 
     // None if there are no more transactions in the store
     pub next_cursor: Option<(CheckpointSequenceNumber, Option<usize>)>,
+}
+
+pub struct CheckpointIter {
+    reader: StateReader,
+    direction: Direction,
+
+    next_cursor: Option<CheckpointSequenceNumber>,
+}
+
+impl CheckpointIter {
+    pub fn new(reader: StateReader, direction: Direction, start: CheckpointSequenceNumber) -> Self {
+        Self {
+            reader,
+            direction,
+            next_cursor: Some(start),
+        }
+    }
+}
+
+impl Iterator for CheckpointIter {
+    type Item = Result<(
+        sui_types::messages_checkpoint::CertifiedCheckpointSummary,
+        sui_types::messages_checkpoint::CheckpointContents,
+    )>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let current_checkpoint = self.next_cursor?;
+
+        let checkpoint = match self
+            .reader
+            .inner()
+            .get_checkpoint_by_sequence_number(current_checkpoint)
+        {
+            Ok(Some(checkpoint)) => checkpoint,
+            Ok(None) => return None,
+            Err(e) => return Some(Err(e)),
+        }
+        .into_inner();
+        let contents = match self
+            .reader
+            .inner()
+            .get_checkpoint_contents_by_sequence_number(checkpoint.sequence_number)
+        {
+            Ok(Some(contents)) => contents,
+            Ok(None) => return None,
+            Err(e) => return Some(Err(e)),
+        };
+
+        self.next_cursor = match self.direction {
+            Direction::Ascending => current_checkpoint.checked_add(1),
+            Direction::Descending => current_checkpoint.checked_sub(1),
+        };
+
+        Some(Ok((checkpoint, contents)))
+    }
 }

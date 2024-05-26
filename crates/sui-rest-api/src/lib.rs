@@ -44,6 +44,24 @@ pub enum Direction {
     Descending,
 }
 
+pub struct Page<T, C> {
+    pub entries: response::ResponseContent<Vec<T>>,
+    pub cursor: Option<C>,
+}
+
+pub const DEFAULT_PAGE_SIZE: usize = 50;
+pub const MAX_PAGE_SIZE: usize = 100;
+
+impl<T: serde::Serialize, C: std::fmt::Display> axum::response::IntoResponse for Page<T, C> {
+    fn into_response(self) -> axum::response::Response {
+        let cursor = self
+            .cursor
+            .map(|cursor| [(crate::types::X_SUI_CURSOR, cursor.to_string())]);
+
+        (cursor, self.entries).into_response()
+    }
+}
+
 #[derive(Clone)]
 pub struct RestService {
     reader: StateReader,
@@ -124,6 +142,18 @@ impl RestService {
                 get(system::get_protocol_config),
             )
             .route(system::GET_GAS_INFO_PATH, get(system::get_gas_info))
+            .route(
+                checkpoints::LIST_CHECKPOINT_PATH,
+                get(checkpoints::list_checkpoints),
+            )
+            .route(
+                checkpoints::GET_CHECKPOINT_PATH,
+                get(checkpoints::get_checkpoint),
+            )
+            .route(
+                checkpoints::GET_FULL_CHECKPOINT_PATH,
+                get(checkpoints::get_full_checkpoint),
+            )
             .with_state(self.clone())
             .merge(rest_router(store))
             .pipe(|router| {
@@ -168,18 +198,6 @@ where
 {
     Router::new()
         .route(health::HEALTH_PATH, get(health::health::<S>))
-        .route(
-            checkpoints::GET_FULL_CHECKPOINT_PATH,
-            get(checkpoints::get_full_checkpoint::<S>),
-        )
-        .route(
-            checkpoints::GET_CHECKPOINT_PATH,
-            get(checkpoints::get_checkpoint::<S>),
-        )
-        .route(
-            checkpoints::GET_LATEST_CHECKPOINT_PATH,
-            get(checkpoints::get_latest_checkpoint::<S>),
-        )
         .route(objects::GET_OBJECT_PATH, get(objects::get_object::<S>))
         .route(
             objects::GET_OBJECT_WITH_VERSION_PATH,
