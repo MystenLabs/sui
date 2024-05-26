@@ -29,6 +29,7 @@ use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::ExecutionCacheTraitPointers;
+use crate::rest_index::RestIndexStore;
 
 #[derive(Clone)]
 pub struct RocksDbStore {
@@ -350,6 +351,13 @@ impl RestReadStore {
     pub fn new(state: Arc<AuthorityState>, rocks: RocksDbStore) -> Self {
         Self { state, rocks }
     }
+
+    fn index(&self) -> sui_types::storage::error::Result<&RestIndexStore> {
+        self.state
+            .rest_index
+            .as_deref()
+            .ok_or_else(|| sui_types::storage::error::Error::custom("rest index store is disabled"))
+    }
 }
 
 impl ObjectStore for RestReadStore {
@@ -473,10 +481,9 @@ impl RestStateReader for RestReadStore {
         &self,
         digest: &TransactionDigest,
     ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
-        self.state
-            .get_checkpoint_cache()
-            .deprecated_get_transaction_checkpoint(digest)
-            .map(|res| res.map(|(_epoch, checkpoint)| checkpoint))
+        self.index()?
+            .get_transaction_info(digest)
+            .map(|maybe_info| maybe_info.map(|info| info.checkpoint))
             .map_err(StorageError::custom)
     }
 
