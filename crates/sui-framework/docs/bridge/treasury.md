@@ -480,7 +480,7 @@ title: Module `0xb::treasury`
 <pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_add_new_token">add_new_token</a>(
     self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>,
     token_name: String,
-    token_id:u8,
+    token_id: u8,
     native_token: bool,
     notional_value: u64,
 ) {
@@ -490,7 +490,7 @@ title: Module `0xb::treasury`
             <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
             uc,
             decimal,
-        } = <a href="../sui-framework/bag.md#0x2_bag_remove">bag::remove</a>&lt;String, <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>&gt;(&<b>mut</b> self.waiting_room, token_name);
+        } = self.waiting_room.remove&lt;String, <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>&gt;(token_name);
         <b>let</b> decimal_multiplier = <a href="../sui-framework/math.md#0x2_math_pow">math::pow</a>(10, decimal);
         self.supported_tokens.insert(
             <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,

@@ -588,7 +588,7 @@ module bridge::bridge {
         assert!(token_ids.length() == token_type_names.length(), EMalformedMessageError);
         assert!(token_ids.length() == token_prices.length(), EMalformedMessageError);
 
-        while (vector::length(&token_ids) > 0) {
+        while (token_ids.length() > 0) {
             let token_id = token_ids.pop_back();
             let token_type_name = token_type_names.pop_back();
             let token_price = token_prices.pop_back();
@@ -744,12 +744,24 @@ module bridge::bridge {
     }
 
     #[test_only]
+    public fun inner_treasury_mut(bridge_inner: &mut BridgeInner): &mut BridgeTreasury {
+        &mut bridge_inner.treasury
+    }
+
+    #[test_only]
     public fun inner_paused(bridge_inner: &BridgeInner): bool {
         bridge_inner.paused
     }
 
     #[test_only]
     public fun inner_token_transfer_records(
+        bridge_inner: &BridgeInner,
+    ): &LinkedTable<BridgeMessageKey, BridgeRecord> {
+        &bridge_inner.token_transfer_records
+    }
+
+    #[test_only]
+    public fun inner_token_transfer_records_mut(
         bridge_inner: &mut BridgeInner,
     ): &mut LinkedTable<BridgeMessageKey, BridgeRecord> {
         &mut bridge_inner.token_transfer_records
@@ -820,5 +832,11 @@ module bridge::bridge {
     #[test_only]
     public fun transfer_status_not_found(): u8 {
         TRANSFER_STATUS_NOT_FOUND
+    }
+
+    #[test_only]
+    public fun test_execute_add_tokens_on_sui(bridge: &mut Bridge, payload: AddTokenOnSui) {
+        let inner = load_inner_mut(bridge);
+        inner.execute_add_tokens_on_sui(payload);
     }
 }
