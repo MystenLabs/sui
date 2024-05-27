@@ -2,7 +2,7 @@
 from docker.io/mysten/sui-tools:mainnet-v1.19.1 as setup
 
 RUN apt update
-RUN apt install python3 python3-pip -y
+RUN apt install python3 python3-pip python3-venv -y
 
 # copy configuration files to root
 COPY ./new-genesis.sh /new-genesis.sh

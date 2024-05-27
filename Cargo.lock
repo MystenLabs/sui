@@ -2589,7 +2589,7 @@ dependencies = [
 [[package]]
 name = "consensus-common"
 version = "0.1.0"
-source = "git+https://github.com/scalarorg/common?branch=dev#cd68e55a7d5fdb8383e9fc0d114eb4bbb2aa9419"
+source = "git+https://github.com/scalarorg/common?branch=add_echo_grpc#4573d8fd79fffd877fe8b2204e9d7666bc261964"
 dependencies = [
  "async-trait",
  "prost 0.12.4",

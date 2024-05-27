@@ -7,7 +7,7 @@
 * Implement grpc server for listening consensus request and sends transaction into consensus layer
 */
 use anyhow::anyhow;
-use consensus_common::proto::{ConsensusApi, ExternalTransaction};
+use consensus_common::proto::{ConsensusApi, ExternalTransaction, RequestEcho, ResponseEcho};
 use narwhal_worker::LazyNarwhalClient;
 use prometheus::Registry;
 use std::{pin::Pin, sync::Arc};
@@ -122,6 +122,15 @@ impl ConsensusService {
 
 #[tonic::async_trait]
 impl ConsensusApi for ConsensusService {
+    async fn echo(&self, request: tonic::Request<RequestEcho>) -> ConsensusServiceResult<ResponseEcho> {
+        info!("ConsensusServiceServer::echo");
+        let echo_message= request.into_inner().message;
+
+        Ok(Response::new(ResponseEcho {
+            message: echo_message
+        }))
+    }
+
     type InitTransactionStream = ResponseStream;
     /*
      * Consensus client init a duplex streaming connection to send external transaction
