@@ -11,18 +11,19 @@ serde.workspace = true
 diesel = { version = "2.1.4", features = ["postgres", "r2d2", "serde_json"] }
 ethers = "2.0"
 tokio = { workspace = true, features = ["full"] }
-sui-types.workspace = true
-prometheus.workspace = true
-async-trait.workspace = true
-sui-data-ingestion-core.workspace = true
-sui-bridge.workspace = true
-clap.workspace = true
-tracing.workspace = true
-bin-version.workspace = true
 anyhow.workspace = true
-mysten-metrics.workspace = true
+async-trait.workspace = true
 bcs.workspace = true
+bin-version.workspace = true
+clap.workspace = true
+mysten-metrics.workspace = true
+prometheus.workspace = true
 serde_yaml.workspace = true
+sui-bridge.workspace = true
+sui-data-ingestion-core.workspace = true
+sui-types.workspace = true
+telemetry-subscribers.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }
