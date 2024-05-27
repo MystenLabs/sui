@@ -2271,19 +2271,19 @@ impl ProtocolConfig {
                     cfg.feature_flags.mysticeti_use_committed_subdag_digest = true;
                 }
                 48 => {
-                    // enable vdf in devnet
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.enable_vdf = true;
-                        // Set to 30x and 2x the cost of a signature verification for now. This
-                        // should be updated along with other native crypto functions.
-                        cfg.vdf_verify_vdf_cost = Some(1500);
-                        cfg.vdf_hash_to_input_cost = Some(100);
-                    }
-                }
-                48 => {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.move_binary_format_version = Some(7);
                     }
+
+                // enable vdf in devnet
+                if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    cfg.feature_flags.enable_vdf = true;
+                    // Set to 30x and 2x the cost of a signature verification for now. This
+                    // should be updated along with other native crypto functions.
+                    cfg.vdf_verify_vdf_cost = Some(1500);
+                    cfg.vdf_hash_to_input_cost = Some(100);
+                }
+
                 }
                 // Use this template when making changes:
                 //

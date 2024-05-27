@@ -4423,15 +4423,19 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=878492bd2541dce1491791bcadf3cc855ddcdc05#878492bd2541dce1491791bcadf3cc855ddcdc05"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=c101a5176799db3eb9c801b844e7add92153d291#c101a5176799db3eb9c801b844e7add92153d291"
 dependencies = [
+ "bcs",
  "fastcrypto",
+ "lazy_static",
  "num-bigint 0.4.4",
  "num-integer",
  "num-prime",
  "num-traits",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
+ "serde",
+ "serde_with",
 ]
 
 [[package]]
