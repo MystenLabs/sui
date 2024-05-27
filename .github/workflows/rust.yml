@@ -231,6 +231,7 @@ jobs:
     runs-on: [ubuntu-ghcloud]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 60000
+      MSIM_TEST_SEED: 2
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - uses: taiki-e/install-action@nextest
