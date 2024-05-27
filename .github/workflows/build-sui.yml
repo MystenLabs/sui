@@ -1,0 +1,34 @@
+name: Build and Run Docker Containers
+
+on:
+  push:
+    branches:
+      - scalaris_grpc_server
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest 
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Build sui-node
+        run: |
+          chmod +x docker/sui-node/build.sh
+          docker/sui-node/build.sh -t scalaris/consensus-node
+
+      - name: Build stress image
+        run: |
+          cd docker/stress
+          docker build -t stress:testing --build-arg SUI_TOOLS_IMAGE_TAG=mainnet-v1.19.1 .
+
+      - name: Build sui-network image
+        run: |
+          cd docker/sui-network
+          docker build --file Dockerfile --output "type=local,dest=./" .
+
+      - name: Run containers with Docker Compose
+        run: |
+          cd docker/sui-network
+          docker-compose -f docker-compose-scalaris.yaml up -d
