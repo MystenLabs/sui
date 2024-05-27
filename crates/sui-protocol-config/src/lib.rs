@@ -2275,15 +2275,14 @@ impl ProtocolConfig {
                         cfg.move_binary_format_version = Some(7);
                     }
 
-                // enable vdf in devnet
-                if chain != Chain::Mainnet && chain != Chain::Testnet {
-                    cfg.feature_flags.enable_vdf = true;
-                    // Set to 30x and 2x the cost of a signature verification for now. This
-                    // should be updated along with other native crypto functions.
-                    cfg.vdf_verify_vdf_cost = Some(1500);
-                    cfg.vdf_hash_to_input_cost = Some(100);
-                }
-
+                    // enable vdf in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_vdf = true;
+                        // Set to 30x and 2x the cost of a signature verification for now. This
+                        // should be updated along with other native crypto functions.
+                        cfg.vdf_verify_vdf_cost = Some(1500);
+                        cfg.vdf_hash_to_input_cost = Some(100);
+                    }
                 }
                 // Use this template when making changes:
                 //
