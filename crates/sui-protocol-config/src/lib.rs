@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 47;
+const MAX_PROTOCOL_VERSION: u64 = 48;
 
 // Record history of protocol version allocations here:
 //
@@ -129,7 +129,8 @@ const MAX_PROTOCOL_VERSION: u64 = 47;
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 // Version 46: Enable native bridge in testnet
 //             Enable resharing at the same initial shared version.
-// Version 47: Use tonic networking for Mysticeti.
+// Version 47: Deepbook changes (framework update)
+// Version 48: Use tonic networking for Mysticeti.
 //             Resolve Move abort locations to the package id instead of the runtime module ID.
 //             Enable random beacon in testnet.
 
@@ -2224,7 +2225,8 @@ impl ProtocolConfig {
                     // Enable resharing at same initial version
                     cfg.feature_flags.reshare_at_same_initial_version = true;
                 }
-                47 => {
+                47 => {}
+                48 => {
                     // Use tonic networking for Mysticeti.
                     cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
 
