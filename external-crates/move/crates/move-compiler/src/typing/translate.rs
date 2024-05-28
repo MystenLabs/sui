@@ -208,7 +208,7 @@ fn module(
     context.add_use_funs_scope(use_funs);
     structs
         .iter_mut()
-        .for_each(|(_, _, s)| struct_def(context, s));
+        .for_each(|(loc, _name, s)| struct_def(context, loc, s));
     enums.iter_mut().for_each(|(_, _, e)| enum_def(context, e));
     process_attributes(context, &attributes);
     let constants = nconstants.map(|name, c| constant(context, name, c));
@@ -268,7 +268,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
-    context.reset_for_module_item();
+    context.reset_for_module_item(name.loc());
     context.current_function = Some(name);
     context.in_macro_function = macro_.is_some();
     process_attributes(context, &attributes);
@@ -358,9 +358,9 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
 // Constants
 //**************************************************************************************************
 
-fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) -> T::Constant {
+fn constant(context: &mut Context, name: ConstantName, nconstant: N::Constant) -> T::Constant {
     assert!(context.constraints.is_empty());
-    context.reset_for_module_item();
+    context.reset_for_module_item(name.loc());
 
     let N::Constant {
         warning_filter,
@@ -675,9 +675,9 @@ mod check_valid_constant {
 // Data Types
 //**************************************************************************************************
 
-fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
+fn struct_def(context: &mut Context, sloc: Loc, s: &mut N::StructDefinition) {
     assert!(context.constraints.is_empty());
-    context.reset_for_module_item();
+    context.reset_for_module_item(sloc);
     context
         .env
         .add_warning_filter_scope(s.warning_filter.clone());
@@ -737,8 +737,9 @@ fn enum_def(context: &mut Context, enum_: &mut N::EnumDefinition) {
     let enum_type_params = &enum_.type_parameters;
 
     let mut field_types = vec![];
-    for (_, _, variant) in enum_.variants.iter_mut() {
-        let mut varient_fields = variant_def(context, enum_abilities, enum_type_params, variant);
+    for (vloc, _, variant) in enum_.variants.iter_mut() {
+        let mut varient_fields =
+            variant_def(context, vloc, enum_abilities, enum_type_params, variant);
         field_types.append(&mut varient_fields);
     }
 
@@ -748,11 +749,12 @@ fn enum_def(context: &mut Context, enum_: &mut N::EnumDefinition) {
 
 fn variant_def(
     context: &mut Context,
+    vloc: Loc,
     enum_abilities: &AbilitySet,
     enum_tparams: &[DatatypeTypeParameter],
     v: &mut N::VariantDefinition,
 ) -> Vec<(usize, Type)> {
-    context.reset_for_module_item();
+    context.reset_for_module_item(vloc);
 
     let field_map = match &mut v.fields {
         N::VariantFields::Empty => return vec![],
