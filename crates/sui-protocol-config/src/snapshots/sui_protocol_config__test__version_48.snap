@@ -54,6 +54,7 @@ feature_flags:
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
+  enable_vdf: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -267,6 +268,8 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
+vdf_verify_vdf_cost: 1500
+vdf_hash_to_input_cost: 100
 scoring_decision_mad_divisor: 2.3
 scoring_decision_cutoff_value: 2.5
 execution_version: 3
