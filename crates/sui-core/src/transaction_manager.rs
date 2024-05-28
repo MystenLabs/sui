@@ -1056,6 +1056,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn test_transaction_queue() {
         let mut queue = TransactionQueue::default();
 
@@ -1072,6 +1073,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn test_transaction_queue_remove_in_order() {
         // insert two items, remove them in insertion order
         let time1 = Instant::now();
@@ -1091,6 +1093,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn test_transaction_queue_remove_in_reverse_order() {
         // insert two items, remove them in reverse order
         let time1 = Instant::now();
