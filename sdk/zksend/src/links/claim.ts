@@ -531,7 +531,7 @@ export class ZkSendLink {
 				network: this.#network,
 				sender,
 				claimer,
-				transactionKindBytes: toB64(
+				transactionBlockKindBytes: toB64(
 					await tx.build({
 						onlyTransactionKind: true,
 						client: this.#client,
@@ -560,7 +560,7 @@ export class ZkSendLink {
 		});
 
 		if (!res.ok) {
-			console.error(await res.text());
+			console.error(path, await res.text());
 			throw new Error(`Request to claim API failed with status code ${res.status}`);
 		}
 

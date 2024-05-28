@@ -282,7 +282,7 @@ async function normalizeInputs(
 		}
 
 		// Special handling for values that where previously encoded using the wellKnownEncoding pattern.
-		// This should only happen when transaction block data was hydrated from an old version of the SDK
+		// This should only happen when transaction data was hydrated from an old version of the SDK
 		switch (command.$kind) {
 			case 'SplitCoins':
 				command.SplitCoins.amounts.forEach((amount) => {

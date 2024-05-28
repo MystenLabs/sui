@@ -33,11 +33,11 @@ suiClient,
 );
 
 /// And then for each incoming request...
-/// ...get the incoming transactionBlock
-const myTransactionBlock;
+/// ...get the incoming transaction
+const myTransaction;
 
 /// and send it for execution
-const promise = eshandler.execute(myTransactionBlock, suiClient, splitStrategy);
+const promise = eshandler.execute(myTransaction, suiClient, splitStrategy);
 ```
 
 See [End-to-End Examples](/typescript/owned-object-pool/examples) for sample code you can run.

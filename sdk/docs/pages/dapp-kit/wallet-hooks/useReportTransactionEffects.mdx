@@ -4,8 +4,8 @@ import { UseSignTransactionExample } from '../../../examples/wallet-hooks';
 
 Use the `useReportTransactionEffects` hook can be used to report the effects of a transaction to the
 connected wallet. The `useSignAndExecuteTransaction` hook automatically reports effects, and the
-`useSignTransactionBlock` hook provides a `reportTransactionEffects` callback to report effects
-manually, so this hook is only needed when using a non-standard flow for executing transactions.
+`useSignTransaction` hook provides a `reportTransactionEffects` callback to report effects manually,
+so this hook is only needed when using a non-standard flow for executing transactions.
 
 ```ts
 import {
@@ -35,7 +35,7 @@ function MyComponent() {
 								reportTransactionEffects({ effects });
 							}}
 						>
-							Sign empty transaction block
+							Sign empty transaction
 						</button>
 					</div>
 					<div>Signature: {signature}</div>

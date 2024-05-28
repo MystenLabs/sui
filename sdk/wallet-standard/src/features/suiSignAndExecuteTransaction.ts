@@ -30,6 +30,6 @@ export interface SuiSignAndExecuteTransactionInput extends SuiSignTransactionInp
 /** Output of signing and sending transactions. */
 export interface SuiSignAndExecuteTransactionOutput extends SignedTransaction {
 	digest: string;
-	/** Transaction block effects as base64 encoded bcs. */
+	/** Transaction effects as base64 encoded bcs. */
 	effects: string;
 }

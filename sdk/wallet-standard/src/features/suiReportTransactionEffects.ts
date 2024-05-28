@@ -25,6 +25,6 @@ export type SuiReportTransactionEffectsMethod = (
 export interface SuiReportTransactionEffectsInput {
 	account: WalletAccount;
 	chain: IdentifierString;
-	/** Transaction block effects as base64 encoded bcs. */
+	/** Transaction effects as base64 encoded bcs. */
 	effects: string;
 }

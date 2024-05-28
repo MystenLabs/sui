@@ -39,7 +39,7 @@ export interface SuiSignTransactionBlockInput {
 export interface SuiSignTransactionBlockOutput extends SignedTransactionBlock {}
 
 export interface SignedTransactionBlock {
-	/** Transaction block as base64 encoded bcs. */
+	/** Transaction as base64 encoded bcs. */
 	transactionBlockBytes: string;
 	/** Base64 encoded signature */
 	signature: string;
