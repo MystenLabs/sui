@@ -18,7 +18,7 @@ describe('CachingTransactionExecutor', async () => {
 
 	beforeAll(async () => {
 		const packagePath = __dirname + '/./data/tto';
-		packageId = (await publishPackage(packagePath)).packageId;
+		packageId = normalizeSuiAddress((await publishPackage(packagePath)).packageId);
 	});
 
 	beforeEach(async () => {
@@ -81,7 +81,7 @@ describe('CachingTransactionExecutor', async () => {
 		expect(result.effects?.status.status).toBe('success');
 		expect(toolbox.client.getNormalizedMoveFunction).toHaveBeenCalledOnce();
 		expect(toolbox.client.getNormalizedMoveFunction).toHaveBeenCalledWith({
-			package: packageId,
+			package: normalizeSuiAddress(packageId),
 			module: 'tto',
 			function: 'receiver',
 		});
