@@ -441,6 +441,7 @@ mod tests {
             blocks,
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
+            vec![],
         )];
         let scoring_strategy = VoteScoringStrategy {};
         let mut calculator =
