@@ -436,7 +436,7 @@ export class Transaction {
 
 	/**
 	 * @deprecated Use toJSON instead.
-	 * Fro synchronous serialization, you can use `getData()`
+	 * For synchronous serialization, you can use `getData()`
 	 * */
 	serialize() {
 		return JSON.stringify(serializeV1TransactionData(this.#data.snapshot()));
