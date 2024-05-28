@@ -1289,7 +1289,6 @@ pub fn get_symbols(
             Ok(v) => v,
             Err((_pass, diags)) => {
                 let failure = true;
-                // report_diagnostics(&files, diags);
                 diagnostics = Some((diags, failure));
                 eprintln!("typed AST compilation failed");
                 eprintln!("diagnostics: {:#?}", diagnostics);
