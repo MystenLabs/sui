@@ -545,19 +545,20 @@ async fn make_recv_future<T: Clone>(
 
 #[cfg(test)]
 mod tests {
+    use crate::test_dag_builder::DagBuilder;
     use crate::{
         authority_service::AuthorityService,
+        block::BlockAPI,
         block::{BlockRef, SignedBlock, TestBlock, VerifiedBlock},
         commit_syncer::CommitVoteMonitor,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         dag_state::DagState,
-        error::{ConsensusResult},
+        error::ConsensusResult,
         network::{BlockStream, NetworkClient, NetworkService},
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
         Round,
-        block::BlockAPI,
     };
     use async_trait::async_trait;
     use bytes::Bytes;
@@ -759,13 +760,19 @@ mod tests {
             .persist_layers(dag_state);
 
         // WHEN
-        let authorities_to_request = vec![AuthorityIndex::new_for_test(1), AuthorityIndex::new_for_test(2)];
-        let results = authority_service.handle_fetch_latest_blocks(AuthorityIndex::new_for_test(1), authorities_to_request).await;
+        let authorities_to_request = vec![
+            AuthorityIndex::new_for_test(1),
+            AuthorityIndex::new_for_test(2),
+        ];
+        let results = authority_service
+            .handle_fetch_latest_blocks(AuthorityIndex::new_for_test(1), authorities_to_request)
+            .await;
 
         // THEN
         let serialised_blocks = results.unwrap();
         for serialised_block in serialised_blocks {
-            let signed_block: SignedBlock = bcs::from_bytes(&serialised_block).expect("Error while deserialising block");
+            let signed_block: SignedBlock =
+                bcs::from_bytes(&serialised_block).expect("Error while deserialising block");
             let verified_block = VerifiedBlock::new_verified(signed_block, serialised_block);
 
             assert_eq!(verified_block.round(), 10);

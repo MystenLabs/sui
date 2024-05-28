@@ -83,6 +83,10 @@ pub(crate) struct Core {
     block_signer: ProtocolKeyPair,
     /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
     dag_state: Arc<RwLock<DagState>>,
+    /// The minimum round after which the node should be able to propose. This is currently being used
+    /// to avoid equivocations during a node recovering from amnesia. When value is None it means that
+    /// the last block sync mechanism is enabled, but it hasn't been initialised yet.
+    min_propose_round: Option<Round>,
 }
 
 impl Core {
@@ -129,6 +133,13 @@ impl Core {
             last_included_ancestors[ancestor.author] = Some(*ancestor);
         }
 
+        let min_propose_round = if context.parameters.is_sync_last_proposed_block_enabled() {
+            None
+        } else {
+            // if the sync is disabled then we practically don't want to impose any restriction.
+            Some(0)
+        };
+
         Self {
             context: context.clone(),
             threshold_clock: ThresholdClock::new(0, context.clone()),
@@ -144,6 +155,7 @@ impl Core {
             signals,
             block_signer,
             dag_state,
+            min_propose_round,
         }
         .recover()
     }
@@ -316,6 +328,16 @@ impl Core {
 
         let clock_round = self.threshold_clock.get_round();
         if clock_round <= self.last_proposed_round() {
+            return None;
+        }
+
+        if let Some(min_propose_round) = self.min_propose_round {
+            if clock_round < min_propose_round {
+                debug!("Skip proposing for round {clock_round} as min propose round is {min_propose_round}");
+                return None;
+            }
+        } else {
+            debug!("Skip proposing for round {clock_round}, min propose round has not been synced yet.");
             return None;
         }
 

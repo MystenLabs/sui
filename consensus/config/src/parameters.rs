@@ -68,6 +68,11 @@ pub struct Parameters {
     /// Tonic network settings.
     #[serde(default = "TonicParameters::default")]
     pub tonic: TonicParameters,
+
+    /// Time to wait during node start up until the node has synced the last proposed block via the
+    /// network peers. When set to `0` the sync mechanism is disabled.
+    #[serde(default = "Parameters::default_sync_last_proposed_block_timeout")]
+    pub sync_last_proposed_block_timeout: Duration,
 }
 
 impl Parameters {
@@ -124,6 +129,14 @@ impl Parameters {
     pub(crate) fn default_commit_sync_batches_ahead() -> usize {
         200
     }
+
+    pub(crate) fn default_sync_last_proposed_block_timeout() -> Duration {
+        Duration::from_millis(0)
+    }
+
+    pub fn is_sync_last_proposed_block_enabled(&self) -> bool {
+        !self.sync_last_proposed_block_timeout.is_zero()
+    }
 }
 
 impl Default for Parameters {
@@ -140,6 +153,8 @@ impl Default for Parameters {
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             anemo: AnemoParameters::default(),
             tonic: TonicParameters::default(),
+            sync_last_proposed_block_timeout: Parameters::default_sync_last_proposed_block_timeout(
+            ),
         }
     }
 }
