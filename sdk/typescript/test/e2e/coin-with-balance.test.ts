@@ -61,7 +61,7 @@ describe('coinWithBalance', () => {
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
-			transactions: [
+			commands: [
 				{
 					$Intent: {
 						data: {
@@ -116,7 +116,7 @@ describe('coinWithBalance', () => {
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
-			transactions: [
+			commands: [
 				{
 					SplitCoins: {
 						coin: {
@@ -208,7 +208,7 @@ describe('coinWithBalance', () => {
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
-			transactions: [
+			commands: [
 				{
 					$Intent: {
 						data: {
@@ -268,7 +268,7 @@ describe('coinWithBalance', () => {
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
-			transactions: [
+			commands: [
 				{
 					SplitCoins: {
 						coin: {
@@ -357,7 +357,7 @@ describe('coinWithBalance', () => {
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
-			transactions: [
+			commands: [
 				{
 					$Intent: {
 						data: {
@@ -471,7 +471,7 @@ describe('coinWithBalance', () => {
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
-			transactions: [
+			commands: [
 				{
 					SplitCoins: {
 						coin: {
