@@ -13,7 +13,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
+    CheckpointContents, CheckpointSummary, CheckpointVersionSpecificData, SignedCheckpointSummary,
 };
 use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::CertifiedTransaction;
@@ -63,7 +63,7 @@ fn gen_ckpts(
                     GasCostSummary::default(),
                     None,
                     0,
-                    Vec::new(),
+                    CheckpointVersionSpecificData::empty_for_tests(),
                 ),
                 k,
                 name,

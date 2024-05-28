@@ -17,7 +17,7 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
-    SignedCheckpointSummary,
+    CheckpointVersionSpecificData, SignedCheckpointSummary,
 };
 use sui_types::utils::make_committee_key;
 use tempfile::NamedTempFile;
@@ -144,7 +144,7 @@ fn mock_checkpoint_data_bytes(seq_number: CheckpointSequenceNumber) -> Vec<u8> {
         GasCostSummary::default(),
         None,
         0,
-        Vec::new(),
+        CheckpointVersionSpecificData::empty_for_tests(),
     );
 
     let sign_infos: Vec<_> = keys

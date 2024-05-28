@@ -20,7 +20,7 @@ use sui_types::error::SuiResult;
 use sui_types::event::Event;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
-    SignedCheckpointSummary,
+    CheckpointVersionSpecificData, SignedCheckpointSummary,
 };
 use sui_types::transaction::Transaction;
 
@@ -114,7 +114,7 @@ impl MockTxStore {
             Default::default(),
             None,
             0,
-            Vec::new(),
+            CheckpointVersionSpecificData::empty_for_tests(),
         );
 
         let signed = SignedCheckpointSummary::new(

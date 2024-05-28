@@ -1361,12 +1361,13 @@ impl CheckpointBuilder {
                     .filter_map(|e| randomness_rounds.get(e.transaction_digest()))
                     .copied()
                     .collect();
-                let data = CheckpointVersionSpecificData::V1(CheckpointVersionSpecificDataV1 {
-                    randomness_rounds: matching_randomness_rounds,
-                });
-                bcs::to_bytes(&data)?
+                Some(CheckpointVersionSpecificData::V1(
+                    CheckpointVersionSpecificDataV1 {
+                        randomness_rounds: matching_randomness_rounds,
+                    },
+                ))
             } else {
-                Vec::new()
+                None
             };
 
             let contents = CheckpointContents::new_with_digests_and_signatures(

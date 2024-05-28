@@ -209,9 +209,12 @@ impl CheckpointSummary {
         epoch_rolling_gas_cost_summary: GasCostSummary,
         end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
-        version_specific_data: Vec<u8>,
+        version_specific_data: Option<CheckpointVersionSpecificData>,
     ) -> CheckpointSummary {
         let content_digest = *transactions.digest();
+        let version_specific_data = version_specific_data
+            .map(|v| bcs::to_bytes(&v).expect("version specific data should serialize"))
+            .unwrap_or_default();
 
         Self {
             epoch,
@@ -730,6 +733,14 @@ impl CheckpointVersionSpecificData {
             Self::V1(v) => v,
         }
     }
+
+    pub fn empty_for_tests() -> Option<CheckpointVersionSpecificData> {
+        Some(CheckpointVersionSpecificData::V1(
+            CheckpointVersionSpecificDataV1 {
+                randomness_rounds: Vec::new(),
+            },
+        ))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -782,7 +793,7 @@ mod tests {
                         GasCostSummary::default(),
                         None,
                         0,
-                        Vec::new(),
+                        CheckpointVersionSpecificData::empty_for_tests(),
                     ),
                     k,
                     name,
@@ -817,7 +828,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             0,
-            Vec::new(),
+            CheckpointVersionSpecificData::empty_for_tests(),
         );
 
         let sign_infos: Vec<_> = keys
@@ -857,7 +868,7 @@ mod tests {
                         GasCostSummary::default(),
                         None,
                         0,
-                        Vec::new(),
+                        CheckpointVersionSpecificData::empty_for_tests(),
                     ),
                     k,
                     name,
@@ -896,7 +907,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             100,
-            Vec::new(),
+            CheckpointVersionSpecificData::empty_for_tests(),
         )
     }
 
