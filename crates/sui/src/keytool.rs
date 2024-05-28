@@ -316,7 +316,7 @@ pub struct DecodedMultiSigOutput {
     participating_keys_signatures: Vec<DecodedMultiSig>,
     pub_keys: Vec<MultiSigOutput>,
     threshold: usize,
-    transaction_result: String,
+    sig_verify_result: String,
 }
 
 #[derive(Serialize)]
@@ -517,7 +517,7 @@ impl KeyToolCommand {
                     participating_keys_signatures: vec![],
                     pub_keys,
                     threshold,
-                    transaction_result: "".to_string(),
+                    sig_verify_result: "".to_string(),
                 };
 
                 for (sig, i) in sigs.iter().zip(bitmap) {
@@ -543,7 +543,11 @@ impl KeyToolCommand {
                         &VerifyParams::default(),
                         Arc::new(VerifiedDigestCache::new_empty()),
                     );
-                    output.transaction_result = format!("{:?}", res);
+
+                    match res {
+                        Ok(()) => output.sig_verify_result = "OK".to_string(),
+                        Err(e) => output.sig_verify_result = format!("{:?}", e),
+                    };
                 };
 
                 CommandOutput::DecodeMultiSig(output)
