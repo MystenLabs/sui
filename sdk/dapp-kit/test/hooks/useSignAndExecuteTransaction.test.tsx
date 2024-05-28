@@ -223,6 +223,8 @@ describe('useSignAndExecuteTransaction', () => {
 		});
 		expect(result.current.useSignAndExecuteTransaction.data?.custom).toBe(123);
 		expect(reportEffects).toHaveBeenCalledWith({
+			account: mockWallet.accounts[0],
+			chain: 'sui:testnet',
 			effects: effectsBcs,
 		});
 
