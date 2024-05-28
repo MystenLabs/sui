@@ -444,7 +444,12 @@ pub fn build_member_map(
                 tyarg_arity,
                 field_info,
             };
-            assert!(members.insert(name.value(), M::Datatype(ResolvedDatatype::Struct(Box::new(struct_def)))).is_none())
+            assert!(members
+                .insert(
+                    name.value(),
+                    M::Datatype(ResolvedDatatype::Struct(Box::new(struct_def)))
+                )
+                .is_none())
         }
         for (enum_name, edef) in mdef.enums.key_cloned_iter() {
             let tyarg_arity = edef.type_parameters.len();
@@ -743,7 +748,10 @@ impl<'env> Context<'env> {
                     Some(e @ ResolvedModuleMember::Datatype(ResolvedDatatype::Enum(_))) => {
                         let mut diag =
                             make_invalid_module_member_kind_error(self, &EK::Function, mloc, &e);
-                        diag.add_note("Enums cannot be instantiated directly. Instead, you must instantiate a variant.");
+                        diag.add_note(
+                            "Enums cannot be instantiated directly. \
+                                      Instead, you must instantiate a variant.",
+                        );
                         self.env.add_diag(diag);
                         ResolvedCallSubject::Unbound
                     }
@@ -3949,6 +3957,10 @@ fn resolve_call(
             }
         }
         ResolvedCallSubject::Var(var) => {
+            context
+                .env
+                .check_feature(context.current_package, FeatureGate::Lambda, call_loc);
+
             check_is_not_macro(context, is_macro, &var.value.name);
             let tyargs_opt = types_opt(context, TypeAnnotation::Expression, in_tyargs_opt);
             if tyargs_opt.is_some() {
@@ -3960,7 +3972,30 @@ fn resolve_call(
                     ),
                 ));
             }
-            N::Exp_::VarCall(sp(subject_loc, var.value), args)
+            // If this variable refers to a local (num > 0) or it isn't syntax, error.
+            if !var.value.is_syntax_identifier() {
+                let msg = format!(
+                    "Unexpected invocation of parameter or local '{}'. \
+                                     Non-syntax variables cannot be invoked as functions.",
+                    var.value.name
+                );
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::InvalidCallTarget, (var.loc, msg)));
+                N::Exp_::UnresolvedError
+            } else if var.value.id != 0 {
+                let msg = format!(
+                    "Unexpected invocation of non-parameter variable '{}'. \
+                                     Only lambda-typed syntax parameters may be invoked",
+                    var.value.name
+                );
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::InvalidCallTarget, (var.loc, msg)));
+                N::Exp_::UnresolvedError
+            } else {
+                N::Exp_::VarCall(sp(subject_loc, var.value), args)
+            }
         }
         ResolvedCallSubject::Unbound => N::Exp_::UnresolvedError,
     }
