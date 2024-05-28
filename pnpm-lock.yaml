@@ -368,6 +368,9 @@ importers:
       stream-browserify:
         specifier: ^3.0.0
         version: 3.0.0
+      suisecblocklist:
+        specifier: ^1.0.2
+        version: 1.0.2
       throttle-debounce:
         specifier: ^5.0.0
         version: 5.0.0
@@ -7586,6 +7589,9 @@ packages:
   cross-fetch@3.1.8:
     resolution: {integrity: sha512-cvA+JwZoU0Xq+h6WkMvAUqPEYy92Obet6UdKLfW60qn99ftItKjB5T+BkyWOFWe2pUyfQ+IJHmpOTznqk1M6Kg==}
 
+  cross-fetch@4.0.0:
+    resolution: {integrity: sha512-e4a5N8lVvuLgAWgnCrLr2PP0YyDOTHa9H/Rj54dirp61qXnNq46m82bRhNqIA5VccJtWBvPTFRV3TtvHUKPB1g==}
+
   cross-inspect@1.0.0:
     resolution: {integrity: sha512-4PFfn4b5ZN6FMNGSZlyb7wUhuN8wvj8t/VQHZdM4JsDcruGJ8L2kf9zao98QIrBPFCpdk27qst/AGTl7pL3ypQ==}
     engines: {node: '>=16.0.0'}
@@ -12956,6 +12962,9 @@ packages:
     resolution: {integrity: sha512-ARGC7vbufOHfpvyGcZZXFaXCMZ9A4fffOGC5ucOW7+WHDGlAe8LJdf3Jts1sWhDeiI1RSWrKy5Hodl+JWGdW2A==}
     engines: {node: '>=8'}
     hasBin: true
+
+  suisecblocklist@1.0.2:
+    resolution: {integrity: sha512-eW8hmIOX9cDmkM5FzAfXeQ1Wn39fj8kJlxiFfDNO//QJZGlwEEFXILRWUa7mctL4oJCnXWh13KQPOihEB9c52w==}
 
   superstruct@1.0.3:
     resolution: {integrity: sha512-8iTn3oSS8nRGn+C2pgXSKPI3jmpm6FExNazNpjvqS6ZUJQCej3PUXEKM8NjHBOs54ExM+LPW/FBRhymrdcCiSg==}
@@ -22181,6 +22190,12 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
+  cross-fetch@4.0.0:
+    dependencies:
+      node-fetch: 2.7.0
+    transitivePeerDependencies:
+      - encoding
+
   cross-inspect@1.0.0:
     dependencies:
       tslib: 2.6.2
@@ -28593,6 +28608,12 @@ snapshots:
       mz: 2.7.0
       pirates: 4.0.6
       ts-interface-checker: 0.1.13
+
+  suisecblocklist@1.0.2:
+    dependencies:
+      cross-fetch: 4.0.0
+    transitivePeerDependencies:
+      - encoding
 
   superstruct@1.0.3: {}
 
