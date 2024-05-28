@@ -2604,6 +2604,7 @@ dependencies = [
  "enum_dispatch",
  "fastcrypto",
  "futures",
+ "http",
  "hyper",
  "hyper-rustls 0.24.0",
  "itertools 0.10.5",
