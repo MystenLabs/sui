@@ -44,7 +44,7 @@ export class TransactionDataBuilder implements TransactionData {
 				price: null,
 			},
 			inputs: programmableTx.inputs,
-			commands: programmableTx.transactions,
+			commands: programmableTx.commands,
 		});
 	}
 
@@ -63,7 +63,7 @@ export class TransactionDataBuilder implements TransactionData {
 			expiration: data.expiration,
 			gasData: data.gasData,
 			inputs: programmableTx.inputs,
-			commands: programmableTx.transactions,
+			commands: programmableTx.commands,
 		});
 	}
 
@@ -134,7 +134,7 @@ export class TransactionDataBuilder implements TransactionData {
 	} = {}) {
 		// TODO validate that inputs and intents are actually resolved
 		const inputs = this.inputs as (typeof bcs.CallArg.$inferInput)[];
-		const transactions = this.commands as Extract<
+		const commands = this.commands as Extract<
 			Command<Exclude<Argument, { IntentResult: unknown } | { NestedIntentResult: unknown }>>,
 			{ Upgrade: unknown }
 		>[];
@@ -142,7 +142,7 @@ export class TransactionDataBuilder implements TransactionData {
 		const kind = {
 			ProgrammableTransaction: {
 				inputs,
-				transactions,
+				commands,
 			},
 		};
 
@@ -182,7 +182,7 @@ export class TransactionDataBuilder implements TransactionData {
 			kind: {
 				ProgrammableTransaction: {
 					inputs,
-					transactions,
+					commands,
 				},
 			},
 		};

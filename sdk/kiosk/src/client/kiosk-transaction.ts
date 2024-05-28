@@ -25,6 +25,9 @@ import type { KioskClient } from './kiosk-client.js';
 export type KioskTransactionParams = {
 	/** The Transaction for this run */
 	transaction: Transaction;
+
+	/** @deprecated use transaction instead */
+	transactionBlock?: Transaction;
 	/**
 	 * You can create a new KioskClient by calling `new KioskClient()`
 	 */
@@ -56,7 +59,12 @@ export class KioskTransaction {
 	// A flag that checks whether kiosk TX is finalized.
 	#finalized: boolean = false;
 
-	constructor({ transaction, kioskClient, cap }: KioskTransactionParams) {
+	constructor({
+		transactionBlock,
+		transaction = transactionBlock!,
+		kioskClient,
+		cap,
+	}: KioskTransactionParams) {
 		this.transaction = transaction;
 		this.kioskClient = kioskClient;
 
@@ -366,6 +374,7 @@ export class KioskTransaction {
 
 			ruleDefinition.resolveRuleFunction({
 				packageId: ruleDefinition.packageId,
+				transactionBlock: this.transaction,
 				transaction: this.transaction,
 				itemType,
 				itemId,

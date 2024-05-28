@@ -53,6 +53,8 @@ export type TransferPolicyCreated = {
 // e.g. `if(!'my_key' in ruleParams!) throw new Error("Can't resolve that rule!")`
 export type RuleResolvingParams = {
 	transaction: Transaction;
+	/** @deprecated use transaction instead */
+	transactionBlock: Transaction;
 	itemType: string;
 	itemId: string;
 	price: string;

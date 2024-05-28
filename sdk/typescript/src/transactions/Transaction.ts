@@ -302,7 +302,11 @@ export class Transaction {
 	}
 
 	/** Add a transaction to the transaction */
-	add(command: Command) {
+	add(command: Command | ((tx: Transaction) => TransactionResult)): TransactionResult {
+		if (typeof command === 'function') {
+			return command(this);
+		}
+
 		const index = this.#data.commands.push(command);
 		return createTransactionResult(index - 1);
 	}
@@ -431,26 +435,11 @@ export class Transaction {
 	}
 
 	/**
-	 * Serialize the transaction to a string so that it can be sent to a separate context.
-	 * This is different from `build` in that it does not serialize to BCS bytes, and instead
-	 * uses a separate format that is unique to the transaction builder. This allows
-	 * us to serialize partially-complete transactions, that can then be completed and
-	 * built in a separate context.
-	 *
-	 * For example, a dapp can construct a transaction, but not provide gas objects
-	 * or a gas budget. The transaction then can be sent to the wallet, where this
-	 * information is automatically filled in (e.g. by querying for coin objects
-	 * and performing a dry run).
-	 */
-	serialize(format: 'v1' | 'v2' = 'v1') {
-		if (format === 'v1') {
-			return JSON.stringify(serializeV1TransactionData(this.#data.snapshot()));
-		}
-
-		return JSON.stringify(
-			parse(SerializedTransactionDataV2, this.#data.snapshot()),
-			(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
-		);
+	 * @deprecated Use toJSON instead.
+	 * For synchronous serialization, you can use `getData()`
+	 * */
+	serialize() {
+		return JSON.stringify(serializeV1TransactionData(this.#data.snapshot()));
 	}
 
 	async toJSON(options: SerializeTransactionOptions = {}): Promise<string> {

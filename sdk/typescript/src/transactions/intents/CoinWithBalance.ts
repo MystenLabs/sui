@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/bcs';
 import { bigint, object, parse, string } from 'valibot';
 
+import { bcs } from '../../bcs/index.js';
 import type { CoinStruct, SuiClient } from '../../client/index.js';
 import { normalizeStructTag } from '../../utils/sui-types.js';
 import { Commands } from '../Commands.js';
@@ -18,29 +18,28 @@ const COIN_WITH_BALANCE = 'CoinWithBalance';
 const SUI_TYPE = normalizeStructTag('0x2::sui::SUI');
 
 export function coinWithBalance({
-	type,
+	type = SUI_TYPE,
 	balance,
 	useGasCoin = true,
 }: {
-	type: string;
 	balance: bigint | number;
+	type?: string;
 	useGasCoin?: boolean;
 }) {
 	return (tx: Transaction) => {
 		tx.addIntentResolver(COIN_WITH_BALANCE, resolveCoinBalance);
 		const coinType = type === 'gas' ? type : normalizeStructTag(type);
 
-		return tx.add({
-			$kind: '$Intent',
-			$Intent: {
+		return tx.add(
+			Commands.Intent({
 				name: COIN_WITH_BALANCE,
 				inputs: {},
 				data: {
 					type: coinType === SUI_TYPE && useGasCoin ? 'gas' : coinType,
 					balance,
 				},
-			},
-		});
+			}),
+		);
 	};
 }
 

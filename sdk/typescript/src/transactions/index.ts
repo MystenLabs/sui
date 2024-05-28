@@ -38,3 +38,4 @@ export { ObjectCache, AsyncCache } from './ObjectCache.js';
 export { SerialTransactionExecutor } from './executor/serial.js';
 export { ParallelTransactionExecutor } from './executor/parallel.js';
 export type { ParallelTransactionExecutorOptions } from './executor/parallel.js';
+export { coinWithBalance } from './intents/CoinWithBalance.js';

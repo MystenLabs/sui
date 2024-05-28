@@ -25,7 +25,7 @@ const MoveLocation = bcs.struct('MoveLocation', {
 	module: ModuleId,
 	function: bcs.u16(),
 	instruction: bcs.u16(),
-	function_name: bcs.option(bcs.string()),
+	functionName: bcs.option(bcs.string()),
 });
 
 const CommandArgumentError = bcs.enum('CommandArgumentError', {

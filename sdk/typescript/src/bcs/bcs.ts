@@ -113,7 +113,7 @@ export const ProgrammableMoveCall = bcs.struct('ProgrammableMoveCall', {
 	arguments: bcs.vector(Argument),
 });
 
-export const Transaction = bcs.enum('Transaction', {
+export const Command = bcs.enum('Command', {
 	/**
 	 * A Move Call - any public Move function can be called via
 	 * this transaction. The results can be used that instant to pass
@@ -187,7 +187,7 @@ export const Transaction = bcs.enum('Transaction', {
 
 export const ProgrammableTransaction = bcs.struct('ProgrammableTransaction', {
 	inputs: bcs.vector(CallArg),
-	transactions: bcs.vector(Transaction),
+	commands: bcs.vector(Command),
 });
 
 export const TransactionKind = bcs.enum('TransactionKind', {
