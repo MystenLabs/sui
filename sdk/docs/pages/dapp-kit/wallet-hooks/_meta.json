@@ -9,5 +9,6 @@
 	"useSwitchAccount": "useSwitchAccount",
 	"useSignPersonalMessage": "useSignPersonalMessage",
 	"useSignTransaction": "useSignTransaction",
-	"useSignAndExecuteTransaction": "useSignAndExecuteTransaction"
+	"useSignAndExecuteTransaction": "useSignAndExecuteTransaction",
+	"useReportTransactionEffects": "useReportTransactionEffects"
 }

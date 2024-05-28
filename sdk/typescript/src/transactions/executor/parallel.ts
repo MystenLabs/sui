@@ -68,6 +68,10 @@ export class ParallelTransactionExecutor {
 			: null;
 	}
 
+	resetCache() {
+		return this.#cache.reset();
+	}
+
 	async executeTransaction(transaction: Transaction) {
 		const { promise, resolve, reject } = promiseWithResolvers<{
 			digest: string;

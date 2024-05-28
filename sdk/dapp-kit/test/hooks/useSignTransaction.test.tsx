@@ -87,6 +87,7 @@ describe('useSignTransaction', () => {
 		expect(result.current.signTransaction.data).toStrictEqual({
 			bytes: 'abc',
 			signature: '123',
+			reportTransactionEffects: expect.any(Function),
 		});
 
 		act(() => unregister());

@@ -119,6 +119,8 @@ describe('useSignAndExecuteTransaction', () => {
 		});
 		expect(reportEffects).toHaveBeenCalledWith({
 			effects: 'ChQe',
+			chain: 'sui:testnet',
+			account: mockWallet.accounts[0],
 		});
 
 		const call = signTransaction.mock.calls[0];
@@ -221,6 +223,8 @@ describe('useSignAndExecuteTransaction', () => {
 		});
 		expect(result.current.useSignAndExecuteTransaction.data?.custom).toBe(123);
 		expect(reportEffects).toHaveBeenCalledWith({
+			account: mockWallet.accounts[0],
+			chain: 'sui:testnet',
 			effects: effectsBcs,
 		});
 

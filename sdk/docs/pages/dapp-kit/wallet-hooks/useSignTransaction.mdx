@@ -6,12 +6,19 @@ Use the `useSignTransactionBlock` hook to prompt the user to sign a transaction 
 wallet.
 
 ```ts
-import { ConnectButton, useCurrentAccount, useSignTransactionBlock } from '@mysten/dapp-kit';
+import {
+	ConnectButton,
+	useCurrentAccount,
+	useSignTransactionBlock,
+	useSuiClient,
+} from '@mysten/dapp-kit';
+import { toB64 } from '@mysten/sui/utils';
 import { useState } from 'react';
 
 function MyComponent() {
-	const { mutate: signTransactionBlock } = useSignTransactionBlock();
+	const { mutateAsync: signTransactionBlock } = useSignTransactionBlock();
 	const [signature, setSignature] = useState('');
+	const client = useSuiClient();
 	const currentAccount = useCurrentAccount();
 
 	return (
@@ -21,19 +28,24 @@ function MyComponent() {
 				<>
 					<div>
 						<button
-							onClick={() => {
-								signTransactionBlock(
-									{
-										transactionBlock: new TransactionBlock(),
-										chain: 'sui:devnet',
+							onClick={async () => {
+								const { bytes, signature, reportTransactionEffects } = await signTransactionBlock({
+									transactionBlock: new TransactionBlock(),
+									chain: 'sui:devnet',
+								});
+
+								const executeResult = await client.executeTransactionBlock({
+									transactionBlock: bytes,
+									signature,
+									options: {
+										showRawEffects: true,
 									},
-									{
-										onSuccess: (result) => {
-											console.log('signed transaction block', result);
-											setSignature(result.signature);
-										},
-									},
-								);
+								});
+
+								// Always report transaction effects to the wallet after execution
+								reportTransactionEffects(result.rawEffects!);
+
+								console.log(executeResult);
 							}}
 						>
 							Sign empty transaction block
@@ -60,3 +72,7 @@ function MyComponent() {
 
 - `signature`: The signature of the message, as a Base64-encoded `string`.
 - `transactionBlockBytes`: The serialized transaction bytes, as a a Base64-encoded `string`.
+- `reportTransactionEffects`: A function to report the transaction effects to the wallet. This
+  callback should always be invoked after executing the signed transaction. This function accepts
+  the `rawEffects` returned from JSON-RPC `executeTransactionBlock` method, or the `effects.bcs`
+  when executing with the GraphQL API.
