@@ -8,9 +8,6 @@ to construct an object reference.
 ```tsx
 import { Inputs } from '@mysten/sui/transactions';
 
-// for pure values
-tx.pure(pureValueAsBytes);
-
 // for owned or immutable objects
 tx.object(Inputs.ObjectRef({ digest, objectId, version }));
 

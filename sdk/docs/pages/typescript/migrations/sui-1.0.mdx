@@ -20,6 +20,20 @@ affected packages below:
 
 As part of the 1.0 release the `@mysten/sui.js` package has been renamed to `@mysten/sui`
 
+To upgrade to the new version, uninstall the old package and install the new one:
+
+```sh npm2yarn
+npm uninstall @mysten/sui.js
+npm install @mysten/sui
+```
+
+Then update all imports to use the new package name:
+
+```diff
+- import { SuiClient } from '@mysten/sui.js'
++ import { SuiClient } from '@mysten/sui'
+```
+
 ### `@mysten/sui/transactions`
 
 The largest changes in the 1.0 release are all centered around how Transactions are built and
@@ -86,7 +100,7 @@ constructor:
 #### `transaction.blockData` -> `transaction.getData()`
 
 The `blockData` property has been deprecated and will be removed in a future release. A new
-`txb.getBlockData()` method has been added, and returns the new internal representation of a
+`txb.getData()` method has been added, and returns the new internal representation of a
 TransactionBlock. The `blockData` property will continue to return the old representation to allow a
 more gradual migration, but will be removed in a future minor release.
 
@@ -130,9 +144,9 @@ The `Transactions` export has been renamed to `Commands` and some of the options
 
  tx.upgrade({
    modules,
-	 dependencies,
-	 packageId: EXAMPLE_PACKAGE_ID,
-	 ticket: tx.object(ticketId),
+   dependencies,
+   packageId: EXAMPLE_PACKAGE_ID,
+   ticket: tx.object(ticketId),
 -  packageId: '0x123',
 +  package: '0x123'
  })
@@ -184,7 +198,7 @@ function callArg(arg: typeof bcs.CallArg.$inferType) {
 ## /utils
 
 The typescript SDK no longer uses `superstruct` for type validation, so the `is` and `assert`
-helpers have been removed Removed `is` and `assert` helpers
+helpers have been removed.
 
 ## /multisig
 
@@ -343,8 +357,6 @@ redesigned to work the the updated wallet-standard methods.
 `useSignAndExecuteTransaction` no-longer accepts the options passed to
 `suiClient.executeTransactionBlock` for returning additional data.
 
-TODO: Add information about alternative for fetching additional data
-
 By default useSignAndExecuteTransactionBlock will now return an object with the transaction `digest`
 and the bcs encoded transaction effects:
 
@@ -353,6 +365,40 @@ const { signAndExecuteTransaction } = useSignAndExecuteTransaction()
 ...
 const { digest, effects } = await signAndExecuteTransaction({ transaction })
 ```
+
+To fetch additional data, you can provide a customized `execute` function:
+
+```diff
+- const { digest, objectChanges } = await signAndExecuteTransactionBlock({
+-   transactionBlock: transaction,
+-   options: {
+-     showObjectChanges: true,
+- })
+
++ const { digest, objectChanges } = await signAndExecuteTransaction({
++ 	transaction,
++ 	execute: async ({ bytes, signature }) =>
++ 		await suiClient.executeTransactionBlock({
++ 			transactionBlock: bytes,
++ 			signature,
++ 			options: {
++ 				// Raw effects are required so the effects can be reported back to the wallet
++ 				showRawEffects: true,
++ 				// Select additional data to return
++ 				showObjectChanges: true,
++ 			},
++ 		}),
++ });
+```
+
+When using a custom `execute` function, the you must return the rawEffects by setting
+`showRawEffects` to true if using `suiClient.executeTransactionBlock`, or by returning an object
+matching `{ effects: { bcs: string` } }` with the base64 encoded bcs effects when using a GraphQL
+query to execute the transaction.
+
+This change decouples the `useSignAndExecuteTransaction` hook from a specific RPC API
+implementation, and will enable migration to GraphQL without additional breaking changes in this
+hook.
 
 # @mysten/zksend
 
