@@ -133,7 +133,7 @@ impl DagState {
                             store.as_ref(),
                             commit.clone(),
                             vec![],
-                        ); // We don't mind recovering the reputation scores
+                        ); // We don't need to recover reputation scores for unscored_committed_subdags
                         unscored_committed_subdags.push(committed_subdag);
                     }
                 });

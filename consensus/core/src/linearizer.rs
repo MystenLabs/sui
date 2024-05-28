@@ -131,7 +131,7 @@ impl Linearizer {
         // part of the first sub dag.
         let schedule_updated = self
             .leader_schedule
-            .leader_schedule_updated(self.dag_state.clone());
+            .leader_schedule_updated(&self.dag_state);
 
         let mut committed_sub_dags = vec![];
         for (i, leader_block) in committed_leaders.into_iter().enumerate() {
@@ -266,10 +266,10 @@ mod tests {
         dag_state.write().add_unscored_committed_subdags(commits);
 
         // Now update the leader schedule
-        leader_schedule.update_leader_schedule(dag_state.clone());
+        leader_schedule.update_leader_schedule(&dag_state);
 
         assert!(
-            leader_schedule.leader_schedule_updated(dag_state.clone()),
+            leader_schedule.leader_schedule_updated(&dag_state),
             "Leader schedule should have been updated"
         );
 
