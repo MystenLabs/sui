@@ -21,6 +21,7 @@ import type { PartialBy } from '../../types/utilityTypes.js';
 import { useSuiClient } from '../useSuiClient.js';
 import { useCurrentAccount } from './useCurrentAccount.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
+import { useReportTransactionEffects } from './useReportTransactionEffects.js';
 
 type UseSignAndExecuteTransactionArgs = PartialBy<
 	Omit<SuiSignAndExecuteTransactionInput, 'transaction'>,
@@ -77,6 +78,7 @@ export function useSignAndExecuteTransaction<
 	const { currentWallet, supportedIntents } = useCurrentWallet();
 	const currentAccount = useCurrentAccount();
 	const client = useSuiClient();
+	const { mutate: reportTransactionEffects } = useReportTransactionEffects();
 
 	const executeTransaction: ({
 		bytes,
@@ -117,10 +119,7 @@ export function useSignAndExecuteTransaction<
 					'No wallet account is selected to sign the transaction with.',
 				);
 			}
-
-			const reportEffects =
-				currentWallet.features['sui:reportTransactionEffects']?.reportTransactionEffects ??
-				(() => {});
+			const chain = signTransactionArgs.chain ?? signerAccount?.chains[0];
 
 			if (
 				!currentWallet.features['sui:signTransaction'] &&
@@ -159,11 +158,7 @@ export function useSignAndExecuteTransaction<
 				throw new Error('Could not parse effects from transaction result.');
 			}
 
-			try {
-				await reportEffects({ effects });
-			} catch (error) {
-				console.warn('Failed to report transaction effects:', error);
-			}
+			reportTransactionEffects({ effects, account: signerAccount, chain });
 
 			return result as Result;
 		},

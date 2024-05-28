@@ -44,8 +44,6 @@ const Argument = enumUnion({
 	NestedResult: tuple([number([integer()]), number([integer()])]),
 });
 
-type Argument = Output<typeof Argument>;
-
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L1387-L1392
 const GasData = object({
 	budget: nullable(JsonU64),
@@ -53,7 +51,6 @@ const GasData = object({
 	owner: nullable(SuiAddress),
 	payment: nullable(array(ObjectRef)),
 });
-type GasData = Output<typeof GasData>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L707-L718
 const ProgrammableMoveCall = object({
@@ -64,7 +61,6 @@ const ProgrammableMoveCall = object({
 	typeArguments: array(string()),
 	arguments: array(Argument),
 });
-type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
 
 const $Intent = object({
 	name: string(),
@@ -132,14 +128,11 @@ const CallArg = enumUnion({
 		initialSharedVersion: optional(nullable(JsonU64)),
 	}),
 });
-type CallArg = Output<typeof CallArg>;
 
 const TransactionExpiration = enumUnion({
 	None: literal(true),
 	Epoch: JsonU64,
 });
-
-type TransactionExpiration = Output<typeof TransactionExpiration>;
 
 export const SerializedTransactionDataV2 = object({
 	version: literal(2),
@@ -149,4 +142,5 @@ export const SerializedTransactionDataV2 = object({
 	inputs: array(CallArg),
 	commands: array(Command),
 });
+
 export type SerializedTransactionDataV2 = Output<typeof SerializedTransactionDataV2>;

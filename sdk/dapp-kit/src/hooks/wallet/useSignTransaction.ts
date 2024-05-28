@@ -17,6 +17,7 @@ import type { PartialBy } from '../../types/utilityTypes.js';
 import { useSuiClient } from '../useSuiClient.js';
 import { useCurrentAccount } from './useCurrentAccount.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
+import { useReportTransactionEffects } from './useReportTransactionEffects.js';
 
 type UseSignTransactionArgs = PartialBy<
 	Omit<SuiSignTransactionInput, 'transaction'>,
@@ -25,7 +26,9 @@ type UseSignTransactionArgs = PartialBy<
 	transaction: Transaction | string;
 };
 
-type UseSignTransactionResult = SignedTransaction;
+interface UseSignTransactionResult extends SignedTransaction {
+	reportTransactionEffects: (effects: string) => void;
+}
 
 type UseSignTransactionError =
 	| WalletFeatureNotSupportedError
@@ -58,6 +61,8 @@ export function useSignTransaction({
 	const currentAccount = useCurrentAccount();
 	const client = useSuiClient();
 
+	const { mutate: reportTransactionEffects } = useReportTransactionEffects();
+
 	return useMutation({
 		mutationKey: walletMutationKeys.signTransaction(mutationKey),
 		mutationFn: async ({ transaction, ...signTransactionArgs }) => {
@@ -81,7 +86,7 @@ export function useSignTransaction({
 				);
 			}
 
-			return await signTransaction(currentWallet, {
+			const { bytes, signature } = await signTransaction(currentWallet, {
 				...signTransactionArgs,
 				transaction: {
 					toJSON: async () => {
@@ -96,6 +101,18 @@ export function useSignTransaction({
 				account: signerAccount,
 				chain: signTransactionArgs.chain ?? signerAccount.chains[0],
 			});
+
+			return {
+				bytes,
+				signature,
+				reportTransactionEffects: (effects) => {
+					reportTransactionEffects({
+						effects,
+						account: signerAccount,
+						chain: signTransactionArgs.chain ?? signerAccount.chains[0],
+					});
+				},
+			};
 		},
 		...mutationOptions,
 	});

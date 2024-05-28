@@ -30,6 +30,7 @@
 		"@mysten/graphql-transport": "workspace:*",
 		"@mysten/kiosk": "workspace:*",
 		"@mysten/sui": "workspace:*",
+		"@mysten/wallet-standard": "workspace:*",
 		"@mysten/zklogin": "workspace:*",
 		"@mysten/zksend": "workspace:*",
 		"@tanstack/react-query": "^5.0.0",
