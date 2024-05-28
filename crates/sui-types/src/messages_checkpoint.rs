@@ -8,7 +8,7 @@ use crate::base_types::{
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
-    AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo,
+    AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, RandomnessRound,
 };
 use crate::digests::Digest;
 use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
@@ -185,6 +185,8 @@ pub struct CheckpointSummary {
     /// code. Therefore, in order to allow extensions to be added to CheckpointSummary, we allow
     /// opaque data to be added to checkpoints which can be deserialized based on the current
     /// protocol version.
+    ///
+    /// This is implemented with BCS-serialized `CheckpointVersionSpecificData`.
     pub version_specific_data: Vec<u8>,
 }
 
@@ -207,6 +209,7 @@ impl CheckpointSummary {
         epoch_rolling_gas_cost_summary: GasCostSummary,
         end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
+        version_specific_data: Vec<u8>,
     ) -> CheckpointSummary {
         let content_digest = *transactions.digest();
 
@@ -219,7 +222,7 @@ impl CheckpointSummary {
             epoch_rolling_gas_cost_summary,
             end_of_epoch_data,
             timestamp_ms,
-            version_specific_data: Vec::new(),
+            version_specific_data,
             checkpoint_commitments: Default::default(),
         }
     }
@@ -709,6 +712,32 @@ impl VerifiedCheckpointContents {
     }
 }
 
+/// Holds data in CheckpointSummary that is serialized into the `version_specific_data` field.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CheckpointVersionSpecificData {
+    V1(CheckpointVersionSpecificDataV1),
+}
+
+impl CheckpointVersionSpecificData {
+    pub fn as_v1(&self) -> &CheckpointVersionSpecificDataV1 {
+        match self {
+            Self::V1(v) => v,
+        }
+    }
+
+    pub fn into_v1(self) -> CheckpointVersionSpecificDataV1 {
+        match self {
+            Self::V1(v) => v,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckpointVersionSpecificDataV1 {
+    /// Lists the rounds for which RandomnessStateUpdate transactions are present in the checkpoint.
+    pub randomness_rounds: Vec<RandomnessRound>,
+}
+
 #[cfg(test)]
 #[cfg(feature = "test-utils")]
 mod tests {
@@ -753,6 +782,7 @@ mod tests {
                         GasCostSummary::default(),
                         None,
                         0,
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -787,6 +817,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             0,
+            Vec::new(),
         );
 
         let sign_infos: Vec<_> = keys
@@ -826,6 +857,7 @@ mod tests {
                         GasCostSummary::default(),
                         None,
                         0,
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -864,6 +896,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             100,
+            Vec::new(),
         )
     }
 

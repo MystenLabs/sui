@@ -63,6 +63,7 @@ fn gen_ckpts(
                     GasCostSummary::default(),
                     None,
                     0,
+                    Vec::new(),
                 ),
                 k,
                 name,

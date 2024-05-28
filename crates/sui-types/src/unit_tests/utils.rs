@@ -146,6 +146,7 @@ pub fn mock_certified_checkpoint<'a>(
         GasCostSummary::default(),
         None,
         0,
+        Vec::new(),
     );
 
     let sign_infos: Vec<_> = keys

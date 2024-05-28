@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "49",
+              "maxSupportedProtocolVersion": "50",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1368,6 +1368,7 @@
                 "allow_receiving_object_id": false,
                 "ban_entry_init": false,
                 "bridge": false,
+                "checkpoint_summary_version_specific_data": false,
                 "commit_root_state_digest": false,
                 "consensus_order_end_of_epoch_last": true,
                 "disable_invariant_violation_check_in_swap_loc": false,
@@ -1859,6 +1860,7 @@
                 "max_verifier_meter_ticks_per_function": {
                   "u64": "6000000"
                 },
+                "min_checkpoint_interval_ms": null,
                 "min_move_binary_format_version": null,
                 "move_binary_format_version": {
                   "u32": "6"

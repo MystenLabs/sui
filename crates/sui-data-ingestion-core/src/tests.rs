@@ -144,6 +144,7 @@ fn mock_checkpoint_data_bytes(seq_number: CheckpointSequenceNumber) -> Vec<u8> {
         GasCostSummary::default(),
         None,
         0,
+        Vec::new(),
     );
 
     let sign_infos: Vec<_> = keys

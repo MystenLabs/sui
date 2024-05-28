@@ -28,7 +28,9 @@ use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::messages_checkpoint::CheckpointCommitment;
+use sui_types::messages_checkpoint::{
+    CheckpointCommitment, CheckpointVersionSpecificData, CheckpointVersionSpecificDataV1,
+};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -932,28 +934,67 @@ impl CheckpointBuilder {
                 }
                 Ok(false) => (),
             };
-            let mut last = self
+
+            // Collect info about the most recently built checkpoint.
+            let summary = self
                 .epoch_store
-                .last_built_checkpoint_commit_height()
+                .last_built_checkpoint_builder_summary()
                 .expect("epoch should not have ended");
+            let mut last_height = summary.clone().and_then(|s| s.checkpoint_height);
+            let mut last_timestamp = summary.map(|s| s.summary.timestamp_ms);
+
+            let min_checkpoint_interval_ms = self
+                .epoch_store
+                .protocol_config()
+                .min_checkpoint_interval_ms_as_option()
+                .unwrap_or_default();
+            let mut grouped_pending_checkpoints = Vec::new();
             for (height, pending) in self
                 .epoch_store
-                .get_pending_checkpoints(last)
+                .get_pending_checkpoints(last_height)
                 .expect("unexpected epoch store error")
             {
-                last = Some(height);
+                // Group PendingCheckpoints until minimum interval has elapsed.
+                let current_timestamp = pending.details().timestamp_ms;
+                let can_build = match last_timestamp {
+                    Some(last_timestamp) => {
+                        current_timestamp >= last_timestamp + min_checkpoint_interval_ms
+                    }
+                    None => true,
+                } || pending.details().last_of_epoch; // TODO-DNS should I be proactively preventing coalescing other pendingcheckpoints into the last-of-epoch checkpoint?
+                grouped_pending_checkpoints.push(pending);
+                if !can_build {
+                    debug!(
+                        checkpoint_commit_height = height,
+                        last_timestamp = ?last_timestamp,
+                        ?current_timestamp,
+                        "waiting for more PendingCheckpoints: minimum interval not yet elapsed"
+                    );
+                    continue;
+                }
+
+                // Min interval has elasped, we can now coalesce and build a checkpoint.
+                last_height = Some(height);
+                last_timestamp = Some(current_timestamp);
                 debug!(
                     checkpoint_commit_height = height,
                     "Making checkpoint at commit height"
                 );
-                if let Err(e) = self.make_checkpoint(height, pending).await {
+                if let Err(e) = self
+                    .make_checkpoint(std::mem::take(&mut grouped_pending_checkpoints))
+                    .await
+                {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     self.metrics.checkpoint_errors.inc();
                     continue 'main;
                 }
+                //TODO-DNS need to fix checkpoint executor not to assume RSU is first in a checkpoint (or that there's only one)
             }
-            debug!("Waiting for more checkpoints from consensus after processing {last:?}");
+            debug!(
+                "Waiting for more checkpoints from consensus after processing {last_height:?}; {} pending checkpoints left unprocessed until next interval",
+                grouped_pending_checkpoints.len(),
+            );
             match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
                     // break loop on exit signal
@@ -965,20 +1006,20 @@ impl CheckpointBuilder {
         info!("Shutting down CheckpointBuilder");
     }
 
-    #[instrument(level = "debug", skip_all, fields(?height))]
-    async fn make_checkpoint(
-        &self,
-        height: CheckpointHeight,
-        pending: PendingCheckpointV2,
-    ) -> anyhow::Result<()> {
-        let pending = pending.into_v2();
+    #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
+    async fn make_checkpoint(&self, pendings: Vec<PendingCheckpointV2>) -> anyhow::Result<()> {
+        let last_details = pendings.last().unwrap().details().clone();
+        let roots = pendings
+            .into_iter()
+            .flat_map(|pending| pending.into_v2().roots)
+            .collect::<Vec<_>>();
         self.metrics
             .checkpoint_roots_count
-            .inc_by(pending.roots.len() as u64);
+            .inc_by(roots.len() as u64);
 
         let root_digests = self
             .epoch_store
-            .notify_read_executed_digests(&pending.roots)
+            .notify_read_executed_digests(&roots)
             .in_monitored_scope("CheckpointNotifyDigests")
             .await?;
         let root_effects = self
@@ -993,8 +1034,9 @@ impl CheckpointBuilder {
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
             CausalOrder::causal_sort(unsorted)
         };
-        let new_checkpoint = self.create_checkpoints(sorted, pending.details).await?;
-        self.write_checkpoints(height, new_checkpoint).await?;
+        let new_checkpoints = self.create_checkpoints(sorted, &last_details).await?;
+        self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
+            .await?;
         Ok(())
     }
 
@@ -1129,7 +1171,7 @@ impl CheckpointBuilder {
     async fn create_checkpoints(
         &self,
         all_effects: Vec<TransactionEffects>,
-        details: PendingCheckpointInfo,
+        details: &PendingCheckpointInfo,
     ) -> anyhow::Result<Vec<(CheckpointSummary, CheckpointContents)>> {
         let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
         let total = all_effects.len();
@@ -1167,6 +1209,7 @@ impl CheckpointBuilder {
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
         let mut transactions = Vec::with_capacity(all_effects.len());
         let mut transaction_keys = Vec::with_capacity(all_effects.len());
+        let mut randomness_rounds = BTreeMap::new();
         {
             let _guard = monitored_scope("CheckpointBuilder::wait_for_transactions_sequenced");
             debug!(
@@ -1181,18 +1224,26 @@ impl CheckpointBuilder {
             {
                 let (transaction, size) = transaction_and_size
                     .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
-                // ConsensusCommitPrologue and AuthenticatorStateUpdate are guaranteed to be
-                // processed before we reach here
-                if !matches!(
-                    transaction.inner().transaction_data().kind(),
+                match transaction.inner().transaction_data().kind() {
                     TransactionKind::ConsensusCommitPrologue(_)
-                        | TransactionKind::ConsensusCommitPrologueV2(_)
-                        | TransactionKind::AuthenticatorStateUpdate(_)
-                        | TransactionKind::RandomnessStateUpdate(_)
-                ) {
-                    transaction_keys.push(SequencedConsensusTransactionKey::External(
-                        ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
-                    ));
+                    | TransactionKind::ConsensusCommitPrologueV2(_)
+                    | TransactionKind::AuthenticatorStateUpdate(_) => {
+                        // ConsensusCommitPrologue and AuthenticatorStateUpdate are guaranteed to be
+                        // processed before we reach here.
+                    }
+                    TransactionKind::RandomnessStateUpdate(rsu) => {
+                        // RandomnessStateUpdate does not come via consensus, so no need to include
+                        // it in the call to `consensus_messages_processed_notify`.
+                        randomness_rounds
+                            .insert(*effects.transaction_digest(), rsu.randomness_round);
+                    }
+                    _ => {
+                        // All other tx should be included in the call to
+                        // `consensus_messages_processed_notify`.
+                        transaction_keys.push(SequencedConsensusTransactionKey::External(
+                            ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
+                        ));
+                    }
                 }
                 transactions.push(transaction);
                 all_effects_and_transaction_sizes.push((effects, size));
@@ -1300,6 +1351,24 @@ impl CheckpointBuilder {
                 None
             };
 
+            let version_specific_data = if self
+                .epoch_store
+                .protocol_config()
+                .checkpoint_summary_version_specific_data()
+            {
+                let matching_randomness_rounds: Vec<_> = effects
+                    .iter()
+                    .filter_map(|e| randomness_rounds.get(e.transaction_digest()))
+                    .copied()
+                    .collect();
+                let data = CheckpointVersionSpecificData::V1(CheckpointVersionSpecificDataV1 {
+                    randomness_rounds: matching_randomness_rounds,
+                });
+                bcs::to_bytes(&data)?
+            } else {
+                Vec::new()
+            };
+
             let contents = CheckpointContents::new_with_digests_and_signatures(
                 effects.iter().map(TransactionEffects::execution_digests),
                 signatures,
@@ -1322,6 +1391,7 @@ impl CheckpointBuilder {
                 epoch_rolling_gas_cost_summary,
                 end_of_epoch_data,
                 timestamp_ms,
+                version_specific_data,
             );
             summary.report_checkpoint_age_ms(&self.metrics.last_created_checkpoint_age_ms);
             if last_checkpoint_of_epoch {

@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 49;
+const MAX_PROTOCOL_VERSION: u64 = 50;
 
 // Record history of protocol version allocations here:
 //
@@ -135,6 +135,7 @@ const MAX_PROTOCOL_VERSION: u64 = 49;
 //             Enable random beacon in testnet.
 // Version 49: Enable Move enums on devnet.
 //             Enable VDF in devnet
+// Version 50: Enable checkpoint batching in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -456,6 +457,10 @@ struct FeatureFlags {
     // Enable VDF
     #[serde(skip_serializing_if = "is_false")]
     enable_vdf: bool,
+
+    // Enables version-specific data v1 in CheckpointSummary.
+    #[serde(skip_serializing_if = "is_false")]
+    checkpoint_summary_version_specific_data: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1097,6 +1102,9 @@ pub struct ProtocolConfig {
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
+
+    /// Minimum interval of commit timestamps between consecutive checkpoints.
+    min_checkpoint_interval_ms: Option<u64>,
 }
 
 // feature flags
@@ -1362,6 +1370,10 @@ impl ProtocolConfig {
 
     pub fn enable_vdf(&self) -> bool {
         self.feature_flags.enable_vdf
+    }
+
+    pub fn checkpoint_summary_version_specific_data(&self) -> bool {
+        self.feature_flags.checkpoint_summary_version_specific_data
     }
 }
 
@@ -1815,6 +1827,8 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_checkpoint: None,
 
             max_deferral_rounds_for_congestion_control: None,
+
+            min_checkpoint_interval_ms: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2284,6 +2298,13 @@ impl ProtocolConfig {
                         // should be updated along with other native crypto functions.
                         cfg.vdf_verify_vdf_cost = Some(1500);
                         cfg.vdf_hash_to_input_cost = Some(100);
+                    }
+                }
+                50 => {
+                    // Enable checkpoint batching in testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.checkpoint_summary_version_specific_data = true;
+                        cfg.min_checkpoint_interval_ms = Some(200);
                     }
                 }
                 // Use this template when making changes:
