@@ -75,8 +75,6 @@ pub trait TypingVisitorContext {
         }
     }
 
-    // TODO  type visiting
-
     fn visit_struct_custom(
         &mut self,
         _module: ModuleIdent,
@@ -85,6 +83,7 @@ pub trait TypingVisitorContext {
     ) -> bool {
         false
     }
+
     fn visit_struct(
         &mut self,
         module: ModuleIdent,
@@ -107,6 +106,7 @@ pub trait TypingVisitorContext {
     ) -> bool {
         false
     }
+
     fn visit_enum(
         &mut self,
         module: ModuleIdent,
@@ -173,6 +173,11 @@ pub trait TypingVisitorContext {
         for s in seq {
             self.visit_seq_item(s);
         }
+    }
+
+    /// Custom visit for a sequence item. It will skip `visit_seq_item` if `visit_seq_item_custom` returns true.
+    fn visit_seq_item_custom(&mut self, _seq_item: &mut T::SequenceItem) -> bool {
+        false
     }
 
     fn visit_seq_item(&mut self, sp!(_, seq_item): &mut T::SequenceItem) {

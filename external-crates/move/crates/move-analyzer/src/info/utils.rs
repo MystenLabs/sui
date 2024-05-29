@@ -30,6 +30,14 @@ pub fn get_loc(
     }
 }
 
+fn get_start_loc(
+    pos: &Loc,
+    files: &SimpleFiles<Symbol, String>,
+    file_id_mapping: &HashMap<FileHash, usize>,
+) -> Option<Position> {
+    get_loc(&pos.file_hash(), pos.start(), files, file_id_mapping)
+}
+
 /// Some functions defined in a module need to be ignored.
 pub fn ignored_function(name: Symbol) -> bool {
     // In test mode (that's how IDE compiles Move source files),
