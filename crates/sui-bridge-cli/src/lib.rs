@@ -43,12 +43,12 @@ use tracing::info;
 #[clap(rename_all = "kebab-case")]
 pub struct Args {
     #[clap(subcommand)]
-    pub command: BridgeValidatorCommand,
+    pub command: BridgeCommand,
 }
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
-pub enum BridgeValidatorCommand {
+pub enum BridgeCommand {
     #[clap(name = "create-bridge-validator-key")]
     CreateBridgeValidatorKey { path: PathBuf },
     #[clap(name = "create-bridge-client-key")]
@@ -81,6 +81,14 @@ pub enum BridgeValidatorCommand {
         chain_id: u8,
         #[clap(subcommand)]
         cmd: GovernanceClientCommands,
+    },
+    /// Given proxy address of SuiBridge contract, print other contract addresses
+    #[clap(name = "print-eth-bridge-addresses")]
+    PrintEthBridgeAddresses {
+        #[clap(long = "bridge-proxy")]
+        bridge_proxy: EthAddress,
+        #[clap(long = "eth-rpc-url")]
+        eth_rpc_url: String,
     },
     /// Client to facilitate and execute Bridge actions
     #[clap(name = "client")]
