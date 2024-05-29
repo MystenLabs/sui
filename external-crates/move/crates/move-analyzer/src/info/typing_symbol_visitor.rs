@@ -486,10 +486,31 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
     fn visit_struct(
         &mut self,
         _module: move_compiler::expansion::ast::ModuleIdent,
-        _struct_name: P::DatatypeName,
+        struct_name: P::DatatypeName,
         sdef: &mut N::StructDefinition,
     ) {
         self.reset_for_module_member();
+        let file_hash = struct_name.loc().file_hash();
+        // enter self-definition for struct name (unwrap safe - done when inserting def)
+        let name_start = self.lsp_start_position(&struct_name.loc());
+        let struct_info = self
+            .def_info
+            .get(&DefLoc::new(file_hash, name_start))
+            .unwrap();
+        let struct_type_def = def_info_to_type_def_loc(self.mod_outer_defs, struct_info);
+        self.use_defs.insert(
+            name_start.line,
+            UseDef::new(
+                self.references,
+                self.alias_lengths,
+                file_hash,
+                name_start,
+                file_hash,
+                name_start,
+                &struct_name.value(),
+                struct_type_def,
+            ),
+        );
         for stp in &sdef.type_parameters {
             self.add_type_param(&stp.param);
         }
@@ -642,10 +663,6 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
 
         // clear type params from the scope
         self.type_params.clear();
-    }
-
-    fn visit_seq_item_custom(&mut self, _seq_item: &mut T::SequenceItem) -> bool {
-        false
     }
 
     fn visit_lvalue_list(&mut self, kind: &LValueKind, lvalues: &mut T::LValueList) {

@@ -278,7 +278,7 @@ pub struct FieldDef {
 
 /// Definition of a struct
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct StructDef {
+pub struct StructDef {
     pub name_start: Position,
     pub field_defs: Vec<FieldDef>,
     /// Does this struct have positional fields?
@@ -292,7 +292,7 @@ impl StructDef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct FunctionDef {
+pub struct FunctionDef {
     pub name: Symbol,
     pub start: Position,
     pub attrs: Vec<String>,
@@ -313,13 +313,13 @@ pub struct LocalDef {
 
 /// Definition of a constant
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct ConstDef {
+pub struct ConstDef {
     pub name_start: Position,
 }
 
 /// Module-level definitions
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
-pub(crate) struct ModuleDefs {
+pub struct ModuleDefs {
     /// File where this module is located
     pub fhash: FileHash,
     /// Location where this module is located
@@ -2536,6 +2536,7 @@ pub fn add_struct_use_def(
         debug_assert!(false);
         return None;
     };
+    println!("name_start: {mod_ident_str:?}");
     if let Some(def) = mod_defs.structs.get(use_name) {
         let def_fhash = mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
         let struct_info = def_info

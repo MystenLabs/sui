@@ -322,6 +322,8 @@ pub trait TypingVisitorContext {
             }
             SI::Declare(_) => (),
             SI::Bind(lvalues, ty_ann, e) => {
+                // visit the RHS first to better match control flow
+                self.visit_exp(e);
                 if Self::VISIT_LVALUES {
                     self.visit_lvalue_list(&LValueKind::Bind, lvalues);
                 }
@@ -331,7 +333,6 @@ pub trait TypingVisitorContext {
                         .flatten()
                         .for_each(|ty| self.visit_type(ty));
                 }
-                self.visit_exp(e)
             }
         }
     }
@@ -410,12 +411,13 @@ pub trait TypingVisitorContext {
         match uexp {
             E::ModuleCall(c) => self.visit_exp(&mut c.arguments),
             E::Builtin(bf, e) => {
+                // visit the argument first to better match control flow
+                self.visit_exp(e);
                 use T::BuiltinFunction_ as BF;
                 match &mut bf.value {
                     BF::Freeze(t) => self.visit_type(t),
                     BF::Assert(_) => (),
                 }
-                self.visit_exp(e);
             }
             E::Vector(_, _, ty, e) => {
                 if Self::VISIT_TYPES {
@@ -451,6 +453,8 @@ pub trait TypingVisitorContext {
             E::NamedBlock(_, seq) => self.visit_seq(seq),
             E::Block(seq) => self.visit_seq(seq),
             E::Assign(lvalues, ty_ann, e) => {
+                // visit the RHS first to better match control flow
+                self.visit_exp(e);
                 if Self::VISIT_LVALUES {
                     for lvalue in lvalues.value.iter_mut() {
                         self.visit_lvalue(&LValueKind::Assign, lvalue);
@@ -462,7 +466,6 @@ pub trait TypingVisitorContext {
                         .flatten()
                         .for_each(|ty| self.visit_type(ty));
                 }
-                self.visit_exp(e)
             }
             E::Mutate(e1, e2) => {
                 self.visit_exp(e1);
