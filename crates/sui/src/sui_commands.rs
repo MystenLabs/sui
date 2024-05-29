@@ -175,7 +175,7 @@ pub enum SuiCommand {
     },
 
     /// Invoke Sui's move-analyzer via CLI
-    #[clap(name = "analyzer")]
+    #[clap(name = "analyzer", hide = true)]
     Analyzer,
 }
 
