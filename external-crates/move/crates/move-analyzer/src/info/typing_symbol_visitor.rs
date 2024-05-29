@@ -541,7 +541,7 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
 
     fn visit_function(
         &mut self,
-        module: move_compiler::expansion::ast::ModuleIdent,
+        _module: move_compiler::expansion::ast::ModuleIdent,
         function_name: P::FunctionName,
         fdef: &mut T::Function,
     ) {
@@ -643,8 +643,8 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
                         LValueKind::Assign => self.add_local_use_def(&var.value.name, &var.loc),
                     }
                 }
-                T::LValue_::Unpack(mident, name, tyargs, fields)
-                | T::LValue_::BorrowUnpack(_, mident, name, tyargs, fields) => {
+                T::LValue_::Unpack(mident, name, _tyargs, fields)
+                | T::LValue_::BorrowUnpack(_, mident, name, _tyargs, fields) => {
                     for_unpack = true;
                     self.add_datatype_use_def(mident, name, &name.loc());
                     for (fpos, fname, (_, (_, lvalue))) in fields {
@@ -724,7 +724,7 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
                 let fun_name = name.value();
                 // a function name (same as fun_name) or method name (different from fun_name)
                 let fun_use = method_name.unwrap_or_else(|| sp(name.loc(), name.value()));
-                self.add_fun_use_def(&module, &fun_name, &fun_use.value, &fun_use.loc);
+                self.add_fun_use_def(module, &fun_name, &fun_use.value, &fun_use.loc);
                 // handle type parameters
                 for t in type_arguments.iter_mut() {
                     self.visit_type(t);
@@ -735,7 +735,7 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
             TE::IDEAnnotation(_, _) => todo!(),
             TE::Pack(mident, name, tyargs, fields) => {
                 // add use of the struct name
-                self.add_datatype_use_def(mident, &name, &name.loc());
+                self.add_datatype_use_def(mident, name, &name.loc());
                 for (fpos, fname, (_, (_, init_exp))) in fields.iter_mut() {
                     // add use of the field name
                     self.add_field_use_def(&mident.value, &name.value(), fname, &fpos);
@@ -821,7 +821,7 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
             }
             N::Type_::Apply(_, sp!(_, type_name), tyargs) => {
                 if let N::TypeName_::ModuleType(mod_ident, struct_name) = type_name {
-                    self.add_datatype_use_def(mod_ident, &struct_name, &struct_name.loc());
+                    self.add_datatype_use_def(mod_ident, struct_name, &struct_name.loc());
                 } // otherwise nothing to be done for other type names
                 for t in tyargs.iter_mut() {
                     self.visit_type(t);

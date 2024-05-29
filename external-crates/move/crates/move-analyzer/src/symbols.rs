@@ -1031,6 +1031,12 @@ impl PartialEq for UseDef {
     }
 }
 
+impl Default for UseDefMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UseDefMap {
     pub fn new() -> Self {
         Self(BTreeMap::new())
@@ -1534,7 +1540,7 @@ fn process_typed_modules<'a>(
         let use_defs = std::mem::replace(&mut typing_symbolicator.use_defs, UseDefMap::new());
         file_use_defs
             .entry(fpath_buffer)
-            .or_insert_with(UseDefMap::new)
+            .or_default()
             .extend(use_defs.elements());
     }
 }
