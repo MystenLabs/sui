@@ -28,6 +28,8 @@ pub enum IDEAnnotation {
     ExpandedLambda,
     /// Autocomplete information.
     AutocompleteInfo(Box<AutocompleteInfo>),
+    /// Match Missing Arm.
+    MissingMatchArms(Box<MissingMatchArmsInfo>),
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +54,14 @@ pub struct AutocompleteInfo {
     /// TODO: possibly extend this with type information?
     pub fields: BTreeSet<Symbol>,
 }
+
+#[derive(Debug, Clone)]
+pub struct MissingMatchArmsInfo {
+    /// A vector of arm patterns that can be inserted to make the match complete.
+    /// Note the span information on these is _wrong_ and must be recomputed after insertion.
+    pub arms: Vec<N::MatchPattern_>,
+}
+
 
 //*************************************************************************************************
 // Impls
