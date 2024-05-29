@@ -273,7 +273,7 @@ export const ObjectArg = safeEnum({
 		objectId: ObjectID,
 		// snake case in rust
 		initialSharedVersion: JsonU64,
-		mutable: nullable(boolean()),
+		mutable: boolean(),
 	}),
 	Receiving: ObjectRef,
 });
