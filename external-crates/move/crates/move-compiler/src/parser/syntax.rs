@@ -1135,6 +1135,8 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
         }
     }
 
+    // Attaches the doc comments to the start of the location of the member that these
+    // attributes/doc comments are attached to.
     if !doc_comments.is_empty() {
         context.tokens.attach_doc_comments(doc_comments.join("\n"));
     }
