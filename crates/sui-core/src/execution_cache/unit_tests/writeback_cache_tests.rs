@@ -124,6 +124,7 @@ impl Scenario {
             println!("running with cache eviction after step {}", i);
             let count = Arc::new(AtomicU32::new(0));
             let action = Box::new(|s: &mut Scenario| {
+                println!("evict_caches()");
                 s.evict_caches();
             });
             let fut = f(Scenario::new(Some((i, action)), count.clone()).await);
@@ -790,7 +791,8 @@ async fn test_lt_or_eq_caching() {
                 .get(&s.obj_id(1))
                 .unwrap()
                 .lock()
-                .0
+                .version()
+                .unwrap()
                 .value(),
             5
         );
@@ -803,6 +805,46 @@ async fn test_lt_or_eq_caching() {
         check_version(5, 5);
         check_version(6, 5);
         check_version(7, 5);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_lt_or_eq_with_cached_tombstone() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        // make an object, and a tombstone
+        s.with_created(&[1]);
+        let tx1 = s.do_tx().await;
+        s.with_deleted(&[1]);
+        let tx2 = s.do_tx().await;
+        s.commit(tx1).await.unwrap();
+        s.commit(tx2).await.unwrap();
+
+        s.reset_cache();
+
+        let check_version = |lookup_version: u64, expected_version: Option<u64>| {
+            let lookup_version = SequenceNumber::from_u64(lookup_version);
+            assert_eq!(
+                s.cache()
+                    .find_object_lt_or_eq_version(s.obj_id(1), lookup_version)
+                    .unwrap()
+                    .map(|v| v.version()),
+                expected_version.map(SequenceNumber::from_u64)
+            );
+        };
+
+        // latest object not yet cached
+        assert!(!s.cache.cached.object_by_id_cache.contains_key(&s.obj_id(1)));
+
+        // version 2 is deleted
+        check_version(2, None);
+
+        // checking the version pulled the tombstone into the cache
+        assert!(s.cache.cached.object_by_id_cache.contains_key(&s.obj_id(1)));
+
+        // version 1 is still found, tombstone in cache is ignored
+        check_version(1, Some(1));
     })
     .await;
 }
@@ -1146,7 +1188,7 @@ async fn latest_object_cache_race_test() {
                     .cached
                     .object_by_id_cache
                     .get(&object_id)
-                    .map(|e| e.lock().0)
+                    .and_then(|e| e.lock().version())
                 else {
                     continue;
                 };
@@ -1159,7 +1201,10 @@ async fn latest_object_cache_race_test() {
                 let object =
                     Object::with_id_owner_version_for_testing(object_id, latest_version, owner);
 
-                cache.cache_latest_object_by_id(&object_id, latest_version, object.into());
+                cache.cache_latest_object_by_id(
+                    &object_id,
+                    LatestObjectCacheEntry::Object(latest_version, object.into()),
+                );
             }
         })
     };
@@ -1176,7 +1221,7 @@ async fn latest_object_cache_race_test() {
                     .cached
                     .object_by_id_cache
                     .get(&object_id)
-                    .map(|e| e.lock().0)
+                    .and_then(|e| e.lock().version())
                 else {
                     continue;
                 };

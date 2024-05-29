@@ -464,6 +464,7 @@ impl From<&ObjectRef> for ObjectKey {
     }
 }
 
+#[derive(Clone)]
 pub enum ObjectOrTombstone {
     Object(Object),
     Tombstone(ObjectRef),
