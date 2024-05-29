@@ -1033,6 +1033,18 @@ blake2b256
 keccak256
 	public fun
 	0x2::hash
+hash_to_input
+	public fun
+	0x2::vdf
+hash_to_input_internal
+	fun
+	0x2::vdf
+vdf_verify
+	public fun
+	0x2::vdf
+vdf_verify_internal
+	fun
+	0x2::vdf
 encode
 	public fun
 	0x2::hex
@@ -1753,6 +1765,9 @@ is_empty
 into_keys
 	public fun
 	0x2::vec_set
+from_keys
+	public fun
+	0x2::vec_set
 keys
 	public fun
 	0x2::vec_set
@@ -1988,6 +2003,9 @@ destroy_empty
 	public fun
 	0x2::vec_map
 into_keys_values
+	public fun
+	0x2::vec_map
+from_keys_values
 	public fun
 	0x2::vec_map
 keys

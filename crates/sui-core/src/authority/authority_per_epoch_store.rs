@@ -1617,20 +1617,26 @@ impl AuthorityPerEpochStore {
             ));
         }
 
-        // Defer transaction if it uses shared objects that are congested.
-        if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
-            .should_defer_due_to_object_congestion(
-                cert,
-                self.protocol_config()
-                    .max_accumulated_txn_cost_per_object_in_checkpoint_as_option(),
-                previously_deferred_tx_digests,
-                commit_round,
-            )
+        if let Some(max_accumulated_txn_cost_per_object_in_checkpoint) = self
+            .protocol_config()
+            .max_accumulated_txn_cost_per_object_in_checkpoint_as_option()
         {
-            Some((
-                deferral_key,
-                DeferralReason::SharedObjectCongestion(congested_objects),
-            ))
+            // Defer transaction if it uses shared objects that are congested.
+            if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
+                .should_defer_due_to_object_congestion(
+                    cert,
+                    max_accumulated_txn_cost_per_object_in_checkpoint,
+                    previously_deferred_tx_digests,
+                    commit_round,
+                )
+            {
+                Some((
+                    deferral_key,
+                    DeferralReason::SharedObjectCongestion(congested_objects),
+                ))
+            } else {
+                None
+            }
         } else {
             None
         }

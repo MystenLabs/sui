@@ -62,21 +62,25 @@ impl SharedObjectCongestionTracker {
             .expect("There must be at least one object in shared_input_objects.")
     }
 
+    pub fn get_tx_cost(&self, cert: &VerifiedExecutableTransaction) -> Option<u64> {
+        match self.mode {
+            PerObjectCongestionControlMode::None => None,
+            PerObjectCongestionControlMode::TotalGasBudget => Some(cert.gas_budget()),
+            PerObjectCongestionControlMode::TotalTxCount => Some(1),
+        }
+    }
+
     // Given a transaction, returns the deferral key and the congested objects if the transaction should be deferred.
     pub fn should_defer_due_to_object_congestion(
         &self,
         cert: &VerifiedExecutableTransaction,
-        max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
+        max_accumulated_txn_cost_per_object_in_checkpoint: u64,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         commit_round: Round,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
-        let tx_cost = match self.mode {
-            PerObjectCongestionControlMode::None => return None,
-            PerObjectCongestionControlMode::TotalGasBudget => cert.gas_budget(),
-            PerObjectCongestionControlMode::TotalTxCount => 1,
+        let Some(tx_cost) = self.get_tx_cost(cert) else {
+            return None;
         };
-
-        max_accumulated_txn_cost_per_object_in_checkpoint?;
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         if shared_input_objects.is_empty() {
@@ -85,7 +89,7 @@ impl SharedObjectCongestionTracker {
         }
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
 
-        if start_cost + tx_cost <= max_accumulated_txn_cost_per_object_in_checkpoint.unwrap() {
+        if start_cost + tx_cost <= max_accumulated_txn_cost_per_object_in_checkpoint {
             return None;
         }
 
@@ -128,10 +132,8 @@ impl SharedObjectCongestionTracker {
     // Update shared objects' execution cost used in `cert` using `cert`'s execution cost.
     // This is called when `cert` is scheduled for execution.
     pub fn bump_object_execution_cost(&mut self, cert: &VerifiedExecutableTransaction) {
-        let tx_cost = match self.mode {
-            PerObjectCongestionControlMode::None => return,
-            PerObjectCongestionControlMode::TotalGasBudget => cert.gas_budget(),
-            PerObjectCongestionControlMode::TotalTxCount => 1,
+        let Some(tx_cost) = self.get_tx_cost(cert) else {
+            return;
         };
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
@@ -263,11 +265,11 @@ mod object_cost_tests {
         let tx_gas_budget = 100;
 
         // Set max_accumulated_txn_cost_per_object_in_checkpoint to only allow 1 transaction to go through.
-        let max_accumulated_txn_cost_per_object_in_checkpoint = Some(match mode {
+        let max_accumulated_txn_cost_per_object_in_checkpoint = match mode {
             PerObjectCongestionControlMode::None => unreachable!(),
             PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget + 1,
             PerObjectCongestionControlMode::TotalTxCount => 2,
-        });
+        };
 
         let shared_object_congestion_tracker = match mode {
             PerObjectCongestionControlMode::None => unreachable!(),
@@ -359,7 +361,7 @@ mod object_cost_tests {
         let shared_obj_0 = ObjectID::random();
         let tx = build_transaction(&[(shared_obj_0, true)], 100);
         // Make should_defer_due_to_object_congestion always defer transactions.
-        let max_accumulated_txn_cost_per_object_in_checkpoint = Some(0);
+        let max_accumulated_txn_cost_per_object_in_checkpoint = 0;
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(mode);
 
         // Insert a random pre-existing transaction.
