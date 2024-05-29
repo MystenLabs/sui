@@ -78,21 +78,21 @@ export const CallArg = bcs.enum('CallArg', {
 	Object: ObjectArg,
 });
 
-export const TypeTag: BcsType<string, string | TypeTagType> = (
-	bcs.enum('TypeTag', {
-		bool: null,
-		u8: null,
-		u64: null,
-		u128: null,
-		address: null,
-		signer: null,
-		vector: bcs.lazy(() => TypeTag),
-		struct: bcs.lazy(() => StructTag),
-		u16: null,
-		u32: null,
-		u256: null,
-	}) as BcsType<TypeTagType>
-).transform({
+const InnerTypeTag: BcsType<TypeTagType, TypeTagType> = bcs.enum('TypeTag', {
+	bool: null,
+	u8: null,
+	u64: null,
+	u128: null,
+	address: null,
+	signer: null,
+	vector: bcs.lazy(() => InnerTypeTag),
+	struct: bcs.lazy(() => StructTag),
+	u16: null,
+	u32: null,
+	u256: null,
+}) as BcsType<TypeTagType>;
+
+export const TypeTag = InnerTypeTag.transform({
 	input: (typeTag: string | TypeTagType) =>
 		typeof typeTag === 'string' ? TypeTagSerializer.parseFromStr(typeTag, true) : typeTag,
 	output: (typeTag: TypeTagType) => TypeTagSerializer.tagToString(typeTag),
@@ -206,7 +206,7 @@ export const StructTag = bcs.struct('StructTag', {
 	address: Address,
 	module: bcs.string(),
 	name: bcs.string(),
-	typeParams: bcs.vector(TypeTag),
+	typeParams: bcs.vector(InnerTypeTag),
 });
 
 export const GasData = bcs.struct('GasData', {
