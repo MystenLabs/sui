@@ -55,14 +55,10 @@ impl PgManager {
     /// Retrieve the validator APYs
     pub(crate) async fn fetch_validator_apys(
         &self,
-        address: &NativeSuiAddress,
+        _address: &NativeSuiAddress,
     ) -> Result<Option<f64>, Error> {
-        let governance_api = GovernanceReadApi::new(self.inner.clone());
-
-        governance_api
-            .get_validator_apy(address)
-            .await
-            .map_err(|e| Error::Internal(format!("{e}")))
+        // TODO will fixed in PR 17701, right after this PR is merged
+        Ok(None)
     }
 
     /// If no epoch was requested or if the epoch requested is in progress,
