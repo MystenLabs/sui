@@ -297,6 +297,7 @@ impl CachedCommittedData {
 
     fn clear_and_assert_empty(&self) {
         self.object_cache.invalidate_all();
+        self.object_by_id_cache.invalidate_all();
         self.marker_cache.invalidate_all();
         self.transactions.invalidate_all();
         self.transaction_effects.invalidate_all();
@@ -305,6 +306,7 @@ impl CachedCommittedData {
         self._transaction_objects.invalidate_all();
 
         assert_empty(&self.object_cache);
+        assert_empty(&self.object_by_id_cache);
         assert_empty(&self.marker_cache);
         assert_empty(&self.transactions);
         assert_empty(&self.transaction_effects);
