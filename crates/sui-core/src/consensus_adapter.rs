@@ -418,7 +418,7 @@ impl ConsensusAdapter {
         let (position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
 
-        const MAX_LATENCY: Duration = Duration::from_secs(15);
+        const MAX_LATENCY: Duration = Duration::from_secs(10);
         const DEFAULT_LATENCY: Duration = Duration::from_secs(3); // > p50 consensus latency with global deployment
         let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
         self.metrics
@@ -1100,7 +1100,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
         // Only sample latency after consensus quorum is up. Otherwise, the wait for consensus
         // quorum at the beginning of an epoch can be distort the sampled latencies.
         // Technically there are more system transaction types that can be included in samples
-        // after the first consensus commit, but using the types above should be enough.
+        // after the first consensus commit, but this set of types should be enough.
         if self.position == Some(0) {
             // Transaction types below require quorum existed in the current epoch.
             let sampled = matches!(

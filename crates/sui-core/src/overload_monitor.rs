@@ -426,10 +426,12 @@ mod tests {
 
         // Creates a simple case to see if authority state overload_info can be updated
         // correctly by check_authority_overload.
-        state
-            .metrics
-            .execution_queueing_latency
-            .report(Duration::from_secs(20));
+        for _ in 0..1000 {
+            state
+                .metrics
+                .execution_queueing_latency
+                .report(Duration::from_secs(20));
+        }
         let authority = Arc::downgrade(&state);
         assert!(check_authority_overload(&authority, &config));
         assert!(state.overload_info.is_overload.load(Ordering::Relaxed));
