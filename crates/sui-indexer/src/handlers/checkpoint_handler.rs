@@ -50,7 +50,8 @@ use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackage
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
     IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
-    IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
+    IndexedObjectVersion, IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind,
+    TxIndex,
 };
 
 use super::tx_processor::EpochEndIndexingObjectStore;
@@ -289,6 +290,7 @@ where
             Self::index_objects(data.clone(), &metrics, package_resolver.clone()).await?;
         let object_history_changes: TransactionObjectChangesToCommit =
             Self::index_objects_history(data.clone(), package_resolver.clone()).await?;
+        let object_versions = Self::index_object_versions(data.clone());
 
         let (checkpoint, db_transactions, db_events, db_indices, db_displays) = {
             let CheckpointData {
@@ -341,6 +343,7 @@ where
             display_updates: db_displays,
             object_changes,
             object_history_changes,
+            object_versions,
             packages,
             epoch,
         })
@@ -651,6 +654,34 @@ where
             changed_objects,
             deleted_objects: indexed_deleted_objects,
         })
+    }
+
+    fn index_object_versions(data: CheckpointData) -> Vec<IndexedObjectVersion> {
+        data.transactions
+            .iter()
+            .flat_map(|tx| {
+                let CheckpointTransaction {
+                    transaction: _tx,
+                    effects: fx,
+                    ..
+                } = tx;
+                // NOTE: fill bumped version for wrapped & deleted objects, such that we can count on the order
+                // of object versions for the latest object states.
+                let tx_lamport_version = fx.lamport_version().value();
+                fx.object_changes()
+                    .into_iter()
+                    .map(|change| IndexedObjectVersion {
+                        object_id: change.id.to_vec(),
+                        input_version: change.input_version.map(|seq| seq.value()),
+                        output_version: change
+                            .output_version
+                            .map(|seq| seq.value())
+                            .unwrap_or(tx_lamport_version),
+                        checkpoint_sequence_number: data.checkpoint_summary.sequence_number,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     }
 
     fn index_packages(
