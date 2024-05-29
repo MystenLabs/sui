@@ -526,8 +526,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::UnaryExp(_, base_exp)
         | E::Borrow(_, base_exp, _)
         | E::Cast(base_exp, _)
-        | E::TempBorrow(_, base_exp)
-        | E::AutocompleteDotAccess { base_exp, .. } => value_report!(base_exp),
+        | E::TempBorrow(_, base_exp) => value_report!(base_exp),
 
         E::BorrowLocal(_, _) => None,
 
@@ -739,7 +738,6 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::ErrorConstant { .. }
         | E::Move { .. }
         | E::Copy { .. }
-        | E::AutocompleteDotAccess { .. }
         | E::UnresolvedError => value(context, e),
 
         E::Value(_) | E::Unit { .. } => None,

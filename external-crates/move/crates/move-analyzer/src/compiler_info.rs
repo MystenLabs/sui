@@ -10,6 +10,7 @@ use move_ir_types::location::Loc;
 pub struct CompilerInfo {
     pub macro_info: BTreeMap<Loc, CI::MacroCallInfo>,
     pub expanded_lambdas: BTreeSet<Loc>,
+    pub autocomplete_info: BTreeMap<Loc, CI::AutocompleteInfo>,
 }
 
 impl CompilerInfo {
@@ -36,6 +37,13 @@ impl CompilerInfo {
                 CI::IDEAnnotation::ExpandedLambda => {
                     self.expanded_lambdas.insert(loc);
                 }
+                CI::IDEAnnotation::AutocompleteInfo(info) => {
+                    // TODO: what if we find two autocomplete info sets? Intersection may be better
+                    // than union, as it's likely in a lambda body.
+                    if let Some(_old) = self.autocomplete_info.insert(loc, *info) {
+                        eprintln!("Repeated autocomplete info");
+                    }
+                }
             }
         }
     }
@@ -46,5 +54,9 @@ impl CompilerInfo {
 
     pub fn is_expanded_lambda(&mut self, loc: &Loc) -> bool {
         self.expanded_lambdas.contains(loc)
+    }
+
+    pub fn get_autocomplete_info(&mut self, loc: &Loc) -> Option<&CI::AutocompleteInfo> {
+        self.autocomplete_info.get(loc)
     }
 }

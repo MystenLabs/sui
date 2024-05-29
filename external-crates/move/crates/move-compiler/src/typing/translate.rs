@@ -20,7 +20,7 @@ use crate::{
         VariantName,
     },
     shared::{
-        ide::{IDEAnnotation, MacroCallInfo},
+        ide::{AutocompleteInfo, IDEAnnotation, MacroCallInfo},
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, TypingProgramInfo},
@@ -208,7 +208,7 @@ fn module(
     context.add_use_funs_scope(use_funs);
     structs
         .iter_mut()
-        .for_each(|(_, _, s)| struct_def(context, s));
+        .for_each(|(loc, _name, s)| struct_def(context, loc, s));
     enums.iter_mut().for_each(|(_, _, e)| enum_def(context, e));
     process_attributes(context, &attributes);
     let constants = nconstants.map(|name, c| constant(context, name, c));
@@ -268,7 +268,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
-    context.reset_for_module_item();
+    context.reset_for_module_item(name.loc());
     context.current_function = Some(name);
     context.in_macro_function = macro_.is_some();
     process_attributes(context, &attributes);
@@ -358,9 +358,9 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
 // Constants
 //**************************************************************************************************
 
-fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) -> T::Constant {
+fn constant(context: &mut Context, name: ConstantName, nconstant: N::Constant) -> T::Constant {
     assert!(context.constraints.is_empty());
-    context.reset_for_module_item();
+    context.reset_for_module_item(name.loc());
 
     let N::Constant {
         warning_filter,
@@ -543,14 +543,6 @@ mod check_valid_constant {
                 exp(context, &call.arguments);
                 "Module calls are"
             }
-            E::AutocompleteDotAccess {
-                base_exp,
-                methods: _,
-                fields: _,
-            } => {
-                exp(context, base_exp);
-                "Partial dot access paths are"
-            }
             E::Builtin(b, args) => {
                 exp(context, args);
                 s = format!("'{}' is", b);
@@ -683,9 +675,9 @@ mod check_valid_constant {
 // Data Types
 //**************************************************************************************************
 
-fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
+fn struct_def(context: &mut Context, sloc: Loc, s: &mut N::StructDefinition) {
     assert!(context.constraints.is_empty());
-    context.reset_for_module_item();
+    context.reset_for_module_item(sloc);
     context
         .env
         .add_warning_filter_scope(s.warning_filter.clone());
@@ -745,8 +737,9 @@ fn enum_def(context: &mut Context, enum_: &mut N::EnumDefinition) {
     let enum_type_params = &enum_.type_parameters;
 
     let mut field_types = vec![];
-    for (_, _, variant) in enum_.variants.iter_mut() {
-        let mut varient_fields = variant_def(context, enum_abilities, enum_type_params, variant);
+    for (vloc, _, variant) in enum_.variants.iter_mut() {
+        let mut varient_fields =
+            variant_def(context, vloc, enum_abilities, enum_type_params, variant);
         field_types.append(&mut varient_fields);
     }
 
@@ -756,11 +749,12 @@ fn enum_def(context: &mut Context, enum_: &mut N::EnumDefinition) {
 
 fn variant_def(
     context: &mut Context,
+    vloc: Loc,
     enum_abilities: &AbilitySet,
     enum_tparams: &[DatatypeTypeParameter],
     v: &mut N::VariantDefinition,
 ) -> Vec<(usize, Type)> {
-    context.reset_for_module_item();
+    context.reset_for_module_item(vloc);
 
     let field_map = match &mut v.fields {
         N::VariantFields::Empty => return vec![],
@@ -3083,8 +3077,9 @@ struct ExpDotted {
     // if a constant appears plainly in a `use`/`copy` position, and suppresses constant usage
     // warning if so.
     warn_on_constant: bool,
-    // This should only be used in IDE mode, and should only occur on the outer-most parse form.
-    for_autocomplete: bool,
+    // This should only be used in IDE mode, used to drive autocompletion reporting in a situation
+    // like `x.foo.{CURSOR}`.
+    autocomplete_last: Option<Loc>,
 }
 
 impl ExpDotted {
@@ -3142,7 +3137,7 @@ fn process_exp_dotted(
             base_type,
             accessors,
             warn_on_constant: true,
-            for_autocomplete: false,
+            autocomplete_last: None,
         }
     }
 
@@ -3178,58 +3173,6 @@ fn process_exp_dotted(
         }
     }
 
-    /// Process a dotted expression with autocomplete enabled. Note that this bails after the
-    /// innermost autocomplete, and that is the one that will receive any suggestions.
-    #[growing_stack]
-    fn process_exp_dotted_autocomplete(
-        context: &mut Context,
-        constraint_verb: Option<&str>,
-        sp!(dloc, ndot_): N::ExpDotted,
-    ) -> ExpDotted {
-        match ndot_ {
-            N::ExpDotted_::Exp(e) => process_base_exp(context, constraint_verb, dloc, e),
-            N::ExpDotted_::Dot(ndot, field) => {
-                let mut inner = process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
-                if inner.for_autocomplete {
-                    return inner;
-                }
-                let inner_ty = inner.last_type();
-                let field_type = resolve_field(context, dloc, inner_ty, &field);
-                inner.loc = dloc;
-                debug_print!(context.debug.autocomplete_resolution, ("field type" => field_type));
-                if matches!(&field_type.value, Type_::UnresolvedError) {
-                    // If we failed to resolve a field, mark this as for_autocomplete to provide
-                    // suggestions at the error location.
-                    inner.for_autocomplete = true;
-                } else {
-                    inner
-                        .accessors
-                        .push(ExpDottedAccess::Field(field, field_type));
-                }
-                inner
-            }
-            N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
-                let mut inner = process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
-                if inner.for_autocomplete {
-                    return inner;
-                }
-                let inner_ty = inner.last_type();
-                let index_access = process_index_access(context, dloc, inner_ty, argloc, nargs_);
-                inner.loc = dloc;
-                inner.accessors.push(index_access);
-                inner
-            }
-            N::ExpDotted_::DotAutocomplete(_loc, ndot) => {
-                let mut inner = process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
-                if inner.for_autocomplete {
-                    return inner;
-                }
-                inner.for_autocomplete = true;
-                inner
-            }
-        }
-    }
-
     #[growing_stack]
     fn process_exp_dotted_inner(
         context: &mut Context,
@@ -3240,6 +3183,7 @@ fn process_exp_dotted(
             N::ExpDotted_::Exp(e) => process_base_exp(context, constraint_verb, dloc, e),
             N::ExpDotted_::Dot(ndot, field) => {
                 let mut inner = process_exp_dotted_inner(context, Some("dot access"), *ndot);
+                assert!(inner.autocomplete_last.is_none());
                 let inner_ty = inner.last_type();
                 let field_type = resolve_field(context, dloc, inner_ty, &field);
                 inner.loc = dloc;
@@ -3250,10 +3194,17 @@ fn process_exp_dotted(
             }
             N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
                 let mut inner = process_exp_dotted_inner(context, Some("dot access"), *ndot);
+                assert!(inner.autocomplete_last.is_none());
                 let inner_ty = inner.last_type();
                 let index_access = process_index_access(context, dloc, inner_ty, argloc, nargs_);
                 inner.loc = dloc;
                 inner.accessors.push(index_access);
+                inner
+            }
+            N::ExpDotted_::DotAutocomplete(loc, ndot) if context.env.ide_mode() => {
+                let mut inner = process_exp_dotted_inner(context, Some("dot access"), *ndot);
+                assert!(inner.autocomplete_last.is_none());
+                inner.autocomplete_last = Some(loc);
                 inner
             }
             N::ExpDotted_::DotAutocomplete(_loc, ndot) => {
@@ -3266,11 +3217,7 @@ fn process_exp_dotted(
         }
     }
 
-    if context.env.ide_mode() {
-        process_exp_dotted_autocomplete(context, constraint_verb, ndotted)
-    } else {
-        process_exp_dotted_inner(context, constraint_verb, ndotted)
-    }
+    process_exp_dotted_inner(context, constraint_verb, ndotted)
 }
 
 fn exp_dotted_usage(
@@ -3348,8 +3295,7 @@ fn resolve_exp_dotted(
     let make_error = |context: &mut Context| make_error_exp(context, error_loc);
 
     let edotted_ty = core::unfold_type(&context.subst, edotted.last_type());
-    let for_autocomplete = edotted.for_autocomplete;
-    debug_print!(context.debug.autocomplete_resolution, ("autocompleting" => edotted; dbg));
+    let autocomplete_last = edotted.autocomplete_last;
 
     let result = match usage {
         DottedUsage::Move(loc) => {
@@ -3449,26 +3395,11 @@ fn resolve_exp_dotted(
         DottedUsage::Borrow(mut_) => borrow_exp_dotted(context, error_loc, mut_, edotted),
     };
 
-    // Even if for_autocomplete is set, we process the inner dot path to report any additional
-    // errors that may detect or report.
-    if for_autocomplete {
-        let Some(tn) = type_to_type_name(
-            context,
-            &edotted_ty,
-            error_loc,
-            "autocompletion".to_string(),
-        ) else {
-            return make_error_exp(context, error_loc);
-        };
-        let methods = context.find_all_methods(&tn);
-        let fields = context.find_all_fields(&tn);
-        let e_ = TE::AutocompleteDotAccess {
-            base_exp: result,
-            methods,
-            fields,
-        };
-        let ty = sp(error_loc, Type_::UnresolvedError);
-        Box::new(T::exp(ty, sp(error_loc, e_)))
+    if let Some(loc) = autocomplete_last {
+        assert!(context.env.ide_mode());
+        debug_print!(context.debug.autocomplete_resolution, ("computing autocomplete" => result; dbg));
+        ide_report_autocomplete(context, &loc, &edotted_ty);
+        result
     } else {
         result
     }
@@ -3534,7 +3465,7 @@ fn borrow_exp_dotted(
         base_kind,
         accessors,
         mut warn_on_constant,
-        for_autocomplete: _,
+        autocomplete_last: _,
     } = ed;
 
     // If we have accessors, we are definitely going to actually borrow and that means we'll copy
@@ -3557,6 +3488,8 @@ fn borrow_exp_dotted(
         check_mut(context, error_loc, exp.ty.clone(), mut_);
         match accessor {
             ExpDottedAccess::Field(name, ty) => {
+                // report autocomplete information for the IDE
+                ide_report_autocomplete(context, &name.loc(), &ty);
                 let e_ = TE::Borrow(mut_, exp, name);
                 let ty = sp(loc, Type_::Ref(mut_, Box::new(ty)));
                 exp = Box::new(T::exp(ty, sp(loc, e_)));
@@ -3758,6 +3691,20 @@ fn warn_on_constant_borrow(context: &mut Context, loc: Loc, e: &T::Exp) {
     }
 }
 
+fn ide_report_autocomplete(context: &mut Context, at_loc: &Loc, in_ty: &Type) {
+    if !context.env.ide_mode() {
+        return;
+    }
+    let ty = core::unfold_type(&context.subst, in_ty.clone());
+    let Some(tn) = type_to_type_name(context, &ty, *at_loc, "autocompletion".to_string()) else {
+        return;
+    };
+    let methods = context.find_all_methods(&tn);
+    let fields = context.find_all_fields(&tn);
+    let info = AutocompleteInfo { methods, fields };
+    context.add_ide_info(*at_loc, IDEAnnotation::AutocompleteInfo(Box::new(info)));
+}
+
 //**************************************************************************************************
 // Calls
 //**************************************************************************************************
@@ -3788,8 +3735,8 @@ fn method_call(
         match method_call_resolve(context, call_loc, &edotted, method, ty_args_opt) {
             ResolvedMethodCall::Resolved(m, f, fty, usage) => (*m, f, fty, usage),
             ResolvedMethodCall::UnknownName if context.env.ide_mode() => {
-                // If the method name fails to resolve, we do autocomplete for the dotted expression.
-                edotted.for_autocomplete = true;
+                // Even if the method name fails to resolve, we want autocomplete information.
+                edotted.autocomplete_last = Some(method.loc);
                 let err_ty = context.error_type(call_loc);
                 let dot_output =
                     resolve_exp_dotted(context, DottedUsage::Borrow(false), call_loc, edotted);
@@ -3797,6 +3744,10 @@ fn method_call(
             }
             ResolvedMethodCall::InvalidBaseType | ResolvedMethodCall::UnknownName => return None,
         };
+    // report autocomplete information for the IDE
+    if context.env.ide_mode() {
+        edotted.autocomplete_last = Some(method.loc);
+    }
     let first_arg = *resolve_exp_dotted(context, usage, call_loc, edotted);
     args.insert(0, first_arg);
     let (mut call, ret_ty) = module_call_impl(context, call_loc, m, f, fty, argloc, args);
@@ -4265,14 +4216,18 @@ fn macro_method_call(
     {
         ResolvedMethodCall::Resolved(m, f, fty, usage) => (*m, f, fty, usage),
         ResolvedMethodCall::UnknownName if context.env.ide_mode() => {
-            // If the method name fails to resolve, we do autocomplete for the dotted expression.
-            edotted.for_autocomplete = true;
+            // Even if the method name fails to resolve, we want autocomplete information.
+            edotted.autocomplete_last = Some(method.loc);
             let err_ty = context.error_type(loc);
             let dot_output = resolve_exp_dotted(context, DottedUsage::Borrow(false), loc, edotted);
             return Some((err_ty, dot_output.exp.value));
         }
         ResolvedMethodCall::InvalidBaseType | ResolvedMethodCall::UnknownName => return None,
     };
+    // report autocomplete information for the IDE
+    if context.env.ide_mode() {
+        edotted.autocomplete_last = Some(method.loc);
+    }
     let first_arg = *resolve_exp_dotted(context, usage, loc, edotted);
     let mut args = vec![macro_expand::EvalStrategy::ByValue(first_arg)];
     args.extend(

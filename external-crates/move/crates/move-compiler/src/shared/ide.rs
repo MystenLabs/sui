@@ -1,11 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_ir_types::location::Loc;
+use std::collections::BTreeSet;
 
 use crate::{
     expansion::ast as E, naming::ast as N, parser::ast as P, shared::Name, typing::ast as T,
 };
+
+use move_ir_types::location::Loc;
+use move_symbol_pool::Symbol;
 
 //*************************************************************************************************
 // Types
@@ -19,10 +22,12 @@ pub struct IDEInfo {
 #[derive(Debug, Clone)]
 /// An individual IDE annotation.
 pub enum IDEAnnotation {
-    /// Indicates a macro call site.
+    /// A macro call site.
     MacroCallInfo(Box<MacroCallInfo>),
-    /// Indicates an expanded lambda site.
+    /// An expanded lambda site.
     ExpandedLambda,
+    /// Autocomplete information.
+    AutocompleteInfo(Box<AutocompleteInfo>),
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +42,15 @@ pub struct MacroCallInfo {
     pub type_arguments: Vec<N::Type>,
     /// By-value args (at this point there should only be one, representing receiver arg)
     pub by_value_args: Vec<T::SequenceItem>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AutocompleteInfo {
+    /// Methods that are valid autocompletes
+    pub methods: BTreeSet<(E::ModuleIdent, P::FunctionName)>,
+    /// Fields that are valid autocompletes (e.g., for a struct)
+    /// TODO: possibly extend this with type information?
+    pub fields: BTreeSet<Symbol>,
 }
 
 //*************************************************************************************************

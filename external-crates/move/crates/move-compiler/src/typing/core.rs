@@ -484,7 +484,7 @@ impl<'env> Context<'env> {
         self.use_funs.last().unwrap().color.unwrap()
     }
 
-    pub fn reset_for_module_item(&mut self) {
+    pub fn reset_for_module_item(&mut self, loc: Loc) {
         self.named_block_map = BTreeMap::new();
         self.return_type = None;
         self.locals = UniqueMap::new();
@@ -497,7 +497,8 @@ impl<'env> Context<'env> {
         self.lambda_expansion = vec![];
 
         if !self.ide_info.is_empty() {
-            eprintln!("IDE info should be cleared after each item");
+            self.env
+                .add_diag(ice!((loc, "IDE info should be cleared after each item")));
             self.ide_info = IDEInfo::new();
         }
     }
