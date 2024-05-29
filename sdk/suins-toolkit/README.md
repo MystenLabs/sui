@@ -20,7 +20,7 @@ You can also use yarn or pnpm.
 Create an instance of SuinsClient:
 
 ```typescript
-import { SuiClient } from '@mysten/sui.js/client';
+import { SuiClient } from '@mysten/sui/client';
 import { SuinsClient } from '@mysten/suins-toolkit';
 
 const client = new SuiClient();

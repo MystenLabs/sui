@@ -14,7 +14,6 @@ import {
 } from '../cryptography/signature-scheme.js';
 import type { SignatureFlag, SignatureScheme } from '../cryptography/signature-scheme.js';
 import { parseSerializedSignature } from '../cryptography/signature.js';
-import type { SerializedSignature } from '../cryptography/signature.js';
 import type { SuiGraphQLClient } from '../graphql/client.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 // eslint-disable-next-line import/no-cycle
@@ -99,7 +98,10 @@ export class MultiSigPublicKey extends PublicKey {
 		const seenPublicKeys = new Set<string>();
 
 		this.publicKeys = this.multisigPublicKey.pk_map.map(({ pubKey, weight }) => {
-			const [scheme, bytes] = Object.entries(pubKey)[0] as [SignatureScheme, number[]];
+			const [scheme, bytes] = Object.entries(pubKey).filter(([name]) => name !== '$kind')[0] as [
+				SignatureScheme,
+				number[],
+			];
 			const publicKeyStr = Uint8Array.from(bytes).toString();
 
 			if (seenPublicKeys.has(publicKeyStr)) {
@@ -212,7 +214,7 @@ export class MultiSigPublicKey extends PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	async verify(message: Uint8Array, multisigSignature: SerializedSignature): Promise<boolean> {
+	async verify(message: Uint8Array, multisigSignature: string): Promise<boolean> {
 		// Multisig verification only supports serialized signature
 		const parsed = parseSerializedSignature(multisigSignature);
 
@@ -248,7 +250,7 @@ export class MultiSigPublicKey extends PublicKey {
 	 * Combines multiple partial signatures into a single multisig, ensuring that each public key signs only once
 	 * and that all the public keys involved are known and valid, and then serializes multisig into the standard format
 	 */
-	combinePartialSignatures(signatures: SerializedSignature[]): SerializedSignature {
+	combinePartialSignatures(signatures: string[]): string {
 		if (signatures.length > MAX_SIGNER_IN_MULTISIG) {
 			throw new Error(`Max number of signatures in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
 		}
@@ -317,10 +319,9 @@ export function parsePartialSignatures(
 ): ParsedPartialMultiSigSignature[] {
 	let res: ParsedPartialMultiSigSignature[] = new Array(multisig.sigs.length);
 	for (let i = 0; i < multisig.sigs.length; i++) {
-		const [signatureScheme, signature] = Object.entries(multisig.sigs[i])[0] as [
-			SignatureScheme,
-			number[],
-		];
+		const [signatureScheme, signature] = Object.entries(multisig.sigs[i]).filter(
+			([name]) => name !== '$kind',
+		)[0] as [SignatureScheme, number[]];
 		const pkIndex = asIndices(multisig.bitmap).at(i)!;
 		const pair = multisig.multisig_pk.pk_map[pkIndex];
 		const pkBytes = Uint8Array.from(Object.values(pair.pubKey)[0]);

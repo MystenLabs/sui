@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiObjectChange } from '@mysten/sui.js/client';
+import type { SuiObjectChange } from '@mysten/sui/client';
 
 export const getOwnerType = (change: SuiObjectChange) => {
 	if (!('owner' in change)) return '';

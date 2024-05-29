@@ -2,9 +2,14 @@
 
 import { Callout } from 'nextra/components';
 
-<Callout type="info">
-	Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
-	development.
+<Callout type="warning">
+	Sui Owned Object Pools (SuiOOP) will likely be replaced by
+	[`ParallelTransactionExecutor`](../executors#paralleltransactionexecutor) from
+	`@mysten/sui/transactions`
+
+    Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
+    development.
+
 </Callout>
 
 The prior example does not define a split strategy explicitly, so it uses the
@@ -14,8 +19,8 @@ This default split strategy only selects enough gas coins (coins of type
 `0x2::coin::Coin<0x2::sui::SUI>`) from the `mainPool` that their sum of balances surpasses a minimum
 threshold, and creates a new worker pool only containing these gas coins.
 
-It fulfils the minimum requirement needed for a transaction block to be executed, as the client
-should always be able to pay for the gas of the transaction.
+It fulfils the minimum requirement needed for a transaction to be executed, as the client should
+always be able to pay for the gas of the transaction.
 
 However, in more complex scenarios, you might want to define your own split strategy.
 
