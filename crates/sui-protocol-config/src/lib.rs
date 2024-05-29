@@ -2476,6 +2476,9 @@ impl ProtocolConfig {
     pub fn set_mysticeti_leader_scoring_and_schedule(&mut self, val: bool) {
         self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
     }
+    pub fn set_min_checkpoint_interval_ms(&mut self, val: u64) {
+        self.min_checkpoint_interval_ms = Some(val);
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;

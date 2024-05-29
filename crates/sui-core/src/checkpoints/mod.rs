@@ -2161,6 +2161,7 @@ mod tests {
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Deref;
     use sui_macros::sim_test;
+    use sui_protocol_config::{Chain, ProtocolConfig};
     use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::{AuthoritySignInfo, Signature};
     use sui_types::digests::TransactionEventsDigest;
@@ -2174,7 +2175,14 @@ mod tests {
     #[sim_test]
     pub async fn checkpoint_builder_test() {
         telemetry_subscribers::init_for_testing();
-        let state = TestAuthorityBuilder::new().build().await;
+
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.set_min_checkpoint_interval_ms(100);
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(protocol_config)
+            .build()
+            .await;
 
         let dummy_tx = VerifiedTransaction::new_genesis_transaction(vec![]);
         let dummy_tx_with_data =
@@ -2240,7 +2248,7 @@ mod tests {
             vec![],
             GasCostSummary::new(41, 42, 41, 1),
         );
-        for i in [10, 11, 12, 13] {
+        for i in [5, 6, 7, 10, 11, 12, 13] {
             commit_cert_for_test(
                 &mut store,
                 state.clone(),
@@ -2290,21 +2298,28 @@ mod tests {
             100_000,
         );
 
+        // TODO-DNS test batching here
         checkpoint_service
-            .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4]))
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 0))
             .unwrap();
         // Verify that sending same digests at same height is noop
         checkpoint_service
-            .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4]))
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 1000))
             .unwrap();
         checkpoint_service
-            .write_and_notify_checkpoint_for_testing(&epoch_store, p(1, vec![1, 3]))
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(1, vec![1, 3], 2000))
             .unwrap();
         checkpoint_service
-            .write_and_notify_checkpoint_for_testing(&epoch_store, p(2, vec![10, 11, 12, 13]))
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(2, vec![10, 11, 12, 13], 3000))
             .unwrap();
         checkpoint_service
-            .write_and_notify_checkpoint_for_testing(&epoch_store, p(3, vec![15, 16, 17]))
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(3, vec![15, 16, 17], 4000))
+            .unwrap();
+        checkpoint_service
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(4, vec![5], 4001))
+            .unwrap();
+        checkpoint_service
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(5, vec![6], 5000))
             .unwrap();
 
         let (c1c, c1s) = result.recv().await.unwrap();
@@ -2353,6 +2368,14 @@ mod tests {
         assert_eq!(c6s.previous_digest, Some(c5s.digest()));
         assert_eq!(c5t, vec![d(15), d(16)]);
         assert_eq!(c6t, vec![d(17)]);
+
+        // Pending at index 4 was too soon after the prior one and should be coalesced into
+        // the next one.
+        let (c7c, c7s) = result.recv().await.unwrap();
+        let c7t = c7c.iter().map(|d| d.transaction).collect::<Vec<_>>();
+        assert_eq!(c7t, vec![d(5), d(6)]);
+        assert_eq!(c7s.previous_digest, Some(c6s.digest()));
+        assert_eq!(c7s.sequence_number, 6);
 
         let c1ss = SignedCheckpointSummary::new(c1s.epoch, c1s, state.secret.deref(), state.name);
         let c2ss = SignedCheckpointSummary::new(c2s.epoch, c2s, state.secret.deref(), state.name);
@@ -2468,14 +2491,14 @@ mod tests {
         }
     }
 
-    fn p(i: u64, t: Vec<u8>) -> PendingCheckpointV2 {
+    fn p(i: u64, t: Vec<u8>, timestamp_ms: u64) -> PendingCheckpointV2 {
         PendingCheckpointV2::V2(PendingCheckpointV2Contents {
             roots: t
                 .into_iter()
                 .map(|t| TransactionKey::Digest(d(t)))
                 .collect(),
             details: PendingCheckpointInfo {
-                timestamp_ms: 0,
+                timestamp_ms,
                 last_of_epoch: false,
                 checkpoint_height: i,
             },
