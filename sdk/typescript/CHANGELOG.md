@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.0.1
+
+### Patch Changes
+
+- 6fc6235984: Fix parsing of struct tags
+
 ## 1.0.0
 
 ### Major Changes
