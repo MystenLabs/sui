@@ -198,7 +198,8 @@ impl MappedFiles {
 // This is abstracted into a trait for reuse by the Move Analyzer.
 
 pub trait PositionInfo {
-    fn files(&self) -> &SimpleFiles<Symbol, Arc<str>>;
+    type FileContents: AsRef<str>;
+    fn files(&self) -> &SimpleFiles<Symbol, Self::FileContents>;
     fn file_mapping(&self) -> &HashMap<FileHash, FileId>;
 
     fn filename(&self, fhash: &FileHash) -> &str {
@@ -215,12 +216,28 @@ pub trait PositionInfo {
     }
 
     fn position(&self, loc: &Loc) -> FilePosition {
+        self.position_opt(loc).unwrap()
+    }
+
+    fn byte_span(&self, loc: &Loc) -> FileByteSpan {
+        self.byte_span_opt(loc).unwrap()
+    }
+
+    fn start_position_opt(&self, loc: &Loc) -> Option<Position> {
+        self.position_opt(loc).map(|posn| posn.start)
+    }
+
+    fn end_position_opt(&self, loc: &Loc) -> Option<Position> {
+        self.position_opt(loc).map(|posn| posn.end)
+    }
+
+    fn position_opt(&self, loc: &Loc) -> Option<FilePosition> {
         let start_loc = loc.start() as usize;
         let end_loc = loc.end() as usize;
-        let file_id = *self.file_mapping().get(&loc.file_hash()).unwrap();
-        let start_file_loc = self.files().location(file_id, start_loc).unwrap();
-        let end_file_loc = self.files().location(file_id, end_loc).unwrap();
-        FilePosition {
+        let file_id = *self.file_mapping().get(&loc.file_hash())?;
+        let start_file_loc = self.files().location(file_id, start_loc).ok()?;
+        let end_file_loc = self.files().location(file_id, end_loc).ok()?;
+        let posn = FilePosition {
             file_id,
             start: Position {
                 line: start_file_loc.line_number,
@@ -232,22 +249,25 @@ pub trait PositionInfo {
                 column: end_file_loc.column_number - 1,
                 byte: end_loc,
             },
-        }
+        };
+        Some(posn)
     }
 
-    fn byte_span(&self, loc: &Loc) -> FileByteSpan {
+    fn byte_span_opt(&self, loc: &Loc) -> Option<FileByteSpan> {
         let start = loc.start() as usize;
         let end = loc.end() as usize;
-        let file_id = *self.file_mapping().get(&loc.file_hash()).unwrap();
-        FileByteSpan {
+        let file_id = *self.file_mapping().get(&loc.file_hash())?;
+        let posn = FileByteSpan {
             byte_span: ByteSpan { start, end },
             file_id,
-        }
+        };
+        Some(posn)
     }
 }
 
 impl PositionInfo for MappedFiles {
-    fn files(&self) -> &SimpleFiles<Symbol, Arc<str>> {
+    type FileContents = Arc<str>;
+    fn files(&self) -> &SimpleFiles<Symbol, Self::FileContents> {
         &self.files
     }
 

@@ -7,6 +7,8 @@ use crate::expansion::ast::ModuleIdent;
 use crate::naming::ast as N;
 use crate::parser::ast::{ConstantName, DatatypeName, FunctionName};
 use crate::shared::CompilationEnv;
+use crate::parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName};
+use crate::shared::{program_info::TypingProgramInfo, CompilationEnv};
 use crate::typing::ast as T;
 
 use move_proc_macros::growing_stack;
@@ -35,9 +37,35 @@ pub trait TypingVisitorConstructor {
     }
 }
 
+pub enum LValueKind {
+    Bind,
+    Assign,
+}
+
 pub trait TypingVisitorContext {
     fn add_warning_filter_scope(&mut self, filter: WarningFilters);
     fn pop_warning_filter_scope(&mut self);
+
+    /// Indicates if types should be visited during the traversal of other forms (struct and enum
+    /// definitions, function signatures, expressions, etc.)
+    const VISIT_TYPES: bool = false;
+
+    /// Indicates if lvalues should be visited during the traversal of sequence forms.
+    const VISIT_LVALUES: bool = false;
+
+    /// Indicates if use_funs should be visited during the traversal.
+    const VISIT_USE_FUNS: bool = false;
+
+    /// By default, the visitor will visit all all expressions in all functions in all modules. A
+    /// custom version should of this function should be created if different type of analysis is
+    /// required.
+    fn visit(&mut self, program: &mut T::Program_) {
+        for (mident, mdef) in program.modules.key_cloned_iter_mut() {
+            self.visit_module(mident, mdef);
+        }
+    }
+
+    // -- MODULE DEFINITIONS --
 
     fn visit_module_custom(
         &mut self,
@@ -47,33 +75,34 @@ pub trait TypingVisitorContext {
         false
     }
 
-    /// By default, the visitor will visit all all expressions in all functions in all modules. A
-    /// custom version should of this function should be created if different type of analysis is
-    /// required.
-    fn visit(&mut self, program: &mut T::Program) {
-        for (mident, mdef) in program.modules.key_cloned_iter_mut() {
-            self.add_warning_filter_scope(mdef.warning_filter.clone());
-            if self.visit_module_custom(mident, mdef) {
-                self.pop_warning_filter_scope();
-                continue;
-            }
-
+    fn visit_module(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) {
+        self.add_warning_filter_scope(mdef.warning_filter.clone());
+        if self.visit_module_custom(ident, mdef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        if Self::VISIT_TYPES {
             for (struct_name, sdef) in mdef.structs.key_cloned_iter_mut() {
-                self.visit_struct(mident, struct_name, sdef)
+                self.visit_struct(ident, struct_name, sdef)
             }
             for (enum_name, edef) in mdef.enums.key_cloned_iter_mut() {
-                self.visit_enum(mident, enum_name, edef)
+                self.visit_enum(ident, enum_name, edef)
             }
-            for (constant_name, cdef) in mdef.constants.key_cloned_iter_mut() {
-                self.visit_constant(mident, constant_name, cdef)
-            }
-            for (function_name, fdef) in mdef.functions.key_cloned_iter_mut() {
-                self.visit_function(mident, function_name, fdef)
-            }
-
-            self.pop_warning_filter_scope();
         }
+        for (constant_name, cdef) in mdef.constants.key_cloned_iter_mut() {
+            self.visit_constant(ident, constant_name, cdef)
+        }
+        for (function_name, fdef) in mdef.functions.key_cloned_iter_mut() {
+            self.visit_function(ident, function_name, fdef)
+        }
+        if Self::VISIT_USE_FUNS {
+            self.visit_use_funs(&mut mdef.use_funs);
+        }
+
+        self.pop_warning_filter_scope();
     }
+
+    // -- MODULE MEMBER DEFINITIONS --
 
     fn visit_struct_custom(
         &mut self,
@@ -94,6 +123,16 @@ pub trait TypingVisitorContext {
         if self.visit_struct_custom(module, struct_name, sdef) {
             self.pop_warning_filter_scope();
             return;
+        }
+        if Self::VISIT_TYPES {
+            match &mut sdef.fields {
+                N::StructFields::Defined(_, fields) => {
+                    for (_, _, (_, ty)) in fields {
+                        self.visit_type(ty)
+                    }
+                }
+                N::StructFields::Native(_) => (),
+            }
         }
         self.pop_warning_filter_scope();
     }
@@ -118,7 +157,42 @@ pub trait TypingVisitorContext {
             self.pop_warning_filter_scope();
             return;
         }
+        for (vname, vdef) in edef.variants.key_cloned_iter_mut() {
+            self.visit_variant(&module, &enum_name, vname, vdef);
+        }
         self.pop_warning_filter_scope();
+    }
+
+    fn visit_variant_custom(
+        &mut self,
+        _module: &ModuleIdent,
+        _enum_name: &DatatypeName,
+        _variant_name: VariantName,
+        _vdef: &mut N::VariantDefinition,
+    ) -> bool {
+        false
+    }
+
+    fn visit_variant(
+        &mut self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+        variant_name: VariantName,
+        vdef: &mut N::VariantDefinition,
+    ) {
+        if self.visit_variant_custom(module, enum_name, variant_name, vdef) {
+            return;
+        }
+        if Self::VISIT_TYPES {
+            match &mut vdef.fields {
+                N::VariantFields::Defined(_, fields) => {
+                    for (_, _, (_, ty)) in fields {
+                        self.visit_type(ty)
+                    }
+                }
+                N::VariantFields::Empty => (),
+            }
+        }
     }
 
     fn visit_constant_custom(
@@ -129,6 +203,7 @@ pub trait TypingVisitorContext {
     ) -> bool {
         false
     }
+
     fn visit_constant(
         &mut self,
         module: ModuleIdent,
@@ -152,6 +227,7 @@ pub trait TypingVisitorContext {
     ) -> bool {
         false
     }
+
     fn visit_function(
         &mut self,
         module: ModuleIdent,
@@ -163,13 +239,67 @@ pub trait TypingVisitorContext {
             self.pop_warning_filter_scope();
             return;
         }
+        if Self::VISIT_TYPES {
+            fdef.signature
+                .parameters
+                .iter_mut()
+                .map(|(_, _, ty)| ty)
+                .for_each(|ty| self.visit_type(ty));
+            self.visit_type(&mut fdef.signature.return_type);
+        }
         if let T::FunctionBody_::Defined(seq) = &mut fdef.body.value {
             self.visit_seq(seq);
         }
         self.pop_warning_filter_scope();
     }
 
-    fn visit_seq(&mut self, (_, seq): &mut T::Sequence) {
+    // -- TYPES --
+
+    fn visit_type_custom(&mut self, _ty: &mut N::Type) -> bool {
+        false
+    }
+
+    /// Visit a type, including recursively. Note that this may be called manually even if
+    /// `VISIT_TYPES` is set to `false`.
+    #[growing_stack]
+    fn visit_type(&mut self, ty: &mut N::Type) {
+        if self.visit_type_custom(ty) {
+            return;
+        }
+        match &mut ty.value {
+            N::Type_::Unit => (),
+            N::Type_::Ref(_, inner) => self.visit_type(inner),
+            N::Type_::Param(_) => (),
+            N::Type_::Apply(_, _, args) => args.iter_mut().for_each(|ty| self.visit_type(ty)),
+            N::Type_::Fun(args, ret) => {
+                args.iter_mut().for_each(|ty| self.visit_type(ty));
+                self.visit_type(ret);
+            }
+            N::Type_::Var(_) => (),
+            N::Type_::Anything => (),
+            N::Type_::UnresolvedError => (),
+        }
+    }
+
+    // -- USE FUNS --
+
+    fn visit_use_funs_custom(&mut self, _use_funs: &mut N::UseFuns) -> bool {
+        false
+    }
+
+    fn visit_use_funs(&mut self, use_funs: &mut N::UseFuns) {
+        if self.visit_use_funs_custom(use_funs) {
+            return;
+        }
+        // Nothing to traverse in the other case
+    }
+
+    // -- SEQUENCES AND EXPRESSIONS --
+
+    fn visit_seq(&mut self, (use_funs, seq): &mut T::Sequence) {
+        if Self::VISIT_USE_FUNS {
+            self.visit_use_funs(use_funs);
+        }
         for s in seq {
             self.visit_seq_item(s);
         }
@@ -180,12 +310,85 @@ pub trait TypingVisitorContext {
         false
     }
 
-    fn visit_seq_item(&mut self, sp!(_, seq_item): &mut T::SequenceItem) {
+    fn visit_seq_item(&mut self, seq_item: &mut T::SequenceItem) {
         use T::SequenceItem_ as SI;
-        match seq_item {
+        if self.visit_seq_item_custom(seq_item) {
+            return;
+        }
+        match &mut seq_item.value {
             SI::Seq(e) => self.visit_exp(e),
+            SI::Declare(lvalues) if Self::VISIT_LVALUES => {
+                self.visit_lvalue_list(&LValueKind::Bind, lvalues);
+            }
             SI::Declare(_) => (),
-            SI::Bind(_, _, e) => self.visit_exp(e),
+            SI::Bind(lvalues, ty_ann, e) => {
+                if Self::VISIT_LVALUES {
+                    self.visit_lvalue_list(&LValueKind::Bind, lvalues);
+                }
+                if Self::VISIT_TYPES {
+                    ty_ann
+                        .iter_mut()
+                        .flatten()
+                        .for_each(|ty| self.visit_type(ty));
+                }
+                self.visit_exp(e)
+            }
+        }
+    }
+
+    /// Visit an lvalue list. Note that this may be called manually even if `VISIT_LVALUES` is set
+    /// to `false`.
+    fn visit_lvalue_list(&mut self, kind: &LValueKind, lvalues: &mut T::LValueList) {
+        if !Self::VISIT_LVALUES {
+            return;
+        };
+        for lvalue in &mut lvalues.value {
+            self.visit_lvalue(&kind, lvalue);
+        }
+    }
+
+    /// Custom visit for an lvalue. It will skip `visit_lvalue` if `visit_lvalue_custom` returns true.
+    fn visit_lvalue_custom(&mut self, _kind: &LValueKind, _lvalue: &mut T::LValue) -> bool {
+        false
+    }
+
+    /// Visit an lvalue, including recursively. Note that this may be called manually even if
+    /// `VISIT_LValues` is set to `false`.
+    fn visit_lvalue(&mut self, kind: &LValueKind, lvalue: &mut T::LValue) {
+        if self.visit_lvalue_custom(kind, lvalue) {
+            return;
+        }
+        match &mut lvalue.value {
+            T::LValue_::Ignore => (),
+            T::LValue_::Var {
+                mut_: _,
+                var: _,
+                ty,
+                unused_binding: _,
+            } => {
+                if Self::VISIT_TYPES {
+                    self.visit_type(ty);
+                }
+            }
+            T::LValue_::UnpackVariant(_, _, _, tyargs, fields)
+            | T::LValue_::BorrowUnpackVariant(_, _, _, _, tyargs, fields)
+            | T::LValue_::Unpack(_, _, tyargs, fields)
+            | T::LValue_::BorrowUnpack(_, _, _, tyargs, fields) => {
+                if !Self::VISIT_TYPES && !Self::VISIT_LVALUES {
+                    return;
+                }
+                if Self::VISIT_TYPES {
+                    tyargs.iter_mut().for_each(|ty| self.visit_type(ty));
+                }
+                for (_, _, (_, (ty, lvalue))) in fields.iter_mut() {
+                    if Self::VISIT_TYPES {
+                        self.visit_type(ty);
+                    }
+                    if Self::VISIT_LVALUES {
+                        self.visit_lvalue(kind, lvalue);
+                    }
+                }
+            }
         }
     }
 
@@ -200,11 +403,26 @@ pub trait TypingVisitorContext {
         if self.visit_exp_custom(exp) {
             return;
         }
+        if Self::VISIT_TYPES {
+            self.visit_type(&mut exp.ty);
+        }
         let sp!(_, uexp) = &mut exp.exp;
         match uexp {
             E::ModuleCall(c) => self.visit_exp(&mut c.arguments),
-            E::Builtin(_, e) => self.visit_exp(e),
-            E::Vector(_, _, _, e) => self.visit_exp(e),
+            E::Builtin(bf, e) => {
+                use T::BuiltinFunction_ as BF;
+                match &mut bf.value {
+                    BF::Freeze(t) => self.visit_type(t),
+                    BF::Assert(_) => (),
+                }
+                self.visit_exp(e);
+            }
+            E::Vector(_, _, ty, e) => {
+                if Self::VISIT_TYPES {
+                    self.visit_type(ty);
+                }
+                self.visit_exp(e);
+            }
             E::IfElse(e1, e2, e3) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
@@ -232,7 +450,20 @@ pub trait TypingVisitorContext {
             E::Loop { body, .. } => self.visit_exp(body),
             E::NamedBlock(_, seq) => self.visit_seq(seq),
             E::Block(seq) => self.visit_seq(seq),
-            E::Assign(_, _, e) => self.visit_exp(e),
+            E::Assign(lvalues, ty_ann, e) => {
+                if Self::VISIT_LVALUES {
+                    for lvalue in lvalues.value.iter_mut() {
+                        self.visit_lvalue(&LValueKind::Assign, lvalue);
+                    }
+                }
+                if Self::VISIT_TYPES {
+                    ty_ann
+                        .iter_mut()
+                        .flatten()
+                        .for_each(|ty| self.visit_type(ty));
+                }
+                self.visit_exp(e)
+            }
             E::Mutate(e1, e2) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
@@ -242,28 +473,56 @@ pub trait TypingVisitorContext {
             E::Give(_, e) => self.visit_exp(e),
             E::Dereference(e) => self.visit_exp(e),
             E::UnaryExp(_, e) => self.visit_exp(e),
-            E::BinopExp(e1, _, _, e2) => {
+            E::BinopExp(e1, _, ty, e2) => {
+                if Self::VISIT_TYPES {
+                    self.visit_type(ty);
+                }
                 self.visit_exp(e1);
                 self.visit_exp(e2);
             }
-            E::Pack(_, _, _, fields) => fields
-                .iter_mut()
-                .for_each(|(_, _, (_, (_, e)))| self.visit_exp(e)),
-            E::PackVariant(_, _, _, _, fields) => fields
-                .iter_mut()
-                .for_each(|(_, _, (_, (_, e)))| self.visit_exp(e)),
+            E::Pack(_, _, tyargs, fields) | E::PackVariant(_, _, _, tyargs, fields) => {
+                if Self::VISIT_TYPES {
+                    tyargs.iter_mut().for_each(|ty| self.visit_type(ty));
+                }
+                fields.iter_mut().for_each(|(_, _, (_, (ty, e)))| {
+                    if Self::VISIT_TYPES {
+                        self.visit_type(ty)
+                    }
+                    self.visit_exp(e);
+                });
+            }
             E::ExpList(list) => {
                 for l in list {
                     match l {
-                        T::ExpListItem::Single(e, _) => self.visit_exp(e),
-                        T::ExpListItem::Splat(_, e, _) => self.visit_exp(e),
+                        T::ExpListItem::Single(e, ty) => {
+                            self.visit_exp(e);
+                            if Self::VISIT_TYPES {
+                                self.visit_type(ty)
+                            }
+                        }
+                        T::ExpListItem::Splat(_, e, tys) => {
+                            self.visit_exp(e);
+                            if Self::VISIT_TYPES {
+                                tys.iter_mut().for_each(|ty| self.visit_type(ty));
+                            }
+                        }
                     }
                 }
             }
             E::Borrow(_, e, _) => self.visit_exp(e),
             E::TempBorrow(_, e) => self.visit_exp(e),
-            E::Cast(e, _) => self.visit_exp(e),
-            E::Annotate(e, _) => self.visit_exp(e),
+            E::Cast(e, ty) => {
+                self.visit_exp(e);
+                if Self::VISIT_TYPES {
+                    self.visit_type(ty)
+                }
+            }
+            E::Annotate(e, ty) => {
+                self.visit_exp(e);
+                if Self::VISIT_TYPES {
+                    self.visit_type(ty)
+                }
+            }
             E::Unit { .. }
             | E::Value(_)
             | E::Move { .. }

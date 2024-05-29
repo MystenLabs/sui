@@ -58,6 +58,7 @@ use crate::{
     compiler_info::CompilerInfo,
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
+    info::typing_symbol_visitor,
     utils::get_loc,
 };
 use anyhow::{anyhow, Result};
@@ -105,7 +106,15 @@ use move_compiler::{
     },
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
-        ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
+        ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
+    shared::{unique_map::UniqueMap, Identifier, Name, NamedAddressMap, NamedAddressMaps},
+    typing::{
+        ast::{
+            BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, IDEInfo, LValue,
+            LValueList, LValue_, MacroCallInfo, ModuleDefinition, SequenceItem, SequenceItem_,
+            UnannotatedExp_,
+        },
+        visitor::TypingVisitorContext,
     },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
@@ -134,9 +143,9 @@ pub struct PrecompiledPkgDeps {
 /// Location of a definition's identifier
 pub struct DefLoc {
     /// File where the definition of the identifier starts
-    fhash: FileHash,
+    pub fhash: FileHash,
     /// Location where the definition of the identifier starts
-    start: Position,
+    pub start: Position,
 }
 
 impl DefLoc {
@@ -155,7 +164,7 @@ impl DefLoc {
 
 /// Location of a use's identifier
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy)]
-struct UseLoc {
+pub struct UseLoc {
     /// File where this use identifier starts
     fhash: FileHash,
     /// Location where this use identifier starts
@@ -276,17 +285,17 @@ pub struct UseDef {
 /// Definition of a struct field
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FieldDef {
-    name: Symbol,
-    start: Position,
+    pub name: Symbol,
+    pub start: Position,
 }
 
 /// Definition of a struct
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct StructDef {
-    name_start: Position,
-    field_defs: Vec<FieldDef>,
+pub(crate) struct StructDef {
+    pub name_start: Position,
+    pub field_defs: Vec<FieldDef>,
     /// Does this struct have positional fields?
-    positional: bool,
+    pub positional: bool,
 }
 
 impl StructDef {
@@ -296,48 +305,48 @@ impl StructDef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FunctionDef {
-    name: Symbol,
-    start: Position,
-    attrs: Vec<String>,
+pub(crate) struct FunctionDef {
+    pub name: Symbol,
+    pub start: Position,
+    pub attrs: Vec<String>,
 }
 
 /// Definition of a local (or parameter)
 #[allow(clippy::non_canonical_partial_ord_impl)]
 #[derive(Derivative, Debug, Clone, Eq, PartialEq)]
 #[derivative(PartialOrd, Ord)]
-struct LocalDef {
+pub struct LocalDef {
     /// Location of the definition
-    def_loc: DefLoc,
+    pub def_loc: DefLoc,
     /// Type of definition
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
-    def_type: Type,
+    pub def_type: Type,
 }
 
 /// Definition of a constant
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct ConstDef {
-    name_start: Position,
+pub(crate) struct ConstDef {
+    pub name_start: Position,
 }
 
 /// Module-level definitions
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
-pub struct ModuleDefs {
+pub(crate) struct ModuleDefs {
     /// File where this module is located
-    fhash: FileHash,
+    pub fhash: FileHash,
     /// Location where this module is located
-    start: Position,
+    pub start: Position,
     /// Module name
-    ident: ModuleIdent_,
+    pub ident: ModuleIdent_,
     /// Struct definitions
-    structs: BTreeMap<Symbol, StructDef>,
+    pub structs: BTreeMap<Symbol, StructDef>,
     /// Const definitions
-    constants: BTreeMap<Symbol, ConstDef>,
+    pub constants: BTreeMap<Symbol, ConstDef>,
     /// Function definitions
-    functions: BTreeMap<Symbol, FunctionDef>,
+    pub functions: BTreeMap<Symbol, FunctionDef>,
     /// Definitions where the type is not explicitly specified
-    untyped_defs: BTreeSet<DefLoc>,
+    pub untyped_defs: BTreeSet<DefLoc>,
 }
 
 /// Data used during symbolication over parsed AST
@@ -400,7 +409,7 @@ pub struct TypingSymbolicator<'a> {
 
 /// Maps a line number to a list of use-def-s on a given line (use-def set is sorted by col_start)
 #[derive(Debug, Clone, Eq, PartialEq)]
-struct UseDefMap(BTreeMap<u32, BTreeSet<UseDef>>);
+pub struct UseDefMap(BTreeMap<u32, BTreeSet<UseDef>>);
 
 /// Result of the symbolication process
 #[derive(Clone)]
@@ -951,7 +960,7 @@ impl SymbolicatorRunner {
 }
 
 impl UseDef {
-    fn new(
+    pub fn new(
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         alias_lengths: &BTreeMap<Position, usize>,
         use_fhash: FileHash,
@@ -1070,23 +1079,23 @@ impl PartialEq for UseDef {
 }
 
 impl UseDefMap {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self(BTreeMap::new())
     }
 
-    fn insert(&mut self, key: u32, val: UseDef) {
+    pub fn insert(&mut self, key: u32, val: UseDef) {
         self.0.entry(key).or_default().insert(val);
     }
 
-    fn get(&self, key: u32) -> Option<BTreeSet<UseDef>> {
+    pub fn get(&self, key: u32) -> Option<BTreeSet<UseDef>> {
         self.0.get(&key).cloned()
     }
 
-    fn elements(self) -> BTreeMap<u32, BTreeSet<UseDef>> {
+    pub fn elements(self) -> BTreeMap<u32, BTreeSet<UseDef>> {
         self.0
     }
 
-    fn extend(&mut self, use_defs: BTreeMap<u32, BTreeSet<UseDef>>) {
+    pub fn extend(&mut self, use_defs: BTreeMap<u32, BTreeSet<UseDef>>) {
         for (k, v) in use_defs {
             self.0.entry(k).or_default().extend(v);
         }
@@ -1344,7 +1353,7 @@ pub fn get_symbols(
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
     let parsed_program = parsed_ast.unwrap();
-    let typed_modules = typed_ast.unwrap().modules;
+    let mut typed_modules = typed_ast.unwrap().inner.modules;
 
     let mut mod_outer_defs = BTreeMap::new();
     let mut mod_use_defs = BTreeMap::new();
@@ -1408,21 +1417,23 @@ pub fn get_symbols(
             &mut mod_to_alias_lengths,
         );
     }
-    let mut typing_symbolicator = TypingSymbolicator {
+
+    let mut typing_symbolicator = typing_symbol_visitor::TypingSymbolicator {
         mod_outer_defs: &mod_outer_defs,
         files: &files,
         file_id_mapping: &file_id_mapping,
-        type_params: BTreeMap::new(),
         references: &mut references,
         def_info: &mut def_info,
         use_defs: UseDefMap::new(),
         alias_lengths: &BTreeMap::new(),
         traverse_only: false,
         compiler_info: compiler_info.unwrap(),
+        type_params: BTreeMap::new(),
+        expression_scope: OrdMap::new(),
     };
 
     process_typed_modules(
-        &typed_modules,
+        &mut typed_modules,
         &source_files,
         &mod_to_alias_lengths,
         &mut typing_symbolicator,
@@ -1431,7 +1442,7 @@ pub fn get_symbols(
     );
     if let Some(libs) = compiled_libs {
         process_typed_modules(
-            &libs.typing.modules,
+            &mut libs.typing.inner.modules.clone(),
             &source_files,
             &mod_to_alias_lengths,
             &mut typing_symbolicator,
@@ -1546,20 +1557,20 @@ fn mark_positional_struct(
 }
 
 fn process_typed_modules<'a>(
-    typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
+    typed_modules: &mut UniqueMap<ModuleIdent, ModuleDefinition>,
     source_files: &BTreeMap<FileHash, (Symbol, String, bool)>,
     mod_to_alias_lengths: &'a BTreeMap<String, BTreeMap<Position, usize>>,
-    typing_symbolicator: &mut TypingSymbolicator<'a>,
+    typing_symbolicator: &mut typing_symbol_visitor::TypingSymbolicator<'a>,
     file_use_defs: &mut BTreeMap<PathBuf, UseDefMap>,
     mod_use_defs: &mut BTreeMap<String, UseDefMap>,
 ) {
-    for (pos, module_ident, module_def) in typed_modules {
-        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
+    for (module_ident, module_def) in typed_modules.key_cloned_iter_mut() {
+        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         typing_symbolicator.use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
         typing_symbolicator.alias_lengths = mod_to_alias_lengths.get(&mod_ident_str).unwrap();
-        typing_symbolicator.mod_symbols(module_def, &mod_ident_str);
+        typing_symbolicator.visit_module(module_ident, module_def);
 
-        let fpath = match source_files.get(&pos.file_hash()) {
+        let fpath = match source_files.get(&module_ident.loc.file_hash()) {
             Some((p, _, _)) => p,
             None => continue,
         };
@@ -1672,7 +1683,7 @@ fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: &NamedAddressMap) -> 
 
 /// Produces module ident string of the form pkg::module to be used as a map key
 /// It's important that these are consistent between parsing AST and typed AST.
-fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
+pub fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
     use E::Address as A;
     match mod_ident.address {
         A::Numerical { value, .. } => format!("{value}::{}", mod_ident.module).to_string(),
@@ -3447,7 +3458,7 @@ impl<'a> TypingSymbolicator<'a> {
 }
 
 /// Add use of a function identifier
-fn add_fun_use_def(
+pub fn add_fun_use_def(
     fun_def_name: &Symbol, // may be different from use_name for methods
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
     files: &SimpleFiles<Symbol, String>,
@@ -3488,7 +3499,7 @@ fn add_fun_use_def(
 }
 
 /// Add use of a struct identifier
-fn add_struct_use_def(
+pub fn add_struct_use_def(
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
     files: &SimpleFiles<Symbol, String>,
     file_id_mapping: &HashMap<FileHash, usize>,
@@ -3527,7 +3538,7 @@ fn add_struct_use_def(
     None
 }
 
-fn def_info_to_type_def_loc(
+pub fn def_info_to_type_def_loc(
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
     def_info: &DefInfo,
 ) -> Option<DefLoc> {
@@ -3554,7 +3565,10 @@ fn def_info_doc_string(def_info: &DefInfo) -> Option<String> {
     }
 }
 
-fn type_def_loc(mod_outer_defs: &BTreeMap<String, ModuleDefs>, sp!(_, t): &Type) -> Option<DefLoc> {
+pub fn type_def_loc(
+    mod_outer_defs: &BTreeMap<String, ModuleDefs>,
+    sp!(_, t): &Type,
+) -> Option<DefLoc> {
     match t {
         Type_::Ref(_, r) => type_def_loc(mod_outer_defs, r),
         Type_::Apply(_, sp!(_, TypeName_::ModuleType(sp!(_, mod_ident), struct_name)), _) => {

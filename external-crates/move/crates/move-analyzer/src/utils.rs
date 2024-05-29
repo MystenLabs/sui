@@ -4,6 +4,7 @@
 use codespan_reporting::files::{Files, SimpleFiles};
 use lsp_types::Position;
 use move_command_line_common::files::FileHash;
+use move_compiler::unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::HashMap;
@@ -28,6 +29,23 @@ pub fn get_loc(
         }),
         Err(_) => None,
     }
+}
+
+/// Convert a move_compiler Position into an lsp_types position
+pub fn to_lsp_position(pos: move_compiler::diagnostics::Position) -> Position {
+    Position {
+        // we need 0-based column location
+        line: pos.line as u32 - 1,
+        character: pos.column as u32 - 1,
+    }
+}
+
+pub fn get_start_position_opt(
+    pos: &Loc,
+    files: &SimpleFiles<Symbol, String>,
+    file_id_mapping: &HashMap<FileHash, usize>,
+) -> Option<Position> {
+    get_loc(&pos.file_hash(), pos.start(), files, file_id_mapping)
 }
 
 /// Some functions defined in a module need to be ignored.
