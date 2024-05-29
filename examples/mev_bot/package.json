@@ -1,6 +1,6 @@
 {
 	"name": "mev-bot",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"main": "src/index.ts",
 	"type": "module",
 	"author": "Patrick <patrick@mystenlabs.com>",
