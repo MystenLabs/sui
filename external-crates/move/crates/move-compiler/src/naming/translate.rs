@@ -3974,14 +3974,18 @@ fn resolve_call(
             }
             // If this variable refers to a local (num > 0) or it isn't syntax, error.
             if !var.value.is_syntax_identifier() {
+                let name = var.value.name;
                 let msg = format!(
-                    "Unexpected invocation of parameter or local '{}'. \
-                                     Non-syntax variables cannot be invoked as functions.",
-                    var.value.name
+                    "Unexpected invocation of parameter or local '{name}'. \
+                                     Non-syntax variables cannot be invoked as functions",
                 );
-                context
-                    .env
-                    .add_diag(diag!(TypeSafety::InvalidCallTarget, (var.loc, msg)));
+                let note = format!(
+                    "Only macro syntax variables, e.g. '${name}', \
+                            may be invoked as functions."
+                );
+                let mut diag = diag!(TypeSafety::InvalidCallTarget, (var.loc, msg));
+                diag.add_note(note);
+                context.env.add_diag(diag);
                 N::Exp_::UnresolvedError
             } else if var.value.id != 0 {
                 let msg = format!(

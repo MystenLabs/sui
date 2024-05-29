@@ -32,5 +32,7 @@ error[E04029]: invalid function call
   ┌─ tests/move_2024/expansion/macro_identifier_missing.move:3:9
   │
 3 │         f(x)
-  │         ^ Unexpected invocation of parameter or local 'f'. Non-syntax variables cannot be invoked as functions.
+  │         ^ Unexpected invocation of parameter or local 'f'. Non-syntax variables cannot be invoked as functions
+  │
+  = Only macro syntax variables, e.g. '$f', may be invoked as functions.
 

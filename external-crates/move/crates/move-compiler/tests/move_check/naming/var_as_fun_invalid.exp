@@ -2,7 +2,9 @@ error[E04029]: invalid function call
   ┌─ tests/move_check/naming/var_as_fun_invalid.move:4:9
   │
 4 │         var();
-  │         ^^^ Unexpected invocation of parameter or local 'var'. Non-syntax variables cannot be invoked as functions.
+  │         ^^^ Unexpected invocation of parameter or local 'var'. Non-syntax variables cannot be invoked as functions
+  │
+  = Only macro syntax variables, e.g. '$var', may be invoked as functions.
 
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/naming/var_as_fun_invalid.move:4:9

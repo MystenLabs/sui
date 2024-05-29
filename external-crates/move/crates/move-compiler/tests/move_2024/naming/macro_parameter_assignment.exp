@@ -22,7 +22,9 @@ error[E04029]: invalid function call
   ┌─ tests/move_2024/naming/macro_parameter_assignment.move:5:9
   │
 5 │         f(x)
-  │         ^ Unexpected invocation of parameter or local 'f'. Non-syntax variables cannot be invoked as functions.
+  │         ^ Unexpected invocation of parameter or local 'f'. Non-syntax variables cannot be invoked as functions
+  │
+  = Only macro syntax variables, e.g. '$f', may be invoked as functions.
 
 warning[W09005]: dead or unreachable code
    ┌─ tests/move_2024/naming/macro_parameter_assignment.move:10:15

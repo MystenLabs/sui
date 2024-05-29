@@ -8,7 +8,9 @@ error[E04029]: invalid function call
   ┌─ tests/move_2024/typing/use_lambda_outside_call_invalid.move:4:9
   │
 4 │         x();
-  │         ^ Unexpected invocation of parameter or local 'x'. Non-syntax variables cannot be invoked as functions.
+  │         ^ Unexpected invocation of parameter or local 'x'. Non-syntax variables cannot be invoked as functions
+  │
+  = Only macro syntax variables, e.g. '$x', may be invoked as functions.
 
 error[E02010]: invalid name
   ┌─ tests/move_2024/typing/use_lambda_outside_call_invalid.move:7:23
