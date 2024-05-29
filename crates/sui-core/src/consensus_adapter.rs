@@ -63,7 +63,7 @@ pub mod consensus_tests;
 
 const SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.1, 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 4., 5., 6., 7., 10., 15.,
-    20., 25., 30., 60.,
+    20., 25., 30., 60., 90., 120., 150., 180., 210., 240., 270., 300.,
 ];
 
 const SEQUENCING_CERTIFICATE_POSITION_BUCKETS: &[f64] = &[
@@ -418,14 +418,16 @@ impl ConsensusAdapter {
         let (position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
 
-        const MAX_LATENCY: Duration = Duration::from_secs(10);
         const DEFAULT_LATENCY: Duration = Duration::from_secs(3); // > p50 consensus latency with global deployment
+        const MIN_LATENCY: Duration = Duration::from_millis(150);
+        const MAX_LATENCY: Duration = Duration::from_secs(10);
+
         let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
         self.metrics
             .sequencing_estimated_latency
             .set(latency.as_millis() as i64);
 
-        let latency = std::cmp::max(latency, DEFAULT_LATENCY);
+        let latency = std::cmp::max(latency, MIN_LATENCY);
         let latency = std::cmp::min(latency, MAX_LATENCY);
         let latency = latency * 2;
         let latency = self.override_by_throughput_profiler(position, latency);
@@ -1098,11 +1100,12 @@ impl<'a> Drop for InflightDropGuard<'a> {
             .observe(latency.as_secs_f64());
 
         // Only sample latency after consensus quorum is up. Otherwise, the wait for consensus
-        // quorum at the beginning of an epoch can be distort the sampled latencies.
+        // quorum at the beginning of an epoch can distort the sampled latencies.
         // Technically there are more system transaction types that can be included in samples
         // after the first consensus commit, but this set of types should be enough.
         if self.position == Some(0) {
             // Transaction types below require quorum existed in the current epoch.
+            // TODO: refactor tx_type to enum.
             let sampled = matches!(
                 self.tx_type,
                 "shared_certificate" | "owned_certificate" | "checkpoint_signature" | "soft_bundle"
