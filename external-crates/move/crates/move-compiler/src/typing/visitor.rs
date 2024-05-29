@@ -1,15 +1,15 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::command_line::compiler::Visitor;
-use crate::diagnostics::WarningFilters;
-use crate::expansion::ast::ModuleIdent;
-use crate::naming::ast as N;
-use crate::parser::ast::{ConstantName, DatatypeName, FunctionName};
-use crate::shared::CompilationEnv;
-use crate::parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName};
-use crate::shared::{program_info::TypingProgramInfo, CompilationEnv};
-use crate::typing::ast as T;
+use crate::{
+    command_line::compiler::Visitor,
+    diagnostics::WarningFilters,
+    expansion::ast::ModuleIdent,
+    naming::ast as N,
+    parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
+    shared::CompilationEnv,
+    typing::ast as T,
+};
 
 use move_proc_macros::growing_stack;
 
@@ -59,7 +59,7 @@ pub trait TypingVisitorContext {
     /// By default, the visitor will visit all all expressions in all functions in all modules. A
     /// custom version should of this function should be created if different type of analysis is
     /// required.
-    fn visit(&mut self, program: &mut T::Program_) {
+    fn visit(&mut self, program: &mut T::Program) {
         for (mident, mdef) in program.modules.key_cloned_iter_mut() {
             self.visit_module(mident, mdef);
         }

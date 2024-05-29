@@ -61,6 +61,7 @@ use crate::{
     info::typing_symbol_visitor,
     utils::get_loc,
 };
+
 use anyhow::{anyhow, Result};
 use codespan_reporting::files::SimpleFiles;
 use crossbeam::channel::Sender;
@@ -98,7 +99,10 @@ use move_compiler::{
     naming::ast::{StructFields, Type, TypeName_, Type_},
     parser::ast::{self as P},
     shared::{unique_map::UniqueMap, Identifier, Name, NamedAddressMap, NamedAddressMaps},
-    typing::ast::{Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
+    typing::{
+        ast::{Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
+        visitor::TypingVisitorContext,
+    },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
@@ -1312,7 +1316,7 @@ pub fn get_symbols(
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
     let parsed_program = parsed_ast.unwrap();
-    let mut typed_modules = typed_ast.unwrap().inner.modules;
+    let mut typed_modules = typed_ast.unwrap().modules;
 
     let mut mod_outer_defs = BTreeMap::new();
     let mut mod_use_defs = BTreeMap::new();
@@ -1401,7 +1405,7 @@ pub fn get_symbols(
     );
     if let Some(libs) = compiled_libs {
         process_typed_modules(
-            &mut libs.typing.inner.modules.clone(),
+            &mut libs.typing.modules.clone(),
             &source_files,
             &mod_to_alias_lengths,
             &mut typing_symbolicator,
