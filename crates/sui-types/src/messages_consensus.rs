@@ -57,6 +57,9 @@ pub struct ConsensusCommitPrologueV3 {
     pub epoch: u64,
     /// Consensus round of the commit
     pub round: u64,
+    /// The sub DAG index of the consensus commit. This field will be populated if there
+    /// are multiple consensus commits per round.
+    pub sub_dag_index: Option<u64>,
     /// Unix timestamp from consensus
     pub commit_timestamp_ms: CheckpointTimestamp,
     /// Digest of consensus output

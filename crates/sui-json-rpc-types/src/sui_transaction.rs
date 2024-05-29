@@ -439,11 +439,11 @@ impl Display for SuiTransactionBlockKind {
                 )?;
             }
             Self::ConsensusCommitPrologueV3(p) => {
-                writeln!(writer, "Transaction Kind: Consensus Commit Prologue V2")?;
+                writeln!(writer, "Transaction Kind: Consensus Commit Prologue V3")?;
                 writeln!(
                     writer,
-                    "Epoch: {}, Round: {}, Timestamp: {}, ConsensusCommitDigest: {}",
-                    p.epoch, p.round, p.commit_timestamp_ms, p.consensus_commit_digest
+                    "Epoch: {}, Round: {}, SubDagIndex: {:?}, Timestamp: {}, ConsensusCommitDigest: {}",
+                    p.epoch, p.round, p.sub_dag_index, p.commit_timestamp_ms, p.consensus_commit_digest
                 )?;
             }
             Self::ProgrammableTransaction(p) => {
@@ -490,6 +490,7 @@ impl SuiTransactionBlockKind {
                 Self::ConsensusCommitPrologueV3(SuiConsensusCommitPrologueV3 {
                     epoch: p.epoch,
                     round: p.round,
+                    sub_dag_index: p.sub_dag_index,
                     commit_timestamp_ms: p.commit_timestamp_ms,
                     consensus_commit_digest: p.consensus_commit_digest,
                     consensus_determined_version_assignments: p
@@ -586,6 +587,7 @@ impl SuiTransactionBlockKind {
                 Self::ConsensusCommitPrologueV3(SuiConsensusCommitPrologueV3 {
                     epoch: p.epoch,
                     round: p.round,
+                    sub_dag_index: p.sub_dag_index,
                     commit_timestamp_ms: p.commit_timestamp_ms,
                     consensus_commit_digest: p.consensus_commit_digest,
                     consensus_determined_version_assignments: p
@@ -1617,6 +1619,9 @@ pub struct SuiConsensusCommitPrologueV3 {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub round: u64,
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
+    pub sub_dag_index: Option<u64>,
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub commit_timestamp_ms: u64,

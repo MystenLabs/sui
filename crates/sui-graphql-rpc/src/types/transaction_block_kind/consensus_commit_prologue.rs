@@ -24,6 +24,9 @@ use sui_types::{
 pub(crate) struct ConsensusCommitPrologueTransaction {
     epoch: u64,
     round: u64,
+    /// The sub DAG index of the consensus commit. This field will be populated if there
+    /// are multiple consensus commits per round.
+    sub_dag_index: Option<u64>,
     commit_timestamp_ms: CheckpointTimestamp,
     consensus_commit_digest: Option<ConsensusCommitDigest>,
     /// The checkpoint sequence number this was viewed at.
@@ -71,6 +74,7 @@ impl ConsensusCommitPrologueTransaction {
         Self {
             epoch: ccp.epoch,
             round: ccp.round,
+            sub_dag_index: None,
             commit_timestamp_ms: ccp.commit_timestamp_ms,
             consensus_commit_digest: None,
             checkpoint_viewed_at,
@@ -85,6 +89,7 @@ impl ConsensusCommitPrologueTransaction {
         Self {
             epoch: ccp.epoch,
             round: ccp.round,
+            sub_dag_index: None,
             commit_timestamp_ms: ccp.commit_timestamp_ms,
             consensus_commit_digest: Some(ccp.consensus_commit_digest),
             checkpoint_viewed_at,
@@ -99,6 +104,7 @@ impl ConsensusCommitPrologueTransaction {
         Self {
             epoch: ccp.epoch,
             round: ccp.round,
+            sub_dag_index: ccp.sub_dag_index,
             commit_timestamp_ms: ccp.commit_timestamp_ms,
             consensus_commit_digest: Some(ccp.consensus_commit_digest),
             checkpoint_viewed_at,

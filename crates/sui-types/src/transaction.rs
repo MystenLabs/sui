@@ -1516,7 +1516,7 @@ impl Display for TransactionKind {
                 writeln!(writer, "Consensus Digest: {}", p.consensus_commit_digest)?;
             }
             Self::ConsensusCommitPrologueV3(p) => {
-                writeln!(writer, "Transaction Kind : Consensus Commit Prologue V2")?;
+                writeln!(writer, "Transaction Kind : Consensus Commit Prologue V3")?;
                 writeln!(writer, "Timestamp : {}", p.commit_timestamp_ms)?;
                 writeln!(writer, "Consensus Digest: {}", p.consensus_commit_digest)?;
                 writeln!(
@@ -2651,6 +2651,8 @@ impl VerifiedTransaction {
         ConsensusCommitPrologueV3 {
             epoch,
             round,
+            // sub_dag_index is reserved for when we have multi commits per round.
+            sub_dag_index: None,
             commit_timestamp_ms,
             consensus_commit_digest,
             consensus_determined_version_assignments:
