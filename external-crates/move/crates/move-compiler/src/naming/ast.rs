@@ -398,11 +398,6 @@ pub enum MacroArgument {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum IDEInfo {
-    ExpandedLambda,
-}
-
-#[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
@@ -432,7 +427,6 @@ pub enum Exp_ {
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
     Block(Block),
-    IDEAnnotation(IDEInfo, Box<Exp>),
     Lambda(Lambda),
 
     Assign(LValueList, Box<Exp>),
@@ -1737,12 +1731,6 @@ impl AstDebug for Exp_ {
                 e.ast_debug(w);
             }
             E::Block(seq) => seq.ast_debug(w),
-            E::IDEAnnotation(info, e) => match info {
-                IDEInfo::ExpandedLambda => {
-                    w.write("ExpandedLambda:");
-                    e.ast_debug(w);
-                }
-            },
             E::Lambda(l) => l.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");

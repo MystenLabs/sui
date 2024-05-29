@@ -22,12 +22,6 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E15001]: IDE autocomplete
-   ┌─ tests/move_check/ide_mode/struct_method_autocomplete.move:18:21
-   │
-18 │         let _tmp1 = _a.;
-   │                     ^^^ Autocompletes to: 
-
 error[E01002]: unexpected token
    ┌─ tests/move_check/ide_mode/struct_method_autocomplete.move:18:24
    │
@@ -36,12 +30,6 @@ error[E01002]: unexpected token
    │                        │
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
-
-error[E15001]: IDE autocomplete
-   ┌─ tests/move_check/ide_mode/struct_method_autocomplete.move:19:21
-   │
-19 │         let _tmp2 = _b.;
-   │                     ^^^ Autocompletes to: 
 
 error[E01002]: unexpected token
    ┌─ tests/move_check/ide_mode/struct_method_autocomplete.move:19:24

@@ -20,6 +20,7 @@ use crate::{
     hlir::ast as H,
     naming::ast as N,
     parser::ast as P,
+    shared::ide::{IDEAnnotation, IDEInfo},
     sui_mode,
     typing::{
         ast as T,
@@ -45,6 +46,7 @@ use std::{
 use vfs::{VfsError, VfsPath};
 
 pub mod ast_debug;
+pub mod ide;
 pub mod known_attributes;
 pub mod program_info;
 pub mod remembering_unique_map;
@@ -245,6 +247,7 @@ pub struct CompilationEnv {
     // pub counter: u64,
     mapped_files: MappedFiles,
     save_hooks: Vec<SaveHook>,
+    pub ide_information: IDEInfo,
 }
 
 macro_rules! known_code_filter {
@@ -367,6 +370,7 @@ impl CompilationEnv {
             prim_definers: BTreeMap::new(),
             mapped_files: MappedFiles::empty(),
             save_hooks,
+            ide_information: IDEInfo::new(),
         }
     }
 
@@ -608,10 +612,6 @@ impl CompilationEnv {
         self.prim_definers.get(&t)
     }
 
-    pub fn ide_mode(&self) -> bool {
-        self.flags.ide_mode()
-    }
-
     pub fn save_parser_ast(&self, ast: &P::Program) {
         for hook in &self.save_hooks {
             hook.save_parser_ast(ast)
@@ -652,6 +652,20 @@ impl CompilationEnv {
         for hook in &self.save_hooks {
             hook.save_cfgir_ast(ast)
         }
+    }
+
+    // -- IDE Information --
+
+    pub fn ide_mode(&self) -> bool {
+        self.flags.ide_mode()
+    }
+
+    pub fn extend_ide_info(&mut self, info: IDEInfo) {
+        self.ide_information.extend(info);
+    }
+
+    pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+        self.ide_information.add_ide_annotation(loc, info);
     }
 }
 

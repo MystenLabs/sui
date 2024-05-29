@@ -227,7 +227,6 @@ pub trait TypingVisitorContext {
             E::Loop { body, .. } => self.visit_exp(body),
             E::NamedBlock(_, seq) => self.visit_seq(seq),
             E::Block(seq) => self.visit_seq(seq),
-            E::IDEAnnotation(_, e) => self.visit_exp(e),
             E::Assign(_, _, e) => self.visit_exp(e),
             E::Mutate(e1, e2) => {
                 self.visit_exp(e1);
@@ -260,11 +259,6 @@ pub trait TypingVisitorContext {
             E::TempBorrow(_, e) => self.visit_exp(e),
             E::Cast(e, _) => self.visit_exp(e),
             E::Annotate(e, _) => self.visit_exp(e),
-            E::AutocompleteDotAccess {
-                base_exp,
-                methods: _,
-                fields: _,
-            } => self.visit_exp(base_exp),
             E::Unit { .. }
             | E::Value(_)
             | E::Move { .. }
