@@ -129,22 +129,21 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
 	tx.transferObjects([cap], tx.pure.address(await toolbox.address()));
 
-	const publishTxn = await toolbox.client.signAndExecuteTransaction({
+	const { digest } = await toolbox.client.signAndExecuteTransaction({
 		transaction: tx,
 		signer: toolbox.keypair,
-		options: {
-			showEffects: true,
-			showObjectChanges: true,
-		},
 	});
 
-	await toolbox.client.waitForTransaction({ digest: publishTxn.digest });
+	const publishTxn = await toolbox.client.waitForTransaction({
+		digest: digest,
+		options: { showObjectChanges: true, showEffects: true },
+	});
 
 	expect(publishTxn.effects?.status.status).toEqual('success');
 
 	const packageId = ((publishTxn.objectChanges?.filter(
 		(a) => a.type === 'published',
-	) as SuiObjectChangePublished[]) ?? [])[0].packageId.replace(/^(0x)(0+)/, '0x') as string;
+	) as SuiObjectChangePublished[]) ?? [])[0]?.packageId.replace(/^(0x)(0+)/, '0x') as string;
 
 	expect(packageId).toBeTypeOf('string');
 
