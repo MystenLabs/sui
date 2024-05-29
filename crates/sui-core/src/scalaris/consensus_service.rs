@@ -8,11 +8,15 @@
 */
 use anyhow::anyhow;
 use consensus_common::proto::{ConsensusApi, ExternalTransaction, RequestEcho, ResponseEcho};
+use fastcrypto::error::FastCryptoError;
 use narwhal_worker::LazyNarwhalClient;
 use prometheus::Registry;
 use std::{pin::Pin, sync::Arc};
-use sui_config::ConsensusConfig;
-use sui_types::error::{SuiError, SuiResult};
+use sui_config::NodeConfig;
+use sui_types::{
+    crypto::{AccountKeyPair, AuthorityKeyPair, ToFromBytes},
+    error::{SuiError, SuiResult},
+};
 use tap::TapFallible;
 use tokio::sync::mpsc::{self};
 use tokio_stream::{wrappers::UnboundedReceiverStream, Stream, StreamExt};
@@ -83,22 +87,37 @@ impl ConsensusServiceMetrics {
 }
 #[derive(Clone)]
 pub struct ConsensusService {
-    _metrics: Arc<ConsensusServiceMetrics>,
+    validator_keypair: Arc<AccountKeyPair>,
     narwhal_client: Arc<LazyNarwhalClient>,
+    _metrics: Arc<ConsensusServiceMetrics>,
+}
+fn get_ed25519_from_bls12381(
+    authority: &AuthorityKeyPair,
+) -> Result<AccountKeyPair, FastCryptoError> {
+    let authority_keypair = authority.as_bytes();
+    assert!(authority_keypair.len() >= 32);
+    AccountKeyPair::from_bytes(&authority_keypair[0..32])
 }
 /*
 * 20240504
 * Scalaris: current version create a narwhal client from consensus config
 */
 impl ConsensusService {
-    pub fn new(consensus_config: &ConsensusConfig, prometheus_registry: &Registry) -> Self {
+    pub fn new(config: &NodeConfig, prometheus_registry: &Registry) -> anyhow::Result<Self> {
+        let consensus_config = config
+            .consensus_config
+            .as_ref()
+            .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
+        let authority_keypair = config.protocol_key_pair();
+        let validator_keypair = get_ed25519_from_bls12381(authority_keypair)?;
         let narwhal_client = Arc::new(LazyNarwhalClient::new(
             consensus_config.address().to_owned(),
         ));
-        Self {
-            _metrics: Arc::new(ConsensusServiceMetrics::new(prometheus_registry)),
+        Ok(Self {
+            validator_keypair: Arc::new(validator_keypair),
             narwhal_client,
-        }
+            _metrics: Arc::new(ConsensusServiceMetrics::new(prometheus_registry)),
+        })
     }
     pub async fn add_consensus_listener(&self, listener: CommitedTransactionsResultSender) {
         CONSENSUS_LISTENER.add_listener(listener).await;
@@ -122,12 +141,15 @@ impl ConsensusService {
 
 #[tonic::async_trait]
 impl ConsensusApi for ConsensusService {
-    async fn echo(&self, request: tonic::Request<RequestEcho>) -> ConsensusServiceResult<ResponseEcho> {
+    async fn echo(
+        &self,
+        request: tonic::Request<RequestEcho>,
+    ) -> ConsensusServiceResult<ResponseEcho> {
         info!("ConsensusServiceServer::echo");
-        let echo_message= request.into_inner().message;
+        let echo_message = request.into_inner().message;
 
         Ok(Response::new(ResponseEcho {
-            message: echo_message
+            message: echo_message,
         }))
     }
 
@@ -170,5 +192,20 @@ impl ConsensusApi for ConsensusService {
         Ok(Response::new(
             Box::pin(out_stream) as Self::InitTransactionStream
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_config::node::AuthorityKeyPairWithPath;
+
+    #[test]
+    fn test_get_ed25519_from_bls12381() {
+        let authority_keypair = AuthorityKeyPairWithPath::new(
+            get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut OsRng).1,
+        )
+        .authority_keypair();
+        let ed25519_keypair = super::get_ed25519_from_bls12381(authority_keypair);
+        assert!(ed25519_keypair.is_ok())
     }
 }

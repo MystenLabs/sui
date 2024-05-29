@@ -43,7 +43,7 @@ docker build -t stress:testing --build-arg SUI_TOOLS_IMAGE_TAG=mainnet-v1.19.1 .
 Build genesic files
 ```
 cd docker/sui-network
-docker build --file Dockerfile --output "type=local,dest=./"
+docker build --file Dockerfile --output "type=local,dest=./" .
 ```
 Run containers in folder docker/sui-network
 
