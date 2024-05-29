@@ -1,0 +1,38 @@
+Command `build -v`:
+INCLUDING DEPENDENCY Dep
+BUILDING A
+warning[W04039]: use of deprecated struct
+  ┌─ ./dep/sources/m.move:6:28
+  │
+6 │     public fun make_bar(): Bar {
+  │                            ^^^ This struct is deprecated: use a different struct instead
+7 │         Bar()
+  │         --- Deprecated struct used here
+
+warning[W04041]: use of deprecated function
+  ┌─ ./sources/l.move:8:13
+  │
+8 │         am::deprecated_function();
+  │             ^^^^^^^^^^^^^^^^^^^ This function is deprecated: use a different function instead
+
+warning[W04041]: use of deprecated function
+   ┌─ ./sources/l.move:10:25
+   │
+10 │         mod_deprecated::deprecated_function();
+   │                         ^^^^^^^^^^^^^^^^^^^ This function is deprecated: This function is deprecated with a deprecated module
+
+warning[W04038]: use of deprecated module
+   ┌─ ./sources/l.move:11:25
+   │
+11 │         mod_deprecated::make_f();
+   │                         ^^^^^^ This function is deprecated since the whole module that it is declared in is marked deprecated: This module is deprecated
+   ·
+15 │         l<mod_deprecated::F>();
+   │           ----------------- Deprecated struct used here
+
+warning[W04039]: use of deprecated struct
+   ┌─ ./sources/l.move:13:11
+   │
+13 │         l<am::Bar>();
+   │           ^^^^^^^ This struct is deprecated: use a different struct instead
+

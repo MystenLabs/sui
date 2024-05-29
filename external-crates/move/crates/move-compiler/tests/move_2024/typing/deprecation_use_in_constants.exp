@@ -8,7 +8,7 @@ warning[W04037]: use of deprecated constant
    ┌─ tests/move_2024/typing/deprecation_use_in_constants.move:15:13
    │
 15 │         A + B + C + D + E + B
-   │             ^               - Deprecated constant used again here
+   │             ^               - Deprecated constant used here
    │             │                
    │             This constant is deprecated: use D instead
 

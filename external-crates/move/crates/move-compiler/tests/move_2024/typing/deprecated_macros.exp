@@ -1,0 +1,94 @@
+warning[W04039]: use of deprecated struct
+   ┌─ tests/move_2024/typing/deprecated_macros.move:8:37
+   │
+ 8 │     macro fun call_with_x($f: || -> X): X {
+   │                                     ^   - Deprecated struct used here
+   │                                     │    
+   │                                     This struct is deprecated
+   ·
+25 │         call_with_x!(|| X());
+   │                         - Deprecated struct used here
+
+warning[W04039]: use of deprecated struct
+  ┌─ tests/move_2024/typing/deprecated_macros.move:8:37
+  │
+8 │     macro fun call_with_x($f: || -> X): X {
+  │                                     ^   - Deprecated struct used here
+  │                                     │    
+  │                                     This struct is deprecated
+
+warning[W04041]: use of deprecated function
+   ┌─ tests/move_2024/typing/deprecated_macros.move:9:9
+   │
+ 9 │         f();
+   │         ^ This function is deprecated
+   ·
+24 │         f();
+   │         - Deprecated function used here
+
+warning[W04041]: use of deprecated function
+   ┌─ tests/move_2024/typing/deprecated_macros.move:14:9
+   │
+14 │         f();
+   │         ^ This function is deprecated
+   ·
+29 │         f();
+   │         - Deprecated function used here
+
+warning[W04041]: use of deprecated function
+   ┌─ tests/move_2024/typing/deprecated_macros.move:19:9
+   │
+19 │         f();
+   │         ^ This function is deprecated
+   ·
+36 │         f();
+   │         - Deprecated function used here
+
+warning[W04039]: use of deprecated struct
+   ┌─ tests/move_2024/typing/deprecated_macros.move:30:18
+   │
+30 │         call!(|| X());
+   │                  ^^^ This struct is deprecated
+
+error[E03005]: unbound unscoped name
+   ┌─ tests/move_2024/typing/deprecated_macros.move:31:18
+   │
+31 │         call!(|| Y<X>());
+   │                  ^ Unbound function 'Y' in current scope
+
+error[E03005]: unbound unscoped name
+   ┌─ tests/move_2024/typing/deprecated_macros.move:32:18
+   │
+32 │         call!(|| Y<Y<X>>());
+   │                  ^ Unbound function 'Y' in current scope
+
+error[E03004]: unbound type
+   ┌─ tests/move_2024/typing/deprecated_macros.move:32:20
+   │
+32 │         call!(|| Y<Y<X>>());
+   │                    ^ Unbound type 'Y' in current scope
+
+warning[W04039]: use of deprecated struct
+   ┌─ tests/move_2024/typing/deprecated_macros.move:37:25
+   │
+37 │         call_unders!(|| X());
+   │                         ^^^ This struct is deprecated
+
+error[E03005]: unbound unscoped name
+   ┌─ tests/move_2024/typing/deprecated_macros.move:38:25
+   │
+38 │         call_unders!(|| Y<X>());
+   │                         ^ Unbound function 'Y' in current scope
+
+error[E03005]: unbound unscoped name
+   ┌─ tests/move_2024/typing/deprecated_macros.move:39:25
+   │
+39 │         call_unders!(|| Y<Y<X>>());
+   │                         ^ Unbound function 'Y' in current scope
+
+error[E03004]: unbound type
+   ┌─ tests/move_2024/typing/deprecated_macros.move:39:27
+   │
+39 │         call_unders!(|| Y<Y<X>>());
+   │                           ^ Unbound type 'Y' in current scope
+

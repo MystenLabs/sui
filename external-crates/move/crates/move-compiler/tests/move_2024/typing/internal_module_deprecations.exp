@@ -28,7 +28,7 @@ warning[W04039]: use of deprecated struct
 32 │     public fun return_dep(): A {
    │                              ^ This struct is deprecated: Use the B struct instead.
 33 │         A()
-   │         - Deprecated struct used again here
+   │         - Deprecated struct used here
 
 warning[W04037]: use of deprecated constant
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:37:9
@@ -46,21 +46,21 @@ warning[W04039]: use of deprecated struct
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:45:18
    │
 45 │         let y = (A(): A);
-   │                  ^    - Deprecated struct used again here
+   │                  ^    - Deprecated struct used here
    │                  │     
    │                  This struct is deprecated: Use the B struct instead.
 46 │         match (y) {
 47 │             A() => (),
-   │             - Deprecated struct used again here
+   │             - Deprecated struct used here
 48 │         };
 49 │         A() = A();
-   │         ---   - Deprecated struct used again here
+   │         ---   - Deprecated struct used here
    │         │      
-   │         Deprecated struct used again here
+   │         Deprecated struct used here
 50 │         let A() = A();
-   │             ---   - Deprecated struct used again here
+   │             ---   - Deprecated struct used here
    │             │      
-   │             Deprecated struct used again here
+   │             Deprecated struct used here
 
 warning[W04039]: use of deprecated struct
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:54:24
