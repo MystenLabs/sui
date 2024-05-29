@@ -1,0 +1,53 @@
+warning[W04038]: use of deprecated module
+   ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:23:12
+   │
+23 │         f: X,
+   │            ^ This module member is deprecated since the whole module is marked deprecated: Use the k module instead.
+
+warning[W04038]: use of deprecated module
+   ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:27:14
+   │
+27 │         Some(X),
+   │              ^ This module member is deprecated since the whole module is marked deprecated: Use the k module instead.
+28 │         Other { y: X },
+   │                    - Deprecated module member used again here
+
+warning[W04038]: use of deprecated module
+   ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:40:24
+   │
+40 │     public fun quux(x: 0x7::l::X) {
+   │                        ^^^^^^^^^ This module member is deprecated since the whole module is marked deprecated: Use the k module instead.
+41 │         0x7::l::foo();
+   │                 --- Deprecated module member used again here
+42 │         x.bar();
+   │           --- Deprecated module member used again here
+
+warning[W04038]: use of deprecated module
+   ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:47:12
+   │
+47 │         l::foo(); 
+   │            ^^^ This module member is deprecated since the whole module is marked deprecated: Use the k module instead.
+
+warning[W04038]: use of deprecated module
+   ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:53:11
+   │
+53 │         x.bar();
+   │           ^^^ This module member is deprecated since the whole module is marked deprecated: Use the k module instead.
+   ·
+59 │         x.rofl();
+   │           ---- Deprecated module member used again here
+
+warning[W04041]: use of deprecated function
+   ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:58:11
+   │
+58 │         x.lol();
+   │           ^^^ This function is deprecated: More specific deprecations override less specific ones.
+
+warning[W04038]: use of deprecated module
+   ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:66:33
+   │
+66 │         let _ = T::Some(0x7::l::make_x());
+   │                                 ^^^^^^ This module member is deprecated since the whole module is marked deprecated: Use the k module instead.
+67 │         let _ = T::Other { y: 0x7::l::make_x()};
+   │                                       ------ Deprecated module member used again here
+

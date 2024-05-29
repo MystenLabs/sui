@@ -289,6 +289,13 @@ codes!(
         IncompatibleSyntaxMethods: { msg: "'syntax' method types differ", severity: BlockingError },
         InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
         IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
+        DeprecatedConstant: { msg: "use of deprecated constant", severity: Warning },
+        DeprecatedModule: { msg: "use of deprecated module", severity: Warning },
+        DeprecatedStruct: { msg: "use of deprecated struct", severity: Warning },
+        DeprecatedEnum: { msg: "use of deprecated enum", severity: Warning },
+        DeprecatedFunction: { msg: "use of deprecated function", severity: Warning },
+        MultipleDeprecations: { msg: "multiple `deprecated` attributes", severity: NonblockingError },
+        InvalidDeprecation: { msg: "Invalid `deprecated` attribute", severity: NonblockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

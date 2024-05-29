@@ -1,0 +1,20 @@
+warning[W04037]: use of deprecated constant
+   ┌─ tests/move_2024/typing/deprecation_use_in_constants.move:15:9
+   │
+15 │         A + B + C + D + E + B
+   │         ^ This constant is deprecated
+
+warning[W04037]: use of deprecated constant
+   ┌─ tests/move_2024/typing/deprecation_use_in_constants.move:15:13
+   │
+15 │         A + B + C + D + E + B
+   │             ^               - Deprecated constant used again here
+   │             │                
+   │             This constant is deprecated: use D instead
+
+warning[W04037]: use of deprecated constant
+   ┌─ tests/move_2024/typing/deprecation_use_in_constants.move:15:17
+   │
+15 │         A + B + C + D + E + B
+   │                 ^ This constant is deprecated: You should use E instead
+

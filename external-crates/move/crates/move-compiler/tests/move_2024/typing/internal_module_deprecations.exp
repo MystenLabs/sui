@@ -1,0 +1,70 @@
+warning[W04039]: use of deprecated struct
+  ┌─ tests/move_2024/typing/internal_module_deprecations.move:3:13
+  │
+3 │         Bad(A),
+  │             ^ This struct is deprecated: Use the B struct instead.
+
+warning[W04041]: use of deprecated function
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:26:9
+   │
+26 │         foo();
+   │         ^^^ This function is deprecated
+
+warning[W04041]: use of deprecated function
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:27:9
+   │
+27 │         bar_dep();
+   │         ^^^^^^^ This function is deprecated: Use the baz function instead.
+
+warning[W04039]: use of deprecated struct
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:30:23
+   │
+30 │     public fun qux(_: A) { }
+   │                       ^ This struct is deprecated: Use the B struct instead.
+
+warning[W04039]: use of deprecated struct
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:32:30
+   │
+32 │     public fun return_dep(): A {
+   │                              ^ This struct is deprecated: Use the B struct instead.
+33 │         A()
+   │         - Deprecated struct used again here
+
+warning[W04037]: use of deprecated constant
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:37:9
+   │
+37 │         H
+   │         ^ This constant is deprecated: Use the L constant instead.
+
+warning[W04037]: use of deprecated constant
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:41:15
+   │
+41 │         abort OldError
+   │               ^^^^^^^^ This constant is deprecated: Use `NewError` instead.
+
+warning[W04039]: use of deprecated struct
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:45:18
+   │
+45 │         let y = (A(): A);
+   │                  ^    - Deprecated struct used again here
+   │                  │     
+   │                  This struct is deprecated: Use the B struct instead.
+46 │         match (y) {
+47 │             A() => (),
+   │             - Deprecated struct used again here
+48 │         };
+49 │         A() = A();
+   │         ---   - Deprecated struct used again here
+   │         │      
+   │         Deprecated struct used again here
+50 │         let A() = A();
+   │             ---   - Deprecated struct used again here
+   │             │      
+   │             Deprecated struct used again here
+
+warning[W04039]: use of deprecated struct
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:54:24
+   │
+54 │         let _ = R::Bad(A());
+   │                        ^ This struct is deprecated: Use the B struct instead.
+

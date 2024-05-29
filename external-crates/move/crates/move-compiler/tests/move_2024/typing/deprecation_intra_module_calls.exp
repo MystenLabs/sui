@@ -1,0 +1,6 @@
+warning[W04041]: use of deprecated function
+   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:16:9
+   │
+16 │         internal();
+   │         ^^^^^^^^ This function is deprecated: This is a deprecated function within a deprecated module.
+
