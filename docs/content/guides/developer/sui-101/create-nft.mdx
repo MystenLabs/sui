@@ -14,7 +14,7 @@ module examples::devnet_nft {
     use sui::tx_context::{Self, TxContext};
 
     /// An example NFT that can be minted by anybody
-    struct DevNetNFT has key, store {
+    public struct DevNetNFT has key, store {
         id: UID,
         /// Name for the token
         name: string::String,
@@ -27,7 +27,7 @@ module examples::devnet_nft {
 
     // ===== Events =====
 
-    struct NFTMinted has copy, drop {
+    public struct NFTMinted has copy, drop {
         // The Object ID of the NFT
         object_id: ID,
         // The creator of the NFT

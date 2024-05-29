@@ -11,6 +11,7 @@ import { accountSourcesEvents } from './account-sources/events';
 import { getAccountsStatusData, getAllAccounts, lockAllAccounts } from './accounts';
 import { accountsEvents } from './accounts/events';
 import Alarms, { autoLockAlarmName, cleanUpAlarmName } from './Alarms';
+import { blocklist } from './blocklist';
 import { Connections } from './connections';
 import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
@@ -144,4 +145,16 @@ Qredo.onQredoEvent('onConnectionResponse', ({ allowed, request }) => {
 			aMessageID,
 		);
 	});
+});
+
+Browser.alarms.onAlarm.addListener((alarm) => {
+	if (alarm.name === 'refetch-domainlist') {
+		blocklist.fetchDomainlist();
+	}
+});
+
+// per 5 mins update domainlist
+Browser.alarms.create('refetch-domainlist', {
+	periodInMinutes: 5,
+	delayInMinutes: 0,
 });
