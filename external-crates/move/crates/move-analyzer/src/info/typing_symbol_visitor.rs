@@ -555,7 +555,7 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
         let fun_info = self
             .def_info
             .get(&DefLoc::new(loc.file_hash(), name_start))
-            .unwrap();
+            .expect(&format!("Could not find loc for {loc:#?} for {name_start:?} in {:#?}", self.def_info));
         let fun_type_def = def_info_to_type_def_loc(self.mod_outer_defs, fun_info);
         let use_def = UseDef::new(
             self.references,

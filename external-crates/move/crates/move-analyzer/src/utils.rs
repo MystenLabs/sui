@@ -23,9 +23,9 @@ pub fn get_loc(
     };
     match files.location(*id, pos as usize) {
         Ok(v) => Some(Position {
-            // we need 0-based column location
+            // lsp line is 0-indexed, lsp column is 1-indexed
             line: v.line_number as u32 - 1,
-            character: v.column_number as u32 - 1,
+            character: v.column_number as u32,
         }),
         Err(_) => None,
     }
@@ -34,9 +34,9 @@ pub fn get_loc(
 /// Convert a move_compiler Position into an lsp_types position
 pub fn to_lsp_position(pos: move_compiler::diagnostics::Position) -> Position {
     Position {
-        // we need 0-based column location
+        // lsp line is 0-indexed, lsp column is 1-indexed
         line: pos.line as u32 - 1,
-        character: pos.column as u32 - 1,
+        character: pos.column as u32 + 1,
     }
 }
 
