@@ -55,10 +55,10 @@
 #![allow(clippy::non_canonical_partial_ord_impl)]
 
 use crate::{
+    analysis::typing_analysis,
     compiler_info::CompilerInfo,
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
-    info::typing_symbol_visitor,
     utils::get_loc,
 };
 
@@ -1381,7 +1381,7 @@ pub fn get_symbols(
         );
     }
 
-    let mut typing_symbolicator = typing_symbol_visitor::TypingSymbolicator {
+    let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
         mod_outer_defs: &mod_outer_defs,
         files: &files,
         file_id_mapping: &file_id_mapping,
@@ -1523,7 +1523,7 @@ fn process_typed_modules<'a>(
     typed_modules: &mut UniqueMap<ModuleIdent, ModuleDefinition>,
     source_files: &BTreeMap<FileHash, (Symbol, String, bool)>,
     mod_to_alias_lengths: &'a BTreeMap<String, BTreeMap<Position, usize>>,
-    typing_symbolicator: &mut typing_symbol_visitor::TypingSymbolicator<'a>,
+    typing_symbolicator: &mut typing_analysis::TypingAnalysisContext<'a>,
     file_use_defs: &mut BTreeMap<PathBuf, UseDefMap>,
     mod_use_defs: &mut BTreeMap<String, UseDefMap>,
 ) {

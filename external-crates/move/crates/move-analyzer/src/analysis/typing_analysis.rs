@@ -31,8 +31,8 @@ use im::OrdMap;
 use lsp_types::Position;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-/// Data used during symbolication over typed AST
-pub struct TypingSymbolicator<'a> {
+/// Data used during anlysis over typed AST
+pub struct TypingAnalysisContext<'a> {
     /// Outermost definitions in a module (structs, consts, functions), keyd on a ModuleIdent
     /// string so that we can access it regardless of the ModuleIdent representation
     /// (e.g., in the parsing AST or in the typing AST)
@@ -62,7 +62,7 @@ pub struct TypingSymbolicator<'a> {
     pub compiler_info: CompilerInfo,
 }
 
-impl TypingSymbolicator<'_> {
+impl TypingAnalysisContext<'_> {
     /// Returns the `lsp_types::Position` start for a location, but may fail if we didn't see the
     /// definition already.
     fn lsp_start_position_opt(&self, loc: &Loc) -> Option<lsp_types::Position> {
@@ -432,7 +432,7 @@ impl TypingSymbolicator<'_> {
         module: &ModuleIdent,
         name: &P::FunctionName,
         method_name: Option<Name>,
-        tyargs: &mut Vec<N::Type>,
+        tyargs: &mut [N::Type],
         args: Option<&mut Box<T::Exp>>,
     ) {
         let Some(mod_def) = self
@@ -467,7 +467,7 @@ impl TypingSymbolicator<'_> {
     }
 }
 
-impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
+impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
     // Nothing to do -- we're not producing errors.
     fn add_warning_filter_scope(&mut self, _filter: diag::WarningFilters) {}
 
@@ -616,10 +616,7 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
         let fun_info = self
             .def_info
             .get(&DefLoc::new(loc.file_hash(), name_start))
-            .expect(&format!(
-                "Could not find loc for {loc:#?} for {name_start:?} in {:#?}",
-                self.def_info
-            ));
+            .unwrap();
         let fun_type_def = def_info_to_type_def_loc(self.mod_outer_defs, fun_info);
         let use_def = UseDef::new(
             self.references,
@@ -740,7 +737,7 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
     fn visit_exp_custom(&mut self, _exp: &mut T::Exp) -> bool {
         use T::UnannotatedExp_ as TE;
 
-        fn visit_exp_inner(visitor: &mut TypingSymbolicator<'_>, exp: &mut T::Exp) -> bool {
+        fn visit_exp_inner(visitor: &mut TypingAnalysisContext<'_>, exp: &mut T::Exp) -> bool {
             visitor.visit_type(&mut exp.ty);
             match &mut exp.exp.value {
                 TE::Move { from_user: _, var }
@@ -866,7 +863,8 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
                 let Some(def_loc) = self.type_params.get(&use_name) else {
                     debug_assert!(
                         false,
-                        "Could not find type for {use_name:#?} in {:#?}", self.type_params
+                        "Could not find type for {use_name:#?} in {:#?}",
+                        self.type_params
                     );
                     return true;
                 };
@@ -931,7 +929,7 @@ impl<'a> TypingVisitorContext for TypingSymbolicator<'a> {
     }
 }
 
-impl diag::PositionInfo for TypingSymbolicator<'_> {
+impl diag::PositionInfo for TypingAnalysisContext<'_> {
     type FileContents = String;
 
     fn files(&self) -> &SimpleFiles<Symbol, Self::FileContents> {

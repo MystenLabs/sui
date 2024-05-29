@@ -288,9 +288,7 @@ pub trait TypingVisitorContext {
     }
 
     fn visit_use_funs(&mut self, use_funs: &mut N::UseFuns) {
-        if self.visit_use_funs_custom(use_funs) {
-            return;
-        }
+        let _ = self.visit_use_funs_custom(use_funs);
         // Nothing to traverse in the other case
     }
 
@@ -305,7 +303,8 @@ pub trait TypingVisitorContext {
         }
     }
 
-    /// Custom visit for a sequence item. It will skip `visit_seq_item` if `visit_seq_item_custom` returns true.
+    /// Custom visit for a sequence item. It will skip `visit_seq_item` if `visit_seq_item_custom`
+    /// returns true.
     fn visit_seq_item_custom(&mut self, _seq_item: &mut T::SequenceItem) -> bool {
         false
     }
@@ -344,7 +343,7 @@ pub trait TypingVisitorContext {
             return;
         };
         for lvalue in &mut lvalues.value {
-            self.visit_lvalue(&kind, lvalue);
+            self.visit_lvalue(kind, lvalue);
         }
     }
 

@@ -1,4 +1,4 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod typing_symbol_visitor;
+pub mod typing_analysis;
