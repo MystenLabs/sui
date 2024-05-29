@@ -3,7 +3,7 @@
 
 import { hasDisplayData, isKioskOwnerToken, useGetOwnedObjects } from '@mysten/core';
 import { useKioskClient } from '@mysten/core/src/hooks/useKioskClient';
-import { type SuiObjectData } from '@mysten/sui.js/client';
+import { type SuiObjectData } from '@mysten/sui/client';
 import { useMemo } from 'react';
 
 import { useBuyNLargeAsset } from '../components/buynlarge/useBuyNLargeAsset';

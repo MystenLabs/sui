@@ -3,6 +3,8 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IBridgeVault.sol";
 import "./interfaces/IWETH9.sol";
 
@@ -12,7 +14,7 @@ import "./interfaces/IWETH9.sol";
 /// unwrapping WETH (Wrapped Ether) and transferring the unwrapped ETH.
 /// @dev The contract is initialized with the deployer as the owner. The ownership is intended to be
 /// transferred to the SuiBridge contract after the bridge contract is deployed.
-contract BridgeVault is Ownable, IBridgeVault {
+contract BridgeVault is Ownable, IBridgeVault, ReentrancyGuard {
     /* ========== STATE VARIABLES ========== */
 
     IWETH9 public immutable wETH;
@@ -21,7 +23,7 @@ contract BridgeVault is Ownable, IBridgeVault {
 
     /// @notice Constructor function for the BridgeVault contract.
     /// @param _wETH The address of the Wrapped Ether (WETH) contract.
-    constructor(address _wETH) Ownable(msg.sender) {
+    constructor(address _wETH) Ownable(msg.sender) ReentrancyGuard() {
         // Set the WETH address
         wETH = IWETH9(_wETH);
     }
@@ -36,15 +38,10 @@ contract BridgeVault is Ownable, IBridgeVault {
         external
         override
         onlyOwner
+        nonReentrant
     {
-        // Get the token contract instance
-        IERC20 token = IERC20(tokenAddress);
-
         // Transfer the tokens from the contract to the target address
-        bool success = token.transfer(recipientAddress, amount);
-
-        // Check that the transfer was successful
-        require(success, "BridgeVault: Transfer failed");
+        SafeERC20.safeTransfer(IERC20(tokenAddress), recipientAddress, amount);
     }
 
     /// @notice Unwraps stored wrapped ETH and transfers the newly withdrawn ETH to the provided target
@@ -56,15 +53,21 @@ contract BridgeVault is Ownable, IBridgeVault {
         external
         override
         onlyOwner
+        nonReentrant
     {
         // Unwrap the WETH
         wETH.withdraw(amount);
 
         // Transfer the unwrapped ETH to the target address
-        recipientAddress.transfer(amount);
+        (bool success,) = recipientAddress.call{value: amount}("");
+        require(success, "ETH transfer failed");
     }
 
-    /// @notice Enables the contract to receive ETH.
-    /// @dev This function is required to receive ETH when unwrapping WETH.
-    receive() external payable {}
+    /// @notice Wraps as eth sent to this contract.
+    /// @dev skip if sender is wETH contract to avoid infinite loop.
+    receive() external payable {
+        if (msg.sender != address(wETH)) {
+            wETH.deposit{value: msg.value}();
+        }
+    }
 }

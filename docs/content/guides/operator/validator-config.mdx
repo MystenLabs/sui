@@ -26,7 +26,7 @@ Specific steps you must take include:
 
 ## Hardware requirements to run a Validator node
 
-Suggested minimum hardware specifications to run a Sui Full node:
+Suggested minimum hardware specifications to run a Sui Validator node:
 
 - CPU: 24 physical cores (or 48 virtual cores)
 - Memory: 128 GB
@@ -89,6 +89,8 @@ For example, assume that there are seven validators with equal stake, and the pr
 In practice, the process for submitting a gas price quote for the Gas Price Survey is a straightforward one. Each validator owns an object that contains their quote for the reference gas price. To change their response, they must update the value in that object.
 
 For example, to set the price quote for the next epoch to 42, run:
+
+{@include: ../../snippets/info-gas-budget.mdx}
 
 ```shell
 sui client call --package <PACKAGE-ID> --module sui_system --function request_set_gas_price --args 0x5 \"42\" --gas-budget <GAS-AMOUNT>

@@ -6,11 +6,13 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::base_types::{AuthorityName, EpochId, SuiAddress};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, StakeUnit};
-use crate::crypto::AuthorityPublicKeyBytes;
 use crate::multiaddr::Multiaddr;
 use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
-use consensus_config::{Authority, Committee as ConsensusCommittee};
+use consensus_config::{
+    Authority, AuthorityPublicKey, Committee as ConsensusCommittee, NetworkPublicKey,
+    ProtocolPublicKey,
+};
 use narwhal_config::{Committee as NarwhalCommittee, CommitteeBuilder, WorkerCache, WorkerIndex};
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
@@ -192,23 +194,22 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
                 // TODO(mysticeti): Add EpochStartValidatorInfoV2 with new field for mysticeti address.
                 address: validator.narwhal_primary_address.clone(),
                 hostname: validator.hostname.clone(),
-                network_key: validator.narwhal_network_pubkey.clone(),
-                protocol_key: validator.protocol_pubkey.clone(),
+                authority_key: AuthorityPublicKey::new(validator.protocol_pubkey.clone()),
+                protocol_key: ProtocolPublicKey::new(validator.narwhal_worker_pubkey.clone()),
+                network_key: NetworkPublicKey::new(validator.narwhal_network_pubkey.clone()),
             });
         }
 
         // Sort the authorities by their protocol (public) key in ascending order, same as the order
         // in the Sui committee returned from get_sui_committee().
-        authorities.sort_by(|a1, a2| a1.protocol_key.cmp(&a2.protocol_key));
+        authorities.sort_by(|a1, a2| a1.authority_key.cmp(&a2.authority_key));
 
         for ((i, mysticeti_authority), sui_authority_name) in authorities
             .iter()
             .enumerate()
             .zip(self.get_sui_committee().names())
         {
-            if sui_authority_name
-                != &AuthorityPublicKeyBytes::from(&mysticeti_authority.protocol_key)
-            {
+            if sui_authority_name.0 != mysticeti_authority.authority_key.to_bytes() {
                 error!(
                     "Mismatched authority order between Sui and Mysticeti! Index {}, Mysticeti authority {:?}\nSui authority name {}",
                     i, mysticeti_authority, sui_authority_name
@@ -388,7 +389,7 @@ mod test {
                 .unwrap();
 
             assert_eq!(
-                mysticeti_authority.protocol_key.pubkey.to_bytes(),
+                mysticeti_authority.authority_key.to_bytes(),
                 sui_authority_name.0,
                 "Mysten & SUI committee member of same index correspond to different public key"
             );

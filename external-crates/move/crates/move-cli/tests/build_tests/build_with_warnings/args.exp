@@ -1,7 +1,7 @@
 Command `build`:
 BUILDING Test
 warning[W09002]: unused variable
-  ┌─ sources/m.move:2:16
+  ┌─ ./sources/m.move:2:16
   │
 2 │ public fun foo(x: u64): u64 {
   │                ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
@@ -13,14 +13,17 @@ Command `disassemble --package Test --name m`:
 module 42.m {
 
 
+
+
 public foo(x#0#0: u64): u64 {
 B0:
 	0: LdU64(2)
 	1: Ret
+
 }
 }
 warning[W09002]: unused variable
-  ┌─ sources/m.move:2:16
+  ┌─ ./sources/m.move:2:16
   │
 2 │ public fun foo(x: u64): u64 {
   │                ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
@@ -34,7 +37,7 @@ BUILDING Test
 Command `build --warnings-are-errors`:
 BUILDING Test
 error[E09002]: unused variable
-  ┌─ sources/m.move:2:16
+  ┌─ ./sources/m.move:2:16
   │
 2 │ public fun foo(x: u64): u64 {
   │                ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'

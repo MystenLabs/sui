@@ -3,18 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::unit_tests::production_config;
-use invalid_mutations::signature::{FieldRefMutation, SignatureRefMutation};
 use move_binary_format::file_format::{
     Bytecode::*, CompiledModule, SignatureToken::*, Visibility::Public, *,
 };
 use move_bytecode_verifier::{
-    meter::DummyMeter, verify_module_unmetered, verify_module_with_config_for_test,
-    SignatureChecker,
+    verify_module_unmetered, verify_module_with_config_for_test, SignatureChecker,
 };
+use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
-use proptest::{collection::vec, prelude::*, sample::Index as PropIndex};
 
 #[test]
 fn test_reference_of_reference() {
@@ -26,39 +24,6 @@ fn test_reference_of_reference() {
     assert!(errors.is_err());
 }
 
-proptest! {
-    #[test]
-    fn valid_signatures(module in CompiledModule::valid_strategy(20)) {
-        prop_assert!(SignatureChecker::verify_module(&module).is_ok())
-    }
-
-    #[test]
-    fn double_refs(
-        mut module in CompiledModule::valid_strategy(20),
-        mutations in vec((any::<PropIndex>(), any::<PropIndex>()), 0..20),
-    ) {
-        let context = SignatureRefMutation::new(&mut module, mutations);
-        let expected_violations = context.apply();
-
-        let result = SignatureChecker::verify_module(&module);
-
-        prop_assert_eq!(expected_violations, result.is_err());
-    }
-
-    #[test]
-    fn field_def_references(
-        mut module in CompiledModule::valid_strategy(20),
-        mutations in vec((any::<PropIndex>(), any::<PropIndex>()), 0..40),
-    ) {
-        let context = FieldRefMutation::new(&mut module, mutations);
-        let expected_violations = context.apply();
-
-        let result = SignatureChecker::verify_module(&module);
-
-        prop_assert_eq!(expected_violations, result.is_err());
-    }
-}
-
 #[test]
 fn no_verify_locals_good() {
     let compiled_module_good = CompiledModule {
@@ -68,7 +33,7 @@ fn no_verify_locals_good() {
             name: IdentifierIndex(0),
         }],
         self_module_handle_idx: ModuleHandleIndex(0),
-        struct_handles: vec![],
+        datatype_handles: vec![],
         signatures: vec![
             Signature(vec![Address]),
             Signature(vec![U64]),
@@ -113,6 +78,7 @@ fn no_verify_locals_good() {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(0),
                     code: vec![Ret],
+                    jump_tables: vec![],
                 }),
             },
             FunctionDefinition {
@@ -123,9 +89,14 @@ fn no_verify_locals_good() {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(1),
                     code: vec![Ret],
+                    jump_tables: vec![],
                 }),
             },
         ],
+        enum_defs: vec![],
+        enum_def_instantiations: vec![],
+        variant_handles: vec![],
+        variant_instantiation_handles: vec![],
     };
     assert!(verify_module_unmetered(&compiled_module_good).is_ok());
 }
@@ -141,7 +112,7 @@ fn big_signature_test() {
     }
     for _ in 0..INSTANTIATION_DEPTH {
         let type_params = vec![st; N_TYPE_PARAMS];
-        st = SignatureToken::StructInstantiation(Box::new((StructHandleIndex(0), type_params)));
+        st = SignatureToken::DatatypeInstantiation(Box::new((DatatypeHandleIndex(0), type_params)));
     }
 
     const N_READPOP: u16 = 7500;
@@ -157,7 +128,7 @@ fn big_signature_test() {
     }
     code.push(Bytecode::Ret);
 
-    let type_param_constraints = StructTypeParameter {
+    let type_param_constraints = DatatypeTyParameter {
         constraints: AbilitySet::EMPTY,
         is_phantom: false,
     };
@@ -169,7 +140,7 @@ fn big_signature_test() {
             address: AddressIdentifierIndex(0),
             name: IdentifierIndex(0),
         }],
-        struct_handles: vec![StructHandle {
+        datatype_handles: vec![DatatypeHandle {
             module: ModuleHandleIndex(0),
             name: IdentifierIndex(1),
             abilities: AbilitySet::ALL,
@@ -196,7 +167,7 @@ fn big_signature_test() {
         constant_pool: vec![],
         metadata: vec![],
         struct_defs: vec![StructDefinition {
-            struct_handle: StructHandleIndex(0),
+            struct_handle: DatatypeHandleIndex(0),
             field_information: StructFieldInformation::Native,
         }],
         function_defs: vec![FunctionDefinition {
@@ -207,8 +178,13 @@ fn big_signature_test() {
             code: Some(CodeUnit {
                 locals: SignatureIndex(0),
                 code,
+                jump_tables: vec![],
             }),
         }],
+        enum_def_instantiations: vec![],
+        enum_defs: vec![],
+        variant_handles: vec![],
+        variant_instantiation_handles: vec![],
     };
 
     // save module and verify that it can ser/de
@@ -218,7 +194,7 @@ fn big_signature_test() {
 
     let res = verify_module_with_config_for_test(
         "big_signature_test",
-        &production_config(),
+        &production_config().0,
         &module,
         &mut DummyMeter,
     )

@@ -7,8 +7,6 @@
 
 //# publish
 module test::m1 {
-    use std::option::Option;
-    use sui::object::ID;
     use std::string::String;
     use std::ascii;
 

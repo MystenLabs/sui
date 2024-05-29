@@ -89,7 +89,7 @@ type Address implements IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this address. These grant the owner the capability to
 	manage the associated domain.
@@ -310,6 +310,14 @@ String representation of an arbitrary width, possibly signed integer.
 scalar BigInt
 
 
+type BridgeCommitteeInitTransaction {
+	bridgeObjInitialSharedVersion: Int!
+}
+
+type BridgeStateCreateTransaction {
+	chainId: String!
+}
+
 """
 A system transaction that updates epoch information on-chain (increments the current epoch).
 Executed by the system once per epoch, without using gas. Epoch change transactions cannot be
@@ -473,7 +481,7 @@ type Coin implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -632,7 +640,7 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -819,6 +827,11 @@ type DisplayEntry {
 	error: String
 }
 
+enum DomainFormat {
+	AT
+	DOT
+}
+
 type DryRunEffect {
 	"""
 	Changes made to arguments that were mutably borrowed by each command in this transaction.
@@ -938,7 +951,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -1324,6 +1337,31 @@ type GenesisTransaction {
 
 
 """
+Interface implemented by all GraphQL types that represent a Move datatype (either structs or
+enums). This interface is used to provide a way to access fields that are shared by both
+structs and enums, e.g., the module that the datatype belongs to, the name of the datatype,
+type parameters etc.
+"""
+interface IMoveDatatype {
+	"""
+	The module that the datatype belongs to.
+	"""
+	module: MoveModule!
+	"""
+	The name of the datatype.
+	"""
+	name: String!
+	"""
+	The abilities of the datatype.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	The type parameters of the datatype.
+	"""
+	typeParameters: [MoveStructTypeParameter!]
+}
+
+"""
 This interface is implemented by types that represent a Move object on-chain (A Move value whose
 type has `key`).
 """
@@ -1430,7 +1468,7 @@ interface IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object or address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object or address. These grant the owner the capability to manage the associated domain.
 	"""
@@ -1571,9 +1609,126 @@ type MoveData =
   | { String:  string }
   | { Vector:  [MoveData] }
   | { Option:   MoveData? }
-  | { Struct:  [{ name: string, value: MoveData }] }
+  | { Struct:  [{ name: string , value: MoveData }] }
+  | { Variant: {
+      name: string,
+      fields: [{ name: string, value: MoveData }],
+  }
 """
 scalar MoveData
+
+"""
+The generic representation of a Move datatype (either a struct or an enum) which exposes common
+fields and information (module, name, abilities, type parameters etc.) that is shared across
+them.
+"""
+type MoveDatatype implements IMoveDatatype {
+	module: MoveModule!
+	name: String!
+	abilities: [MoveAbility!]
+	typeParameters: [MoveStructTypeParameter!]
+	asMoveEnum: MoveEnum
+	asMoveStruct: MoveStruct
+}
+
+type MoveDatatypeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MoveDatatypeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveDatatype!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveDatatypeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveDatatype!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Description of an enum type, defined in a Move module.
+"""
+type MoveEnum implements IMoveDatatype {
+	"""
+	The module this enum was originally defined in.
+	"""
+	module: MoveModule!
+	"""
+	The enum's (unqualified) type name.
+	"""
+	name: String!
+	"""
+	The enum's abilities.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	Constraints on the enum's formal type parameters.  Move bytecode does not name type
+	parameters, so when they are referenced (e.g. in field types) they are identified by their
+	index in this list.
+	"""
+	typeParameters: [MoveStructTypeParameter!]
+	"""
+	The names and types of the enum's fields.  Field types reference type parameters, by their
+	index in the defining enum's `typeParameters` list.
+	"""
+	variants: [MoveEnumVariant!]
+}
+
+type MoveEnumConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MoveEnumEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveEnum!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveEnumEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveEnum!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type MoveEnumVariant {
+	"""
+	The name of the variant
+	"""
+	name: String!
+	"""
+	The names and types of the variant's fields.  Field types reference type parameters, by their
+	index in the defining enum's `typeParameters` list.
+	"""
+	fields: [MoveField!]
+}
 
 """
 Information for a particular field on a Move struct.
@@ -1686,6 +1841,22 @@ type MoveModule {
 	"""
 	structs(first: Int, after: String, last: Int, before: String): MoveStructConnection
 	"""
+	Look-up the definition of a enum defined in this module, by its name.
+	"""
+	enum(name: String!): MoveEnum
+	"""
+	Iterate through the enums defined in this module.
+	"""
+	enums(first: Int, after: String, last: Int, before: String): MoveEnumConnection
+	"""
+	Look-up the definition of a datatype (struct or enum) defined in this module, by its name.
+	"""
+	datatype(name: String!): MoveDatatype
+	"""
+	Iterate through the datatypes (enmums and structs) defined in this module.
+	"""
+	datatypes(first: Int, after: String, last: Int, before: String): MoveDatatypeConnection
+	"""
 	Look-up the signature of a function defined in this module, by its name.
 	"""
 	function(name: String!): MoveFunction
@@ -1764,7 +1935,7 @@ type MoveObject implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -1944,7 +2115,7 @@ type MovePackage implements IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this package. These grant the owner the capability to
 	manage the associated domain.
@@ -2049,9 +2220,9 @@ type MovePackageEdge {
 }
 
 """
-Description of a type, defined in a Move module.
+Description of a struct type, defined in a Move module.
 """
-type MoveStruct {
+type MoveStruct implements IMoveDatatype {
 	"""
 	The module this struct was originally defined in.
 	"""
@@ -2147,6 +2318,14 @@ type MoveTypeLayout =
         fields: [{ name: string, layout: MoveTypeLayout }],
       }
     }
+  | { enum: [{
+          type: string,
+          variants: [{ 
+              name: string,
+              fields: [{ name: string, layout: MoveTypeLayout }],
+          }]
+      }] 
+  }
 """
 scalar MoveTypeLayout
 
@@ -2275,7 +2454,7 @@ type Object implements IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -2485,18 +2664,14 @@ input ObjectKey {
 
 enum ObjectKind {
 	"""
-	The object is loaded from serialized data, such as the contents of a transaction.
+	The object is loaded from serialized data, such as the contents of a transaction that hasn't
+	been indexed yet.
 	"""
 	NOT_INDEXED
 	"""
-	The object is currently live and is not deleted or wrapped.
+	The object is fetched from the index.
 	"""
-	LIVE
-	"""
-	The object is referenced at some version, and thus is fetched from the snapshot or
-	historical objects table.
-	"""
-	HISTORICAL
+	INDEXED
 	"""
 	The object is deleted or wrapped and only partial information can be loaded from the
 	indexer.
@@ -2620,7 +2795,7 @@ type Owner implements IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object or address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object or address. These grant the owner the
 	capability to manage the associated domain.
@@ -2904,6 +3079,20 @@ type Query {
 	The coin metadata associated with the given coin type.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
+	"""
+	Verify a zkLogin signature based on the provided transaction or personal message
+	based on current epoch, chain id, and latest JWKs fetched on-chain. If the
+	signature is valid, the function returns a `ZkLoginVerifyResult` with success as
+	true and an empty list of errors. If the signature is invalid, the function returns
+	a `ZkLoginVerifyResult` with success as false with a list of errors.
+	
+	- `bytes` is either the personal message in raw bytes or transaction data bytes in
+	BCS-encoded and then Base64-encoded.
+	- `signature` is a serialized zkLogin signature that is Base64-encoded.
+	- `intentScope` is an enum that specifies the intent scope to be used to parse bytes.
+	- `author` is the address of the signer of the transaction or personal msg.
+	"""
+	verifyZkloginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult!
 }
 
 type RandomnessStateCreateTransaction {
@@ -2998,6 +3187,10 @@ type ServiceConfig {
 	"""
 	isEnabled(feature: Feature!): Boolean!
 	"""
+	List the available versions for this GraphQL service.
+	"""
+	availableVersions: [String!]!
+	"""
 	List of all features that are enabled on this GraphQL service.
 	"""
 	enabledFeatures: [Feature!]!
@@ -3036,7 +3229,14 @@ type ServiceConfig {
 	"""
 	maxPageSize: Int!
 	"""
-	Maximum time in milliseconds that will be spent to serve one request.
+	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a
+	a transaction to execute. Note that the transaction may still succeed even in the case of a
+	timeout. Transactions are idempotent, so a transaction that times out should be resubmitted
+	until the network returns a definite response (success or failure, not timeout).
+	"""
+	mutationTimeoutMs: Int!
+	"""
+	Maximum time in milliseconds that will be spent to serve one query request.
 	"""
 	requestTimeoutMs: Int!
 	"""
@@ -3088,6 +3288,20 @@ type SharedInput {
 	respect to each other.
 	"""
 	mutable: Boolean!
+}
+
+"""
+The transaction accpeted a shared object as input, but its execution was cancelled.
+"""
+type SharedObjectCancelled {
+	"""
+	ID of the shared object.
+	"""
+	address: SuiAddress!
+	"""
+	The assigned shared object version. It is a special version indicating transaction cancellation reason.
+	"""
+	version: Int!
 }
 
 """
@@ -3228,7 +3442,7 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -3430,7 +3644,7 @@ type SuinsRegistration implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -3690,6 +3904,8 @@ type TransactionBlockEffects {
 	lamportVersion: Int!
 	"""
 	The reason for a transaction failure, if it did fail.
+	If the error is a Move abort, the error message will be resolved to a human-readable form if
+	possible, otherwise it will fall back to displaying the abort code and location.
 	"""
 	errors: String
 	"""
@@ -3856,7 +4072,7 @@ This information is considered part of the effects, because although the transac
 the shared object as input, consensus must schedule it and pick the version that is actually
 used.
 """
-union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete | SharedObjectCancelled
 
 type UnchangedSharedObjectConnection {
 	"""
@@ -3948,12 +4164,22 @@ type Validator {
 	The validator's current staking pool object, used to track the amount of stake
 	and to compound staking rewards.
 	"""
-	stakingPool: MoveObject
+	stakingPool: MoveObject @deprecated(reason: "The staking pool is a wrapped object. Access its fields directly on the `Validator` type.")
+	"""
+	The ID of this validator's `0x3::staking_pool::StakingPool`.
+	"""
+	stakingPoolId: SuiAddress!
 	"""
 	The validator's current exchange object. The exchange rate is used to determine
 	the amount of SUI tokens that each past SUI staker can withdraw in the future.
 	"""
-	exchangeRates: MoveObject
+	exchangeRates: MoveObject @deprecated(reason: "The exchange object is a wrapped object. Access its dynamic fields through the `exchangeRatesTable` query.")
+	"""
+	A wrapped object containing the validator's exchange rates. This is a table from epoch
+	number to `PoolTokenExchangeRate` value. The exchange rate is used to determine the amount
+	of SUI tokens that each past SUI staker can withdraw in the future.
+	"""
+	exchangeRatesTable: Owner
 	"""
 	Number of exchange rates in the table.
 	"""
@@ -4121,6 +4347,35 @@ type ValidatorSet {
 	The current set of active validators.
 	"""
 	activeValidators(first: Int, before: String, last: Int, after: String): ValidatorConnection!
+}
+
+"""
+An enum that specifies the intent scope to be used to parse the bytes for signature
+verification.
+"""
+enum ZkLoginIntentScope {
+	"""
+	Indicates that the bytes are to be parsed as transaction data bytes.
+	"""
+	TRANSACTION_DATA
+	"""
+	Indicates that the bytes are to be parsed as a personal message.
+	"""
+	PERSONAL_MESSAGE
+}
+
+"""
+The result of the zkLogin signature verification.
+"""
+type ZkLoginVerifyResult {
+	"""
+	The boolean result of the verification. If true, errors should be empty.
+	"""
+	success: Boolean!
+	"""
+	The errors field captures any verification error
+	"""
+	errors: [String!]!
 }
 
 schema {

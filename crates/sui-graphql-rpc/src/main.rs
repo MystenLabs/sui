@@ -11,28 +11,28 @@ use sui_graphql_rpc::config::{
 };
 use sui_graphql_rpc::server::builder::export_schema;
 use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 
-// WARNING!!!
-//
-// Do not move or use similar logic to generate git revision information outside of a binary entry
-// point (e.g. main.rs). Placing the below logic into a library can result in unnecessary builds.
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        git_version::git_version!(
-            args = ["--always", "--abbrev=12", "--dirty", "--exclude", "*"],
-            fallback = "DIRTY"
-        )
-    }
-};
+// Define the `GIT_REVISION` const
+bin_version::git_revision!();
 
 // VERSION mimics what other sui binaries use for the same const
-static VERSION: Version = Version(const_str::concat!(
-    env!("CARGO_PKG_VERSION"),
-    "-",
-    GIT_REVISION
-));
+static VERSION: Version = Version {
+    year: env!("CARGO_PKG_VERSION_MAJOR"),
+    month: env!("CARGO_PKG_VERSION_MINOR"),
+    patch: env!("CARGO_PKG_VERSION_PATCH"),
+    sha: GIT_REVISION,
+    full: const_str::concat!(
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        ".",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        ".",
+        env!("CARGO_PKG_VERSION_PATCH"),
+        "-",
+        GIT_REVISION
+    ),
+};
 
 #[tokio::main]
 async fn main() {
@@ -74,6 +74,7 @@ async fn main() {
         Command::StartServer {
             ide_title,
             db_url,
+            db_pool_size,
             port,
             host,
             config,
@@ -81,11 +82,14 @@ async fn main() {
             prom_host,
             prom_port,
         } => {
-            let connection = ConnectionConfig::new(port, host, db_url, None, prom_host, prom_port);
+            let connection =
+                ConnectionConfig::new(port, host, db_url, db_pool_size, prom_host, prom_port);
             let service_config = service_config(config);
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()
                 .init();
+            let tracker = TaskTracker::new();
+            let cancellation_token = CancellationToken::new();
 
             println!("Starting server...");
             let server_config = ServerConfig {
@@ -96,9 +100,31 @@ async fn main() {
                 ..ServerConfig::default()
             };
 
-            start_graphiql_server(&server_config, &VERSION)
-                .await
-                .unwrap();
+            let cancellation_token_clone = cancellation_token.clone();
+            let graphql_service_handle = tracker.spawn(async move {
+                start_graphiql_server(&server_config, &VERSION, cancellation_token_clone)
+                    .await
+                    .unwrap();
+            });
+
+            // Wait for shutdown signal
+            tokio::select! {
+                result = graphql_service_handle => {
+                    if let Err(e) = result {
+                        println!("GraphQL service crashed or exited with error: {:?}", e);
+                    }
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    println!("Ctrl+C signal received.");
+                },
+            }
+
+            println!("Shutting down...");
+
+            // Send shutdown signal to application
+            cancellation_token.cancel();
+            tracker.close();
+            tracker.wait().await;
         }
     }
 }

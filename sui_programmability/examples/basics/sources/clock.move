@@ -4,16 +4,14 @@
 /// This example demonstrates reading a clock object.
 /// Current time is emitted as an event in the get_time transaction
 module basics::clock {
-    use sui::clock::{Self, Clock};
-    use sui::event;
-    use sui::tx_context::TxContext;
+    use sui::{clock::Clock, event};
 
-    struct TimeEvent has copy, drop {
+    public struct TimeEvent has copy, drop {
         timestamp_ms: u64,
     }
 
     /// Emit event with current time.
-    public entry fun get_time(clock: &Clock, _ctx: &mut TxContext) {
-        event::emit(TimeEvent { timestamp_ms: clock::timestamp_ms(clock) });
+    entry fun access(clock: &Clock) {
+        event::emit(TimeEvent { timestamp_ms: clock.timestamp_ms() });
     }
 }

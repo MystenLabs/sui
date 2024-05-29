@@ -19,7 +19,7 @@ module sui::test_utils {
     }
 
     public fun print(str: vector<u8>) {
-        std::debug::print(&std::ascii::string(str))
+        std::debug::print(&str.to_ascii_string())
     }
 
     public native fun destroy<T>(x: T);

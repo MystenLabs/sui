@@ -11,11 +11,11 @@ use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_type::MoveType;
 use super::move_value::MoveValue;
-use super::object::{self, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus};
+use super::object::{self, ObjectFilter, ObjectImpl, ObjectLookup, ObjectOwner, ObjectStatus};
 use super::owner::OwnerImpl;
 use super::stake::StakedSuiDowncastError;
 use super::sui_address::SuiAddress;
-use super::suins_registration::{SuinsRegistration, SuinsRegistrationDowncastError};
+use super::suins_registration::{DomainFormat, SuinsRegistration, SuinsRegistrationDowncastError};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use super::{coin::Coin, object::Object};
@@ -193,8 +193,14 @@ impl MoveObject {
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
-    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl::from(&self.super_).default_suins_name(ctx).await
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+        format: Option<DomainFormat>,
+    ) -> Result<Option<String>> {
+        OwnerImpl::from(&self.super_)
+            .default_suins_name(ctx, format)
+            .await
     }
 
     /// The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
@@ -417,11 +423,11 @@ impl MoveObjectImpl<'_> {
 
 impl MoveObject {
     pub(crate) async fn query(
-        db: &Db,
+        ctx: &Context<'_>,
         address: SuiAddress,
-        key: ObjectLookupKey,
+        key: ObjectLookup,
     ) -> Result<Option<Self>, Error> {
-        let Some(object) = Object::query(db, address, key).await? else {
+        let Some(object) = Object::query(ctx, address, key).await? else {
             return Ok(None);
         };
 
@@ -437,14 +443,13 @@ impl MoveObject {
     /// Query the database for a `page` of Move objects, optionally `filter`-ed.
     ///
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
-    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
-    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
-    /// state, it will be as if it was read at the same checkpoint.
+    /// queried for. Each entity returned in the connection will inherit this checkpoint, so that
+    /// when viewing that entity's state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<object::Cursor>,
         filter: ObjectFilter,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, MoveObject>, Error> {
         Object::paginate_subtype(db, page, filter, checkpoint_viewed_at, |object| {
             let address = object.address;

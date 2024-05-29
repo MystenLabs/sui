@@ -46,6 +46,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -96,19 +97,26 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -127,6 +135,9 @@ validator_configs:
       min-load-shedding-percentage-above-hard-limit: 50
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 100
+    execution-cache: passthrough-cache
   - protocol-key-pair:
       value: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
     worker-key-pair:
@@ -170,6 +181,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -220,19 +232,26 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -251,6 +270,9 @@ validator_configs:
       min-load-shedding-percentage-above-hard-limit: 50
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 100
+    execution-cache: passthrough-cache
   - protocol-key-pair:
       value: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
     worker-key-pair:
@@ -294,6 +316,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -344,19 +367,26 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -375,6 +405,9 @@ validator_configs:
       min-load-shedding-percentage-above-hard-limit: 50
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 100
+    execution-cache: passthrough-cache
   - protocol-key-pair:
       value: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
     worker-key-pair:
@@ -418,6 +451,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -468,19 +502,26 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -499,6 +540,9 @@ validator_configs:
       min-load-shedding-percentage-above-hard-limit: 50
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 100
+    execution-cache: passthrough-cache
   - protocol-key-pair:
       value: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
     worker-key-pair:
@@ -542,6 +586,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -592,19 +637,26 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -623,6 +675,9 @@ validator_configs:
       min-load-shedding-percentage-above-hard-limit: 50
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 100
+    execution-cache: passthrough-cache
   - protocol-key-pair:
       value: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
     worker-key-pair:
@@ -666,6 +721,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -716,19 +772,26 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -747,6 +810,9 @@ validator_configs:
       min-load-shedding-percentage-above-hard-limit: 50
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 100
+    execution-cache: passthrough-cache
   - protocol-key-pair:
       value: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
     worker-key-pair:
@@ -790,6 +856,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -840,19 +907,26 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Unknown:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - Credenza3
         - Facebook
         - Google
         - Kakao
+        - KarrierOne
+        - Microsoft
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -871,6 +945,9 @@ validator_configs:
       min-load-shedding-percentage-above-hard-limit: 50
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 100
+    execution-cache: passthrough-cache
 account_keys:
   - Hloy4pnf8pWEHGP+4OFsXz56bLdIJhkD2O+OdKMqCA4=
   - pvMScjoMR/DaN0M5IOxS2VpGC59N6kv6gDm63ufLQ5w=
@@ -878,3 +955,4 @@ account_keys:
   - mfPjCoE6SX0Sl84MnmNS/LS+tfPpkn7I8tziuk2g0WM=
   - 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
 genesis: "[fake genesis]"
+

@@ -5,11 +5,54 @@
 /// - Creating proof-of-publish objects from one-time witnesses
 /// - Administering package upgrades through upgrade policies.
 module sui::package {
-    use sui::object::{Self, ID, UID};
-    use sui::tx_context::{TxContext, sender};
     use std::ascii::String;
     use std::type_name;
     use sui::types;
+
+    /// Allows calling `.burn` to destroy a `Publisher`.
+    public use fun burn_publisher as Publisher.burn;
+
+    /// Allows calling `.module_` to access the name of the module a
+    /// `Publisher` was derived from.
+    public use fun published_module as Publisher.module_;
+
+    /// Allows calling `.package` to access the address of the package
+    /// a `Publisher` was derived from.
+    public use fun published_package as Publisher.package;
+
+    /// Allows calling `.package` to access the package this cap
+    /// authorizes upgrades for.
+    public use fun upgrade_package as UpgradeCap.package;
+
+    /// Allows calling `.policy` to access the most permissive kind of
+    /// upgrade this cap will authorize.
+    public use fun upgrade_policy as UpgradeCap.policy;
+
+    /// Allows calling `.authorize` to initiate an upgrade.
+    public use fun authorize_upgrade as UpgradeCap.authorize;
+
+    /// Allows calling `.commit` to finalize an upgrade.
+    public use fun commit_upgrade as UpgradeCap.commit;
+
+    /// Allows calling `.package` to access the package this ticket
+    /// authorizes an upgrade for.
+    public use fun ticket_package as UpgradeTicket.package;
+
+    /// Allows calling `.policy` to access the kind of upgrade this
+    /// ticket authorizes.
+    public use fun ticket_policy as UpgradeTicket.policy;
+
+    /// Allows calling `.digest` to access the digest of the bytecode
+    /// used for this upgrade.
+    public use fun ticket_digest as UpgradeTicket.digest;
+
+    /// Allows calling `.cap` to fetch the ID of the cap this receipt
+    /// should be applied to.
+    public use fun receipt_cap as UpgradeReceipt.cap;
+
+    /// Allows calling `.package` to fetch the ID of the package after
+    /// upgrade.
+    public use fun receipt_package as UpgradeReceipt.package;
 
     /// Tried to create a `Publisher` using a type that isn't a
     /// one-time witness.
@@ -36,14 +79,14 @@ module sui::package {
     /// generates a module, by consuming its one-time witness, so it
     /// can be used to identify the address that published the package
     /// a type originated from.
-    struct Publisher has key, store {
+    public struct Publisher has key, store {
         id: UID,
         package: String,
         module_name: String,
     }
 
     /// Capability controlling the ability to upgrade a package.
-    struct UpgradeCap has key, store {
+    public struct UpgradeCap has key, store {
         id: UID,
         /// (Mutable) ID of the package that can be upgraded.
         package: ID,
@@ -62,7 +105,7 @@ module sui::package {
     /// between concurrent updates or a change in its upgrade policy after
     /// issuing a ticket, so the ticket is a "Hot Potato" to preserve forward
     /// progress.
-    struct UpgradeTicket {
+    public struct UpgradeTicket {
         /// (Immutable) ID of the `UpgradeCap` this originated from.
         cap: ID,
         /// (Immutable) ID of the package that can be upgraded.
@@ -79,7 +122,7 @@ module sui::package {
     /// information to be used to update the `UpgradeCap`.  This is a "Hot
     /// Potato" to ensure that it is used to update its `UpgradeCap` before
     /// the end of the transaction that performed the upgrade.
-    struct UpgradeReceipt {
+    public struct UpgradeReceipt {
         /// (Immutable) ID of the `UpgradeCap` this originated from.
         cap: ID,
         /// (Immutable) ID of the package after it was upgraded.
@@ -93,12 +136,12 @@ module sui::package {
     public fun claim<OTW: drop>(otw: OTW, ctx: &mut TxContext): Publisher {
         assert!(types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
-        let type = type_name::get_with_original_ids<OTW>();
+        let tyname = type_name::get_with_original_ids<OTW>();
 
         Publisher {
             id: object::new(ctx),
-            package: type_name::get_address(&type),
-            module_name: type_name::get_module(&type),
+            package: tyname.get_address(),
+            module_name: tyname.get_module(),
         }
     }
 
@@ -107,29 +150,26 @@ module sui::package {
     /// Since this function can only be called in the module initializer,
     /// the sender is the publisher.
     public fun claim_and_keep<OTW: drop>(otw: OTW, ctx: &mut TxContext) {
-        sui::transfer::public_transfer(claim(otw, ctx), sender(ctx))
+        sui::transfer::public_transfer(claim(otw, ctx), ctx.sender())
     }
 
     /// Destroy a Publisher object effectively removing all privileges
     /// associated with it.
     public fun burn_publisher(self: Publisher) {
         let Publisher { id, package: _, module_name: _ } = self;
-        object::delete(id);
+        id.delete();
     }
 
     /// Check whether type belongs to the same package as the publisher object.
     public fun from_package<T>(self: &Publisher): bool {
-        let type = type_name::get_with_original_ids<T>();
-
-        (type_name::get_address(&type) == self.package)
+        type_name::get_with_original_ids<T>().get_address() == self.package
     }
 
     /// Check whether a type belongs to the same module as the publisher object.
     public fun from_module<T>(self: &Publisher): bool {
-        let type = type_name::get_with_original_ids<T>();
+        let tyname = type_name::get_with_original_ids<T>();
 
-        (type_name::get_address(&type) == self.package)
-            && (type_name::get_module(&type) == self.module_name)
+        (tyname.get_address() == self.package) && (tyname.get_module() == self.module_name)
     }
 
     /// Read the name of the module.
@@ -209,19 +249,19 @@ module sui::package {
     /// Restrict upgrades through this upgrade `cap` to just add code, or
     /// change dependencies.
     public entry fun only_additive_upgrades(cap: &mut UpgradeCap) {
-        restrict(cap, ADDITIVE)
+        cap.restrict(ADDITIVE)
     }
 
     /// Restrict upgrades through this upgrade `cap` to just change
     /// dependencies.
     public entry fun only_dep_upgrades(cap: &mut UpgradeCap) {
-        restrict(cap, DEP_ONLY)
+        cap.restrict(DEP_ONLY)
     }
 
     /// Discard the `UpgradeCap` to make a package immutable.
     public entry fun make_immutable(cap: UpgradeCap) {
         let UpgradeCap { id, package: _, version: _, policy: _ } = cap;
-        object::delete(id);
+        id.delete();
     }
 
     /// Issue a ticket authorizing an upgrade to a particular new bytecode
@@ -239,7 +279,7 @@ module sui::package {
         policy: u8,
         digest: vector<u8>
     ): UpgradeTicket {
-        let id_zero = object::id_from_address(@0x0);
+        let id_zero = @0x0.to_id();
         assert!(cap.package != id_zero, EAlreadyAuthorized);
         assert!(policy >= cap.policy, ETooPermissive);
 
@@ -263,7 +303,7 @@ module sui::package {
         let UpgradeReceipt { cap: cap_id, package } = receipt;
 
         assert!(object::id(cap) == cap_id, EWrongUpgradeCap);
-        assert!(object::id_to_address(&cap.package) == @0x0, ENotAuthorized);
+        assert!(cap.package.to_address() == @0x0, ENotAuthorized);
 
         cap.package = package;
         cap.version = cap.version + 1;
@@ -272,12 +312,12 @@ module sui::package {
     #[test_only]
     /// Test-only function to claim a Publisher object bypassing OTW check.
     public fun test_claim<OTW: drop>(_: OTW, ctx: &mut TxContext): Publisher {
-        let type = type_name::get_with_original_ids<OTW>();
+        let tyname = type_name::get_with_original_ids<OTW>();
 
         Publisher {
             id: object::new(ctx),
-            package: type_name::get_address(&type),
-            module_name: type_name::get_module(&type),
+            package: tyname.get_address(),
+            module_name: tyname.get_module(),
         }
     }
 
@@ -302,8 +342,8 @@ module sui::package {
 
         // Generate a fake package ID for the upgraded package by
         // hashing the existing package and cap ID.
-        let data = object::id_to_bytes(&cap);
-        std::vector::append(&mut data, object::id_to_bytes(&package));
+        let mut data = cap.to_bytes();
+        data.append(package.to_bytes());
         let package = object::id_from_bytes(sui::hash::blake2b256(&data));
 
         UpgradeReceipt {

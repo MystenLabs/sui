@@ -6,9 +6,11 @@ pub mod action_executor;
 pub mod client;
 pub mod config;
 pub mod crypto;
+pub mod encoding;
 pub mod error;
 pub mod eth_client;
 pub mod eth_syncer;
+pub mod eth_transaction_builder;
 pub mod events;
 pub mod node;
 pub mod orchestrator;
@@ -18,6 +20,7 @@ pub mod sui_client;
 pub mod sui_syncer;
 pub mod sui_transaction_builder;
 pub mod types;
+pub mod utils;
 
 #[cfg(test)]
 pub(crate) mod eth_mock_provider;
@@ -26,7 +29,12 @@ pub(crate) mod eth_mock_provider;
 pub(crate) mod sui_mock_client;
 
 #[cfg(test)]
-pub(crate) mod test_utils;
+pub mod test_utils;
+
+pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 45;
+
+#[cfg(test)]
+pub mod e2e_tests;
 
 #[macro_export]
 macro_rules! retry_with_max_elapsed_time {

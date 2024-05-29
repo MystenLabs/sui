@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::bag`
 ---
@@ -17,7 +16,7 @@ bag::add(&mut bag1, 1, true);
 bag::add(&mut bag2, 0, false);
 bag::add(&mut bag2, 1, true);
 // bag1 does not equal bag2, despite having the same entries
-assert!(&bag1 != &bag2, 0);
+assert!(&bag1 != &bag2);
 ```
 At it's core, <code>sui::bag</code> is a wrapper around <code>UID</code> that allows for access to
 <code>sui::dynamic_field</code> while preventing accidentally stranding field values. A <code>UID</code> can be
@@ -359,7 +358,7 @@ Aborts with <code><a href="../sui-framework/bag.md#0x2_bag_EBagNotEmpty">EBagNot
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/bag.md#0x2_bag_destroy_empty">destroy_empty</a>(<a href="../sui-framework/bag.md#0x2_bag">bag</a>: <a href="../sui-framework/bag.md#0x2_bag_Bag">Bag</a>) {
     <b>let</b> <a href="../sui-framework/bag.md#0x2_bag_Bag">Bag</a> { id, size } = <a href="../sui-framework/bag.md#0x2_bag">bag</a>;
     <b>assert</b>!(size == 0, <a href="../sui-framework/bag.md#0x2_bag_EBagNotEmpty">EBagNotEmpty</a>);
-    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id)
+    id.delete()
 }
 </code></pre>
 

@@ -9,6 +9,7 @@ use std::fmt;
 pub mod abi;
 pub mod account_address;
 pub mod annotated_value;
+pub mod annotated_visitor;
 pub mod effects;
 pub mod errmap;
 pub mod gas_algebra;
@@ -27,6 +28,8 @@ pub mod u256;
 #[cfg(test)]
 mod unit_tests;
 pub mod vm_status;
+
+pub const VARIANT_COUNT_MAX: u64 = 127;
 
 pub(crate) fn fmt_list<T: fmt::Display>(
     f: &mut fmt::Formatter<'_>,

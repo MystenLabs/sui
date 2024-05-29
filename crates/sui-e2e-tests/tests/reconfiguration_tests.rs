@@ -96,29 +96,21 @@ async fn test_transaction_expiration() {
     let mut expired_data = data.clone();
     *expired_data.expiration_mut_for_testing() = TransactionExpiration::Epoch(0);
     let expired_transaction = test_cluster.wallet.sign_transaction(&expired_data);
-    let authority = test_cluster.swarm.validator_node_handles().pop().unwrap();
-    let result = authority
-        .with_async(|node| async {
-            let epoch_store = node.state().epoch_store_for_testing();
-            let state = node.state();
-            let expired_transaction = epoch_store.verify_transaction(expired_transaction).unwrap();
-            state
-                .handle_transaction(&epoch_store, expired_transaction)
-                .await
-        })
+    let result = test_cluster
+        .wallet
+        .execute_transaction_may_fail(expired_transaction)
         .await;
-    assert!(matches!(result.unwrap_err(), SuiError::TransactionExpired));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(&SuiError::TransactionExpired.to_string()));
 
     // Non expired transaction signed without issue
     *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
     let transaction = test_cluster.wallet.sign_transaction(&data);
-    authority
-        .with_async(|node| async {
-            let epoch_store = node.state().epoch_store_for_testing();
-            let state = node.state();
-            let transaction = epoch_store.verify_transaction(transaction).unwrap();
-            state.handle_transaction(&epoch_store, transaction).await
-        })
+    test_cluster
+        .wallet
+        .execute_transaction_may_fail(transaction)
         .await
         .unwrap();
 }
@@ -154,7 +146,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .sui_node
         .with(|node| node.clone_authority_aggregator().unwrap());
     let cert = net
-        .process_transaction(tx.clone())
+        .process_transaction(tx.clone(), None)
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -180,7 +172,10 @@ async fn reconfig_with_revert_end_to_end_test() {
     let client = net
         .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
         .unwrap();
-    client.handle_certificate_v2(cert.clone()).await.unwrap();
+    client
+        .handle_certificate_v2(cert.clone(), None)
+        .await
+        .unwrap();
 
     authorities[reverting_authority_idx]
         .with_async(|node| async {
@@ -345,23 +340,29 @@ async fn do_test_lock_table_upgrade() {
     };
 
     let t1 = transfer_sui(1);
-    test_cluster.create_certificate(t1.clone()).await.unwrap();
+    test_cluster
+        .create_certificate(t1.clone(), None)
+        .await
+        .unwrap();
 
     // attempt to equivocate
     let t2 = transfer_sui(2);
     test_cluster
-        .create_certificate(t2.clone())
+        .create_certificate(t2.clone(), None)
         .await
         .unwrap_err();
 
     test_cluster.wait_for_epoch_all_nodes(1).await;
 
     // old locks can be overridden in new epoch
-    test_cluster.create_certificate(t2.clone()).await.unwrap();
+    test_cluster
+        .create_certificate(t2.clone(), None)
+        .await
+        .unwrap();
 
     // attempt to equivocate
     test_cluster
-        .create_certificate(t1.clone())
+        .create_certificate(t1.clone(), None)
         .await
         .unwrap_err();
 }
@@ -488,7 +489,7 @@ async fn test_validator_resign_effects() {
         .sui_node
         .with(|node| node.clone_authority_aggregator().unwrap());
     let effects1 = net
-        .process_transaction(tx)
+        .process_transaction(tx, None)
         .await
         .unwrap()
         .into_effects_for_testing();
@@ -689,7 +690,7 @@ async fn do_test_reconfig_with_committee_change_stress() {
             // otherwise new validators to the committee will not be able to catch up to the network
             // TODO: remove and replace with usage of archival solution
             .filter(|node| {
-                node.config
+                node.config()
                     .authority_store_pruning_config
                     .num_epochs_to_retain_for_checkpoints()
                     .is_some()

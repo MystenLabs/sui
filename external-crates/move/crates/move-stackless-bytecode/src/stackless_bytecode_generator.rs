@@ -11,12 +11,9 @@ use crate::{
     },
 };
 use itertools::Itertools;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{
-        Bytecode as MoveBytecode, CodeOffset, CompiledModule, FieldHandleIndex, SignatureIndex,
-    },
-    views::{FunctionHandleView, ViewInternals},
+use move_binary_format::file_format::{
+    Bytecode as MoveBytecode, CodeOffset, CompiledModule, FieldHandleIndex, JumpTableInner,
+    SignatureIndex,
 };
 use move_core_types::{
     language_storage::{self, CORE_CODE_ADDRESS},
@@ -24,7 +21,7 @@ use move_core_types::{
 };
 use move_model::{
     ast::TempIndex,
-    model::{FunId, FunctionEnv, Loc, ModuleId, StructId},
+    model::{DatatypeId, FunId, FunctionEnv, Loc, ModuleId, RefType},
     ty::{PrimitiveType, Type},
 };
 use num::BigUint;
@@ -137,7 +134,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
         attr
     }
 
-    fn get_field_info(&self, field_handle_index: FieldHandleIndex) -> (StructId, usize, Type) {
+    fn get_field_info(&self, field_handle_index: FieldHandleIndex) -> (DatatypeId, usize, Type) {
         let field_handle = self.module.field_handle_at(field_handle_index);
         let struct_id = self.func_env.module_env.get_struct_id(field_handle.owner);
         let struct_env = self.func_env.module_env.get_struct(struct_id);
@@ -382,8 +379,11 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let temp_index = self.temp_count;
                 self.temp_stack.push(temp_index);
                 self.local_types.push(Type::Primitive(PrimitiveType::U256));
-                self.code
-                    .push(Bytecode::Load(attr_id, temp_index, Constant::from(&**number)));
+                self.code.push(Bytecode::Load(
+                    attr_id,
+                    temp_index,
+                    Constant::from(&**number),
+                ));
                 self.temp_count += 1;
             }
 
@@ -391,8 +391,11 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let temp_index = self.temp_count;
                 self.temp_stack.push(temp_index);
                 self.local_types.push(Type::Primitive(PrimitiveType::U128));
-                self.code
-                    .push(Bytecode::Load(attr_id, temp_index, Constant::U128(**number)));
+                self.code.push(Bytecode::Load(
+                    attr_id,
+                    temp_index,
+                    Constant::U128(**number),
+                ));
                 self.temp_count += 1;
             }
 
@@ -549,20 +552,21 @@ impl<'a> StacklessBytecodeGenerator<'a> {
 
             MoveBytecode::Call(idx) => {
                 let function_handle = self.module.function_handle_at(*idx);
-                let function_handle_view = FunctionHandleView::new(self.module, function_handle);
+                let parameters = self.module.signature_at(function_handle.parameters);
+                let return_ = self.module.signature_at(function_handle.return_);
 
                 let mut arg_temp_indices = vec![];
                 let mut return_temp_indices = vec![];
-                for _ in function_handle_view.arg_tokens() {
+                for _ in &parameters.0 {
                     let arg_temp_index = self.temp_stack.pop().unwrap();
                     arg_temp_indices.push(arg_temp_index);
                 }
-                for return_type_view in function_handle_view.return_tokens() {
+                for return_signature_token in &return_.0 {
                     let return_temp_index = self.temp_count;
                     let return_type = self
                         .func_env
                         .module_env
-                        .globalize_signature(return_type_view.as_inner());
+                        .globalize_signature(return_signature_token);
                     return_temp_indices.push(return_temp_index);
                     self.temp_stack.push(return_temp_index);
                     self.local_types.push(return_type);
@@ -585,21 +589,22 @@ impl<'a> StacklessBytecodeGenerator<'a> {
 
                 let type_sigs = self.get_type_params(func_instantiation.type_parameters);
                 let function_handle = self.module.function_handle_at(func_instantiation.handle);
-                let function_handle_view = FunctionHandleView::new(self.module, function_handle);
+                let parameters = self.module.signature_at(function_handle.parameters);
+                let return_ = self.module.signature_at(function_handle.return_);
 
                 let mut arg_temp_indices = vec![];
                 let mut return_temp_indices = vec![];
-                for _ in function_handle_view.arg_tokens() {
+                for _ in &parameters.0 {
                     let arg_temp_index = self.temp_stack.pop().unwrap();
                     arg_temp_indices.push(arg_temp_index);
                 }
-                for return_type_view in function_handle_view.return_tokens() {
+                for return_signature_token in &return_.0 {
                     let return_temp_index = self.temp_count;
                     // instantiate type parameters
                     let return_type = self
                         .func_env
                         .module_env
-                        .globalize_signature(return_type_view.as_inner())
+                        .globalize_signature(return_signature_token)
                         .instantiate(&type_sigs);
                     return_temp_indices.push(return_temp_index);
                     self.temp_stack.push(return_temp_index);
@@ -630,7 +635,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                     let field_temp_index = self.temp_stack.pop().unwrap();
                     field_temp_indices.push(field_temp_index);
                 }
-                self.local_types.push(Type::Struct(
+                self.local_types.push(Type::Datatype(
                     struct_env.module_env.get_id(),
                     struct_env.get_id(),
                     vec![],
@@ -658,7 +663,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                     let field_temp_index = self.temp_stack.pop().unwrap();
                     field_temp_indices.push(field_temp_index);
                 }
-                self.local_types.push(Type::Struct(
+                self.local_types.push(Type::Datatype(
                     struct_env.module_env.get_id(),
                     struct_env.get_id(),
                     actuals.clone(),
@@ -994,7 +999,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let temp_index = self.temp_count;
                 self.local_types.push(Type::Reference(
                     is_mut,
-                    Box::new(Type::Struct(
+                    Box::new(Type::Datatype(
                         struct_env.module_env.get_id(),
                         struct_env.get_id(),
                         vec![],
@@ -1027,7 +1032,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let actuals = self.get_type_params(struct_instantiation.type_parameters);
                 self.local_types.push(Type::Reference(
                     is_mut,
-                    Box::new(Type::Struct(
+                    Box::new(Type::Datatype(
                         struct_env.module_env.get_id(),
                         struct_env.get_id(),
                         actuals.clone(),
@@ -1053,7 +1058,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let operand_index = self.temp_stack.pop().unwrap();
                 let temp_index = self.temp_count;
                 self.temp_stack.push(temp_index);
-                self.local_types.push(Type::Struct(
+                self.local_types.push(Type::Datatype(
                     struct_env.module_env.get_id(),
                     struct_env.get_id(),
                     vec![],
@@ -1080,7 +1085,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let temp_index = self.temp_count;
                 self.temp_stack.push(temp_index);
                 let actuals = self.get_type_params(struct_instantiation.type_parameters);
-                self.local_types.push(Type::Struct(
+                self.local_types.push(Type::Datatype(
                     struct_env.module_env.get_id(),
                     struct_env.get_id(),
                     actuals.clone(),
@@ -1288,6 +1293,194 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                     vec![operand_index],
                     None,
                 ))
+            }
+            MoveBytecode::PackVariant(vhi) => {
+                let handle = self
+                    .func_env
+                    .module_env
+                    .get_verified_module()
+                    .variant_handle_at(*vhi);
+                let enum_env = self
+                    .func_env
+                    .module_env
+                    .get_enum_by_def_idx(handle.enum_def);
+                let variant_env = enum_env.get_variant_by_tag(handle.variant as usize);
+                let mut field_temp_indices = vec![];
+                let variant_temp_index = self.temp_count;
+                for _ in variant_env.get_fields() {
+                    let field_temp_index = self.temp_stack.pop().unwrap();
+                    field_temp_indices.push(field_temp_index);
+                }
+                self.local_types.push(Type::Datatype(
+                    enum_env.module_env.get_id(),
+                    enum_env.get_id(),
+                    vec![],
+                ));
+                self.temp_stack.push(variant_temp_index);
+                field_temp_indices.reverse();
+                self.code.push(mk_call(
+                    Operation::PackVariant(
+                        enum_env.module_env.get_id(),
+                        enum_env.get_id(),
+                        variant_env.get_id(),
+                        vec![],
+                    ),
+                    vec![variant_temp_index],
+                    field_temp_indices,
+                ));
+                self.temp_count += 1;
+            }
+            MoveBytecode::PackVariantGeneric(vhiid) => {
+                let handle = self
+                    .func_env
+                    .module_env
+                    .get_verified_module()
+                    .variant_instantiation_handle_at(*vhiid);
+                let enum_instantiation = self
+                    .func_env
+                    .module_env
+                    .get_verified_module()
+                    .enum_instantiation_at(handle.enum_def);
+                let actuals = self.get_type_params(enum_instantiation.type_parameters);
+                let enum_env = self
+                    .func_env
+                    .module_env
+                    .get_enum_by_def_idx(enum_instantiation.def);
+                let variant_env = enum_env.get_variant_by_tag(handle.variant as usize);
+                let mut field_temp_indices = vec![];
+                let variant_temp_index = self.temp_count;
+                for _ in variant_env.get_fields() {
+                    let field_temp_index = self.temp_stack.pop().unwrap();
+                    field_temp_indices.push(field_temp_index);
+                }
+                self.local_types.push(Type::Datatype(
+                    enum_env.module_env.get_id(),
+                    enum_env.get_id(),
+                    actuals.clone(),
+                ));
+                self.temp_stack.push(variant_temp_index);
+                field_temp_indices.reverse();
+                self.code.push(mk_call(
+                    Operation::PackVariant(
+                        enum_env.module_env.get_id(),
+                        enum_env.get_id(),
+                        variant_env.get_id(),
+                        actuals,
+                    ),
+                    vec![variant_temp_index],
+                    field_temp_indices,
+                ));
+                self.temp_count += 1;
+            }
+            MoveBytecode::UnpackVariant(vhi)
+            | MoveBytecode::UnpackVariantImmRef(vhi)
+            | MoveBytecode::UnpackVariantMutRef(vhi) => {
+                let handle = self
+                    .func_env
+                    .module_env
+                    .get_verified_module()
+                    .variant_handle_at(*vhi);
+                let enum_env = self
+                    .func_env
+                    .module_env
+                    .get_enum_by_def_idx(handle.enum_def);
+                let variant_env = enum_env.get_variant_by_tag(handle.variant as usize);
+                let mut field_temp_indices = vec![];
+                let unpack_type = |ty| match bytecode {
+                    MoveBytecode::UnpackVariantImmRef(_) => Type::Reference(false, Box::new(ty)),
+                    MoveBytecode::UnpackVariantMutRef(_) => Type::Reference(true, Box::new(ty)),
+                    MoveBytecode::UnpackVariant(_) => ty,
+                    _ => unreachable!(),
+                };
+                let ref_type = match bytecode {
+                    MoveBytecode::UnpackVariant(_) => RefType::ByValue,
+                    MoveBytecode::UnpackVariantImmRef(_) => RefType::ByImmRef,
+                    MoveBytecode::UnpackVariantMutRef(_) => RefType::ByMutRef,
+                    _ => unreachable!(),
+                };
+                let variant_temp_index = self.temp_stack.pop().unwrap();
+                for field_env in variant_env.get_fields() {
+                    let field_temp_index = self.temp_count;
+                    field_temp_indices.push(field_temp_index);
+                    self.temp_stack.push(field_temp_index);
+                    self.local_types.push(unpack_type(field_env.get_type()));
+                    self.temp_count += 1;
+                }
+                self.code.push(mk_call(
+                    Operation::UnpackVariant(
+                        enum_env.module_env.get_id(),
+                        enum_env.get_id(),
+                        variant_env.get_id(),
+                        vec![],
+                        ref_type,
+                    ),
+                    field_temp_indices,
+                    vec![variant_temp_index],
+                ));
+            }
+            MoveBytecode::UnpackVariantGeneric(vhiid)
+            | MoveBytecode::UnpackVariantGenericImmRef(vhiid)
+            | MoveBytecode::UnpackVariantGenericMutRef(vhiid) => {
+                let handle = self
+                    .func_env
+                    .module_env
+                    .get_verified_module()
+                    .variant_instantiation_handle_at(*vhiid);
+                let enum_instantiation = self
+                    .func_env
+                    .module_env
+                    .get_verified_module()
+                    .enum_instantiation_at(handle.enum_def);
+                let actuals = self.get_type_params(enum_instantiation.type_parameters);
+                let enum_env = self
+                    .func_env
+                    .module_env
+                    .get_enum_by_def_idx(enum_instantiation.def);
+                let variant_env = enum_env.get_variant_by_tag(handle.variant as usize);
+                let mut field_temp_indices = vec![];
+                let unpack_type = |ty| match bytecode {
+                    MoveBytecode::UnpackVariantImmRef(_) => Type::Reference(false, Box::new(ty)),
+                    MoveBytecode::UnpackVariantMutRef(_) => Type::Reference(true, Box::new(ty)),
+                    MoveBytecode::UnpackVariant(_) => ty,
+                    _ => unreachable!(),
+                };
+                let ref_type = match bytecode {
+                    MoveBytecode::UnpackVariant(_) => RefType::ByValue,
+                    MoveBytecode::UnpackVariantImmRef(_) => RefType::ByImmRef,
+                    MoveBytecode::UnpackVariantMutRef(_) => RefType::ByMutRef,
+                    _ => unreachable!(),
+                };
+                let variant_temp_index = self.temp_stack.pop().unwrap();
+                for field_env in variant_env.get_fields() {
+                    let field_temp_index = self.temp_count;
+                    field_temp_indices.push(field_temp_index);
+                    self.temp_stack.push(field_temp_index);
+                    self.local_types
+                        .push(unpack_type(field_env.get_type().instantiate(&actuals)));
+                    self.temp_count += 1;
+                }
+                self.code.push(mk_call(
+                    Operation::UnpackVariant(
+                        enum_env.module_env.get_id(),
+                        enum_env.get_id(),
+                        variant_env.get_id(),
+                        actuals,
+                        ref_type,
+                    ),
+                    field_temp_indices,
+                    vec![variant_temp_index],
+                ));
+            }
+            MoveBytecode::VariantSwitch(jump_table_idx) => {
+                let jump_table = self.func_env.get_jump_tables()[jump_table_idx.0 as usize].clone();
+                let temp_index = self.temp_stack.pop().unwrap();
+                let JumpTableInner::Full(jump_table) = jump_table.jump_table;
+                let labels = jump_table
+                    .iter()
+                    .map(|off| label_map[off])
+                    .collect::<Vec<_>>();
+                self.code
+                    .push(Bytecode::VariantSwitch(attr_id, temp_index, labels));
             }
         }
     }

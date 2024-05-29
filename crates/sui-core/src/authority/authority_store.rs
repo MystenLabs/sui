@@ -7,6 +7,9 @@ use std::sync::Arc;
 use std::{iter, mem, thread};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_pruner::{
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
+};
 use crate::authority::authority_store_types::{
     get_store_object_pair, ObjectContentDigest, StoreObject, StoreObjectPair, StoreObjectWrapper,
 };
@@ -19,6 +22,7 @@ use futures::stream::FuturesUnordered;
 use itertools::izip;
 use move_core_types::resolver::ModuleResolver;
 use serde::{Deserialize, Serialize};
+use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
@@ -136,18 +140,22 @@ impl AuthorityStore {
     pub async fn open(
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         genesis: &Genesis,
-        indirect_objects_threshold: usize,
-        enable_epoch_sui_conservation_check: bool,
+        config: &NodeConfig,
         registry: &Registry,
     ) -> SuiResult<Arc<Self>> {
+        let indirect_objects_threshold = config.indirect_objects_threshold;
+        let enable_epoch_sui_conservation_check = config
+            .expensive_safety_check_config
+            .enable_epoch_sui_conservation_check();
+
         let epoch_start_configuration = if perpetual_tables.database_is_empty()? {
             info!("Creating new epoch start config from genesis");
 
             #[allow(unused_mut)]
-            let mut initial_epoch_flags = None;
+            let mut initial_epoch_flags = EpochFlag::default_flags_for_new_epoch(config);
             fail_point_arg!("initial_epoch_flags", |flags: Vec<EpochFlag>| {
                 info!("Setting initial epoch flags to {:?}", flags);
-                initial_epoch_flags = Some(flags);
+                initial_epoch_flags = flags;
             });
 
             let epoch_start_configuration = EpochStartConfiguration::new(
@@ -666,6 +674,7 @@ impl AuthorityStore {
     }
 
     /// This function should only be used for initializing genesis and should remain private.
+    #[instrument(level = "debug", skip_all)]
     pub(crate) fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult<()> {
         let mut batch = self.perpetual_tables.objects.batch();
         let ref_and_objects: Vec<_> = objects
@@ -785,7 +794,7 @@ impl AuthorityStore {
     #[instrument(level = "trace", skip_all)]
     async fn acquire_read_locks_for_indirect_objects(
         &self,
-        written: &WrittenObjects,
+        written: &[Object],
     ) -> Vec<RwLockGuard> {
         // locking is required to avoid potential race conditions with the pruner
         // potential race:
@@ -796,7 +805,7 @@ impl AuthorityStore {
         // read locks are sufficient because ref count increments are safe,
         // concurrent transaction executions produce independent ref count increments and don't corrupt the state
         let digests = written
-            .values()
+            .iter()
             .filter_map(|object| {
                 let StoreObjectPair(_, indirect_object) =
                     get_store_object_pair(object.clone(), self.indirect_objects_threshold);
@@ -814,7 +823,42 @@ impl AuthorityStore {
     pub async fn write_transaction_outputs(
         &self,
         epoch_id: EpochId,
-        tx_outputs: Arc<TransactionOutputs>,
+        tx_outputs: &[Arc<TransactionOutputs>],
+    ) -> SuiResult {
+        let mut written = Vec::with_capacity(tx_outputs.len());
+        for outputs in tx_outputs {
+            written.extend(outputs.written.values().cloned());
+        }
+
+        let _locks = self.acquire_read_locks_for_indirect_objects(&written).await;
+
+        let mut write_batch = self.perpetual_tables.transactions.batch();
+        for outputs in tx_outputs {
+            self.write_one_transaction_outputs(&mut write_batch, epoch_id, outputs)?;
+        }
+        // test crashing before writing the batch
+        fail_point_async!("crash");
+
+        write_batch.write()?;
+        trace!(
+            "committed transactions: {:?}",
+            tx_outputs
+                .iter()
+                .map(|tx| tx.transaction.digest())
+                .collect::<Vec<_>>()
+        );
+
+        // test crashing before notifying
+        fail_point_async!("crash");
+
+        Ok(())
+    }
+
+    fn write_one_transaction_outputs(
+        &self,
+        write_batch: &mut DBBatch,
+        epoch_id: EpochId,
+        tx_outputs: &TransactionOutputs,
     ) -> SuiResult {
         let TransactionOutputs {
             transaction,
@@ -827,12 +871,7 @@ impl AuthorityStore {
             locks_to_delete,
             new_locks_to_init,
             ..
-        } = &*tx_outputs;
-
-        let _locks = self.acquire_read_locks_for_indirect_objects(written).await;
-
-        // Extract the new state from the execution
-        let mut write_batch = self.perpetual_tables.transactions.batch();
+        } = tx_outputs;
 
         // Store the certificate indexed by transaction digest
         let transaction_digest = transaction.digest();
@@ -912,22 +951,11 @@ impl AuthorityStore {
 
         write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
-        // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
-        // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
-        // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
-        //    (But the lock should exist which means previous transactions finished)
-        // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its
-        //    fine
-        // 4. Locks may have existed when we started processing this tx, but could have since
-        //    been deleted by a concurrent tx that finished first. In that case, check if the
-        //    tx effects exist.
-        self.check_owned_object_locks_exist(locks_to_delete)?;
-
-        self.initialize_live_object_markers_impl(&mut write_batch, new_locks_to_init, false)?;
+        self.initialize_live_object_markers_impl(write_batch, new_locks_to_init, false)?;
 
         // Note: deletes locks for received objects as well (but not for objects that were in
         // `Receiving` arguments which were not received)
-        self.delete_live_object_markers(&mut write_batch, locks_to_delete)?;
+        self.delete_live_object_markers(write_batch, locks_to_delete)?;
 
         write_batch
             .insert_batch(
@@ -939,17 +967,25 @@ impl AuthorityStore {
                 [(transaction_digest, effects_digest)],
             )?;
 
-        // test crashing before writing the batch
-        fail_point_async!("crash");
-
-        // Commit.
-        write_batch.write()?;
-
-        // test crashing before notifying
-        fail_point_async!("crash");
-
         debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
 
+        Ok(())
+    }
+
+    /// Commits transactions only to the db. Called by checkpoint builder. See
+    /// ExecutionCache::commit_transactions for more info
+    pub(crate) fn commit_transactions(
+        &self,
+        transactions: &[(TransactionDigest, VerifiedTransaction)],
+    ) -> SuiResult {
+        let mut batch = self.perpetual_tables.transactions.batch();
+        batch.insert_batch(
+            &self.perpetual_tables.transactions,
+            transactions
+                .iter()
+                .map(|(digest, tx)| (*digest, tx.serializable_ref())),
+        )?;
+        batch.write()?;
         Ok(())
     }
 
@@ -1133,7 +1169,7 @@ impl AuthorityStore {
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
-            epoch_tables.write_transaction_locks(transaction, locks_to_write)?;
+            epoch_tables.write_transaction_locks(transaction, locks_to_write.into_iter())?;
         }
 
         Ok(())
@@ -1254,7 +1290,7 @@ impl AuthorityStore {
     /// Returns UserInputError::ObjectNotFound if cannot find lock record for at least one of the objects.
     /// Returns UserInputError::ObjectVersionUnavailableForConsumption if at least one object lock is not initialized
     ///     at the given version.
-    pub fn check_owned_object_locks_exist(&self, objects: &[ObjectRef]) -> SuiResult {
+    pub fn check_owned_objects_are_live(&self, objects: &[ObjectRef]) -> SuiResult {
         let locks = self
             .perpetual_tables
             .live_owned_object_markers
@@ -1385,7 +1421,7 @@ impl AuthorityStore {
     /// TODO: implement GC for transactions that are no longer needed.
     pub fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let Some(effects) = self.get_executed_effects(tx_digest)? else {
-            debug!("Not reverting {:?} as it was not executed", tx_digest);
+            info!("Not reverting {:?} as it was not executed", tx_digest);
             return Ok(());
         };
 
@@ -1905,6 +1941,27 @@ impl AuthorityStore {
         );
     }
 
+    pub async fn prune_objects_and_compact_for_testing(
+        &self,
+        checkpoint_store: &Arc<CheckpointStore>,
+    ) {
+        let pruning_config = AuthorityStorePruningConfig {
+            num_epochs_to_retain: 0,
+            ..Default::default()
+        };
+        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
+            &self.perpetual_tables,
+            checkpoint_store,
+            &self.objects_lock_table,
+            pruning_config,
+            AuthorityStorePruningMetrics::new_for_test(),
+            usize::MAX,
+            EPOCH_DURATION_MS_FOR_TESTING,
+        )
+        .await;
+        let _ = AuthorityStorePruner::compact(&self.perpetual_tables);
+    }
+
     #[cfg(test)]
     pub async fn prune_objects_immediately_for_testing(
         &self,
@@ -2031,13 +2088,16 @@ impl ObjectStore for AuthorityStore {
 }
 
 /// A wrapper to make Orphan Rule happy
-pub struct ResolverWrapper<T: BackingPackageStore> {
-    pub resolver: Arc<T>,
+pub struct ResolverWrapper {
+    pub resolver: Arc<dyn BackingPackageStore + Send + Sync>,
     pub metrics: Arc<ResolverMetrics>,
 }
 
-impl<T: BackingPackageStore> ResolverWrapper<T> {
-    pub fn new(resolver: Arc<T>, metrics: Arc<ResolverMetrics>) -> Self {
+impl ResolverWrapper {
+    pub fn new(
+        resolver: Arc<dyn BackingPackageStore + Send + Sync>,
+        metrics: Arc<ResolverMetrics>,
+    ) -> Self {
         metrics.module_cache_size.set(0);
         ResolverWrapper { resolver, metrics }
     }
@@ -2049,11 +2109,11 @@ impl<T: BackingPackageStore> ResolverWrapper<T> {
     }
 }
 
-impl<T: BackingPackageStore> ModuleResolver for ResolverWrapper<T> {
+impl ModuleResolver for ResolverWrapper {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.inc_cache_size_gauge();
-        get_module(&self.resolver, module_id)
+        get_module(&*self.resolver, module_id)
     }
 }
 

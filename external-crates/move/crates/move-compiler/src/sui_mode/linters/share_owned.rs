@@ -10,7 +10,6 @@ use move_ir_types::location::*;
 use crate::{
     cfgir::{
         absint::JoinResult,
-        ast::Program,
         visitor::{
             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
         },
@@ -30,7 +29,7 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    type_abilities, LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    type_abilities, LinterDiagnosticCategory, LinterDiagnosticCode, LINT_WARNING_PREFIX,
     PUBLIC_SHARE_FUN, SHARE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
 };
 
@@ -42,8 +41,8 @@ const SHARE_FUNCTIONS: &[(&str, &str, &str)] = &[
 const SHARE_OWNED_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::ShareOwned as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagnosticCategory::Sui as u8,
+    LinterDiagnosticCode::ShareOwned as u8,
     "possible owned object share",
 );
 
@@ -82,15 +81,13 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
 
     fn new<'a>(
         _env: &CompilationEnv,
-        program: &'a Program,
         context: &'a CFGContext<'a>,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         if context.attributes.is_test_or_test_only()
-            || program
-                .modules
-                .get(&context.module)
-                .unwrap()
+            || context
+                .info
+                .module(&context.module)
                 .attributes
                 .is_test_or_test_only()
         {

@@ -11,7 +11,7 @@
 /// In either case a new address would need to be created, and customers would
 /// then need to understand that they should interact with the new address and
 /// not the old (now possibly compomised) one.
-/// 
+///
 /// Overall, while it may seem simple it has pretty significant shortcomings
 /// that can be overcome with a transfer-to-object  based approach using a
 /// shared-object register for tracking authorization.
@@ -21,7 +21,7 @@ module owned_no_tto::cash_register {
     use sui::coin::{Self, Coin};
     use sui::event;
 
-    struct PaymentProcessed has copy, drop { payment_id: u64, amount: u64 }
+    public struct PaymentProcessed has copy, drop { payment_id: u64, amount: u64 }
 
     public fun process_payment(payment: IdentifiedPayment): Coin<SUI> {
         let (payment_id, coin) = identified_payment::unpack(payment);

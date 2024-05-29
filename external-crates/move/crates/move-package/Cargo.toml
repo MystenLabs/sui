@@ -24,6 +24,7 @@ treeline.workspace = true
 once_cell.workspace = true
 named-lock.workspace = true
 itertools.workspace = true
+vfs.workspace = true
 
 move-binary-format.workspace = true
 move-compiler.workspace = true

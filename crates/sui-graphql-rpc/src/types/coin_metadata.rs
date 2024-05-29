@@ -13,7 +13,7 @@ use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectS
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
-use super::suins_registration::SuinsRegistration;
+use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use crate::data::Db;
@@ -114,9 +114,13 @@ impl CoinMetadata {
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
-    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+        format: Option<DomainFormat>,
+    ) -> Result<Option<String>> {
         OwnerImpl::from(&self.super_.super_)
-            .default_suins_name(ctx)
+            .default_suins_name(ctx, format)
             .await
     }
 
@@ -305,9 +309,13 @@ impl CoinMetadata {
             return Ok(None);
         };
 
-        let supply = CoinMetadata::query_total_supply(ctx.data_unchecked(), coin_type)
-            .await
-            .extend()?;
+        let supply = CoinMetadata::query_total_supply(
+            ctx.data_unchecked(),
+            coin_type,
+            self.super_.super_.checkpoint_viewed_at,
+        )
+        .await
+        .extend()?;
 
         Ok(supply.map(BigInt::from))
     }
@@ -315,15 +323,20 @@ impl CoinMetadata {
 
 impl CoinMetadata {
     /// Read a `CoinMetadata` from the `db` for the coin whose inner type is `coin_type`.
-    pub(crate) async fn query(db: &Db, coin_type: TypeTag) -> Result<Option<CoinMetadata>, Error> {
+    pub(crate) async fn query(
+        db: &Db,
+        coin_type: TypeTag,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Option<CoinMetadata>, Error> {
         let TypeTag::Struct(coin_struct) = coin_type else {
             // If the type supplied is not metadata, we know it's not a valid coin type, so there
             // won't be CoinMetadata for it.
             return Ok(None);
         };
 
-        let metadata_type = NativeCoinMetadata::type_(*coin_struct).into();
-        let Some(object) = Object::query_singleton(db, metadata_type).await? else {
+        let metadata_type = NativeCoinMetadata::type_(*coin_struct);
+        let Some(object) = Object::query_singleton(db, metadata_type, checkpoint_viewed_at).await?
+        else {
             return Ok(None);
         };
 
@@ -347,6 +360,7 @@ impl CoinMetadata {
     pub(crate) async fn query_total_supply(
         db: &Db,
         coin_type: TypeTag,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<u64>, Error> {
         let TypeTag::Struct(coin_struct) = coin_type else {
             // If the type supplied is not metadata, we know it's not a valid coin type, so there
@@ -357,8 +371,9 @@ impl CoinMetadata {
         Ok(Some(if GAS::is_gas(coin_struct.as_ref()) {
             TOTAL_SUPPLY_SUI
         } else {
-            let cap_type = TreasuryCap::type_(*coin_struct).into();
-            let Some(object) = Object::query_singleton(db, cap_type).await? else {
+            let cap_type = TreasuryCap::type_(*coin_struct);
+            let Some(object) = Object::query_singleton(db, cap_type, checkpoint_viewed_at).await?
+            else {
                 return Ok(None);
             };
 

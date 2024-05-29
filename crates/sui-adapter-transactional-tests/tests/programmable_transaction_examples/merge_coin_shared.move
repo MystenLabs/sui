@@ -8,10 +8,6 @@
 //# publish
 
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
-
     // not a native coin, but same type structure and BCS layout
     public struct Coin has key, store {
         id: UID,

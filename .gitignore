@@ -71,5 +71,6 @@ yarn-error.log*
 checkpoints_dir/*
 light_client.yaml
 docs/content/references/sui-api/sui-graphql/*
+docs/content/references/framework/**
 
 lcov.info

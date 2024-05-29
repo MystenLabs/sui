@@ -518,6 +518,7 @@ mod checked {
                 modules,
                 self.tx_context.digest(),
                 self.protocol_config.max_move_package_size(),
+                self.protocol_config.move_binary_format_version(),
                 dependencies,
             )
         }
@@ -1095,7 +1096,7 @@ mod checked {
                 }
 
                 if type_params.is_empty() {
-                    Type::Struct(idx)
+                    Type::Datatype(idx)
                 } else {
                     let loaded_type_params = type_params
                         .iter()
@@ -1110,7 +1111,7 @@ mod checked {
                         }
                     }
 
-                    Type::StructInstantiation(Box::new((idx, loaded_type_params)))
+                    Type::DatatypeInstantiation(Box::new((idx, loaded_type_params)))
                 }
             }
         })

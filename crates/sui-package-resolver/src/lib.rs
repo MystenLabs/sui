@@ -4,10 +4,13 @@
 use async_trait::async_trait;
 use lru::LruCache;
 use move_binary_format::file_format::{
-    AbilitySet, FunctionDefinitionIndex, Signature as MoveSignature, SignatureIndex,
-    StructTypeParameter, Visibility,
+    AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex,
+    Signature as MoveSignature, SignatureIndex, Visibility,
 };
-use std::collections::btree_map::Entry;
+use move_command_line_common::error_bitset::ErrorBitset;
+use move_core_types::annotated_value::MoveEnumLayout;
+use move_core_types::language_storage::ModuleId;
+use move_core_types::u256::U256;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
@@ -18,9 +21,8 @@ use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction
 use crate::error::Error;
 use move_binary_format::errors::Location;
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
-        SignatureToken, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
+        DatatypeHandleIndex, SignatureToken, StructDefinitionIndex, StructFieldInformation,
         TableIndex,
     },
     CompiledModule,
@@ -30,9 +32,9 @@ use move_core_types::{
     annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     language_storage::{StructTag, TypeTag},
 };
-use sui_types::move_package::TypeOrigin;
+use sui_types::move_package::{MovePackage, TypeOrigin};
 use sui_types::object::Object;
-use sui_types::{base_types::SequenceNumber, is_system_package, Identifier};
+use sui_types::{base_types::SequenceNumber, Identifier};
 
 pub mod error;
 
@@ -85,14 +87,68 @@ pub struct Package {
     /// is referred to by in other packages) to its storage ID (the ID it is loaded from on chain).
     linkage: Linkage,
 
-    /// The version this package was loaded at -- necessary for cache invalidation of system
-    /// packages.
+    /// The version this package was loaded at -- necessary for handling race conditions when
+    /// loading system packages.
     version: SequenceNumber,
 
     modules: BTreeMap<String, Module>,
 }
 
 type Linkage = BTreeMap<AccountAddress, AccountAddress>;
+
+/// A `CleverError` is a special kind of abort code that is used to encode more information than a
+/// normal abort code. These clever errors are used to encode the line number, error constant name,
+/// and error constant value as pool indicies packed into a format satisfying the `ErrorBitset`
+/// format. This struct is the "inflated" view of that data, providing the module ID, line number,
+/// and error constant name and value (if available).
+#[derive(Clone, Debug)]
+pub struct CleverError {
+    /// The (storage) module ID of the module that the assertion failed in.
+    pub module_id: ModuleId,
+    /// Inner error information. This is either a complete error, just a line number, or bytes that
+    /// should be treated opaquely.
+    pub error_info: ErrorConstants,
+    /// The line number in the source file where the error occured.
+    pub source_line_number: u16,
+}
+
+/// The `ErrorConstants` enum is used to represent the different kinds of error information that
+/// can be returned from a clever error when looking at the constant values for the clever error.
+/// These values are either:
+/// * `None` - No constant information is available, only a line number.
+/// * `Rendered` - The error is a complete error, with an error identifier and constant that can be
+///    rendered in a human-readable format (see in-line doc comments for exact types of values
+///    supported).
+/// * `Raw` - If there is an error constant value, but it is not a renderable type (e.g., a
+///   `vector<address>`), then it is treated as opaque and the bytes are returned.
+#[derive(Clone, Debug)]
+pub enum ErrorConstants {
+    /// No constant information is available, only a line number.
+    None,
+    /// The error is a complete error, with an error identifier and constant that can be rendered.
+    /// The the rendered string representation of the constant is returned only when the contant
+    /// value is one of the following types:
+    /// * A vector of bytes convertible to a valid UTF-8 string; or
+    /// * A numeric value (u8, u16, u32, u64, u128, u256); or
+    /// * A boolean value; or
+    /// * An address value
+    /// Otherwise, the `Raw` bytes of the error constant are returned.
+    Rendered {
+        /// The name of the error constant.
+        identifier: String,
+        /// The value of the error constant.
+        constant: String,
+    },
+    /// If there is an error constant value, but ii is not one of the above types, then it is
+    /// treated as opaque and the bytes are returned. The caller is responsible for determining how
+    /// best to display the error constant in this case.
+    Raw {
+        /// The name of the error constant.
+        identifier: String,
+        /// The raw (BCS) bytes of the error constant.
+        bytes: Vec<u8>,
+    },
+}
 
 #[derive(Clone, Debug)]
 pub struct Module {
@@ -102,6 +158,10 @@ pub struct Module {
     /// bytecode, to speed up definition lookups.
     struct_index: BTreeMap<String, (AccountAddress, StructDefinitionIndex)>,
 
+    /// Index mapping enum names to their defining ID and the index of their definition in the
+    /// bytecode. This speeds up definition lookups.
+    enum_index: BTreeMap<String, (AccountAddress, EnumDefinitionIndex)>,
+
     /// Index mapping function names to the index for their definition in the bytecode, to speed up
     /// definition lookups.
     function_index: BTreeMap<String, FunctionDefinitionIndex>,
@@ -109,7 +169,7 @@ pub struct Module {
 
 /// Deserialized representation of a struct definition.
 #[derive(Debug)]
-pub struct StructDef {
+pub struct DataDef {
     /// The storage ID of the package that first introduced this type.
     pub defining_id: AccountAddress,
 
@@ -117,11 +177,32 @@ pub struct StructDef {
     pub abilities: AbilitySet,
 
     /// Ability constraints and phantom status for type parameters
-    pub type_params: Vec<StructTypeParameter>,
+    pub type_params: Vec<DatatypeTyParameter>,
 
+    /// The internal data of the datatype. This can either be a sequence of fields, or a sequence
+    /// of variants.
+    pub data: MoveData,
+}
+
+#[derive(Debug)]
+pub enum MoveData {
     /// Serialized representation of fields (names and deserialized signatures). Signatures refer to
     /// packages at their runtime IDs (not their storage ID or defining ID).
-    pub fields: Vec<(String, OpenSignatureBody)>,
+    Struct(Vec<(String, OpenSignatureBody)>),
+
+    /// Serialized representation of variants (names and deserialized signatures).
+    Enum(Vec<VariantDef>),
+}
+
+/// Deserialized representation of an enum definition. These are always held inside an `EnumDef`.
+#[derive(Debug)]
+pub struct VariantDef {
+    /// The name of the enum variant
+    pub name: String,
+
+    /// The serialized representation of the variant's signature. Signatures refer to packages at
+    /// their runtime IDs (not their storage ID or defining ID).
+    pub signatures: Vec<(String, OpenSignatureBody)>,
 }
 
 /// Deserialized representation of a function definition
@@ -197,7 +278,8 @@ pub enum OpenSignatureBody {
 #[derive(Debug, Default)]
 struct ResolutionContext<'l> {
     /// Definitions (field information) for structs referred to by types added to this context.
-    structs: BTreeMap<DatatypeKey, StructDef>,
+    datatypes: BTreeMap<DatatypeKey, DataDef>,
+
     /// Limits configuration from the calling resolver.
     limits: Option<&'l Limits>,
 }
@@ -206,8 +288,6 @@ struct ResolutionContext<'l> {
 /// store during testing.
 #[async_trait]
 pub trait PackageStore: Send + Sync + 'static {
-    /// Latest version of the object at `id`.
-    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber>;
     /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>>;
@@ -217,9 +297,6 @@ macro_rules! as_ref_impl {
     ($type:ty) => {
         #[async_trait]
         impl PackageStore for $type {
-            async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-                self.as_ref().version(id).await
-            }
             async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
                 self.as_ref().fetch(id).await
             }
@@ -449,6 +526,117 @@ impl<S: PackageStore> Resolver<S> {
             .map(|t| t.as_ref().and_then(|t| layouts.get(t).cloned()))
             .collect())
     }
+
+    /// Resolves a runtime address in a `ModuleId` to a storage `ModuleId` according to the linkage
+    /// table in the `context` which must refer to a package.
+    /// * Will fail if the wrong context is provided, i.e., is not a package, or
+    ///   does not exist.
+    /// * Will fail if an invalid `context` is provided for the `location`, i.e., the package at
+    ///   `context` does not contain the module that `location` refers to.
+    pub async fn resolve_module_id(
+        &self,
+        module_id: ModuleId,
+        context: AccountAddress,
+    ) -> Result<ModuleId> {
+        let package = self.package_store.fetch(context).await?;
+        let storage_id = package.relocate(*module_id.address())?;
+        Ok(ModuleId::new(storage_id, module_id.name().to_owned()))
+    }
+
+    /// Resolves an abort code following the clever error format to a `CleverError` enum.
+    /// The `module_id` must be the storage ID of the module (which can e.g., be gotten from the
+    /// `resolve_module_id` function) and not the runtime ID.
+    ///
+    /// If the `abort_code` is not a clever error (i.e., does not follow the tagging and layout as
+    /// defined in `ErrorBitset`), this function will return `None`.
+    ///
+    /// In the case where it is a clever error but only a line number is present (i.e., the error
+    /// is the result of an `assert!(<cond>)` source expression) a `CleverError::LineNumberOnly` is
+    /// returned. Otherwise a `CleverError::CompleteError` is returned.
+    ///
+    /// If for any reason we are unable to resolve the abort code to a `CleverError`, this function
+    /// will return `None`.
+    pub async fn resolve_clever_error(
+        &self,
+        module_id: ModuleId,
+        abort_code: u64,
+    ) -> Option<CleverError> {
+        let bitset = ErrorBitset::from_u64(abort_code)?;
+        let package = self.package_store.fetch(*module_id.address()).await.ok()?;
+        let module = package.module(module_id.name().as_str()).ok()?.bytecode();
+        let source_line_number = bitset.line_number()?;
+
+        // We only have a line number in our clever error, so return early.
+        if bitset.identifier_index().is_none() && bitset.constant_index().is_none() {
+            return Some(CleverError {
+                module_id,
+                error_info: ErrorConstants::None,
+                source_line_number,
+            });
+        } else if bitset.identifier_index().is_none() || bitset.constant_index().is_none() {
+            return None;
+        }
+
+        let error_identifier_constant = module
+            .constant_pool()
+            .get(bitset.identifier_index()? as usize)?;
+        let error_value_constant = module
+            .constant_pool()
+            .get(bitset.constant_index()? as usize)?;
+
+        if !matches!(&error_identifier_constant.type_, SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8)
+        {
+            return None;
+        };
+
+        let error_identifier = bcs::from_bytes::<Vec<u8>>(&error_identifier_constant.data)
+            .ok()
+            .and_then(|x| String::from_utf8(x).ok())?;
+        let bytes = error_value_constant.data.clone();
+
+        let rendered = match &error_value_constant.type_ {
+            SignatureToken::Vector(inner_ty) if inner_ty.as_ref() == &SignatureToken::U8 => {
+                bcs::from_bytes::<Vec<u8>>(&bytes)
+                    .ok()
+                    .and_then(|x| String::from_utf8(x).ok())
+            }
+            SignatureToken::U8 => bcs::from_bytes::<u8>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U16 => bcs::from_bytes::<u16>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U32 => bcs::from_bytes::<u32>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U64 => bcs::from_bytes::<u64>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U128 => bcs::from_bytes::<u128>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U256 => bcs::from_bytes::<U256>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::Address => bcs::from_bytes::<AccountAddress>(&bytes)
+                .ok()
+                .map(|x| x.to_canonical_string(true)),
+            SignatureToken::Bool => bcs::from_bytes::<bool>(&bytes).ok().map(|x| x.to_string()),
+
+            SignatureToken::Signer
+            | SignatureToken::Vector(_)
+            | SignatureToken::Datatype(_)
+            | SignatureToken::DatatypeInstantiation(_)
+            | SignatureToken::Reference(_)
+            | SignatureToken::MutableReference(_)
+            | SignatureToken::TypeParameter(_) => None,
+        };
+
+        let error_info = match rendered {
+            None => ErrorConstants::Raw {
+                identifier: error_identifier,
+                bytes,
+            },
+            Some(error_constant) => ErrorConstants::Rendered {
+                identifier: error_identifier,
+                constant: error_constant,
+            },
+        };
+
+        Some(CleverError {
+            module_id,
+            error_info,
+            source_line_number,
+        })
+    }
 }
 
 impl<T> PackageStoreWithLruCache<T> {
@@ -456,29 +644,30 @@ impl<T> PackageStoreWithLruCache<T> {
         let packages = Mutex::new(LruCache::new(PACKAGE_CACHE_SIZE));
         Self { packages, inner }
     }
+
+    /// Removes all packages with ids in `ids` from the cache, if they exist. Does nothing for ids
+    /// that are not in the cache. Accepts `self` immutably as it operates under the lock.
+    pub fn evict(&self, ids: impl IntoIterator<Item = AccountAddress>) {
+        let mut packages = self.packages.lock().unwrap();
+        for id in ids {
+            packages.pop(&id);
+        }
+    }
 }
 
 #[async_trait]
 impl<T: PackageStore> PackageStore for PackageStoreWithLruCache<T> {
-    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-        self.inner.version(id).await
-    }
-
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
-        let candidate = {
+        if let Some(package) = {
             // Release the lock after getting the package
             let mut packages = self.packages.lock().unwrap();
             packages.get(&id).map(Arc::clone)
+        } {
+            return Ok(package);
         };
 
-        // System packages can be invalidated in the cache if a newer version exists.
-        match candidate {
-            Some(package) if !is_system_package(id) => return Ok(package),
-            Some(package) if self.version(id).await? <= package.version => return Ok(package),
-            Some(_) | None => { /* nop */ }
-        }
-
         let package = self.inner.fetch(id).await?;
+
         // Try and insert the package into the cache, accounting for races.  In most cases the
         // racing fetches will produce the same package, but for system packages, they may not, so
         // favour the package that has the newer version, or if they are the same, the package that
@@ -501,23 +690,28 @@ impl<T: PackageStore> PackageStore for PackageStoreWithLruCache<T> {
 }
 
 impl Package {
-    pub fn read(object: &Object) -> Result<Self> {
+    pub fn read_from_object(object: &Object) -> Result<Self> {
         let storage_id = AccountAddress::from(object.id());
         let Some(package) = object.data.try_as_package() else {
             return Err(Error::NotAPackage(storage_id));
         };
 
+        Self::read_from_package(package)
+    }
+
+    pub fn read_from_package(package: &MovePackage) -> Result<Self> {
+        let storage_id = AccountAddress::from(package.id());
         let mut type_origins: BTreeMap<String, BTreeMap<String, AccountAddress>> = BTreeMap::new();
         for TypeOrigin {
             module_name,
-            struct_name,
+            datatype_name,
             package,
         } in package.type_origin_table()
         {
             type_origins
                 .entry(module_name.to_string())
                 .or_default()
-                .insert(struct_name.to_string(), AccountAddress::from(*package));
+                .insert(datatype_name.to_string(), AccountAddress::from(*package));
         }
 
         let mut runtime_id = None;
@@ -565,17 +759,16 @@ impl Package {
         &self.modules
     }
 
-    fn struct_def(&self, module_name: &str, struct_name: &str) -> Result<StructDef> {
+    fn data_def(&self, module_name: &str, datatype_name: &str) -> Result<DataDef> {
         let module = self.module(module_name)?;
-        let Some(struct_def) = module.struct_def(struct_name)? else {
-            return Err(Error::StructNotFound(
+        let Some(data_def) = module.data_def(datatype_name)? else {
+            return Err(Error::DatatypeNotFound(
                 self.storage_id,
                 module_name.to_string(),
-                struct_name.to_string(),
+                datatype_name.to_string(),
             ));
         };
-
-        Ok(struct_def)
+        Ok(data_def)
     }
 
     /// Translate the `runtime_id` of a package to a specific storage ID using this package's
@@ -604,7 +797,7 @@ impl Module {
     ) -> std::result::Result<Self, String> {
         let mut struct_index = BTreeMap::new();
         for (index, def) in bytecode.struct_defs.iter().enumerate() {
-            let sh = bytecode.struct_handle_at(def.struct_handle);
+            let sh = bytecode.datatype_handle_at(def.struct_handle);
             let struct_ = bytecode.identifier_at(sh.name).to_string();
             let index = StructDefinitionIndex::new(index as TableIndex);
 
@@ -613,6 +806,19 @@ impl Module {
             };
 
             struct_index.insert(struct_, (defining_id, index));
+        }
+
+        let mut enum_index = BTreeMap::new();
+        for (index, def) in bytecode.enum_defs.iter().enumerate() {
+            let eh = bytecode.datatype_handle_at(def.enum_handle);
+            let enum_ = bytecode.identifier_at(eh.name).to_string();
+            let index = EnumDefinitionIndex::new(index as TableIndex);
+
+            let Some(defining_id) = origins.remove(&enum_) else {
+                return Err(enum_);
+            };
+
+            enum_index.insert(enum_, (defining_id, index));
         }
 
         let mut function_index = BTreeMap::new();
@@ -627,6 +833,7 @@ impl Module {
         Ok(Module {
             bytecode,
             struct_index,
+            enum_index,
             function_index,
         })
     }
@@ -658,16 +865,48 @@ impl Module {
             .map(|(name, _)| name.as_str())
     }
 
+    /// Iterate over the enums with names strictly after `after` (or from the beginning), and
+    /// strictly before `before` (or to the end).
+    pub fn enums(
+        &self,
+        after: Option<&str>,
+        before: Option<&str>,
+    ) -> impl DoubleEndedIterator<Item = &str> + Clone {
+        use std::ops::Bound as B;
+        self.enum_index
+            .range::<str, _>((
+                after.map_or(B::Unbounded, B::Excluded),
+                before.map_or(B::Unbounded, B::Excluded),
+            ))
+            .map(|(name, _)| name.as_str())
+    }
+
+    /// Iterate over the datatypes with names strictly after `after` (or from the beginning), and
+    /// strictly before `before` (or to the end). Enums and structs will be interleaved, and will
+    /// be sorted by their names.
+    pub fn datatypes(
+        &self,
+        after: Option<&str>,
+        before: Option<&str>,
+    ) -> impl DoubleEndedIterator<Item = &str> + Clone {
+        let mut names = self
+            .structs(after, before)
+            .chain(self.enums(after, before))
+            .collect::<Vec<_>>();
+        names.sort();
+        names.into_iter()
+    }
+
     /// Get the struct definition corresponding to the struct with name `name` in this module.
     /// Returns `Ok(None)` if the struct cannot be found in this module, `Err(...)` if there was an
     /// error deserializing it, and `Ok(Some(def))` on success.
-    pub fn struct_def(&self, name: &str) -> Result<Option<StructDef>> {
+    pub fn struct_def(&self, name: &str) -> Result<Option<DataDef>> {
         let Some(&(defining_id, index)) = self.struct_index.get(name) else {
             return Ok(None);
         };
 
         let struct_def = self.bytecode.struct_def_at(index);
-        let struct_handle = self.bytecode.struct_handle_at(struct_def.struct_handle);
+        let struct_handle = self.bytecode.datatype_handle_at(struct_def.struct_handle);
         let abilities = struct_handle.abilities;
         let type_params = struct_handle.type_parameters.clone();
 
@@ -684,12 +923,66 @@ impl Module {
                 .collect::<Result<_>>()?,
         };
 
-        Ok(Some(StructDef {
+        Ok(Some(DataDef {
             defining_id,
             abilities,
             type_params,
-            fields,
+            data: MoveData::Struct(fields),
         }))
+    }
+
+    /// Get the enum definition corresponding to the enum with name `name` in this module.
+    /// Returns `Ok(None)` if the enum cannot be found in this module, `Err(...)` if there was an
+    /// error deserializing it, and `Ok(Some(def))` on success.
+    pub fn enum_def(&self, name: &str) -> Result<Option<DataDef>> {
+        let Some(&(defining_id, index)) = self.enum_index.get(name) else {
+            return Ok(None);
+        };
+
+        let enum_def = self.bytecode.enum_def_at(index);
+        let enum_handle = self.bytecode.datatype_handle_at(enum_def.enum_handle);
+        let abilities = enum_handle.abilities;
+        let type_params = enum_handle.type_parameters.clone();
+
+        let variants = enum_def
+            .variants
+            .iter()
+            .map(|variant| {
+                let name = self
+                    .bytecode
+                    .identifier_at(variant.variant_name)
+                    .to_string();
+                let signatures = variant
+                    .fields
+                    .iter()
+                    .map(|f| {
+                        Ok((
+                            self.bytecode.identifier_at(f.name).to_string(),
+                            OpenSignatureBody::read(&f.signature.0, &self.bytecode)?,
+                        ))
+                    })
+                    .collect::<Result<_>>()?;
+
+                Ok(VariantDef { name, signatures })
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(Some(DataDef {
+            defining_id,
+            abilities,
+            type_params,
+            data: MoveData::Enum(variants),
+        }))
+    }
+
+    /// Get the data definition corresponding to the data type with name `name` in this module.
+    /// Returns `Ok(None)` if the datatype cannot be found in this module, `Err(...)` if there was an
+    /// error deserializing it, and `Ok(Some(def))` on success.
+    pub fn data_def(&self, name: &str) -> Result<Option<DataDef>> {
+        self.struct_def(name)
+            .transpose()
+            .or_else(|| self.enum_def(name).transpose())
+            .transpose()
     }
 
     /// Iterate over the functions with names strictly after `after` (or from the beginning), and
@@ -783,9 +1076,9 @@ impl OpenSignatureBody {
 
             S::Vector(sig) => O::Vector(Box::new(OpenSignatureBody::read(sig, bytecode)?)),
 
-            S::Struct(ix) => O::Datatype(DatatypeKey::read(*ix, bytecode), vec![]),
-            S::StructInstantiation(struct_inst) => {
-                let (ix, params) = &**struct_inst;
+            S::Datatype(ix) => O::Datatype(DatatypeKey::read(*ix, bytecode), vec![]),
+            S::DatatypeInstantiation(inst) => {
+                let (ix, params) = &**inst;
                 O::Datatype(
                     DatatypeKey::read(*ix, bytecode),
                     params
@@ -841,8 +1134,8 @@ impl<'m, 'n> DatatypeRef<'m, 'n> {
 }
 
 impl DatatypeKey {
-    fn read(ix: StructHandleIndex, bytecode: &CompiledModule) -> Self {
-        let sh = bytecode.struct_handle_at(ix);
+    fn read(ix: DatatypeHandleIndex, bytecode: &CompiledModule) -> Self {
+        let sh = bytecode.datatype_handle_at(ix);
         let mh = bytecode.module_handle_at(sh.module);
 
         let package = *bytecode.address_identifier_at(mh.address);
@@ -860,7 +1153,7 @@ impl DatatypeKey {
 impl<'l> ResolutionContext<'l> {
     fn new(limits: Option<&'l Limits>) -> Self {
         ResolutionContext {
-            structs: BTreeMap::new(),
+            datatypes: BTreeMap::new(),
             limits,
         }
     }
@@ -923,7 +1216,7 @@ impl<'l> ResolutionContext<'l> {
                     let context = store.fetch(s.address).await?;
                     let def = context
                         .clone()
-                        .struct_def(s.module.as_str(), s.name.as_str())?;
+                        .data_def(s.module.as_str(), s.name.as_str())?;
 
                     // Normalize `address` (the ID of a package that contains the definition of this
                     // struct) to be a runtime ID, because that's what the resolution context uses
@@ -950,23 +1243,40 @@ impl<'l> ResolutionContext<'l> {
                         }
                     }
 
-                    if self.structs.contains_key(&key) {
+                    if self.datatypes.contains_key(&key) {
                         continue;
                     }
 
                     if visit_fields {
-                        for (_, sig) in &def.fields {
-                            self.add_signature(sig.clone(), store, &context, visit_fields)
-                                .await?;
-                        }
+                        match &def.data {
+                            MoveData::Struct(fields) => {
+                                for (_, sig) in fields {
+                                    self.add_signature(sig.clone(), store, &context, visit_fields)
+                                        .await?;
+                                }
+                            }
+                            MoveData::Enum(variants) => {
+                                for variant in variants {
+                                    for (_, sig) in &variant.signatures {
+                                        self.add_signature(
+                                            sig.clone(),
+                                            store,
+                                            &context,
+                                            visit_fields,
+                                        )
+                                        .await?;
+                                    }
+                                }
+                            }
+                        };
                     }
 
                     check_max_limit!(
                         TooManyTypeNodes, self.limits;
-                        max_type_nodes > self.structs.len()
+                        max_type_nodes > self.datatypes.len()
                     );
 
-                    self.structs.insert(key, def);
+                    self.datatypes.insert(key, def);
                 }
             }
         }
@@ -1009,35 +1319,43 @@ impl<'l> ResolutionContext<'l> {
                     );
 
                     let params_count = params.len();
-                    let struct_count = self.structs.len();
+                    let data_count = self.datatypes.len();
                     frontier.extend(params.into_iter());
 
-                    let def = match self.structs.entry(key.clone()) {
-                        Entry::Occupied(e) => e.into_mut(),
+                    let type_params = if let Some(def) = self.datatypes.get(&key) {
+                        &def.type_params
+                    } else {
+                        check_max_limit!(
+                            TooManyTypeNodes, self.limits;
+                            max_type_nodes > data_count
+                        );
 
-                        Entry::Vacant(e) => {
-                            let storage_id = context.relocate(key.package)?;
-                            let package = store.fetch(storage_id).await?;
-                            let def = package.struct_def(&key.module, &key.name)?;
+                        // Need to resolve the datatype, so fetch the package that contains it.
+                        let storage_id = context.relocate(key.package)?;
+                        let package = store.fetch(storage_id).await?;
 
-                            if visit_fields {
-                                frontier.extend(def.fields.iter().map(|f| &f.1).cloned());
-                            }
-
-                            check_max_limit!(
-                                TooManyTypeNodes, self.limits;
-                                max_type_nodes > struct_count
-                            );
-
-                            e.insert(def)
+                        let def = package.data_def(&key.module, &key.name)?;
+                        if visit_fields {
+                            match &def.data {
+                                MoveData::Struct(fields) => {
+                                    frontier.extend(fields.iter().map(|f| &f.1).cloned());
+                                }
+                                MoveData::Enum(variants) => {
+                                    frontier.extend(
+                                        variants
+                                            .iter()
+                                            .flat_map(|v| v.signatures.iter().map(|(_, s)| s))
+                                            .cloned(),
+                                    );
+                                }
+                            };
                         }
+
+                        &self.datatypes.entry(key).or_insert(def).type_params
                     };
 
-                    if def.type_params.len() != params_count {
-                        return Err(Error::TypeArityMismatch(
-                            def.type_params.len(),
-                            params_count,
-                        ));
+                    if type_params.len() != params_count {
+                        return Err(Error::TypeArityMismatch(type_params.len(), params_count));
                     }
                 }
             }
@@ -1091,24 +1409,14 @@ impl<'l> ResolutionContext<'l> {
                 // these layouts are naturally keyed based on defining ID, but during resolution,
                 // they are keyed by runtime IDs.
 
-                // SAFETY: `add_type_tag` ensures `structs` has an element with this key.
-                let key = DatatypeRef::from(s.as_ref());
-                let def = &self.structs[&key];
-
-                let StructTag {
-                    module,
-                    name,
-                    type_params,
-                    ..
-                } = s.as_ref();
-
                 // TODO (optimization): This could be made more efficient by only generating layouts
                 // for non-phantom types.  This efficiency could be extended to the exploration
                 // phase (i.e. only explore layouts of non-phantom types). But this optimisation is
                 // complicated by the fact that we still need to create a correct type tag for a
                 // phantom parameter, which is currently done by converting a type layout into a
                 // tag.
-                let param_layouts = type_params
+                let param_layouts = s
+                    .type_params
                     .iter()
                     // Reduce the max depth because we know these type parameters will be nested
                     // wthin this struct.
@@ -1120,29 +1428,83 @@ impl<'l> ResolutionContext<'l> {
                 // is necessary to avoid errors when converting layouts into type tags.
                 let type_params = param_layouts.iter().map(|l| TypeTag::from(&l.0)).collect();
 
+                // SAFETY: `add_type_tag` ensures `datatyps` has an element with this key.
+                let key = DatatypeRef::from(s.as_ref());
+                let def = &self.datatypes[&key];
+
                 let type_ = StructTag {
                     address: def.defining_id,
-                    module: module.clone(),
-                    name: name.clone(),
+                    module: s.module.clone(),
+                    name: s.name.clone(),
                     type_params,
                 };
 
-                let mut fields = Vec::with_capacity(def.fields.len());
+                self.resolve_datatype_signature(def, type_, param_layouts, max_depth)?
+            }
+        })
+    }
+
+    /// Translates a datatype definition into a type layout.  Needs to be provided the layouts of type
+    /// parameters which are substituted when a type parameter is encountered.
+    ///
+    /// `max_depth` controls how deep the layout is allowed to grow to. The actual depth reached is
+    /// returned alongside the layout (assuming it does not exceed `max_depth`).
+    fn resolve_datatype_signature(
+        &self,
+        data_def: &DataDef,
+        type_: StructTag,
+        param_layouts: Vec<(MoveTypeLayout, usize)>,
+        max_depth: usize,
+    ) -> Result<(MoveTypeLayout, usize)> {
+        Ok(match &data_def.data {
+            MoveData::Struct(fields) => {
+                let mut resolved_fields = Vec::with_capacity(fields.len());
                 let mut field_depth = 0;
 
-                for (name, sig) in &def.fields {
+                for (name, sig) in fields {
                     let (layout, depth) =
                         self.resolve_signature_layout(sig, &param_layouts, max_depth - 1)?;
 
                     field_depth = field_depth.max(depth);
-                    fields.push(MoveFieldLayout {
+                    resolved_fields.push(MoveFieldLayout {
                         name: ident(name.as_str())?,
                         layout,
                     })
                 }
 
                 (
-                    L::Struct(MoveStructLayout { type_, fields }),
+                    MoveTypeLayout::Struct(MoveStructLayout {
+                        type_,
+                        fields: resolved_fields,
+                    }),
+                    field_depth + 1,
+                )
+            }
+            MoveData::Enum(variants) => {
+                let mut field_depth = 0;
+                let mut resolved_variants = BTreeMap::new();
+
+                for (tag, variant) in variants.iter().enumerate() {
+                    let mut fields = Vec::with_capacity(variant.signatures.len());
+                    for (name, sig) in &variant.signatures {
+                        // Note: We decrement the depth here because we're already under the variant
+                        let (layout, depth) =
+                            self.resolve_signature_layout(sig, &param_layouts, max_depth - 1)?;
+
+                        field_depth = field_depth.max(depth);
+                        fields.push(MoveFieldLayout {
+                            name: ident(name.as_str())?,
+                            layout,
+                        })
+                    }
+                    resolved_variants.insert((ident(variant.name.as_str())?, tag as u16), fields);
+                }
+
+                (
+                    MoveTypeLayout::Enum(MoveEnumLayout {
+                        type_,
+                        variants: resolved_variants,
+                    }),
                     field_depth + 1,
                 )
             }
@@ -1205,8 +1567,8 @@ impl<'l> ResolutionContext<'l> {
             }
 
             O::Datatype(key, params) => {
-                // SAFETY: `add_signature` ensures `structs` has an element with this key.
-                let def = &self.structs[key];
+                // SAFETY: `add_signature` ensures `datatypes` has an element with this key.
+                let def = &self.datatypes[&key];
 
                 let param_layouts = params
                     .iter()
@@ -1216,7 +1578,8 @@ impl<'l> ResolutionContext<'l> {
                 // SAFETY: `param_layouts` contains `MoveTypeLayout`-s that are generated by this
                 // `ResolutionContext`, which guarantees that struct layouts come with types, which
                 // is necessary to avoid errors when converting layouts into type tags.
-                let type_params = param_layouts.iter().map(|l| TypeTag::from(&l.0)).collect();
+                let type_params: Vec<TypeTag> =
+                    param_layouts.iter().map(|l| TypeTag::from(&l.0)).collect();
 
                 let type_ = StructTag {
                     address: def.defining_id,
@@ -1225,23 +1588,7 @@ impl<'l> ResolutionContext<'l> {
                     type_params,
                 };
 
-                let mut fields = Vec::with_capacity(def.fields.len());
-                let mut field_depth = 0;
-                for (name, sig) in &def.fields {
-                    let (layout, depth) =
-                        self.resolve_signature_layout(sig, &param_layouts, max_depth - 1)?;
-
-                    field_depth = field_depth.max(depth);
-                    fields.push(MoveFieldLayout {
-                        name: ident(name.as_str())?,
-                        layout,
-                    });
-                }
-
-                (
-                    L::Struct(MoveStructLayout { type_, fields }),
-                    field_depth + 1,
-                )
+                self.resolve_datatype_signature(def, type_, param_layouts, max_depth)?
             }
         })
     }
@@ -1260,9 +1607,9 @@ impl<'l> ResolutionContext<'l> {
             T::Vector(tag) => self.resolve_abilities(tag)?.intersect(AbilitySet::VECTOR),
 
             T::Struct(s) => {
-                // SAFETY: `add_type_tag` ensures `structs` has an element with this key.
+                // SAFETY: `add_type_tag` ensures `datatypes` has an element with this key.
                 let key = DatatypeRef::from(s.as_ref());
-                let def = &self.structs[&key];
+                let def = &self.datatypes[&key];
 
                 if def.type_params.len() != s.type_params.len() {
                     return Err(Error::TypeArityMismatch(
@@ -1291,7 +1638,7 @@ impl<'l> ResolutionContext<'l> {
                 )
                 // This error is unexpected because the only reason it would fail is because of a
                 // type parameter arity mismatch, which we check for above.
-                .map_err(|e| Error::UnexpectedError(Box::new(e)))?
+                .map_err(|e| Error::UnexpectedError(Arc::new(e)))?
             }
         })
     }
@@ -1312,13 +1659,13 @@ impl<'l> ResolutionContext<'l> {
             O::Vector(sig) => self.relocate_signature(sig.as_mut())?,
 
             O::Datatype(key, params) => {
-                // SAFETY: `add_signature` ensures `structs` has an element with this key.
-                let def = &self.structs[key];
+                // SAFETY: `add_signature` ensures `datatypes` has an element with this key.
+                let defining_id = &self.datatypes[&key].defining_id;
                 for param in params {
                     self.relocate_signature(param)?;
                 }
 
-                key.package = def.defining_id;
+                key.package = *defining_id;
             }
         }
 
@@ -1369,16 +1716,24 @@ mod tests {
 
     use super::*;
 
+    fn fmt(struct_layout: MoveTypeLayout, enum_layout: MoveTypeLayout) -> String {
+        format!("struct:\n{struct_layout:#}\n\nenum:\n{enum_layout:#}",)
+    }
+
     /// Layout for a type that only refers to base types or other types in the same module.
     #[tokio::test]
     async fn test_simple_type() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let package_resolver = Resolver::new(cache);
-        let layout = package_resolver
+        let struct_layout = package_resolver
             .type_layout(type_("0xa0::m::T0"))
             .await
             .unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let enum_layout = package_resolver
+            .type_layout(type_("0xa0::m::E0"))
+            .await
+            .unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     /// A type that refers to types from other modules in the same package.
@@ -1386,11 +1741,12 @@ mod tests {
     async fn test_cross_module() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let resolver = Resolver::new(cache);
-        let layout = resolver.type_layout(type_("0xa0::n::T0")).await.unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let struct_layout = resolver.type_layout(type_("0xa0::n::T0")).await.unwrap();
+        let enum_layout = resolver.type_layout(type_("0xa0::n::E0")).await.unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
-    /// A type that refers to types from other modules in the same package.
+    /// A type that refers to types a different package.
     #[tokio::test]
     async fn test_cross_package() {
         let (_, cache) = package_cache([
@@ -1399,8 +1755,9 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let layout = resolver.type_layout(type_("0xb0::m::T0")).await.unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let struct_layout = resolver.type_layout(type_("0xb0::m::T0")).await.unwrap();
+        let enum_layout = resolver.type_layout(type_("0xb0::m::E0")).await.unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     /// A type from an upgraded package, mixing structs defined in the original package and the
@@ -1413,8 +1770,9 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let layout = resolver.type_layout(type_("0xa1::n::T1")).await.unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let struct_layout = resolver.type_layout(type_("0xa1::n::T1")).await.unwrap();
+        let enum_layout = resolver.type_layout(type_("0xa1::n::E1")).await.unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     /// A generic type instantiation where the type parameters are resolved relative to linkage
@@ -1427,11 +1785,15 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let layout = resolver
+        let struct_layout = resolver
             .type_layout(type_("0xa0::m::T1<0xa0::m::T0, 0xa1::m::T3>"))
             .await
             .unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let enum_layout = resolver
+            .type_layout(type_("0xa0::m::E1<0xa0::m::E0, 0xa1::m::E3>"))
+            .await
+            .unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     /// Refer to a type, not by its defining ID, but by the ID of some later version of that
@@ -1446,11 +1808,15 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let layout = resolver
+        let struct_layout = resolver
             .type_layout(type_("0xa1::m::T1<0xa1::m::T3, 0xa1::m::T0>"))
             .await
             .unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let enum_layout = resolver
+            .type_layout(type_("0xa1::m::E1<0xa1::m::E3, 0xa1::m::E0>"))
+            .await
+            .unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     /// A type that refers to a types in a relinked package.  C depends on B and overrides its
@@ -1466,8 +1832,9 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let layout = resolver.type_layout(type_("0xc0::m::T0")).await.unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let struct_layout = resolver.type_layout(type_("0xc0::m::T0")).await.unwrap();
+        let enum_layout = resolver.type_layout(type_("0xc0::m::E0")).await.unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     #[tokio::test]
@@ -1485,11 +1852,15 @@ mod tests {
         );
 
         // The layout of this type is fine, because it is *just* at the correct depth.
-        let layout = resolver
+        let struct_layout = resolver
             .type_layout(type_("0xa0::m::T1<u8, u8>"))
             .await
             .unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let enum_layout = resolver
+            .type_layout(type_("0xa0::m::E1<u8, u8>"))
+            .await
+            .unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     #[tokio::test]
@@ -1507,11 +1878,16 @@ mod tests {
         );
 
         // The depth limit is now too low, so this will fail.
-        let err = resolver
+        let struct_err = resolver
             .type_layout(type_("0xa0::m::T1<u8, u8>"))
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::ValueNesting(2)))
+        let enum_err = resolver
+            .type_layout(type_("0xa0::m::E1<u8, u8>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(struct_err, Error::ValueNesting(2)));
+        assert!(matches!(enum_err, Error::ValueNesting(2)));
     }
 
     #[tokio::test]
@@ -1530,11 +1906,16 @@ mod tests {
 
         // This layout calculation will fail early because we know that the type parameter we're
         // calculating will eventually contribute to a layout that exceeds the max depth.
-        let err = resolver
+        let struct_err = resolver
             .type_layout(type_("0xa0::m::T1<vector<vector<u8>>, u8>"))
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::ValueNesting(3)))
+        let enum_err = resolver
+            .type_layout(type_("0xa0::m::E1<vector<vector<u8>>, u8>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(struct_err, Error::ValueNesting(3)));
+        assert!(matches!(enum_err, Error::ValueNesting(3)));
     }
 
     #[tokio::test]
@@ -1559,15 +1940,24 @@ mod tests {
             .type_layout(type_("0xd0::m::O<u8, u8>"))
             .await
             .unwrap();
+        let _ = resolver
+            .type_layout(type_("0xd0::m::EO<u8, u8>"))
+            .await
+            .unwrap();
 
         // But this one fails, even though the big layout is for a phantom type parameter. This may
         // change in future if we optimise the way we handle phantom type parameters to not
         // calculate their full layout, just their type tag.
-        let err = resolver
+        let struct_err = resolver
             .type_layout(type_("0xd0::m::O<u8, vector<vector<u8>>>"))
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::ValueNesting(3)))
+        let enum_err = resolver
+            .type_layout(type_("0xd0::m::EO<u8, vector<vector<u8>>>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(struct_err, Error::ValueNesting(3)));
+        assert!(matches!(enum_err, Error::ValueNesting(3)));
     }
 
     #[tokio::test]
@@ -1589,12 +1979,17 @@ mod tests {
 
         // Make sure that even if all type parameters individually meet the depth requirements,
         // that we correctly fail if they extend the layout's depth on application.
-        let err = resolver
+        let struct_err = resolver
             .type_layout(type_("0xd0::m::O<vector<u8>, u8>"))
             .await
             .unwrap_err();
+        let enum_err = resolver
+            .type_layout(type_("0xd0::m::EO<vector<u8>, u8>"))
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, Error::ValueNesting(3)))
+        assert!(matches!(struct_err, Error::ValueNesting(3)));
+        assert!(matches!(enum_err, Error::ValueNesting(3)));
     }
 
     #[tokio::test]
@@ -1602,8 +1997,10 @@ mod tests {
         let (inner, cache) = package_cache([(1, build_package("s0"), s0_types())]);
         let resolver = Resolver::new(cache);
 
-        let not_found = resolver.type_layout(type_("0x1::m::T1")).await.unwrap_err();
-        assert!(matches!(not_found, Error::StructNotFound(_, _, _)));
+        let struct_not_found = resolver.type_layout(type_("0x1::m::T1")).await.unwrap_err();
+        let enum_not_found = resolver.type_layout(type_("0x1::m::E1")).await.unwrap_err();
+        assert!(matches!(struct_not_found, Error::DatatypeNotFound(_, _, _)));
+        assert!(matches!(enum_not_found, Error::DatatypeNotFound(_, _, _)));
 
         // Add a new version of the system package into the store underlying the cache.
         inner.write().unwrap().replace(
@@ -1611,8 +2008,12 @@ mod tests {
             cached_package(2, BTreeMap::new(), &build_package("s1"), &s1_types()),
         );
 
-        let layout = resolver.type_layout(type_("0x1::m::T1")).await.unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        // Evict the package from the cache
+        resolver.package_store().evict([addr("0x1")]);
+
+        let struct_layout = resolver.type_layout(type_("0x1::m::T1")).await.unwrap();
+        let enum_layout = resolver.type_layout(type_("0x1::m::E1")).await.unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     #[tokio::test]
@@ -1623,37 +2024,39 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let stats = |inner: &Arc<RwLock<InnerStore>>| {
-            let i = inner.read().unwrap();
-            (i.fetches, i.version_checks)
-        };
-
-        assert_eq!(stats(&inner), (0, 0));
+        assert_eq!(inner.read().unwrap().fetches, 0);
         let l0 = resolver.type_layout(type_("0xa0::m::T0")).await.unwrap();
 
         // Load A0.
-        assert_eq!(stats(&inner), (1, 0));
+        assert_eq!(inner.read().unwrap().fetches, 1);
 
-        // Layouts are the same, no need to reload the package.  Not a system package, so no version
-        // check needed.
+        // Layouts are the same, no need to reload the package.
         let l1 = resolver.type_layout(type_("0xa0::m::T0")).await.unwrap();
         assert_eq!(format!("{l0}"), format!("{l1}"));
-        assert_eq!(stats(&inner), (1, 0));
+        assert_eq!(inner.read().unwrap().fetches, 1);
 
         // Different type, but same package, so no extra fetch.
         let l2 = resolver.type_layout(type_("0xa0::m::T2")).await.unwrap();
         assert_ne!(format!("{l0}"), format!("{l2}"));
-        assert_eq!(stats(&inner), (1, 0));
+        assert_eq!(inner.read().unwrap().fetches, 1);
 
-        // New package to load.  It's a system package, which would need a version check if it
-        // already existed in the cache, but it doesn't yet, so we only see a fetch.
+        // Enum types won't trigger a fetch either.
+        resolver.type_layout(type_("0xa0::m::E0")).await.unwrap();
+        assert_eq!(inner.read().unwrap().fetches, 1);
+
+        // New package to load.
         let l3 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
-        assert_eq!(stats(&inner), (2, 0));
+        assert_eq!(inner.read().unwrap().fetches, 2);
 
-        // Reload the same system package type, which will cause a version check.
+        // Reload the same system package type, it gets fetched from cache
         let l4 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
         assert_eq!(format!("{l3}"), format!("{l4}"));
-        assert_eq!(stats(&inner), (2, 1));
+        assert_eq!(inner.read().unwrap().fetches, 2);
+
+        // Reload a same system package type (enum), which will cause a version check.
+        let el4 = resolver.type_layout(type_("0x1::m::E0")).await.unwrap();
+        assert_ne!(format!("{el4}"), format!("{l4}"));
+        assert_eq!(inner.read().unwrap().fetches, 2);
 
         // Upgrade the system package
         inner.write().unwrap().replace(
@@ -1661,12 +2064,15 @@ mod tests {
             cached_package(2, BTreeMap::new(), &build_package("s1"), &s1_types()),
         );
 
-        // Reload the same system type again.  The version check fails and the system package is
-        // refetched (even though the type is the same as before).  This usage pattern (layouts for
-        // system types) is why a layout cache would be particularly helpful (future optimisation).
+        // Evict the package from the cache
+        resolver.package_store().evict([addr("0x1")]);
+
+        // Reload the system system type again. It will be refetched (even though the type is the
+        // same as before). This usage pattern (layouts for system types) is why a layout cache
+        // would be particularly helpful (future optimisation).
         let l5 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
         assert_eq!(format!("{l4}"), format!("{l5}"));
-        assert_eq!(stats(&inner), (3, 2));
+        assert_eq!(inner.read().unwrap().fetches, 3);
     }
 
     #[tokio::test]
@@ -1700,7 +2106,7 @@ mod tests {
             .type_layout(type_("0xa0::m::T9"))
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::StructNotFound(_, _, _)));
+        assert!(matches!(err, Error::DatatypeNotFound(_, _, _)));
     }
 
     #[tokio::test]
@@ -1751,6 +2157,40 @@ mod tests {
             "a0::m::T0: {t0:#?}\n\
              a0::m::T1: {t1:#?}\n\
              a0::m::T2: {t2:#?}",
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_enums() {
+        let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
+        let a0 = cache
+            .fetch(AccountAddress::from_str("0xa0").unwrap())
+            .await
+            .unwrap();
+        let m = a0.module("m").unwrap();
+
+        assert_eq!(
+            m.enums(None, None).collect::<Vec<_>>(),
+            vec!["E0", "E1", "E2"],
+        );
+
+        assert_eq!(m.enums(None, Some("E1")).collect::<Vec<_>>(), vec!["E0"],);
+
+        assert_eq!(
+            m.enums(Some("E0"), Some("E2")).collect::<Vec<_>>(),
+            vec!["E1"],
+        );
+
+        assert_eq!(m.enums(Some("E1"), None).collect::<Vec<_>>(), vec!["E2"],);
+
+        let e0 = m.enum_def("E0").unwrap().unwrap();
+        let e1 = m.enum_def("E1").unwrap().unwrap();
+        let e2 = m.enum_def("E2").unwrap().unwrap();
+
+        insta::assert_snapshot!(format!(
+            "a0::m::E0: {e0:#?}\n\
+             a0::m::E1: {e1:#?}\n\
+             a0::m::E2: {e2:#?}",
         ));
     }
 
@@ -2253,10 +2693,14 @@ mod tests {
 
     fn a0_types() -> TypeOriginTable {
         vec![
-            struct_("0xa0", "m", "T0"),
-            struct_("0xa0", "m", "T1"),
-            struct_("0xa0", "m", "T2"),
-            struct_("0xa0", "n", "T0"),
+            datakey("0xa0", "m", "T0"),
+            datakey("0xa0", "m", "T1"),
+            datakey("0xa0", "m", "T2"),
+            datakey("0xa0", "m", "E0"),
+            datakey("0xa0", "m", "E1"),
+            datakey("0xa0", "m", "E2"),
+            datakey("0xa0", "n", "T0"),
+            datakey("0xa0", "n", "E0"),
         ]
     }
 
@@ -2264,58 +2708,67 @@ mod tests {
         let mut types = a0_types();
 
         types.extend([
-            struct_("0xa1", "m", "T3"),
-            struct_("0xa1", "m", "T4"),
-            struct_("0xa1", "n", "T1"),
+            datakey("0xa1", "m", "T3"),
+            datakey("0xa1", "m", "T4"),
+            datakey("0xa1", "n", "T1"),
+            datakey("0xa1", "m", "E3"),
+            datakey("0xa1", "m", "E4"),
+            datakey("0xa1", "n", "E1"),
         ]);
 
         types
     }
 
     fn b0_types() -> TypeOriginTable {
-        vec![struct_("0xb0", "m", "T0")]
+        vec![datakey("0xb0", "m", "T0"), datakey("0xb0", "m", "E0")]
     }
 
     fn c0_types() -> TypeOriginTable {
-        vec![struct_("0xc0", "m", "T0")]
+        vec![datakey("0xc0", "m", "T0"), datakey("0xc0", "m", "E0")]
     }
 
     fn d0_types() -> TypeOriginTable {
         vec![
-            struct_("0xd0", "m", "O"),
-            struct_("0xd0", "m", "P"),
-            struct_("0xd0", "m", "Q"),
-            struct_("0xd0", "m", "R"),
-            struct_("0xd0", "m", "S"),
-            struct_("0xd0", "m", "T"),
+            datakey("0xd0", "m", "O"),
+            datakey("0xd0", "m", "P"),
+            datakey("0xd0", "m", "Q"),
+            datakey("0xd0", "m", "R"),
+            datakey("0xd0", "m", "S"),
+            datakey("0xd0", "m", "T"),
+            datakey("0xd0", "m", "EO"),
+            datakey("0xd0", "m", "EP"),
+            datakey("0xd0", "m", "EQ"),
+            datakey("0xd0", "m", "ER"),
+            datakey("0xd0", "m", "ES"),
+            datakey("0xd0", "m", "ET"),
         ]
     }
 
     fn e0_types() -> TypeOriginTable {
-        vec![struct_("0xe0", "m", "O")]
+        vec![datakey("0xe0", "m", "O")]
     }
 
     fn s0_types() -> TypeOriginTable {
-        vec![struct_("0x1", "m", "T0")]
+        vec![datakey("0x1", "m", "T0"), datakey("0x1", "m", "E0")]
     }
 
     fn s1_types() -> TypeOriginTable {
         let mut types = s0_types();
 
-        types.extend([struct_("0x1", "m", "T1")]);
+        types.extend([datakey("0x1", "m", "T1"), datakey("0x1", "m", "E1")]);
 
         types
     }
 
     fn sui_types() -> TypeOriginTable {
-        vec![struct_("0x2", "object", "UID")]
+        vec![datakey("0x2", "object", "UID")]
     }
 
     fn std_types() -> TypeOriginTable {
         vec![
-            struct_("0x1", "ascii", "String"),
-            struct_("0x1", "option", "Option"),
-            struct_("0x1", "string", "String"),
+            datakey("0x1", "ascii", "String"),
+            datakey("0x1", "option", "Option"),
+            datakey("0x1", "string", "String"),
         ]
     }
 
@@ -2324,7 +2777,10 @@ mod tests {
     /// have a 'published-at' address), and their transitive dependencies are also in `packages`.
     fn package_cache(
         packages: impl IntoIterator<Item = (u64, CompiledPackage, TypeOriginTable)>,
-    ) -> (Arc<RwLock<InnerStore>>, Box<dyn PackageStore>) {
+    ) -> (
+        Arc<RwLock<InnerStore>>,
+        PackageStoreWithLruCache<InMemoryPackageStore>,
+    ) {
         let packages_by_storage_id: BTreeMap<AccountAddress, _> = packages
             .into_iter()
             .map(|(version, package, origins)| {
@@ -2360,16 +2816,13 @@ mod tests {
         let inner = Arc::new(RwLock::new(InnerStore {
             packages,
             fetches: 0,
-            version_checks: 0,
         }));
 
         let store = InMemoryPackageStore {
             inner: inner.clone(),
         };
 
-        let store_with_cache = PackageStoreWithLruCache::new(store);
-
-        (inner, Box::new(store_with_cache))
+        (inner, PackageStoreWithLruCache::new(store))
     }
 
     fn cached_package(
@@ -2437,7 +2890,7 @@ mod tests {
         AccountAddress::from_str(a).unwrap()
     }
 
-    fn struct_(a: &str, m: &'static str, n: &'static str) -> DatatypeKey {
+    fn datakey(a: &str, m: &'static str, n: &'static str) -> DatatypeKey {
         DatatypeKey {
             package: addr(a),
             module: m.into(),
@@ -2463,21 +2916,10 @@ mod tests {
     struct InnerStore {
         packages: BTreeMap<AccountAddress, Package>,
         fetches: usize,
-        version_checks: usize,
     }
 
     #[async_trait]
     impl PackageStore for InMemoryPackageStore {
-        async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-            let mut inner = self.inner.as_ref().write().unwrap();
-            inner.version_checks += 1;
-            inner
-                .packages
-                .get(&id)
-                .ok_or_else(|| Error::PackageNotFound(id))
-                .map(|p| p.version)
-        }
-
         async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
             let mut inner = self.inner.as_ref().write().unwrap();
             inner.fetches += 1;

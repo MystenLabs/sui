@@ -5,11 +5,7 @@ import networkEnv from '_src/background/NetworkEnv';
 import { type NetworkEnvType } from '_src/shared/api-env';
 import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
-import {
-	toSerializedSignature,
-	type PublicKey,
-	type SerializedSignature,
-} from '@mysten/sui.js/cryptography';
+import { toSerializedSignature, type PublicKey } from '@mysten/sui/cryptography';
 import { computeZkLoginAddress, genAddressSeed, getZkLoginSignature } from '@mysten/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
@@ -196,7 +192,7 @@ export class ZkLoginAccount
 		};
 	}
 
-	async signData(data: Uint8Array): Promise<SerializedSignature> {
+	async signData(data: Uint8Array): Promise<string> {
 		const digest = blake2b(data, { dkLen: 32 });
 		if (await this.isLocked()) {
 			throw new Error('Account is locked');
@@ -222,6 +218,7 @@ export class ZkLoginAccount
 				BigInt(randomness),
 				maxEpoch,
 				keyPair.getPublicKey(),
+				activeNetwork,
 			);
 			credentialsData.proofs = proofs;
 			// store the proofs to avoid creating them again
@@ -295,6 +292,7 @@ export class ZkLoginAccount
 		randomness: bigint,
 		maxEpoch: number,
 		ephemeralPublicKey: PublicKey,
+		network: NetworkEnvType,
 	) {
 		const { salt: obfuscatedSalt, claimName } = await this.getStoredData();
 		const salt = await deobfuscate<string>(obfuscatedSalt);
@@ -305,6 +303,7 @@ export class ZkLoginAccount
 			jwtRandomness: randomness,
 			keyClaimName: claimName,
 			maxEpoch,
+			network,
 		});
 	}
 }

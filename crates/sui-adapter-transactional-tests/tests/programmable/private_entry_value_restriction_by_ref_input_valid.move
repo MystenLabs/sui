@@ -8,8 +8,6 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
     use sui::coin::Coin;
     use sui::sui::SUI;
 

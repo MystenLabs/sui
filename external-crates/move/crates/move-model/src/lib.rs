@@ -17,18 +17,17 @@ use log::warn;
 use num::{BigUint, Num};
 
 use builder::module_builder::ModuleBuilder;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{CompiledModule, FunctionDefinitionIndex, StructDefinitionIndex},
+use move_binary_format::file_format::{
+    CompiledModule, FunctionDefinitionIndex, StructDefinitionIndex,
 };
 use move_compiler::{
     self,
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{Diagnostics, WarningFilters},
-    expansion::ast::{self as E, ModuleIdent, ModuleIdent_},
-    parser::ast::{self as P},
+    expansion::ast::{self as E, ModuleIdent, ModuleIdent_, TargetKind},
+    parser::ast as P,
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
-    typing::ast::{self as T},
+    typing::ast as T,
     Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER, PASS_TYPING,
 };
 use move_core_types::account_address::AccountAddress;
@@ -37,7 +36,7 @@ use move_symbol_pool::Symbol as MoveSymbol;
 use crate::{
     ast::ModuleName,
     builder::model_builder::ModelBuilder,
-    model::{FunId, FunctionData, GlobalEnv, Loc, ModuleData, ModuleId, StructId},
+    model::{FunId, FunctionData, GlobalEnv, Loc, ModuleData, ModuleId, DatatypeId},
     options::ModelBuilderOptions,
 };
 
@@ -110,10 +109,11 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     env.set_extension(options);
 
     // Step 1: parse the program to get comments and a separation of targets and dependencies.
-    let (files, comments_and_compiler_res) = Compiler::from_package_paths(move_sources, deps)?
-        .set_flags(flags)
-        .set_warning_filter(warning_filter)
-        .run::<PASS_PARSER>()?;
+    let (files, comments_and_compiler_res) =
+        Compiler::from_package_paths(None, move_sources, deps)?
+            .set_flags(flags)
+            .set_warning_filter(warning_filter)
+            .run::<PASS_PARSER>()?;
     let (comment_map, compiler) = match comments_and_compiler_res {
         Err((_pass, diags)) => {
             // Add source files so that the env knows how to translate locations of parse errors
@@ -219,14 +219,10 @@ pub fn run_model_builder_with_options_and_compilation_flags<
 
     // Extract the module/script closure
     let mut visited_modules = BTreeSet::new();
-    for (_, mident, mdef) in &typing_ast.inner.modules {
+    for (_, mident, mdef) in &typing_ast.modules {
         let src_file_hash = mdef.loc.file_hash();
         if !dep_files.contains(&src_file_hash) {
-            collect_related_modules_recursive(
-                mident,
-                &typing_ast.inner.modules,
-                &mut visited_modules,
-            );
+            collect_related_modules_recursive(mident, &typing_ast.modules, &mut visited_modules);
         }
     }
 
@@ -235,23 +231,25 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         let E::Program { modules } = expansion_ast;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
-                mdef.is_source_module = true;
+                mdef.target_kind = TargetKind::Source {
+                    is_root_package: true,
+                };
                 mdef
             })
         });
         E::Program { modules }
     };
     let typing_ast = {
-        let T::Program { info, inner } = typing_ast;
-        let T::Program_ { modules } = inner;
+        let T::Program { info, modules } = typing_ast;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
-                mdef.is_source_module = true;
+                mdef.target_kind = TargetKind::Source {
+                    is_root_package: true,
+                };
                 mdef
             })
         });
-        let inner = T::Program_ { modules };
-        T::Program { info, inner }
+        T::Program { info, modules }
     };
 
     // Run the compiler fully to the compiled units
@@ -328,9 +326,9 @@ pub fn run_bytecode_model_builder<'a>(
         // add structs
         for (i, def) in m.struct_defs().iter().enumerate() {
             let def_idx = StructDefinitionIndex(i as u16);
-            let name = m.identifier_at(m.struct_handle_at(def.struct_handle).name);
+            let name = m.identifier_at(m.datatype_handle_at(def.struct_handle).name);
             let symbol = env.symbol_pool().make(name.as_str());
-            let struct_id = StructId::new(symbol);
+            let struct_id = DatatypeId::new(symbol);
             let data =
                 env.create_move_struct_data(m, def_idx, symbol, Loc::default(), Vec::default());
             module_data.struct_data.insert(struct_id, data);

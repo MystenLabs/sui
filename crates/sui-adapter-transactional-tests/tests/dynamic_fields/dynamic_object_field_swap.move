@@ -6,9 +6,6 @@
 //# publish
 
 module test::m {
-    use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, UID};
-    use sui::transfer;
     use sui::dynamic_object_field as ofield;
 
     public struct Outer has key {

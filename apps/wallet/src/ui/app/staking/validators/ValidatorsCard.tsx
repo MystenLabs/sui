@@ -15,7 +15,7 @@ import {
 import { useGetDelegatedStake } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Plus12 } from '@mysten/icons';
-import type { StakeObject } from '@mysten/sui.js/client';
+import type { StakeObject } from '@mysten/sui/client';
 import { useMemo } from 'react';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';

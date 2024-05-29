@@ -1,8 +1,7 @@
-address 0x42 {
-module X {
+module 0x42::X {
     struct S {}
 }
-module M {
+module 0x42::M {
     use 0x42::X;
     use 0x42::X::S as X;
 
@@ -38,5 +37,4 @@ module M {
         // Should fail with unbound local even though it is not a valid local name
         Y = 0;
     }
-}
 }

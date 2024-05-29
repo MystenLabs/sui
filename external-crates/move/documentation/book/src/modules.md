@@ -18,7 +18,7 @@ module <address>::<identifier> {
 }
 ```
 
-where `<address>` is a valid [named or literal address](./address.md) specifying the module's
+where `<address>` is a valid [address](./primitive-types/address.md) specifying the module's
 package.
 
 For example:
@@ -42,11 +42,11 @@ module 0x42::test {
 ## Names
 
 The `module test_addr::test` part specifies that the module `test` will be published under the
-numerical [address](./address.md) value assigned for the name `test_addr` in the
+numerical [address](./primitive-types/address.md) value assigned for the name `test_addr` in the
 [package settings](./packages.md).
 
-Modules should normally be declared using [named addresses](./address.md) (as opposed to using the
-numerical value directly). For example:
+Modules should normally be declared using [named addresses](./primitive-types/address.md) (as
+opposed to using the numerical value directly). For example:
 
 ```move
 module test_addr::test {

@@ -10,7 +10,7 @@ const guides = [
 	{
 		type: 'category',
 		label: 'Developer Guides',
-                collapsed: false,
+		collapsed: false,
 		link: {
 			type: 'doc',
 			id: 'guides/developer',
@@ -19,13 +19,12 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Getting Started',
-                                collapsed: false,
+				collapsed: false,
 				link: {
 					type: 'doc',
 					id: 'guides/developer/getting-started',
 				},
 				items: [
-					'guides/developer/getting-started/sui-environment',
 					'guides/developer/getting-started/sui-install',
 					'guides/developer/getting-started/connect',
 					'guides/developer/getting-started/local-network',
@@ -99,6 +98,19 @@ const guides = [
 					'guides/developer/cryptography/groth16',
 					'guides/developer/cryptography/hashing',
 					'guides/developer/cryptography/ecvrf',
+					'guides/developer/cryptography/multisig',
+					{
+						type: 'category',
+						label: 'zkLogin Integration Guide',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/cryptography/zklogin-integration',
+						},
+						items: [
+							'guides/developer/cryptography/zklogin-integration/developer-account',
+							'guides/developer/cryptography/zklogin-integration/zklogin-example',
+						],
+					},
 				],
 			},
 			{
@@ -118,9 +130,11 @@ const guides = [
 						},
 						items: ['guides/developer/advanced/min-gas-fees'],
 					},*/
-					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/graphql-migration',
+					'guides/developer/advanced/move-2024-migration',
+					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/custom-indexer',
+					'guides/developer/advanced/randomness-onchain',
 				],
 			},
 			{
@@ -149,18 +163,19 @@ const guides = [
 					},
 					'guides/developer/app-examples/plinko',
 					'guides/developer/app-examples/recaptcha',
+          'guides/developer/app-examples/reviews-rating',
 					'guides/developer/app-examples/tic-tac-toe',
 					{
 						type: 'category',
-						label: 'Trustless Token Swap',
+						label: 'Trustless Swap',
 						link: {
 							type: 'doc',
-							id: 'guides/developer/app-examples/trustless-token-swap',
+							id: 'guides/developer/app-examples/trustless-swap',
 						},
 						items: [
-							'guides/developer/app-examples/trustless-token-swap/backend',
-							'guides/developer/app-examples/trustless-token-swap/indexer-api',
-							'guides/developer/app-examples/trustless-token-swap/frontend',
+							'guides/developer/app-examples/trustless-swap/backend',
+							'guides/developer/app-examples/trustless-swap/indexer-api',
+							'guides/developer/app-examples/trustless-swap/frontend',
 						],
 					},
 					'guides/developer/app-examples/trusted-swap',

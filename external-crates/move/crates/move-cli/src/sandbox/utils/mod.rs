@@ -6,7 +6,6 @@ use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
 use anyhow::{bail, Result};
 
 use move_binary_format::{
-    access::ModuleAccess,
     compatibility::Compatibility,
     errors::{Location, VMError},
     file_format::{AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken},
@@ -164,12 +163,13 @@ pub(crate) fn explain_publish_error(
             let new_api = normalized::Module::new(module);
 
             if (Compatibility {
-                check_struct_and_pub_function_linking: false,
-                check_struct_layout: true,
+                check_datatype_and_pub_function_linking: false,
+                check_datatype_layout: true,
                 check_friend_linking: false,
                 check_private_entry_linking: true,
                 disallowed_new_abilities: AbilitySet::EMPTY,
-                disallow_change_struct_type_params: false,
+                disallow_change_datatype_type_params: false,
+                disallow_new_variants: false,
             })
             .check(&old_api, &new_api)
             .is_err()
@@ -178,12 +178,13 @@ pub(crate) fn explain_publish_error(
                 // structs of this type. but probably a bad idea
                 println!("Layout API for structs of module {} has changed. Need to do a data migration of published structs", module_id)
             } else if (Compatibility {
-                check_struct_and_pub_function_linking: true,
-                check_struct_layout: false,
+                check_datatype_and_pub_function_linking: true,
+                check_datatype_layout: false,
                 check_friend_linking: false,
                 check_private_entry_linking: true,
                 disallowed_new_abilities: AbilitySet::EMPTY,
-                disallow_change_struct_type_params: false,
+                disallow_change_datatype_type_params: false,
+                disallow_new_variants: false,
             })
             .check(&old_api, &new_api)
             .is_err()
@@ -343,7 +344,6 @@ pub(crate) fn explain_execution_error(
                         state.resolve_function(id, function.0)?.unwrap()
                     )
                 }
-                Location::Script => "script".to_owned(),
                 Location::Undefined => "UNDEFINED".to_owned(),
             };
             println!(

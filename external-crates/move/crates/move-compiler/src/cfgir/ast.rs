@@ -4,18 +4,21 @@
 
 use crate::{
     diagnostics::WarningFilters,
-    expansion::ast::{Attributes, Friend, ModuleIdent, Mutability},
+    expansion::ast::{Attributes, Friend, ModuleIdent, Mutability, TargetKind},
     hlir::ast::{
-        BaseType, Command, Command_, FunctionSignature, Label, SingleType, StructDefinition, Var,
-        Visibility,
+        BaseType, Command, Command_, EnumDefinition, FunctionSignature, Label, SingleType,
+        StructDefinition, Var, Visibility,
     },
-    parser::ast::{ConstantName, FunctionName, StructName, ENTRY_MODIFIER},
-    shared::{ast_debug::*, unique_map::UniqueMap},
+    parser::ast::{ConstantName, DatatypeName, FunctionName, ENTRY_MODIFIER},
+    shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use move_core_types::runtime_value::MoveValue;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, VecDeque};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::Arc,
+};
 
 // HLIR + Unstructured Control Flow + CFG
 
@@ -25,6 +28,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    pub info: Arc<TypingProgramInfo>,
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
@@ -38,11 +42,12 @@ pub struct ModuleDefinition {
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
-    pub is_source_module: bool,
+    pub target_kind: TargetKind,
     /// `dependency_order` is the topological order/rank in the dependency graph.
     pub dependency_order: usize,
     pub friends: UniqueMap<ModuleIdent, Friend>,
-    pub structs: UniqueMap<StructName, StructDefinition>,
+    pub structs: UniqueMap<DatatypeName, StructDefinition>,
+    pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
 }
@@ -172,6 +177,11 @@ fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, sp!(_, cmd_): &mut Comma
             *if_true = remapping[if_true];
             *if_false = remapping[if_false];
         }
+        VariantSwitch { arms, .. } => {
+            for (_, arm) in arms.iter_mut() {
+                *arm = remapping[arm];
+            }
+        }
     }
 }
 
@@ -181,7 +191,7 @@ fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, sp!(_, cmd_): &mut Comma
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules } = self;
+        let Program { modules, info: _ } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));
@@ -197,10 +207,11 @@ impl AstDebug for ModuleDefinition {
             warning_filter,
             package_name,
             attributes,
-            is_source_module,
+            target_kind,
             dependency_order,
             friends,
             structs,
+            enums,
             constants,
             functions,
         } = self;
@@ -209,11 +220,15 @@ impl AstDebug for ModuleDefinition {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
-        if *is_source_module {
-            w.writeln("library module")
-        } else {
-            w.writeln("source module")
-        }
+        w.writeln(match target_kind {
+            TargetKind::Source {
+                is_root_package: true,
+            } => "root module",
+            TargetKind::Source {
+                is_root_package: false,
+            } => "dependency module",
+            TargetKind::External => "external module",
+        });
         w.writeln(&format!("dependency order #{}", dependency_order));
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
@@ -221,6 +236,10 @@ impl AstDebug for ModuleDefinition {
         }
         for sdef in structs.key_cloned_iter() {
             sdef.ast_debug(w);
+            w.new_line();
+        }
+        for edef in enums.key_cloned_iter() {
+            edef.ast_debug(w);
             w.new_line();
         }
         for cdef in constants.key_cloned_iter() {
@@ -278,6 +297,7 @@ impl AstDebug for MoveValue {
                 w.write("]");
             }
             V::Struct(_) => panic!("ICE struct constants not supported"),
+            V::Variant(_) => panic!("ICE enum constants not supported"),
             V::Signer(_) => panic!("ICE signer constants not supported"),
         }
     }

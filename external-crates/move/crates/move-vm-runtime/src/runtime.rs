@@ -11,7 +11,6 @@ use crate::{
     session::{LoadedFunctionInstantiation, SerializedReturnValues, Session},
 };
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{AbilitySet, LocalIndex},
     CompiledModule, IndexKind,
@@ -30,7 +29,7 @@ use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
-    loaded_data::runtime_types::{CachedStructIndex, StructType, Type},
+    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
     values::{Locals, Reference, VMValueCast, Value},
 };
 use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};
@@ -384,9 +383,9 @@ impl VMRuntime {
         extensions: &mut NativeContextExtensions,
         bypass_declared_entry_check: bool,
     ) -> VMResult<SerializedReturnValues> {
-        use move_binary_format::{binary_views::BinaryIndexedView, file_format::SignatureIndex};
+        use move_binary_format::file_format::SignatureIndex;
         fn check_is_entry(
-            _resolver: &BinaryIndexedView,
+            _resolver: &CompiledModule,
             is_entry: bool,
             _parameters_idx: SignatureIndex,
             _return_idx: Option<SignatureIndex>,
@@ -453,8 +452,8 @@ impl VMRuntime {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
-    pub fn get_struct_type(&self, index: CachedStructIndex) -> Option<Arc<StructType>> {
-        self.loader.get_struct_type(index)
+    pub fn get_type(&self, index: CachedTypeIndex) -> Option<Arc<CachedDatatype>> {
+        self.loader.get_type(index)
     }
 
     pub fn type_to_type_layout(&self, ty: &Type) -> VMResult<MoveTypeLayout> {
@@ -463,14 +462,14 @@ impl VMRuntime {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
-    pub fn load_struct(
+    pub fn load_type(
         &self,
         module_id: &ModuleId,
         struct_name: &IdentStr,
         data_store: &impl DataStore,
-    ) -> VMResult<(CachedStructIndex, Arc<StructType>)> {
+    ) -> VMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         self.loader
-            .load_struct_by_name(struct_name, module_id, data_store)
+            .load_type_by_name(struct_name, module_id, data_store)
     }
 
     pub fn execute_function_bypass_visibility(

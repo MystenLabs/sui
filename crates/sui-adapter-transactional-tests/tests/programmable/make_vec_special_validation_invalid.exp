@@ -3,15 +3,15 @@ processed 4 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 8-31:
+task 1 'publish'. lines 8-29:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6049600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 33-36:
+task 2 'programmable'. lines 31-34:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<u64> but provided argument's value does not match"), command: Some(0) } }
 
-task 3 'programmable'. lines 38-41:
+task 3 'programmable'. lines 36-39:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::string::String but provided argument's value does not match"), command: Some(0) } }

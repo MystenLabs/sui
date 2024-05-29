@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
 use sui_types::base_types::ObjectRef;
 use sui_types::storage::ObjectStore;
-use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
@@ -19,6 +18,7 @@ use sui_types::{
     object::{Object, OBJECT_START_VERSION},
     MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
 };
+use sui_types::{BRIDGE_PACKAGE_ID, DEEPBOOK_PACKAGE_ID};
 use tracing::error;
 
 /// Represents a system package in the framework, that's built from the source code inside
@@ -123,6 +123,15 @@ impl BuiltInFramework {
                 DEEPBOOK_PACKAGE_ID,
                 "deepbook",
                 [MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]
+            ),
+            (
+                BRIDGE_PACKAGE_ID,
+                "bridge",
+                [
+                    MOVE_STDLIB_PACKAGE_ID,
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    SUI_SYSTEM_PACKAGE_ID
+                ]
             )
         ])
         .iter()
@@ -215,8 +224,8 @@ pub async fn compare_system_package<S: ObjectStore>(
     }
 
     let compatibility = Compatibility {
-        check_struct_and_pub_function_linking: true,
-        check_struct_layout: true,
+        check_datatype_and_pub_function_linking: true,
+        check_datatype_layout: true,
         check_friend_linking: false,
         // Checking `entry` linkage is required because system packages are updated in-place, and a
         // transaction that was rolled back to make way for reconfiguration should still be runnable
@@ -228,7 +237,8 @@ pub async fn compare_system_package<S: ObjectStore>(
         // fail if one of its mutable inputs was being used in another private `entry` function.
         check_private_entry_linking: true,
         disallowed_new_abilities: AbilitySet::singleton(Ability::Key),
-        disallow_change_struct_type_params: true,
+        disallow_change_datatype_type_params: true,
+        disallow_new_variants: true,
     };
 
     let new_pkg = new_object

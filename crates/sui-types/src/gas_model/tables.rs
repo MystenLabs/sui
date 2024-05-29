@@ -545,6 +545,11 @@ impl GasMeter for GasStatus {
         self.charge(1, num_fields, 1, 0, STRUCT_SIZE.into())
     }
 
+    fn charge_variant_switch(&mut self, val: impl ValueView) -> PartialVMResult<()> {
+        // We perform a single pop of a value from the stack.
+        self.charge(1, 0, 1, 0, self.abstract_memory_size(val).into())
+    }
+
     fn charge_read_ref(&mut self, ref_val: impl ValueView) -> PartialVMResult<()> {
         // We read the reference so we are decreasing the size of the stack by the size of the
         // reference, and adding to it the size of the value that has been read from that
@@ -563,7 +568,7 @@ impl GasMeter for GasStatus {
         new_val: impl ValueView,
         old_val: impl ValueView,
     ) -> PartialVMResult<()> {
-        // TODO(tzakian): We should account for this elsewhere as the owner of data the the
+        // TODO(tzakian): We should account for this elsewhere as the owner of data the
         // reference points to won't be on the stack. For now though, we treat it as adding to the
         // stack size.
         self.charge(

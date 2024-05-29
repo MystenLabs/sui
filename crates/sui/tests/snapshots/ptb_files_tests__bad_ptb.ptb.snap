@@ -48,12 +48,3 @@ expression: "results.join(\"\\n\")"
  8 │ --assign Z none
    ╰────
 
-  × Error when processing PTB
-   ╭─[9:39]
- 8 │ --assign Z none
- 9 │ --move-call 0x1::option::is_no <u64> Z 
-   ·                                       ▲
-   ·                                       ╰── Gas budget not set.
-   ╰────
-  help: Use --gas-budget <u64> to set a gas budget
-

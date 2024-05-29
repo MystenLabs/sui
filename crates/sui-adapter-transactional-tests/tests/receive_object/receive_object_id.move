@@ -5,9 +5,7 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
 
     public struct A has key, store {
         id: UID,
@@ -38,10 +36,10 @@ module tto::M1 {
 
 //# run tto::M1::receiver --args receiving(2,1)
 
-//# programmable --inputs receiving(2,1) 
+//# programmable --inputs receiving(2,1)
 //> sui::transfer::receiving_object_id<tto::M1::B>(Input(0))
 
-//# programmable --inputs receiving(2,1) 
+//# programmable --inputs receiving(2,1)
 //> tto::M1::receiver(Input(0))
 
 //# view-object 2,0

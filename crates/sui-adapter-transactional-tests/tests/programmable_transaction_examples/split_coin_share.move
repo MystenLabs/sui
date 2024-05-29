@@ -8,9 +8,6 @@ module p::m {
     use sui::sui::SUI;
     use sui::coin;
 
-    use sui::tx_context::TxContext;
-    use sui::transfer;
-
     public fun sharer<T: key + store>(x: T) {
         transfer::public_share_object(x);
     }

@@ -1,9 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::base_types::{AuthorityName, ConciseableName, SuiAddress};
 use crate::committee::CommitteeTrait;
-use crate::zk_login_authenticator::AddressSeed;
+use crate::committee::{Committee, EpochId, StakeUnit};
+use crate::error::{SuiError, SuiResult};
+use crate::signature::GenericSignature;
+use crate::sui_serde::{Readable, SuiBitmap};
 use anyhow::{anyhow, Error};
 use derive_more::{AsMut, AsRef, From};
+pub use enum_dispatch::enum_dispatch;
 use eyre::eyre;
 use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381AggregateSignatureAsBytes, BLS12381KeyPair,
@@ -13,6 +18,9 @@ use fastcrypto::ed25519::{
     Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519PublicKeyAsBytes, Ed25519Signature,
     Ed25519SignatureAsBytes,
 };
+use fastcrypto::encoding::{Base64, Bech32, Encoding, Hex};
+use fastcrypto::error::{FastCryptoError, FastCryptoResult};
+use fastcrypto::hash::{Blake2b256, HashFunction};
 use fastcrypto::secp256k1::{
     Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1PublicKeyAsBytes, Secp256k1Signature,
     Secp256k1SignatureAsBytes,
@@ -22,11 +30,13 @@ use fastcrypto::secp256r1::{
     Secp256r1SignatureAsBytes,
 };
 pub use fastcrypto::traits::KeyPair as KeypairTraits;
+pub use fastcrypto::traits::Signer;
 pub use fastcrypto::traits::{
     AggregateAuthenticator, Authenticator, EncodeDecodeBase64, SigningKey, ToFromBytes,
     VerifyingKey,
 };
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
+use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use roaring::RoaringBitmap;
@@ -36,22 +46,11 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use strum::EnumString;
-
-use crate::base_types::{AuthorityName, ConciseableName, SuiAddress};
-use crate::committee::{Committee, EpochId, StakeUnit};
-use crate::error::{SuiError, SuiResult};
-use crate::signature::GenericSignature;
-use crate::sui_serde::{Readable, SuiBitmap};
-pub use enum_dispatch::enum_dispatch;
-use fastcrypto::encoding::{Base64, Bech32, Encoding, Hex};
-use fastcrypto::error::FastCryptoError;
-use fastcrypto::hash::{Blake2b256, HashFunction};
-pub use fastcrypto::traits::Signer;
-use std::fmt::Debug;
 use tracing::{instrument, warn};
 
 #[cfg(test)]
@@ -149,6 +148,14 @@ impl SuiKeyPair {
             SuiKeyPair::Secp256r1(kp) => PublicKey::Secp256r1(kp.public().into()),
         }
     }
+
+    pub fn copy(&self) -> Self {
+        match self {
+            SuiKeyPair::Ed25519(kp) => kp.copy().into(),
+            SuiKeyPair::Secp256k1(kp) => kp.copy().into(),
+            SuiKeyPair::Secp256r1(kp) => kp.copy().into(),
+        }
+    }
 }
 
 impl Signer<Signature> for SuiKeyPair {
@@ -166,9 +173,9 @@ impl EncodeDecodeBase64 for SuiKeyPair {
         Base64::encode(self.to_bytes())
     }
 
-    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        let bytes = Base64::decode(value).map_err(|e| eyre!("{}", e.to_string()))?;
-        Self::from_bytes(&bytes)
+    fn decode_base64(value: &str) -> FastCryptoResult<Self> {
+        let bytes = Base64::decode(value)?;
+        Self::from_bytes(&bytes).map_err(|_| FastCryptoError::InvalidInput)
     }
 }
 impl SuiKeyPair {
@@ -212,9 +219,18 @@ impl SuiKeyPair {
             _ => Err(eyre!("Invalid bytes")),
         }
     }
+
+    pub fn to_bytes_no_flag(&self) -> Vec<u8> {
+        match self {
+            SuiKeyPair::Ed25519(kp) => kp.as_bytes().to_vec(),
+            SuiKeyPair::Secp256k1(kp) => kp.as_bytes().to_vec(),
+            SuiKeyPair::Secp256r1(kp) => kp.as_bytes().to_vec(),
+        }
+    }
+
     /// Encode a SuiKeyPair as `flag || privkey` in Bech32 starting with "suiprivkey" to a string. Note that the pubkey is not encoded.
     pub fn encode(&self) -> Result<String, eyre::Report> {
-        Bech32::encode(self.to_bytes(), SUI_PRIV_KEY_PREFIX)
+        Bech32::encode(self.to_bytes(), SUI_PRIV_KEY_PREFIX).map_err(|e| eyre!(e))
     }
 
     /// Decode a SuiKeyPair from `flag || privkey` in Bech32 starting with "suiprivkey" to SuiKeyPair. The public key is computed directly from the private key bytes.
@@ -260,15 +276,11 @@ pub struct ZkLoginPublicIdentifier(#[schemars(with = "Base64")] pub Vec<u8>);
 
 impl ZkLoginPublicIdentifier {
     /// Consists of iss_bytes_len || iss_bytes || padded_32_byte_address_seed.
-    pub fn new(iss: &str, address_seed: &str) -> SuiResult<Self> {
+    pub fn new(iss: &str, address_seed: &Bn254FrElement) -> SuiResult<Self> {
         let mut bytes = Vec::new();
         let iss_bytes = iss.as_bytes();
         bytes.extend([iss_bytes.len() as u8]);
         bytes.extend(iss_bytes);
-
-        let address_seed =
-            AddressSeed::from_str(address_seed).map_err(|_| SuiError::InvalidAddress)?;
-
         bytes.extend(address_seed.padded());
 
         Ok(Self(bytes))
@@ -293,30 +305,31 @@ impl EncodeDecodeBase64 for PublicKey {
         Base64::encode(&bytes[..])
     }
 
-    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        let bytes = Base64::decode(value).map_err(|e| eyre!("{}", e.to_string()))?;
+    fn decode_base64(value: &str) -> FastCryptoResult<Self> {
+        let bytes = Base64::decode(value)?;
         match bytes.first() {
             Some(x) => {
                 if x == &SignatureScheme::ED25519.flag() {
-                    let pk: Ed25519PublicKey = Ed25519PublicKey::from_bytes(
-                        bytes.get(1..).ok_or_else(|| eyre!("Invalid length"))?,
-                    )?;
+                    let pk: Ed25519PublicKey =
+                        Ed25519PublicKey::from_bytes(bytes.get(1..).ok_or(
+                            FastCryptoError::InputLengthWrong(Ed25519PublicKey::LENGTH + 1),
+                        )?)?;
                     Ok(PublicKey::Ed25519((&pk).into()))
                 } else if x == &SignatureScheme::Secp256k1.flag() {
-                    let pk = Secp256k1PublicKey::from_bytes(
-                        bytes.get(1..).ok_or_else(|| eyre!("Invalid length"))?,
-                    )?;
+                    let pk = Secp256k1PublicKey::from_bytes(bytes.get(1..).ok_or(
+                        FastCryptoError::InputLengthWrong(Secp256k1PublicKey::LENGTH + 1),
+                    )?)?;
                     Ok(PublicKey::Secp256k1((&pk).into()))
                 } else if x == &SignatureScheme::Secp256r1.flag() {
-                    let pk = Secp256r1PublicKey::from_bytes(
-                        bytes.get(1..).ok_or_else(|| eyre!("Invalid length"))?,
-                    )?;
+                    let pk = Secp256r1PublicKey::from_bytes(bytes.get(1..).ok_or(
+                        FastCryptoError::InputLengthWrong(Secp256r1PublicKey::LENGTH + 1),
+                    )?)?;
                     Ok(PublicKey::Secp256r1((&pk).into()))
                 } else {
-                    Err(eyre!("Invalid flag byte"))
+                    Err(FastCryptoError::InvalidInput)
                 }
             }
-            _ => Err(eyre!("Invalid bytes")),
+            _ => Err(FastCryptoError::InvalidInput),
         }
     }
 }

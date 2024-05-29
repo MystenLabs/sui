@@ -12,8 +12,9 @@ use std::time::Duration;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
-    CheckpointExecutorConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig, Genesis,
-    KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig, ExpensiveSafetyCheckConfig,
+    Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
+    DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
@@ -24,6 +25,7 @@ use sui_config::{
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
 use sui_types::multiaddr::Multiaddr;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
 /// a validator NodeConfig. It can be used to build either a genesis validator or a new validator.
@@ -35,6 +37,10 @@ pub struct ValidatorConfigBuilder {
     jwk_fetch_interval: Option<Duration>,
     authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    policy_config: Option<PolicyConfig>,
+    firewall_config: Option<RemoteFirewallConfig>,
+    max_submit_position: Option<usize>,
+    submit_delay_step_override_millis: Option<u64>,
 }
 
 impl ValidatorConfigBuilder {
@@ -77,6 +83,29 @@ impl ValidatorConfigBuilder {
         self
     }
 
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_firewall_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.firewall_config = config;
+        self
+    }
+
+    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
+        self.max_submit_position = Some(max_submit_position);
+        self
+    }
+
+    pub fn with_submit_delay_step_override_millis(
+        mut self,
+        submit_delay_step_override_millis: u64,
+    ) -> Self {
+        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
+        self
+    }
+
     pub fn build(
         self,
         validator: ValidatorGenesisConfig,
@@ -100,8 +129,8 @@ impl ValidatorConfigBuilder {
             db_path: consensus_db_path,
             internal_worker_address,
             max_pending_transactions: None,
-            max_submit_position: None,
-            submit_delay_step_override_millis: None,
+            max_submit_position: self.max_submit_position,
+            submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             protocol: ConsensusProtocol::Narwhal,
             narwhal_config: narwhal_config::Parameters {
                 network_admin_server: NetworkAdminServerParameters {
@@ -195,6 +224,10 @@ impl ValidatorConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: self.authority_overload_config.unwrap_or_default(),
             run_with_range: None,
+            websocket_only: false,
+            policy_config: self.policy_config,
+            firewall_config: self.firewall_config,
+            execution_cache: ExecutionCacheConfig::default(),
         }
     }
 
@@ -227,6 +260,8 @@ pub struct FullnodeConfigBuilder {
     p2p_listen_address: Option<SocketAddr>,
     network_key_pair: Option<KeyPairWithPath>,
     run_with_range: Option<RunWithRange>,
+    policy_config: Option<PolicyConfig>,
+    fw_config: Option<RemoteFirewallConfig>,
 }
 
 impl FullnodeConfigBuilder {
@@ -321,6 +356,16 @@ impl FullnodeConfigBuilder {
         if let Some(run_with_range) = run_with_range {
             self.run_with_range = Some(run_with_range);
         }
+        self
+    }
+
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.fw_config = config;
         self
     }
 
@@ -447,6 +492,10 @@ impl FullnodeConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
+            websocket_only: false,
+            policy_config: self.policy_config,
+            firewall_config: self.fw_config,
+            execution_cache: ExecutionCacheConfig::default(),
         }
     }
 }

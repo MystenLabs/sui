@@ -13,9 +13,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use crate::meter::Meter;
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         Bytecode, CodeOffset, CompiledModule, FunctionDefinition, FunctionDefinitionIndex,
@@ -23,6 +21,7 @@ use move_binary_format::{
     },
     safe_unwrap,
 };
+use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
 
 pub(crate) struct AcquiresVerifier<'a> {
@@ -38,7 +37,7 @@ impl<'a> AcquiresVerifier<'a> {
         module: &'a CompiledModule,
         index: FunctionDefinitionIndex,
         function_definition: &'a FunctionDefinition,
-        _meter: &mut impl Meter, // currently unused
+        _meter: &mut (impl Meter + ?Sized), // currently unused
     ) -> PartialVMResult<()> {
         let annotated_acquires: BTreeSet<_> = function_definition
             .acquires_global_resources
@@ -73,7 +72,7 @@ impl<'a> AcquiresVerifier<'a> {
             }
 
             let struct_def = safe_unwrap!(module.struct_defs().get(annotation.0 as usize));
-            let struct_handle = module.struct_handle_at(struct_def.struct_handle);
+            let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
             if !struct_handle.abilities.has_key() {
                 return Err(PartialVMError::new(StatusCode::INVALID_ACQUIRES_ANNOTATION));
             }
@@ -172,6 +171,18 @@ impl<'a> AcquiresVerifier<'a> {
             | Bytecode::VecPopBack(_)
             | Bytecode::VecUnpack(..)
             | Bytecode::VecSwap(_) => Ok(()),
+            Bytecode::PackVariant(_)
+            | Bytecode::PackVariantGeneric(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantGeneric(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantGenericImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::VariantSwitch(_) => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message("Unexpected variant opcode in version 1".to_string())),
         }
     }
 

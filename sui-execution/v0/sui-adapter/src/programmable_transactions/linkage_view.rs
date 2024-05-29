@@ -156,7 +156,7 @@ impl<'state> LinkageView<'state> {
         // speed up other requests.
         for TypeOrigin {
             module_name,
-            struct_name,
+            datatype_name: struct_name,
             package: defining_id,
         } in context.type_origin_table()
         {
@@ -308,7 +308,7 @@ impl<'state> LinkageResolver for LinkageView<'state> {
 
         for TypeOrigin {
             module_name,
-            struct_name,
+            datatype_name: struct_name,
             package,
         } in package.move_package().type_origin_table()
         {

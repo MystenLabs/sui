@@ -107,7 +107,7 @@ describe('WalletProvider', () => {
 		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
 
 		const wrapper = createWalletProviderContextWrapper({
-			requiredFeatures: ['my-dapp:super-cool-feature'],
+			walletFilter: (wallet) => !!wallet.features['my-dapp:super-cool-feature'],
 		});
 		const { result } = renderHook(() => useWallets(), { wrapper });
 		const walletNames = result.current.map((wallet) => wallet.name);

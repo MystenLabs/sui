@@ -7,9 +7,7 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 
 use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{Constant, FunctionDefinitionIndex, StructDefinitionIndex},
-    views::{FunctionHandleView, StructHandleView},
+    file_format::{Constant, EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex},
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
@@ -27,8 +25,8 @@ use crate::{
         model_builder::{ConstEntry, ModelBuilder},
     },
     model::{
-        FunId, FunctionData, Loc, ModuleId, NamedConstantData, NamedConstantId, StructData,
-        StructId, SCRIPT_BYTECODE_FUN_NAME,
+        DatatypeId, EnumData, FunId, FunctionData, Loc, ModuleId, NamedConstantData,
+        NamedConstantId, StructData, SCRIPT_BYTECODE_FUN_NAME,
     },
     project_1st,
     symbol::{Symbol, SymbolPool},
@@ -126,6 +124,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 );
                 (Some(module_name), self.symbol_pool().make(n.value.as_str()))
             }
+            EA::ModuleAccess_::Variant(..) => panic!("Variants are not supported by move model."),
         }
     }
 
@@ -235,6 +234,9 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                                 self.symbol_pool().make(n.value.as_str()),
                             )
                         }
+                        EA::ModuleAccess_::Variant(..) => {
+                            panic!("Variants are not supported by move model.")
+                        }
                     },
                 };
                 Attribute::Assign(node_id, self.symbol_pool().make(n.value.as_str()), v)
@@ -289,9 +291,9 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             .define_const(qsym, ConstEntry { loc, ty, value });
     }
 
-    fn decl_ana_struct(&mut self, name: &PA::StructName, def: &EA::StructDefinition) {
+    fn decl_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
-        let struct_id = StructId::new(qsym.symbol);
+        let struct_id = DatatypeId::new(qsym.symbol);
         let attrs = self.translate_attributes(&def.attributes);
         let mut et = ExpTranslator::new(self);
         let type_params =
@@ -354,7 +356,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
 /// ## Struct Definition Analysis
 
 impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
-    fn def_ana_struct(&mut self, name: &PA::StructName, def: &EA::StructDefinition) {
+    fn def_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
         let type_params = self
             .parent
@@ -437,21 +439,49 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         module: CompiledModule,
         source_map: SourceMap,
     ) {
-        let struct_data: BTreeMap<StructId, StructData> = (0..module.struct_defs().len())
+        let struct_data: BTreeMap<DatatypeId, StructData> = (0..module.struct_defs().len())
             .filter_map(|idx| {
                 let def_idx = StructDefinitionIndex(idx as u16);
                 let handle_idx = module.struct_def_at(def_idx).struct_handle;
-                let handle = module.struct_handle_at(handle_idx);
-                let view = StructHandleView::new(&module, handle);
-                let name = self.symbol_pool().make(view.name().as_str());
+                let handle = module.datatype_handle_at(handle_idx);
+                let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
                 if let Some(entry) = self
                     .parent
                     .struct_table
                     .get(&self.qualified_by_module(name))
                 {
                     Some((
-                        StructId::new(name),
+                        DatatypeId::new(name),
                         self.parent.env.create_move_struct_data(
+                            &module,
+                            def_idx,
+                            name,
+                            entry.loc.clone(),
+                            entry.attributes.clone(),
+                        ),
+                    ))
+                } else {
+                    self.parent.error(
+                        &self.parent.env.internal_loc(),
+                        &format!("[internal] bytecode does not match AST: `{}` in bytecode but not in AST", name.display(self.symbol_pool())));
+                    None
+                }
+            })
+            .collect();
+        let enum_data: BTreeMap<DatatypeId, EnumData> = (0..module.enum_defs().len())
+            .filter_map(|idx| {
+                let def_idx = EnumDefinitionIndex(idx as u16);
+                let handle_idx = module.enum_def_at(def_idx).enum_handle;
+                let handle = module.datatype_handle_at(handle_idx);
+                let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
+                if let Some(entry) = self
+                    .parent
+                    .struct_table
+                    .get(&self.qualified_by_module(name))
+                {
+                    Some((
+                        DatatypeId::new(name),
+                        self.parent.env.create_move_enum_data(
                             &module,
                             def_idx,
                             name,
@@ -472,15 +502,14 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 let def_idx = FunctionDefinitionIndex(idx as u16);
                 let handle_idx = module.function_def_at(def_idx).function;
                 let handle = module.function_handle_at(handle_idx);
-                let view = FunctionHandleView::new(&module, handle);
-                let name_str = view.name().as_str();
+                let name_str = module.identifier_at(handle.name).as_str();
                 let name = if name_str == SCRIPT_BYTECODE_FUN_NAME {
                     // This is a pseudo script module, which has exactly one function. Determine
                     // the name of this function.
-                    self.parent.fun_table.iter().filter_map(|(k, _)| {
+                    self.parent.fun_table.iter().find_map(|(k, _)| {
                         if k.module_name == self.module_name
                         { Some(k.symbol) } else { None }
-                    }).next().expect("unexpected script with multiple or no functions")
+                    }).expect("unexpected script with multiple or no functions")
                 } else {
                     self.symbol_pool().make(name_str)
                 };
@@ -529,6 +558,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             source_map,
             named_constants,
             struct_data,
+            enum_data,
             function_data,
         );
     }

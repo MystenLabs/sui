@@ -3,9 +3,7 @@
 
 #[test_only]
 module deepbook::order_query_tests {
-    use std::option;
-    use std::option::{none, some, Option};
-    use std::vector;
+    use std::option::{none, some};
     use sui::clock;
     use deepbook::order_query;
     use deepbook::order_query::iter_bids;
@@ -22,7 +20,7 @@ module deepbook::order_query_tests {
     const CLIENT_ID_ALICE: u64 = 0;
     const FLOAT_SCALING: u64 = 1000000000;
     const CANCEL_OLDEST: u8 = 0;
-    const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+    const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
 
     const OWNER: address = @0xf;
     const ALICE: address = @0xBEEF;
@@ -30,19 +28,19 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_pagination() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let page1 = iter_bids(&pool, none(), none(), none(), none(), true);
-        assert!(vector::length(order_query::orders(&page1)) == 100, 0);
-        assert!(order_query::has_next_page(&page1), 0);
+        assert!(vector::length(order_query::orders(&page1)) == 100);
+        assert!(order_query::has_next_page(&page1));
 
         let orders = order_query::orders(&page1);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 1, 0);
+        assert!(order_query::order_id(first_order) == 1);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
 
-        assert!(order_query::order_id(last_order) == 100, 0);
+        assert!(order_query::order_id(last_order) == 100);
 
         let page2 = iter_bids(
             &pool,
@@ -52,14 +50,14 @@ module deepbook::order_query_tests {
             none(),
             true
         );
-        assert!(vector::length(order_query::orders(&page2)) == 100, 0);
-        assert!(!order_query::has_next_page(&page2), 0);
+        assert!(vector::length(order_query::orders(&page2)) == 100);
+        assert!(!order_query::has_next_page(&page2));
 
         let orders = order_query::orders(&page2);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 101, 0);
+        assert!(order_query::order_id(first_order) == 101);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 200, 0);
+        assert!(order_query::order_id(last_order) == 200);
 
         test_scenario::return_shared(pool);
         end(scenario);
@@ -67,20 +65,20 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_pagination_decending() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let page1 = iter_bids(&pool, none(), none(), none(), none(), false);
 
-        assert!(vector::length(order_query::orders(&page1)) == 100, 0);
-        assert!(order_query::has_next_page(&page1), 0);
+        assert!(vector::length(order_query::orders(&page1)) == 100);
+        assert!(order_query::has_next_page(&page1));
 
         let orders = order_query::orders(&page1);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 200, 0);
+        assert!(order_query::order_id(first_order) == 200);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
 
-        assert!(order_query::order_id(last_order) == 101, 0);
+        assert!(order_query::order_id(last_order) == 101);
 
         let page2 = iter_bids(
             &pool,
@@ -90,14 +88,14 @@ module deepbook::order_query_tests {
             none(),
             false
         );
-        assert!(vector::length(order_query::orders(&page2)) == 100, 0);
-        assert!(!order_query::has_next_page(&page2), 0);
+        assert!(vector::length(order_query::orders(&page2)) == 100);
+        assert!(!order_query::has_next_page(&page2));
 
         let orders = order_query::orders(&page2);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 100, 0);
+        assert!(order_query::order_id(first_order) == 100);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 1, 0);
+        assert!(order_query::order_id(last_order) == 1);
 
         test_scenario::return_shared(pool);
         end(scenario);
@@ -105,19 +103,19 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_start_order_id() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         // test start order id
         let page = iter_bids(&pool, none(), some(51), none(), none(), true);
-        assert!(vector::length(order_query::orders(&page)) == 100, 0);
-        assert!(order_query::has_next_page(&page), 0);
+        assert!(vector::length(order_query::orders(&page)) == 100);
+        assert!(order_query::has_next_page(&page));
 
         let orders = order_query::orders(&page);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 51, 0);
+        assert!(order_query::order_id(first_order) == 51);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 150, 0);
+        assert!(order_query::order_id(last_order) == 150);
 
         let page2 = iter_bids(
             &pool,
@@ -127,15 +125,15 @@ module deepbook::order_query_tests {
             none(),
             true
         );
-        assert!(vector::length(order_query::orders(&page2)) == 50, 0);
-        assert!(!order_query::has_next_page(&page2), 0);
+        assert!(vector::length(order_query::orders(&page2)) == 50);
+        assert!(!order_query::has_next_page(&page2));
 
         let orders = order_query::orders(&page2);
 
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 151, 0);
+        assert!(order_query::order_id(first_order) == 151);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 200, 0);
+        assert!(order_query::order_id(last_order) == 200);
 
         test_scenario::return_shared(pool);
         end(scenario);
@@ -143,7 +141,7 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_with_expiry() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(20, TIMESTAMP_INF, none(), &mut scenario);
 
         let clock = test_scenario::take_shared<Clock>(&scenario);
@@ -157,14 +155,14 @@ module deepbook::order_query_tests {
 
         // test get all order excluding expired orders
         let page = iter_bids(&pool, none(), none(), some(expired_timestamp + 1), none(), true);
-        assert!(vector::length(order_query::orders(&page)) == 20, 0);
-        assert!(!order_query::has_next_page(&page), 0);
+        assert!(vector::length(order_query::orders(&page)) == 20);
+        assert!(!order_query::has_next_page(&page));
 
         let orders = order_query::orders(&page);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 1, 0);
+        assert!(order_query::order_id(first_order) == 1);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 20, 0);
+        assert!(order_query::order_id(last_order) == 20);
 
         test_scenario::return_shared(pool);
         end(scenario);
@@ -172,33 +170,33 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_with_max_id() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(70, TIMESTAMP_INF, none(), &mut scenario);
 
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
 
         // test get all order with id < 50
         let page = iter_bids(&pool, none(), none(), none(), some(50), true);
-        assert!(vector::length(order_query::orders(&page)) == 50, 0);
-        assert!(!order_query::has_next_page(&page), 0);
+        assert!(vector::length(order_query::orders(&page)) == 50);
+        assert!(!order_query::has_next_page(&page));
 
         let orders = order_query::orders(&page);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 1, 0);
+        assert!(order_query::order_id(first_order) == 1);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 50, 0);
+        assert!(order_query::order_id(last_order) == 50);
 
         // test get all order with id between 20 and 50
         let page = iter_bids(&pool, none(), some(20), none(), some(50), true);
 
-        assert!(vector::length(order_query::orders(&page)) == 31, 0);
-        assert!(!order_query::has_next_page(&page), 0);
+        assert!(vector::length(order_query::orders(&page)) == 31);
+        assert!(!order_query::has_next_page(&page));
 
         let orders = order_query::orders(&page);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 20, 0);
+        assert!(order_query::order_id(first_order) == 20);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 50, 0);
+        assert!(order_query::order_id(last_order) == 50);
 
         test_scenario::return_shared(pool);
         end(scenario);
@@ -206,7 +204,7 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_pagination_multiple_orders_same_tick_level() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         // orders with same tick level repeated 4 times
         add_orders(50, TIMESTAMP_INF, none(), &mut scenario);
         add_orders(50, TIMESTAMP_INF, none(), &mut scenario);
@@ -215,14 +213,14 @@ module deepbook::order_query_tests {
 
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let page1 = iter_bids(&pool, none(), none(), none(), none(), true);
-        assert!(vector::length(order_query::orders(&page1)) == 100, 0);
-        assert!(order_query::has_next_page(&page1), 0);
+        assert!(vector::length(order_query::orders(&page1)) == 100);
+        assert!(order_query::has_next_page(&page1));
 
         let orders = order_query::orders(&page1);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 1, 0);
+        assert!(order_query::order_id(first_order) == 1);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 175, 0);
+        assert!(order_query::order_id(last_order) == 175);
 
         let page2 = iter_bids(
             &pool,
@@ -232,27 +230,27 @@ module deepbook::order_query_tests {
             none(),
             true
         );
-        assert!(vector::length(order_query::orders(&page2)) == 100, 0);
-        assert!(!order_query::has_next_page(&page2), 0);
+        assert!(vector::length(order_query::orders(&page2)) == 100);
+        assert!(!order_query::has_next_page(&page2));
 
         let orders = order_query::orders(&page2);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 26, 0);
+        assert!(order_query::order_id(first_order) == 26);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 200, 0);
+        assert!(order_query::order_id(last_order) == 200);
 
         // Query order with tick level > 40 * FLOAT_SCALING
         let page = iter_bids(&pool, some(40 * FLOAT_SCALING), none(), none(), none(), true);
 
         // should only contain orders with tick level > 40 - 50, 44 orders in total
-        assert!(vector::length(order_query::orders(&page)) == 44, 0);
-        assert!(!order_query::has_next_page(&page), 0);
+        assert!(vector::length(order_query::orders(&page)) == 44);
+        assert!(!order_query::has_next_page(&page));
 
         let orders = order_query::orders(&page);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 40, 0);
+        assert!(order_query::order_id(first_order) == 40);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 200, 0);
+        assert!(order_query::order_id(last_order) == 200);
 
         test_scenario::return_shared(pool);
         end(scenario);
@@ -260,7 +258,7 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_query_after_insert() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
 
         // insert a new order at tick level 10
@@ -270,31 +268,31 @@ module deepbook::order_query_tests {
         let page = iter_bids(&pool, some(11 * FLOAT_SCALING), none(), none(), none(), true);
 
         // this page should start from order id 11 and end at order id 110, contains 100 orders
-        assert!(vector::length(order_query::orders(&page)) == 100, 0);
-        assert!(order_query::has_next_page(&page), 0);
+        assert!(vector::length(order_query::orders(&page)) == 100);
+        assert!(order_query::has_next_page(&page));
 
         let orders = order_query::orders(&page);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::order_id(first_order) == 11, 0);
+        assert!(order_query::order_id(first_order) == 11);
         let last_order = vector::borrow(orders, vector::length(orders) - 1);
-        assert!(order_query::order_id(last_order) == 110, 0);
+        assert!(order_query::order_id(last_order) == 110);
 
         // tick 10 should contain 2 orders
         let page2 = iter_bids(&pool, some(10 * FLOAT_SCALING), none(), none(), none(), true);
         let orders = order_query::orders(&page2);
         let first_order = vector::borrow(orders, 0);
-        assert!(order_query::tick_level(first_order) == 10 * FLOAT_SCALING, 0);
+        assert!(order_query::tick_level(first_order) == 10 * FLOAT_SCALING);
         let second_order = vector::borrow(orders, 1);
-        assert!(order_query::tick_level(second_order) == 10 * FLOAT_SCALING, 0);
+        assert!(order_query::tick_level(second_order) == 10 * FLOAT_SCALING);
         let third_order = vector::borrow(orders, 2);
-        assert!(order_query::tick_level(third_order) == 11 * FLOAT_SCALING, 0);
+        assert!(order_query::tick_level(third_order) == 11 * FLOAT_SCALING);
 
         test_scenario::return_shared(pool);
         end(scenario);
     }
 
     fun prepare_scenario(): Scenario {
-        let scenario = test_scenario::begin(@0x1);
+        let mut scenario = test_scenario::begin(@0x1);
         next_tx(&mut scenario, OWNER);
         setup_test(5000000, 2500000, &mut scenario, OWNER);
 
@@ -304,7 +302,7 @@ module deepbook::order_query_tests {
         mint_account_cap_transfer(BOB, test_scenario::ctx(&mut scenario));
         next_tx(&mut scenario, ALICE);
 
-        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
+        let mut pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let account_cap = test_scenario::take_from_sender<AccountCap>(&scenario);
         let account_cap_user = account_owner(&account_cap);
         let (base_custodian, quote_custodian) = clob_v2::borrow_mut_custodian(&mut pool);
@@ -321,7 +319,7 @@ module deepbook::order_query_tests {
     }
 
     fun add_orders(order_count: u64, timestamp: u64, price: Option<u64>, scenario: &mut Scenario) {
-        let n = 1;
+        let mut n = 1;
         while (n <= order_count) {
             let price = if (option::is_some(&price)) {
                 option::destroy_some(price) * FLOAT_SCALING
@@ -330,7 +328,7 @@ module deepbook::order_query_tests {
             };
 
             let account_cap = test_scenario::take_from_sender<AccountCap>(scenario);
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(scenario);
+            let mut pool = test_scenario::take_shared<Pool<SUI, USD>>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
             clob_v2::place_limit_order<SUI, USD>(
                 &mut pool,

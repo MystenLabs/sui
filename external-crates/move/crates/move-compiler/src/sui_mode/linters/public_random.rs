@@ -13,20 +13,20 @@ use crate::{
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     expansion::ast::Visibility,
     naming::ast as N,
-    shared::{program_info::TypingProgramInfo, CompilationEnv},
+    shared::CompilationEnv,
     typing::ast as T,
 };
 
 use super::{
-    LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    LinterDiagnosticCategory, LinterDiagnosticCode, LINT_WARNING_PREFIX,
     RANDOM_GENERATOR_STRUCT_NAME, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME, SUI_PKG_NAME,
 };
 
 const PUBLIC_RANDOM_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::PublicRandom as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagnosticCategory::Sui as u8,
+    LinterDiagnosticCode::PublicRandom as u8,
     "Risky use of 'sui::random'",
 );
 
@@ -38,11 +38,7 @@ pub struct Context<'a> {
 impl TypingVisitorConstructor for PublicRandomVisitor {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(
-        env: &'a mut CompilationEnv,
-        _program_info: &'a TypingProgramInfo,
-        _program: &T::Program_,
-    ) -> Self::Context<'a> {
+    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
         Context { env }
     }
 }

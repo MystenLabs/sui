@@ -29,6 +29,7 @@ use csr::files::Files;
 use move_command_line_common::{env::read_env_var, files::FileHash};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     io::Write,
@@ -59,7 +60,10 @@ pub struct Diagnostic {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
-pub struct Diagnostics(Option<Diagnostics_>);
+pub struct Diagnostics {
+    diags: Option<Diagnostics_>,
+    format: DiagnosticsFormat,
+}
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
 struct Diagnostics_ {
@@ -67,6 +71,24 @@ struct Diagnostics_ {
     // diagnostics filtered in source code
     filtered_source_diagnostics: Vec<Diagnostic>,
     severity_count: BTreeMap<Severity, usize>,
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
+pub enum DiagnosticsFormat {
+    #[default]
+    Text,
+    JSON,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct JsonDiagnostic {
+    file: String,
+    line: usize,
+    column: usize,
+    level: String,
+    category: u8,
+    code: u8,
+    msg: String,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -97,14 +119,16 @@ enum MigrationChange {
     AddPublic,
     Backquote(String),
     AddGlobalQual,
-    RemoveFriend(/* start */ usize),
-    MakePubPackage(/* start */ usize),
+    RemoveFriend,
+    MakePubPackage,
+    AddressRemove,
+    AddressAdd(String),
 }
 
 // All of the migration changes
 pub struct Migration {
     mapped_files: MappedFiles,
-    changes: BTreeMap<FileId, BTreeMap<usize, Vec<(usize, MigrationChange)>>>,
+    changes: BTreeMap<FileId, Vec<(ByteSpan, MigrationChange)>>,
 }
 
 /// A mapping from file ids to file contents along with the mapping of filehash to fileID.
@@ -114,16 +138,30 @@ pub struct MappedFiles {
 }
 
 /// A file, and the line:column start, and line:column end that corresponds to a `Loc`
+#[allow(dead_code)]
 pub struct FileLineColSpan {
-    file_id: FileId,
-    start: LineColLocation,
-    end: LineColLocation,
+    pub file_id: FileId,
+    pub start: LineColLocation,
+    pub end: LineColLocation,
 }
 
 /// A line and column location in a file
 pub struct LineColLocation {
     pub line: usize,
     pub column: usize,
+    pub byte: usize,
+}
+
+/// A file, and the usize start and usize end that corresponds to a `Loc`
+pub struct FileByteSpan {
+    file_id: FileId,
+    byte_span: ByteSpan,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ByteSpan {
+    start: usize,
+    end: usize,
 }
 
 impl MappedFiles {
@@ -156,22 +194,35 @@ impl MappedFiles {
         self.file_mapping.insert(fhash, id);
     }
 
+    #[allow(dead_code)]
     pub fn location(&self, loc: Loc) -> FileLineColSpan {
         let start_loc = loc.start() as usize;
         let end_loc = loc.end() as usize;
         let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
-        let star_loc = self.files.location(file_id, start_loc).unwrap();
-        let end_loc = self.files.location(file_id, end_loc).unwrap();
+        let start_file_loc = self.files.location(file_id, start_loc).unwrap();
+        let end_file_loc = self.files.location(file_id, end_loc).unwrap();
         FileLineColSpan {
             file_id,
             start: LineColLocation {
-                line: star_loc.line_number,
-                column: star_loc.column_number - 1,
+                line: start_file_loc.line_number,
+                column: start_file_loc.column_number - 1,
+                byte: start_loc,
             },
             end: LineColLocation {
-                line: end_loc.line_number,
-                column: end_loc.column_number - 1,
+                line: end_file_loc.line_number,
+                column: end_file_loc.column_number - 1,
+                byte: end_loc,
             },
+        }
+    }
+
+    pub fn byte_location(&self, loc: Loc) -> FileByteSpan {
+        let start = loc.start() as usize;
+        let end = loc.end() as usize;
+        let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
+        FileByteSpan {
+            byte_span: ByteSpan { start, end },
+            file_id,
         }
     }
 }
@@ -195,7 +246,7 @@ pub fn report_warnings(files: &FilesSourceText, warnings: Diagnostics) {
 }
 
 fn report_diagnostics_impl(files: &FilesSourceText, diags: Diagnostics, should_exit: bool) {
-    let color_choice = env_color();
+    let color_choice = diags.env_color();
     let mut writer = StandardStream::stderr(color_choice);
     output_diagnostics(&mut writer, files, diags);
     if should_exit {
@@ -270,7 +321,11 @@ fn output_diagnostics<W: WriteColor>(
 }
 
 fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: Diagnostics) {
-    let Diagnostics(Some(mut diags)) = diags else {
+    let Diagnostics {
+        diags: Some(mut diags),
+        format,
+    } = diags
+    else {
         return;
     };
 
@@ -282,25 +337,38 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: 
         let loc2: &Loc = &e2.primary_label.0;
         loc1.cmp(loc2)
     });
+    match format {
+        DiagnosticsFormat::Text => emit_diagnostics_text(writer, &mapping, diags),
+        DiagnosticsFormat::JSON => emit_diagnostics_json(writer, &mapping, diags),
+    }
+}
+
+fn convert_loc(mapped_files: &MappedFiles, loc: Loc) -> (FileId, Range<usize>) {
+    let fname = loc.file_hash();
+    let id = mapped_files
+        .file_hash_to_file_id(&fname)
+        .unwrap_or_else(|| panic!("ICE Couldn't find filename hash {:?} in mapping", fname));
+    let range = loc.usize_range();
+    (id, range)
+}
+
+fn emit_diagnostics_text(
+    writer: &mut dyn WriteColor,
+    mapped_files: &MappedFiles,
+    diags: Diagnostics_,
+) {
     let mut seen: HashSet<Diagnostic> = HashSet::new();
     for diag in diags.diagnostics {
         if seen.contains(&diag) {
             continue;
         }
         seen.insert(diag.clone());
-        let rendered = render_diagnostic(&mapping, diag);
-        emit(writer, &Config::default(), &mapping.files, &rendered).unwrap()
+        let rendered = render_diagnostic_text(mapped_files, diag);
+        emit(writer, &Config::default(), &mapped_files.files, &rendered).unwrap()
     }
 }
 
-fn convert_loc(mapped_files: &MappedFiles, loc: Loc) -> (FileId, Range<usize>) {
-    let fname = loc.file_hash();
-    let id = mapped_files.file_hash_to_file_id(&fname).unwrap();
-    let range = loc.usize_range();
-    (id, range)
-}
-
-fn render_diagnostic(
+fn render_diagnostic_text(
     mapped_files: &MappedFiles,
     diag: Diagnostic,
 ) -> csr::diagnostic::Diagnostic<FileId> {
@@ -330,6 +398,29 @@ fn render_diagnostic(
     diag
 }
 
+fn emit_diagnostics_json(
+    writer: &mut dyn WriteColor,
+    mapped_files: &MappedFiles,
+    diags: Diagnostics_,
+) {
+    let mut seen: HashSet<Diagnostic> = HashSet::new();
+    let mut output_diagnostics = vec![];
+    for diag in diags.diagnostics {
+        if seen.contains(&diag) {
+            continue;
+        }
+        seen.insert(diag.clone());
+        let json_diag = diag.to_json(mapped_files);
+        output_diagnostics.push(json_diag);
+    }
+    writeln!(
+        writer,
+        "{}",
+        serde_json::to_string_pretty(&output_diagnostics).unwrap()
+    )
+    .expect("ICE reporting error");
+}
+
 //**************************************************************************************************
 // Migration Diff Reporting
 //**************************************************************************************************
@@ -339,7 +430,14 @@ pub fn generate_migration_diff(
     diags: &Diagnostics,
 ) -> Option<(Migration, /* Migration errors */ Diagnostics)> {
     match diags {
-        Diagnostics(Some(inner)) => {
+        Diagnostics {
+            diags: Some(inner),
+            format,
+        } => {
+            assert!(
+                matches!(format, DiagnosticsFormat::Text),
+                "Cannot migrate with json mode set"
+            );
             let migration_diags = inner
                 .diagnostics
                 .iter()
@@ -374,11 +472,24 @@ pub fn report_migration_to_buffer(files: &FilesSourceText, diags: Diagnostics) -
 
 impl Diagnostics {
     pub fn new() -> Self {
-        Self(None)
+        Self {
+            diags: None,
+            format: DiagnosticsFormat::default(),
+        }
+    }
+
+    pub fn set_format(&mut self, format: DiagnosticsFormat) {
+        self.format = format;
     }
 
     pub fn max_severity(&self) -> Option<Severity> {
-        let Self(Some(inner)) = self else { return None };
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
+            return None;
+        };
         // map would be empty at the severity, so it should never be zero
         debug_assert!(inner.severity_count.values().all(|count| *count > 0));
         inner
@@ -389,7 +500,13 @@ impl Diagnostics {
     }
 
     pub fn count_diags_at_or_above_severity(&self, threshold: Severity) -> usize {
-        let Self(Some(inner)) = self else { return 0 };
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
+            return 0;
+        };
         // map would be empty at the severity, so it should never be zero
         debug_assert!(inner.severity_count.values().all(|count| *count > 0));
         inner
@@ -401,20 +518,32 @@ impl Diagnostics {
     }
 
     pub fn is_empty(&self) -> bool {
-        let Self(Some(inner)) = self else { return true };
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
+            return true;
+        };
         inner.diagnostics.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        let Self(Some(inner)) = self else { return 0 };
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
+            return 0;
+        };
         inner.diagnostics.len()
     }
 
     pub fn add(&mut self, diag: Diagnostic) {
-        if self.0.is_none() {
-            self.0 = Some(Diagnostics_::default())
+        if self.diags.is_none() {
+            self.diags = Some(Diagnostics_::default())
         }
-        let inner = self.0.as_mut().unwrap();
+        let inner = self.diags.as_mut().unwrap();
         *inner
             .severity_count
             .entry(diag.info.severity())
@@ -429,26 +558,30 @@ impl Diagnostics {
     }
 
     pub fn add_source_filtered(&mut self, diag: Diagnostic) {
-        if self.0.is_none() {
-            self.0 = Some(Diagnostics_::default())
+        if self.diags.is_none() {
+            self.diags = Some(Diagnostics_::default())
         }
-        let inner = self.0.as_mut().unwrap();
+        let inner = self.diags.as_mut().unwrap();
         inner.filtered_source_diagnostics.push(diag)
     }
 
     pub fn extend(&mut self, other: Self) {
-        let Self(Some(Diagnostics_ {
-            diagnostics,
-            filtered_source_diagnostics: _,
-            severity_count,
-        })) = other
+        let Self {
+            diags:
+                Some(Diagnostics_ {
+                    diagnostics,
+                    filtered_source_diagnostics: _,
+                    severity_count,
+                }),
+            format: _format,
+        } = other
         else {
             return;
         };
-        if self.0.is_none() {
-            self.0 = Some(Diagnostics_::default())
+        if self.diags.is_none() {
+            self.diags = Some(Diagnostics_::default())
         }
-        let inner = self.0.as_mut().unwrap();
+        let inner = self.diags.as_mut().unwrap();
         for (sev, count) in severity_count {
             *inner.severity_count.entry(sev).or_insert(0) += count;
         }
@@ -456,7 +589,9 @@ impl Diagnostics {
     }
 
     pub fn into_vec(self) -> Vec<Diagnostic> {
-        self.0.map(|inner| inner.diagnostics).unwrap_or_default()
+        self.diags
+            .map(|inner| inner.diagnostics)
+            .unwrap_or_default()
     }
 
     pub fn into_codespan_format(
@@ -489,15 +624,19 @@ impl Diagnostics {
     }
 
     pub fn retain(&mut self, f: impl FnMut(&Diagnostic) -> bool) {
-        if self.0.is_none() {
+        if self.diags.is_none() {
             return;
         }
-        let inner = self.0.as_mut().unwrap();
+        let inner = self.diags.as_mut().unwrap();
         inner.diagnostics.retain(f);
     }
 
     pub fn any_with_prefix(&self, prefix: &str) -> bool {
-        let Self(Some(inner)) = self else {
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
             return false;
         };
         inner
@@ -506,22 +645,55 @@ impl Diagnostics {
             .any(|d| d.info.external_prefix() == Some(prefix))
     }
 
-    /// Returns the number of diags filtered in source (user) code (an not in the dependencies) that
-    /// have a given prefix (first value returned) and how many different categories of diags were
-    /// filtered.
+    /// Returns true if any diagnostic in the Syntax category have already been recorded.
+    pub fn any_syntax_error_with_primary_loc(&self, loc: Loc) -> bool {
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
+            return false;
+        };
+        inner
+            .diagnostics
+            .iter()
+            .any(|d| d.info().category() == Category::Syntax as u8 && d.primary_label.0 == loc)
+    }
+
+    /// Returns the number of diags filtered in source (user) code (not in the dependencies) that
+    /// have a given prefix and how many different unique lints were filtered.
     pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
-        let Self(Some(inner)) = self else {
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
             return (0, 0);
         };
         let mut filtered_diags_num = 0;
-        let mut filtered_categories = HashSet::new();
+        let mut unique = HashSet::new();
         inner.filtered_source_diagnostics.iter().for_each(|d| {
             if d.info.external_prefix() == Some(prefix) {
                 filtered_diags_num += 1;
-                filtered_categories.insert(d.info.category());
+                unique.insert((d.info.category(), d.info.code()));
             }
         });
-        (filtered_diags_num, filtered_categories.len())
+        (filtered_diags_num, unique.len())
+    }
+
+    fn env_color(&self) -> ColorChoice {
+        match self.format {
+            DiagnosticsFormat::Text => (),
+            DiagnosticsFormat::JSON => {
+                return ColorChoice::Never;
+            }
+        };
+        match read_env_var(COLOR_MODE_ENV_VAR).as_str() {
+            "NONE" => ColorChoice::Never,
+            "ANSI" => ColorChoice::AlwaysAnsi,
+            "ALWAYS" => ColorChoice::Always,
+            _ => ColorChoice::Auto,
+        }
     }
 }
 
@@ -591,9 +763,38 @@ impl Diagnostic {
         &self.primary_label.1
     }
 
+    pub fn primary_loc(&self) -> Loc {
+        self.primary_label.0
+    }
+
     pub fn is_migration(&self) -> bool {
         const MIGRATION_CATEGORY: u8 = codes::Category::Migration as u8;
         self.info.category() == MIGRATION_CATEGORY
+    }
+
+    fn to_json(&self, mapped_files: &MappedFiles) -> JsonDiagnostic {
+        let Diagnostic {
+            info,
+            primary_label: (ploc, _pmsg),
+            secondary_labels: _,
+            notes: _,
+        } = self;
+
+        let bloc = mapped_files.location(*ploc);
+        JsonDiagnostic {
+            file: mapped_files
+                .files
+                .get(bloc.file_id)
+                .unwrap()
+                .name()
+                .to_string(),
+            line: bloc.start.line,
+            column: bloc.start.column,
+            level: format!("{:?}", info.severity()),
+            category: info.category(),
+            code: info.code(),
+            msg: info.message().to_string(),
+        }
     }
 }
 
@@ -854,15 +1055,15 @@ impl Migration {
             mapped_files,
         };
 
-        let mut migration_errors = Diagnostics::new();
+        let migration_errors = Diagnostics::new();
         for diag in diags {
-            mig.add_diagnostic(&mut migration_errors, diag);
+            mig.add_diagnostic(diag);
         }
 
         (mig, migration_errors)
     }
 
-    fn add_diagnostic(&mut self, migration_errors: &mut Diagnostics, diag: Diagnostic) {
+    fn add_diagnostic(&mut self, diag: Diagnostic) {
         const CAT: u8 = Category::Migration as u8;
         const NEEDS_MUT: u8 = codes::Migration::NeedsLetMut as u8;
         const NEEDS_PUBLIC: u8 = codes::Migration::NeedsPublic as u8;
@@ -870,134 +1071,121 @@ impl Migration {
         const NEEDS_GLOBAL_QUAL: u8 = codes::Migration::NeedsGlobalQualification as u8;
         const REMOVE_FRIEND: u8 = codes::Migration::RemoveFriend as u8;
         const MAKE_PUB_PACKAGE: u8 = codes::Migration::MakePubPackage as u8;
+        const ADDRESS_REMOVE: u8 = codes::Migration::AddressRemove as u8;
+        const ADDRESS_ADD: u8 = codes::Migration::AddressAdd as u8;
 
-        let FileLineColSpan {
-            file_id,
-            start:
-                LineColLocation {
-                    line: start_line,
-                    column: start_col,
-                },
-            end:
-                LineColLocation {
-                    line: end_line,
-                    column: end_col,
-                },
-        } = self.find_file_location(&diag);
+        let FileByteSpan { file_id, byte_span } = self.find_file_location(&diag);
         let file_change_entry = self.changes.entry(file_id).or_default();
-        let line_change_entry = file_change_entry.entry(start_line).or_default();
-        match (diag.info().category(), diag.info().code()) {
-            (CAT, NEEDS_MUT) => line_change_entry.push((start_col, MigrationChange::AddMut)),
-            (CAT, NEEDS_PUBLIC) => line_change_entry.push((start_col, MigrationChange::AddPublic)),
+        let change = match (diag.info().category(), diag.info().code()) {
+            (CAT, NEEDS_MUT) => MigrationChange::AddMut,
+            (CAT, NEEDS_PUBLIC) => MigrationChange::AddPublic,
             (CAT, NEEDS_BACKTICKS) => {
                 let old_name = diag.primary_msg().to_string();
-                line_change_entry.push((start_col, MigrationChange::Backquote(old_name)))
+                MigrationChange::Backquote(old_name)
             }
-            (CAT, NEEDS_GLOBAL_QUAL) => {
-                line_change_entry.push((start_col, MigrationChange::AddGlobalQual))
-            }
-            (CAT, REMOVE_FRIEND) => {
-                if start_line == end_line {
-                    // we order `end_col` then `start_col` since `render_line` will reverse iterate
-                    line_change_entry.push((end_col, MigrationChange::RemoveFriend(start_col)))
-                } else {
-                    let loc = diag.primary_label.0;
-                    let msg = "Unable to migrate. Cannot remove 'friend' that spans multiple lines";
-                    migration_errors.add(diag!(Uncategorized::UnableToMigrate, (loc, msg)))
-                }
-            }
-            (CAT, MAKE_PUB_PACKAGE) => {
-                if start_line == end_line {
-                    // we order `end_col` then `start_col` since `render_line` will reverse iterate
-                    line_change_entry.push((end_col, MigrationChange::MakePubPackage(start_col)))
-                } else {
-                    let loc = diag.primary_label.0;
-                    let msg = "Unable to migrate 'public(friend)' that spans multiple lines";
-                    migration_errors.add(diag!(Uncategorized::UnableToMigrate, (loc, msg)))
-                }
+            (CAT, NEEDS_GLOBAL_QUAL) => MigrationChange::AddGlobalQual,
+            (CAT, REMOVE_FRIEND) => MigrationChange::RemoveFriend,
+            (CAT, MAKE_PUB_PACKAGE) => MigrationChange::MakePubPackage,
+            (CAT, ADDRESS_REMOVE) => MigrationChange::AddressRemove,
+            (CAT, ADDRESS_ADD) => {
+                let insertion = diag.primary_msg().to_string();
+                MigrationChange::AddressAdd(insertion)
             }
             _ => unreachable!(),
-        }
+        };
+        file_change_entry.push((byte_span, change));
     }
 
-    fn find_file_location(&mut self, diag: &Diagnostic) -> FileLineColSpan {
+    fn find_file_location(&mut self, diag: &Diagnostic) -> FileByteSpan {
         let (loc, _msg) = &diag.primary_label;
-        self.mapped_files.location(*loc)
+        self.mapped_files.byte_location(*loc)
     }
 
-    fn get_line(&self, file_id: FileId, line_index: usize) -> String {
-        let line_range = self
-            .mapped_files
-            .files
-            .line_range(file_id, line_index)
-            .unwrap();
-        self.mapped_files.files.source(file_id).unwrap()[line_range].to_string()
+    fn get_file_contents(&self, file_id: FileId) -> String {
+        self.mapped_files.files.source(file_id).unwrap().to_string()
     }
 
-    fn render_line(
-        line_text: String,
-        migration_set: BTreeMap<usize, BTreeSet<MigrationChange>>,
-    ) -> String {
-        let mut line_prefix: &str = &line_text[..];
+    fn render_changes(source: String, changes: &mut [(ByteSpan, MigrationChange)]) -> String {
+        changes.sort_by(|(loc0, _), (loc1, _)| loc0.start.partial_cmp(&loc1.start).unwrap());
         let mut output = "".to_string();
-        for (col, changes) in migration_set.iter().rev() {
-            let rest = &line_prefix[*col..];
-            for change in changes {
-                match change {
-                    MigrationChange::AddMut => {
-                        output = format!("mut {}{}", rest, output);
-                        line_prefix = &line_prefix[..*col];
-                    }
-                    MigrationChange::AddPublic => {
-                        output = format!("public {}{}", rest, output);
-                        line_prefix = &line_prefix[..*col];
-                    }
-                    MigrationChange::Backquote(old_name) => {
-                        output = format!("`{}`{}{}", old_name, &rest[old_name.len()..], output);
-                        line_prefix = &line_prefix[..*col];
-                    }
-                    MigrationChange::AddGlobalQual => {
-                        output = format!("::{}{}", rest, output);
-                        line_prefix = &line_prefix[..*col];
-                    }
-                    MigrationChange::RemoveFriend(start) => {
-                        output = format!("/* {} */{}{}", &line_prefix[*start..*col], rest, output);
-                        line_prefix = &line_prefix[..*start];
-                    }
-                    MigrationChange::MakePubPackage(start) => {
-                        output = format!("public(package){}{}", rest, output);
-                        line_prefix = &line_prefix[..*start];
-                    }
+
+        let mut source_prefix = &source[..];
+        let mut last_seen = source_prefix.len();
+        for (loc, change) in changes.iter().rev() {
+            assert!(loc.end <= last_seen, "Found overlapping migrations.");
+            match change {
+                MigrationChange::AddMut => {
+                    let rest = &source_prefix[loc.start..];
+                    output = format!("mut {}{}", rest, output);
+                }
+                MigrationChange::AddPublic => {
+                    let rest = &source_prefix[loc.start..];
+                    output = format!("public {}{}", rest, output);
+                }
+                MigrationChange::Backquote(old_name) => {
+                    let rest = &source_prefix[loc.end..];
+                    output = format!("`{}`{}{}", old_name, rest, output);
+                }
+                MigrationChange::AddGlobalQual => {
+                    let rest = &source_prefix[loc.start..];
+                    output = format!("::{}{}", rest, output);
+                }
+                MigrationChange::RemoveFriend => {
+                    let rest = &source_prefix[loc.end..];
+                    output = format!(
+                        "/* {} */{}{}",
+                        &source_prefix[loc.start..loc.end],
+                        rest,
+                        output
+                    );
+                }
+                MigrationChange::MakePubPackage => {
+                    let rest = &source_prefix[loc.end..];
+                    output = format!("public(package){}{}", rest, output);
+                }
+                MigrationChange::AddressRemove => {
+                    let rest = &source_prefix[loc.end..];
+                    output = format!(
+                        "/* {} */{}{}",
+                        &source_prefix[loc.start..loc.end],
+                        rest,
+                        output
+                    );
+                }
+                MigrationChange::AddressAdd(insertion) => {
+                    let rest = &source_prefix[loc.start..];
+                    output = format!("{}{}{}", insertion, rest, output);
                 }
             }
+            source_prefix = &source_prefix[..loc.start];
+            last_seen = loc.start;
         }
-        output = format!("{}{}", line_prefix, output);
+        output = format!("{}{}", source_prefix, output);
+
         output
     }
 
     pub fn render_output(&mut self) -> String {
-        let mut changes = std::mem::take(&mut self.changes);
-
         let mut output = vec![];
-        let mut names = changes
+        let mut names = self
+            .changes
             .keys()
             .map(|id| (*id, *self.mapped_files.files.get(*id).unwrap().name()))
             .collect::<Vec<_>>();
         names.sort_by_key(|(_, name)| *name);
         for (file_id, name) in names {
-            let file_changes = changes.get_mut(&file_id).unwrap();
-            output.push(format!("--- {}\n+++ {}\n", name, name));
-            for (line_number, line_changes) in file_changes.iter() {
-                let migration_set = Self::unique_changes(line_changes);
-                let line = self.get_line(file_id, *line_number - 1).to_string();
-                output.push(format!("@@ -{line_number},1 +{line_number},1 @@\n"));
-                output.push(format!("-{}", line));
-                let new_line = Self::render_line(line.to_string(), migration_set);
-                output.push(format!("+{}", new_line));
-            }
+            let original = self.get_file_contents(file_id);
+            let file_changes = self.changes.get_mut(&file_id).unwrap();
+            Self::ensure_unique_changes(file_changes);
+            let migrated = Self::render_changes(original.clone(), file_changes);
+            let diff = similar::TextDiff::from_lines(&original, &migrated);
+            output.push(
+                diff.unified_diff()
+                    .context_radius(0)
+                    .header(&name, &name)
+                    .to_string(),
+            );
         }
-
-        let _ = std::mem::replace(&mut self.changes, changes);
 
         output.join("")
     }
@@ -1014,46 +1202,30 @@ impl Migration {
         let mut names = self
             .changes
             .keys()
-            .map(|id| (*id, self.mapped_files.files.get(*id).unwrap()))
+            .map(|id| (*id, *self.mapped_files.files.get(*id).unwrap().name()))
             .collect::<Vec<_>>();
-        names.sort_by_key(|(_, file)| file.name());
-        for (file_id, file) in names {
+        names.sort_by_key(|(_, name)| *name);
+        for (file_id, name) in names {
+            let original = self.get_file_contents(file_id);
             let file_changes = self.changes.get_mut(&file_id).unwrap();
-            let name = file.name();
+            Self::ensure_unique_changes(file_changes);
+            let migrated = Self::render_changes(original.clone(), file_changes);
             let path = PathBuf::from(name.to_string());
-            let mut output = vec![];
-            for (ndx, line) in file.source().lines().enumerate() {
-                if let Some(line_changes) = file_changes.get(&(ndx + 1)) {
-                    let migration_set = Self::unique_changes(line_changes);
-                    output.push(Self::render_line(line.to_string(), migration_set))
-                } else {
-                    output.push(line.to_string());
-                }
-            }
             writeln!(w, "Updating {:#?} . . .", path)?;
-            // let out_writer = std::fs::write(path, contents)
-            let mut buf: Vec<u8> = Vec::new();
-            for line in output {
-                writeln!(&mut buf, "{}", line)?;
-            }
-            std::fs::write(path, buf)?;
+            Self::ensure_unique_changes(file_changes);
+            std::fs::write(path, migrated)?;
         }
         Ok(())
     }
 
-    // Processes a vector of changes for a single line, returning a BTreeMap of unique ones
-    // per-column. The map iterates in sorted order, so this also sorts them.
-    fn unique_changes(
-        change_list: &[(usize, MigrationChange)],
-    ) -> BTreeMap<usize, BTreeSet<MigrationChange>> {
-        let mut migration_set: BTreeMap<usize, BTreeSet<MigrationChange>> = BTreeMap::new();
-        for (col, change) in change_list {
-            migration_set
-                .entry(*col)
-                .or_default()
-                .insert(change.clone());
+    fn ensure_unique_changes(changes: &mut Vec<(ByteSpan, MigrationChange)>) {
+        let file_changes = std::mem::take(changes);
+        let mut set_changes = BTreeSet::new();
+        for change in file_changes {
+            set_changes.insert(change);
         }
-        migration_set
+        let out_changes = set_changes.into_iter().collect::<Vec<_>>();
+        let _ = std::mem::replace(changes, out_changes);
     }
 }
 
@@ -1071,18 +1243,24 @@ impl FromIterator<Diagnostic> for Diagnostics {
 impl From<Vec<Diagnostic>> for Diagnostics {
     fn from(diagnostics: Vec<Diagnostic>) -> Self {
         if diagnostics.is_empty() {
-            return Self(None);
+            return Self {
+                diags: None,
+                format: DiagnosticsFormat::default(),
+            };
         }
 
         let mut severity_count = BTreeMap::new();
         for diag in &diagnostics {
             *severity_count.entry(diag.info.severity()).or_insert(0) += 1;
         }
-        Self(Some(Diagnostics_ {
-            diagnostics,
-            filtered_source_diagnostics: vec![],
-            severity_count,
-        }))
+        Self {
+            diags: Some(Diagnostics_ {
+                diagnostics,
+                filtered_source_diagnostics: vec![],
+                severity_count,
+            }),
+            format: DiagnosticsFormat::default(),
+        }
     }
 }
 

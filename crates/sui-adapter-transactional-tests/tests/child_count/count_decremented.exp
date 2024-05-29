@@ -3,82 +3,118 @@ processed 17 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 9-52:
+task 1 'publish'. lines 9-51:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 7516400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 54-54:
+task 2 'run'. lines 53-53:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 56-56:
+task 3 'view-object'. lines 55-55:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
-task 4 'run'. lines 58-58:
+task 4 'run'. lines 57-57:
 created: object(4,0), object(4,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
-task 5 'run'. lines 60-60:
+task 5 'run'. lines 59-59:
 mutated: object(0,0), object(2,0)
 deleted: object(4,0), object(4,1)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 5801004, non_refundable_storage_fee: 58596
 
-task 6 'view-object'. lines 62-66:
+task 6 'view-object'. lines 61-65:
 Owner: Account Address ( A )
 Version: 4
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
-task 7 'run'. lines 68-68:
+task 7 'run'. lines 67-67:
 created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'view-object'. lines 70-70:
+task 8 'view-object'. lines 69-69:
 Owner: Account Address ( A )
 Version: 5
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+}
 
-task 9 'run'. lines 72-72:
+task 9 'run'. lines 71-71:
 created: object(9,0), object(9,1)
 mutated: object(0,0), object(7,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
-task 10 'run'. lines 74-74:
+task 10 'run'. lines 73-73:
 mutated: object(0,0), object(7,0), object(9,0), object(9,1)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 5801004, non_refundable_storage_fee: 58596
 
-task 11 'view-object'. lines 76-80:
+task 11 'view-object'. lines 75-79:
 Owner: Account Address ( A )
 Version: 7
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+}
 
-task 12 'run'. lines 82-82:
+task 12 'run'. lines 81-81:
 created: object(12,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 13 'view-object'. lines 84-84:
+task 13 'view-object'. lines 83-83:
 Owner: Account Address ( A )
 Version: 8
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(12,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+}
 
-task 14 'run'. lines 86-86:
+task 14 'run'. lines 85-85:
 created: object(14,0), object(14,1)
 mutated: object(0,0), object(12,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
-task 15 'run'. lines 88-88:
+task 15 'run'. lines 87-87:
 created: object(15,0)
 mutated: object(0,0), object(12,0), object(14,0)
 wrapped: object(14,1)
 gas summary: computation_cost: 1000000, storage_cost: 6102800,  storage_rebate: 5801004, non_refundable_storage_fee: 58596
 
-task 16 'view-object'. lines 90-90:
+task 16 'view-object'. lines 89-89:
 Owner: Account Address ( A )
 Version: 10
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(12,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+}

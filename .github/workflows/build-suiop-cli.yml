@@ -1,0 +1,28 @@
+name: Build suiop-cli binaries
+on:
+  push:
+    paths:
+      - 'crates/suiop-cli/**'
+  pull_request:
+    paths:
+      - 'crates/suiop-cli/**'
+
+# Do not run the same workflow concurrenctly
+# for the same branch.
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # Trigger a gh action in MystenLabs/sui-operations
+      - name: Dispatch Build To Operations Repo
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with:
+          repository: MystenLabs/sui-operations
+          # Using the changeset's token for now,
+          # we could generate a different secret for this
+          # for separation of concerns:
+          token: ${{ secrets.CHANGESETS_DEPLOY_DISPATCH }}
+          event-type: build-binaries
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'

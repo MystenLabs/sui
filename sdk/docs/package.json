@@ -7,7 +7,7 @@
 	"scripts": {
 		"dev": "next dev",
 		"#build": "next cache causes issues in vercel: https://github.com/orgs/vercel/discussions/2079",
-		"build": "next build && rm -rf .next/cache",
+		"build": "typedoc && next build && rm -rf .next/cache",
 		"start": "next start",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
@@ -23,17 +23,26 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"license": "Apache-2.0",
 	"dependencies": {
+		"@mysten/bcs": "workspace:*",
 		"@mysten/dapp-kit": "workspace:*",
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/deepbook": "workspace:*",
+		"@mysten/enoki": "workspace:*",
+		"@mysten/graphql-transport": "workspace:*",
+		"@mysten/kiosk": "workspace:*",
+		"@mysten/sui": "workspace:*",
+		"@mysten/wallet-standard": "workspace:*",
+		"@mysten/zklogin": "workspace:*",
+		"@mysten/zksend": "workspace:*",
 		"@tanstack/react-query": "^5.0.0",
 		"@types/node": "^20.4.2",
-		"next": "^13.4.15",
-		"nextra": "^2.11.0",
-		"nextra-theme-docs": "^2.11.0",
+		"next": "^14.2.3",
+		"nextra": "^2.13.4",
+		"nextra-theme-docs": "^2.13.4",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0"
 	},
 	"devDependencies": {
-		"@types/react": "^18.2.15"
+		"@types/react": "^18.2.15",
+		"typedoc": "^0.25.13"
 	}
 }

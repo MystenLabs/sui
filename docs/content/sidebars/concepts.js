@@ -12,21 +12,7 @@ const concepts = [
 			id: 'concepts/app-devs',
 		},
 		items: [
-			{
-				type: 'category',
-				label: 'GraphQL for Sui RPC',
-				link: {
-					type: 'doc',
-					id: 'concepts/graphql-rpc',
-				},
-				items: [
-					'concepts/graphql-rpc/headers',
-					'concepts/graphql-rpc/variables',
-					'concepts/graphql-rpc/fragments',
-					'concepts/graphql-rpc/pagination',
-					'concepts/graphql-rpc/limits',
-				],
-			},
+			'concepts/graphql-rpc',
 			{
 				type: 'category',
 				label: 'Object Model',
@@ -96,22 +82,6 @@ const concepts = [
 							'concepts/sui-move-concepts/packages/custom-policies',
 						],
 					},
-					{
-						type: 'category',
-						label: 'Patterns',
-						link: {
-							type: 'doc',
-							id: 'concepts/sui-move-concepts/patterns',
-						},
-						items: [
-							'concepts/sui-move-concepts/patterns/capabilities',
-							'concepts/sui-move-concepts/patterns/witness',
-							'concepts/sui-move-concepts/patterns/transferrable-witness',
-							'concepts/sui-move-concepts/patterns/hot-potato',
-							'concepts/sui-move-concepts/patterns/id-pointer',
-							'concepts/sui-move-concepts/patterns/app-extensions',
-						],
-					},
 					'concepts/sui-move-concepts/conventions',
 				],
 			},
@@ -153,15 +123,7 @@ const concepts = [
 					'concepts/cryptography/transaction-auth/intent-signing',
 				],
 			},
-			{
-				type: 'category',
-				label: 'zkLogin',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/zklogin',
-				},
-				items: ['concepts/cryptography/zklogin/zklogin-example'],
-			},
+			'concepts/cryptography/zklogin',
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',

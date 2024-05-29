@@ -5,9 +5,7 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
 
     public struct Wrapper has key, store {
         id: UID,
@@ -55,4 +53,3 @@ module tto::M1 {
 
 // Try an receive at the old version -- should fail
 //# run tto::M1::wrapper --args object(2,0) receiving(2,1)@3
-

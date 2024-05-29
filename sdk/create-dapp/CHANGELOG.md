@@ -1,5 +1,121 @@
 # @mysten/create-dapp
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [6fc6235984]
+  - @mysten/sui@1.0.1
+  - @mysten/dapp-kit@0.14.1
+
+## 0.3.0
+
+### Minor Changes
+
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
+  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+
+### Patch Changes
+
+- Updated dependencies [ebdfe7cf21]
+- Updated dependencies [a92b03de42]
+  - @mysten/sui@1.0.0
+  - @mysten/dapp-kit@0.14.0
+
+## 0.2.20
+
+### Patch Changes
+
+- Updated dependencies [3f8b08dedc]
+  - @mysten/dapp-kit@0.13.2
+
+## 0.2.19
+
+### Patch Changes
+
+- Updated dependencies [2da78f77a3]
+  - @mysten/dapp-kit@0.13.1
+
+## 0.2.18
+
+### Patch Changes
+
+- Updated dependencies [807262f394]
+  - @mysten/dapp-kit@0.13.0
+
+## 0.2.17
+
+### Patch Changes
+
+- Updated dependencies [99b112178c]
+  - @mysten/sui.js@0.54.1
+  - @mysten/dapp-kit@0.12.15
+
+## 0.2.16
+
+### Patch Changes
+
+- Updated dependencies [b7f673dbd9]
+- Updated dependencies [123b42c75c]
+  - @mysten/sui.js@0.54.0
+  - @mysten/dapp-kit@0.12.14
+
+## 0.2.15
+
+### Patch Changes
+
+- Updated dependencies [774bfb41a8]
+  - @mysten/sui.js@0.53.0
+  - @mysten/dapp-kit@0.12.13
+
+## 0.2.14
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.12.12
+
+## 0.2.13
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.12.11
+
+## 0.2.12
+
+### Patch Changes
+
+- Updated dependencies [929db4976a]
+  - @mysten/sui.js@0.52.0
+  - @mysten/dapp-kit@0.12.10
+
+## 0.2.11
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.12.9
+
+## 0.2.10
+
+### Patch Changes
+
+- Updated dependencies [b4ecdb5860]
+  - @mysten/sui.js@0.51.2
+  - @mysten/dapp-kit@0.12.8
+
+## 0.2.9
+
+### Patch Changes
+
+- Updated dependencies [6984dd1e38]
+  - @mysten/sui.js@0.51.1
+  - @mysten/dapp-kit@0.12.7
+
+## 0.2.8
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.12.6
+
 ## 0.2.7
 
 ### Patch Changes

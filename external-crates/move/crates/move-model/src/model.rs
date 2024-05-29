@@ -37,19 +37,13 @@ use num::BigUint;
 
 pub use move_binary_format::file_format::{AbilitySet, Visibility as FunctionVisibility};
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{
         AddressIdentifierIndex, Bytecode, Constant as VMConstant, ConstantPoolIndex,
-        FunctionDefinitionIndex, FunctionHandleIndex, FunctionInstantiation, SignatureIndex,
-        SignatureToken, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
-        Visibility,
+        DatatypeHandleIndex, EnumDefinitionIndex, FunctionDefinition, FunctionDefinitionIndex,
+        FunctionHandleIndex, FunctionInstantiation, SignatureIndex, SignatureToken,
+        StructDefinitionIndex, StructFieldInformation, VariantJumpTable, Visibility,
     },
     normalized::{FunctionRef, Type as MType},
-    views::{
-        FieldDefinitionView, FunctionDefinitionView, FunctionHandleView, SignatureTokenView,
-        StructDefinitionView, StructHandleView,
-    },
     CompiledModule,
 };
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
@@ -196,9 +190,13 @@ pub struct ModuleId(RawIndex);
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct NamedConstantId(Symbol);
 
-/// Identifier for a structure/resource, relative to module.
+/// Identifier for a datatype, relative to module.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub struct StructId(Symbol);
+pub struct DatatypeId(Symbol);
+
+/// Identifier for an enum variant, relative to an enum.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub struct VariantId(Symbol);
 
 /// Identifier for a field of a structure, relative to struct.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
@@ -226,6 +224,14 @@ pub struct IntrinsicId(usize);
 pub struct QualifiedId<Id> {
     pub module_id: ModuleId,
     pub id: Id,
+}
+
+/// Reference type when unpacking an enum variant.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub enum RefType {
+    ByValue,
+    ByImmRef,
+    ByMutRef,
 }
 
 /// Some identifier qualified by a module and a type instantiation.
@@ -256,7 +262,7 @@ impl FunId {
     }
 }
 
-impl StructId {
+impl DatatypeId {
     pub fn new(sym: Symbol) -> Self {
         Self(sym)
     }
@@ -373,9 +379,9 @@ impl<Id: Clone> QualifiedInstId<Id> {
     }
 }
 
-impl QualifiedInstId<StructId> {
+impl QualifiedInstId<DatatypeId> {
     pub fn to_type(&self) -> Type {
-        Type::Struct(self.module_id, self.id, self.inst.to_owned())
+        Type::Datatype(self.module_id, self.id, self.inst.to_owned())
     }
 }
 
@@ -718,12 +724,9 @@ impl GlobalEnv {
     /// TODO: move-compiler should use FileId as well so we don't need this here. There is already
     /// a todo in their code to remove the current use of `&'static str` for file names in Loc.
     pub fn to_loc(&self, loc: &MoveIrLoc) -> Loc {
-        let file_id = self.get_file_id(loc.file_hash()).unwrap_or_else(|| {
-            panic!(
-                "Unable to find source file '{}' in the environment",
-                loc.file_hash()
-            )
-        });
+        let Some(file_id) = self.get_file_id(loc.file_hash()) else {
+            return self.unknown_loc();
+        };
         Loc {
             file_id,
             span: Span::new(loc.start(), loc.end()),
@@ -882,7 +885,8 @@ impl GlobalEnv {
         module: CompiledModule,
         source_map: SourceMap,
         named_constants: BTreeMap<NamedConstantId, NamedConstantData>,
-        struct_data: BTreeMap<StructId, StructData>,
+        struct_data: BTreeMap<DatatypeId, StructData>,
+        enum_data: BTreeMap<DatatypeId, EnumData>,
         function_data: BTreeMap<FunId, FunctionData>,
     ) {
         let idx = self.module_data.len();
@@ -898,13 +902,18 @@ impl GlobalEnv {
             self.symbol_pool.make(module.self_id().name().as_str())
         };
         let name = ModuleName::from_str(&module.self_id().address().to_string(), effective_name);
-        let struct_idx_to_id: BTreeMap<StructDefinitionIndex, StructId> = struct_data
+        let struct_idx_to_id: BTreeMap<StructDefinitionIndex, DatatypeId> = struct_data
             .iter()
             .map(|(id, data)| match &data.info {
                 StructInfo::Declared { def_idx, .. } => (*def_idx, *id),
             })
             .collect();
         let function_idx_to_id: BTreeMap<FunctionDefinitionIndex, FunId> = function_data
+            .iter()
+            .map(|(id, data)| (data.def_idx, *id))
+            .collect();
+
+        let enum_idx_to_id: BTreeMap<EnumDefinitionIndex, DatatypeId> = enum_data
             .iter()
             .map(|(id, data)| (data.def_idx, *id))
             .collect();
@@ -916,6 +925,8 @@ impl GlobalEnv {
             named_constants,
             struct_data,
             struct_idx_to_id,
+            enum_data,
+            enum_idx_to_id,
             function_data,
             function_idx_to_id,
             source_map,
@@ -988,7 +999,7 @@ impl GlobalEnv {
                 let name = self
                     .symbol_pool
                     .make(module.identifier_at(field.name).as_str());
-                let info = FieldInfo::Declared { def_idx };
+                let info = FieldInfo::DeclaredStruct { def_idx };
                 map.insert(FieldId(name), FieldData { name, offset, info });
             }
             map
@@ -1005,6 +1016,60 @@ impl GlobalEnv {
             attributes,
             info,
             field_data,
+        }
+    }
+
+    /// Creates data for a enum declared in Move. Currently all information is contained in
+    /// the byte code. This is a helper for adding a new module to the environment.
+    pub fn create_move_enum_data(
+        &self,
+        module: &CompiledModule,
+        def_idx: EnumDefinitionIndex,
+        name: Symbol,
+        loc: Loc,
+        attributes: Vec<Attribute>,
+    ) -> EnumData {
+        let enum_def = module.enum_def_at(def_idx);
+        let enum_smap = self
+            .find_module_by_language_storage_id(&module.self_id())
+            .unwrap()
+            .data
+            .source_map
+            .get_enum_source_map(def_idx)
+            .unwrap();
+        let handle_idx = enum_def.enum_handle;
+        let mut variant_data = BTreeMap::new();
+        for (tag, variant) in enum_def.variants.iter().enumerate() {
+            let mut field_data = BTreeMap::new();
+            for (offset, field) in variant.fields.iter().enumerate() {
+                let name = self
+                    .symbol_pool
+                    .make(module.identifier_at(field.name).as_str());
+                let info = FieldInfo::DeclaredEnum { def_idx };
+                field_data.insert(FieldId(name), FieldData { name, offset, info });
+            }
+            let variant_name = self
+                .symbol_pool
+                .make(module.identifier_at(variant.variant_name).as_str());
+            let loc = self.to_loc(&enum_smap.variants[tag].0 .1);
+            variant_data.insert(
+                VariantId(variant_name),
+                VariantData {
+                    name: variant_name,
+                    loc,
+                    tag,
+                    field_data,
+                },
+            );
+        }
+
+        EnumData {
+            name,
+            loc,
+            attributes,
+            def_idx,
+            handle_idx,
+            variant_data,
         }
     }
 
@@ -1061,7 +1126,7 @@ impl GlobalEnv {
     pub fn find_struct_by_tag(
         &self,
         tag: &language_storage::StructTag,
-    ) -> Option<QualifiedId<StructId>> {
+    ) -> Option<QualifiedId<DatatypeId>> {
         self.find_module(&self.to_module_name(&tag.module_id()))
             .and_then(|menv| {
                 menv.find_struct_by_identifier(tag.name.clone())
@@ -1112,7 +1177,7 @@ impl GlobalEnv {
     }
 
     /// Return the `StructEnv` for `str`
-    pub fn get_struct(&self, str: QualifiedId<StructId>) -> StructEnv<'_> {
+    pub fn get_struct(&self, str: QualifiedId<DatatypeId>) -> StructEnv<'_> {
         self.get_module(str.module_id).into_struct(str.id)
     }
 
@@ -1131,7 +1196,7 @@ impl GlobalEnv {
     }
 
     /// Gets a struct by qualified id.
-    pub fn get_struct_qid(&self, qid: QualifiedId<StructId>) -> StructEnv<'_> {
+    pub fn get_struct_qid(&self, qid: QualifiedId<DatatypeId>) -> StructEnv<'_> {
         self.get_module(qid.module_id).into_struct(qid.id)
     }
 
@@ -1176,14 +1241,14 @@ impl GlobalEnv {
     pub fn get_struct_tag(
         &self,
         mid: ModuleId,
-        sid: StructId,
+        sid: DatatypeId,
         ts: &[Type],
     ) -> Option<language_storage::StructTag> {
         self.get_struct_type(mid, sid, ts)?.into_struct_tag()
     }
 
     /// Attempt to compute a struct type for (`mid`, `sid`, `ts`).
-    pub fn get_struct_type(&self, mid: ModuleId, sid: StructId, ts: &[Type]) -> Option<MType> {
+    pub fn get_struct_type(&self, mid: ModuleId, sid: DatatypeId, ts: &[Type]) -> Option<MType> {
         let menv = self.get_module(mid);
         Some(MType::Struct {
             address: *menv.self_address(),
@@ -1364,10 +1429,16 @@ pub struct ModuleData {
     pub named_constants: BTreeMap<NamedConstantId, NamedConstantData>,
 
     /// Struct data.
-    pub struct_data: BTreeMap<StructId, StructData>,
+    pub struct_data: BTreeMap<DatatypeId, StructData>,
 
-    /// Mapping from struct definition index to id in above map.
-    pub struct_idx_to_id: BTreeMap<StructDefinitionIndex, StructId>,
+    /// Enum data.
+    pub enum_data: BTreeMap<DatatypeId, EnumData>,
+
+    /// Mapping from struct definition index to id in struct map.
+    pub struct_idx_to_id: BTreeMap<StructDefinitionIndex, DatatypeId>,
+
+    /// Mapping from enum definition index to id in the enum_data map
+    pub enum_idx_to_id: BTreeMap<EnumDefinitionIndex, DatatypeId>,
 
     /// Function data.
     pub function_data: BTreeMap<FunId, FunctionData>,
@@ -1408,6 +1479,8 @@ impl ModuleData {
             attributes: Default::default(),
             used_modules: Default::default(),
             friend_modules: Default::default(),
+            enum_data: BTreeMap::new(),
+            enum_idx_to_id: BTreeMap::new(),
         }
     }
 }
@@ -1675,14 +1748,16 @@ impl<'env> ModuleEnv<'env> {
     /// Gets FunctionEnv for a function used in this module, via the FunctionHandleIndex. The
     /// returned function might be from this or another module.
     pub fn get_used_function(&self, idx: FunctionHandleIndex) -> FunctionEnv<'_> {
-        let view =
-            FunctionHandleView::new(&self.data.module, self.data.module.function_handle_at(idx));
-        let module_name = self.env.to_module_name(&view.module_id());
+        let module = &self.data.module;
+        let fhandle = module.function_handle_at(idx);
+        let fname = module.identifier_at(fhandle.name).as_str();
+        let declaring_module_handle = module.module_handle_at(fhandle.module);
+        let declaring_module = module.module_id_for_handle(declaring_module_handle);
         let module_env = self
             .env
-            .find_module(&module_name)
+            .find_module(&self.env.to_module_name(&declaring_module))
             .expect("unexpected reference to module not found in global env");
-        module_env.into_function(FunId::new(self.env.symbol_pool.make(view.name().as_str())))
+        module_env.into_function(FunId::new(self.env.symbol_pool.make(fname)))
     }
 
     /// Gets the function id from a definition index.
@@ -1701,7 +1776,7 @@ impl<'env> ModuleEnv<'env> {
 
     /// Gets a StructEnv in this module by name.
     pub fn find_struct(&self, name: Symbol) -> Option<StructEnv<'_>> {
-        let id = StructId(name);
+        let id = DatatypeId(name);
         self.data.struct_data.get(&id).map(|data| StructEnv {
             module_env: self.clone(),
             data,
@@ -1709,7 +1784,7 @@ impl<'env> ModuleEnv<'env> {
     }
 
     /// Gets a StructEnv in this module by identifier
-    pub fn find_struct_by_identifier(&self, identifier: Identifier) -> Option<StructId> {
+    pub fn find_struct_by_identifier(&self, identifier: Identifier) -> Option<DatatypeId> {
         let some_id = Some(identifier);
         for data in self.data.struct_data.values() {
             let senv = StructEnv {
@@ -1724,7 +1799,7 @@ impl<'env> ModuleEnv<'env> {
     }
 
     /// Gets the struct id from a definition index which must be valid for this environment.
-    pub fn get_struct_id(&self, idx: StructDefinitionIndex) -> StructId {
+    pub fn get_struct_id(&self, idx: StructDefinitionIndex) -> DatatypeId {
         *self
             .data
             .struct_idx_to_id
@@ -1733,7 +1808,7 @@ impl<'env> ModuleEnv<'env> {
     }
 
     /// Gets a StructEnv by id.
-    pub fn get_struct(&self, id: StructId) -> StructEnv<'_> {
+    pub fn get_struct(&self, id: DatatypeId) -> StructEnv<'_> {
         let data = self.data.struct_data.get(&id).expect("StructId undefined");
         StructEnv {
             module_env: self.clone(),
@@ -1746,7 +1821,7 @@ impl<'env> ModuleEnv<'env> {
     }
 
     /// Gets a StructEnv by id, consuming this module env.
-    pub fn into_struct(self, id: StructId) -> StructEnv<'env> {
+    pub fn into_struct(self, id: DatatypeId) -> StructEnv<'env> {
         let data = self.data.struct_data.get(&id).expect("StructId undefined");
         StructEnv {
             module_env: self,
@@ -1762,6 +1837,71 @@ impl<'env> ModuleEnv<'env> {
     /// Returns an iterator over structs in this module.
     pub fn get_structs(&'env self) -> impl Iterator<Item = StructEnv<'env>> {
         self.clone().into_structs()
+    }
+
+    /// Gets an EnumEnv in this module by name.
+    pub fn find_enum(&self, name: Symbol) -> Option<EnumEnv<'_>> {
+        let id = DatatypeId(name);
+        self.data.enum_data.get(&id).map(|data| EnumEnv {
+            module_env: self.clone(),
+            data,
+        })
+    }
+
+    /// Gets an EnumEnv in this module by identifier
+    pub fn find_enum_by_identifier(&self, identifier: Identifier) -> Option<DatatypeId> {
+        let some_id = Some(identifier);
+        for data in self.data.enum_data.values() {
+            let eenv = EnumEnv {
+                module_env: self.clone(),
+                data,
+            };
+            if eenv.get_identifier() == some_id {
+                return Some(eenv.get_id());
+            }
+        }
+        None
+    }
+
+    /// Gets the enum id from a definition index which must be valid for this environment.
+    pub fn get_enum_id(&self, idx: EnumDefinitionIndex) -> DatatypeId {
+        *self
+            .data
+            .enum_idx_to_id
+            .get(&idx)
+            .unwrap_or_else(|| panic!("undefined enum definition index {:?}", idx))
+    }
+
+    /// Gets an EnumEnv by id.
+    pub fn get_enum(&self, id: DatatypeId) -> EnumEnv<'_> {
+        let data = self.data.enum_data.get(&id).expect("EnumId undefined");
+        EnumEnv {
+            module_env: self.clone(),
+            data,
+        }
+    }
+
+    pub fn get_enum_by_def_idx(&self, idx: EnumDefinitionIndex) -> EnumEnv<'_> {
+        self.get_enum(self.get_enum_id(idx))
+    }
+
+    /// Gets an EnumEnv by id, consuming this module env.
+    pub fn into_enum(self, id: DatatypeId) -> EnumEnv<'env> {
+        let data = self.data.enum_data.get(&id).expect("EnumId undefined");
+        EnumEnv {
+            module_env: self,
+            data,
+        }
+    }
+
+    /// Gets the number of enums in this module.
+    pub fn get_enum_count(&self) -> usize {
+        self.data.enum_data.len()
+    }
+
+    /// Returns an iterator over structs in this module.
+    pub fn get_enums(&'env self) -> impl Iterator<Item = EnumEnv<'env>> {
+        self.clone().into_enums()
     }
 
     /// Returns an iterator over all object types declared by this module
@@ -1835,7 +1975,7 @@ impl<'env> ModuleEnv<'env> {
             // Objects returned by a public function can be transferred, shared, frozen, or wrapped
             // by a different module or (in the case of transfer) by a command in a programmable transaction block.
             for f in f.get_return_types() {
-                if let Type::Struct(mid, sid, _) = f {
+                if let Type::Datatype(mid, sid, _) = f {
                     let struct_env = self.env.get_module(mid).into_struct(sid);
                     if struct_env.get_abilities().has_key() {
                         returned.insert(f);
@@ -1849,6 +1989,14 @@ impl<'env> ModuleEnv<'env> {
     /// Returns iterator over structs in this module.
     pub fn into_structs(self) -> impl Iterator<Item = StructEnv<'env>> {
         self.data.struct_data.values().map(move |data| StructEnv {
+            module_env: self.clone(),
+            data,
+        })
+    }
+
+    /// Returns iterator over enums in this module.
+    pub fn into_enums(self) -> impl Iterator<Item = EnumEnv<'env>> {
+        self.data.enum_data.values().map(move |data| EnumEnv {
             module_env: self.clone(),
             data,
         })
@@ -1874,34 +2022,36 @@ impl<'env> ModuleEnv<'env> {
             }
             SignatureToken::TypeParameter(index) => Type::TypeParameter(*index),
             SignatureToken::Vector(bt) => Type::Vector(Box::new(self.globalize_signature(bt))),
-            SignatureToken::Struct(handle_idx) => {
-                let struct_view = StructHandleView::new(
-                    &self.data.module,
-                    self.data.module.struct_handle_at(*handle_idx),
-                );
+            SignatureToken::Datatype(handle_idx) => {
+                let module = &self.data.module;
+                let shandle = module.datatype_handle_at(*handle_idx);
+                let sname = module.identifier_at(shandle.name).as_str();
+                let declaring_module_handle = module.module_handle_at(shandle.module);
+                let declaring_module = module.module_id_for_handle(declaring_module_handle);
                 let declaring_module_env = self
                     .env
-                    .find_module(&self.env.to_module_name(&struct_view.module_id()))
+                    .find_module(&self.env.to_module_name(&declaring_module))
                     .expect("undefined module");
                 let struct_env = declaring_module_env
-                    .find_struct(self.env.symbol_pool.make(struct_view.name().as_str()))
+                    .find_struct(self.env.symbol_pool.make(sname))
                     .expect("undefined struct");
-                Type::Struct(declaring_module_env.data.id, struct_env.get_id(), vec![])
+                Type::Datatype(declaring_module_env.data.id, struct_env.get_id(), vec![])
             }
-            SignatureToken::StructInstantiation(struct_inst) => {
-                let (handle_idx, args) = &**struct_inst;
-                let struct_view = StructHandleView::new(
-                    &self.data.module,
-                    self.data.module.struct_handle_at(*handle_idx),
-                );
+            SignatureToken::DatatypeInstantiation(inst) => {
+                let (handle_idx, args) = &**inst;
+                let module = &self.data.module;
+                let shandle = module.datatype_handle_at(*handle_idx);
+                let sname = module.identifier_at(shandle.name).as_str();
+                let declaring_module_handle = module.module_handle_at(shandle.module);
+                let declaring_module = module.module_id_for_handle(declaring_module_handle);
                 let declaring_module_env = self
                     .env
-                    .find_module(&self.env.to_module_name(&struct_view.module_id()))
+                    .find_module(&self.env.to_module_name(&declaring_module))
                     .expect("undefined module");
                 let struct_env = declaring_module_env
-                    .find_struct(self.env.symbol_pool.make(struct_view.name().as_str()))
+                    .find_struct(self.env.symbol_pool.make(sname))
                     .expect("undefined struct");
-                Type::Struct(
+                Type::Datatype(
                     declaring_module_env.data.id,
                     struct_env.get_id(),
                     self.globalize_signatures(args),
@@ -1953,10 +2103,7 @@ impl<'env> ModuleEnv<'env> {
     /// Disassemble the module bytecode
     pub fn disassemble(&self) -> String {
         let disas = Disassembler::new(
-            SourceMapping::new(
-                self.data.source_map.clone(),
-                BinaryIndexedView::Module(self.get_verified_module()),
-            ),
+            SourceMapping::new(self.data.source_map.clone(), self.get_verified_module()),
             DisassemblerOptions {
                 only_externally_visible: false,
                 print_code: true,
@@ -2000,6 +2147,396 @@ impl<'env> ModuleEnv<'env> {
 }
 
 // =================================================================================================
+/// # Enum Environment
+
+#[derive(Debug)]
+pub struct EnumData {
+    /// The name of this enum.
+    name: Symbol,
+
+    /// The location of this enum.
+    loc: Loc,
+
+    /// Attributes attached to this enum.
+    attributes: Vec<Attribute>,
+
+    /// The definition index of this enum in its module.
+    def_idx: EnumDefinitionIndex,
+
+    /// The handle index of this enum in its module.
+    handle_idx: DatatypeHandleIndex,
+
+    /// Variant definitions
+    variant_data: BTreeMap<VariantId, VariantData>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumEnv<'env> {
+    /// Reference to enclosing module.
+    pub module_env: ModuleEnv<'env>,
+
+    /// Reference to the enum data.
+    data: &'env EnumData,
+}
+
+impl<'env> EnumEnv<'env> {
+    /// Returns the name of this enum.
+    pub fn get_name(&self) -> Symbol {
+        self.data.name
+    }
+
+    /// Gets full name as string.
+    pub fn get_full_name_str(&self) -> String {
+        format!(
+            "{}::{}",
+            self.module_env.get_name().display(self.symbol_pool()),
+            self.get_name().display(self.symbol_pool())
+        )
+    }
+
+    /// Gets full name with module address as string.
+    pub fn get_full_name_with_address(&self) -> String {
+        format!(
+            "{}::{}",
+            self.module_env.get_full_name_str(),
+            self.get_name().display(self.symbol_pool())
+        )
+    }
+
+    /// Returns the VM identifier for thisenum
+    pub fn get_identifier(&self) -> Option<Identifier> {
+        let handle_idx = self.data.handle_idx;
+        let handle = self.module_env.data.module.datatype_handle_at(handle_idx);
+        Some(
+            self.module_env
+                .data
+                .module
+                .identifier_at(handle.name)
+                .to_owned(),
+        )
+    }
+
+    /// Shortcut for accessing the symbol pool.
+    pub fn symbol_pool(&self) -> &SymbolPool {
+        self.module_env.symbol_pool()
+    }
+
+    /// Returns the location of this enum.
+    pub fn get_loc(&self) -> Loc {
+        self.data.loc.clone()
+    }
+
+    /// Returns the attributes of this enum.
+    pub fn get_attributes(&self) -> &[Attribute] {
+        &self.data.attributes
+    }
+
+    /// Get documentation associated with this enum.
+    pub fn get_doc(&self) -> &str {
+        self.module_env.env.get_doc(&self.data.loc)
+    }
+
+    /// Gets the id associated with this enum.
+    pub fn get_id(&self) -> DatatypeId {
+        DatatypeId(self.data.name)
+    }
+
+    /// Gets the qualified id of this enum.
+    pub fn get_qualified_id(&self) -> QualifiedId<DatatypeId> {
+        self.module_env.get_id().qualified(self.get_id())
+    }
+
+    /// Get the abilities of this struct.
+    pub fn get_abilities(&self) -> AbilitySet {
+        let def = self.module_env.data.module.enum_def_at(self.data.def_idx);
+        let handle = self
+            .module_env
+            .data
+            .module
+            .datatype_handle_at(def.enum_handle);
+        handle.abilities
+    }
+
+    /// Determines whether memory-related operations needs to be declared for this struct.
+    pub fn has_memory(&self) -> bool {
+        self.get_abilities().has_key()
+    }
+
+    /// Get an iterator for the fields, ordered by offset.
+    pub fn get_variants(&'env self) -> impl Iterator<Item = VariantEnv<'env>> {
+        self.data
+            .variant_data
+            .values()
+            .sorted_by_key(|data| data.tag)
+            .map(move |data| VariantEnv {
+                enum_env: self.clone(),
+                data,
+            })
+    }
+
+    /// Return the number of variants in the enum.
+    pub fn get_variant_count(&self) -> usize {
+        self.data.variant_data.len()
+    }
+
+    /// Gets a variant by its id.
+    pub fn get_variant(&'env self, id: VariantId) -> VariantEnv<'env> {
+        let data = self
+            .data
+            .variant_data
+            .get(&id)
+            .expect("VariantId undefined");
+        VariantEnv {
+            enum_env: self.clone(),
+            data,
+        }
+    }
+
+    /// Find a variann by its name.
+    pub fn find_variant(&'env self, name: Symbol) -> Option<VariantEnv<'env>> {
+        let id = VariantId(name);
+        self.data.variant_data.get(&id).map(|data| VariantEnv {
+            enum_env: self.clone(),
+            data,
+        })
+    }
+
+    /// Gets a variant by its tag.
+    pub fn get_variant_by_tag(&'env self, tag: usize) -> VariantEnv<'env> {
+        for data in self.data.variant_data.values() {
+            if data.tag == tag {
+                return VariantEnv {
+                    enum_env: self.clone(),
+                    data,
+                };
+            }
+        }
+        unreachable!("invalid variant lookup")
+    }
+
+    /// Whether the type parameter at position `idx` is declared as phantom.
+    pub fn is_phantom_parameter(&self, idx: usize) -> bool {
+        let def_idx = self.data.def_idx;
+
+        let def = self.module_env.data.module.enum_def_at(def_idx);
+        self.module_env
+            .data
+            .module
+            .datatype_handle_at(def.enum_handle)
+            .type_parameters[idx]
+            .is_phantom
+    }
+
+    /// Returns the type parameters associated with this enum.
+    pub fn get_type_parameters(&self) -> Vec<TypeParameter> {
+        // TODO: we currently do not know the original names of those formals, so we generate them.
+        let pool = &self.module_env.env.symbol_pool;
+        let def_idx = self.data.def_idx;
+        let module = &self.module_env.data.module;
+        let edef = module.enum_def_at(def_idx);
+        let ehandle = module.datatype_handle_at(edef.enum_handle);
+        ehandle
+            .type_parameters
+            .iter()
+            .enumerate()
+            .map(|(i, k)| {
+                TypeParameter(
+                    pool.make(&format!("$tv{}", i)),
+                    AbilityConstraint(k.constraints),
+                )
+            })
+            .collect_vec()
+    }
+
+    /// Returns the type parameters associated with this enum, with actual names.
+    pub fn get_named_type_parameters(&self) -> Vec<TypeParameter> {
+        let def_idx = self.data.def_idx;
+        let module = &self.module_env.data.module;
+        let edef = module.enum_def_at(def_idx);
+        let ehandle = module.datatype_handle_at(edef.enum_handle);
+        ehandle
+            .type_parameters
+            .iter()
+            .enumerate()
+            .map(|(i, k)| {
+                let name = self
+                    .module_env
+                    .data
+                    .source_map
+                    .get_enum_source_map(def_idx)
+                    .ok()
+                    .and_then(|smap| smap.type_parameters.get(i))
+                    .map(|(s, _)| s.clone())
+                    .unwrap_or_else(|| format!("unknown#{}", i));
+                TypeParameter(
+                    self.module_env.env.symbol_pool.make(&name),
+                    AbilityConstraint(k.constraints),
+                )
+            })
+            .collect_vec()
+    }
+}
+
+// =================================================================================================
+/// # Variant Environment
+
+#[derive(Debug)]
+pub struct VariantData {
+    /// The name of this variant.
+    name: Symbol,
+
+    /// The location of this variant.
+    loc: Loc,
+
+    tag: usize,
+
+    /// Field definitions.
+    field_data: BTreeMap<FieldId, FieldData>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VariantEnv<'env> {
+    /// Reference to enclosing module.
+    pub enum_env: EnumEnv<'env>,
+
+    /// Reference to the variant data.
+    data: &'env VariantData,
+}
+
+impl<'env> VariantEnv<'env> {
+    /// Returns the name of this variant.
+    pub fn get_name(&self) -> Symbol {
+        self.data.name
+    }
+
+    /// Gets full name as string.
+    pub fn get_full_name_str(&self) -> String {
+        format!(
+            "{}::{}::{}",
+            self.enum_env
+                .module_env
+                .get_name()
+                .display(self.symbol_pool()),
+            self.enum_env.get_name().display(self.symbol_pool()),
+            self.get_name().display(self.symbol_pool())
+        )
+    }
+
+    /// Gets full name with module address as string.
+    pub fn get_full_name_with_address(&self) -> String {
+        format!(
+            "{}::{}",
+            self.enum_env.get_full_name_str(),
+            self.get_name().display(self.symbol_pool())
+        )
+    }
+
+    /// Gets the tag associated with this variant.
+    pub fn get_tag(&self) -> usize {
+        self.data.tag
+    }
+
+    /// Returns the VM identifier for this variant
+    pub fn get_identifier(&self) -> Option<Identifier> {
+        let enum_def = self
+            .enum_env
+            .module_env
+            .data
+            .module
+            .enum_def_at(self.enum_env.data.def_idx);
+        let variant_def = &enum_def.variants[self.data.tag];
+        Some(
+            self.enum_env
+                .module_env
+                .data
+                .module
+                .identifier_at(variant_def.variant_name)
+                .to_owned(),
+        )
+    }
+
+    /// Shortcut for accessing the symbol pool.
+    pub fn symbol_pool(&self) -> &SymbolPool {
+        self.enum_env.symbol_pool()
+    }
+
+    /// Returns the location of this variant.
+    pub fn get_loc(&self) -> Loc {
+        self.data.loc.clone()
+    }
+
+    /// Get documentation associated with this struct.
+    pub fn get_doc(&self) -> &str {
+        let def_idx = self.enum_env.data.def_idx;
+        let Ok(emap) = self
+            .enum_env
+            .module_env
+            .data
+            .source_map
+            .get_enum_source_map(def_idx)
+        else {
+            return "";
+        };
+        let variant_loc = emap.variants[self.data.tag].0 .1;
+        let loc = self.enum_env.module_env.env.to_loc(&variant_loc);
+        self.enum_env.module_env.env.get_doc(&loc)
+    }
+
+    /// Gets the id associated with this variant.
+    pub fn get_id(&self) -> VariantId {
+        VariantId(self.data.name)
+    }
+
+    /// Get an iterator for the fields, ordered by offset.
+    pub fn get_fields(&'env self) -> impl Iterator<Item = FieldEnv<'env>> {
+        self.data
+            .field_data
+            .values()
+            .sorted_by_key(|data| data.offset)
+            .map(move |data| FieldEnv {
+                parent_env: EnclosingEnv::Variant(self.clone()),
+                data,
+            })
+    }
+
+    /// Return the number of fields in the struct.
+    pub fn get_field_count(&self) -> usize {
+        self.data.field_data.len()
+    }
+
+    /// Gets a field by its id.
+    pub fn get_field(&'env self, id: FieldId) -> FieldEnv<'env> {
+        let data = self.data.field_data.get(&id).expect("FieldId undefined");
+        FieldEnv {
+            parent_env: EnclosingEnv::Variant(self.clone()),
+            data,
+        }
+    }
+
+    /// Find a field by its name.
+    pub fn find_field(&'env self, name: Symbol) -> Option<FieldEnv<'env>> {
+        let id = FieldId(name);
+        self.data.field_data.get(&id).map(|data| FieldEnv {
+            parent_env: EnclosingEnv::Variant(self.clone()),
+            data,
+        })
+    }
+
+    /// Gets a field by its offset.
+    pub fn get_field_by_offset(&'env self, offset: usize) -> FieldEnv<'env> {
+        for data in self.data.field_data.values() {
+            if data.offset == offset {
+                return FieldEnv {
+                    parent_env: EnclosingEnv::Variant(self.clone()),
+                    data,
+                };
+            }
+        }
+        unreachable!("invalid field lookup")
+    }
+}
+
+// =================================================================================================
 /// # Struct Environment
 
 #[derive(Debug)]
@@ -2029,7 +2566,7 @@ enum StructInfo {
         def_idx: StructDefinitionIndex,
 
         /// The handle index of this struct in its module.
-        handle_idx: StructHandleIndex,
+        handle_idx: DatatypeHandleIndex,
     },
 }
 
@@ -2070,7 +2607,7 @@ impl<'env> StructEnv<'env> {
     pub fn get_identifier(&self) -> Option<Identifier> {
         match &self.data.info {
             StructInfo::Declared { handle_idx, .. } => {
-                let handle = self.module_env.data.module.struct_handle_at(*handle_idx);
+                let handle = self.module_env.data.module.datatype_handle_at(*handle_idx);
                 Some(
                     self.module_env
                         .data
@@ -2103,12 +2640,12 @@ impl<'env> StructEnv<'env> {
     }
 
     /// Gets the id associated with this struct.
-    pub fn get_id(&self) -> StructId {
-        StructId(self.data.name)
+    pub fn get_id(&self) -> DatatypeId {
+        DatatypeId(self.data.name)
     }
 
     /// Gets the qualified id of this struct.
-    pub fn get_qualified_id(&self) -> QualifiedId<StructId> {
+    pub fn get_qualified_id(&self) -> QualifiedId<DatatypeId> {
         self.module_env.get_id().qualified(self.get_id())
     }
 
@@ -2131,7 +2668,7 @@ impl<'env> StructEnv<'env> {
                     .module_env
                     .data
                     .module
-                    .struct_handle_at(def.struct_handle);
+                    .datatype_handle_at(def.struct_handle);
                 handle.abilities
             }
         }
@@ -2149,7 +2686,7 @@ impl<'env> StructEnv<'env> {
             .values()
             .sorted_by_key(|data| data.offset)
             .map(move |data| FieldEnv {
-                struct_env: self.clone(),
+                parent_env: EnclosingEnv::Struct(self.clone()),
                 data,
             })
     }
@@ -2163,7 +2700,7 @@ impl<'env> StructEnv<'env> {
     pub fn get_field(&'env self, id: FieldId) -> FieldEnv<'env> {
         let data = self.data.field_data.get(&id).expect("FieldId undefined");
         FieldEnv {
-            struct_env: self.clone(),
+            parent_env: EnclosingEnv::Struct(self.clone()),
             data,
         }
     }
@@ -2172,7 +2709,7 @@ impl<'env> StructEnv<'env> {
     pub fn find_field(&'env self, name: Symbol) -> Option<FieldEnv<'env>> {
         let id = FieldId(name);
         self.data.field_data.get(&id).map(|data| FieldEnv {
-            struct_env: self.clone(),
+            parent_env: EnclosingEnv::Struct(self.clone()),
             data,
         })
     }
@@ -2182,7 +2719,7 @@ impl<'env> StructEnv<'env> {
         for data in self.data.field_data.values() {
             if data.offset == offset {
                 return FieldEnv {
-                    struct_env: self.clone(),
+                    parent_env: EnclosingEnv::Struct(self.clone()),
                     data,
                 };
             }
@@ -2198,7 +2735,7 @@ impl<'env> StructEnv<'env> {
                 self.module_env
                     .data
                     .module
-                    .struct_handle_at(def.struct_handle)
+                    .datatype_handle_at(def.struct_handle)
                     .type_parameters[idx]
                     .is_phantom
             }
@@ -2211,11 +2748,11 @@ impl<'env> StructEnv<'env> {
         let pool = &self.module_env.env.symbol_pool;
         match &self.data.info {
             StructInfo::Declared { def_idx, .. } => {
-                let view = StructDefinitionView::new(
-                    &self.module_env.data.module,
-                    self.module_env.data.module.struct_def_at(*def_idx),
-                );
-                view.type_parameters()
+                let module = &self.module_env.data.module;
+                let sdef = module.struct_def_at(*def_idx);
+                let shandle = module.datatype_handle_at(sdef.struct_handle);
+                shandle
+                    .type_parameters
                     .iter()
                     .enumerate()
                     .map(|(i, k)| {
@@ -2233,11 +2770,11 @@ impl<'env> StructEnv<'env> {
     pub fn get_named_type_parameters(&self) -> Vec<TypeParameter> {
         match &self.data.info {
             StructInfo::Declared { def_idx, .. } => {
-                let view = StructDefinitionView::new(
-                    &self.module_env.data.module,
-                    self.module_env.data.module.struct_def_at(*def_idx),
-                );
-                view.type_parameters()
+                let module = &self.module_env.data.module;
+                let sdef = module.struct_def_at(*def_idx);
+                let shandle = module.datatype_handle_at(sdef.struct_handle);
+                shandle
+                    .type_parameters
                     .iter()
                     .enumerate()
                     .map(|(i, k)| {
@@ -2279,16 +2816,35 @@ pub struct FieldData {
 #[derive(Debug)]
 enum FieldInfo {
     /// The field is declared in Move.
-    Declared {
+    DeclaredStruct {
         /// The struct definition index of this field in its VM module.
         def_idx: StructDefinitionIndex,
+    },
+    DeclaredEnum {
+        /// The enum definition index of this field in its VM module.
+        def_idx: EnumDefinitionIndex,
     },
 }
 
 #[derive(Debug)]
+pub enum EnclosingEnv<'env> {
+    Struct(StructEnv<'env>),
+    Variant(VariantEnv<'env>),
+}
+
+impl<'env> EnclosingEnv<'env> {
+    pub fn module_env(&self) -> &ModuleEnv<'env> {
+        match self {
+            EnclosingEnv::Struct(s) => &s.module_env,
+            EnclosingEnv::Variant(v) => &v.enum_env.module_env,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct FieldEnv<'env> {
-    /// Reference to enclosing struct.
-    pub struct_env: StructEnv<'env>,
+    /// Reference to enclosing env.
+    pub parent_env: EnclosingEnv<'env>,
 
     /// Reference to the field data.
     data: &'env FieldData,
@@ -2307,45 +2863,78 @@ impl<'env> FieldEnv<'env> {
 
     /// Returns the VM identifier for this field
     pub fn get_identifier(&'env self) -> Option<Identifier> {
-        let FieldInfo::Declared { def_idx } = &self.data.info;
-        let m = &self.struct_env.module_env.data.module;
-        let def = m.struct_def_at(*def_idx);
-        let offset = self.data.offset;
-        Some(
-            FieldDefinitionView::new(m, def.field(offset).expect("Bad field offset"))
-                .name()
-                .to_owned(),
-        )
+        match &self.data.info {
+            FieldInfo::DeclaredStruct { def_idx } => {
+                let module = &self.parent_env.module_env().data.module;
+                let def = module.struct_def_at(*def_idx);
+                let offset = self.data.offset;
+                let field = def.field(offset).expect("Bad field offset");
+                Some(module.identifier_at(field.name).to_owned())
+            }
+            FieldInfo::DeclaredEnum { def_idx } => {
+                let EnclosingEnv::Variant(v) = &self.parent_env else {
+                    unreachable!()
+                };
+                let m = &v.enum_env.module_env.data.module;
+                let enum_def = m.enum_def_at(*def_idx);
+                let variant_def = &enum_def.variants[v.data.tag];
+                let offset = self.data.offset;
+                let field = variant_def.fields.get(offset).expect("Bad field offset");
+                Some(m.identifier_at(field.name).to_owned())
+            }
+        }
     }
 
     /// Get documentation associated with this field.
     pub fn get_doc(&self) -> &str {
-        let FieldInfo::Declared { def_idx } = &self.data.info;
-        if let Ok(smap) = self
-            .struct_env
-            .module_env
-            .data
-            .source_map
-            .get_struct_source_map(*def_idx)
-        {
-            let loc = self
-                .struct_env
-                .module_env
-                .env
-                .to_loc(&smap.fields[self.data.offset]);
-            self.struct_env.module_env.env.get_doc(&loc)
-        } else {
-            ""
+        match &self.data.info {
+            FieldInfo::DeclaredStruct { def_idx } => {
+                let Ok(smap) = self
+                    .parent_env
+                    .module_env()
+                    .data
+                    .source_map
+                    .get_struct_source_map(*def_idx)
+                else {
+                    return "";
+                };
+                let loc = self
+                    .parent_env
+                    .module_env()
+                    .env
+                    .to_loc(&smap.fields[self.data.offset]);
+                self.parent_env.module_env().env.get_doc(&loc)
+            }
+            FieldInfo::DeclaredEnum { def_idx } => {
+                let EnclosingEnv::Variant(v) = &self.parent_env else {
+                    unreachable!()
+                };
+                let Ok(emap) = self
+                    .parent_env
+                    .module_env()
+                    .data
+                    .source_map
+                    .get_enum_source_map(*def_idx)
+                else {
+                    return "";
+                };
+                let loc = self
+                    .parent_env
+                    .module_env()
+                    .env
+                    .to_loc(&emap.variants[v.data.tag].1[self.data.offset]);
+                self.parent_env.module_env().env.get_doc(&loc)
+            }
         }
     }
 
     /// Gets the type of this field.
     pub fn get_type(&self) -> Type {
         match &self.data.info {
-            FieldInfo::Declared { def_idx } => {
+            FieldInfo::DeclaredStruct { def_idx } => {
                 let struct_def = self
-                    .struct_env
-                    .module_env
+                    .parent_env
+                    .module_env()
                     .data
                     .module
                     .struct_def_at(*def_idx);
@@ -2353,7 +2942,18 @@ impl<'env> FieldEnv<'env> {
                     StructFieldInformation::Declared(fields) => &fields[self.data.offset],
                     StructFieldInformation::Native => unreachable!(),
                 };
-                self.struct_env
+                self.parent_env
+                    .module_env()
+                    .globalize_signature(&field.signature.0)
+            }
+            FieldInfo::DeclaredEnum { def_idx } => {
+                let EnclosingEnv::Variant(v) = &self.parent_env else {
+                    unreachable!()
+                };
+                let enum_def = v.enum_env.module_env.data.module.enum_def_at(*def_idx);
+                let variant_def = &enum_def.variants[v.data.tag];
+                let field = &variant_def.fields[self.data.offset];
+                v.enum_env
                     .module_env
                     .globalize_signature(&field.signature.0)
             }
@@ -2585,18 +3185,25 @@ impl<'env> FunctionEnv<'env> {
             .data
             .module
             .function_def_at(self.get_def_idx());
-        let function_definition_view =
-            FunctionDefinitionView::new(&self.module_env.data.module, function_definition);
-        match function_definition_view.code() {
+        match &function_definition.code {
             Some(code) => &code.code,
             None => &[],
         }
     }
 
+    /// Returns the variant jump tables for this function.
+    pub fn get_jump_tables(&self) -> &[VariantJumpTable] {
+        let function_definition = self
+            .module_env
+            .data
+            .module
+            .function_def_at(self.get_def_idx());
+        &function_definition.code.as_ref().unwrap().jump_tables
+    }
+
     /// Returns true if this function is native.
     pub fn is_native(&self) -> bool {
-        let view = self.definition_view();
-        view.is_native()
+        self.definition().is_native()
     }
 
     /// Returns true if this is the well-known native or intrinsic function of the given name.
@@ -2613,12 +3220,12 @@ impl<'env> FunctionEnv<'env> {
 
     /// Return the visibility of this function
     pub fn visibility(&self) -> FunctionVisibility {
-        self.definition_view().visibility()
+        self.definition().visibility
     }
 
     /// Return true if the function is an entry fucntion
     pub fn is_entry(&self) -> bool {
-        self.definition_view().is_entry()
+        self.definition().is_entry
     }
 
     /// Return the visibility string for this function. Useful for formatted printing.
@@ -2633,8 +3240,8 @@ impl<'env> FunctionEnv<'env> {
     /// Return whether this function is exposed outside of the module.
     pub fn is_exposed(&self) -> bool {
         self.module_env.is_script_module()
-            || self.definition_view().is_entry()
-            || match self.definition_view().visibility() {
+            || self.definition().is_entry
+            || match self.definition().visibility {
                 Visibility::Public | Visibility::Friend => true,
                 Visibility::Private => false,
             }
@@ -2643,8 +3250,8 @@ impl<'env> FunctionEnv<'env> {
     /// Return whether this function is exposed outside of the module.
     pub fn has_unknown_callers(&self) -> bool {
         self.module_env.is_script_module()
-            || self.definition_view().is_entry()
-            || match self.definition_view().visibility() {
+            || self.definition().is_entry
+            || match self.definition().visibility {
                 Visibility::Public => true,
                 Visibility::Private | Visibility::Friend => false,
             }
@@ -2653,12 +3260,12 @@ impl<'env> FunctionEnv<'env> {
     /// Returns true if the function is a script function
     pub fn is_script(&self) -> bool {
         // The main function of a scipt is a script function
-        self.module_env.is_script_module() || self.definition_view().is_entry()
+        self.module_env.is_script_module() || self.definition().is_entry
     }
 
     /// Return true if this function is a friend function
     pub fn is_friend(&self) -> bool {
-        self.definition_view().visibility() == Visibility::Friend
+        self.definition().visibility == Visibility::Friend
     }
 
     /// Returns true if this function mutates any references (i.e. has &mut parameters).
@@ -2672,8 +3279,14 @@ impl<'env> FunctionEnv<'env> {
     pub fn get_type_parameters(&self) -> Vec<TypeParameter> {
         // TODO: currently the translation scheme isn't working with using real type
         //   parameter names, so use indices instead.
-        let view = self.definition_view();
-        view.type_parameters()
+        let fdef = self.definition();
+        let fhandle = self
+            .module_env
+            .data
+            .module
+            .function_handle_at(fdef.function);
+        fhandle
+            .type_parameters
             .iter()
             .enumerate()
             .map(|(i, k)| {
@@ -2687,8 +3300,14 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the type parameters with the real names.
     pub fn get_named_type_parameters(&self) -> Vec<TypeParameter> {
-        let view = self.definition_view();
-        view.type_parameters()
+        let fdef = self.definition();
+        let fhandle = self
+            .module_env
+            .data
+            .module
+            .function_handle_at(fdef.function);
+        fhandle
+            .type_parameters
             .iter()
             .enumerate()
             .map(|(i, k)| {
@@ -2710,14 +3329,21 @@ impl<'env> FunctionEnv<'env> {
     }
 
     pub fn get_parameter_count(&self) -> usize {
-        let view = self.definition_view();
-        view.arg_tokens().count()
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        module.signature_at(fhandle.parameters).0.len()
     }
 
     /// Return the number of type parameters for self
     pub fn get_type_parameter_count(&self) -> usize {
-        let view = self.definition_view();
-        view.type_parameters().len()
+        let fdef = self.definition();
+        let fhandle = self
+            .module_env
+            .data
+            .module
+            .function_handle_at(fdef.function);
+        fhandle.type_parameters.len()
     }
 
     /// Return `true` if idx is a formal parameter index
@@ -2734,21 +3360,27 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the parameter types associated with this function
     pub fn get_parameter_types(&self) -> Vec<Type> {
-        let view = self.definition_view();
-        view.arg_tokens()
-            .map(|tv: SignatureTokenView<CompiledModule>| {
-                self.module_env.globalize_signature(tv.signature_token())
-            })
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        module
+            .signature_at(fhandle.parameters)
+            .0
+            .iter()
+            .map(|tv: &SignatureToken| self.module_env.globalize_signature(tv))
             .collect()
     }
 
     /// Returns the regular parameters associated with this function.
     pub fn get_parameters(&self) -> Vec<Parameter> {
-        let view = self.definition_view();
-        view.arg_tokens()
-            .map(|tv: SignatureTokenView<CompiledModule>| {
-                self.module_env.globalize_signature(tv.signature_token())
-            })
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        module
+            .signature_at(fhandle.parameters)
+            .0
+            .iter()
+            .map(|tv: &SignatureToken| self.module_env.globalize_signature(tv))
             .zip(self.data.arg_names.iter())
             .map(|(s, i)| Parameter(*i, s))
             .collect_vec()
@@ -2756,11 +3388,14 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns return types of this function.
     pub fn get_return_types(&self) -> Vec<Type> {
-        let view = self.definition_view();
-        view.return_tokens()
-            .map(|tv: SignatureTokenView<CompiledModule>| {
-                self.module_env.globalize_signature(tv.signature_token())
-            })
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        module
+            .signature_at(fhandle.return_)
+            .0
+            .iter()
+            .map(|tv: &SignatureToken| self.module_env.globalize_signature(tv))
             .collect_vec()
     }
 
@@ -2771,8 +3406,10 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the number of return values of this function.
     pub fn get_return_count(&self) -> usize {
-        let view = self.definition_view();
-        view.return_count()
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        module.signature_at(fhandle.return_).0.len()
     }
 
     /// Get the name to be used for a local. If the local is an argument, use that for naming,
@@ -2816,33 +3453,35 @@ impl<'env> FunctionEnv<'env> {
     /// by the user and also have a user assigned name which can be discovered via `get_local_name`.
     /// Note we may have more anonymous locals generated e.g by the 'stackless' transformation.
     pub fn get_local_count(&self) -> usize {
-        let view = self.definition_view();
-        match view.locals_signature() {
-            Some(locals_view) => locals_view.len(),
-            None => view.parameters().len(),
-        }
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let num_params = self.get_parameter_count();
+        let num_locals = fdef
+            .code
+            .as_ref()
+            .map(|code| module.signature_at(code.locals).0.len())
+            .unwrap_or(0);
+        num_params + num_locals
     }
 
     /// Gets the type of the local at index. This must use an index in the range as determined by
     /// `get_local_count`.
     pub fn get_local_type(&self, idx: usize) -> Type {
-        let view = self.definition_view();
-        let parameters = view.parameters();
-
-        if idx < parameters.len() {
-            self.module_env.globalize_signature(&parameters.0[idx])
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        let parameters = &module.signature_at(fhandle.parameters).0;
+        let st = if idx < parameters.len() {
+            &parameters[idx]
         } else {
-            self.module_env.globalize_signature(
-                view.locals_signature()
-                    .unwrap()
-                    .token_at(idx as u8)
-                    .signature_token(),
-            )
-        }
+            let locals = &module.signature_at(fdef.code.as_ref().unwrap().locals).0;
+            &locals[idx - parameters.len()]
+        };
+        self.module_env.globalize_signature(st)
     }
 
     /// Returns the acquired global resource types.
-    pub fn get_acquires_global_resources(&'env self) -> Vec<StructId> {
+    pub fn get_acquires_global_resources(&'env self) -> Vec<DatatypeId> {
         let function_definition = self
             .module_env
             .data
@@ -2962,14 +3601,11 @@ impl<'env> FunctionEnv<'env> {
         }
     }
 
-    fn definition_view(&'env self) -> FunctionDefinitionView<'env, CompiledModule> {
-        FunctionDefinitionView::new(
-            &self.module_env.data.module,
-            self.module_env
-                .data
-                .module
-                .function_def_at(self.data.def_idx),
-        )
+    fn definition(&'env self) -> &'env FunctionDefinition {
+        self.module_env
+            .data
+            .module
+            .function_def_at(self.data.def_idx)
     }
 
     /// Produce a TypeDisplayContext to print types within the scope of this env
@@ -3199,7 +3835,7 @@ pub trait GetNameString {
     fn get_name_for_display(&self, env: &GlobalEnv) -> String;
 }
 
-impl GetNameString for QualifiedId<StructId> {
+impl GetNameString for QualifiedId<DatatypeId> {
     fn get_name_for_display(&self, env: &GlobalEnv) -> String {
         env.get_struct_qid(*self).get_full_name_str()
     }

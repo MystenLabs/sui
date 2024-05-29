@@ -7,11 +7,11 @@ module object_wrapping::object_wrapping {
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID};
 
-    struct Child has key, store {
+    public struct Child has key, store {
         id: UID,
     }
 
-    struct Parent has key {
+    public struct Parent has key {
         id: UID,
         child: Option<Child>,
     }
@@ -48,7 +48,7 @@ module object_wrapping::object_wrapping {
     }
 
     public entry fun delete_parent(parent: Parent) {
-        let Parent { id: parent_id, child: child_opt } = parent;
+        let Parent { id: parent_id, child: mut child_opt } = parent;
         object::delete(parent_id);
         if (option::is_some(&child_opt)) {
             let child = option::extract(&mut child_opt);

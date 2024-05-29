@@ -37,7 +37,10 @@ struct ProgramParsingState {
     preview_set: bool,
     summary_set: bool,
     warn_shadows_set: bool,
+    serialize_unsigned_set: bool,
+    serialize_signed_set: bool,
     json_set: bool,
+    dry_run_set: bool,
     gas_object_id: Option<Spanned<ObjectID>>,
     gas_budget: Option<Spanned<u64>>,
 }
@@ -56,7 +59,10 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 preview_set: false,
                 summary_set: false,
                 warn_shadows_set: false,
+                serialize_unsigned_set: false,
+                serialize_signed_set: false,
                 json_set: false,
+                dry_run_set: false,
                 gas_object_id: None,
                 gas_budget: None,
             },
@@ -99,8 +105,11 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             }
 
             match lexeme {
+                L(T::Command, A::SERIALIZE_UNSIGNED) => flag!(serialize_unsigned_set),
+                L(T::Command, A::SERIALIZE_SIGNED) => flag!(serialize_signed_set),
                 L(T::Command, A::SUMMARY) => flag!(summary_set),
                 L(T::Command, A::JSON) => flag!(json_set),
+                L(T::Command, A::DRY_RUN) => flag!(dry_run_set),
                 L(T::Command, A::PREVIEW) => flag!(preview_set),
                 L(T::Command, A::WARN_SHADOWS) => flag!(warn_shadows_set),
                 L(T::Command, A::GAS_COIN) => {
@@ -184,14 +193,6 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 .push(err!(sp, "Trailing {tok} found after the last command",));
         }
 
-        let Some(gas_budget) = self.state.gas_budget else {
-            self.state.errors.push(err!(
-                sp => help: { "Use --gas-budget <u64> to set a gas budget" },
-                "Gas budget not set."
-            ));
-            return Err(self.state.errors);
-        };
-
         if self.state.errors.is_empty() {
             Ok((
                 A::Program {
@@ -201,9 +202,12 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 A::ProgramMetadata {
                     preview_set: self.state.preview_set,
                     summary_set: self.state.summary_set,
+                    serialize_unsigned_set: self.state.serialize_unsigned_set,
+                    serialize_signed_set: self.state.serialize_signed_set,
                     gas_object_id: self.state.gas_object_id,
                     json_set: self.state.json_set,
-                    gas_budget,
+                    dry_run_set: self.state.dry_run_set,
+                    gas_budget: self.state.gas_budget,
                 },
             ))
         } else {
@@ -356,6 +360,9 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     fn parse_gas_budget(&mut self) -> PTBResult<Spanned<u64>> {
         Ok(match self.parse_argument()? {
             sp!(sp, Argument::U64(u)) => sp.wrap(u),
+            sp!(sp, Argument::InferredNum(n)) => {
+                sp.wrap(u64::try_from(n).map_err(|_| err!(sp, "Value does not fit within a u64"))?)
+            }
             sp!(sp, _) => error!(sp, "Expected a u64 value"),
         })
     }
@@ -624,10 +631,10 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             L(T::Ident, A::U128) => parse_num!(parse_u128, V::U128),
             L(T::Ident, A::U256) => parse_num!(parse_u256, V::U256),
 
-            // If there's no suffix, assume u64, and don't consume the peeked character.
-            _ => match parse_u64(contents.value) {
-                Ok((value, _)) => contents.span.wrap(V::U64(value)),
-                Err(e) => error!(contents.span, "{e}"),
+            // If there's no suffix, parse as `InferredNum`, and don't consume the peeked character.
+            _ => match parse_u256(contents.value) {
+                Ok((value, _)) => contents.span.wrap(V::InferredNum(value)),
+                Err(_) => error!(contents.span, "Invalid integer literal"),
             },
         })
     }

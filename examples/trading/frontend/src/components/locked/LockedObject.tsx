@@ -4,7 +4,7 @@
 import { CONSTANTS } from "@/constants";
 import { useSuiClientQuery } from "@mysten/dapp-kit";
 import { Locked } from "./partials/Locked";
-import { SuiObjectData } from "@mysten/sui.js/client";
+import { SuiObjectData } from "@mysten/sui/client";
 
 /**
  * Acts as a wrapper between the `Locked` object fetched from API

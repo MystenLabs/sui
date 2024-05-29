@@ -40,6 +40,7 @@ use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use better_any::{Tid, TidAble};
+use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A,
@@ -49,7 +50,7 @@ use move_core_types::{
     runtime_value as R,
     vm_status::StatusCode,
 };
-use move_stdlib::natives::{GasParameters, NurseryGasParameters};
+use move_stdlib_natives::{GasParameters, NurseryGasParameters};
 use move_vm_runtime::native_functions::{NativeContext, NativeFunction, NativeFunctionTable};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
@@ -67,7 +68,8 @@ mod dynamic_field;
 mod event;
 mod object;
 pub mod object_runtime;
-mod test_scenario;
+mod random;
+pub mod test_scenario;
 mod test_utils;
 mod transfer;
 mod tx_context;
@@ -150,6 +152,9 @@ pub struct NativesCostTable {
 
     // group ops
     pub group_ops_cost_params: GroupOpsCostParams,
+
+    // vdf
+    pub vdf_cost_params: VDFCostParams,
 
     // zklogin
     pub check_zklogin_id_cost_params: CheckZkloginIdCostParams,
@@ -609,6 +614,14 @@ impl NativesCostTable {
                     .group_ops_bls12381_pairing_cost_as_option()
                     .map(Into::into),
             },
+            vdf_cost_params: VDFCostParams {
+                vdf_verify_cost: protocol_config
+                    .vdf_verify_vdf_cost_as_option()
+                    .map(Into::into),
+                hash_to_input_cost: protocol_config
+                    .vdf_hash_to_input_cost_as_option()
+                    .map(Into::into),
+            },
         }
     }
 }
@@ -696,6 +709,12 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(ed25519::ed25519_verify),
         ),
         ("event", "emit", make_native!(event::emit)),
+        (
+            "event",
+            "events_by_type",
+            make_native!(event::get_events_by_type),
+        ),
+        ("event", "num_events", make_native!(event::num_events)),
         (
             "groth16",
             "verify_groth16_proof_internal",
@@ -811,6 +830,16 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(test_scenario::ids_for_address),
         ),
         (
+            "test_scenario",
+            "allocate_receiving_ticket_for_object",
+            make_native!(test_scenario::allocate_receiving_ticket_for_object),
+        ),
+        (
+            "test_scenario",
+            "deallocate_receiving_ticket_for_object",
+            make_native!(test_scenario::deallocate_receiving_ticket_for_object),
+        ),
+        (
             "transfer",
             "transfer_impl",
             make_native!(transfer::transfer_internal),
@@ -847,6 +876,11 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(test_utils::create_one_time_witness),
         ),
         (
+            "random",
+            "generate_rand_seed_for_testing",
+            make_native!(random::generate_rand_seed_for_testing),
+        ),
+        (
             "zklogin_verified_id",
             "check_zklogin_id_internal",
             make_native!(zklogin::check_zklogin_id_internal),
@@ -860,6 +894,16 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "poseidon",
             "poseidon_bn254_internal",
             make_native!(poseidon::poseidon_bn254_internal),
+        ),
+        (
+            "vdf",
+            "vdf_verify_internal",
+            make_native!(vdf::vdf_verify_internal),
+        ),
+        (
+            "vdf",
+            "hash_to_input_internal",
+            make_native!(vdf::hash_to_input_internal),
         ),
     ];
     let sui_framework_natives_iter =
@@ -891,12 +935,12 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             )
         })
         .chain(sui_framework_natives_iter)
-        .chain(move_stdlib::natives::all_natives(
+        .chain(move_stdlib_natives::all_natives(
             MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params
             GasParameters::zeros(),
         ))
-        .chain(move_stdlib::natives::nursery_natives(
+        .chain(move_stdlib_natives::nursery_natives(
             silent,
             MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params

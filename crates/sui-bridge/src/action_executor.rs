@@ -7,11 +7,11 @@
 use mysten_metrics::spawn_logged_monitored_task;
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
+use sui_types::transaction::ObjectArg;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
-    committee::VALIDITY_THRESHOLD,
     crypto::{Signature, SuiKeyPair},
     digests::TransactionDigest,
     gas_coin::GasCoin,
@@ -19,12 +19,16 @@ use sui_types::{
     transaction::Transaction,
 };
 
+use crate::events::{
+    TokenTransferAlreadyApproved, TokenTransferAlreadyClaimed, TokenTransferApproved,
+    TokenTransferClaimed,
+};
 use crate::{
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
     error::BridgeError,
     storage::BridgeOrchestratorTables,
     sui_client::{SuiClient, SuiClientInner},
-    sui_transaction_builder::build_transaction,
+    sui_transaction_builder::build_sui_transaction,
     types::{BridgeAction, BridgeActionStatus, VerifiedCertifiedBridgeAction},
 };
 use std::sync::Arc;
@@ -64,6 +68,7 @@ pub struct BridgeActionExecutor<C> {
     sui_address: SuiAddress,
     gas_object_id: ObjectID,
     store: Arc<BridgeOrchestratorTables>,
+    bridge_object_arg: ObjectArg,
 }
 
 impl<C> BridgeActionExecutorTrait for BridgeActionExecutor<C>
@@ -85,7 +90,7 @@ impl<C> BridgeActionExecutor<C>
 where
     C: SuiClientInner + 'static,
 {
-    pub fn new(
+    pub async fn new(
         sui_client: Arc<SuiClient<C>>,
         bridge_auth_agg: Arc<BridgeAuthorityAggregator>,
         store: Arc<BridgeOrchestratorTables>,
@@ -93,6 +98,9 @@ where
         sui_address: SuiAddress,
         gas_object_id: ObjectID,
     ) -> Self {
+        let bridge_object_arg = sui_client
+            .get_mutable_bridge_object_arg_must_succeed()
+            .await;
         Self {
             sui_client,
             bridge_auth_agg,
@@ -100,6 +108,7 @@ where
             key,
             gas_object_id,
             sui_address,
+            bridge_object_arg,
         }
     }
 
@@ -153,6 +162,7 @@ where
                 self.store.clone(),
                 execution_tx_clone,
                 execution_rx,
+                self.bridge_object_arg,
             )
         ));
         (tasks, sender, execution_tx)
@@ -198,7 +208,10 @@ where
         store: &Arc<BridgeOrchestratorTables>,
     ) -> bool {
         let status = sui_client
-            .get_token_transfer_action_onchain_status_until_success(action)
+            .get_token_transfer_action_onchain_status_until_success(
+                action.chain_id() as u8,
+                action.seq_number(),
+            )
             .await;
         match status {
             BridgeActionStatus::Approved | BridgeActionStatus::Claimed => {
@@ -214,8 +227,8 @@ where
                 true
             }
             // Although theoretically a legit SuiToEthBridgeAction should not have
-            // status `RecordNotFound`
-            BridgeActionStatus::Pending | BridgeActionStatus::RecordNotFound => false,
+            // status `NotFound`
+            BridgeActionStatus::Pending | BridgeActionStatus::NotFound => false,
         }
     }
 
@@ -243,12 +256,7 @@ where
         {
             return;
         }
-
-        // TODO: use different threshold based on action types.
-        match auth_agg
-            .request_committee_signatures(action.clone(), VALIDITY_THRESHOLD)
-            .await
-        {
+        match auth_agg.request_committee_signatures(action.clone()).await {
             Ok(certificate) => {
                 execution_queue_sender
                     .send(CertifiedBridgeActionExecutionWrapper(certificate, 0))
@@ -285,8 +293,12 @@ where
         mut execution_queue_receiver: mysten_metrics::metered_channel::Receiver<
             CertifiedBridgeActionExecutionWrapper,
         >,
+        bridge_object_arg: ObjectArg,
     ) {
         info!("Starting run_onchain_execution_loop");
+        // Get token id maps, this must succeed to continue.
+        let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
+
         while let Some(certificate_wrapper) = execution_queue_receiver.recv().await {
             info!(
                 "Received certified action for execution: {:?}",
@@ -311,7 +323,16 @@ where
             let (_gas_coin, gas_object_ref) =
                 Self::get_gas_data_assert_ownership(sui_address, gas_object_id, &sui_client).await;
             let ceriticate_clone = certificate.clone();
-            let tx_data = match build_transaction(sui_address, &gas_object_ref, ceriticate_clone) {
+            info!("Building Sui transaction for action: {:?}", action);
+            let rgp = sui_client.get_reference_gas_price_until_success().await;
+            let tx_data = match build_sui_transaction(
+                sui_address,
+                &gas_object_ref,
+                ceriticate_clone,
+                bridge_object_arg,
+                &sui_token_type_tags,
+                rgp,
+            ) {
                 Ok(tx_data) => tx_data,
                 Err(err) => {
                     // TODO: add mertrics
@@ -337,10 +358,7 @@ where
                 .execute_transaction_block_with_effects(signed_tx)
                 .await
             {
-                Ok(effects) => {
-                    let effects = effects.effects.expect("We requested effects but got None.");
-                    Self::handle_execution_effects(tx_digest, effects, &store, action).await
-                }
+                Ok(resp) => Self::handle_execution_effects(tx_digest, resp, &store, action).await,
 
                 // If the transaction did not go through, retry up to a certain times.
                 Err(err) => {
@@ -373,13 +391,30 @@ where
     // TODO: do we need a mechanism to periodically read pending actions from DB?
     async fn handle_execution_effects(
         tx_digest: TransactionDigest,
-        effects: SuiTransactionBlockEffects,
+        response: SuiTransactionBlockResponse,
         store: &Arc<BridgeOrchestratorTables>,
         action: &BridgeAction,
     ) {
+        let effects = response
+            .effects
+            .clone()
+            .expect("We requested effects but got None.");
         let status = effects.status();
         match status {
             SuiExecutionStatus::Success => {
+                let events = response.events.expect("We requested events but got None.");
+                // If the transaction is successful, there must be either
+                // TokenTransferAlreadyClaimed or TokenTransferClaimed event.
+                assert!(events
+                    .data
+                    .iter()
+                    .any(|e| e.type_ == *TokenTransferAlreadyClaimed.get().unwrap()
+                        || e.type_ == *TokenTransferClaimed.get().unwrap()
+                        || e.type_ == *TokenTransferApproved.get().unwrap()
+                        || e.type_ == *TokenTransferAlreadyApproved.get().unwrap()),
+                    "Expected TokenTransferAlreadyClaimed, TokenTransferClaimed, TokenTransferApproved or TokenTransferAlreadyApproved event but got: {:?}",
+                    events,
+                    );
                 info!(?tx_digest, "Sui transaction executed successfully");
                 store
                     .remove_pending_actions(&[action.digest()])
@@ -434,13 +469,19 @@ pub async fn submit_to_executor(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
+    use crate::events::init_all_struct_tags;
+    use crate::test_utils::DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
-    use sui_json_rpc_types::SuiTransactionBlockResponse;
+    use std::collections::{BTreeMap, HashMap};
+    use std::str::FromStr;
+    use sui_json_rpc_types::SuiTransactionBlockEffects;
+    use sui_json_rpc_types::SuiTransactionBlockEvents;
+    use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockResponse};
+    use sui_types::bridge::{TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT};
     use sui_types::crypto::get_key_pair;
     use sui_types::gas_coin::GasCoin;
+    use sui_types::TypeTag;
     use sui_types::{base_types::random_object_ref, transaction::TransactionData};
 
     use crate::{
@@ -476,11 +517,8 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-        ) = setup();
-
-        // TODO: remove once we don't rely on env var to get object id
-        std::env::set_var("ROOT_BRIDGE_OBJECT_ID", "0x09");
-        std::env::set_var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION", "1");
+            id_token_map,
+        ) = setup().await;
 
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
@@ -488,7 +526,15 @@ mod tests {
         );
         let action = action_certificate.data().clone();
 
-        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
+        let tx_data = build_sui_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate,
+            DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+            &id_token_map,
+            1000,
+        )
+        .unwrap();
 
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
@@ -500,16 +546,20 @@ mod tests {
         );
 
         // Mock the transaction to be successfully executed
+        let mut event = SuiEvent::random_for_testing();
+        event.type_ = TokenTransferClaimed.get().unwrap().clone();
+        let events = vec![event];
         mock_transaction_response(
             &sui_client_mock,
             tx_digest,
             SuiExecutionStatus::Success,
+            Some(events),
             true,
         );
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -520,7 +570,7 @@ mod tests {
 
         // Expect to see the transaction to be requested and successfully executed hence removed from WAL
         tx_subscription.recv().await.unwrap();
-        assert!(store.get_all_pending_actions().unwrap().is_empty());
+        assert!(store.get_all_pending_actions().is_empty());
 
         /////////////////////////////////////////////////////////////////////////////////////////////////
         ////////////////////////////////////// Test execution failure ///////////////////////////////////
@@ -533,7 +583,15 @@ mod tests {
 
         let action = action_certificate.data().clone();
 
-        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
+        let tx_data = build_sui_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate,
+            DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+            &id_token_map,
+            1000,
+        )
+        .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
         // Mock the transaction to fail
@@ -543,12 +601,13 @@ mod tests {
             SuiExecutionStatus::Failure {
                 error: "failure is mother of success".to_string(),
             },
+            None,
             true,
         );
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -561,7 +620,7 @@ mod tests {
         tx_subscription.recv().await.unwrap();
         // The action is not removed from WAL because the transaction failed
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -576,7 +635,15 @@ mod tests {
 
         let action = action_certificate.data().clone();
 
-        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
+        let tx_data = build_sui_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate,
+            DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+            &id_token_map,
+            1000,
+        )
+        .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
         mock_transaction_error(
             &sui_client_mock,
@@ -587,7 +654,7 @@ mod tests {
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -603,14 +670,17 @@ mod tests {
         // The retry is still going on, action still in WAL
         assert!(store
             .get_all_pending_actions()
-            .unwrap()
             .contains_key(&action.digest()));
 
         // Now let it succeed
+        let mut event = SuiEvent::random_for_testing();
+        event.type_ = TokenTransferClaimed.get().unwrap().clone();
+        let events = vec![event];
         mock_transaction_response(
             &sui_client_mock,
             tx_digest,
             SuiExecutionStatus::Success,
+            Some(events),
             true,
         );
 
@@ -619,7 +689,6 @@ mod tests {
         // The action is successful and should be removed from WAL now
         assert!(!store
             .get_all_pending_actions()
-            .unwrap()
             .contains_key(&action.digest()));
     }
 
@@ -640,11 +709,8 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-        ) = setup();
-
-        // TODO: remove once we don't rely on env var to get object id
-        std::env::set_var("ROOT_BRIDGE_OBJECT_ID", "0x09");
-        std::env::set_var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION", "1");
+            id_token_map,
+        ) = setup().await;
 
         let (action_certificate, sui_tx_digest, sui_tx_event_index) =
             get_bridge_authority_approved_action(
@@ -674,7 +740,7 @@ mod tests {
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -699,7 +765,7 @@ mod tests {
         );
         // Still in WAL
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -717,14 +783,25 @@ mod tests {
             BridgeCommitteeValiditySignInfo { signatures: sigs },
         );
         let action_certificate = VerifiedCertifiedBridgeAction::new_from_verified(certified_action);
-
-        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
+        let tx_data = build_sui_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate,
+            DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+            &id_token_map,
+            1000,
+        )
+        .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
+        let mut event = SuiEvent::random_for_testing();
+        event.type_ = TokenTransferClaimed.get().unwrap().clone();
+        let events = vec![event];
         mock_transaction_response(
             &sui_client_mock,
             tx_digest,
             SuiExecutionStatus::Success,
+            Some(events),
             true,
         );
 
@@ -733,7 +810,6 @@ mod tests {
         // The action is removed from WAL
         assert!(!store
             .get_all_pending_actions()
-            .unwrap()
             .contains_key(&action.digest()));
     }
 
@@ -754,17 +830,17 @@ mod tests {
             _handles,
             _gas_object_ref,
             _sui_address,
-        ) = setup();
-
-        // TODO: remove once we don't rely on env var to get object id
-        std::env::set_var("ROOT_BRIDGE_OBJECT_ID", "0x09");
-        std::env::set_var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION", "1");
+            _id_token_map,
+        ) = setup().await;
 
         let sui_tx_digest = TransactionDigest::random();
         let sui_tx_event_index = 0;
         let action = get_test_sui_to_eth_bridge_action(
             Some(sui_tx_digest),
             Some(sui_tx_event_index),
+            None,
+            None,
+            None,
             None,
             None,
         );
@@ -775,7 +851,7 @@ mod tests {
         );
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -789,20 +865,13 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         tx_subscription.try_recv().unwrap_err();
         // And the action is still in WAL
-        assert!(store
-            .get_all_pending_actions()
-            .unwrap()
-            .contains_key(&action_digest));
+        assert!(store.get_all_pending_actions().contains_key(&action_digest));
 
         sui_client_mock.set_action_onchain_status(&action, BridgeActionStatus::Approved);
 
         // The next retry will see the action is already processed on chain and remove it from WAL
         let now = std::time::Instant::now();
-        while store
-            .get_all_pending_actions()
-            .unwrap()
-            .contains_key(&action_digest)
-        {
+        while store.get_all_pending_actions().contains_key(&action_digest) {
             if now.elapsed().as_secs() > 10 {
                 panic!("Timeout waiting for action to be removed from WAL");
             }
@@ -828,11 +897,8 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-        ) = setup();
-
-        // TODO: remove once we don't rely on env var to get object id
-        std::env::set_var("ROOT_BRIDGE_OBJECT_ID", "0x09");
-        std::env::set_var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION", "1");
+            id_token_map,
+        ) = setup().await;
 
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
@@ -840,9 +906,16 @@ mod tests {
         );
 
         let action = action_certificate.data().clone();
-
-        let tx_data =
-            build_transaction(sui_address, &gas_object_ref, action_certificate.clone()).unwrap();
+        let arg = DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
+        let tx_data = build_sui_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate.clone(),
+            arg,
+            &id_token_map,
+            1000,
+        )
+        .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
         mock_transaction_error(
             &sui_client_mock,
@@ -862,7 +935,7 @@ mod tests {
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -881,11 +954,7 @@ mod tests {
         // The next retry will see the action is already processed on chain and remove it from WAL
         let now = std::time::Instant::now();
         let action_digest = action.digest();
-        while store
-            .get_all_pending_actions()
-            .unwrap()
-            .contains_key(&action_digest)
-        {
+        while store.get_all_pending_actions().contains_key(&action_digest) {
             if now.elapsed().as_secs() > 10 {
                 panic!("Timeout waiting for action to be removed from WAL");
             }
@@ -940,6 +1009,9 @@ mod tests {
             Some(sui_tx_event_index),
             None,
             None,
+            None,
+            None,
+            None,
         );
 
         let sigs =
@@ -971,10 +1043,14 @@ mod tests {
         sui_client_mock: &SuiMockClient,
         tx_digest: TransactionDigest,
         status: SuiExecutionStatus,
+        events: Option<Vec<SuiEvent>>,
         wildcard: bool,
     ) {
         let mut response = SuiTransactionBlockResponse::new(tx_digest);
         let effects = SuiTransactionBlockEffects::new_for_testing(tx_digest, status);
+        if let Some(events) = events {
+            response.events = Some(SuiTransactionBlockEvents { data: events });
+        }
         response.effects = Some(effects);
         if wildcard {
             sui_client_mock.set_wildcard_transaction_response(Ok(response));
@@ -997,7 +1073,7 @@ mod tests {
     }
 
     #[allow(clippy::type_complexity)]
-    fn setup() -> (
+    async fn setup() -> (
         mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
         mysten_metrics::metered_channel::Sender<CertifiedBridgeActionExecutionWrapper>,
         SuiMockClient,
@@ -1012,10 +1088,12 @@ mod tests {
         Vec<tokio::task::JoinHandle<()>>,
         ObjectRef,
         SuiAddress,
+        HashMap<u8, TypeTag>,
     ) {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
         mysten_metrics::init_metrics(&registry);
+        init_all_struct_tags();
 
         let (sui_address, kp): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
         let sui_key = SuiKeyPair::from(kp);
@@ -1052,10 +1130,19 @@ mod tests {
             sui_key,
             sui_address,
             gas_object_ref.0,
-        );
+        )
+        .await;
 
         let (executor_handle, signing_tx, execution_tx) = executor.run_inner();
         handles.extend(executor_handle);
+
+        // Mock id token type map for testing
+        let mut id_token_map = HashMap::new();
+        id_token_map.insert(TOKEN_ID_BTC, TypeTag::from_str("0xb::btc::BTC").unwrap());
+        id_token_map.insert(TOKEN_ID_ETH, TypeTag::from_str("0xb::eth::ETH").unwrap());
+        id_token_map.insert(TOKEN_ID_USDC, TypeTag::from_str("0xb::usdc::USDC").unwrap());
+        id_token_map.insert(TOKEN_ID_USDT, TypeTag::from_str("0xb::usdt::USDT").unwrap());
+
         (
             signing_tx,
             execution_tx,
@@ -1071,6 +1158,7 @@ mod tests {
             handles,
             gas_object_ref,
             sui_address,
+            id_token_map,
         )
     }
 }

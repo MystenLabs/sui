@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::package_cache::PackageCache;
 use async_graphql::*;
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{annotated_value as A, language_storage::TypeTag};
 use serde::{Deserialize, Serialize};
-use sui_package_resolver::Resolver;
 
+use crate::data::package_resolver::PackageResolver;
 use crate::error::Error;
 
 use super::open_move_type::MoveAbility;
@@ -54,7 +53,15 @@ type MoveTypeLayout =
         type: string,
         fields: [{ name: string, layout: MoveTypeLayout }],
       }
-    }"
+    }
+  | { enum: [{
+          type: string,
+          variants: [{ 
+              name: string,
+              fields: [{ name: string, layout: MoveTypeLayout }],
+          }]
+      }] 
+  }"
 );
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -92,6 +99,7 @@ pub(crate) enum MoveTypeLayout {
     U256,
     Vector(Box<MoveTypeLayout>),
     Struct(MoveStructLayout),
+    Enum(MoveEnumLayout),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -99,6 +107,17 @@ pub(crate) struct MoveStructLayout {
     #[serde(rename = "type")]
     type_: String,
     fields: Vec<MoveFieldLayout>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct MoveEnumLayout {
+    variants: Vec<MoveVariantLayout>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct MoveVariantLayout {
+    name: String,
+    layout: Vec<MoveFieldLayout>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -123,7 +142,7 @@ impl MoveType {
 
     /// Structured representation of the "shape" of values that match this type.
     async fn layout(&self, ctx: &Context<'_>) -> Result<MoveTypeLayout> {
-        let resolver: &Resolver<PackageCache> = ctx
+        let resolver: &PackageResolver = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
@@ -133,7 +152,7 @@ impl MoveType {
 
     /// The abilities this concrete type has.
     async fn abilities(&self, ctx: &Context<'_>) -> Result<Vec<MoveAbility>> {
-        let resolver: &Resolver<PackageCache> = ctx
+        let resolver: &PackageResolver = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
@@ -159,7 +178,7 @@ impl MoveType {
 
     pub(crate) async fn layout_impl(
         &self,
-        resolver: &Resolver<PackageCache>,
+        resolver: &PackageResolver,
     ) -> Result<A::MoveTypeLayout, Error> {
         resolver
             .type_layout(self.native.clone())
@@ -174,7 +193,7 @@ impl MoveType {
 
     pub(crate) async fn abilities_impl(
         &self,
-        resolver: &Resolver<PackageCache>,
+        resolver: &PackageResolver,
     ) -> Result<AbilitySet, Error> {
         resolver.abilities(self.native.clone()).await.map_err(|e| {
             Error::Internal(format!(
@@ -241,6 +260,30 @@ impl TryFrom<A::MoveTypeLayout> for MoveTypeLayout {
 
             TL::Vector(v) => Self::Vector(Box::new(Self::try_from(*v)?)),
             TL::Struct(s) => Self::Struct(s.try_into()?),
+            TL::Enum(e) => Self::Enum(e.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<A::MoveEnumLayout> for MoveEnumLayout {
+    type Error = Error;
+
+    fn try_from(layout: A::MoveEnumLayout) -> Result<Self, Error> {
+        let A::MoveEnumLayout { variants, .. } = layout;
+        let mut variant_layouts = Vec::new();
+        for ((name, _), variant_fields) in variants {
+            let mut field_layouts = Vec::new();
+            for field in variant_fields {
+                field_layouts.push(MoveFieldLayout::try_from(field)?);
+            }
+            variant_layouts.push(MoveVariantLayout {
+                name: name.to_string(),
+                layout: field_layouts,
+            });
+        }
+
+        Ok(MoveEnumLayout {
+            variants: variant_layouts,
         })
     }
 }

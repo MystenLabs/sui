@@ -2,18 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
-    binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::{
-        CompiledModule, CompiledScript, SignatureToken, StructFieldInformation, TableIndex,
-    },
+    file_format::{CompiledModule, SignatureToken, StructFieldInformation, TableIndex},
     IndexKind,
 };
 use move_core_types::{runtime_value::MoveValue, vm_status::StatusCode};
 use move_vm_config::verifier::VerifierConfig;
 
 pub struct LimitsVerifier<'a> {
-    resolver: BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
 }
 
 impl<'a> LimitsVerifier<'a> {
@@ -26,39 +23,21 @@ impl<'a> LimitsVerifier<'a> {
         config: &VerifierConfig,
         module: &'a CompiledModule,
     ) -> PartialVMResult<()> {
-        let limit_check = Self {
-            resolver: BinaryIndexedView::Module(module),
-        };
+        let limit_check = Self { resolver: module };
         limit_check.verify_constants(config)?;
         limit_check.verify_function_handles(config)?;
-        limit_check.verify_struct_handles(config)?;
+        limit_check.verify_datatype_handles(config)?;
         limit_check.verify_type_nodes(config)?;
         limit_check.verify_identifiers(config)?;
         limit_check.verify_definitions(config)
     }
 
-    pub fn verify_script(config: &VerifierConfig, module: &'a CompiledScript) -> VMResult<()> {
-        Self::verify_script_impl(config, module).map_err(|e| e.finish(Location::Script))
-    }
-
-    fn verify_script_impl(
-        config: &VerifierConfig,
-        script: &'a CompiledScript,
-    ) -> PartialVMResult<()> {
-        let limit_check = Self {
-            resolver: BinaryIndexedView::Script(script),
-        };
-        limit_check.verify_function_handles(config)?;
-        limit_check.verify_struct_handles(config)?;
-        limit_check.verify_type_nodes(config)
-    }
-
-    fn verify_struct_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
+    fn verify_datatype_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
         if let Some(limit) = config.max_generic_instantiation_length {
-            for (idx, struct_handle) in self.resolver.struct_handles().iter().enumerate() {
+            for (idx, struct_handle) in self.resolver.datatype_handles().iter().enumerate() {
                 if struct_handle.type_parameters.len() > limit {
                     return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_PARAMETERS)
-                        .at_index(IndexKind::StructHandle, idx as u16));
+                        .at_index(IndexKind::DatatypeHandle, idx as u16));
                 }
             }
         }
@@ -98,7 +77,8 @@ impl<'a> LimitsVerifier<'a> {
         for cons in self.resolver.constant_pool() {
             self.verify_type_node(config, &cons.type_)?
         }
-        if let Some(sdefs) = self.resolver.struct_defs() {
+        let sdefs = self.resolver.struct_defs();
+        {
             for sdef in sdefs {
                 if let StructFieldInformation::Declared(fdefs) = &sdef.field_information {
                     for fdef in fdefs {
@@ -125,7 +105,7 @@ impl<'a> LimitsVerifier<'a> {
                 // Notice that the preorder traversal will iterate all type instantiations, so we
                 // why we can ignore them below.
                 match t {
-                    SignatureToken::Struct(..) | SignatureToken::StructInstantiation(..) => {
+                    SignatureToken::Datatype(..) | SignatureToken::DatatypeInstantiation(..) => {
                         size += STRUCT_SIZE_WEIGHT
                     }
                     SignatureToken::TypeParameter(..) => size += PARAM_SIZE_WEIGHT,
@@ -140,7 +120,8 @@ impl<'a> LimitsVerifier<'a> {
     }
 
     fn verify_definitions(&self, config: &VerifierConfig) -> PartialVMResult<()> {
-        if let Some(defs) = self.resolver.function_defs() {
+        let defs = self.resolver.function_defs();
+        {
             if let Some(max_function_definitions) = config.max_function_definitions {
                 if defs.len() > max_function_definitions {
                     return Err(PartialVMError::new(
@@ -149,8 +130,9 @@ impl<'a> LimitsVerifier<'a> {
                 }
             }
         }
-        if let Some(defs) = self.resolver.struct_defs() {
-            if let Some(max_struct_definitions) = config.max_struct_definitions {
+        let defs = self.resolver.struct_defs();
+        {
+            if let Some(max_struct_definitions) = config.max_data_definitions {
                 if defs.len() > max_struct_definitions {
                     return Err(PartialVMError::new(
                         StatusCode::MAX_STRUCT_DEFINITIONS_REACHED,

@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::object`
 ---
@@ -18,6 +17,7 @@ Sui object identifiers
 -  [Function `authenticator_state`](#0x2_object_authenticator_state)
 -  [Function `randomness_state`](#0x2_object_randomness_state)
 -  [Function `sui_deny_list_object_id`](#0x2_object_sui_deny_list_object_id)
+-  [Function `bridge`](#0x2_object_bridge)
 -  [Function `uid_as_inner`](#0x2_object_uid_as_inner)
 -  [Function `uid_to_inner`](#0x2_object_uid_to_inner)
 -  [Function `uid_to_bytes`](#0x2_object_uid_to_bytes)
@@ -132,6 +132,16 @@ The hardcoded ID for the singleton AuthenticatorState Object.
 
 
 
+<a name="0x2_object_SUI_BRIDGE_ID"></a>
+
+The hardcoded ID for the Bridge Object.
+
+
+<pre><code><b>const</b> <a href="../sui-framework/object.md#0x2_object_SUI_BRIDGE_ID">SUI_BRIDGE_ID</a>: <b>address</b> = 9;
+</code></pre>
+
+
+
 <a name="0x2_object_SUI_CLOCK_OBJECT_ID"></a>
 
 The hardcoded ID for the singleton Clock Object.
@@ -239,7 +249,7 @@ Make an <code><a href="../sui-framework/object.md#0x2_object_ID">ID</a></code> f
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/object.md#0x2_object_id_from_bytes">id_from_bytes</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../sui-framework/object.md#0x2_object_ID">ID</a> {
-    <a href="../sui-framework/object.md#0x2_object_id_from_address">id_from_address</a>(address::from_bytes(bytes))
+    address::from_bytes(bytes).to_id()
 }
 </code></pre>
 
@@ -290,7 +300,7 @@ This should only be called once from <code>sui_system</code>.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/object.md#0x2_object_sui_system_state">sui_system_state</a>(ctx: &TxContext): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../sui-framework/object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>);
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_SYSTEM_STATE_OBJECT_ID">SUI_SYSTEM_STATE_OBJECT_ID</a> },
     }
@@ -318,7 +328,7 @@ This should only be called once from <code><a href="../sui-framework/clock.md#0x
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/clock.md#0x2_clock">clock</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/clock.md#0x2_clock">clock</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_CLOCK_OBJECT_ID">SUI_CLOCK_OBJECT_ID</a> }
     }
@@ -346,7 +356,7 @@ This should only be called once from <code><a href="../sui-framework/authenticat
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state">authenticator_state</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state">authenticator_state</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_AUTHENTICATOR_STATE_ID">SUI_AUTHENTICATOR_STATE_ID</a> }
     }
@@ -374,7 +384,7 @@ This should only be called once from <code><a href="../sui-framework/random.md#0
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_randomness_state">randomness_state</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_randomness_state">randomness_state</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_RANDOM_ID">SUI_RANDOM_ID</a> }
     }
@@ -402,9 +412,37 @@ This should only be called once from <code><a href="../sui-framework/deny_list.m
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_DENY_LIST_OBJECT_ID">SUI_DENY_LIST_OBJECT_ID</a> }
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_bridge"></a>
+
+## Function `bridge`
+
+Create the <code><a href="../sui-framework/object.md#0x2_object_UID">UID</a></code> for the singleton <code>Bridge</code> object.
+This should only be called once from <code>bridge</code>.
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/object.md#0x2_object_bridge">bridge</a>(): <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/object.md#0x2_object_bridge">bridge</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+    <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+        id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_BRIDGE_ID">SUI_BRIDGE_ID</a> }
     }
 }
 </code></pre>
@@ -532,7 +570,7 @@ This is the only way to create <code><a href="../sui-framework/object.md#0x2_obj
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/object.md#0x2_object_new">new</a>(ctx: &<b>mut</b> TxContext): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
-        id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/tx_context.md#0x2_tx_context_fresh_object_address">tx_context::fresh_object_address</a>(ctx) },
+        id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: ctx.fresh_object_address() },
     }
 }
 </code></pre>
@@ -710,7 +748,7 @@ Generate a new UID specifically used for creating a UID from a hash
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_record_new_uid">record_new_uid</a>(bytes);
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> { id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes } }
 }

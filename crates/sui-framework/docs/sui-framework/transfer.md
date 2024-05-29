@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::transfer`
 ---
@@ -326,7 +325,7 @@ that <code>T</code> is an object defined in the module where <code>receive</code
         id,
         version,
     } = to_receive;
-    <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>(<a href="../sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(parent), id, version)
+    <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>(parent.to_address(), id, version)
 }
 </code></pre>
 
@@ -358,7 +357,7 @@ The object must have <code>store</code> to be received outside of its defining m
         id,
         version,
     } = to_receive;
-    <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>(<a href="../sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(parent), id, version)
+    <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>(parent.to_address(), id, version)
 }
 </code></pre>
 
@@ -406,7 +405,7 @@ Return the object ID that the given <code><a href="../sui-framework/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_freeze_object_impl">freeze_object_impl</a>&lt;T: key&gt;(obj: T);
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_freeze_object_impl">freeze_object_impl</a>&lt;T: key&gt;(obj: T);
 </code></pre>
 
 
@@ -428,7 +427,7 @@ Return the object ID that the given <code><a href="../sui-framework/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_share_object_impl">share_object_impl</a>&lt;T: key&gt;(obj: T);
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_share_object_impl">share_object_impl</a>&lt;T: key&gt;(obj: T);
 </code></pre>
 
 
@@ -450,7 +449,7 @@ Return the object ID that the given <code><a href="../sui-framework/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_transfer_impl">transfer_impl</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>);
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_transfer_impl">transfer_impl</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>);
 </code></pre>
 
 
@@ -472,7 +471,7 @@ Return the object ID that the given <code><a href="../sui-framework/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>&lt;T: key&gt;(parent: <b>address</b>, to_receive: <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>, version: u64): T;
+<pre><code><b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>&lt;T: key&gt;(parent: <b>address</b>, to_receive: ID, version: u64): T;
 </code></pre>
 
 

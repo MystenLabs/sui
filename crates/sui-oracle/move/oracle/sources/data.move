@@ -4,12 +4,12 @@
 module oracle::data {
     use std::string::String;
 
-    struct Data<T> has drop, copy {
+    public struct Data<T> has drop, copy {
         value: T,
         metadata: Metadata,
     }
 
-    struct Metadata has drop, copy {
+    public struct Metadata has drop, copy {
         ticker: String,
         sequence_number: u64,
         timestamp: u64,

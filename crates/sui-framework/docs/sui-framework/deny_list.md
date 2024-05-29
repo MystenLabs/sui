@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::deny_list`
 ---
@@ -21,7 +20,8 @@ list.
 -  [Function `per_type_list`](#0x2_deny_list_per_type_list)
 
 
-<pre><code><b>use</b> <a href="../sui-framework/bag.md#0x2_bag">0x2::bag</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
+<b>use</b> <a href="../sui-framework/bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../sui-framework/table.md#0x2_table">0x2::table</a>;
 <b>use</b> <a href="../sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
@@ -133,12 +133,34 @@ The index into the deny list vector for the <code>sui::coin::Coin</code> type.
 
 
 
+<a name="0x2_deny_list_EInvalidAddress"></a>
+
+The specified address cannot be added to the deny list.
+
+
+<pre><code><b>const</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_EInvalidAddress">EInvalidAddress</a>: u64 = 1;
+</code></pre>
+
+
+
 <a name="0x2_deny_list_ENotDenied"></a>
 
 The specified address to be removed is not already in the deny list.
 
 
 <pre><code><b>const</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_deny_list_RESERVED"></a>
+
+These addresses are reserved and cannot be added to the deny list.
+The addresses listed are well known package and object addresses. So it would be
+meaningless to add them to the deny list.
+
+
+<pre><code><b>const</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_RESERVED">RESERVED</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt; = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1027, 57065];
 </code></pre>
 
 
@@ -162,13 +184,16 @@ the type specified is the type of the coin, not the coin type itself. For exampl
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_add">add</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_add">add</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    type: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(<a href="../sui-framework/bag.md#0x2_bag_borrow_mut">bag::borrow_mut</a>(&<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), type, addr)
+    <b>let</b> reserved = <a href="../sui-framework/deny_list.md#0x2_deny_list_RESERVED">RESERVED</a>;
+    <b>assert</b>!(!reserved.<a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(&addr), <a href="../sui-framework/deny_list.md#0x2_deny_list_EInvalidAddress">EInvalidAddress</a>);
+    <b>let</b> bag_entry: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a> = &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists[per_type_index];
+    bag_entry.<a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(`type`, addr)
 }
 </code></pre>
 
@@ -193,21 +218,21 @@ the type specified is the type of the coin, not the coin type itself. For exampl
 
 <pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(
     list: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
-    type: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <b>if</b> (!<a href="../sui-framework/table.md#0x2_table_contains">table::contains</a>(&list.denied_addresses, type)) {
-        <a href="../sui-framework/table.md#0x2_table_add">table::add</a>(&<b>mut</b> list.denied_addresses, type, <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">vec_set::empty</a>());
+    <b>if</b> (!list.denied_addresses.<a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(`type`)) {
+        list.denied_addresses.<a href="../sui-framework/deny_list.md#0x2_deny_list_add">add</a>(`type`, <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">vec_set::empty</a>());
     };
-    <b>let</b> denied_addresses = <a href="../sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_addresses, type);
-    <b>let</b> already_denied = <a href="../sui-framework/vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(denied_addresses, &addr);
+    <b>let</b> denied_addresses = &<b>mut</b> list.denied_addresses[`type`];
+    <b>let</b> already_denied = denied_addresses.<a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(&addr);
     <b>if</b> (already_denied) <b>return</b>;
 
-    <a href="../sui-framework/vec_set.md#0x2_vec_set_insert">vec_set::insert</a>(denied_addresses, addr);
-    <b>if</b> (!<a href="../sui-framework/table.md#0x2_table_contains">table::contains</a>(&list.denied_count, addr)) {
-        <a href="../sui-framework/table.md#0x2_table_add">table::add</a>(&<b>mut</b> list.denied_count, addr, 0);
+    denied_addresses.insert(addr);
+    <b>if</b> (!list.denied_count.<a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(addr)) {
+        list.denied_count.<a href="../sui-framework/deny_list.md#0x2_deny_list_add">add</a>(addr, 0);
     };
-    <b>let</b> denied_count = <a href="../sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_count, addr);
+    <b>let</b> denied_count = &<b>mut</b> list.denied_count[addr];
     *denied_count = *denied_count + 1;
 }
 </code></pre>
@@ -233,13 +258,15 @@ Aborts with <code><a href="../sui-framework/deny_list.md#0x2_deny_list_ENotDenie
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_remove">remove</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_remove">remove</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    type: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_remove">per_type_list_remove</a>(<a href="../sui-framework/bag.md#0x2_bag_borrow_mut">bag::borrow_mut</a>(&<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), type, addr)
+    <b>let</b> reserved = <a href="../sui-framework/deny_list.md#0x2_deny_list_RESERVED">RESERVED</a>;
+    <b>assert</b>!(!reserved.<a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(&addr), <a href="../sui-framework/deny_list.md#0x2_deny_list_EInvalidAddress">EInvalidAddress</a>);
+    <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_remove">per_type_list_remove</a>(&<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists[per_type_index], `type`, addr)
 }
 </code></pre>
 
@@ -264,16 +291,16 @@ Aborts with <code><a href="../sui-framework/deny_list.md#0x2_deny_list_ENotDenie
 
 <pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_remove">per_type_list_remove</a>(
     list: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
-    type: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <b>let</b> denied_addresses = <a href="../sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_addresses, type);
-    <b>assert</b>!(<a href="../sui-framework/vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(denied_addresses, &addr), <a href="../sui-framework/deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a>);
-    <a href="../sui-framework/vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(denied_addresses, &addr);
-    <b>let</b> denied_count = <a href="../sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_count, addr);
+    <b>let</b> denied_addresses = &<b>mut</b> list.denied_addresses[`type`];
+    <b>assert</b>!(denied_addresses.<a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(&addr), <a href="../sui-framework/deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a>);
+    denied_addresses.<a href="../sui-framework/deny_list.md#0x2_deny_list_remove">remove</a>(&addr);
+    <b>let</b> denied_count = &<b>mut</b> list.denied_count[addr];
     *denied_count = *denied_count - 1;
     <b>if</b> (*denied_count == 0) {
-        <a href="../sui-framework/table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> list.denied_count, addr);
+        list.denied_count.<a href="../sui-framework/deny_list.md#0x2_deny_list_remove">remove</a>(addr);
     }
 }
 </code></pre>
@@ -298,13 +325,15 @@ Returns true iff the given address is denied for the given type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    type: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ): bool {
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_contains">per_type_list_contains</a>(<a href="../sui-framework/bag.md#0x2_bag_borrow">bag::borrow</a>(&<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), type, addr)
+    <b>let</b> reserved = <a href="../sui-framework/deny_list.md#0x2_deny_list_RESERVED">RESERVED</a>;
+    <b>if</b> (reserved.<a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(&addr)) <b>return</b> <b>false</b>;
+    <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_contains">per_type_list_contains</a>(&<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists[per_type_index], `type`, addr)
 }
 </code></pre>
 
@@ -329,18 +358,18 @@ Returns true iff the given address is denied for the given type.
 
 <pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_contains">per_type_list_contains</a>(
     list: &<a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
-    type: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ): bool {
-    <b>if</b> (!<a href="../sui-framework/table.md#0x2_table_contains">table::contains</a>(&list.denied_count, addr)) <b>return</b> <b>false</b>;
+    <b>if</b> (!list.denied_count.<a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(addr)) <b>return</b> <b>false</b>;
 
-    <b>let</b> denied_count = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&list.denied_count, addr);
+    <b>let</b> denied_count = &list.denied_count[addr];
     <b>if</b> (*denied_count == 0) <b>return</b> <b>false</b>;
 
-    <b>if</b> (!<a href="../sui-framework/table.md#0x2_table_contains">table::contains</a>(&list.denied_addresses, type)) <b>return</b> <b>false</b>;
+    <b>if</b> (!list.denied_addresses.<a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(`type`)) <b>return</b> <b>false</b>;
 
-    <b>let</b> denied_addresses = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&list.denied_addresses, type);
-    <a href="../sui-framework/vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(denied_addresses, &addr)
+    <b>let</b> denied_addresses = &list.denied_addresses[`type`];
+    denied_addresses.<a href="../sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(&addr)
 }
 </code></pre>
 
@@ -366,10 +395,10 @@ via a system transaction.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_create">create</a>(ctx: &<b>mut</b> TxContext) {
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../sui-framework/deny_list.md#0x2_deny_list_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/deny_list.md#0x2_deny_list_ENotSystemAddress">ENotSystemAddress</a>);
 
-    <b>let</b> lists = <a href="../sui-framework/bag.md#0x2_bag_new">bag::new</a>(ctx);
-    <a href="../sui-framework/bag.md#0x2_bag_add">bag::add</a>(&<b>mut</b> lists, <a href="../sui-framework/deny_list.md#0x2_deny_list_COIN_INDEX">COIN_INDEX</a>, <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list">per_type_list</a>(ctx));
+    <b>let</b> <b>mut</b> lists = <a href="../sui-framework/bag.md#0x2_bag_new">bag::new</a>(ctx);
+    lists.<a href="../sui-framework/deny_list.md#0x2_deny_list_add">add</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list_COIN_INDEX">COIN_INDEX</a>, <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list">per_type_list</a>(ctx));
     <b>let</b> deny_list_object = <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a> {
         id: <a href="../sui-framework/object.md#0x2_object_sui_deny_list_object_id">object::sui_deny_list_object_id</a>(),
         lists,

@@ -2,27 +2,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use invalid_mutations::bounds::{
-    ApplyCodeUnitBoundsContext, ApplyOutOfBoundsContext, CodeUnitBoundsMutation,
-    OutOfBoundsMutation,
-};
-use move_binary_format::{
-    check_bounds::BoundsChecker, file_format::*, file_format_common,
-    proptest_types::CompiledModuleStrategyGen,
-};
-use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
-};
-use proptest::{collection::vec, prelude::*};
+use move_binary_format::{check_bounds::BoundsChecker, file_format::*, file_format_common};
+use move_core_types::vm_status::StatusCode;
 
 #[test]
 fn empty_module_no_errors() {
     BoundsChecker::verify_module(&basic_test_module()).unwrap();
-}
-
-#[test]
-fn empty_script_no_errors() {
-    BoundsChecker::verify_script(&basic_test_script()).unwrap();
 }
 
 #[test]
@@ -72,26 +57,13 @@ fn invalid_type_param_in_fn_parameters() {
 }
 
 #[test]
-fn invalid_type_param_in_script_parameters() {
-    use SignatureToken::*;
-
-    let mut s = basic_test_script();
-    s.parameters = SignatureIndex(1);
-    s.signatures.push(Signature(vec![TypeParameter(0)]));
-    assert_eq!(
-        BoundsChecker::verify_script(&s).unwrap_err().major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
-    );
-}
-
-#[test]
 fn invalid_struct_in_fn_return_() {
     use SignatureToken::*;
 
     let mut m = basic_test_module();
     m.function_handles[0].return_ = SignatureIndex(1);
     m.signatures
-        .push(Signature(vec![Struct(StructHandleIndex::new(1))]));
+        .push(Signature(vec![Datatype(DatatypeHandleIndex::new(1))]));
     assert_eq!(
         BoundsChecker::verify_module(&m).unwrap_err().major_status(),
         StatusCode::INDEX_OUT_OF_BOUNDS
@@ -122,7 +94,7 @@ fn invalid_struct_in_field() {
     let mut m = basic_test_module();
     match &mut m.struct_defs[0].field_information {
         StructFieldInformation::Declared(ref mut fields) => {
-            fields[0].signature.0 = Struct(StructHandleIndex::new(3));
+            fields[0].signature.0 = Datatype(DatatypeHandleIndex::new(3));
             assert_eq!(
                 BoundsChecker::verify_module(&m).unwrap_err().major_status(),
                 StatusCode::INDEX_OUT_OF_BOUNDS
@@ -139,8 +111,10 @@ fn invalid_struct_with_actuals_in_field() {
     let mut m = basic_test_module();
     match &mut m.struct_defs[0].field_information {
         StructFieldInformation::Declared(ref mut fields) => {
-            fields[0].signature.0 =
-                StructInstantiation(Box::new((StructHandleIndex::new(0), vec![TypeParameter(0)])));
+            fields[0].signature.0 = DatatypeInstantiation(Box::new((
+                DatatypeHandleIndex::new(0),
+                vec![TypeParameter(0)],
+            )));
             assert_eq!(
                 BoundsChecker::verify_module(&m).unwrap_err().major_status(),
                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH
@@ -168,23 +142,6 @@ fn invalid_locals_id_in_call() {
 }
 
 #[test]
-fn script_invalid_locals_id_in_call() {
-    use Bytecode::*;
-
-    let mut s = basic_test_script();
-    s.function_instantiations.push(FunctionInstantiation {
-        handle: FunctionHandleIndex::new(0),
-        type_parameters: SignatureIndex::new(1),
-    });
-    let func_inst_idx = FunctionInstantiationIndex(s.function_instantiations.len() as u16 - 1);
-    s.code.code = vec![CallGeneric(func_inst_idx)];
-    assert_eq!(
-        BoundsChecker::verify_script(&s).unwrap_err().major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
-    );
-}
-
-#[test]
 fn invalid_type_param_in_call() {
     use Bytecode::*;
     use SignatureToken::*;
@@ -204,32 +161,13 @@ fn invalid_type_param_in_call() {
 }
 
 #[test]
-fn script_invalid_type_param_in_call() {
-    use Bytecode::*;
-    use SignatureToken::*;
-
-    let mut s = basic_test_script();
-    s.signatures.push(Signature(vec![TypeParameter(0)]));
-    s.function_instantiations.push(FunctionInstantiation {
-        handle: FunctionHandleIndex::new(0),
-        type_parameters: SignatureIndex::new(1),
-    });
-    let func_inst_idx = FunctionInstantiationIndex(s.function_instantiations.len() as u16 - 1);
-    s.code.code = vec![CallGeneric(func_inst_idx)];
-    assert_eq!(
-        BoundsChecker::verify_script(&s).unwrap_err().major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
-    );
-}
-
-#[test]
 fn invalid_struct_as_type_actual_in_exists() {
     use Bytecode::*;
     use SignatureToken::*;
 
     let mut m = basic_test_module();
     m.signatures
-        .push(Signature(vec![Struct(StructHandleIndex::new(3))]));
+        .push(Signature(vec![Datatype(DatatypeHandleIndex::new(3))]));
     m.function_instantiations.push(FunctionInstantiation {
         handle: FunctionHandleIndex::new(0),
         type_parameters: SignatureIndex::new(1),
@@ -238,26 +176,6 @@ fn invalid_struct_as_type_actual_in_exists() {
     m.function_defs[0].code.as_mut().unwrap().code = vec![CallGeneric(func_inst_idx)];
     assert_eq!(
         BoundsChecker::verify_module(&m).unwrap_err().major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
-    );
-}
-
-#[test]
-fn script_invalid_struct_as_type_argument_in_exists() {
-    use Bytecode::*;
-    use SignatureToken::*;
-
-    let mut s = basic_test_script();
-    s.signatures
-        .push(Signature(vec![Struct(StructHandleIndex::new(3))]));
-    s.function_instantiations.push(FunctionInstantiation {
-        handle: FunctionHandleIndex::new(0),
-        type_parameters: SignatureIndex::new(1),
-    });
-    let func_inst_idx = FunctionInstantiationIndex(s.function_instantiations.len() as u16 - 1);
-    s.code.code = vec![CallGeneric(func_inst_idx)];
-    assert_eq!(
-        BoundsChecker::verify_script(&s).unwrap_err().major_status(),
         StatusCode::INDEX_OUT_OF_BOUNDS
     );
 }
@@ -289,25 +207,12 @@ fn invalid_friend_module_name() {
 }
 
 #[test]
-fn script_missing_signature() {
-    // The basic test script includes parameters pointing to an empty signature.
-    let mut s = basic_test_script();
-    // Remove the empty signature from the script.
-    s.signatures.clear();
-    // Bounds-checking the script should now result in an out-of-bounds error.
-    assert_eq!(
-        BoundsChecker::verify_script(&s).unwrap_err().major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
-    );
-}
-
-#[test]
 fn invalid_signature_for_vector_operation() {
     use Bytecode::*;
 
     let skeleton = basic_test_module();
     let sig_index = SignatureIndex(skeleton.signatures.len() as u16);
-    for bytecode in vec![
+    for bytecode in [
         VecPack(sig_index, 0),
         VecLen(sig_index),
         VecImmBorrow(sig_index),
@@ -334,9 +239,9 @@ fn invalid_struct_for_vector_operation() {
     let mut skeleton = basic_test_module();
     skeleton
         .signatures
-        .push(Signature(vec![Struct(StructHandleIndex::new(3))]));
+        .push(Signature(vec![Datatype(DatatypeHandleIndex::new(3))]));
     let sig_index = SignatureIndex((skeleton.signatures.len() - 1) as u16);
-    for bytecode in vec![
+    for bytecode in [
         VecPack(sig_index, 0),
         VecLen(sig_index),
         VecImmBorrow(sig_index),
@@ -363,7 +268,7 @@ fn invalid_type_param_for_vector_operation() {
     let mut skeleton = basic_test_module();
     skeleton.signatures.push(Signature(vec![TypeParameter(0)]));
     let sig_index = SignatureIndex((skeleton.signatures.len() - 1) as u16);
-    for bytecode in vec![
+    for bytecode in [
         VecPack(sig_index, 0),
         VecLen(sig_index),
         VecImmBorrow(sig_index),
@@ -382,83 +287,76 @@ fn invalid_type_param_for_vector_operation() {
     }
 }
 
-proptest! {
-    #[test]
-    fn valid_bounds(_module in CompiledModule::valid_strategy(20)) {
-        // valid_strategy will panic if there are any bounds check issues.
-    }
-}
-
-/// Ensure that valid modules that don't have any members (e.g. function args, struct fields) pass
-/// bounds checks.
-///
-/// There are some potentially tricky edge cases around ranges that are captured here.
 #[test]
-fn valid_bounds_no_members() {
-    let mut gen = CompiledModuleStrategyGen::new(20);
-    gen.zeros_all();
-    proptest!(|(_module in gen.generate())| {
-        // gen.generate() will panic if there are any bounds check issues.
-    });
-}
+fn invalid_variant_handle_index_for_enum_operation() {
+    use Bytecode::*;
 
-proptest! {
-    #[test]
-    fn invalid_out_of_bounds(
-        module in CompiledModule::valid_strategy(20),
-        oob_mutations in vec(OutOfBoundsMutation::strategy(), 0..40),
-    ) {
-        let (module, expected_violations) = {
-            let oob_context = ApplyOutOfBoundsContext::new(module, oob_mutations);
-            oob_context.apply()
-        };
-
-        let actual_violations = BoundsChecker::verify_module(&module);
-        prop_assert_eq!(expected_violations.is_empty(), actual_violations.is_ok());
-    }
-
-    #[test]
-    fn code_unit_out_of_bounds(
-        mut module in CompiledModule::valid_strategy(20),
-        mutations in vec(CodeUnitBoundsMutation::strategy(), 0..40),
-    ) {
-        let expected_violations = {
-            let context = ApplyCodeUnitBoundsContext::new(&mut module, mutations);
-            context.apply()
-        };
-
-        let actual_violations = BoundsChecker::verify_module(&module);
-        prop_assert_eq!(expected_violations.is_empty(), actual_violations.is_ok());
-    }
-
-    #[test]
-    fn no_module_handles(
-        identifiers in vec(any::<Identifier>(), 0..20),
-        address_identifiers in vec(any::<AccountAddress>(), 0..20),
-    ) {
-        // If there are no module handles, the only other things that can be stored are intrinsic
-        // data.
-        let module = CompiledModule {
-            identifiers,
-            address_identifiers,
-            ..Default::default()
-        };
-
-        prop_assert_eq!(
-            BoundsChecker::verify_module(&module).map_err(|e| e.major_status()),
-            Err(StatusCode::NO_MODULE_HANDLES)
+    let skeleton = basic_test_module();
+    let variant_handle_index = VariantHandleIndex(skeleton.variant_handles.len() as u16);
+    let variant_handle_inst_index =
+        VariantInstantiationHandleIndex(skeleton.variant_instantiation_handles.len() as u16);
+    for bytecode in [
+        PackVariant(variant_handle_index),
+        UnpackVariant(variant_handle_index),
+        UnpackVariantImmRef(variant_handle_index),
+        UnpackVariantMutRef(variant_handle_index),
+        PackVariantGeneric(variant_handle_inst_index),
+        UnpackVariantGeneric(variant_handle_inst_index),
+        UnpackVariantGenericImmRef(variant_handle_inst_index),
+        UnpackVariantGenericMutRef(variant_handle_inst_index),
+    ] {
+        let mut m = skeleton.clone();
+        m.function_defs[0].code.as_mut().unwrap().code = vec![bytecode];
+        assert_eq!(
+            BoundsChecker::verify_module(&m).unwrap_err().major_status(),
+            StatusCode::INDEX_OUT_OF_BOUNDS
         );
     }
 }
 
-proptest! {
-    // Generating arbitrary compiled modules is really slow, possibly because of
-    // https://github.com/AltSysrq/proptest/issues/143.
-    #![proptest_config(ProptestConfig::with_cases(16))]
+#[test]
+fn invalid_variant_jump_table_index() {
+    use Bytecode::*;
 
-    /// Make sure that garbage inputs don't crash the bounds checker.
-    #[test]
-    fn garbage_inputs(module in any_with::<CompiledModule>(16)) {
-        let _ = BoundsChecker::verify_module(&module);
-    }
+    let skeleton = basic_test_module();
+    let jt_index = VariantJumpTableIndex(
+        skeleton.function_defs[0]
+            .code
+            .as_ref()
+            .map(|c| c.jump_tables.len() as u16)
+            .unwrap_or(0u16),
+    );
+    let mut m = skeleton.clone();
+    m.function_defs[0].code.as_mut().unwrap().code = vec![VariantSwitch(jt_index)];
+    assert_eq!(
+        BoundsChecker::verify_module(&m).unwrap_err().major_status(),
+        StatusCode::INDEX_OUT_OF_BOUNDS
+    );
+}
+
+#[test]
+fn invalid_variant_jump_table_code_offset() {
+    use Bytecode::*;
+
+    let mut skeleton = basic_test_module_with_enum();
+    let enum_index = EnumDefinitionIndex(0);
+    skeleton.function_defs[0].code.as_mut().unwrap().code = vec![LdU64(0), Pop, Ret];
+    skeleton.function_defs[0].code.as_mut().unwrap().jump_tables = vec![VariantJumpTable {
+        head_enum: enum_index,
+        jump_table: JumpTableInner::Full(vec![100]),
+    }];
+
+    let jt_index = VariantJumpTableIndex(
+        skeleton.function_defs[0]
+            .code
+            .as_ref()
+            .map(|c| c.jump_tables.len() as u16)
+            .unwrap_or(0u16),
+    );
+    let mut m = skeleton.clone();
+    m.function_defs[0].code.as_mut().unwrap().code = vec![VariantSwitch(jt_index)];
+    assert_eq!(
+        BoundsChecker::verify_module(&m).unwrap_err().major_status(),
+        StatusCode::INDEX_OUT_OF_BOUNDS
+    );
 }

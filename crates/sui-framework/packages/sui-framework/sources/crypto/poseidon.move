@@ -4,7 +4,6 @@
 /// Module which defines instances of the poseidon hash functions.
 module sui::poseidon {
 
-    use std::vector;
     use sui::bcs;
 
     /// Error if any of the inputs are larger than or equal to the BN254 field size.
@@ -23,16 +22,16 @@ module sui::poseidon {
     /// Each element has to be a BN254 field element in canonical representation so it must be smaller than the BN254
     /// scalar field size which is 21888242871839275222246405745257275088548364400416034343698204186575808495617.
     public fun poseidon_bn254(data: &vector<u256>): u256 {
-        let (i, b, l) = (0, vector[], vector::length(data));
+        let (mut i, mut b, l) = (0, vector[], data.length());
         assert!(l > 0, EEmptyInput);
         while (i < l) {
-            let field_element = vector::borrow(data, i);
+            let field_element = &data[i];
             assert!(*field_element < BN254_MAX, ENonCanonicalInput);
-            vector::push_back(&mut b, bcs::to_bytes(vector::borrow(data, i)));
+            b.push_back(bcs::to_bytes(&data[i]));
             i = i + 1;
         };
         let binary_output = poseidon_bn254_internal(&b);
-        bcs::peel_u256(&mut bcs::new(binary_output))
+        bcs::new(binary_output).peel_u256()
     }
 
     /// @param data: Vector of BN254 field elements in little-endian representation.

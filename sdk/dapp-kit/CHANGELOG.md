@@ -1,5 +1,149 @@
 # @mysten/dapp-kit
 
+## 0.14.1
+
+### Patch Changes
+
+- Updated dependencies [6fc6235984]
+  - @mysten/sui@1.0.1
+  - @mysten/wallet-standard@0.12.1
+  - @mysten/zksend@0.9.1
+
+## 0.14.0
+
+### Minor Changes
+
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
+  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+
+### Patch Changes
+
+- Updated dependencies [ebdfe7cf21]
+- Updated dependencies [3e1d716642]
+- Updated dependencies [a92b03de42]
+  - @mysten/sui@1.0.0
+  - @mysten/zksend@0.9.0
+  - @mysten/wallet-standard@0.12.0
+
+## 0.13.2
+
+### Patch Changes
+
+- 3f8b08dedc: Fix broken theme style tag in canary versions of React when the provider is placed outside of the body tag
+- Updated dependencies [eeb19db837]
+  - @mysten/zksend@0.8.2
+
+## 0.13.1
+
+### Patch Changes
+
+- 2da78f77a3: Update stashed logo and fix detection of stashed wallet
+- Updated dependencies [2da78f77a3]
+  - @mysten/zksend@0.8.1
+
+## 0.13.0
+
+### Minor Changes
+
+- 807262f394: The `zksend` property on the `WalletProvider` has been replaced with a `stashedWallet` option.
+
+### Patch Changes
+
+- Updated dependencies [807262f394]
+  - @mysten/zksend@0.8.0
+
+## 0.12.15
+
+### Patch Changes
+
+- Updated dependencies [99b112178c]
+  - @mysten/sui.js@0.54.1
+  - @mysten/wallet-standard@0.11.6
+  - @mysten/zksend@0.7.2
+
+## 0.12.14
+
+### Patch Changes
+
+- Updated dependencies [29d8e45b0e]
+- Updated dependencies [b7f673dbd9]
+- Updated dependencies [b7f673dbd9]
+- Updated dependencies [123b42c75c]
+  - @mysten/zksend@0.7.1
+  - @mysten/sui.js@0.54.0
+  - @mysten/wallet-standard@0.11.5
+
+## 0.12.13
+
+### Patch Changes
+
+- Updated dependencies [774bfb41a8]
+- Updated dependencies [879421a5ac]
+  - @mysten/sui.js@0.53.0
+  - @mysten/zksend@0.7.0
+  - @mysten/wallet-standard@0.11.4
+
+## 0.12.12
+
+### Patch Changes
+
+- Updated dependencies [9a9ff3cde1]
+- Updated dependencies [905bc99e88]
+  - @mysten/zksend@0.6.0
+
+## 0.12.11
+
+### Patch Changes
+
+- Updated dependencies [44ba140be0]
+  - @mysten/zksend@0.5.0
+
+## 0.12.10
+
+### Patch Changes
+
+- Updated dependencies [929db4976a]
+  - @mysten/sui.js@0.52.0
+  - @mysten/wallet-standard@0.11.3
+  - @mysten/zksend@0.4.4
+
+## 0.12.9
+
+### Patch Changes
+
+- Updated dependencies [59168f73ff]
+- Updated dependencies [b8f2a859ce]
+  - @mysten/zksend@0.4.3
+
+## 0.12.8
+
+### Patch Changes
+
+- Updated dependencies [b4ecdb5860]
+  - @mysten/sui.js@0.51.2
+  - @mysten/wallet-standard@0.11.2
+  - @mysten/zksend@0.4.2
+
+## 0.12.7
+
+### Patch Changes
+
+- Updated dependencies [6984dd1e38]
+  - @mysten/sui.js@0.51.1
+  - @mysten/wallet-standard@0.11.1
+  - @mysten/zksend@0.4.1
+
+## 0.12.6
+
+### Patch Changes
+
+- Updated dependencies [c05a4e8cb7]
+- Updated dependencies [c05a4e8cb7]
+- Updated dependencies [c05a4e8cb7]
+- Updated dependencies [c05a4e8cb7]
+- Updated dependencies [c05a4e8cb7]
+  - @mysten/zksend@0.4.0
+
 ## 0.12.5
 
 ### Patch Changes

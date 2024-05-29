@@ -1,0 +1,27 @@
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:29
+   │
+17 │         let _ = &in.0.0[1]. ;
+   │                             ^
+   │                             │
+   │                             Unexpected ';'
+   │                             Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:34
+   │
+21 │         let _ = &in.0.0[1].0[0]. ;
+   │                                  ^
+   │                                  │
+   │                                  Unexpected ';'
+   │                                  Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:34
+   │
+25 │         let _ = &in.0.0[1].0[0]. ;
+   │                                  ^
+   │                                  │
+   │                                  Unexpected ';'
+   │                                  Expected an identifier or a decimal number
+

@@ -32,11 +32,11 @@ move-core-types.workspace = true
 move-ir-types.workspace = true
 move-compiler.workspace = true
 move-stdlib.workspace = true
+move-stdlib-natives.workspace = true
 move-vm-types.workspace = true
 move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true
 move-vm-test-utils.workspace = true
-move-read-write-set-types.workspace = true
 move-binary-format.workspace = true
 move-package.workspace = true
 move-prover.workspace = true
@@ -56,12 +56,8 @@ name = "sandbox_testsuite"
 harness = false
 
 [[test]]
-name = "move_unit_tests_move_vm_and_stackless_vm"
-harness = false
-
-[[test]]
 name = "build_testsuite"
 harness = false
 
 [features]
-tiered-gas = [ "move-vm-test-utils/tiered-gas" ]
+tiered-gas = ["move-vm-test-utils/tiered-gas"]

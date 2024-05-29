@@ -55,15 +55,16 @@ error[E04007]: incompatible types
   │          Invalid call of 'assert'. Invalid argument for parameter '0'
   │          Expected: 'bool'
 
-error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/other_builtins_invalid.move:7:10
+error[E04035]: invalid constant usage in error context
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:7:22
   │
 7 │         (assert!(42, true): ());
-  │          ^^^^^^^^^^^^^^^^^
-  │          │           │
-  │          │           Given: 'bool'
-  │          Invalid call of 'assert'. Invalid argument for parameter '1'
-  │          Expected: 'u64'
+  │                      ^^^^
+  │                      │
+  │                      Invalid error code for assertion, expected a u64 or constant declared with '#[error]' annotation
+  │                      If you want to use a non-u64 as an abort code, you must use a '#[error]' attribute on a constant
+  │
+  = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/other_builtins_invalid.move:8:38
@@ -75,13 +76,14 @@ error[E04007]: incompatible types
   │          │                           Expected: 'bool'
   │          Given: '()'
 
-error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/other_builtins_invalid.move:9:9
+error[E04035]: invalid constant usage in error context
+  ┌─ tests/move_check/typing/other_builtins_invalid.move:9:32
   │
 9 │         assert!(true || false, 0u8);
-  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  │         │                      │
-  │         │                      Given: 'u8'
-  │         Invalid call of 'assert'. Invalid argument for parameter '1'
-  │         Expected: 'u64'
+  │                                ^^^
+  │                                │
+  │                                Invalid error code for assertion, expected a u64 or constant declared with '#[error]' annotation
+  │                                If you want to use a non-u64 as an abort code, you must use a '#[error]' attribute on a constant
+  │
+  = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
 

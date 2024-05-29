@@ -80,7 +80,7 @@ impl BlockVerifier for SignedBlockVerifier {
             });
         }
 
-        // Verifiy the block's signature.
+        // Verify the block's signature.
         block.verify_signature(&self.context)?;
 
         // Verify the block's ancestor refs are consistent with the block's round,
@@ -210,7 +210,7 @@ mod test {
             for txn in transactions {
                 if txn.len() < 4 {
                     return Err(ValidationError::InvalidTransaction(format!(
-                        "Lenght {} too short!",
+                        "Length {} is too short!",
                         txn.len()
                     )));
                 }
@@ -219,8 +219,8 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_verify_block() {
+    #[tokio::test]
+    async fn test_verify_block() {
         let (context, keypairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let authority_2_protocol_keypair = &keypairs[2].1;
@@ -447,8 +447,8 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_check_ancestors() {
+    #[tokio::test]
+    async fn test_check_ancestors() {
         let num_authorities = 4;
         let (context, _keypairs) = Context::new_for_test(num_authorities);
         let context = Arc::new(context);

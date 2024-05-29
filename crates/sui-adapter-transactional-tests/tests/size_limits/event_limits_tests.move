@@ -10,8 +10,6 @@
 /// Test event limits enforced
 module Test::M1 {
     use sui::event;
-    use sui::tx_context::TxContext;
-    use std::vector;
     use sui::bcs;
 
     public struct NewValueEvent has copy, drop {

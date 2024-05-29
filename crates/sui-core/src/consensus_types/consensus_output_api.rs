@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::fmt::Display;
 
-use crate::consensus_types::AuthorityIndex;
-use consensus_core::BlockAPI;
+use consensus_core::{BlockAPI, CommitDigest};
 use fastcrypto::hash::Hash;
 use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{digests::ConsensusCommitDigest, messages_consensus::ConsensusTransaction};
+
+use crate::consensus_types::AuthorityIndex;
 
 /// A list of tuples of:
 /// (certificate origin authority index, all transactions corresponding to the certificate).
@@ -28,7 +30,7 @@ pub(crate) trait ConsensusOutputAPI: Display {
     fn transactions(&self) -> ConsensusOutputTransactions<'_>;
 
     /// Returns the digest of consensus output.
-    fn consensus_digest(&self) -> ConsensusCommitDigest;
+    fn consensus_digest(&self, protocol_config: &ProtocolConfig) -> ConsensusCommitDigest;
 }
 
 impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
@@ -94,7 +96,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
             }).collect()
     }
 
-    fn consensus_digest(&self) -> ConsensusCommitDigest {
+    fn consensus_digest(&self, _protocol_config: &ProtocolConfig) -> ConsensusCommitDigest {
         // We port ConsensusOutputDigest, a narwhal space object, into ConsensusCommitDigest, a sui-core space object.
         // We assume they always have the same format.
         static_assertions::assert_eq_size!(ConsensusCommitDigest, ConsensusOutputDigest);
@@ -104,8 +106,16 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
 
 impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
     fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
-        // TODO: Implement this in Mysticeti.
-        None
+        if !self.reputation_scores_desc.is_empty() {
+            Some(
+                self.reputation_scores_desc
+                    .iter()
+                    .map(|(id, score)| (id.value() as AuthorityIndex, *score))
+                    .collect(),
+            )
+        } else {
+            None
+        }
     }
 
     fn leader_round(&self) -> u64 {
@@ -122,7 +132,7 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
     }
 
     fn commit_sub_dag_index(&self) -> u64 {
-        self.commit_index.into()
+        self.commit_ref.index.into()
     }
 
     fn transactions(&self) -> ConsensusOutputTransactions {
@@ -153,8 +163,14 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
             .collect()
     }
 
-    fn consensus_digest(&self) -> ConsensusCommitDigest {
-        // TODO(mysticeti): implement consensus output digest.
-        ConsensusCommitDigest::default()
+    fn consensus_digest(&self, protocol_config: &ProtocolConfig) -> ConsensusCommitDigest {
+        if protocol_config.mysticeti_use_committed_subdag_digest() {
+            // We port CommitDigest, a consensus space object, into ConsensusCommitDigest, a sui-core space object.
+            // We assume they always have the same format.
+            static_assertions::assert_eq_size!(ConsensusCommitDigest, CommitDigest);
+            ConsensusCommitDigest::new(self.commit_ref.digest.into_inner())
+        } else {
+            ConsensusCommitDigest::default()
+        }
     }
 }

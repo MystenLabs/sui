@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::Ordering,
     fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::Deref,
+    ops::{Deref, Range},
     sync::Arc,
 };
 
@@ -17,15 +18,20 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
+    leader_scoring::ReputationScores,
     storage::Store,
 };
 
 /// Index of a commit among all consensus commits.
 pub type CommitIndex = u32;
 
+pub(crate) const GENESIS_COMMIT_INDEX: CommitIndex = 0;
+
 /// Default wave length for all committers. A longer wave length increases the
 /// chance of committing the leader under asynchrony at the cost of latency in
 /// the common case.
+// TODO: merge DEFAULT_WAVE_LENGTH and MINIMUM_WAVE_LENGTH into a single constant,
+// because we are unlikely to change them via config in the forseeable future.
 pub(crate) const DEFAULT_WAVE_LENGTH: Round = MINIMUM_WAVE_LENGTH;
 
 /// We need at least one leader round, one voting round, and one decision round.
@@ -35,12 +41,12 @@ pub(crate) const MINIMUM_WAVE_LENGTH: Round = 3;
 /// round, at least one voting round, and one decision round.
 pub(crate) type WaveNumber = u32;
 
-/// Versioned representation of a consensus commit.
+/// [`Commit`] summarizes [`CommittedSubDag`] for storage and network communications.
 ///
-/// Commit is used to persist commit metadata for recovery. It is also exchanged over the network.
-/// To balance being functional and succinct, a field must meet these requirements to be added
-/// to the struct:
-/// - helps with recoverying CommittedSubDag locally and for peers catching up.
+/// Validators should be able to reconstruct a sequence of CommittedSubDag from the
+/// corresponding Commit and blocks referenced in the Commit.
+/// A field must meet these requirements to be added to Commit:
+/// - helps with recovery locally and for peers catching up.
 /// - cannot be derived from a sequence of Commits and other persisted values.
 ///
 /// For example, transactions in blocks should not be included in Commit, because they can be
@@ -58,12 +64,14 @@ impl Commit {
     pub(crate) fn new(
         index: CommitIndex,
         previous_digest: CommitDigest,
+        timestamp_ms: BlockTimestampMs,
         leader: BlockRef,
         blocks: Vec<BlockRef>,
     ) -> Self {
         Commit::V1(CommitV1 {
             index,
             previous_digest,
+            timestamp_ms,
             leader,
             blocks,
         })
@@ -81,6 +89,7 @@ pub(crate) trait CommitAPI {
     fn round(&self) -> Round;
     fn index(&self) -> CommitIndex;
     fn previous_digest(&self) -> CommitDigest;
+    fn timestamp_ms(&self) -> BlockTimestampMs;
     fn leader(&self) -> BlockRef;
     fn blocks(&self) -> &[BlockRef];
 }
@@ -95,6 +104,8 @@ pub(crate) struct CommitV1 {
     /// Digest of the previous commit.
     /// Set to CommitDigest::MIN for the first commit after genesis.
     previous_digest: CommitDigest,
+    /// Timestamp of the commit, max of the timestamp of the leader block and previous Commit timestamp.
+    timestamp_ms: BlockTimestampMs,
     /// A reference to the commit leader.
     leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
@@ -112,6 +123,10 @@ impl CommitAPI for CommitV1 {
 
     fn previous_digest(&self) -> CommitDigest {
         self.previous_digest
+    }
+
+    fn timestamp_ms(&self) -> BlockTimestampMs {
+        self.timestamp_ms
     }
 
     fn leader(&self) -> BlockRef {
@@ -151,10 +166,11 @@ impl TrustedCommit {
     pub(crate) fn new_for_test(
         index: CommitIndex,
         previous_digest: CommitDigest,
+        timestamp_ms: BlockTimestampMs,
         leader: BlockRef,
         blocks: Vec<BlockRef>,
     ) -> Self {
-        let commit = Commit::new(index, previous_digest, leader, blocks);
+        let commit = Commit::new(index, previous_digest, timestamp_ms, leader, blocks);
         let serialized = commit.serialize().unwrap();
         Self::new_trusted(commit, serialized)
     }
@@ -174,7 +190,7 @@ impl TrustedCommit {
         &self.serialized
     }
 
-    fn compute_digest(serialized: &[u8]) -> CommitDigest {
+    pub(crate) fn compute_digest(serialized: &[u8]) -> CommitDigest {
         let mut hasher = DefaultHashFunction::new();
         hasher.update(serialized);
         CommitDigest(hasher.finalize().into())
@@ -198,6 +214,10 @@ impl CommitDigest {
     /// Lexicographic min & max digest.
     pub const MIN: Self = Self([u8::MIN; consensus_config::DIGEST_LENGTH]);
     pub const MAX: Self = Self([u8::MAX; consensus_config::DIGEST_LENGTH]);
+
+    pub fn into_inner(self) -> [u8; consensus_config::DIGEST_LENGTH] {
+        self.0
+    }
 }
 
 impl Hash for CommitDigest {
@@ -241,8 +261,33 @@ pub struct CommitRef {
     pub digest: CommitDigest,
 }
 
-/// The output of consensus is an ordered list of [`CommittedSubDag`]. The application
-/// can arbitrarily sort the blocks within each sub-dag (but using a deterministic algorithm).
+impl CommitRef {
+    pub(crate) fn new(index: CommitIndex, digest: CommitDigest) -> Self {
+        Self { index, digest }
+    }
+}
+
+impl fmt::Display for CommitRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "C{}({})", self.index, self.digest)
+    }
+}
+
+impl fmt::Debug for CommitRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "C{}({:?})", self.index, self.digest)
+    }
+}
+
+// Represents a vote on a Commit.
+pub type CommitVote = CommitRef;
+
+/// The output of consensus to execution is an ordered list of [`CommittedSubDag`].
+/// Each CommittedSubDag contains the information needed to execution transactions in
+/// the consensus commit.
+///
+/// The application processing CommittedSubDag can arbitrarily sort the blocks within
+/// each sub-dag (but using a deterministic algorithm).
 #[derive(Clone, PartialEq)]
 pub struct CommittedSubDag {
     /// A reference to the leader of the sub-dag
@@ -251,45 +296,50 @@ pub struct CommittedSubDag {
     pub blocks: Vec<VerifiedBlock>,
     /// The timestamp of the commit, obtained from the timestamp of the leader block.
     pub timestamp_ms: BlockTimestampMs,
-    /// Index of the commit.
+    /// The reference of the commit.
     /// First commit after genesis has a index of 1, then every next commit has a
     /// index incremented by 1.
-    pub commit_index: CommitIndex,
+    pub commit_ref: CommitRef,
+    /// Optional scores that are provided as part of the consensus output to Sui
+    /// that can then be used by Sui for future submission to consensus.
+    pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
 }
 
 impl CommittedSubDag {
     /// Create new (empty) sub-dag.
-    pub fn new(
+    pub(crate) fn new(
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
-        timestamp_ms: u64,
-        commit_index: CommitIndex,
+        timestamp_ms: BlockTimestampMs,
+        commit_ref: CommitRef,
+        reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> Self {
         Self {
             leader,
             blocks,
             timestamp_ms,
-            commit_index,
+            commit_ref,
+            reputation_scores_desc,
         }
     }
+}
 
-    /// Sort the blocks of the sub-dag by round number then authority index. Any
-    /// deterministic & stable algorithm works.
-    pub fn sort(&mut self) {
-        self.blocks.sort_by(|a, b| {
-            a.round()
-                .cmp(&b.round())
-                .then_with(|| a.author().cmp(&b.author()))
-        });
-    }
+// Sort the blocks of the sub-dag blocks by round number then authority index. Any
+// deterministic & stable algorithm works.
+pub(crate) fn sort_sub_dag_blocks(blocks: &mut [VerifiedBlock]) {
+    blocks.sort_by(|a, b| {
+        a.round()
+            .cmp(&b.round())
+            .then_with(|| a.author().cmp(&b.author()))
+    })
 }
 
 impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CommittedSubDag(leader={}, index={}, blocks=[",
-            self.leader, self.commit_index
+            "CommittedSubDag(leader={}, ref={}, blocks=[",
+            self.leader, self.commit_ref
         )?;
         for (idx, block) in self.blocks.iter().enumerate() {
             if idx > 0 {
@@ -303,21 +353,26 @@ impl Display for CommittedSubDag {
 
 impl fmt::Debug for CommittedSubDag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{} (", self.leader, self.commit_index)?;
+        write!(f, "{}@{} ([", self.leader, self.commit_ref)?;
         for block in &self.blocks {
             write!(f, "{}, ", block.reference())?;
         }
-        write!(f, ")")
+        write!(
+            f,
+            "];{}ms;rs{:?})",
+            self.timestamp_ms, self.reputation_scores_desc
+        )
     }
 }
 
 // Recovers the full CommittedSubDag from block store, based on Commit.
 pub fn load_committed_subdag_from_store(
-    block_store: &dyn Store,
+    store: &dyn Store,
     commit: TrustedCommit,
+    reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
 ) -> CommittedSubDag {
     let mut leader_block_idx = None;
-    let commit_blocks = block_store
+    let commit_blocks = store
         .read_blocks(commit.blocks())
         .expect("We should have the block referenced in the commit data");
     let blocks = commit_blocks
@@ -334,8 +389,13 @@ pub fn load_committed_subdag_from_store(
         .collect::<Vec<_>>();
     let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
     let leader_block_ref = blocks[leader_block_idx].reference();
-    let timestamp_ms = blocks[leader_block_idx].timestamp_ms();
-    CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit.index())
+    CommittedSubDag::new(
+        leader_block_ref,
+        blocks,
+        commit.timestamp_ms(),
+        commit.reference(),
+        reputation_scores_desc,
+    )
 }
 
 pub struct CommitConsumer {
@@ -370,9 +430,7 @@ pub(crate) enum Decision {
     Indirect,
 }
 
-/// The status of every leader output by the committers. While the core only cares
-/// about committed leaders, providing a richer status allows for easier debugging,
-/// testing, and composition with advanced commit strategies.
+/// The status of a leader slot from the direct and indirect commit rules.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LeaderStatus {
     Commit(VerifiedBlock),
@@ -389,14 +447,6 @@ impl LeaderStatus {
         }
     }
 
-    pub(crate) fn authority(&self) -> AuthorityIndex {
-        match self {
-            Self::Commit(block) => block.author(),
-            Self::Skip(leader) => leader.authority,
-            Self::Undecided(leader) => leader.authority,
-        }
-    }
-
     pub(crate) fn is_decided(&self) -> bool {
         match self {
             Self::Commit(_) => true,
@@ -405,21 +455,11 @@ impl LeaderStatus {
         }
     }
 
-    // Only should be called when the leader status is decided (Commit/Skip)
-    pub fn get_decided_slot(&self) -> Slot {
+    pub(crate) fn into_decided_leader(self) -> Option<DecidedLeader> {
         match self {
-            Self::Commit(block) => block.reference().into(),
-            Self::Skip(leader) => *leader,
-            Self::Undecided(..) => panic!("Decided block is either Commit or Skip"),
-        }
-    }
-
-    // Only should be called when the leader status is decided (Commit/Skip)
-    pub fn into_committed_block(self) -> Option<VerifiedBlock> {
-        match self {
-            Self::Commit(block) => Some(block),
-            Self::Skip(_leader) => None,
-            Self::Undecided(..) => panic!("Decided block is either Commit or Skip"),
+            Self::Commit(block) => Some(DecidedLeader::Commit(block)),
+            Self::Skip(slot) => Some(DecidedLeader::Skip(slot)),
+            Self::Undecided(..) => None,
         }
     }
 }
@@ -428,9 +468,128 @@ impl Display for LeaderStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Commit(block) => write!(f, "Commit({})", block.reference()),
-            Self::Skip(leader) => write!(f, "Skip({leader})"),
-            Self::Undecided(leader) => write!(f, "Undecided({leader})"),
+            Self::Skip(slot) => write!(f, "Skip({slot})"),
+            Self::Undecided(slot) => write!(f, "Undecided({slot})"),
         }
+    }
+}
+
+/// Decision of each leader slot.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum DecidedLeader {
+    Commit(VerifiedBlock),
+    Skip(Slot),
+}
+
+impl DecidedLeader {
+    // Slot where the leader is decided.
+    pub(crate) fn slot(&self) -> Slot {
+        match self {
+            Self::Commit(block) => block.reference().into(),
+            Self::Skip(slot) => *slot,
+        }
+    }
+
+    // Converts to committed block if the decision is to commit. Returns None otherwise.
+    pub(crate) fn into_committed_block(self) -> Option<VerifiedBlock> {
+        match self {
+            Self::Commit(block) => Some(block),
+            Self::Skip(_) => None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn round(&self) -> Round {
+        match self {
+            Self::Commit(block) => block.round(),
+            Self::Skip(leader) => leader.round,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn authority(&self) -> AuthorityIndex {
+        match self {
+            Self::Commit(block) => block.author(),
+            Self::Skip(leader) => leader.authority,
+        }
+    }
+}
+
+impl Display for DecidedLeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Commit(block) => write!(f, "Commit({})", block.reference()),
+            Self::Skip(slot) => write!(f, "Skip({slot})"),
+        }
+    }
+}
+
+/// Per-commit properties that can be regenerated from past values, and do not need to be part of
+/// the Commit struct.
+/// Only the latest version is needed for recovery, but more versions are stored for debugging,
+/// and potentially restoring from an earlier state.
+// TODO: version this struct.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct CommitInfo {
+    pub(crate) committed_rounds: Vec<Round>,
+    pub(crate) reputation_scores: ReputationScores,
+}
+
+impl CommitInfo {
+    // Returns a new CommitInfo.
+    pub(crate) fn new(committed_rounds: Vec<Round>, reputation_scores: ReputationScores) -> Self {
+        CommitInfo {
+            committed_rounds,
+            reputation_scores,
+        }
+    }
+}
+
+/// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)
+/// and end (exclusive) commit indices and can be ordered for use as the key of a table.
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct CommitRange(Range<CommitIndex>);
+
+#[allow(unused)]
+impl CommitRange {
+    pub(crate) fn new(range: Range<CommitIndex>) -> Self {
+        Self(range)
+    }
+
+    // Inclusive
+    pub(crate) fn start(&self) -> CommitIndex {
+        self.0.start
+    }
+
+    // Exclusive
+    pub(crate) fn end(&self) -> CommitIndex {
+        self.0.end
+    }
+
+    /// Check if the provided range is sequentially after this range with the same
+    /// range length.
+    pub(crate) fn is_next_range(&self, other: &Self) -> bool {
+        self.0.len() == other.0.len() && self.end() == other.start()
+    }
+}
+
+impl Ord for CommitRange {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.start()
+            .cmp(&other.start())
+            .then_with(|| self.end().cmp(&other.end()))
+    }
+}
+
+impl PartialOrd for CommitRange {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl From<Range<CommitIndex>> for CommitRange {
+    fn from(range: Range<CommitIndex>) -> Self {
+        Self(range)
     }
 }
 
@@ -445,8 +604,8 @@ mod tests {
         storage::{mem_store::MemStore, WriteBatch},
     };
 
-    #[test]
-    fn test_new_subdag_from_commit_data() {
+    #[tokio::test]
+    async fn test_new_subdag_from_commit() {
         let store = Arc::new(MemStore::new());
         let context = Arc::new(Context::new_for_test(4).0);
         let wave_length = DEFAULT_WAVE_LENGTH;
@@ -504,17 +663,42 @@ mod tests {
         let commit = TrustedCommit::new_for_test(
             commit_index,
             CommitDigest::MIN,
+            leader_block.timestamp_ms(),
             leader_ref,
             blocks.clone(),
         );
-
-        let subdag = load_committed_subdag_from_store(store.as_ref(), commit);
+        let subdag = load_committed_subdag_from_store(store.as_ref(), commit.clone(), vec![]);
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
         assert_eq!(
             subdag.blocks.len(),
             (num_authorities * wave_length) as usize + 1
         );
-        assert_eq!(subdag.commit_index, commit_index);
+        assert_eq!(subdag.commit_ref, commit.reference());
+        assert_eq!(subdag.reputation_scores_desc, vec![]);
+    }
+
+    #[tokio::test]
+    async fn test_commit_range() {
+        let range1 = CommitRange::new(1..6);
+        let range2 = CommitRange::new(2..6);
+        let range3 = CommitRange::new(5..10);
+        let range4 = CommitRange::new(6..11);
+        let range5 = CommitRange::new(6..9);
+
+        assert_eq!(range1.start(), 1);
+        assert_eq!(range1.end(), 6);
+
+        // Test next range check
+        assert!(!range1.is_next_range(&range2));
+        assert!(!range1.is_next_range(&range3));
+        assert!(range1.is_next_range(&range4));
+        assert!(!range1.is_next_range(&range5));
+
+        // Test range ordering
+        assert!(range1 < range2);
+        assert!(range2 < range3);
+        assert!(range3 < range4);
+        assert!(range5 < range4);
     }
 }

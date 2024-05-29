@@ -26,4 +26,5 @@ regex.workspace = true
 sui-move-build.workspace = true
 
 move-binary-format.workspace = true
+move-compiler.workspace = true
 move-package.workspace = true

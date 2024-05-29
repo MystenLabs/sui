@@ -3,8 +3,8 @@ error[E07001]: referential transparency violated
   │
 6 │         &mut (&s).v;
   │         ^^^^^^^^^^^
-  │         │    │
-  │         │    Immutable because of this position
+  │         │     │
+  │         │     Immutable because of this position
   │         Invalid mutable borrow from an immutable reference
 
 error[E07001]: referential transparency violated
@@ -12,8 +12,8 @@ error[E07001]: referential transparency violated
   │
 7 │         &mut (&s.x).f;
   │         ^^^^^^^^^^^^^
-  │         │    │
-  │         │    Immutable because of this position
+  │         │     │
+  │         │     Immutable because of this position
   │         Invalid mutable borrow from an immutable reference
 
 error[E07001]: referential transparency violated

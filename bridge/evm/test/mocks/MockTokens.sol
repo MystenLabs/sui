@@ -18,7 +18,7 @@ contract MockWBTC is ERC20 {
         return 8;
     }
 
-    function testMock() public {}
+    function testSkip() public {}
 }
 
 contract MockUSDC is ERC20 {
@@ -36,25 +36,7 @@ contract MockUSDC is ERC20 {
         return 6;
     }
 
-    function testMock() public {}
-}
-
-contract MockSmallUSDC is ERC20 {
-    constructor() ERC20("USD Coin", "USDC") {}
-
-    function mint(address to, uint256 amount) public virtual {
-        _mint(to, amount);
-    }
-
-    function burn(address form, uint256 amount) public virtual {
-        _burn(form, amount);
-    }
-
-    function decimals() public view virtual override returns (uint8) {
-        return 5;
-    }
-
-    function testMock() public {}
+    function testSkip() public {}
 }
 
 contract MockUSDT is ERC20 {
@@ -72,9 +54,8 @@ contract MockUSDT is ERC20 {
         return 6;
     }
 
-    function testMock() public {}
+    function testSkip() public {}
 }
-
 
 contract WETH {
     string public name = "Wrapped Ether";
@@ -131,5 +112,5 @@ contract WETH {
         return true;
     }
 
-    function testMock() public {}
+    function testSkip() public {}
 }

@@ -15,6 +15,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
 };
+use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::CertifiedTransaction;
 
 // TODO consolidate with `gen_certs` in batch_verification_bench.rs
@@ -96,7 +97,11 @@ async fn test_batch_verify() {
         *certs[i].auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
         batch_verify_all_certificates_and_checkpoints(&committee, &certs, &ckpts).unwrap_err();
 
-        let results = batch_verify_certificates(&committee, &certs);
+        let results = batch_verify_certificates(
+            &committee,
+            &certs,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        );
         results[i].as_ref().unwrap_err();
         for (_, r) in results.iter().enumerate().filter(|(j, _)| *j != i) {
             r.as_ref().unwrap();
@@ -121,6 +126,7 @@ async fn test_async_verifier() {
         ZkLoginEnv::Test,
         true,
         true,
+        Some(30),
     ));
 
     let tasks: Vec<_> = (0..32)

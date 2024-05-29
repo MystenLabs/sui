@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use camino::Utf8Path;
 use clap::Parser;
 use nexlint::{prelude::*, NexLintContext};
 use nexlint_lints::{
@@ -127,15 +128,27 @@ pub fn run(args: Args) -> crate::Result<()> {
 pub fn handle_lint_results_exclude_external_crate_checks(
     results: LintResults,
 ) -> crate::Result<()> {
+    // ignore_funcs is a slice of funcs to execute against lint sources and their path
+    // if a func returns true, it means it will be ignored and not throw a lint error
+    let ignore_funcs = [
+        // legacy ignore checks
+        |source: &LintSource, path: &Utf8Path| -> bool {
+            (path.starts_with(EXTERNAL_CRATE_DIR)
+                || path.starts_with(CREATE_DAPP_TEMPLATE_DIR)
+                || path.to_string().contains("/generated/"))
+                && source.name() == "license-header"
+        },
+        // ignore check to skip buck related code paths, meta (fb) derived starlark, etc.
+        |_source: &LintSource, path: &Utf8Path| -> bool {
+            path.starts_with("buck/") || path.starts_with("third-party/")
+        },
+    ];
+
     // TODO: handle skipped results
     let mut errs = false;
     for (source, message) in &results.messages {
         if let LintKind::Content(path) = source.kind() {
-            if (path.starts_with(EXTERNAL_CRATE_DIR)
-                || path.starts_with(CREATE_DAPP_TEMPLATE_DIR)
-                || path.to_string().contains("/generated/"))
-                && source.name() == "license-header"
-            {
+            if ignore_funcs.iter().any(|func| func(source, path)) {
                 continue;
             }
         }

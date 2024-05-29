@@ -8,6 +8,8 @@ import { Extension } from './extension';
 import { log } from './log';
 
 import * as childProcess from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import * as commands from './commands';
 
@@ -32,6 +34,73 @@ async function serverVersion(context: Readonly<Context>): Promise<void> {
         );
     }
 }
+
+async function findPkgRoot(): Promise<string | undefined> {
+    const activeEditor = vscode.window.activeTextEditor;
+    if (!activeEditor) {
+        await vscode.window.showErrorMessage('Cannot find package manifest (no active editor window)');
+        return undefined;
+    }
+
+    const containsManifest = (dir: string): boolean => {
+        const filesInDir = fs.readdirSync(dir);
+        return filesInDir.includes('Move.toml');
+    };
+
+    const activeFileDir = path.dirname(activeEditor.document.uri.fsPath);
+    let currentDir = activeFileDir;
+    while (currentDir !== path.parse(currentDir).root) {
+        if (containsManifest(currentDir)) {
+            return currentDir;
+        }
+        currentDir = path.resolve(currentDir, '..');
+    }
+
+    if (containsManifest(currentDir)) {
+        return currentDir;
+    }
+
+    await vscode.window.showErrorMessage(`Cannot find package manifest for file in '${activeFileDir}' directory`);
+    return undefined;
+}
+
+async function suiMoveCmd(context: Readonly<Context>, cmd: string): Promise<void> {
+    const version = childProcess.spawnSync(
+        context.configuration.suiPath, ['--version'], { encoding: 'utf8' },
+    );
+    if (version.stdout) {
+        const pkgRoot = await findPkgRoot();
+        if (pkgRoot !== undefined) {
+            const terminalName = 'sui move';
+            let terminal = vscode.window.terminals.find(t => t.name === terminalName);
+            if (!terminal) {
+                terminal = vscode.window.createTerminal(terminalName);
+            }
+            terminal.show(true);
+            terminal.sendText('cd ' + pkgRoot, true);
+            terminal.sendText(`sui move ${cmd}`, true);
+        }
+    } else {
+        await vscode.window.showErrorMessage(
+            `A problem occurred when executing the Sui command: '${context.configuration.suiPath}'`,
+        );
+    }
+}
+
+/**
+ * An extension command that that builds the current Move project.
+ */
+async function buildProject(context: Readonly<Context>): Promise<void> {
+    return suiMoveCmd(context, 'build');
+}
+
+/**
+ * An extension command that that builds the current Move project.
+ */
+async function testProject(context: Readonly<Context>): Promise<void> {
+    return suiMoveCmd(context, 'test');
+}
+
 
 /**
  * The entry point to this VS Code extension.
@@ -111,6 +180,8 @@ export async function activate(extensionContext: Readonly<vscode.ExtensionContex
 
     // Register handlers for VS Code commands that the user explicitly issues.
     context.registerCommand('serverVersion', serverVersion);
+    context.registerCommand('build', buildProject);
+    context.registerCommand('test', testProject);
 
     // Configure other language features.
     context.configureLanguage();

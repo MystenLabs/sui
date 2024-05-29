@@ -92,3 +92,22 @@ fn test_invalid_inputs() {
     assert!("test.test@example.sui".parse::<Domain>().is_err());
     assert!("test@test@example".parse::<Domain>().is_err());
 }
+
+#[test]
+fn output_tests() {
+    let mut domain = "test.sui".parse::<Domain>().unwrap();
+    assert!(domain.format(name_service::DomainFormat::Dot) == "test.sui");
+    assert!(domain.format(name_service::DomainFormat::At) == "@test");
+
+    domain = "test.test.sui".parse::<Domain>().unwrap();
+    assert!(domain.format(name_service::DomainFormat::Dot) == "test.test.sui");
+    assert!(domain.format(name_service::DomainFormat::At) == "test@test");
+
+    domain = "test.test.test.sui".parse::<Domain>().unwrap();
+    assert!(domain.format(name_service::DomainFormat::Dot) == "test.test.test.sui");
+    assert!(domain.format(name_service::DomainFormat::At) == "test.test@test");
+
+    domain = "test.test.test.test.sui".parse::<Domain>().unwrap();
+    assert!(domain.format(name_service::DomainFormat::Dot) == "test.test.test.test.sui");
+    assert!(domain.format(name_service::DomainFormat::At) == "test.test.test@test");
+}

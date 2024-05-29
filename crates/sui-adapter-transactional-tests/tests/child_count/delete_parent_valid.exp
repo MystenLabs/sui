@@ -3,32 +3,38 @@ processed 7 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 9-58:
+task 1 'publish'. lines 9-57:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 7987600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 59-59:
+task 2 'run'. lines 58-58:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 61-61:
+task 3 'run'. lines 60-60:
 created: object(3,0), object(3,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
-task 4 'view-object'. lines 63-63:
+task 4 'view-object'. lines 62-62:
 Owner: Account Address ( A )
 Version: 3
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
-task 5 'run'. lines 65-65:
+task 5 'run'. lines 64-64:
 mutated: object(0,0), object(2,0)
 deleted: object(3,0), object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 5801004, non_refundable_storage_fee: 58596
 
-task 6 'run'. lines 67-67:
+task 6 'run'. lines 66-66:
 mutated: object(0,0)
 deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2174436, non_refundable_storage_fee: 21964

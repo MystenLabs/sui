@@ -14,23 +14,22 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use miette::Severity;
 use move_binary_format::{
-    access::ModuleAccess, binary_config::BinaryConfig, binary_views::BinaryIndexedView,
-    file_format::SignatureToken,
+    binary_config::BinaryConfig, file_format::SignatureToken, CompiledModule,
 };
 use move_command_line_common::{
     address::{NumericalAddress, ParsedAddress},
     parser::NumberFormat,
 };
-use move_core_types::{account_address::AccountAddress, ident_str, runtime_value::MoveValue};
+use move_core_types::{
+    account_address::AccountAddress, annotated_value::MoveTypeLayout, ident_str,
+};
 use move_package::BuildConfig;
 use std::{collections::BTreeMap, path::PathBuf};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
-use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::apis::ReadApi;
 use sui_types::{
     base_types::{is_primitive_type_tag, ObjectID, TxContext, TxContextKind},
-    digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
     move_package::MovePackage,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -62,9 +61,10 @@ trait Resolver<'a>: Send {
         &mut self,
         builder: &mut PTBBuilder<'a>,
         loc: Span,
-        val: MoveValue,
+        argument: PTBArg,
     ) -> PTBResult<Tx::Argument> {
-        builder.ptb.pure(val).map_err(|e| err!(loc, "{e}"))
+        let value = argument.to_pure_move_value(loc)?;
+        builder.ptb.pure(value).map_err(|e| err!(loc, "{e}"))
     }
 
     async fn resolve_object_id(
@@ -150,10 +150,34 @@ impl<'a> Resolver<'a> for ToObject {
 }
 
 /// A resolver that resolves object IDs that it encounters to pure PTB values.
-struct ToPure;
+struct ToPure {
+    type_: TypeTag,
+}
+
+impl ToPure {
+    pub fn new(type_: TypeTag) -> Self {
+        Self { type_ }
+    }
+
+    pub fn new_from_layout(layout: MoveTypeLayout) -> Self {
+        Self {
+            type_: TypeTag::from(&layout),
+        }
+    }
+}
 
 #[async_trait]
 impl<'a> Resolver<'a> for ToPure {
+    async fn pure(
+        &mut self,
+        builder: &mut PTBBuilder<'a>,
+        loc: Span,
+        argument: PTBArg,
+    ) -> PTBResult<Tx::Argument> {
+        let value = argument.checked_to_pure_move_value(loc, &self.type_)?;
+        builder.ptb.pure(value).map_err(|e| err!(loc, "{e}"))
+    }
+
     async fn resolve_object_id(
         &mut self,
         builder: &mut PTBBuilder<'a>,
@@ -375,26 +399,6 @@ impl<'a> PTBBuilder<'a> {
         }
     }
 
-    async fn get_protocol_config(&self, loc: Span) -> PTBResult<ProtocolConfig> {
-        let config = self
-            .reader
-            .get_protocol_config(None)
-            .await
-            .map_err(|e| err!(loc, "{e}"))?;
-        let chain_id = self
-            .reader
-            .get_chain_identifier()
-            .await
-            .map_err(|e| err!(loc, "{e}"))?;
-        Ok(if chain_id == get_mainnet_chain_identifier().to_string() {
-            ProtocolConfig::get_for_version(config.protocol_version, Chain::Mainnet)
-        } else if chain_id == get_testnet_chain_identifier().to_string() {
-            ProtocolConfig::get_for_version(config.protocol_version, Chain::Testnet)
-        } else {
-            ProtocolConfig::get_for_version(config.protocol_version, Chain::Unknown)
-        })
-    }
-
     /// Resolve an object ID to a Move package.
     async fn resolve_to_package(
         &mut self,
@@ -408,40 +412,44 @@ impl<'a> PTBBuilder<'a> {
             .map_err(|e| err!(loc, "{e}"))?
             .into_object()
             .map_err(|e| err!(loc, "{e}"))?;
+
         let Some(SuiRawData::Package(package)) = object.bcs else {
             error!(
                 loc,
                 "BCS field in object '{}' is missing or not a package.", package_id
             );
         };
-        let protocol_config = self.get_protocol_config(loc).await?;
-        let package: MovePackage = MovePackage::new(
+
+        MovePackage::new(
             package.id,
-            object.version,
+            package.version,
             package.module_map,
-            protocol_config.max_move_package_size(),
+            // This package came from on-chain and the tool runs locally, so don't worry about
+            // trying to enforce the package size limit.
+            u64::MAX,
             package.type_origin_table,
             package.linkage_table,
         )
-        .map_err(|e| err!(loc, "{e}"))?;
-        Ok(package)
+        .map_err(|e| err!(loc, "{e}"))
     }
 
     /// Resolves the argument to the move call based on the type information of the function being
     /// called.
     async fn resolve_move_call_arg(
         &mut self,
-        view: &BinaryIndexedView<'_>,
+        view: &CompiledModule,
         ty_args: &[TypeTag],
         sp!(loc, arg): Spanned<PTBArg>,
         param: &SignatureToken,
     ) -> PTBResult<Tx::Argument> {
-        let (is_primitive, _) = primitive_type(view, ty_args, param);
+        let (is_primitive, layout) = primitive_type(view, ty_args, param);
 
         // If it's a primitive value, see if we've already resolved this argument. Otherwise, we
         // need to resolve it.
         if is_primitive {
-            return self.resolve(loc.wrap(arg), ToPure).await;
+            return self
+                .resolve(loc.wrap(arg), ToPure::new_from_layout(layout.unwrap()))
+                .await;
         }
 
         // Otherwise it's ambiguous what the value should be, and we need to turn to the signature
@@ -454,7 +462,7 @@ impl<'a> PTBBuilder<'a> {
         // and also determine if it's a receiving argument or not.
         for tok in param.preorder_traversal() {
             match tok {
-                SignatureToken::Struct(..) | SignatureToken::StructInstantiation(..) => {
+                SignatureToken::Datatype(..) | SignatureToken::DatatypeInstantiation(..) => {
                     is_receiving |= is_receiving_argument(view, tok);
                 }
                 SignatureToken::TypeParameter(idx) => {
@@ -550,13 +558,12 @@ impl<'a> PTBBuilder<'a> {
                 }
             })?;
         let function_signature = module.function_handle_at(fdef.function);
-        let view = BinaryIndexedView::Module(&module);
         let parameters: Vec<_> = module
             .signature_at(function_signature.parameters)
             .0
             .clone()
             .into_iter()
-            .filter(|tok| matches!(TxContext::kind(&view, tok), TxContextKind::None))
+            .filter(|tok| matches!(TxContext::kind(&module, tok), TxContextKind::None))
             .collect();
 
         if parameters.len() != args.len() {
@@ -577,7 +584,7 @@ impl<'a> PTBBuilder<'a> {
         let mut call_args = vec![];
         for (param, arg) in parameters.iter().zip(args.into_iter()) {
             let call_arg = self
-                .resolve_move_call_arg(&view, ty_args, arg, param)
+                .resolve_move_call_arg(&module, ty_args, arg, param)
                 .await?;
             call_args.push(call_arg);
         }
@@ -624,12 +631,10 @@ impl<'a> PTBBuilder<'a> {
             | PTBArg::U64(_)
             | PTBArg::U128(_)
             | PTBArg::U256(_)
+            | PTBArg::InferredNum(_)
             | PTBArg::String(_)
             | PTBArg::Option(_)
-            | PTBArg::Vector(_)) => {
-                ctx.pure(self, arg_loc, a.to_pure_move_value(arg_loc)?)
-                    .await
-            }
+            | PTBArg::Vector(_)) => ctx.pure(self, arg_loc, a).await,
             PTBArg::Gas => Ok(Tx::Argument::GasCoin),
             // NB: the ordering of these lines is important so that shadowing is properly
             // supported.
@@ -788,7 +793,9 @@ impl<'a> PTBBuilder<'a> {
         // let sp!(cmd_span, tok) = &command.name;
         match command {
             ParsedPTBCommand::TransferObjects(obj_args, to_address) => {
-                let to_arg = self.resolve(to_address, ToPure).await?;
+                let to_arg = self
+                    .resolve(to_address, ToPure::new(TypeTag::Address))
+                    .await?;
                 let mut transfer_args = vec![];
                 for o in obj_args.value.into_iter() {
                     let arg = self.resolve(o, ToObject::default()).await?;
@@ -826,7 +833,7 @@ impl<'a> PTBBuilder<'a> {
                 let mut vec_args: Vec<Tx::Argument> = vec![];
                 if is_primitive_type_tag(&ty_arg) {
                     for arg in args.into_iter() {
-                        let arg = self.resolve(arg, ToPure).await?;
+                        let arg = self.resolve(arg, ToPure::new(ty_arg.clone())).await?;
                         vec_args.push(arg);
                     }
                 } else {
@@ -844,7 +851,7 @@ impl<'a> PTBBuilder<'a> {
                 let coin = self.resolve(pre_coin, ToObject::default()).await?;
                 let mut args = vec![];
                 for arg in amounts.into_iter() {
-                    let arg = self.resolve(arg, ToPure).await?;
+                    let arg = self.resolve(arg, ToPure::new(TypeTag::U64)).await?;
                     args.push(arg);
                 }
                 let res = self.ptb.command(Tx::Command::SplitCoins(coin, args));
@@ -1082,7 +1089,7 @@ pub(crate) fn display_did_you_mean<S: AsRef<str> + std::fmt::Display>(
     Some(format!("{preposition}{}?", strs.join(", ")))
 }
 
-// This lint is is disabled because it's not good and doesn't look at what you're actually
+// This lint is disabled because it's not good and doesn't look at what you're actually
 // iterating over. This seems to be a common problem with this lint.
 // See e.g., https://github.com/rust-lang/rust-clippy/issues/6075
 #[allow(clippy::needless_range_loop)]

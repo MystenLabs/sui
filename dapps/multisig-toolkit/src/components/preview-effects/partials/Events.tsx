@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiEvent } from '@mysten/sui.js/src/client';
+import { SuiEvent } from '@mysten/sui/client';
 import { ReactNode } from 'react';
 
 import { Textarea } from '@/components/ui/textarea';

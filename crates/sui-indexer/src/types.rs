@@ -175,6 +175,10 @@ pub struct IndexedEvent {
     pub package: ObjectID,
     pub module: String,
     pub event_type: String,
+    pub event_type_package: ObjectID,
+    pub event_type_module: String,
+    /// Struct name of the event, without type parameters.
+    pub event_type_name: String,
     pub bcs: Vec<u8>,
     pub timestamp_ms: u64,
 }
@@ -197,6 +201,9 @@ impl IndexedEvent {
             package: event.package_id,
             module: event.transaction_module.to_string(),
             event_type: event.type_.to_canonical_string(/* with_prefix */ true),
+            event_type_package: event.type_.address.into(),
+            event_type_module: event.type_.module.to_string(),
+            event_type_name: event.type_.name.to_string(),
             bcs: event.contents.clone(),
             timestamp_ms,
         }

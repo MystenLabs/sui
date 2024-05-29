@@ -49,8 +49,6 @@ notice = "warn"
 # output a note when they are encountered.
 ignore = [
     # "RUSTSEC-0000-0000",
-    # potential segfault in the time crate, brought by chrono et al.
-    "RUSTSEC-2020-0071",
     # difference 2.0.0 is unmaintained
     "RUSTSEC-2020-0095",
     # rusoto is unmaintained, use aws crates
@@ -65,6 +63,8 @@ ignore = [
     "RUSTSEC-2023-0052",
     # we don't do RSA signing on Sui (only verifying for zklogin)
     "RUSTSEC-2023-0071",
+    # A few dependencies use unpatched rustls.
+    "RUSTSEC-2024-0336",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

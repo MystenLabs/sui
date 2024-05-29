@@ -7,6 +7,11 @@ the notion of storage for the blockchain). This is implemented by gating access 
 instructions so that for a value to be used with the bytecode instruction, it must have the ability
 required (if one is required at all—not every instruction is gated by an ability).
 
+For Sui, `key` is used to signify an [object](./abilities/object.md). Objects are the basic unit of
+storage where each object has a unique, 32-byte ID. `store` is then used to both indicate what data
+can be stored inside of an object, and is also used to indicate what types can be transferred
+outside of their defining module.
+
 <!-- TODO future section on detailed walk through maybe. We have some examples at the end but it might be helpful to explain why we have precisely this set of abilities
 
 If you are already somewhat familiar with abilities from writing Move programs, but are still confused as to what is going on, it might be helpful to skip to the [motivating walkthrough](#motivating-walkthrough) section to get an idea of what the system is setup in the way that it is. -->
@@ -21,17 +26,20 @@ The four abilities are:
   - Allows values of types with this ability to be popped/dropped.
 - [`store`](#store)
   - Allows values of types with this ability to exist inside a value in storage.
+  - For Sui, `store` controls what data can be stored inside of an [object](./abilities/object.md).
+    `store` also controls what types can be transferred outside of their defining module.
 - [`key`](#key)
   - Allows the type to serve as a "key" for storage. Ostensibly this means the value can be a
     top-level value in storage; in other words, it does not need to be contained in another value to
     be in storage.
+  - For Sui, `key` is used to signify an [object](./abilities/object.md).
 
 ### `copy`
 
 The `copy` ability allows values of types with that ability to be copied. It gates the ability to
 copy values out of local variables with the [`copy`](./variables.md#move-and-copy) operator and to
 copy values via references with
-[dereference `*e`](./references.md#reading-and-writing-through-references).
+[dereference `*e`](./primitive-types/references.md#reading-and-writing-through-references).
 
 If a value has `copy`, all values contained inside of that value have `copy`.
 
@@ -45,7 +53,7 @@ ability gates the ability to ignore values in a multitude of locations, includin
 - not using the value in a [sequence via `;`](./variables.md#expression-blocks)
 - overwriting values in variables in [assignments](./variables.md#assignments)
 - overwriting values via references when
-  [writing `*e1 = e2`](./references.md#reading-and-writing-through-references).
+  [writing `*e1 = e2`](./primitive-types/references.md#reading-and-writing-through-references).
 
 If a value has `drop`, all values contained inside of that value have `drop`.
 
@@ -56,7 +64,11 @@ _but_ not necessarily as a top-level value in storage. This is the only ability 
 directly gate an operation. Instead it gates the existence in storage when used in tandem with
 `key`.
 
-If a value has `store`, all values contained inside of that value have `store`
+If a value has `store`, all values contained inside of that value have `store`.
+
+For Sui, `store` serves double duty. It controls what values can appear inside of an
+[object](./abilities/object.md), and what objects can be
+[transferred](./abilities/object.md#transfer-rules) outside of their defining module.
 
 ### `key`
 
@@ -68,9 +80,11 @@ ability.
 If a value has `key`, all values contained inside of that value have `store`. This is the only
 ability with this sort of asymmetry.
 
+For Sui, `key` is used to signify an [object](./abilities/object.md).
+
 ## Builtin Types
 
-All primitive, builtin types have `copy`, `drop`, and `store`
+All primitive, builtin types have `copy`, `drop`, and `store`.
 
 - `bool`, `u8`, `u16`, `u32`, `u64`, `u128`, `u256`, and `address` all have `copy`, `drop`, and
   `store`.
@@ -81,8 +95,8 @@ All primitive, builtin types have `copy`, `drop`, and `store`
   - This refers to copying and dropping the reference itself, not what they refer to.
   - References cannot appear in global storage, hence they do not have `store`.
 
-None of the primitive types have `key`, meaning none of them can be used directly with the
-[global storage operations](./global-storage-operators.md).
+Note that none of the primitive types have `key`, meaning none of them can be used directly with
+storage operations.
 
 ## Annotating Structs
 
@@ -273,6 +287,6 @@ fun invalid(addr: address) {
    borrow_mut<NoAbilities>(addr);
 }
 
-// Mock storage operations
+// Mock storage operation
 native public fun transfer<T: key>(addr: address, value: T);
 ```
