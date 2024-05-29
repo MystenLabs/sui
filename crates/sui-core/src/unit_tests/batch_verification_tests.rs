@@ -63,7 +63,7 @@ fn gen_ckpts(
                     GasCostSummary::default(),
                     None,
                     0,
-                    CheckpointVersionSpecificData::empty_for_tests(),
+                    Some(CheckpointVersionSpecificData::empty_for_tests()),
                 ),
                 k,
                 name,

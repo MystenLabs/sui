@@ -114,7 +114,7 @@ impl MockTxStore {
             Default::default(),
             None,
             0,
-            CheckpointVersionSpecificData::empty_for_tests(),
+            Some(CheckpointVersionSpecificData::empty_for_tests()),
         );
 
         let signed = SignedCheckpointSummary::new(

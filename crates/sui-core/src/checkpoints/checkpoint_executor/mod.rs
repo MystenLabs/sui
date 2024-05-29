@@ -1046,8 +1046,12 @@ fn get_unexecuted_transactions(
     {
         // With version-specific data, randomness rounds are stored in checkpoint summary.
         let version_specific_data: CheckpointVersionSpecificData =
-            bcs::from_bytes(&checkpoint.version_specific_data)
-                .expect("version_specific_data should deserialize"); //TODO-DNS is this safe?
+            bcs::from_bytes(&checkpoint.version_specific_data).unwrap_or_else(|e| {
+                panic!(
+                    "version_specific_data should deserialize for checkpoint {}: {e:?}",
+                    checkpoint.sequence_number(),
+                )
+            }); //TODO-DNS is this safe?
         version_specific_data.into_v1().randomness_rounds
     } else {
         // Before version-specific data, checkpoint batching must be disabled. In this case,

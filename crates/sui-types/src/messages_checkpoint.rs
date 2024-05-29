@@ -734,12 +734,10 @@ impl CheckpointVersionSpecificData {
         }
     }
 
-    pub fn empty_for_tests() -> Option<CheckpointVersionSpecificData> {
-        Some(CheckpointVersionSpecificData::V1(
-            CheckpointVersionSpecificDataV1 {
-                randomness_rounds: Vec::new(),
-            },
-        ))
+    pub fn empty_for_tests() -> CheckpointVersionSpecificData {
+        CheckpointVersionSpecificData::V1(CheckpointVersionSpecificDataV1 {
+            randomness_rounds: Vec::new(),
+        })
     }
 }
 
@@ -793,7 +791,7 @@ mod tests {
                         GasCostSummary::default(),
                         None,
                         0,
-                        CheckpointVersionSpecificData::empty_for_tests(),
+                        Some(CheckpointVersionSpecificData::empty_for_tests()),
                     ),
                     k,
                     name,
@@ -828,7 +826,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             0,
-            CheckpointVersionSpecificData::empty_for_tests(),
+            Some(CheckpointVersionSpecificData::empty_for_tests()),
         );
 
         let sign_infos: Vec<_> = keys
@@ -868,7 +866,7 @@ mod tests {
                         GasCostSummary::default(),
                         None,
                         0,
-                        CheckpointVersionSpecificData::empty_for_tests(),
+                        Some(CheckpointVersionSpecificData::empty_for_tests()),
                     ),
                     k,
                     name,
@@ -907,7 +905,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             100,
-            CheckpointVersionSpecificData::empty_for_tests(),
+            Some(CheckpointVersionSpecificData::empty_for_tests()),
         )
     }
 
