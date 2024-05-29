@@ -1,5 +1,12 @@
 # @mysten/suins-toolkit
 
+## 0.5.2
+
+### Patch Changes
+
+- Updated dependencies [f0a839f874]
+  - @mysten/sui@1.0.2
+
 ## 0.5.1
 
 ### Patch Changes
