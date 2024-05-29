@@ -10,6 +10,7 @@ use crate::utils::get_eth_signer_client;
 use crate::utils::EthSigner;
 use ethers::types::Address as EthAddress;
 use move_core_types::language_storage::StructTag;
+use prometheus::Registry;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -718,7 +719,11 @@ pub(crate) async fn start_bridge_cluster(
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();
-        handles.push(run_bridge_node(config_clone).await.unwrap());
+        handles.push(
+            run_bridge_node(config_clone, Registry::new())
+                .await
+                .unwrap(),
+        );
     }
     handles
 }

@@ -7,6 +7,7 @@ use crate::{
     config::{BridgeClientConfig, BridgeNodeConfig},
     eth_syncer::EthSyncer,
     events::init_all_struct_tags,
+    metrics::BridgeMetrics,
     orchestrator::BridgeOrchestrator,
     server::{handler::BridgeRequestHandler, run_server},
     storage::BridgeOrchestratorTables,
@@ -27,13 +28,17 @@ use sui_types::{
 use tokio::task::JoinHandle;
 use tracing::info;
 
-pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<JoinHandle<()>> {
+pub async fn run_bridge_node(
+    config: BridgeNodeConfig,
+    prometheus_registry: prometheus::Registry,
+) -> anyhow::Result<JoinHandle<()>> {
     init_all_struct_tags();
+    let metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
     let (server_config, client_config) = config.validate().await?;
 
     // Start Client
     let _handles = if let Some(client_config) = client_config {
-        start_client_components(client_config).await
+        start_client_components(client_config, metrics.clone()).await
     } else {
         Ok(vec![])
     }?;
@@ -51,12 +56,14 @@ pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<JoinHan
             server_config.eth_client,
             server_config.approved_governance_actions,
         ),
+        metrics,
     ))
 }
 
 // TODO: is there a way to clean up the overrides after it's stored in DB?
 async fn start_client_components(
     client_config: BridgeClientConfig,
+    metrics: Arc<BridgeMetrics>,
 ) -> anyhow::Result<Vec<JoinHandle<()>>> {
     let store: std::sync::Arc<BridgeOrchestratorTables> =
         BridgeOrchestratorTables::new(&client_config.db_path.join("client"));
@@ -103,6 +110,7 @@ async fn start_client_components(
         client_config.key,
         client_config.sui_address,
         client_config.gas_object_ref.0,
+        metrics,
     )
     .await;
 
@@ -186,6 +194,7 @@ fn get_eth_contracts_to_watch(
 #[cfg(test)]
 mod tests {
     use ethers::types::Address as EthAddress;
+    use prometheus::Registry;
 
     use super::*;
     use crate::config::BridgeNodeConfig;
@@ -372,7 +381,7 @@ mod tests {
             db_path: None,
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config).await.unwrap();
+        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
@@ -429,7 +438,7 @@ mod tests {
             db_path: Some(db_path),
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config).await.unwrap();
+        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
@@ -497,7 +506,7 @@ mod tests {
             db_path: Some(db_path),
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config).await.unwrap();
+        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
