@@ -36,11 +36,6 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Program {
     pub info: Arc<TypingProgramInfo>,
-    pub inner: Program_,
-}
-
-#[derive(Debug, Clone)]
-pub struct Program_ {
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
@@ -428,13 +423,7 @@ impl fmt::Display for BuiltinFunction_ {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        self.inner.ast_debug(w)
-    }
-}
-
-impl AstDebug for Program_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        let Program_ { modules } = self;
+        let Program { modules, info: _ } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));

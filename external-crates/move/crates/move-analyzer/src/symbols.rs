@@ -1335,7 +1335,7 @@ pub fn get_symbols(
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
     let parsed_program = parsed_ast.unwrap();
-    let typed_modules = typed_ast.unwrap().inner.modules;
+    let typed_modules = typed_ast.unwrap().modules;
 
     let mut mod_outer_defs = BTreeMap::new();
     let mut mod_use_defs = BTreeMap::new();
@@ -1358,7 +1358,7 @@ pub fn get_symbols(
     if let Some(libs) = compiled_libs.clone() {
         pre_process_typed_modules(
             &parsed_program,
-            &libs.typing.inner.modules,
+            &libs.typing.modules,
             &files,
             &file_id_mapping,
             &file_id_to_lines,
@@ -1422,7 +1422,7 @@ pub fn get_symbols(
     );
     if let Some(libs) = compiled_libs {
         process_typed_modules(
-            &libs.typing.inner.modules,
+            &libs.typing.modules,
             &source_files,
             &mod_to_alias_lengths,
             &mut typing_symbolicator,
