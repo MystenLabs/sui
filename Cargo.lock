@@ -13888,6 +13888,7 @@ version = "0.0.0"
 dependencies = [
  "anemo",
  "anyhow",
+ "bcs",
  "fastcrypto",
  "insta",
  "move-bytecode-utils",

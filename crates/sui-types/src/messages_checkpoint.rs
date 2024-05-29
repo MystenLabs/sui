@@ -743,7 +743,7 @@ impl CheckpointVersionSpecificData {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CheckpointVersionSpecificDataV1 {
     /// Lists the rounds for which RandomnessStateUpdate transactions are present in the checkpoint.
     pub randomness_rounds: Vec<RandomnessRound>,
