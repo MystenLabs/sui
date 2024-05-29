@@ -15,7 +15,6 @@ use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 pub mod coin_field;
 pub mod collection_equality;
-mod custom_rules;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
 pub mod public_random;
@@ -90,7 +89,7 @@ pub enum LinterDiagCategory {
 pub const LINTER_DEFAULT_DIAG_CODE: u8 = 1;
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
-    let mut filters = vec![
+    let filters = vec![
         WarningFilter::All(Some(LINT_WARNING_PREFIX)),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
