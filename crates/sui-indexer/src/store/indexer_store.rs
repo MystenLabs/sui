@@ -10,7 +10,10 @@ use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
-use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
+use crate::types::{
+    IndexedCheckpoint, IndexedEvent, IndexedObjectVersion, IndexedPackage, IndexedTransaction,
+    TxIndex,
+};
 
 #[allow(clippy::large_enum_variant)]
 pub enum ObjectChangeToCommit {
@@ -34,6 +37,11 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
     async fn persist_object_history(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
+    ) -> Result<(), IndexerError>;
+
+    async fn persist_objects_version(
+        &self,
+        object_versions: Vec<IndexedObjectVersion>,
     ) -> Result<(), IndexerError>;
 
     // persist objects snapshot with object changes during backfill

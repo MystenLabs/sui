@@ -102,3 +102,15 @@ CREATE INDEX objects_snapshot_owner ON objects_snapshot (owner_type, owner_id, o
 CREATE INDEX objects_snapshot_coin ON objects_snapshot (owner_id, coin_type, object_id) WHERE coin_type IS NOT NULL AND owner_type = 1;
 CREATE INDEX objects_snapshot_package_module_name_full_type ON objects_snapshot (object_type_package, object_type_module, object_type_name, object_type);
 CREATE INDEX objects_snapshot_owner_package_module_name_full_type ON objects_snapshot (owner_id, object_type_package, object_type_module, object_type_name, object_type);
+
+-- versions table to store the version history of objects,
+-- input version can be NULL for created and unwrapped objects,
+-- output version is always NOT NULL. even for deleted and wrapped objects.
+CREATE TABLE objects_version (
+    object_id                   bytea         NOT NULL,
+    input_version               bigint,
+    output_version              bigint        NOT NULL,
+    checkpoint_sequence_number  bigint        NOT NULL,
+    CONSTRAINT objects_version_pk PRIMARY KEY (object_id, output_version)
+);
+CREATE INDEX idx_objects_version_checkpoint_id_version ON objects_version (checkpoint_sequence_number, object_id, output_version DESC);

@@ -18,8 +18,8 @@ use sui_types::object::Object;
 use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
-use crate::schema::{objects, objects_history, objects_snapshot};
-use crate::types::{IndexedDeletedObject, IndexedObject, ObjectStatus};
+use crate::schema::{objects, objects_history, objects_snapshot, objects_version};
+use crate::types::{IndexedDeletedObject, IndexedObject, IndexedObjectVersion, ObjectStatus};
 
 #[derive(Queryable)]
 pub struct DynamicFieldColumn {
@@ -519,6 +519,30 @@ impl TryFrom<CoinBalance> for Balance {
             total_balance: c.coin_balance as u128,
             locked_balance: HashMap::default(),
         })
+    }
+}
+
+// NOTE: Input versions are the object versions before current transactions,
+// they can be None for object created or unwrapped in the current transaction.
+// Output versions are the object versions after current transactions,
+// they always exist even though objects are deleted or wrapped in the current transaction.
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[diesel(table_name = objects_version, primary_key(checkpoint_sequence_number, object_id, output_version))]
+pub struct StoredObjectVersion {
+    pub object_id: Vec<u8>,
+    pub input_version: Option<i64>,
+    pub output_version: i64,
+    pub checkpoint_sequence_number: i64,
+}
+
+impl From<IndexedObjectVersion> for StoredObjectVersion {
+    fn from(o: IndexedObjectVersion) -> Self {
+        Self {
+            object_id: o.object_id,
+            input_version: o.input_version.map(|v| v as i64),
+            output_version: o.output_version as i64,
+            checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
+        }
     }
 }
 
