@@ -98,6 +98,10 @@ pub trait TName: Eq + Ord + Clone {
     fn drop_loc(self) -> (Self::Loc, Self::Key);
     fn add_loc(loc: Self::Loc, key: Self::Key) -> Self;
     fn borrow(&self) -> (&Self::Loc, &Self::Key);
+    fn with_loc(self, loc: Self::Loc) -> Self {
+        let (_old_loc, base) = self.drop_loc();
+        Self::add_loc(loc, base)
+    }
 }
 
 pub trait Identifier {
