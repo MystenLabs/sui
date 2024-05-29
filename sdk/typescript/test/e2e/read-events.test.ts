@@ -10,6 +10,9 @@ describe('Event Reading API', () => {
 
 	beforeAll(async () => {
 		toolbox = await setup();
+
+		// Wait for next epoch to ensure there are events
+		await new Promise((resolve) => setTimeout(resolve, 60_000));
 	});
 
 	it('Get All Events', async () => {
