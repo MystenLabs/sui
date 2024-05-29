@@ -875,4 +875,3 @@ impl diag::PositionInfo for TypingSymbolicator<'_> {
         self.file_id_mapping
     }
 }
-
