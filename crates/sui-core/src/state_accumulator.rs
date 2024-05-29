@@ -519,6 +519,11 @@ impl StateAccumulator {
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<ECMHLiveObjectSetDigest> {
+        // Sleep 1~300 secs randomly to simulate the time cost.
+        use rand::Rng as _;
+        let sleep_time = rand::thread_rng().gen_range(1..300);
+        tokio::time::sleep(std::time::Duration::from_secs(sleep_time)).await;
+
         Ok(self
             .accumulate_epoch(epoch, last_checkpoint_of_epoch, epoch_store)
             .await?
