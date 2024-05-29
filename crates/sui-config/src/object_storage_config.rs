@@ -99,6 +99,8 @@ pub struct ObjectStoreConfig {
     #[serde(default)]
     #[arg(long, default_value_t = false)]
     pub no_sign_request: bool,
+    #[arg(long, default_value_t = false)]
+    pub requester_pays: bool,
 }
 
 fn default_object_store_connection_limit() -> usize {
@@ -147,6 +149,17 @@ impl ObjectStoreConfig {
         }
         if let Some(endpoint) = &self.aws_endpoint {
             builder = builder.with_endpoint(endpoint);
+        }
+        if self.requester_pays {
+            // Set up the headers for requester pays
+            let x_request_payer_header = HeaderName::from_static("x-amz-request-payer");
+
+            let mut headers = HeaderMap::new();
+            headers.insert(x_request_payer_header, HeaderValue::from_str("requester")?);
+
+            // Apply headers to the client configuration
+            builder =
+                builder.with_client_options(ClientOptions::new().with_default_headers(headers));
         }
         // if let Some(profile) = &self.aws_profile {
         //     builder = builder.with_profile(profile);

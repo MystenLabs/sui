@@ -980,6 +980,7 @@ impl ToolCommand {
                             aws_secret_access_key: env::var("AWS_SNAPSHOT_SECRET_ACCESS_KEY").ok(),
                             aws_region: env::var("AWS_SNAPSHOT_REGION").ok(),
                             aws_endpoint: aws_endpoint.filter(|s| !s.is_empty()),
+                            requester_pays: true,
                             aws_virtual_hosted_style_request: env::var(
                                 "AWS_SNAPSHOT_VIRTUAL_HOSTED_REQUESTS",
                             )
