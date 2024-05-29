@@ -32,7 +32,7 @@ pub enum Error {
 ///
 /// Bounded deserialization is intended for use outside of the validator, and so uses a fixed bound,
 /// rather than one that is configured as part of the protocol.
-const MAX_BOUND: usize = 1024 * 1024;
+const MAX_BOUND: usize = 10 * 1024 * 1024;
 
 impl BoundedVisitor {
     fn new(bound: usize) -> Self {
