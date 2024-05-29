@@ -90,6 +90,12 @@ pub enum BridgeCommand {
         #[clap(long = "eth-rpc-url")]
         eth_rpc_url: String,
     },
+    /// Print current registration info
+    #[clap(name = "print-bridge-registration-info")]
+    PrintBridgeRegistrationInfo {
+        #[clap(long = "sui-rpc-url")]
+        sui_rpc_url: String,
+    },
     /// Client to facilitate and execute Bridge actions
     #[clap(name = "client")]
     Client {
