@@ -550,7 +550,6 @@ impl CommitInfo {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct CommitRange(RangeInclusive<CommitIndex>);
 
-#[allow(unused)]
 impl CommitRange {
     pub(crate) fn new(range: RangeInclusive<CommitIndex>) -> Self {
         Self(range)

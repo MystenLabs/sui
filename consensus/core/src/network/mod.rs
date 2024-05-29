@@ -95,7 +95,7 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 
-    /// Fetches serialized commits from a peer, with index in CommitRange(start..=end).
+    /// Fetches serialized commits in the commit range from a peer.
     /// Returns a tuple of both the serialized commits, and serialized blocks that contain
     /// votes certifying the last commit.
     async fn fetch_commits(

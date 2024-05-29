@@ -144,7 +144,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         // Create range with inclusive start and end.
                         let range_start = prev_end + 1;
                         let range_end = prev_end + inner.context.parameters.commit_sync_batch_size;
-                        // When the condition below is true, CommitRange(range_start..=range_end) contains less number of commits
+                        // When the condition below is true, [range_start, range_end] contains less number of commits
                         // than the target batch size. Not creating the smaller batch is intentional, to avoid the
                         // cost of processing more and smaller batches.
                         // Block broadcast, subscription and synchronization will help the node catchup.
@@ -342,7 +342,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             sleep(available_time - now).await;
         }
 
-        // 2. Fetch commits in CommitRange(start..=end) from the selected authority.
+        // 2. Fetch commits in the commit range from the selected authority.
         let (serialized_commits, serialized_blocks) = match inner
             .network_client
             .fetch_commits(
