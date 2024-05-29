@@ -195,25 +195,27 @@ export function serializeV1TransactionData(
 			return {
 				kind: 'Input',
 				index,
-				value: input.Object.ImmOrOwnedObject
-					? {
-							ImmOrOwnedObject: input.Object.ImmOrOwnedObject,
-					  }
-					: input.Object.Receiving
-					? {
-							Receiving: {
-								digest: input.Object.Receiving.digest,
-								version: input.Object.Receiving.version,
-								objectId: input.Object.Receiving.objectId,
-							},
-					  }
-					: {
-							SharedObject: {
-								mutable: input.Object.SharedObject.mutable,
-								initialSharedVersion: input.Object.SharedObject.initialSharedVersion,
-								objectId: input.Object.SharedObject.objectId,
-							},
-					  },
+				value: {
+					Object: input.Object.ImmOrOwnedObject
+						? {
+								ImmOrOwnedObject: input.Object.ImmOrOwnedObject,
+						  }
+						: input.Object.Receiving
+						? {
+								Receiving: {
+									digest: input.Object.Receiving.digest,
+									version: input.Object.Receiving.version,
+									objectId: input.Object.Receiving.objectId,
+								},
+						  }
+						: {
+								SharedObject: {
+									mutable: input.Object.SharedObject.mutable,
+									initialSharedVersion: input.Object.SharedObject.initialSharedVersion,
+									objectId: input.Object.SharedObject.objectId,
+								},
+						  },
+				},
 				type: 'object',
 			};
 		}
