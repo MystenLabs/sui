@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 use url::Url;
 
 pub const MANIFEST_FILENAME: &str = "MANIFEST";
@@ -98,6 +98,8 @@ pub async fn put<S: ObjectStorePutExt>(store: &S, src: &Path, bytes: Bytes) -> R
             store.put_bytes(src, bytes.clone()).await.map_err(|e| {
                 error!("Failed to write file to object store with error: {:?}", &e);
                 backoff::Error::transient(e)
+            }).map(|_| {
+                info!("Successfully wrote file: {:?} to object store", src);
             })
         } else {
             warn!("Not copying empty file: {:?}", src);
