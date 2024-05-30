@@ -1060,8 +1060,6 @@ impl WritebackCache {
     }
 
     fn cache_object_not_found(&self, object_id: &ObjectID) {
-        // when caching non-existence, we use version 0. Since that is less than OBJECT_START_VERSION
-        // it is guaranteed to lose the race with any reader than finds an extant version.
         self.cache_latest_object_by_id(object_id, LatestObjectCacheEntry::NonExistent);
     }
 
