@@ -568,14 +568,23 @@ impl WritebackCache {
         request_type: &'static str,
         object_id: &ObjectID,
     ) -> CacheResult<(SequenceNumber, ObjectEntry)> {
+        self.metrics
+            .record_cache_request(request_type, "object_by_id");
         if let Some(entry) = self.cached.object_by_id_cache.get(object_id) {
             let entry = entry.lock();
             match &*entry {
                 LatestObjectCacheEntry::Object(latest_version, latest_object) => {
-                    return CacheResult::Hit((*latest_version, latest_object.clone()))
+                    self.metrics.record_cache_hit(request_type, "object_by_id");
+                    return CacheResult::Hit((*latest_version, latest_object.clone()));
                 }
-                LatestObjectCacheEntry::NonExistent => return CacheResult::NegativeHit,
+                LatestObjectCacheEntry::NonExistent => {
+                    self.metrics
+                        .record_cache_negative_hit(request_type, "object_by_id");
+                    return CacheResult::NegativeHit;
+                }
             }
+        } else {
+            self.metrics.record_cache_miss(request_type, "object_by_id");
         }
 
         Self::with_locked_cache_entries(
@@ -1015,6 +1024,7 @@ impl WritebackCache {
     // one they inserted
     fn cache_latest_object_by_id(&self, object_id: &ObjectID, object: LatestObjectCacheEntry) {
         trace!("caching object by id: {:?} {:?}", object_id, object);
+        self.metrics.record_cache_write("object_by_id");
         // Warning: tricky code!
         let entry = self
             .cached
@@ -1326,15 +1336,23 @@ impl ObjectCacheRead for WritebackCache {
         }
 
         // if we have the latest version cached, and it is within the bound, we are done
+        self.metrics
+            .record_cache_request("object_lt_or_eq_version", "object_by_id");
         if let Some(latest) = self.cached.object_by_id_cache.get(&object_id) {
             let latest = latest.lock();
             match &*latest {
                 LatestObjectCacheEntry::Object(latest_version, object) => {
                     if *latest_version <= version_bound {
                         if let ObjectEntry::Object(object) = object {
+                            self.metrics
+                                .record_cache_hit("object_lt_or_eq_version", "object_by_id");
                             return Ok(Some(object.clone()));
                         } else {
                             // object is a tombstone, but is still within the version bound
+                            self.metrics.record_cache_negative_hit(
+                                "object_lt_or_eq_version",
+                                "object_by_id",
+                            );
                             return Ok(None);
                         }
                     }
@@ -1342,10 +1360,14 @@ impl ObjectCacheRead for WritebackCache {
                 }
                 // No object by this ID exists at all
                 LatestObjectCacheEntry::NonExistent => {
+                    self.metrics
+                        .record_cache_negative_hit("object_lt_or_eq_version", "object_by_id");
                     return Ok(None);
                 }
             }
         }
+        self.metrics
+            .record_cache_miss("object_lt_or_eq_version", "object_by_id");
 
         Self::with_locked_cache_entries(
             &self.dirty.objects,
