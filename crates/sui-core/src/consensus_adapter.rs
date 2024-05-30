@@ -1031,19 +1031,19 @@ struct InflightDropGuard<'a> {
 
 impl<'a> InflightDropGuard<'a> {
     pub fn acquire(adapter: &'a ConsensusAdapter, tx_type: &'static str) -> Self {
-        let inflight = adapter
+        adapter
             .num_inflight_transactions
             .fetch_add(1, Ordering::SeqCst);
+        adapter
+            .metrics
+            .sequencing_certificate_inflight
+            .with_label_values(&[&tx_type])
+            .inc();
         adapter
             .metrics
             .sequencing_certificate_attempt
             .with_label_values(&[&tx_type])
             .inc();
-        adapter
-            .metrics
-            .sequencing_certificate_inflight
-            .with_label_values(&[&tx_type])
-            .set(inflight as i64);
         Self {
             adapter,
             start: Instant::now(),
@@ -1057,16 +1057,14 @@ impl<'a> InflightDropGuard<'a> {
 
 impl<'a> Drop for InflightDropGuard<'a> {
     fn drop(&mut self) {
-        let inflight = self
-            .adapter
+        self.adapter
             .num_inflight_transactions
             .fetch_sub(1, Ordering::SeqCst);
-        // Store the latest latency
         self.adapter
             .metrics
             .sequencing_certificate_inflight
             .with_label_values(&[self.tx_type])
-            .set(inflight as i64);
+            .dec();
 
         let position = if let Some(position) = self.position {
             self.adapter
