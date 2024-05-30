@@ -989,7 +989,6 @@ impl CheckpointBuilder {
                     self.metrics.checkpoint_errors.inc();
                     continue 'main;
                 }
-                //TODO-DNS need to fix checkpoint executor not to assume RSU is first in a checkpoint (or that there's only one)
             }
             debug!(
                 "Waiting for more checkpoints from consensus after processing {last_height:?}; {} pending checkpoints left unprocessed until next interval",
@@ -2298,7 +2297,6 @@ mod tests {
             100_000,
         );
 
-        // TODO-DNS test batching here
         checkpoint_service
             .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 0))
             .unwrap();
