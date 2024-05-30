@@ -662,15 +662,6 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         self.type_params.clear();
     }
 
-    fn visit_lvalue_list(&mut self, kind: &LValueKind, lvalues: &mut T::LValueList) {
-        if !Self::VISIT_LVALUES {
-            return;
-        };
-        for lvalue in &mut lvalues.value {
-            self.visit_lvalue(kind, lvalue);
-        }
-    }
-
     fn visit_lvalue(&mut self, kind: &LValueKind, lvalue: &mut T::LValue) {
         // Visit an lvalue. If it's just avariable, we add it as a local def. If it'x a field
         // access, we switch modes (`for_unpack` = true) and record them as field use defs instead.

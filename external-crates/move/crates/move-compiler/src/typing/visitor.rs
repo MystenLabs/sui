@@ -47,7 +47,8 @@ pub trait TypingVisitorContext {
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum
-    /// definitions, function signatures, expressions, etc.)
+    /// definitions, function signatures, expressions, etc.). This will not visit lvalue types
+    /// unless VISIT_LVALUES is also enabled.
     const VISIT_TYPES: bool = false;
 
     /// Indicates if lvalues should be visited during the traversal of sequence forms.
@@ -56,9 +57,10 @@ pub trait TypingVisitorContext {
     /// Indicates if use_funs should be visited during the traversal.
     const VISIT_USE_FUNS: bool = false;
 
-    /// By default, the visitor will visit all all expressions in all functions in all modules. A
-    /// custom version should of this function should be created if different type of analysis is
-    /// required.
+    /// By default, the visitor will visit all modules, and all functions and constants therein.
+    /// For functions and constants, it will also visit their expressions. To change this behavior,
+    /// consider enabling `VISIT_LVALUES`, VISIT_TYPES`, and `VISIT_USE_FUNS` or overwriting one of
+    /// the `visit_<name>_custom` functions defined on this trait, as appropriate.
     fn visit(&mut self, program: &mut T::Program) {
         for (mident, mdef) in program.modules.key_cloned_iter_mut() {
             self.visit_module(mident, mdef);
@@ -339,9 +341,6 @@ pub trait TypingVisitorContext {
     /// Visit an lvalue list. Note that this may be called manually even if `VISIT_LVALUES` is set
     /// to `false`.
     fn visit_lvalue_list(&mut self, kind: &LValueKind, lvalues: &mut T::LValueList) {
-        if !Self::VISIT_LVALUES {
-            return;
-        };
         for lvalue in &mut lvalues.value {
             self.visit_lvalue(kind, lvalue);
         }
@@ -353,7 +352,8 @@ pub trait TypingVisitorContext {
     }
 
     /// Visit an lvalue, including recursively. Note that this may be called manually even if
-    /// `VISIT_LValues` is set to `false`.
+    /// `VISIT_LVALUES` is set to `false`.
+    #[growing_stack]
     fn visit_lvalue(&mut self, kind: &LValueKind, lvalue: &mut T::LValue) {
         if self.visit_lvalue_custom(kind, lvalue) {
             return;
@@ -374,9 +374,6 @@ pub trait TypingVisitorContext {
             | T::LValue_::BorrowUnpackVariant(_, _, _, _, tyargs, fields)
             | T::LValue_::Unpack(_, _, tyargs, fields)
             | T::LValue_::BorrowUnpack(_, _, _, tyargs, fields) => {
-                if !Self::VISIT_TYPES && !Self::VISIT_LVALUES {
-                    return;
-                }
                 if Self::VISIT_TYPES {
                     tyargs.iter_mut().for_each(|ty| self.visit_type(ty));
                 }
@@ -384,9 +381,7 @@ pub trait TypingVisitorContext {
                     if Self::VISIT_TYPES {
                         self.visit_type(ty);
                     }
-                    if Self::VISIT_LVALUES {
-                        self.visit_lvalue(kind, lvalue);
-                    }
+                    self.visit_lvalue(kind, lvalue);
                 }
             }
         }
@@ -414,7 +409,11 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e);
                 use T::BuiltinFunction_ as BF;
                 match &mut bf.value {
-                    BF::Freeze(t) => self.visit_type(t),
+                    BF::Freeze(t) => {
+                        if Self::VISIT_TYPES {
+                            self.visit_type(t)
+                        }
+                    }
                     BF::Assert(_) => (),
                 }
             }
