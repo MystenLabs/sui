@@ -95,6 +95,7 @@ pub fn end_transaction(
 ) -> PartialVMResult<NativeResult> {
     assert!(ty_args.is_empty());
     assert!(args.is_empty());
+    // Remove the object from storage. We should never hit this scenario either.
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let taken_shared_or_imm: BTreeMap<_, _> = object_runtime_ref
         .test_inventories
@@ -109,12 +110,32 @@ pub fn end_transaction(
     // if true, we will "abort"
     let mut incorrect_shared_or_imm_handling = false;
 
-    let received = object_runtime_ref
+    // Handle the allocated tickets:
+    // * Remove all allocated_tickets in the test inventories.
+    // * For each allocated ticket, if the ticket's object ID is loaded, move it to `received`.
+    // * Otherwise re-insert the allocated ticket into the objects inventory, and mark it to be
+    //   removed from the backing storage (deferred due to needing to have acces to `context` which
+    //   has outstanding references at this point).
+    let allocated_tickets =
+        std::mem::take(&mut object_runtime_ref.test_inventories.allocated_tickets);
+    let mut received = BTreeMap::new();
+    let mut unreceived = BTreeSet::new();
+    let loaded_runtime_objects = object_runtime_ref.loaded_runtime_objects();
+    for (id, (metadata, value)) in allocated_tickets {
+        match loaded_runtime_objects.get(&id) {
+            Some(_) => {
+                received.insert(id, metadata);
+            }
+            None => {
+                unreceived.insert(id);
+                // This must be untouched since the allocated ticket is still live, so ok to re-insert.
+                object_runtime_ref
         .test_inventories
-        .allocated_tickets
-        .iter()
-        .map(|(k, (metadata, _))| (*k, metadata.clone()))
-        .collect();
+                    .objects
+                    .insert(id, value);
+            }
+        }
+    }
 
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
@@ -168,6 +189,7 @@ pub fn end_transaction(
         }
         inventories.taken.remove(id);
     }
+
     // handle transfers, inserting transferred/written objects into their respective inventory
     let mut created = vec![];
     let mut written = vec![];
@@ -212,6 +234,18 @@ pub fn end_transaction(
             }
         }
     }
+
+    // For any unused allocated tickets, remove them from the store.
+    let store: &&InMemoryTestStore = context.extensions().get();
+    for id in unreceived {
+        if store.0.write().unwrap().remove_object(id).is_none() {
+            return Ok(NativeResult::err(
+                context.gas_used(),
+                E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
+            ));
+        }
+    }
+
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
     for id in deleted_object_ids {
