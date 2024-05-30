@@ -2860,11 +2860,13 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
     {
         report_datatype(context, loc, matrix, mident, datatype_name)
     } else {
-        // It's unclear how we got here, so report an ICE and suggest a wildcard.
-        context.env.add_diag(ice!((
-            loc,
-            format!("Found non-matchable type {} at match subject", error_format(ty, &Subst::empty()))
-        )));
+        if !context.env.has_errors() {
+            // It's unclear how we got here, so report an ICE and suggest a wildcard.
+            context.env.add_diag(ice!((
+                loc,
+                format!("Found non-matchable type {} at match subject", error_format(ty, &Subst::empty()))
+            )));
+        }
         if !matrix.has_default_arm() {
             let info = MissingMatchArmsInfo {
                 arms: vec![PS::Wildcard],
