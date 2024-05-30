@@ -150,4 +150,14 @@ module sui::ecdsa_k1_tests {
         let other_msg = b"Farewell, world!";
         assert!(!ecdsa_k1::secp256k1_verify(&sig, &pk, &other_msg, 0));
     }
+
+    #[test]
+    fun test_generate_keypair() {
+        let seed = b"Some random seed, 32 bytes long.";
+        let kp = ecdsa_k1::secp256k1_keypair_from_seed(&seed);
+
+        let msg = b"Hello, world!";
+        let sig = ecdsa_k1::secp256k1_sign(kp.private_key(), &msg, 0);
+        assert!(ecdsa_k1::secp256k1_verify(&sig, kp.public_key(), &msg, 0));
+    }
 }

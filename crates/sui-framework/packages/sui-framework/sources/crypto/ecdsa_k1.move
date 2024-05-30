@@ -58,4 +58,27 @@ module sui::ecdsa_k1 {
     /// Return the 64-bytes signature in form (r, s) that is signed using Secp256k1.
     /// This should ONLY be used in tests, because it will reveal the private key onchain.
     public native fun secp256k1_sign(private_key: &vector<u8>, msg: &vector<u8>, hash: u8): vector<u8>;
+
+    #[test_only]
+    #[allow(unused_field)]
+    public struct KeyPair has drop {
+        private_key: vector<u8>,
+        public_key: vector<u8>,
+    }
+
+    #[test_only]
+    public fun private_key(self: &KeyPair): &vector<u8> {
+        &self.private_key
+    }
+
+    #[test_only]
+    public fun public_key(self: &KeyPair): &vector<u8> {
+        &self.public_key
+    }
+
+    #[test_only]
+    /// @param seed: A 32-bytes seed that is used to generate the keypair.
+    ///
+    /// Returns a Secp256k1 keypair deterministically generated from the seed.
+    public native fun secp256k1_keypair_from_seed(seed: &vector<u8>): KeyPair;
 }

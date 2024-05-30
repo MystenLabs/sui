@@ -18,15 +18,19 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
-    values::{Value, VectorRef},
+    values::{self, Value, VectorRef},
 };
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use smallvec::smallvec;
 use std::collections::VecDeque;
+use sui_types::crypto::KeypairTraits;
 
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
 pub const INVALID_PUBKEY: u64 = 2;
 pub const INVALID_PRIVKEY_OR_HASH: u64 = 3;
+pub const INVALID_SEED: u64 = 4;
 
 pub const KECCAK256: u8 = 0;
 pub const SHA256: u8 = 1;
@@ -324,5 +328,39 @@ pub fn secp256k1_sign(
     Ok(NativeResult::ok(
         cost,
         smallvec![Value::vector_u8(signature.as_bytes().to_vec())],
+    ))
+}
+
+pub fn secp256k1_keypair_from_seed(
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 1);
+
+    // This function is only used for testing, so we don't need to charge gas
+    let cost = 0.into();
+
+    let seed = pop_arg!(args, VectorRef);
+    let seed_ref = seed.as_bytes_ref();
+
+    if seed_ref.len() != 32 {
+        return Ok(NativeResult::err(cost, INVALID_SEED));
+    }
+    let mut seed_array = [0u8; 32];
+    seed_array.clone_from_slice(&seed_ref);
+
+    let kp = Secp256k1KeyPair::generate(&mut StdRng::from_seed(seed_array));
+
+    let pk_bytes = kp.public().as_bytes().to_vec();
+    let sk_bytes = kp.private().as_bytes().to_vec();
+
+    Ok(NativeResult::ok(
+        cost,
+        smallvec![Value::struct_(values::Struct::pack(vec![
+            Value::vector_u8(sk_bytes),
+            Value::vector_u8(pk_bytes),
+        ]))],
     ))
 }
