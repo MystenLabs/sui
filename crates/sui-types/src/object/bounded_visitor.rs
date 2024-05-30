@@ -32,7 +32,33 @@ pub enum Error {
 ///
 /// Bounded deserialization is intended for use outside of the validator, and so uses a fixed bound,
 /// rather than one that is configured as part of the protocol.
-const MAX_BOUND: usize = 1024 * 1024;
+///
+/// If the environment variable `MAX_ANNOTATED_VALUE_SIZE` is set _during compilation_, the
+/// `MAX_BOUNDS` is set to the value of the environment variable. Otherwise, the default of 1MiB is used.
+const MAX_BOUND: usize = {
+    // Note: once const integers from strs are stabilized, we can remove this function.
+    // https://github.com/rust-lang/rust/pull/124941
+    const fn parse_usize(string: &str) -> usize {
+        let mut res: usize = 0;
+        let mut bytes = string.as_bytes();
+        while let [byte, rest @ ..] = bytes {
+            bytes = rest;
+            if let b'0'..=b'9' = byte {
+                res *= 10;
+                res += (*byte - b'0') as usize;
+            } else {
+                panic!("Unable to parse 'MAX_ANNOTATED_VALUE_SIZE' as a number")
+            }
+        }
+        res
+    }
+
+    if let Some(s) = option_env!("MAX_ANNOTATED_VALUE_SIZE") {
+        parse_usize(s)
+    } else {
+        1024usize * 1024usize
+    }
+};
 
 impl BoundedVisitor {
     fn new(bound: usize) -> Self {
