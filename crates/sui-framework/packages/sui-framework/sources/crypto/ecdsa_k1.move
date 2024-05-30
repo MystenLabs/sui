@@ -22,12 +22,12 @@ module sui::ecdsa_k1 {
 
     #[allow(unused_const)]
     #[test_only]
-    /// Error if the public key is invalid.
+    /// Error if the given hash function does not exist.
     const EInvalidHashFunction: u64 = 4;
 
     #[allow(unused_const)]
     #[test_only]
-    /// Error if the public key is invalid.
+    /// Error if the seed is invalid.
     const EInvalidSeed: u64 = 5;
 
     #[allow(unused_const)]
