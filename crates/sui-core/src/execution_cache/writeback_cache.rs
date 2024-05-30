@@ -1383,12 +1383,20 @@ impl ObjectCacheRead for WritebackCache {
                 //    the version_bound, in which case we must do a scan.
                 // 2. You might think we could just call `self.store.get_latest_object_or_tombstone` here.
                 //    But we cannot, because there may be a more recent version in the dirty set, which
-                //    we skipped over in check_cache_entry! because of the version bound. If we skipped
-                //    it above, we will skip it here as well, but it is more important to optimize the
-                //    case where we miss the cache entirely. Put another way, we expect that most of the
-                //    the time, if we reach this point, there will be nothing in the dirty set, and we
-                //    will go straight to the db - but the dirty set check is still necessary for
-                //    correctness.
+                //    we skipped over in check_cache_entry! because of the version bound. However, if we
+                //    skipped it above, we will skip it here as well, again due to the version bound.
+                // 3. Despite that, we really want to warm the cache here. Why? Because if the object is
+                //    cold (not being written to), then we will very soon be able to start serving reads
+                //    of it from the object_by_id cache, IF we can warm the cache. If we don't warm the
+                //    the cache here, and no writes to the object occur, then we will always have to go
+                //    to the db for the object.
+                //
+                // Lastly, it is important to understand the rationale for all this: If the object is
+                // write-hot, we will serve almost all reads to it from the dirty set (or possibly the
+                // cached set if it is only written to once every few checkpoints). If the object is
+                // write-cold (or non-existent) and read-hot, then we will serve almost all reads to it
+                // from the object_by_id cache check above.  Most of the apparently wasteful code here
+                // exists only to ensure correctness in all the edge cases.
                 let latest: Option<(SequenceNumber, ObjectEntry)> =
                     if let Some(dirty_set) = dirty_entry {
                         dirty_set.get_highest().cloned()
@@ -1415,9 +1423,11 @@ impl ObjectCacheRead for WritebackCache {
                             ObjectEntry::Deleted | ObjectEntry::Wrapped => Ok(None),
                         }
                     } else {
-                        // the latest object exceeded the bound, so now we have to do a scan
+                        // The latest object exceeded the bound, so now we have to do a scan
+                        // But we already know there is no dirty entry within the bound,
+                        // so we go to the db.
                         self.record_db_get("object_lt_or_eq_version_scan")
-                            .find_object_lt_or_eq_version(object_id, version)
+                            .find_object_lt_or_eq_version(object_id, version_bound)
                     }
                 } else {
                     // no object found in dirty set or db, object does not exist
