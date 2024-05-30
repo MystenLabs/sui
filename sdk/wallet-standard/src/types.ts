@@ -164,7 +164,7 @@ export type Command =
 	| {
 			$Intent: {
 				name: string;
-				inputs: Record<string, Argument | Argument[]>;
-				data: Record<string, unknown>;
+				inputs: { [key: string]: Argument | Argument[] };
+				data: { [key: string]: unknown };
 			};
 	  };
