@@ -3489,7 +3489,7 @@ fn borrow_exp_dotted(
         match accessor {
             ExpDottedAccess::Field(name, ty) => {
                 // report autocomplete information for the IDE
-                ide_report_autocomplete(context, &name.loc(), &ty);
+                ide_report_autocomplete(context, &name.loc(), &exp.ty);
                 let e_ = TE::Borrow(mut_, exp, name);
                 let ty = sp(loc, Type_::Ref(mut_, Box::new(ty)));
                 exp = Box::new(T::exp(ty, sp(loc, e_)));
@@ -3695,7 +3695,8 @@ fn ide_report_autocomplete(context: &mut Context, at_loc: &Loc, in_ty: &Type) {
     if !context.env.ide_mode() {
         return;
     }
-    let ty = core::unfold_type(&context.subst, in_ty.clone());
+    let base_ty = sp(in_ty.loc, in_ty.value.base_type_());
+    let ty = core::unfold_type(&context.subst, base_ty.clone());
     let Some(tn) = type_to_type_name(context, &ty, *at_loc, "autocompletion".to_string()) else {
         return;
     };

@@ -1,11 +1,3 @@
-warning[W09008]: unused function
-   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:11:9
-   │
-11 │     fun foo() {
-   │         ^^^ The non-'public', non-'entry' function 'foo' is never called. Consider removing it.
-   │
-   = This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:13:23
    │
@@ -25,7 +17,7 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:14:24
    │
 14 │         let _tmp2 = _s.a.;
-   │                        ^ Autocompletes to: 'x'
+   │                        ^ Autocompletes to: 'a'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:14:25
