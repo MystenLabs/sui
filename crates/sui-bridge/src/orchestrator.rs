@@ -397,7 +397,7 @@ mod tests {
             100,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["unit_test_eth_events_queue"]),
         );
 
@@ -405,7 +405,7 @@ mod tests {
             100,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["unit_test_sui_events_queue"]),
         );
 
@@ -448,7 +448,7 @@ mod tests {
                     100,
                     &mysten_metrics::get_metrics()
                         .unwrap()
-                        .channels
+                        .channel_inflight
                         .with_label_values(&["unit_test_mock_executor"]),
                 );
 

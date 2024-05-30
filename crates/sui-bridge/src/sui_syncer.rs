@@ -53,13 +53,16 @@ where
             SUI_EVENTS_CHANNEL_SIZE,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["sui_events_queue"]),
         );
 
         let mut task_handles = vec![];
         for (module, cursor) in self.cursors {
-            let events_rx_clone = events_tx.clone();
+            let events_rx_clone: mysten_metrics::metered_channel::Sender<(
+                Identifier,
+                Vec<SuiEvent>,
+            )> = events_tx.clone();
             let sui_client_clone = self.sui_client.clone();
             task_handles.push(spawn_logged_monitored_task!(
                 Self::run_event_listening_task(

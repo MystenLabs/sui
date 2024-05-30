@@ -21,6 +21,7 @@ use uuid::Uuid;
 mod guards;
 pub mod histogram;
 pub mod metered_channel;
+pub mod monitored_mpsc;
 pub use guards::*;
 
 pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
@@ -30,7 +31,9 @@ pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
 pub struct Metrics {
     pub tasks: IntGaugeVec,
     pub futures: IntGaugeVec,
-    pub channels: IntGaugeVec,
+    pub channel_inflight: IntGaugeVec,
+    pub channel_sent: IntGaugeVec,
+    pub channel_received: IntGaugeVec,
     pub scope_iterations: IntGaugeVec,
     pub scope_duration_ns: IntGaugeVec,
     pub scope_entrance: IntGaugeVec,
@@ -53,9 +56,23 @@ impl Metrics {
                 registry,
             )
             .unwrap(),
-            channels: register_int_gauge_vec_with_registry!(
-                "monitored_channels",
-                "Size of channels.",
+            channel_inflight: register_int_gauge_vec_with_registry!(
+                "monitored_channel_inflight",
+                "Inflight items in channels.",
+                &["name"],
+                registry,
+            )
+            .unwrap(),
+            channel_sent: register_int_gauge_vec_with_registry!(
+                "monitored_channel_sent",
+                "Sent items in channels.",
+                &["name"],
+                registry,
+            )
+            .unwrap(),
+            channel_received: register_int_gauge_vec_with_registry!(
+                "monitored_channel_received",
+                "Received items in channels.",
                 &["name"],
                 registry,
             )
