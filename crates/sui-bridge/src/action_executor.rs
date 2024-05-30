@@ -129,7 +129,7 @@ where
             CHANNEL_SIZE,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["executor_signing_queue"]),
         );
 
@@ -137,7 +137,7 @@ where
             CHANNEL_SIZE,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["executor_execution_queue"]),
         );
         let execution_tx_clone = execution_tx.clone();
