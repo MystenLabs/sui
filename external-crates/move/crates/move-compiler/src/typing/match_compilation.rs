@@ -2867,7 +2867,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             context.env.add_diag(ice!((
                 loc,
                 format!(
-                    "Found non-matchable type {} at match subject",
+                    "Found non-matchable type {} as match subject",
                     error_format(ty, &Subst::empty())
                 )
             )));
