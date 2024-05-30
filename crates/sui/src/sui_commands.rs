@@ -10,6 +10,7 @@ use crate::validator_commands::SuiValidatorCommand;
 use anyhow::{anyhow, bail};
 use clap::*;
 use fastcrypto::traits::KeyPair;
+use move_analyzer::analyzer;
 use move_package::BuildConfig;
 use rand::rngs::OsRng;
 use std::io::{stderr, stdout, Write};
@@ -172,6 +173,10 @@ pub enum SuiCommand {
         #[clap(subcommand)]
         fire_drill: FireDrill,
     },
+
+    /// Invoke Sui's move-analyzer via CLI
+    #[clap(name = "analyzer", hide = true)]
+    Analyzer,
 }
 
 impl SuiCommand {
@@ -416,6 +421,10 @@ impl SuiCommand {
                 Ok(())
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
+            SuiCommand::Analyzer => {
+                analyzer::run();
+                Ok(())
+            }
         }
     }
 }
