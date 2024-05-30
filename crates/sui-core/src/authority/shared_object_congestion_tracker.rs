@@ -55,6 +55,11 @@ impl SharedObjectCongestionTracker {
         commit_round: Round,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
+        if shared_input_objects.is_empty() {
+            // This is an owned object only transaction. No need to defer.
+            return None;
+        }
+
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
         if start_cost + cert.gas_budget() <= max_accumulated_txn_cost_per_object_in_checkpoint {
             return None;

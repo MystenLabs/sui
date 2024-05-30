@@ -150,7 +150,7 @@ task 5 'run-graphql'. lines 72-96:
 Response: {
   "data": {
     "object": {
-      "address": "0x4ad90f4ed98d545600c66a80334410db765366c41e8e716766bd72822a77500d",
+      "address": "0xedf6e233f33449f4300343e53d4d299378884daa9f57542a878b17470f98648b",
       "asMovePackage": {
         "module": {
           "datatypes": {
@@ -184,7 +184,7 @@ task 6 'run-graphql'. lines 98-143:
 Response: {
   "data": {
     "object": {
-      "address": "0x4ad90f4ed98d545600c66a80334410db765366c41e8e716766bd72822a77500d",
+      "address": "0xedf6e233f33449f4300343e53d4d299378884daa9f57542a878b17470f98648b",
       "asMovePackage": {
         "module": {
           "datatypes": {

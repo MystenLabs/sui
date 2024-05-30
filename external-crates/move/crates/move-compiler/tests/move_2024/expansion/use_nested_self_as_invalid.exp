@@ -33,9 +33,9 @@ error[E03006]: unexpected name in this position
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:11:9
    │
+ 9 │     struct X { f: X::S, f2: S }
+   │            - But 'X' is an struct
+10 │     fun bar() {
 11 │         X::foo();
-   │         ^
-   │         │
-   │         Invalid construction. Expected an enum
-   │         But 'X' is a struct
+   │         ^ Invalid construction. Expected an enum
 

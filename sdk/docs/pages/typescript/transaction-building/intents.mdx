@@ -1,0 +1,58 @@
+# Transaction Intents
+
+Transaction Intents enable 3rd party SDKs and [Transaction Plugins](../plugins) to more easily add
+complex operations to a Transaction. The Typescript SDK currently only includes a single Intent
+(CoinWithBalance), but more will be added in the future.
+
+## The CoinWithBalance intent
+
+The `CoinWithBalance` intent makes it easy to get a coin with a specific balance. For SUI, this has
+generally been done by splitting the gas coin:
+
+```typescript
+const tx = new Transaction();
+
+const [coin] = tx.splitCoins(tx.gas, [100]);
+
+tx.transferObjects([coin], recipient);
+```
+
+This approach works well for SUI, but can't be used for other coin types. The CoinWithBalance intent
+solves this by providing a helper function that automatically adds the correct SplitCoins and
+MergeCoins commands to the transaction:
+
+```typescript
+import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+
+tx.transferObjects(
+	[
+		// Create a SUI coin (balance is in MIST)
+		coinWithBalance({ balance: 100 }),
+		// Create a coin of another type
+		coinWithBalance({ balance: 100, type: '0x123::foo:Bar' }),
+	],
+	recipient,
+);
+```
+
+Splitting the gas coin also causes problems for sponsored transactions. When sponsoring
+transactions, the gas coin comes from the sponsor instead of the transaction sender. Transaction
+sponsors usually do not sponsor transactions that use the gas coin for anything other than gas. To
+transfer SUI that does not use the gas coin, you can set the `useGasCoin` option to `false`:
+
+```typescript
+const tx = new Transaction();
+tx.transferObjects([coinWithBalance({ balance: 100, useGasCoin: false })], recipient);
+```
+
+It's important to only set `useGasCoin` option to false for sponsored transactions, otherwise the
+coinWithBalance intent may use all the SUI coins, leaving no coins to use for gas.
+
+## How it works
+
+When the `CoinWithBalance` intent is resolved, it will look up the senders owned coins for each type
+that needs to be created. It will then find a set of coins with sufficient balance to cover the
+desired balance, to combine them into a single coin. This coin is then used in a `SplitCoins`
+command to create the desired coin.

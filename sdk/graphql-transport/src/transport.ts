@@ -6,8 +6,8 @@ import type {
 	SuiTransport,
 	SuiTransportRequestOptions,
 	SuiTransportSubscribeOptions,
-} from '@mysten/sui.js/client';
-import { SuiHTTPTransport } from '@mysten/sui.js/client';
+} from '@mysten/sui/client';
+import { SuiHTTPTransport } from '@mysten/sui/client';
 import type { DocumentNode } from 'graphql';
 import { print } from 'graphql';
 

@@ -55,6 +55,7 @@
 #![allow(clippy::non_canonical_partial_ord_impl)]
 
 use crate::{
+    compiler_info::CompilerInfo,
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
     utils::get_loc,
@@ -98,10 +99,13 @@ use move_compiler::{
     linters::LintLevel,
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, DatatypeName, FunctionName},
-    shared::{unique_map::UniqueMap, Identifier, Name, NamedAddressMap, NamedAddressMaps},
+    shared::{
+        ide::MacroCallInfo, unique_map::UniqueMap, Identifier, Name, NamedAddressMap,
+        NamedAddressMaps,
+    },
     typing::ast::{
-        BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, IDEInfo, LValue, LValueList,
-        LValue_, MacroCallInfo, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
+        BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
+        ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
     },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
@@ -390,6 +394,8 @@ pub struct TypingSymbolicator<'a> {
     /// In some cases (e.g., when processing bodies of macros) we want to keep traversing
     /// the AST but without recording the actual metadata (uses, definitions, types, etc.)
     traverse_only: bool,
+    /// IDE Annotation Information from the Compiler
+    compiler_info: CompilerInfo,
 }
 
 /// Maps a line number to a list of use-def-s on a given line (use-def set is sorted by col_start)
@@ -717,7 +723,6 @@ fn ast_exp_to_ide_string(exp: &Exp) -> Option<String> {
                     .join(", "),
             )
         }
-        UE::IDEAnnotation(_, exp) => ast_exp_to_ide_string(exp),
         UE::ExpList(list) => {
             let items = list
                 .iter()
@@ -1194,6 +1199,7 @@ pub fn get_symbols(
         BuildPlan::create(resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
     let mut parsed_ast = None;
     let mut typed_ast = None;
+    let mut compiler_info = None;
     let mut diagnostics = None;
 
     let mut dependencies = build_plan.compute_dependencies();
@@ -1285,13 +1291,16 @@ pub fn get_symbols(
                 let failure = true;
                 diagnostics = Some((diags, failure));
                 eprintln!("typed AST compilation failed");
+                eprintln!("diagnostics: {:#?}", diagnostics);
                 return Ok((files, vec![]));
             }
         };
         eprintln!("compiled to typed AST");
         let (mut compiler, typed_program) = compiler.into_ast();
         typed_ast = Some(typed_program.clone());
-
+        compiler_info = Some(CompilerInfo::from(
+            compiler.compilation_env().ide_information.clone(),
+        ));
         edition = Some(compiler.compilation_env().edition(Some(root_pkg_name)));
 
         // compile to CFGIR for accurate diags
@@ -1335,7 +1344,7 @@ pub fn get_symbols(
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
     let parsed_program = parsed_ast.unwrap();
-    let typed_modules = typed_ast.unwrap().inner.modules;
+    let typed_modules = typed_ast.unwrap().modules;
 
     let mut mod_outer_defs = BTreeMap::new();
     let mut mod_use_defs = BTreeMap::new();
@@ -1358,7 +1367,7 @@ pub fn get_symbols(
     if let Some(libs) = compiled_libs.clone() {
         pre_process_typed_modules(
             &parsed_program,
-            &libs.typing.inner.modules,
+            &libs.typing.modules,
             &files,
             &file_id_mapping,
             &file_id_to_lines,
@@ -1399,7 +1408,6 @@ pub fn get_symbols(
             &mut mod_to_alias_lengths,
         );
     }
-
     let mut typing_symbolicator = TypingSymbolicator {
         mod_outer_defs: &mod_outer_defs,
         files: &files,
@@ -1410,6 +1418,7 @@ pub fn get_symbols(
         use_defs: UseDefMap::new(),
         alias_lengths: &BTreeMap::new(),
         traverse_only: false,
+        compiler_info: compiler_info.unwrap(),
     };
 
     process_typed_modules(
@@ -1422,7 +1431,7 @@ pub fn get_symbols(
     );
     if let Some(libs) = compiled_libs {
         process_typed_modules(
-            &libs.typing.inner.modules,
+            &libs.typing.modules,
             &source_files,
             &mod_to_alias_lengths,
             &mut typing_symbolicator,
@@ -2764,6 +2773,38 @@ impl<'a> TypingSymbolicator<'a> {
 
     /// Get symbols for an expression
     fn exp_symbols(&mut self, exp: &Exp, scope: &mut OrdMap<Symbol, LocalDef>) {
+        let expanded_lambda = self.compiler_info.is_expanded_lambda(&exp.exp.loc);
+        if let Some(macro_call_info) = self.compiler_info.get_macro_info(&exp.exp.loc) {
+            debug_assert!(!expanded_lambda, "Compiler info issue");
+            let MacroCallInfo {
+                module,
+                name,
+                method_name,
+                type_arguments,
+                by_value_args,
+            } = macro_call_info.clone();
+            self.mod_call_symbols(&module, name, method_name, &type_arguments, None, scope);
+            by_value_args
+                .iter()
+                .for_each(|a| self.seq_item_symbols(scope, a));
+            let old_traverse_mode = self.traverse_only;
+            // stop adding new use-defs etc.
+            self.traverse_only = true;
+            self.exp_symbols_inner(exp, scope);
+            self.traverse_only = old_traverse_mode;
+        } else if expanded_lambda {
+            let old_traverse_mode = self.traverse_only;
+            // start adding new use-defs etc. when processing a lambda argument
+            self.traverse_only = false;
+            self.exp_symbols_inner(exp, scope);
+            self.traverse_only = old_traverse_mode;
+        } else {
+            self.exp_symbols_inner(exp, scope);
+        }
+    }
+
+    /// Get symbols for an expression
+    fn exp_symbols_inner(&mut self, exp: &Exp, scope: &mut OrdMap<Symbol, LocalDef>) {
         use UnannotatedExp_ as E;
         match &exp.exp.value {
             E::Move { from_user: _, var } => {
@@ -2840,41 +2881,6 @@ impl<'a> TypingSymbolicator<'a> {
                     self.traverse_only = old_traverse_mode;
                 }
             }
-            E::IDEAnnotation(info, exp) => {
-                match info {
-                    IDEInfo::MacroCallInfo(MacroCallInfo {
-                        module,
-                        name,
-                        method_name,
-                        type_arguments,
-                        by_value_args,
-                    }) => {
-                        self.mod_call_symbols(
-                            module,
-                            *name,
-                            *method_name,
-                            type_arguments,
-                            None,
-                            scope,
-                        );
-                        by_value_args
-                            .iter()
-                            .for_each(|a| self.seq_item_symbols(scope, a));
-                        let old_traverse_mode = self.traverse_only;
-                        // stop adding new use-defs etc.
-                        self.traverse_only = true;
-                        self.exp_symbols(exp, scope);
-                        self.traverse_only = old_traverse_mode;
-                    }
-                    IDEInfo::ExpandedLambda => {
-                        let old_traverse_mode = self.traverse_only;
-                        // start adding new use-defs etc. when processing a lambda argument
-                        self.traverse_only = false;
-                        self.exp_symbols(exp, scope);
-                        self.traverse_only = old_traverse_mode;
-                    }
-                }
-            }
             E::Assign(lvalues, opt_types, e) => {
                 self.lvalue_list_symbols(false, lvalues, scope);
                 for opt_t in opt_types {
@@ -2931,9 +2937,6 @@ impl<'a> TypingSymbolicator<'a> {
             E::Annotate(exp, t) => {
                 self.exp_symbols(exp, scope);
                 self.add_type_id_use_def(t);
-            }
-            E::AutocompleteDotAccess { base_exp, .. } => {
-                self.exp_symbols(base_exp, scope);
             }
             E::Unit { .. }
             | E::Value(_)

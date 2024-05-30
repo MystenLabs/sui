@@ -6,7 +6,6 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     cfgir::{
-        self,
         absint::JoinResult,
         visitor::{
             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
@@ -16,10 +15,10 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
     editions::Flavor,
-    expansion::ast::{AbilitySet, TargetKind},
+    expansion::ast::{ModuleIdent, TargetKind},
     hlir::ast::{Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
-    parser::ast::{Ability_, DatatypeName},
-    shared::{unique_map::UniqueMap, CompilationEnv, Identifier},
+    parser::ast::Ability_,
+    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
     sui_mode::{OBJECT_NEW, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT},
 };
 use std::collections::BTreeMap;
@@ -64,7 +63,8 @@ pub const FUNCTIONS_TO_SKIP: &[(Symbol, Symbol, Symbol)] = &[
 
 pub struct IDLeakVerifier;
 pub struct IDLeakVerifierAI<'a> {
-    declared_abilities: &'a UniqueMap<DatatypeName, AbilitySet>,
+    module: &'a ModuleIdent,
+    info: &'a TypingProgramInfo,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -93,20 +93,19 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
 
     fn new<'a>(
         env: &CompilationEnv,
-        program: &'a cfgir::ast::Program,
         context: &'a CFGContext<'a>,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         let module = &context.module;
-        let mdef = program.modules.get(module).unwrap();
-        let package_name = mdef.package_name;
+        let minfo = context.info.module(module);
+        let package_name = minfo.package;
         let config = env.package_config(package_name);
         if config.flavor != Flavor::Sui {
             // Skip if not sui
             return None;
         }
         if !matches!(
-            mdef.target_kind,
+            minfo.target_kind,
             TargetKind::Source {
                 is_root_package: true
             }
@@ -124,8 +123,10 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
             }
         }
 
-        let declared_abilities = context.datatype_declared_abilities.get(module).unwrap();
-        Some(IDLeakVerifierAI { declared_abilities })
+        Some(IDLeakVerifierAI {
+            module,
+            info: context.info,
+        })
     }
 }
 
@@ -160,7 +161,10 @@ impl<'a> SimpleAbsInt for IDLeakVerifierAI<'a> {
         let E::Pack(s, _tys, fields) = e__ else {
             return None;
         };
-        let abilities = self.declared_abilities.get(s)?;
+        let abilities = {
+            let minfo = self.info.module(self.module);
+            &minfo.structs.get(s)?.abilities
+        };
         if !abilities.has_ability_(Ability_::Key) {
             return None;
         }

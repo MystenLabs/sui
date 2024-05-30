@@ -2,9 +2,14 @@
 
 import { Callout } from 'nextra/components';
 
-<Callout type="info">
-	Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
-	development.
+<Callout type="warning">
+	Sui Owned Object Pools (SuiOOP) will likely be replaced by
+	[`ParallelTransactionExecutor`](../executors#paralleltransactionexecutor) from
+	`@mysten/sui/transactions`
+
+    Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
+    development.
+
 </Callout>
 
 ## Installing the library
@@ -69,7 +74,7 @@ At the end of the setup, your `.env` should look like the template
 ADMIN_ADDRESS= ...
 ADMIN_SECRET_KEY= ...
 
-# A user address that is used as a receiver of txbs. Used for testing.
+# A user address that is used as a receiver of txs. Used for testing.
 TEST_USER_ADDRESS= ...
 TEST_USER_SECRET= ...
 

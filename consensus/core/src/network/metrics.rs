@@ -1,11 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
     IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
+
+// Fields for network-agnostic metrics can be added here
+pub(crate) struct NetworkMetrics {
+    pub(crate) network_type: IntGaugeVec,
+    pub(crate) inbound: Arc<NetworkRouteMetrics>,
+    pub(crate) outbound: Arc<NetworkRouteMetrics>,
+}
+
+impl NetworkMetrics {
+    pub(crate) fn new(registry: &Registry) -> Self {
+        Self {
+            network_type: register_int_gauge_vec_with_registry!(
+                "network_type",
+                "Type of the network used: anemo or tonic",
+                &["type"],
+                registry
+            )
+            .unwrap(),
+            inbound: Arc::new(NetworkRouteMetrics::new("inbound", registry)),
+            outbound: Arc::new(NetworkRouteMetrics::new("outbound", registry)),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct QuinnConnectionMetrics {

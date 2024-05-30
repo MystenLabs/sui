@@ -4,39 +4,17 @@
 import type { SerializedBcs } from '@mysten/bcs';
 
 import { bcs } from '../bcs/index.js';
-import type { TransactionBlockInput } from './Transactions.js';
+import type { Argument } from './data/internal.js';
 
-export function createPure(
-	makePure: (value: unknown, type?: string | undefined) => TransactionBlockInput,
-) {
-	/**
-	 * Add a new non-object input to the transaction.
-	 */
+export function createPure(makePure: (value: SerializedBcs<any, any> | Uint8Array) => Argument) {
 	function pure(
 		/**
 		 * The pure value, serialized to BCS. If this is a Uint8Array, then the value
 		 * is assumed to be raw bytes, and will be used directly.
 		 */
 		value: SerializedBcs<any, any> | Uint8Array,
-	): TransactionBlockInput;
-	/**
-	 * @deprecated Pass the pure value as SerializedBcs instead.
-	 */
-	function pure(
-		/**
-		 * The pure value that will be used as the input value. If this is a Uint8Array, then the value
-		 * is assumed to be raw bytes, and will be used directly.
-		 */
-		value: unknown,
-		/**
-		 * The BCS type to serialize the value into. If not provided, the type will automatically be determined
-		 * based on how the input is used.
-		 */
-		type?: string,
-	): TransactionBlockInput;
-
-	function pure(value: unknown, type?: string): TransactionBlockInput {
-		return makePure(value, type);
+	): Argument {
+		return makePure(value);
 	}
 
 	pure.u8 = (value: number) => makePure(bcs.U8.serialize(value));

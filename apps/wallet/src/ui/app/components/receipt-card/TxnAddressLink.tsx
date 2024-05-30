@@ -4,7 +4,7 @@
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { isSuiNSName } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 
 type TxnAddressLinkProps = {
 	address: string;
