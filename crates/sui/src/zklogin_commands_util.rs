@@ -22,7 +22,7 @@ use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_sdk::SuiClientBuilder;
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{PublicKey, SuiKeyPair};
 use sui_types::multisig::{MultiSig, MultiSigPublicKey};
@@ -134,15 +134,15 @@ pub async fn perform_zk_login_test_tx(
         panic!("Faucet did not work correctly and the provided Sui address has no coins")
     }
 
-    let coin_for_transfer = response.data[0].coin_object_id;
-    let coin_for_gas = response.data[1].coin_object_id;
+    let transfer_coin = response.data[0].coin_object_id;
+    let gas_coin = response.data[1].coin_object_id;
 
     let txb_res = sui
         .transaction_builder()
         .transfer_object(
             sender,
-            coin_for_transfer,
-            Some(coin_for_gas),
+            transfer_coin,
+            Some(gas_coin),
             5000000,
             SuiAddress::ZERO, // as a demo, send to a dummy address
         )
