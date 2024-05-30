@@ -1316,7 +1316,6 @@ impl AuthorityStore {
         objects: &[ObjectRef],
         is_force_reset: bool,
     ) -> SuiResult {
-        trace!(?objects, "initialize_locks");
         AuthorityStore::initialize_live_object_markers(
             &self.perpetual_tables.live_owned_object_markers,
             write_batch,

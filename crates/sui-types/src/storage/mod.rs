@@ -470,6 +470,15 @@ pub enum ObjectOrTombstone {
     Tombstone(ObjectRef),
 }
 
+impl ObjectOrTombstone {
+    pub fn as_objref(&self) -> ObjectRef {
+        match self {
+            ObjectOrTombstone::Object(obj) => obj.compute_object_reference(),
+            ObjectOrTombstone::Tombstone(obref) => *obref,
+        }
+    }
+}
+
 impl From<Object> for ObjectOrTombstone {
     fn from(object: Object) -> Self {
         ObjectOrTombstone::Object(object)

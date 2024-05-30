@@ -456,7 +456,7 @@ impl WritebackCache {
         version: SequenceNumber,
         object: ObjectEntry,
     ) {
-        debug!("inserting object entry {:?}: {:?}", object_id, version);
+        debug!("inserting object entry {:?}", object);
         fail_point_async!("write_object_entry");
         self.metrics.record_cache_write("object");
         self.dirty
@@ -570,7 +570,38 @@ impl WritebackCache {
     ) -> CacheResult<(SequenceNumber, ObjectEntry)> {
         self.metrics
             .record_cache_request(request_type, "object_by_id");
-        if let Some(entry) = self.cached.object_by_id_cache.get(object_id) {
+        let entry = self.cached.object_by_id_cache.get(object_id);
+
+        if cfg!(debug_assertions) {
+            if let Some(entry) = &entry {
+                // check that cache is coherent
+                let highest: Option<ObjectEntry> = self
+                    .dirty
+                    .objects
+                    .get(object_id)
+                    .and_then(|entry| entry.get_highest().map(|(_, o)| o.clone()))
+                    .or_else(|| {
+                        let obj: Option<ObjectEntry> = self
+                            .store
+                            .get_latest_object_or_tombstone(*object_id)
+                            .unwrap()
+                            .map(|(_, o)| o.into());
+                        obj
+                    });
+
+                assert_eq!(
+                    highest,
+                    match &*entry.lock() {
+                        LatestObjectCacheEntry::Object(version, entry) => Some(entry.clone()),
+                        LatestObjectCacheEntry::NonExistent => None,
+                    },
+                    "object_by_id cache is incoherent for {:?}",
+                    object_id
+                );
+            }
+        }
+
+        if let Some(entry) = entry {
             let entry = entry.lock();
             match &*entry {
                 LatestObjectCacheEntry::Object(latest_version, latest_object) => {
