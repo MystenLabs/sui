@@ -5753,8 +5753,9 @@ fn create_shared_objects(num: u32) -> Vec<Object> {
     objects
 }
 
-#[sim_test]
-async fn test_consensus_handler_per_object_congestion_control() {
+async fn test_consensus_handler_per_object_congestion_control(
+    mode: PerObjectCongestionControlMode,
+) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // In this test, we tests transactions that operate on 2 shared objects. The idea is that
@@ -5764,15 +5765,29 @@ async fn test_consensus_handler_per_object_congestion_control() {
     //
     // We will create 2 batches of commits. So here, we create gas objects for each of them separately.
     let shared_objects = create_shared_objects(2);
-    let gas_objects_commit_1 = create_gas_objects(10, sender);
-    let gas_objects_commit_2 = create_gas_objects(5, sender);
+
+    let non_congested_tx_count = match mode {
+        PerObjectCongestionControlMode::None => unreachable!(),
+        PerObjectCongestionControlMode::TotalGasBudget => 5,
+        PerObjectCongestionControlMode::TotalTxCount => 2,
+    };
+    let gas_objects_commit_1 = create_gas_objects(5 + non_congested_tx_count, sender);
+    let gas_objects_commit_2 = create_gas_objects(non_congested_tx_count, sender);
 
     // Create the cluster with controlled per object congestion control.
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config
-        .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
-    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(200_000_000);
+    protocol_config.set_per_object_congestion_control_mode(mode);
+
+    match mode {
+        PerObjectCongestionControlMode::None => unreachable!(),
+        PerObjectCongestionControlMode::TotalGasBudget => {
+            protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(200_000_000);
+        }
+        PerObjectCongestionControlMode::TotalTxCount => {
+            protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(2);
+        }
+    }
     protocol_config.set_max_deferral_rounds_for_congestion_control(1000); // Set to a large number so that we don't hit this limit.
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
@@ -5785,9 +5800,9 @@ async fn test_consensus_handler_per_object_congestion_control() {
     authority.insert_genesis_objects(&genesis_objects).await;
 
     // Create first batch of commits. Here, we create 5 transactions that operate on the first
-    // shared object with very high gas budget. And 5 transactions that operate on the second
-    // shared object with low gas budget (so that there won't be any congestion on the second
-    // object).
+    // shared object with very high gas budget. And `non_congested_tx_count` transactions that
+    // operate on the second shared object with low gas budget (so that there won't be any
+    // congestion on the second object).
     //
     // For transaction operates on the expensive object, we use gas price from 1000 to 5000,
     // and for transaction operates on the cheaper object, we use gas price of 1000.
@@ -5831,7 +5846,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
     // should go through, and all transactions oeprate on the cheaper object should go through.
     // We also check that the scheduled transactions on the expensive object have the highest gas price.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
-    assert_eq!(scheduled_txns.len(), 7);
+    assert_eq!(scheduled_txns.len(), 2 + non_congested_tx_count as usize);
     for cert in scheduled_txns.iter() {
         assert!(
             cert.data().transaction_data().gas_price() >= 4000
@@ -5873,7 +5888,8 @@ async fn test_consensus_handler_per_object_congestion_control() {
         }
     }
 
-    // Create second batch of commits. Here, we create another 5 transactions that operate on the cheap object.
+    // Create second batch of commits. Here, we create another `non_congested_tx_count` transactions that operate
+    // on the cheap object.
     let mut new_certificates: Vec<VerifiedCertificate> = vec![];
     for gas_object in gas_objects_commit_2.iter() {
         let certificate = make_test_transaction(
@@ -5896,7 +5912,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
     // object should go through.
     let scheduled_txns =
         send_batch_consensus_no_execution(&authority, &new_certificates, true).await;
-    assert_eq!(scheduled_txns.len(), 7);
+    assert_eq!(scheduled_txns.len(), 2 + non_congested_tx_count as usize);
     for cert in scheduled_txns.iter() {
         assert!(
             cert.data().transaction_data().gas_price() >= 2000
@@ -5942,6 +5958,22 @@ async fn test_consensus_handler_per_object_congestion_control() {
         .get_all_deferred_transactions_for_test()
         .unwrap()
         .is_empty());
+}
+
+#[sim_test]
+async fn test_consensus_handler_per_object_congestion_control_using_budget() {
+    test_consensus_handler_per_object_congestion_control(
+        PerObjectCongestionControlMode::TotalGasBudget,
+    )
+    .await;
+}
+
+#[sim_test]
+async fn test_consensus_handler_per_object_congestion_control_using_tx_count() {
+    test_consensus_handler_per_object_congestion_control(
+        PerObjectCongestionControlMode::TotalTxCount,
+    )
+    .await;
 }
 
 // Tests congestion control triggered transaction cancellation in consensus handler:

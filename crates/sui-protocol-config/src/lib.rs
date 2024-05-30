@@ -488,6 +488,7 @@ pub enum PerObjectCongestionControlMode {
     #[default]
     None, // No congestion control.
     TotalGasBudget, // Use txn gas budget as execution cost.
+    TotalTxCount,   // Use total txn count as execution cost.
 }
 
 impl PerObjectCongestionControlMode {

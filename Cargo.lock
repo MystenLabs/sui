@@ -12312,6 +12312,7 @@ dependencies = [
  "reqwest",
  "roaring",
  "rocksdb",
+ "rstest",
  "scopeguard",
  "serde",
  "serde-reflection",
