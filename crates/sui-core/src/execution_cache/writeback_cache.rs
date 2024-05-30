@@ -592,7 +592,7 @@ impl WritebackCache {
                 assert_eq!(
                     highest,
                     match &*entry.lock() {
-                        LatestObjectCacheEntry::Object(version, entry) => Some(entry.clone()),
+                        LatestObjectCacheEntry::Object(_, entry) => Some(entry.clone()),
                         LatestObjectCacheEntry::NonExistent => None,
                     },
                     "object_by_id cache is incoherent for {:?}",
