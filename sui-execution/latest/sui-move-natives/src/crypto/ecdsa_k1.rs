@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::NativesCostTable;
+use fastcrypto::secp256k1::Secp256k1KeyPair;
+use fastcrypto::secp256k1::Secp256k1PrivateKey;
 use fastcrypto::{
     error::FastCryptoError,
     hash::{Keccak256, Sha256},
@@ -24,6 +26,7 @@ use std::collections::VecDeque;
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
 pub const INVALID_PUBKEY: u64 = 2;
+pub const INVALID_PRIVKEY_OR_HASH: u64 = 3;
 
 pub const KECCAK256: u8 = 0;
 pub const SHA256: u8 = 1;
@@ -285,4 +288,41 @@ pub fn secp256k1_verify(
     };
 
     Ok(NativeResult::ok(cost, smallvec![Value::bool(result)]))
+}
+
+pub fn secp256k1_sign(
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 3);
+
+    // This function is only used for testing, so we don't need to charge gas
+    let cost = 0.into();
+
+    let hash = pop_arg!(args, u8);
+    let msg = pop_arg!(args, VectorRef);
+    let private_key_bytes = pop_arg!(args, VectorRef);
+
+    let msg_ref = msg.as_bytes_ref();
+    let private_key_bytes_ref = private_key_bytes.as_bytes_ref();
+
+    let sk = match <Secp256k1PrivateKey as ToFromBytes>::from_bytes(&private_key_bytes_ref) {
+        Ok(sk) => sk,
+        Err(_) => return Ok(NativeResult::err(cost, INVALID_PRIVKEY_OR_HASH)),
+    };
+
+    let kp = Secp256k1KeyPair::from(sk);
+
+    let signature = match hash {
+        KECCAK256 => kp.sign_with_hash::<Keccak256>(&msg_ref),
+        SHA256 => kp.sign_with_hash::<Sha256>(&msg_ref),
+        _ => return Ok(NativeResult::err(cost, INVALID_PRIVKEY_OR_HASH)),
+    };
+
+    Ok(NativeResult::ok(
+        cost,
+        smallvec![Value::vector_u8(signature.as_bytes().to_vec())],
+    ))
 }

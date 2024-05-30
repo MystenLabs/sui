@@ -49,4 +49,13 @@ module sui::ecdsa_k1 {
     ///
     /// If the signature is valid to the pubkey and hashed message, return true. Else false.
     public native fun secp256k1_verify(signature: &vector<u8>, public_key: &vector<u8>, msg: &vector<u8>, hash: u8): bool;
+
+    #[test_only]
+    /// @param private_key: A 32-bytes private key that is used to sign the message.
+    /// @param msg: The message to sign, this is raw message without hashing.
+    /// @param hash: The hash function used to hash the message when signing.
+    ///
+    /// Return the 64-bytes signature in form (r, s) that is signed using Secp256k1.
+    /// This should ONLY be used in tests, because it will reveal the private key onchain.
+    public native fun secp256k1_sign(private_key: &vector<u8>, msg: &vector<u8>, hash: u8): vector<u8>;
 }

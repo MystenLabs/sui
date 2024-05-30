@@ -131,4 +131,23 @@ module sui::ecdsa_k1_tests {
 
         addr
     }
+
+    #[test]
+    fun test_sign() {
+        let msg = b"Hello, world!";
+        let pk = x"02337cca2171fdbfcfd657fa59881f46269f1e590b5ffab6023686c7ad2ecc2c1c";
+        let sk = x"42258dcda14cf111c602b8971b8cc843e91e46ca905151c02744a6b017e69316";
+
+        // Test with Keccak256 hash
+        let sig = ecdsa_k1::secp256k1_sign(&sk, &msg, 0);
+        assert!(ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 0));
+
+        // Test with SHA256 hash
+        let sig = ecdsa_k1::secp256k1_sign(&sk, &msg, 1);
+        assert!(ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 1));
+
+        // Verification should fail with another message
+        let other_msg = b"Farewell, world!";
+        assert!(!ecdsa_k1::secp256k1_verify(&sig, &pk, &other_msg, 0));
+    }
 }
