@@ -248,6 +248,8 @@ ConsensusCommitPrologueV3:
   STRUCT:
     - epoch: U64
     - round: U64
+    - sub_dag_index:
+        OPTION: U64
     - commit_timestamp_ms: U64
     - consensus_commit_digest:
         TYPENAME: ConsensusCommitDigest
