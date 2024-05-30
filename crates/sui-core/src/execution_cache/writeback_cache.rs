@@ -953,9 +953,10 @@ impl WritebackCache {
 
         // We may be racing with another thread that observed an older version of the object
         if !entry.is_fresh() {
-            // !is_fresh means we lost the race, and actual_entry holds the entry that was
+            // !is_fresh means we lost the race, and entry holds the value that was
             // inserted by the other thread. We need to check if we have a more recent version
             // than the other reader.
+            //
             // This could also mean that the entry was inserted by a transaction write. This
             // could occur in the following case:
             //
@@ -964,12 +965,12 @@ impl WritebackCache {
             //                     | tx writes object at v2
             // tries to cache v1
             //
-            // Thread 1 will see that v2 is already in the cache
-
-            // this point because there should have been a cache hit.)
-            let mut entry = entry.value().lock();
+            // Thread 1 will see that v2 is already in the cache when it tries to cache it,
+            // and will try to update the cache with v1. But the is_newer_than check will fail,
+            // so v2 will remain in the cache
 
             // Ensure only the latest version is inserted.
+            let mut entry = entry.value().lock();
             if object.is_newer_than(&entry) {
                 *entry = object;
             }
