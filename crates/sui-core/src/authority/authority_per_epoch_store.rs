@@ -2640,6 +2640,7 @@ impl AuthorityPerEpochStore {
         transactions: &mut VecDeque<VerifiedExecutableTransaction>,
         consensus_commit_info: &ConsensusCommitInfo,
         roots: &mut BTreeSet<TransactionKey>,
+        cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> SuiResult {
         #[cfg(any(test, feature = "test-utils"))]
         {
@@ -2648,8 +2649,39 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        let transaction = consensus_commit_info
-            .create_consensus_commit_prologue_transaction(self.epoch(), self.protocol_config());
+        let mut version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)> =
+            Vec::new();
+
+        let mut shared_input_next_version = HashMap::new();
+        for txn in transactions.iter() {
+            if let Some(CancelConsensusCertificateReason::CongestionOnObjects(_)) =
+                cancelled_txns.get(txn.digest())
+            {
+                let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
+                    txn,
+                    &mut shared_input_next_version,
+                    cancelled_txns,
+                );
+
+                version_assignment.push((*txn.digest(), assigned_versions));
+            }
+        }
+
+        fail_point_arg!(
+            "additional_cancelled_txns_for_tests",
+            |additional_cancelled_txns: Vec<(
+                TransactionDigest,
+                Vec<(ObjectID, SequenceNumber)>
+            )>| {
+                version_assignment.extend(additional_cancelled_txns);
+            }
+        );
+
+        let transaction = consensus_commit_info.create_consensus_commit_prologue_transaction(
+            self.epoch(),
+            self.protocol_config(),
+            version_assignment,
+        );
         match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
                 roots.insert(processed_tx.key());
@@ -2931,6 +2963,7 @@ impl AuthorityPerEpochStore {
             &mut verified_certificates,
             consensus_commit_info,
             roots,
+            &cancelled_txns,
         )?;
 
         let verified_certificates: Vec<_> = verified_certificates.into();
