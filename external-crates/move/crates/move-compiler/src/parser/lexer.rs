@@ -438,6 +438,16 @@ impl<'input> Lexer<'input> {
     // comments. The documentation comments are not stored in the AST, but can be retrieved by
     // using the start position of an item as an index into `matched_doc_comments`.
     pub fn match_doc_comments(&mut self) {
+        if let Some(comments) = self.read_doc_comments() {
+            self.attach_doc_comments(comments);
+        };
+    }
+
+    // Matches the doc comments after the last token (or the beginning of the file) to the position
+    // of the current token. This moves the comments out of `doc_comments` and
+    // into `matched_doc_comments`. At the end of parsing, if `doc_comments` is not empty, errors
+    // for stale doc comments will be produced.
+    pub fn read_doc_comments(&mut self) -> Option<String> {
         let start = self.previous_end_loc() as u32;
         let end = self.cur_start as u32;
         let mut matched = vec![];
@@ -450,10 +460,23 @@ impl<'input> Lexer<'input> {
             })
             .collect::<Vec<String>>()
             .join("\n");
-        for span in matched {
-            self.doc_comments.remove(&span);
+        if !matched.is_empty() {
+            for span in matched {
+                self.doc_comments.remove(&span);
+            }
+            Some(merged)
+        } else {
+            None
         }
-        self.matched_doc_comments.insert(end, merged);
+    }
+
+    // Calling this function during parsing adds the `doc_comments` to the current location. The
+    // documentation comments are not stored in the AST, but can be retrieved by using the start
+    // position of an item as an index into `matched_doc_comments`.
+    pub fn attach_doc_comments(&mut self, doc_comments: String) {
+        let attachment_location = self.cur_start as u32;
+        self.matched_doc_comments
+            .insert(attachment_location, doc_comments);
     }
 
     // At the end of parsing, checks whether there are any unmatched documentation comments,

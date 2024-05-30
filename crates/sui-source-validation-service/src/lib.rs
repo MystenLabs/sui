@@ -33,7 +33,7 @@ use url::Url;
 use move_core_types::account_address::AccountAddress;
 use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
 use move_symbol_pool::Symbol;
-use sui_move::build::resolve_lock_file_path;
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::rpc_types::{SuiTransactionBlockEffects, TransactionFilter};
 use sui_sdk::types::base_types::ObjectID;

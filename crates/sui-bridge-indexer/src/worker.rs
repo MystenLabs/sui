@@ -16,9 +16,9 @@ use sui_bridge::events::{
 };
 use sui_bridge::types::EthLog;
 use sui_data_ingestion_core::Worker;
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::{
     base_types::ObjectID,
+    effects::TransactionEffectsAPI,
     full_checkpoint_content::{CheckpointData, CheckpointTransaction},
     transaction::{TransactionDataAPI, TransactionKind},
     BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID,
@@ -57,35 +57,36 @@ impl BridgeWorker {
 
     // Process a transaction that has been identified as a bridge transaction.
     fn process_transaction(&self, tx: &CheckpointTransaction, checkpoint: u64, timestamp_ms: u64) {
-        if let Some(event) = &tx.events {
-            event.data.iter().for_each(|ev| {
+        if let Some(events) = &tx.events {
+            events.data.iter().for_each(|ev| {
                 if ev.type_.address == BRIDGE_ADDRESS {
                     let token_transfer = match ev.type_.name.as_str() {
                         "TokenDepositedEvent" => {
-                            println!("Observed Sui Deposit");
-                            // todo: handle deserialization error
-                            let event: MoveTokenDepositedEvent =
+                            info!("Observed Sui Deposit {:?}", ev);
+                            // TODO: handle deserialization error
+                            let move_event: MoveTokenDepositedEvent =
                                 bcs::from_bytes(&ev.contents).unwrap();
                             Some(TokenTransfer {
-                                chain_id: event.source_chain,
-                                nonce: event.seq_num,
+                                chain_id: move_event.source_chain,
+                                nonce: move_event.seq_num,
                                 block_height: checkpoint,
                                 timestamp_ms,
                                 txn_hash: tx.transaction.digest().inner().to_vec(),
+                                txn_sender: ev.sender.to_vec(),
                                 status: TokenTransferStatus::Deposited,
                                 gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
                                 data_source: BridgeDataSource::Sui,
                                 data: Some(TokenTransferData {
-                                    sender_address: event.sender_address,
-                                    destination_chain: event.target_chain,
-                                    recipient_address: event.target_address,
-                                    token_id: event.token_type,
-                                    amount: event.amount_sui_adjusted,
+                                    destination_chain: move_event.target_chain,
+                                    sender_address: move_event.sender_address.clone(),
+                                    recipient_address: move_event.target_address.clone(),
+                                    token_id: move_event.token_type,
+                                    amount: move_event.amount_sui_adjusted,
                                 }),
                             })
                         }
                         "TokenTransferApproved" => {
-                            println!("Observed Sui Approval");
+                            info!("Observed Sui Approval {:?}", ev);
                             let event: MoveTokenTransferApproved =
                                 bcs::from_bytes(&ev.contents).unwrap();
                             Some(TokenTransfer {
@@ -94,6 +95,7 @@ impl BridgeWorker {
                                 block_height: checkpoint,
                                 timestamp_ms,
                                 txn_hash: tx.transaction.digest().inner().to_vec(),
+                                txn_sender: ev.sender.to_vec(),
                                 status: TokenTransferStatus::Approved,
                                 gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
                                 data_source: BridgeDataSource::Sui,
@@ -101,7 +103,7 @@ impl BridgeWorker {
                             })
                         }
                         "TokenTransferClaimed" => {
-                            println!("Observed Sui Claim");
+                            info!("Observed Sui Claim {:?}", ev);
                             let event: MoveTokenTransferClaimed =
                                 bcs::from_bytes(&ev.contents).unwrap();
                             Some(TokenTransfer {
@@ -110,6 +112,7 @@ impl BridgeWorker {
                                 block_height: checkpoint,
                                 timestamp_ms,
                                 txn_hash: tx.transaction.digest().inner().to_vec(),
+                                txn_sender: ev.sender.to_vec(),
                                 status: TokenTransferStatus::Claimed,
                                 gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
                                 data_source: BridgeDataSource::Sui,
@@ -120,7 +123,7 @@ impl BridgeWorker {
                     };
 
                     if let Some(transfer) = token_transfer {
-                        println!("SUI: Storing bridge event : {:?}", ev.type_);
+                        info!("SUI: Storing bridge event : {:?}", ev.type_);
                         write(&self.pg_pool, transfer);
                     }
                 };
@@ -152,24 +155,25 @@ pub async fn process_eth_transaction(
             let gas = transaction.gas;
             let tx_hash = log.tx_hash;
 
-            println!("Observed Eth bridge event: {:#?}", bridge_event);
+            info!("Observed Eth bridge event: {:?}", bridge_event);
 
             match bridge_event {
                 EthBridgeEvent::EthSuiBridgeEvents(bridge_event) => match bridge_event {
                     EthSuiBridgeEvents::TokensDepositedFilter(bridge_event) => {
-                        println!("Observed Eth Deposit");
+                        info!("Observed Eth Deposit {:?}", bridge_event);
                         let transfer = TokenTransfer {
                             chain_id: bridge_event.source_chain_id,
                             nonce: bridge_event.nonce,
                             block_height: block_number,
                             timestamp_ms: timestamp,
                             txn_hash: tx_hash.as_bytes().to_vec(),
+                            txn_sender: bridge_event.sender_address.as_bytes().to_vec(),
                             status: TokenTransferStatus::Deposited,
                             gas_usage: gas.as_u64() as i64,
                             data_source: BridgeDataSource::Eth,
                             data: Some(TokenTransferData {
-                                sender_address: bridge_event.sender_address.as_bytes().to_vec(),
                                 destination_chain: bridge_event.destination_chain_id,
+                                sender_address: bridge_event.sender_address.as_bytes().to_vec(),
                                 recipient_address: bridge_event.recipient_address.to_vec(),
                                 token_id: bridge_event.token_id,
                                 amount: bridge_event.sui_adjusted_amount,
@@ -179,13 +183,14 @@ pub async fn process_eth_transaction(
                         write(&pool, transfer);
                     }
                     EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
-                        println!("Observed Eth Claim");
+                        info!("Observed Eth Claim {:?}", bridge_event);
                         let transfer = TokenTransfer {
                             chain_id: bridge_event.source_chain_id,
                             nonce: bridge_event.nonce,
                             block_height: block_number,
                             timestamp_ms: timestamp,
                             txn_hash: tx_hash.as_bytes().to_vec(),
+                            txn_sender: bridge_event.sender_address.to_vec(),
                             status: TokenTransferStatus::Claimed,
                             gas_usage: gas.as_u64() as i64,
                             data_source: BridgeDataSource::Eth,

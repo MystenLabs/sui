@@ -9,8 +9,11 @@ warning[W09002]: unused variable
 error[E03013]: positional call mismatch
   ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:7:13
   │
+2 │     public struct Foo(u64) has copy, drop;
+  │                   --- 'Foo' is declared here
+  ·
 7 │         let Foo { y: _ } = Foo(0);
-  │             ^^^^^^^^^^^^ Invalid deconstruction. Positional struct field declarations require positional deconstruction
+  │             ^^^^^^^^^^^^ Invalid struct deconstruction. Positional struct declarations require positional deconstructions
 
 error[E04016]: too few arguments
   ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:7:13
@@ -35,8 +38,11 @@ warning[W09002]: unused variable
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:14:9
    │
+ 2 │     public struct Foo(u64) has copy, drop;
+   │                   --- 'Foo' is declared here
+   ·
 14 │         Foo { y: _ } = Foo(0);
-   │         ^^^^^^^^^^^^ Invalid deconstruction. Positional struct field declarations require positional deconstruction
+   │         ^^^^^^^^^^^^ Invalid struct deconstruction. Positional struct declarations require positional deconstructions
 
 error[E04016]: too few arguments
    ┌─ tests/move_2024/naming/positional_struct_non_positional_unpack.move:14:9
