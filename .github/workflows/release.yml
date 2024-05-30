@@ -43,10 +43,10 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-ghcloud,
-            windows-ghcloud,
-            macos-latest-xl,
-            macos-latest-xlarge
+            ubuntu-ghcloud, # ubuntu-x86_64
+            windows-ghcloud, # windows-x86_64
+            macos-latest-xl, # macos-x86_64
+            macos-latest-xlarge # macos-arm64
           ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
