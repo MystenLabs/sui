@@ -303,7 +303,8 @@ pub fn secp256k1_sign(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 3);
 
-    // This function is only used for testing, so we don't need to charge gas
+    // The corresponding Move function, sui::ecdsa_k1::secp256k1_sign, is only used for testing, so
+    // we don't need to charge any gas.
     let cost = 0.into();
 
     let hash = pop_arg!(args, u8);
@@ -340,7 +341,8 @@ pub fn secp256k1_keypair_from_seed(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
 
-    // This function is only used for testing, so we don't need to charge gas
+    // The corresponding Move function, sui::ecdsa_k1::secp256k1_keypair_from_seed, is only used for
+    // testing, so we don't need to charge any gas.
     let cost = 0.into();
 
     let seed = pop_arg!(args, VectorRef);
