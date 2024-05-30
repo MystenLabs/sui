@@ -59,9 +59,49 @@ pub struct AutocompleteInfo {
 pub struct MissingMatchArmsInfo {
     /// A vector of arm patterns that can be inserted to make the match complete.
     /// Note the span information on these is _wrong_ and must be recomputed after insertion.
-    pub arms: Vec<N::MatchPattern_>,
+    pub arms: Vec<PatternSuggestion>,
 }
 
+/// Suggested new entries for a pattern. Note that any location information points to the
+/// definition site. As this is largely suggested text, it lacks location information.
+#[derive(Debug, Clone)]
+pub enum PatternSuggestion {
+    Wildcard,
+    Binder(Symbol),
+    Value(E::Value_),
+    UnpackPositionalStruct {
+        module: E::ModuleIdent,
+        name: P::DatatypeName,
+        /// The number of wildcards to generate.
+        field_count: usize,
+    },
+    UnpackNamedStruct {
+        module: E::ModuleIdent,
+        name: P::DatatypeName,
+        /// The fields, in order, to generate
+        fields: Vec<Symbol>,
+    },
+    /// A tag-style variant that takes no arguments
+    UnpackEmptyVariant {
+        module: E::ModuleIdent,
+        enum_name: P::DatatypeName,
+        variant_name: P::VariantName,
+    },
+    UnpackPositionalVariant {
+        module: E::ModuleIdent,
+        enum_name: P::DatatypeName,
+        variant_name: P::VariantName,
+        /// The number of wildcards to generate.
+        field_count: usize,
+    },
+    UnpackNamedVariant {
+        module: E::ModuleIdent,
+        enum_name: P::DatatypeName,
+        variant_name: P::VariantName,
+        /// The fields, in order, to generate
+        fields: Vec<Symbol>,
+    },
+}
 
 //*************************************************************************************************
 // Impls

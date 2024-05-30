@@ -789,6 +789,24 @@ impl<'env> Context<'env> {
         }
     }
 
+    /// Indicates if the enum variant is empty.
+    pub fn enum_variant_is_empty(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+        variant_name: &VariantName,
+    ) -> bool {
+        let vdef = self
+            .enum_definition(module, enum_name)
+            .variants
+            .get(variant_name)
+            .expect("ICE should have failed during naming");
+        match &vdef.fields {
+            N::VariantFields::Empty => true,
+            N::VariantFields::Defined(_, _m) => false,
+        }
+    }
+
     /// Indicates if the enum variant is positional. Returns false on empty or missing.
     pub fn enum_variant_is_positional(
         &self,
