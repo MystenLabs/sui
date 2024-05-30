@@ -2191,14 +2191,14 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Name(ma, None) => access_constant(context, ma),
 
         EE::IfElse(eb, et, ef) => NE::IfElse(exp(context, eb), exp(context, et), exp(context, ef)),
-        EE::Match(esubject, sp!(_aloc, arms)) if arms.is_empty() => {
-            exp(context, esubject); // for error effect
-            let msg = "Invalid 'match' form. 'match' must have at least one arm";
-            context
-                .env
-                .add_diag(diag!(Syntax::InvalidMatch, (eloc, msg)));
-            NE::UnresolvedError
-        }
+        // EE::Match(esubject, sp!(_aloc, arms)) if arms.is_empty() => {
+        //     exp(context, esubject); // for error effect
+        //     let msg = "Invalid 'match' form. 'match' must have at least one arm";
+        //     context
+        //         .env
+        //         .add_diag(diag!(Syntax::InvalidMatch, (eloc, msg)));
+        //     NE::UnresolvedError
+        // }
         EE::Match(esubject, sp!(aloc, arms)) => NE::Match(
             exp(context, esubject),
             sp(
