@@ -20,7 +20,7 @@
 	},
 	"devDependencies": {
 		"@mysten/dapp-kit": "workspace:*",
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@types/react": "^18.2.15",
 		"@types/react-dom": "^18.2.7",
 		"@vitejs/plugin-react": "^4.0.3",

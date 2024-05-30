@@ -5,13 +5,13 @@ use anyhow::bail;
 use clap::Parser;
 use std::path::PathBuf;
 
+use move_cli::base;
 use move_package::{
     lock_file::{self, LockFile},
+    source_package::layout::SourcePackageLayout,
     BuildConfig,
 };
 use sui_types::base_types::ObjectID;
-
-use crate::build::resolve_lock_file_path;
 
 const NO_LOCK_FILE: &str = "Expected a `Move.lock` file to exist in the package path, \
                             but none found. Consider running `sui move build` to \
@@ -81,4 +81,17 @@ impl ManagePackage {
         lock.commit(lock_file)?;
         Ok(())
     }
+}
+
+/// Resolve Move.lock file path in package directory (where Move.toml is).
+pub fn resolve_lock_file_path(
+    mut build_config: BuildConfig,
+    package_path: Option<PathBuf>,
+) -> Result<BuildConfig, anyhow::Error> {
+    if build_config.lock_file.is_none() {
+        let package_root = base::reroot_path(package_path)?;
+        let lock_file_path = package_root.join(SourcePackageLayout::Lock.path());
+        build_config.lock_file = Some(lock_file_path);
+    }
+    Ok(build_config)
 }

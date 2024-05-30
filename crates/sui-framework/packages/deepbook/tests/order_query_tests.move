@@ -306,10 +306,10 @@ module deepbook::order_query_tests {
         let account_cap = test_scenario::take_from_sender<AccountCap>(&scenario);
         let account_cap_user = account_owner(&account_cap);
         let (base_custodian, quote_custodian) = clob_v2::borrow_mut_custodian(&mut pool);
-        custodian_v2::deposit(base_custodian, mint_for_testing<SUI>(10000000, ctx(&mut scenario)), account_cap_user);
+        custodian_v2::deposit(base_custodian, mint_for_testing<SUI>(1000000, ctx(&mut scenario)), account_cap_user);
         custodian_v2::deposit(
             quote_custodian,
-            mint_for_testing<USD>(100000000, ctx(&mut scenario)),
+            mint_for_testing<USD>(10000000, ctx(&mut scenario)),
             account_cap_user
         );
         test_scenario::return_shared(pool);
@@ -334,7 +334,7 @@ module deepbook::order_query_tests {
                 &mut pool,
                 CLIENT_ID_ALICE,
                 price,
-                2000,
+                200,
                 CANCEL_OLDEST,
                 true,
                 timestamp,

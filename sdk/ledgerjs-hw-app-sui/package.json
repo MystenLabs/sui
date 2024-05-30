@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/ledgerjs-hw-app-sui",
-	"version": "0.3.1",
+	"version": "0.4.0",
 	"description": "Ledger Hardware Wallet Sui Application API",
 	"keywords": [
 		"Ledger",
@@ -73,6 +73,6 @@
 		"@types/node": "^20.4.2",
 		"size-limit": "^8.2.6",
 		"typescript": "^5.3.3",
-		"vitest": "^0.33.0"
+		"vitest": "^1.6.0"
 	}
 }

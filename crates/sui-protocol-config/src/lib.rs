@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 48;
+const MAX_PROTOCOL_VERSION: u64 = 49;
 
 // Record history of protocol version allocations here:
 //
@@ -129,10 +129,12 @@ const MAX_PROTOCOL_VERSION: u64 = 48;
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 // Version 46: Enable native bridge in testnet
 //             Enable resharing at the same initial shared version.
-// Version 47: Use tonic networking for Mysticeti.
+// Version 47: Deepbook changes (framework update)
+// Version 48: Use tonic networking for Mysticeti.
 //             Resolve Move abort locations to the package id instead of the runtime module ID.
 //             Enable random beacon in testnet.
-// Version 48: Enable Move enums on devnet.
+// Version 49: Enable Move enums on devnet.
+//             Enable VDF in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -450,6 +452,10 @@ struct FeatureFlags {
     // a flag as it will lead to checkpoint forks.
     #[serde(skip_serializing_if = "is_false")]
     mysticeti_use_committed_subdag_digest: bool,
+
+    // Enable VDF
+    #[serde(skip_serializing_if = "is_false")]
+    enable_vdf: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1038,6 +1044,9 @@ pub struct ProtocolConfig {
     // zklogin::check_zklogin_issuer
     check_zklogin_issuer_cost_base: Option<u64>,
 
+    vdf_verify_vdf_cost: Option<u64>,
+    vdf_hash_to_input_cost: Option<u64>,
+
     // Const params for consensus scoring decision
     // The scaling factor property for the MED outlier detection
     scoring_decision_mad_divisor: Option<f64>,
@@ -1349,6 +1358,10 @@ impl ProtocolConfig {
 
     pub fn mysticeti_use_committed_subdag_digest(&self) -> bool {
         self.feature_flags.mysticeti_use_committed_subdag_digest
+    }
+
+    pub fn enable_vdf(&self) -> bool {
+        self.feature_flags.enable_vdf
     }
 }
 
@@ -1759,6 +1772,9 @@ impl ProtocolConfig {
             check_zklogin_id_cost_base: None,
             // zklogin::check_zklogin_issuer
             check_zklogin_issuer_cost_base: None,
+
+            vdf_verify_vdf_cost: None,
+            vdf_hash_to_input_cost: None,
 
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
@@ -2237,7 +2253,8 @@ impl ProtocolConfig {
                     // Enable resharing at same initial version
                     cfg.feature_flags.reshare_at_same_initial_version = true;
                 }
-                47 => {
+                47 => {}
+                48 => {
                     // Use tonic networking for Mysticeti.
                     cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
 
@@ -2255,9 +2272,18 @@ impl ProtocolConfig {
                     // Enable the committed sub dag digest inclusion on the commit output
                     cfg.feature_flags.mysticeti_use_committed_subdag_digest = true;
                 }
-                48 => {
+                49 => {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.move_binary_format_version = Some(7);
+                    }
+
+                    // enable vdf in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_vdf = true;
+                        // Set to 30x and 2x the cost of a signature verification for now. This
+                        // should be updated along with other native crypto functions.
+                        cfg.vdf_verify_vdf_cost = Some(1500);
+                        cfg.vdf_hash_to_input_cost = Some(100);
                     }
                 }
                 // Use this template when making changes:

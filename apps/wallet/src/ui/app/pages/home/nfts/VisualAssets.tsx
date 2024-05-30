@@ -9,7 +9,7 @@ import { Button } from '_src/ui/app/shared/ButtonUI';
 import { getKioskIdFromOwnerCap, isKioskOwnerToken } from '@mysten/core';
 import { useKioskClient } from '@mysten/core/src/hooks/useKioskClient';
 import { EyeClose16 } from '@mysten/icons';
-import { type SuiObjectData } from '@mysten/sui.js/client';
+import { type SuiObjectData } from '@mysten/sui/client';
 import { Link } from 'react-router-dom';
 
 import { useHiddenAssets } from '../hidden-assets/HiddenAssetsProvider';

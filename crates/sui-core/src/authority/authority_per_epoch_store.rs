@@ -1605,7 +1605,7 @@ impl AuthorityPerEpochStore {
         if !dkg_failed
             && !generating_randomness
             && self.randomness_state_enabled()
-            && cert.uses_randomness()
+            && cert.transaction_data().uses_randomness()
         {
             let deferred_from_round = previously_deferred_tx_digests
                 .get(cert.digest())
@@ -2925,6 +2925,9 @@ impl AuthorityPerEpochStore {
         authority_metrics
             .consensus_handler_deferred_transactions
             .inc_by(total_deferred_txns as u64);
+        authority_metrics
+            .consensus_handler_cancelled_transactions
+            .inc_by(cancelled_txns.len() as u64);
 
         if randomness_state_updated {
             if let Some(randomness_manager) = randomness_manager.as_mut() {
@@ -3182,7 +3185,10 @@ impl AuthorityPerEpochStore {
                     return Ok(deferral_result);
                 }
 
-                if dkg_failed && self.randomness_state_enabled() && certificate.uses_randomness() {
+                if dkg_failed
+                    && self.randomness_state_enabled()
+                    && certificate.transaction_data().uses_randomness()
+                {
                     // TODO: Cancel these immediately instead of waiting until end of epoch.
                     debug!(
                         "Ignoring randomness-using certificate for transaction {:?} because DKG failed",
@@ -3280,22 +3286,13 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgMessage from {:?}",
                             authority.concise()
                         );
-                        if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
-                            warn!(
-                                "Ignoring RandomnessDkgMessage from {:?} because it is too large",
-                                authority.concise()
-                            );
-                        } else {
-                            match bcs::from_bytes(bytes) {
-                                Ok(message) => {
-                                    randomness_manager.add_message(authority, message)?
-                                }
-                                Err(e) => {
-                                    warn!(
+                        match bcs::from_bytes(bytes) {
+                            Ok(message) => randomness_manager.add_message(authority, message)?,
+                            Err(e) => {
+                                warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
                                     authority.concise(),
                                 );
-                                }
                             }
                         }
                     } else {
@@ -3322,24 +3319,17 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgConfirmation from {:?}",
                             authority.concise()
                         );
-                        if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
-                            warn!(
-                                "Ignoring RandomnessDkgConfirmation from {:?} because it is too large",
-                                authority.concise()
-                            );
-                        } else {
-                            match bcs::from_bytes(bytes) {
-                                Ok(confirmation) => randomness_manager.add_confirmation(
-                                    batch,
-                                    authority,
-                                    confirmation,
-                                )?,
-                                Err(e) => {
-                                    warn!(
+                        match bcs::from_bytes(bytes) {
+                            Ok(confirmation) => randomness_manager.add_confirmation(
+                                batch,
+                                authority,
+                                confirmation,
+                            )?,
+                            Err(e) => {
+                                warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
                                     authority.concise(),
                                 );
-                                }
                             }
                         }
                     } else {
