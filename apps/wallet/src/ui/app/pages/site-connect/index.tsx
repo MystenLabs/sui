@@ -41,18 +41,11 @@ function SiteConnectPage() {
 		activeAccount && !activeAccount.isLocked ? [activeAccount] : [],
 	);
 	const { data: blockedDomains } = useDomainBlocklist();
-	const navigate = useNavigate();
 
 	const isBlocked = useMemo(
 		() => permissionRequest && blockedDomains?.includes(permissionRequest.origin),
 		[blockedDomains, permissionRequest],
 	);
-
-	useEffect(() => {
-		if (isBlocked) {
-			navigate('/blocked');
-		}
-	}, [isBlocked, navigate]);
 
 	const handleOnSubmit = useCallback(
 		async (allowed: boolean) => {
@@ -102,6 +95,15 @@ function SiteConnectPage() {
 	useEffect(() => {
 		setDisplayWarning(!isSecure);
 	}, [isSecure]);
+
+	if (isBlocked) {
+		return (
+			<div className="flex bg-issue-dark text-white items-center h-full w-full justify-center">
+				<h1 className="text-white">Known Scam</h1>
+			</div>
+		);
+	}
+
 	return (
 		<Loading loading={loading}>
 			{permissionRequest &&

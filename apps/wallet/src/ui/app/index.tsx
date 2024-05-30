@@ -10,15 +10,7 @@ import { persistableStorage } from '_src/shared/analytics/amplitude';
 import { type LedgerAccountsPublicKeys } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import { toB64 } from '@mysten/sui/utils';
 import { useEffect, useMemo } from 'react';
-import {
-	Navigate,
-	Outlet,
-	Route,
-	Routes,
-	useLocation,
-	useNavigate,
-	useNavigation,
-} from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { throttle } from 'throttle-debounce';
 
 import { useSuiLedgerClient } from './components/ledger/SuiLedgerClientProvider';
