@@ -21,8 +21,12 @@ use crate::{
         Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
     },
     shared::{
-        known_attributes::TestingAttribute, program_info::*, string_utils::debug_print,
-        unique_map::UniqueMap, *,
+        ide::{IDEAnnotation, IDEInfo},
+        known_attributes::TestingAttribute,
+        program_info::*,
+        string_utils::debug_print,
+        unique_map::UniqueMap,
+        *,
     },
     typing::match_compilation,
     FullyCompiledProgram,
@@ -84,6 +88,7 @@ pub(super) struct TypingDebugFlags {
     pub(super) match_constant_conversion: bool,
     pub(super) autocomplete_resolution: bool,
     pub(super) function_translation: bool,
+    pub(super) type_elaboration: bool,
 }
 
 pub struct Context<'env> {
@@ -123,6 +128,9 @@ pub struct Context<'env> {
     /// This is to prevent accidentally thinking we are in a recursive call if a macro is used
     /// inside a lambda body
     pub lambda_expansion: Vec<Vec<MacroExpansion>>,
+    /// IDE Info for the current module member. We hold onto this during typing so we can elaborate
+    /// it at the end.
+    pub ide_info: IDEInfo,
 }
 
 pub struct ResolvedFunctionType {
@@ -185,6 +193,7 @@ impl<'env> Context<'env> {
             match_constant_conversion: false,
             autocomplete_resolution: false,
             function_translation: false,
+            type_elaboration: false,
         };
         Context {
             use_funs: vec![global_use_funs],
@@ -207,6 +216,7 @@ impl<'env> Context<'env> {
             used_module_members: BTreeMap::new(),
             macro_expansion: vec![],
             lambda_expansion: vec![],
+            ide_info: IDEInfo::new(),
         }
     }
 
@@ -474,7 +484,7 @@ impl<'env> Context<'env> {
         self.use_funs.last().unwrap().color.unwrap()
     }
 
-    pub fn reset_for_module_item(&mut self) {
+    pub fn reset_for_module_item(&mut self, loc: Loc) {
         self.named_block_map = BTreeMap::new();
         self.return_type = None;
         self.locals = UniqueMap::new();
@@ -485,6 +495,12 @@ impl<'env> Context<'env> {
         self.max_variable_color = RefCell::new(0);
         self.macro_expansion = vec![];
         self.lambda_expansion = vec![];
+
+        if !self.ide_info.is_empty() {
+            self.env
+                .add_diag(ice!((loc, "IDE info should be cleared after each item")));
+            self.ide_info = IDEInfo::new();
+        }
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
@@ -864,7 +880,7 @@ impl<'env> Context<'env> {
     }
 
     //********************************************
-    // IDE Helpers
+    // IDE Information
     //********************************************
 
     /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
@@ -922,6 +938,10 @@ impl<'env> Context<'env> {
         };
         debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields; dbg));
         fields
+    }
+
+    pub fn add_ide_info(&mut self, loc: Loc, info: IDEAnnotation) {
+        self.ide_info.add_ide_annotation(loc, info);
     }
 }
 

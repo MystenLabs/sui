@@ -7,7 +7,7 @@ Unlike traditional review rating platforms that often do not disclose the algori
 
 ## Personas
 
-There are four actors in the typical workflow of the Reviews Rating example.  
+There are four actors in the typical workflow of the Reviews Rating example.
 
 - Service: Review requester.
 - Dashboard: Review hub.
@@ -47,6 +47,7 @@ The incentive mechanism for moderators is not implemented for this guide, but se
 ## How reviews are scored
 
 The reviews are scored on chain using the following criteria:
+
 - Intrinsic score (IS): Length of review content.
 - Extrinsic score (ES): Number of votes a review receives.
 - Verification multiplier (VM): Reviews with PoE receive a multiplier to improve rating.
@@ -288,13 +289,14 @@ The frontend is a NextJS project, that follows the NextJS App Router [project st
 The main code of the frontend is located in the [app/src/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/) directory.
 
 The main sub-directories are:
-  - [app/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/): The main code of the pages and the global styles.
-  - [components/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/components): The reusable components of the app, organized in sub-directories.
-  - [hooks/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/hooks): The custom hooks used in the app.
-  - [moderator/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/moderator): The pages for `MODERATOR`.
-  - [serviceOwner/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/serviceOwner): The pages for `SERVICE OWNER`.
-  - [types/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/types): The types/interfaces used in the app.
-  - [user/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/user): The pages for `REVIEWER`.
+
+- [app/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/): The main code of the pages and the global styles.
+- [components/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/components): The reusable components of the app, organized in sub-directories.
+- [hooks/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/hooks): The custom hooks used in the app.
+- [moderator/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/moderator): The pages for `MODERATOR`.
+- [serviceOwner/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/serviceOwner): The pages for `SERVICE OWNER`.
+- [types/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/types): The types/interfaces used in the app.
+- [user/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/user): The pages for `REVIEWER`.
 
 ### Connect button
 
@@ -303,49 +305,47 @@ The Wallet Kit comes with a pre-built React.js component called `ConnectButton` 
 Place the `ConnectButton` in the navigation bar for users to connect their wallets:
 
 ```ts title='src/app/components/navbar/Navbar.tsx'
-import { ConnectButton } from "@mysten/wallet-kit";
-import { usePathname } from "next/navigation";
-import { useAuthentication } from "@/app/hooks/useAuthentication";
+import { ConnectButton } from '@mysten/wallet-kit';
+import { usePathname } from 'next/navigation';
+
+import { useAuthentication } from '@/app/hooks/useAuthentication';
 
 export const Navbar = () => {
-  const pathname = usePathname();
-  console.log(pathname);
-  const { user, handleLogout } = useAuthentication();
+	const pathname = usePathname();
+	console.log(pathname);
+	const { user, handleLogout } = useAuthentication();
 
-  return (
-    <div
-      className="grid grid-cols-12 w-full items-center p-[8px] h-[80px] border-b-gray-400 border-b-[1px] sticky top-0"
-      style={{
-        background: "white",
-      }}
-    >
-      <div className="col-span-3 flex space-x-3 items-center">
-        <div
-          className="text-red-600 text-2xl font-bold cursor-pointer"
-          onClick={handleLogout}
-        >
-          Restaurant Reviews
-        </div>
-      </div>
+	return (
+		<div
+			className="grid grid-cols-12 w-full items-center p-[8px] h-[80px] border-b-gray-400 border-b-[1px] sticky top-0"
+			style={{
+				background: 'white',
+			}}
+		>
+			<div className="col-span-3 flex space-x-3 items-center">
+				<div className="text-red-600 text-2xl font-bold cursor-pointer" onClick={handleLogout}>
+					Restaurant Reviews
+				</div>
+			</div>
 
-      <div className="col-span-6 flex space-x-3 justify-center">
-        {pathname !== "/" && (
-          <h6 className="mb-4 text-2xl leading-none tracking-tight text-gray-400">
-            logged in as{" "}
-            <span className="underline underline-offset-3 decoration-8 decoration-blue-400 dark:decoration-blue-600">
-              {user.role === "user" && "USER"}
-              {user.role === "serviceOwner" && "SERVICE OWNER"}
-              {user.role === "moderator" && "MODERATOR"}
-            </span>
-          </h6>
-        )}
-      </div>
+			<div className="col-span-6 flex space-x-3 justify-center">
+				{pathname !== '/' && (
+					<h6 className="mb-4 text-2xl leading-none tracking-tight text-gray-400">
+						logged in as{' '}
+						<span className="underline underline-offset-3 decoration-8 decoration-blue-400 dark:decoration-blue-600">
+							{user.role === 'user' && 'USER'}
+							{user.role === 'serviceOwner' && 'SERVICE OWNER'}
+							{user.role === 'moderator' && 'MODERATOR'}
+						</span>
+					</h6>
+				)}
+			</div>
 
-      <div className="col-span-3 flex justify-end gap-[14px]">
-        <ConnectButton />
-      </div>
-    </div>
-  );
+			<div className="col-span-3 flex justify-end gap-[14px]">
+				<ConnectButton />
+			</div>
+		</div>
+	);
 };
 ```
 
@@ -357,24 +357,25 @@ All the type definitions are in `src/app/types/`.
 
 ```ts title='src/app/types/Review.ts'
 export interface Review {
-    id: string;
-    owner: string;
-    service_id: string;
-    content: string;
-    len: number;
-    votes: number;
-    time_issued: number;
-    has_poe: boolean;
-    total_score: number;
+	id: string;
+	owner: string;
+	service_id: string;
+	content: string;
+	len: number;
+	votes: number;
+	time_issued: number;
+	has_poe: boolean;
+	total_score: number;
 }
 ```
+
 ```ts title='src/app/types/Service.ts'
 export interface Service {
-  id: string;
-  name: string;
-  stars: number;
-  reward?: number;
-  pool?: number;
+	id: string;
+	name: string;
+	stars: number;
+	reward?: number;
+	pool?: number;
 }
 ```
 
@@ -383,67 +384,73 @@ export interface Service {
 In the frontend, you might need to execute a transaction block in multiple places, hence it's better to extract the transaction execution logic and reuse it everywhere. Let's examine the execute transaction hook.
 
 ```ts title='src/app/hooks/useSignAndExecuteTransaction.ts'
-import { useWalletKit } from "@mysten/wallet-kit"
-import { toast } from "react-hot-toast";
-import { useSui } from "./useSui";
-import { TransactionBlock } from "@mysten/sui.js/transactions";
+import { Transaction } from '@mysten/sui/transactions';
+import { useWalletKit } from '@mysten/wallet-kit';
+import { toast } from 'react-hot-toast';
+
+import { useSui } from './useSui';
 
 export const useSignAndExecuteTransaction = () => {
-    const { executeSignedTransactionBlock } = useSui();
-    const { signTransactionBlock } = useWalletKit();
-    const handleSignAndExecuteTransaction = async (
-        tx: TransactionBlock,
-        operation: String,
-        setIsLoading: any
-    ) => {
-        return signTransactionBlock({
-            transactionBlock: tx,
-        }).then((signedTx: any) => {
-            return executeSignedTransactionBlock({
-                signedTx,
-                requestType: "WaitForLocalExecution",
-                options: {
-                    showEffects: true,
-                    showEvents: true,
-                },
-            }).then((resp) => {
-                setIsLoading(false);
-                console.log(resp);
-                if (resp.effects?.status.status === "success") {
-                    console.log(`${operation} operation successful`);
-                    toast.success(`${operation} operation successful`);
-                    return
-                } else {
-                    console.log(`${operation} operation failed`);
-                    toast.error(`${operation} operation failed.`);
-                    return
-                }
-            }).catch((err) => {
-                setIsLoading(false);
-                console.log(`${operation} operation failed`);
-                console.log(`${operation} error : `,err);
-                toast.error(`Something went wrong, ${operation} operation failed.`);
-            });
-        }).catch((err) => {
-            setIsLoading(false);
-            console.log(`signing goes wrong ${operation} error : `,err);
-            toast.error(`signing goes wrong, ${operation} operation failed.`);
-        });
-    }
-    return { handleSignAndExecuteTransaction }
-}
+	const { executeSignedTransaction } = useSui();
+	const { signTransaction } = useWalletKit();
+	const handleSignAndExecuteTransaction = async (
+		tx: Transaction,
+		operation: String,
+		setIsLoading: any,
+	) => {
+		return signTransaction({
+			transaction: tx,
+		})
+			.then((signedTx: any) => {
+				return executeSignedTransaction({
+					signedTx,
+					requestType: 'WaitForLocalExecution',
+					options: {
+						showEffects: true,
+						showEvents: true,
+					},
+				})
+					.then((resp) => {
+						setIsLoading(false);
+						console.log(resp);
+						if (resp.effects?.status.status === 'success') {
+							console.log(`${operation} operation successful`);
+							toast.success(`${operation} operation successful`);
+							return;
+						} else {
+							console.log(`${operation} operation failed`);
+							toast.error(`${operation} operation failed.`);
+							return;
+						}
+					})
+					.catch((err) => {
+						setIsLoading(false);
+						console.log(`${operation} operation failed`);
+						console.log(`${operation} error : `, err);
+						toast.error(`Something went wrong, ${operation} operation failed.`);
+					});
+			})
+			.catch((err) => {
+				setIsLoading(false);
+				console.log(`signing goes wrong ${operation} error : `, err);
+				toast.error(`signing goes wrong, ${operation} operation failed.`);
+			});
+	};
+	return { handleSignAndExecuteTransaction };
+};
 ```
-A `TransactionBlock` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
-Use the `useWalletKit()` hook from the Wallet Kit to retrieve the Sui client instance configured in `WalletKitProvider`. The `signTransactionBlock()` function is another hook that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, the `executeSignedTransactionBlock()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
+A `Transaction` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
+
+Use the `useWalletKit()` hook from the Wallet Kit to retrieve the Sui client instance configured in `WalletKitProvider`. The `signTransaction()` function is another hook that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, the `executeSignedTransaction()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
 
 ### Components and custom hooks for state management
 
 - Custom hooks: To keep the code as structured as possible, multiple custom hooks are utilized to manage the list of reviews associated with a service. The [useGetReviews](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useGetReviews.ts)
-custom hook encapsulates the service, exposing all the required information (with fields such as `nameOfService`, `listOfReviews`, `listOfStars`) to display the reviews in a table.
-Multiple additional custom hooks, such as [useDashboardCreation](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useDashboardCreation.ts), and [useServiceReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useServiceReview.ts) are encapsulating their own piece of state and logic to make the code readable and maintainable.
+  custom hook encapsulates the service, exposing all the required information (with fields such as `nameOfService`, `listOfReviews`, `listOfStars`) to display the reviews in a table.
+  Multiple additional custom hooks, such as [useDashboardCreation](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useDashboardCreation.ts), and [useServiceReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useServiceReview.ts) are encapsulating their own piece of state and logic to make the code readable and maintainable.
 
-- Component for adding a new review: The [AddReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/components/review/AddReview.tsx) component is implemented to facilitate the creation of a new review. It is rendered by the [servicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/service/[id]/page.tsx) to collect a review entry from a `USER` and uses the `signAndExecuteTransactionBlock` function of the [useWalletKit] hook to execute the transaction.
+- Component for adding a new review: The [AddReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/components/review/AddReview.tsx) component is implemented to facilitate the creation of a new review. It is rendered by the [servicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/service/[id]/page.tsx) to collect a review entry from a `USER` and uses the `signAndExecuteTransaction` function of the [useWalletKit] hook to execute the transaction.
 
 - Proof of experience generation: PoE is an NFT that is minted by `SERVICE OWNER` for customers after they dine at the restaurant; customers can then burn the PoE to write a high-rated review later. Minting an NFT is facilitated by the [ownedServicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/serviceOwner/ownedServices/page.tsx) component. This component is using the [useServicePoEGeneration](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useServicePoeGeneration.ts) custom hook.
 
@@ -452,4 +459,3 @@ Multiple additional custom hooks, such as [useDashboardCreation](https://github.
 ## Related links
 
 [Reviews Rating repository](https://github.com/MystenLabs/sui/tree/main/examples/move/reviews_rating).
-

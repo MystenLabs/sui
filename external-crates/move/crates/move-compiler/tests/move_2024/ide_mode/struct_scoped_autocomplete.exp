@@ -1,9 +1,3 @@
-error[E15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:17:21
-   │
-17 │         let _tmp1 = _a.;
-   │                     ^^^ Autocompletes to: 'a::m::t0'
-
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:17:24
    │
@@ -12,12 +6,6 @@ error[E01002]: unexpected token
    │                        │
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
-
-error[E15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:18:21
-   │
-18 │         let _tmp2 = _b.;
-   │                     ^^^ Autocompletes to: 'a::m::t1'
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:18:24

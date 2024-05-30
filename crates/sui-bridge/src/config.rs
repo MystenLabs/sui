@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{EthBridgeCommittee, EthBridgeConfig, EthSuiBridge};
+use crate::abi::EthBridgeConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::error::BridgeError;
 use crate::eth_client::EthClient;
 use crate::sui_client::SuiClient;
 use crate::types::{is_route_valid, BridgeAction};
+use crate::utils::get_eth_contract_addresses;
 use anyhow::anyhow;
 use ethers::providers::Middleware;
 use ethers::types::Address as EthAddress;
@@ -225,12 +226,8 @@ impl BridgeNodeConfig {
                 .interval(std::time::Duration::from_millis(2000)),
         );
         let chain_id = provider.get_chainid().await?;
-        let sui_bridge = EthSuiBridge::new(bridge_proxy_address, provider.clone());
-        let committee_address: EthAddress = sui_bridge.committee().call().await?;
-        let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
-        let vault_address: EthAddress = sui_bridge.vault().call().await?;
-        let committee = EthBridgeCommittee::new(committee_address, provider.clone());
-        let config_address: EthAddress = committee.config().call().await?;
+        let (committee_address, limiter_address, vault_address, config_address) =
+            get_eth_contract_addresses(bridge_proxy_address, &provider).await?;
         let config = EthBridgeConfig::new(config_address, provider.clone());
 
         if self.run_client && self.eth.eth_contracts_start_block_fallback.is_none() {

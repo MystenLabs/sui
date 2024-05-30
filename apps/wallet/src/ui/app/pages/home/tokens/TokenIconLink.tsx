@@ -10,7 +10,7 @@ import {
 import { Text } from '_src/ui/app/shared/text';
 import { useFormatCoin, useGetDelegatedStake } from '@mysten/core';
 import { WalletActionStake24 } from '@mysten/icons';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { useMemo } from 'react';
 
 export function TokenIconLink({

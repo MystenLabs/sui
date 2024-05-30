@@ -87,7 +87,7 @@ pub fn update_identifiers(binary: &[u8], map: JsValue) -> Result<Box<[u8]>, JsEr
         });
 
     compiled_module
-        .struct_handles
+        .datatype_handles
         .iter_mut()
         .for_each(|handle| {
             handle.name.0 = find_pos(handle.name.0);

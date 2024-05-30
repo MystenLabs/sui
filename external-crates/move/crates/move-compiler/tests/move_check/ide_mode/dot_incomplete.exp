@@ -1,17 +1,3 @@
-warning[W09003]: unused assignment
-   ┌─ tests/move_check/ide_mode/dot_incomplete.move:12:13
-   │
-12 │         let s = AnotherStruct { another_field: SomeStruct { some_field: 0 } };
-   │             ^ Unused assignment for variable 's'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_s')
-   │
-   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E15001]: IDE autocomplete
-   ┌─ tests/move_check/ide_mode/dot_incomplete.move:13:21
-   │
-13 │         let _tmp1 = s.;                // incomplete with `;` (next line should parse)
-   │                     ^^ Autocompletes to: 'another_field'
-
 error[E01002]: unexpected token
    ┌─ tests/move_check/ide_mode/dot_incomplete.move:13:23
    │
@@ -20,12 +6,6 @@ error[E01002]: unexpected token
    │                       │
    │                       Unexpected ';'
    │                       Expected an identifier or a decimal number
-
-error[E15001]: IDE autocomplete
-   ┌─ tests/move_check/ide_mode/dot_incomplete.move:14:21
-   │
-14 │         let _tmp2 = s.another_field.;  // incomplete with `;` (next line should parse)
-   │                     ^^^^^^^^^^^^^^^^ Autocompletes to: 'some_field'
 
 error[E01002]: unexpected token
    ┌─ tests/move_check/ide_mode/dot_incomplete.move:14:37
@@ -36,12 +16,6 @@ error[E01002]: unexpected token
    │                                     Unexpected ';'
    │                                     Expected an identifier or a decimal number
 
-error[E15001]: IDE autocomplete
-   ┌─ tests/move_check/ide_mode/dot_incomplete.move:15:21
-   │
-15 │         let _tmp3 = s.another_field.   // incomplete without `;` (unexpected `let`)
-   │                     ^^^^^^^^^^^^^^^^ Autocompletes to: 'some_field'
-
 error[E01002]: unexpected token
    ┌─ tests/move_check/ide_mode/dot_incomplete.move:16:9
    │
@@ -50,12 +24,6 @@ error[E01002]: unexpected token
    │         │
    │         Unexpected 'let'
    │         Expected an identifier or a decimal number
-
-error[E15001]: IDE autocomplete
-   ┌─ tests/move_check/ide_mode/dot_incomplete.move:17:20
-   │
-17 │         let _tmp = s.                  // incomplete without `;` (unexpected `}`)
-   │                    ^^ Autocompletes to: 'another_field'
 
 error[E01002]: unexpected token
    ┌─ tests/move_check/ide_mode/dot_incomplete.move:18:5

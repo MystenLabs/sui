@@ -23,6 +23,7 @@ use crate::events::{
     TokenTransferAlreadyApproved, TokenTransferAlreadyClaimed, TokenTransferApproved,
     TokenTransferClaimed,
 };
+use crate::metrics::BridgeMetrics;
 use crate::{
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
     error::BridgeError,
@@ -69,6 +70,7 @@ pub struct BridgeActionExecutor<C> {
     gas_object_id: ObjectID,
     store: Arc<BridgeOrchestratorTables>,
     bridge_object_arg: ObjectArg,
+    metrics: Arc<BridgeMetrics>,
 }
 
 impl<C> BridgeActionExecutorTrait for BridgeActionExecutor<C>
@@ -97,6 +99,7 @@ where
         key: SuiKeyPair,
         sui_address: SuiAddress,
         gas_object_id: ObjectID,
+        metrics: Arc<BridgeMetrics>,
     ) -> Self {
         let bridge_object_arg = sui_client
             .get_mutable_bridge_object_arg_must_succeed()
@@ -109,6 +112,7 @@ where
             gas_object_id,
             sui_address,
             bridge_object_arg,
+            metrics,
         }
     }
 
@@ -141,6 +145,7 @@ where
         let store_clone = self.store.clone();
         let client_clone = self.sui_client.clone();
         let mut tasks = vec![];
+        let metrics = self.metrics.clone();
         tasks.push(spawn_logged_monitored_task!(
             Self::run_signature_aggregation_loop(
                 client_clone,
@@ -163,6 +168,7 @@ where
                 execution_tx_clone,
                 execution_rx,
                 self.bridge_object_arg,
+                metrics,
             )
         ));
         (tasks, sender, execution_tx)
@@ -294,6 +300,7 @@ where
             CertifiedBridgeActionExecutionWrapper,
         >,
         bridge_object_arg: ObjectArg,
+        metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting run_onchain_execution_loop");
         // Get token id maps, this must succeed to continue.
@@ -335,7 +342,7 @@ where
             ) {
                 Ok(tx_data) => tx_data,
                 Err(err) => {
-                    // TODO: add mertrics
+                    metrics.total_err_build_sui_transaction.inc();
                     error!(
                         "Failed to build transaction for action {:?}: {:?}",
                         certificate, err
@@ -358,17 +365,22 @@ where
                 .execute_transaction_block_with_effects(signed_tx)
                 .await
             {
-                Ok(resp) => Self::handle_execution_effects(tx_digest, resp, &store, action).await,
+                Ok(resp) => {
+                    Self::handle_execution_effects(tx_digest, resp, &store, action, &metrics).await
+                }
 
                 // If the transaction did not go through, retry up to a certain times.
                 Err(err) => {
                     error!("Sui transaction failed at signing: {err:?}");
-
+                    metrics.total_err_sui_transaction_submission.inc();
+                    let metrics_clone = metrics.clone();
                     // Do this in a separate task so we won't deadlock here
                     let sender_clone = execution_queue_sender.clone();
                     spawn_logged_monitored_task!(async move {
-                        // TODO: metrics + alerts
                         // If it fails for too many times, log and ask for manual intervention.
+                        metrics_clone
+                            .total_err_sui_transaction_submission_too_many_failures
+                            .inc();
                         if attempt_times >= MAX_EXECUTION_ATTEMPTS {
                             error!("Manual intervention is required. Failed to collect execute transaction for bridge action after {MAX_EXECUTION_ATTEMPTS} attempts: {:?}", err);
                             return;
@@ -394,6 +406,7 @@ where
         response: SuiTransactionBlockResponse,
         store: &Arc<BridgeOrchestratorTables>,
         action: &BridgeAction,
+        metrics: &Arc<BridgeMetrics>,
     ) {
         let effects = response
             .effects
@@ -429,7 +442,7 @@ where
                 // the execution queue because retries are mostly likely going to fail anyway.
                 // After human examination, the node should be restarted and fetch them from WAL.
 
-                // TODO metrics + alerts
+                metrics.total_err_sui_transaction_execution.inc();
                 error!(?tx_digest, "Manual intervention is needed. Sui transaction executed and failed with error: {error:?}");
             }
         }
@@ -1122,7 +1135,7 @@ mod tests {
         let committee = BridgeCommittee::new(authorities).unwrap();
 
         let agg = Arc::new(BridgeAuthorityAggregator::new(Arc::new(committee)));
-
+        let metrics = Arc::new(BridgeMetrics::new(&registry));
         let executor = BridgeActionExecutor::new(
             sui_client.clone(),
             agg.clone(),
@@ -1130,6 +1143,7 @@ mod tests {
             sui_key,
             sui_address,
             gas_object_ref.0,
+            metrics,
         )
         .await;
 

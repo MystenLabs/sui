@@ -4,7 +4,7 @@
 management. It's used similar to `KioskTransaction`, and helps in crafting transactions to manage a
 transfer policy.
 
-You need to instatiate it once in every Programmable Transaction Block (PTB) that you're building.
+You need to instantiate it once in every Programmable Transaction Block (PTB) that you're building.
 
 Similar to `KioskTransaction`, you can either create a new transfer policy, or use an existing one.
 
@@ -12,10 +12,10 @@ Similar to `KioskTransaction`, you can either create a new transfer policy, or u
 
 If you have already retrieved a transfer policy from `kioskClient.getOwnedTransferPolicies()`, or
 `kioskClient.getOwnedTransferPoliciesByType()`, you can pass a `TransferPolicyCap` result when
-instatiating.
+instantiating.
 
 ```typescript
-// Initiliazed somewhere in the app.
+// Initialized somewhere in the app.
 const kioskClient = new KioskClient({...});
 
 // You could have more than one cap, since we can create more than one transfer policy.
@@ -24,9 +24,9 @@ const heroPolicyCaps = await kioskClient.getOwnedTransferPoliciesByType({
     address: '0xConnectedAddress',
 });
 
-const txb = new TransactionBlock();
+const tx = new Transaction();
 // You can choose to use any of the caps you have. For this example, use the first one.
-const tpTx = new TransferPolicyTransaction({ kioskClient, transactionBlock: txb, cap: heroPolicyCaps[0] });
+const tpTx = new TransferPolicyTransaction({ kioskClient, transaction: tx, cap: heroPolicyCaps[0] });
 
 // A demonstration of using all the available rule add/remove functions.
 // You can chain these commands.
@@ -40,8 +40,8 @@ tpTx
     // .removeRoyaltyRule()
     // .removePersonalKioskRule()
 
-// Sign and execute transaction block.
-await signAndExecuteTransactionBlock({tx: txb});
+// Sign and execute transaction.
+await signAndExecuteTransaction({tx: tx});
 ```
 
 ## Creating a new transfer policy
@@ -51,9 +51,9 @@ in the same PTB.
 
 ```typescript
 const publisher = '0xPackagePublisherObject';
-const txb = new TransactionBlock();
+const tx = new Transaction();
 
-const tpTx = new TransferPolicyTransaction({ kioskClient, transactionBlock: txb });
+const tpTx = new TransferPolicyTransaction({ kioskClient, transaction: tx });
 
 // This is an async call, as the SDK protects from accidentally creating
 // a second transfer policy.
@@ -71,6 +71,6 @@ tpTx
 	// Transfers the `TransferPolicyCap` to the user and shares the transfer policy.
 	.shareAndTransferCap('address_to_transfer_cap_to');
 
-// Sign and execute transaction block.
-await signAndExecuteTransactionBlock({ tx: txb });
+// Sign and execute transaction.
+await signAndExecuteTransaction({ tx: tx });
 ```

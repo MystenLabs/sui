@@ -15,12 +15,7 @@ use crate::{
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, VariantName,
     },
-    shared::{
-        process_binops,
-        string_utils::{debug_print, format_oxford_list},
-        unique_map::UniqueMap,
-        *,
-    },
+    shared::{process_binops, string_utils::debug_print, unique_map::UniqueMap, *},
     sui_mode::ID_FIELD_NAME,
     typing::ast as T,
     FullyCompiledProgram,
@@ -148,7 +143,7 @@ impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
         pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
-        prog: &T::Program_,
+        prog: &T::Program,
     ) -> Self {
         fn add_struct_fields(
             env: &mut CompilationEnv,
@@ -243,7 +238,7 @@ impl<'env> Context<'env> {
         let mut structs = UniqueMap::new();
         let mut variant_fields = UniqueMap::new();
         if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
-            for (mident, mdef) in pre_compiled_lib.typing.inner.modules.key_cloned_iter() {
+            for (mident, mdef) in pre_compiled_lib.typing.modules.key_cloned_iter() {
                 add_struct_fields(env, &mut structs, mident, &mdef.structs);
                 add_enums(env, &mut variant_fields, mident, &mdef.enums);
             }
@@ -389,11 +384,14 @@ pub fn program(
 ) -> H::Program {
     detect_dead_code_analysis(compilation_env, &prog);
 
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog.inner);
-    let T::Program_ { modules: tmodules } = prog.inner;
+    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
+    let T::Program {
+        modules: tmodules,
+        info,
+    } = prog;
     let modules = modules(&mut context, tmodules);
 
-    H::Program { modules }
+    H::Program { modules, info }
 }
 
 fn modules(
@@ -1041,7 +1039,6 @@ fn tail(
             })
         }
         E::Block((_, seq)) => tail_block(context, block, expected_type, seq),
-        E::IDEAnnotation(_, e) => tail(context, block, expected_type, *e),
 
         // -----------------------------------------------------------------------------------------
         //  statements that need to be hoisted out
@@ -1350,7 +1347,6 @@ fn value(
             bound_exp
         }
         E::Block((_, seq)) => value_block(context, block, Some(&out_type), eloc, seq),
-        E::IDEAnnotation(_, e) => value(context, block, expected_type, *e),
 
         // -----------------------------------------------------------------------------------------
         //  calls
@@ -1689,28 +1685,6 @@ fn value(
             assert!(context.env.has_errors());
             make_exp(HE::UnresolvedError)
         }
-        E::AutocompleteDotAccess {
-            base_exp: _,
-            methods,
-            fields,
-        } => {
-            if !(context.env.ide_mode()) {
-                context
-                    .env
-                    .add_diag(ice!((eloc, "Found autocomplete outside of IDE mode")));
-            };
-            let names = methods
-                .into_iter()
-                .map(|(m, f)| format!("{m}::{f}"))
-                .chain(fields.into_iter().map(|n| format!("{n}")))
-                .collect::<Vec<_>>();
-            let msg = format!(
-                "Autocompletes to: {}",
-                format_oxford_list!("or", "'{}'", names)
-            );
-            context.env.add_diag(diag!(IDE::Autocomplete, (eloc, msg)));
-            make_exp(HE::UnresolvedError)
-        }
     };
     maybe_freeze(context, block, expected_type.cloned(), preresult)
 }
@@ -1974,7 +1948,6 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             }
         }
         E::Block((_, seq)) => statement_block(context, block, seq),
-        E::IDEAnnotation(_, e) => statement(context, block, *e),
         E::Return(rhs) => {
             let expected_type = context.signature.as_ref().map(|s| s.return_type.clone());
             let exp = value(context, block, expected_type.as_ref(), *rhs);
@@ -2052,7 +2025,6 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError
-        | E::AutocompleteDotAccess { .. }
         | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
 
         E::Value(_) | E::Unit { .. } => (),

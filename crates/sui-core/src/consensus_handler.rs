@@ -733,7 +733,7 @@ impl SequencedConsensusTransaction {
         else {
             return false;
         };
-        certificate.uses_randomness()
+        certificate.transaction_data().uses_randomness()
     }
 
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {

@@ -4,7 +4,7 @@
 import { useResolveSuiNSName } from '_app/hooks/useAppResolveSuinsName';
 import { Text } from '_src/ui/app/shared/text';
 import { ArrowUpRight12, Copy12 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 import cn from 'clsx';
 import { forwardRef, type ReactNode } from 'react';
 

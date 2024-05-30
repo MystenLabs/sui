@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
-import type { SuiClient } from '@mysten/sui.js/client';
-import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
-import { graphql } from '@mysten/sui.js/graphql/schemas/2024.4';
-import { fromB64, normalizeSuiAddress } from '@mysten/sui.js/utils';
+import { bcs } from '@mysten/sui/bcs';
+import type { SuiClient } from '@mysten/sui/client';
+import { SuiGraphQLClient } from '@mysten/sui/graphql';
+import { graphql } from '@mysten/sui/graphql/schemas/2024.4';
+import { fromB64, normalizeSuiAddress } from '@mysten/sui/utils';
 
 import { ZkSendLink } from './claim.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
@@ -88,34 +88,36 @@ export async function listCreatedLinks({
 				const kind = bcs.SenderSignedData.parse(fromB64(node.bcs))?.[0]?.intentMessage.value.V1
 					.kind;
 
-				if (!kind || !('ProgrammableTransaction' in kind)) {
+				if (!kind.ProgrammableTransaction) {
 					return null;
 				}
 
-				const { inputs, transactions: commands } = kind.ProgrammableTransaction;
+				const { inputs, commands } = kind.ProgrammableTransaction;
 
 				const fn = commands.find(
 					(command) =>
-						command.kind === 'MoveCall' && command.target !== `${packageId}::zk_bag::new`,
+						command.MoveCall?.package === packageId &&
+						command.MoveCall.module === 'zk_bag' &&
+						command.MoveCall.function === 'new',
 				);
 
-				if (fn?.kind !== 'MoveCall') {
+				if (!fn?.MoveCall) {
 					return null;
 				}
 
-				const addressArg = fn.arguments[1];
+				const addressArg = fn.MoveCall.arguments[1];
 
-				if (addressArg.kind !== 'Input') {
+				if (addressArg.$kind !== 'Input') {
 					throw new Error('Invalid address argument');
 				}
 
-				const input = inputs[addressArg.index];
+				const input = inputs[addressArg.Input];
 
-				if (!('Pure' in input)) {
+				if (!input.Pure) {
 					throw new Error('Expected Address input to be a Pure value');
 				}
 
-				const address = bcs.Address.parse(Uint8Array.from(input.Pure));
+				const address = bcs.Address.fromBase64(input.Pure.bytes);
 
 				const link = new ZkSendLink({
 					network,

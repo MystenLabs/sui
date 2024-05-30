@@ -36,7 +36,7 @@ pub fn make_ascii_titlecase(in_s: &str) -> String {
 ///
 /// This will use `or` as the separator for the last two elements, interspersing commas as
 /// appropriate:
-/// ```
+/// ```text
 /// format_oxford_list("or", "{}", [1]);
 /// ==> "1"
 ///
