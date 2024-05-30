@@ -74,11 +74,7 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
     testsuite(path, config, lint)
 }
 
-fn testsuite(
-    path: &Path,
-    mut config: PackageConfig,
-    lint: bool,
-) -> datatest_stable::Result<()> {
+fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_stable::Result<()> {
     // A test is marked that it should also be compiled in test mode by having a `path.unit_test`
     // file.
     if path.with_extension(TEST_EXT).exists() {

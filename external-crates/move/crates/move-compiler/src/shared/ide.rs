@@ -143,9 +143,8 @@ impl IntoIterator for IDEInfo {
     }
 }
 
-impl Into<Diagnostic> for (Loc, IDEAnnotation) {
-    fn into(self) -> Diagnostic {
-        let (loc, ann) = self;
+impl From<(Loc, IDEAnnotation)> for Diagnostic {
+    fn from((loc, ann): (Loc, IDEAnnotation)) -> Self {
         match ann {
             IDEAnnotation::MacroCallInfo(info) => {
                 let MacroCallInfo {
@@ -164,7 +163,7 @@ impl Into<Diagnostic> for (Loc, IDEAnnotation) {
                     let tyargs_string = debug_display!(type_arguments).to_string();
                     diag.add_note(format!("Type arguments: {tyargs_string}"));
                 }
-                if let Some(entry) = by_value_args.get(0) {
+                if let Some(entry) = by_value_args.first() {
                     let subject_arg_string = debug_display!(entry).to_string();
                     diag.add_note(format!("Subject arg: {subject_arg_string}"));
                 }

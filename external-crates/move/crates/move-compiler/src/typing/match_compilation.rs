@@ -15,7 +15,7 @@ use crate::{
         Identifier,
     },
     typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
-    typing::core::{Context, Subst, error_format},
+    typing::core::{error_format, Context, Subst},
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -2802,7 +2802,9 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             let mut arms = vec![];
             // re-iterate the original so we generate these in definition order
             for variant in context.enum_variants(&mident, &name).into_iter() {
-                if !unmatched_variants.contains(&variant) { continue }
+                if !unmatched_variants.contains(&variant) {
+                    continue;
+                }
                 let is_empty = context.enum_variant_is_empty(&mident, &name, &variant);
                 let is_positional = context.enum_variant_is_positional(&mident, &name, &variant);
                 let Some(fields) = context.enum_variant_fields(&mident, &name, &variant) else {
@@ -2864,7 +2866,10 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             // It's unclear how we got here, so report an ICE and suggest a wildcard.
             context.env.add_diag(ice!((
                 loc,
-                format!("Found non-matchable type {} at match subject", error_format(ty, &Subst::empty()))
+                format!(
+                    "Found non-matchable type {} at match subject",
+                    error_format(ty, &Subst::empty())
+                )
             )));
         }
         if !matrix.has_default_arm() {
