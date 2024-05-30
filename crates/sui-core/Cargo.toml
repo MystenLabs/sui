@@ -99,7 +99,8 @@ zeroize.workspace = true
 
 # Begin Scalaris extension
 serde_bytes = "0.11.14"
-consensus-common = { git = "https://github.com/scalarorg/common", branch = "add_echo_grpc", package = "consensus-common" }
+consensus-common = { git = "https://github.com/scalarorg/common", branch = "common_get_validator_info", package = "consensus-common" }
+# consensus-common = { path = "../../../common/consensus", package = "consensus-common" }
 # lazy_static = "1.4"
 # End scalaris extension
 

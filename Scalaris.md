@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y cmake clang protobuf-compiler
 
 Build scalaris docker image
 ```
-docker/sui-node/build.sh -t scalaris/consensus-node
+cd docker/sui-node/build.sh -t scalaris/consensus-node
 ```
 
 Build local stress image 

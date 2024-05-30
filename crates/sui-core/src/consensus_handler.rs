@@ -354,7 +354,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         crate::scalaris::ConsensusTransactionWrapper::Namespace(transaction) => {
                             self.metrics
                                 .consensus_handler_processed
-                                .with_label_values(&[transaction.namespace.as_str()])
+                                .with_label_values(&[transaction.chain_id.as_str()])
                                 .inc();
                             ns_transactions.push(transaction);
                         }

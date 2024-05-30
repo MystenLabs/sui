@@ -7,8 +7,11 @@
 * Implement grpc server for listening consensus request and sends transaction into consensus layer
 */
 use anyhow::anyhow;
-use consensus_common::proto::{ConsensusApi, ExternalTransaction, RequestEcho, ResponseEcho};
-use fastcrypto::error::FastCryptoError;
+use consensus_common::proto::{
+    ConsensusApi, Empty, ExternalTransaction, RequestEcho, ResponseEcho, ValidatorInfo,
+    ValidatorState,
+};
+use fastcrypto::{error::FastCryptoError, traits::KeyPair};
 use narwhal_worker::LazyNarwhalClient;
 use prometheus::Registry;
 use std::{pin::Pin, sync::Arc};
@@ -21,7 +24,7 @@ use tap::TapFallible;
 use tokio::sync::mpsc::{self};
 use tokio_stream::{wrappers::UnboundedReceiverStream, Stream, StreamExt};
 use tonic::Response;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::ConsensusTransactionWrapper;
 
@@ -88,6 +91,7 @@ impl ConsensusServiceMetrics {
 #[derive(Clone)]
 pub struct ConsensusService {
     validator_keypair: Arc<AccountKeyPair>,
+    node_keypair: Arc<AccountKeyPair>,
     narwhal_client: Arc<LazyNarwhalClient>,
     _metrics: Arc<ConsensusServiceMetrics>,
 }
@@ -110,17 +114,31 @@ impl ConsensusService {
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
         let authority_keypair = config.protocol_key_pair();
         let validator_keypair = get_ed25519_from_bls12381(authority_keypair)?;
+        let network_keypair = config.network_key_pair().copy();
         let narwhal_client = Arc::new(LazyNarwhalClient::new(
             consensus_config.address().to_owned(),
         ));
+
         Ok(Self {
             validator_keypair: Arc::new(validator_keypair),
+            node_keypair: Arc::new(network_keypair),
             narwhal_client,
             _metrics: Arc::new(ConsensusServiceMetrics::new(prometheus_registry)),
         })
     }
     pub async fn add_consensus_listener(&self, listener: CommitedTransactionsResultSender) {
         CONSENSUS_LISTENER.add_listener(listener).await;
+    }
+    fn get_validator_info(&self) -> ValidatorInfo {
+        let keypair = self.validator_keypair.copy();
+        let pub_key = keypair.public().as_bytes().to_vec();
+        let private_key = keypair.private().as_bytes().to_vec();
+        ValidatorInfo {
+            chain_id: String::default(),
+            pub_key,
+            private_key,
+            node_private_key: self.node_keypair.copy().private().as_bytes().to_vec(),
+        }
     }
     pub async fn handle_consensus_transaction(
         &self,
@@ -141,6 +159,7 @@ impl ConsensusService {
 
 #[tonic::async_trait]
 impl ConsensusApi for ConsensusService {
+    type InitTransactionStream = ResponseStream;
     async fn echo(
         &self,
         request: tonic::Request<RequestEcho>,
@@ -153,7 +172,30 @@ impl ConsensusApi for ConsensusService {
         }))
     }
 
-    type InitTransactionStream = ResponseStream;
+    async fn get_validator_info(
+        &self,
+        _request: tonic::Request<Empty>,
+    ) -> ConsensusServiceResult<ValidatorInfo> {
+        info!("ConsensusServiceServer::get_validator_info");
+        let info = self.get_validator_info();
+
+        Ok(Response::new(info))
+    }
+
+    async fn get_validator_state(
+        &self,
+        _request: tonic::Request<Empty>,
+    ) -> ConsensusServiceResult<ValidatorState> {
+        info!("ConsensusServiceServer::get_validator_state");
+        let validator_info = self.get_validator_info();
+        let state = ValidatorState {
+            validator_info: Some(validator_info),
+            round: 0,
+        };
+
+        Ok(Response::new(state))
+    }
+
     /*
      * Consensus client init a duplex streaming connection to send external transaction
      * and to receives consensus output.
@@ -197,15 +239,18 @@ impl ConsensusApi for ConsensusService {
 
 #[cfg(test)]
 mod tests {
+    use rand::rngs::OsRng;
     use sui_config::node::AuthorityKeyPairWithPath;
+    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair};
 
     #[test]
     fn test_get_ed25519_from_bls12381() {
         let authority_keypair = AuthorityKeyPairWithPath::new(
             get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut OsRng).1,
-        )
-        .authority_keypair();
-        let ed25519_keypair = super::get_ed25519_from_bls12381(authority_keypair);
+        );
+        let ed25519_keypair =
+            super::get_ed25519_from_bls12381(&authority_keypair.authority_keypair());
+        println!("{:?}", &ed25519_keypair);
         assert!(ed25519_keypair.is_ok())
     }
 }

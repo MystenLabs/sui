@@ -15,14 +15,14 @@ pub type ConsensusServiceResult<T> = Result<Response<T>, Status>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NsTransaction {
-    pub namespace: String,
+    pub chain_id: String,
     #[serde(with = "serde_bytes")]
     pub transaction: Transaction,
 }
 impl NsTransaction {
-    pub fn new(namespace: String, transaction: Transaction) -> NsTransaction {
+    pub fn new(chain_id: String, transaction: Transaction) -> NsTransaction {
         Self {
-            namespace,
+            chain_id,
             transaction,
         }
     }
@@ -31,11 +31,11 @@ impl NsTransaction {
 impl Into<ExternalTransaction> for NsTransaction {
     fn into(self) -> ExternalTransaction {
         let NsTransaction {
-            namespace,
+            chain_id,
             transaction,
         } = self;
         ExternalTransaction {
-            namespace,
+            chain_id,
             tx_bytes: transaction,
         }
     }
@@ -43,13 +43,10 @@ impl Into<ExternalTransaction> for NsTransaction {
 
 impl From<ExternalTransaction> for NsTransaction {
     fn from(value: ExternalTransaction) -> Self {
-        let ExternalTransaction {
-            namespace,
-            tx_bytes,
-        } = value;
+        let ExternalTransaction { chain_id, tx_bytes } = value;
 
         NsTransaction {
-            namespace,
+            chain_id,
             transaction: tx_bytes,
         }
     }

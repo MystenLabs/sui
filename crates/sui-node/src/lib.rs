@@ -1370,10 +1370,18 @@ impl SuiNode {
          * 20240504 - Taivv
          * Scalaris: Add consensus grpc service for external grpc client
          */
-        let consensus_service =
-            sui_core::scalaris::ConsensusService::new(config, prometheus_registry);
-        server_builder =
-            server_builder.add_service(sui_core::ConsensusApiServer::new(consensus_service));
+        match sui_core::scalaris::ConsensusService::new(config, prometheus_registry) {
+            Ok(consensus_service) => {
+                server_builder = server_builder
+                    .add_service(sui_core::ConsensusApiServer::new(consensus_service));
+            }
+            Err(err) => {
+                info!(
+                    "Error while create consensus service with config {:?}. {:?}",
+                    config, err
+                );
+            }
+        }
         /************And adding consensus grpc server ****************/
 
         let server = server_builder
