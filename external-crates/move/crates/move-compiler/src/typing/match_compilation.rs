@@ -2700,11 +2700,7 @@ fn find_counterexample_impl(
 
 /// Produces IDE information if the top-level match is incomplete. Assumes all arms with guards
 /// have been removed from the provided matrix.
-fn ide_report_missing_arms(
-    context: &mut Context,
-    loc: Loc,
-    matrix: &PatternMatrix,
-) {
+fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatrix) {
     use PatternSuggestion as PS;
     // This function looks at the very top-level of the match. For any arm missing, it suggests the
     // IDE add an arm to address that missing one.
