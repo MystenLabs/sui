@@ -10,13 +10,14 @@ import { permissionsSelectors, respondToPermissionRequest } from '_redux/slices/
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { AccountMultiSelectWithControls } from '../../components/accounts/AccountMultiSelect';
 import Alert from '../../components/alert';
 import { SectionHeader } from '../../components/SectionHeader';
 import { useAccountGroups } from '../../hooks/useAccountGroups';
 import { useActiveAccount } from '../../hooks/useActiveAccount';
+import { useDomainBlocklist } from '../../hooks/useDomainBlocklist';
 import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
 import st from './SiteConnectPage.module.scss';
 
@@ -39,6 +40,20 @@ function SiteConnectPage() {
 	const [accountsToConnect, setAccountsToConnect] = useState<SerializedUIAccount[]>(() =>
 		activeAccount && !activeAccount.isLocked ? [activeAccount] : [],
 	);
+	const { data: blockedDomains } = useDomainBlocklist();
+	const navigate = useNavigate();
+
+	const isBlocked = useMemo(
+		() => permissionRequest && blockedDomains?.includes(permissionRequest.origin),
+		[blockedDomains, permissionRequest],
+	);
+
+	useEffect(() => {
+		if (isBlocked) {
+			navigate('/blocked');
+		}
+	}, [isBlocked, navigate]);
+
 	const handleOnSubmit = useCallback(
 		async (allowed: boolean) => {
 			if (requestID && accountsToConnect && permissionRequest) {
@@ -76,7 +91,7 @@ function SiteConnectPage() {
 	const handleHideWarning = useCallback(
 		async (allowed: boolean) => {
 			if (allowed) {
-				setDisplayWarning(false);
+				setDisplayWarning(true);
 			} else {
 				await handleOnSubmit(false);
 			}

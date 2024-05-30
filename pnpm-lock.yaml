@@ -1468,6 +1468,8 @@ importers:
         specifier: ^1.6.0
         version: 1.6.0(@types/node@20.4.2)(happy-dom@14.11.0)(jsdom@23.0.0)(sass@1.63.6)(terser@5.19.1)
 
+  sdk/move-binary-format-wasm/pkg: {}
+
   sdk/move-bytecode-template:
     devDependencies:
       '@mysten/bcs':
