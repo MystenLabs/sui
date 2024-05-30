@@ -40,6 +40,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .init();
+
     let args = Args::parse();
 
     // load config
