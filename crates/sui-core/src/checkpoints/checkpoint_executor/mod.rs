@@ -27,7 +27,7 @@ use std::{
 
 use futures::stream::FuturesOrdered;
 use itertools::izip;
-use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
+use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::{fail_point, fail_point_async};
@@ -671,13 +671,7 @@ impl CheckpointExecutor {
                         .expect("Failed to insert epoch last checkpoint");
 
                     self.accumulator
-                        .accumulate_epoch(
-                            &cur_epoch,
-                            *checkpoint.sequence_number(),
-                            epoch_store.clone(),
-                        )
-                        .in_monitored_scope("CheckpointExecutor::accumulate_epoch")
-                        .await
+                        .write_root_accumulator(epoch_store.clone(), *checkpoint.sequence_number())
                         .expect("Accumulating epoch cannot fail");
 
                     self.bump_highest_executed_checkpoint(checkpoint);
@@ -1276,7 +1270,14 @@ async fn finalize_checkpoint(
             checkpoint.sequence_number,
         )?;
 
-    accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
+    if checkpoint.end_of_epoch_data.is_some() {
+        accumulator
+            .accumulate_final_checkpoint(effects, checkpoint.sequence_number, epoch_store)
+            .await?;
+    } else {
+        accumulator.accumulate_checkpoint(effects, &checkpoint, epoch_store)?;
+    }
+
     if let Some(path) = data_ingestion_dir {
         store_checkpoint_locally(
             path,

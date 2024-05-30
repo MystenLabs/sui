@@ -457,6 +457,11 @@ pub struct AuthorityEpochTables {
     // the accumulator is complete wrt the checkpoint
     pub state_hash_by_checkpoint: DBMap<CheckpointSequenceNumber, Accumulator>,
 
+    /// Running root state hash of the CURRENT EPOCH. Does not include accumulated
+    /// state from previous epochs. Maintained to amortize the cost of computing the
+    /// end of epoch root state hash.
+    pub running_root_accumulator: DBMap<(), Accumulator>,
+
     /// Record of the capabilities advertised by each authority.
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilities>,
 
@@ -985,6 +990,20 @@ impl AuthorityPerEpochStore {
         checkpoint: &CheckpointSequenceNumber,
     ) -> SuiResult<Option<Accumulator>> {
         Ok(self.tables()?.state_hash_by_checkpoint.get(checkpoint)?)
+    }
+
+    pub fn get_running_root_accumulator(&self) -> SuiResult<Option<Accumulator>> {
+        Ok(self.tables()?.running_root_accumulator.get(&())?)
+    }
+
+    pub fn get_last_accumulated_checkpoint(&self) -> SuiResult<Option<CheckpointSequenceNumber>> {
+        Ok(self
+            .tables()?
+            .state_hash_by_checkpoint
+            .safe_iter()
+            .last()
+            .transpose()?
+            .map(|(seq_num, _acc)| seq_num))
     }
 
     pub fn insert_state_hash_for_checkpoint(

@@ -1266,17 +1266,17 @@ impl CheckpointBuilder {
 
                 // This must happen after the call to augment_epoch_last_checkpoint,
                 // otherwise we will not capture the change_epoch tx
-                self.accumulator.accumulate_checkpoint(
-                    effects.clone(),
-                    sequence_number,
-                    self.epoch_store.clone(),
-                )?;
+                self.accumulator
+                    .accumulate_final_checkpoint(
+                        effects.clone(),
+                        sequence_number,
+                        self.epoch_store.clone(),
+                    )
+                    .await?;
 
                 let root_state_digest = self
                     .accumulator
-                    .digest_epoch(&epoch, sequence_number, self.epoch_store.clone())
-                    .in_monitored_scope("CheckpointBuilder::digest_epoch")
-                    .await?;
+                    .digest_epoch(self.epoch_store.clone(), sequence_number)?;
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
@@ -2203,10 +2203,11 @@ mod tests {
 
         let ckpt_dir = tempfile::tempdir().unwrap();
         let checkpoint_store = CheckpointStore::new(ckpt_dir.path());
-
-        let accumulator = StateAccumulator::new(state.get_accumulator_store().clone());
-
         let epoch_store = state.epoch_store_for_testing();
+
+        let accumulator =
+            StateAccumulator::new(state.get_accumulator_store().clone(), &epoch_store);
+
         let (checkpoint_service, _exit) = CheckpointService::spawn(
             state.clone(),
             checkpoint_store,

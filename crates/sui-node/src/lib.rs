@@ -696,6 +696,7 @@ impl SuiNode {
 
         let accumulator = Arc::new(StateAccumulator::new(
             cache_traits.accumulator_store.clone(),
+            &epoch_store,
         ));
 
         let authority_names_to_peer_ids = epoch_store
