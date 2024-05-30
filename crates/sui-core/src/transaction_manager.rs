@@ -962,11 +962,13 @@ impl TransactionQueue {
             return None;
         };
 
-        while !self.ages.is_empty()
-            && !self
-                .digests
-                .contains_key(&self.ages.peek().expect("heap cannot be empty").1)
-        {
+        while !self.ages.is_empty() {
+            let first = self.ages.peek().expect("heap cannot be empty");
+
+            if self.digests.get(&first.1) == Some(&first.0 .0) {
+                break;
+            }
+
             self.ages.pop();
         }
 
@@ -1113,5 +1115,33 @@ mod test {
         assert_eq!(queue.remove(&digest1), Some(time1));
 
         assert_eq!(queue.first(), None);
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue_double_insert() {
+        // insert two items
+        let time1 = Instant::now();
+        let digest1 = TransactionDigest::new([1; 32]);
+        let time2 = time1 + Duration::from_secs(1);
+        let digest2 = TransactionDigest::new([2; 32]);
+
+        let mut queue = TransactionQueue::default();
+        queue.insert(digest1, time1);
+        queue.insert(digest2, time2);
+
+        // remove the second item
+        queue.remove(&digest2);
+        assert_eq!(queue.first(), Some((time1, digest1)));
+
+        // insert the second item again
+        let time3 = time2 + Duration::from_secs(1);
+        queue.insert(digest2, time3);
+
+        // remove the first item
+        queue.remove(&digest1);
+
+        // time3 should be in first()
+        assert_eq!(queue.first(), Some((time3, digest2)));
     }
 }
