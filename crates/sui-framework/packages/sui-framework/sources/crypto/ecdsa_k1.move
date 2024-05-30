@@ -16,6 +16,21 @@ module sui::ecdsa_k1 {
     const EInvalidPubKey: u64 = 2;
 
     #[allow(unused_const)]
+    #[test_only]
+    /// Error if the private key is invalid.
+    const EInvalidPrivKey: u64 = 3;
+
+    #[allow(unused_const)]
+    #[test_only]
+    /// Error if the public key is invalid.
+    const EInvalidHashFunction: u64 = 4;
+
+    #[allow(unused_const)]
+    #[test_only]
+    /// Error if the public key is invalid.
+    const EInvalidSeed: u64 = 5;
+
+    #[allow(unused_const)]
     /// Hash function name that are valid for ecrecover and secp256k1_verify.
     const KECCAK256: u8 = 0;
     #[allow(unused_const)]
@@ -60,7 +75,6 @@ module sui::ecdsa_k1 {
     public native fun secp256k1_sign(private_key: &vector<u8>, msg: &vector<u8>, hash: u8): vector<u8>;
 
     #[test_only]
-    #[allow(unused_field)]
     public struct KeyPair has drop {
         private_key: vector<u8>,
         public_key: vector<u8>,

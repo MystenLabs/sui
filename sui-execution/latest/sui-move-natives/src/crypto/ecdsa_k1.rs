@@ -29,8 +29,9 @@ use sui_types::crypto::KeypairTraits;
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
 pub const INVALID_PUBKEY: u64 = 2;
-pub const INVALID_PRIVKEY_OR_HASH: u64 = 3;
-pub const INVALID_SEED: u64 = 4;
+pub const INVALID_PRIVKEY: u64 = 3;
+pub const INVALID_HASH: u64 = 4;
+pub const INVALID_SEED: u64 = 5;
 
 pub const KECCAK256: u8 = 0;
 pub const SHA256: u8 = 1;
@@ -314,7 +315,7 @@ pub fn secp256k1_sign(
 
     let sk = match <Secp256k1PrivateKey as ToFromBytes>::from_bytes(&private_key_bytes_ref) {
         Ok(sk) => sk,
-        Err(_) => return Ok(NativeResult::err(cost, INVALID_PRIVKEY_OR_HASH)),
+        Err(_) => return Ok(NativeResult::err(cost, INVALID_PRIVKEY)),
     };
 
     let kp = Secp256k1KeyPair::from(sk);
@@ -322,7 +323,7 @@ pub fn secp256k1_sign(
     let signature = match hash {
         KECCAK256 => kp.sign_with_hash::<Keccak256>(&msg_ref),
         SHA256 => kp.sign_with_hash::<Sha256>(&msg_ref),
-        _ => return Ok(NativeResult::err(cost, INVALID_PRIVKEY_OR_HASH)),
+        _ => return Ok(NativeResult::err(cost, INVALID_HASH)),
     };
 
     Ok(NativeResult::ok(
