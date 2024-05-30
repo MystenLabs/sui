@@ -1347,6 +1347,8 @@ impl TransactionCacheRead for WritebackCache {
                 self.metrics
                     .record_cache_request("transaction_block", "uncommitted");
                 if let Some(tx) = self.dirty.pending_transaction_writes.get(digest) {
+                    self.metrics
+                        .record_cache_hit("transaction_block", "uncommitted");
                     return Ok(CacheResult::Hit(Some(tx.transaction.clone())));
                 }
                 self.metrics
@@ -1355,6 +1357,8 @@ impl TransactionCacheRead for WritebackCache {
                 self.metrics
                     .record_cache_request("transaction_block", "committed");
                 if let Some(tx) = self.cached.transactions.get(digest) {
+                    self.metrics
+                        .record_cache_hit("transaction_block", "committed");
                     return Ok(CacheResult::Hit(Some(tx.clone())));
                 }
                 self.metrics
@@ -1380,6 +1384,8 @@ impl TransactionCacheRead for WritebackCache {
                 self.metrics
                     .record_cache_request("executed_effects_digests", "uncommitted");
                 if let Some(digest) = self.dirty.executed_effects_digests.get(digest) {
+                    self.metrics
+                        .record_cache_hit("executed_effects_digests", "uncommitted");
                     return Ok(CacheResult::Hit(Some(*digest)));
                 }
                 self.metrics
@@ -1388,6 +1394,8 @@ impl TransactionCacheRead for WritebackCache {
                 self.metrics
                     .record_cache_request("executed_effects_digests", "committed");
                 if let Some(digest) = self.cached.executed_effects_digests.get(digest) {
+                    self.metrics
+                        .record_cache_hit("executed_effects_digests", "committed");
                     return Ok(CacheResult::Hit(Some(digest)));
                 }
                 self.metrics
@@ -1412,6 +1420,8 @@ impl TransactionCacheRead for WritebackCache {
                 self.metrics
                     .record_cache_request("transaction_effects", "uncommitted");
                 if let Some(effects) = self.dirty.transaction_effects.get(digest) {
+                    self.metrics
+                        .record_cache_hit("transaction_effects", "uncommitted");
                     return Ok(CacheResult::Hit(Some(effects.clone())));
                 }
                 self.metrics
@@ -1420,6 +1430,8 @@ impl TransactionCacheRead for WritebackCache {
                 self.metrics
                     .record_cache_request("transaction_effects", "committed");
                 if let Some(effects) = self.cached.transaction_effects.get(digest) {
+                    self.metrics
+                        .record_cache_hit("transaction_effects", "committed");
                     return Ok(CacheResult::Hit(Some((*effects).clone())));
                 }
                 self.metrics
