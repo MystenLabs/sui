@@ -2713,8 +2713,8 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
         for lit in literals {
             unused.remove(&lit.value);
         }
-        if unused.len() > 0 {
-            let arms = unused.into_iter().map(|v| PS::Value(v)).collect::<Vec<_>>();
+        if !unused.is_empty() {
+            let arms = unused.into_iter().map(PS::Value).collect::<Vec<_>>();
             let info = MissingMatchArmsInfo { arms };
             context
                 .env
