@@ -17,6 +17,7 @@ use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
 use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point_async, fail_point_if};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::{AuthorityName, EpochId, TransactionDigest},
@@ -41,7 +42,7 @@ use crate::{
     consensus_types::{
         committee_api::CommitteeAPI, consensus_output_api::ConsensusOutputAPI, AuthorityIndex,
     },
-    execution_cache::ExecutionCacheRead,
+    execution_cache::ObjectCacheRead,
     scoring_decision::update_low_scoring_authorities,
     transaction_manager::TransactionManager,
 };
@@ -94,7 +95,7 @@ impl ConsensusHandlerInitializer {
             self.epoch_store.clone(),
             self.checkpoint_service.clone(),
             self.state.transaction_manager().clone(),
-            self.state.get_cache_reader().clone(),
+            self.state.get_object_cache_reader().clone(),
             self.low_scoring_authorities.clone(),
             committee,
             self.state.metrics.clone(),
@@ -113,7 +114,7 @@ pub struct ConsensusHandler<C> {
     last_consensus_stats: ExecutionIndicesWithStats,
     checkpoint_service: Arc<C>,
     /// cache reader is needed when determining the next version to assign for shared objects.
-    cache_reader: Arc<dyn ExecutionCacheRead>,
+    cache_reader: Arc<dyn ObjectCacheRead>,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The narwhal committee used to do stake computations for deciding set of low scoring authorities
@@ -135,7 +136,7 @@ impl<C> ConsensusHandler<C> {
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<C>,
         transaction_manager: Arc<TransactionManager>,
-        cache_reader: Arc<dyn ExecutionCacheRead>,
+        cache_reader: Arc<dyn ObjectCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
@@ -263,32 +264,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             timestamp
         };
 
-        let prologue_transaction = match self
-            .epoch_store
-            .protocol_config()
-            .include_consensus_digest_in_prologue()
-        {
-            true => self.consensus_commit_prologue_v2_transaction(
-                round,
-                timestamp,
-                consensus_output.consensus_digest(),
-            ),
-            false => self.consensus_commit_prologue_transaction(round, timestamp),
-        };
-
         info!(
             %consensus_output,
             epoch = ?self.epoch_store.epoch(),
-            prologue_transaction_digest = ?prologue_transaction.digest(),
             "Received consensus output"
         );
 
+        // TODO: testing empty commit explicitly.
+        // Note that consensus commit batch may contain no transactions, but we still need to record the current
+        // round and subdag index in the last_consensus_stats, so that it won't be re-executed in the future.
         let empty_bytes = vec![];
-        transactions.push((
-            empty_bytes.as_slice(),
-            SequencedConsensusTransactionKind::System(prologue_transaction),
-            consensus_output.leader_author_index(),
-        ));
+        self.update_index_and_hash(
+            ExecutionIndices {
+                last_committed_round: round,
+                sub_dag_index: commit_sub_dag_index,
+                transaction_index: 0_u64,
+            },
+            &empty_bytes,
+        );
 
         // Load all jwks that became active in the previous round, and commit them in this round.
         // We want to delay one round because none of the transactions in the previous round could
@@ -314,7 +307,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             transactions.push((
                 empty_bytes.as_slice(),
                 SequencedConsensusTransactionKind::System(authenticator_state_update_transaction),
-                consensus_output.leader_author_index(),
+                leader_author,
             ));
         }
 
@@ -396,10 +389,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             for (seq, (serialized, transaction, cert_origin)) in
                 transactions.into_iter().enumerate()
             {
+                // In process_consensus_transactions_and_commit_boundary(), we will add a system consensus commit
+                // prologue transaction, which will be the first transaction in this consensus commit batch.
+                // Therefore, the transaction sequence number starts from 1 here.
                 let current_tx_index = ExecutionIndices {
                     last_committed_round: round,
                     sub_dag_index: commit_sub_dag_index,
-                    transaction_index: seq as u64,
+                    transaction_index: (seq + 1) as u64,
                 };
 
                 self.update_index_and_hash(current_tx_index, serialized);
@@ -439,8 +435,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &self.last_consensus_stats,
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
-                round,
-                timestamp,
+                &ConsensusCommitInfo::new(self.epoch_store.protocol_config(), &consensus_output),
                 &self.metrics,
             )
             .await
@@ -537,34 +532,6 @@ impl Drop for MysticetiConsensusHandler {
 }
 
 impl<C> ConsensusHandler<C> {
-    fn consensus_commit_prologue_transaction(
-        &self,
-        round: u64,
-        commit_timestamp_ms: u64,
-    ) -> VerifiedExecutableTransaction {
-        let transaction = VerifiedTransaction::new_consensus_commit_prologue(
-            self.epoch(),
-            round,
-            commit_timestamp_ms,
-        );
-        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
-    }
-
-    fn consensus_commit_prologue_v2_transaction(
-        &self,
-        round: u64,
-        commit_timestamp_ms: u64,
-        consensus_digest: ConsensusCommitDigest,
-    ) -> VerifiedExecutableTransaction {
-        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
-            self.epoch(),
-            round,
-            commit_timestamp_ms,
-            consensus_digest,
-        );
-        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
-    }
-
     fn authenticator_state_update_transaction(
         &self,
         round: u64,
@@ -804,6 +771,79 @@ impl SequencedConsensusTransaction {
     }
 }
 
+/// Represents the information from the current consensus commit.
+pub struct ConsensusCommitInfo {
+    pub round: u64,
+    pub timestamp: u64,
+    pub consensus_commit_digest: ConsensusCommitDigest,
+
+    #[cfg(any(test, feature = "test-utils"))]
+    skip_consensus_commit_prologue_in_test: bool,
+}
+
+impl ConsensusCommitInfo {
+    fn new(protocol_config: &ProtocolConfig, consensus_output: &impl ConsensusOutputAPI) -> Self {
+        Self {
+            round: consensus_output.leader_round(),
+            timestamp: consensus_output.commit_timestamp_ms(),
+            consensus_commit_digest: consensus_output.consensus_digest(protocol_config),
+
+            #[cfg(any(test, feature = "test-utils"))]
+            skip_consensus_commit_prologue_in_test: false,
+        }
+    }
+
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn new_for_test(
+        commit_round: u64,
+        commit_timestamp: u64,
+        skip_consensus_commit_prologue_in_test: bool,
+    ) -> Self {
+        Self {
+            round: commit_round,
+            timestamp: commit_timestamp,
+            consensus_commit_digest: ConsensusCommitDigest::default(),
+            skip_consensus_commit_prologue_in_test,
+        }
+    }
+
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn skip_consensus_commit_prologue_in_test(&self) -> bool {
+        self.skip_consensus_commit_prologue_in_test
+    }
+
+    fn consensus_commit_prologue_transaction(&self, epoch: u64) -> VerifiedExecutableTransaction {
+        let transaction =
+            VerifiedTransaction::new_consensus_commit_prologue(epoch, self.round, self.timestamp);
+        VerifiedExecutableTransaction::new_system(transaction, epoch)
+    }
+
+    fn consensus_commit_prologue_v2_transaction(
+        &self,
+        epoch: u64,
+    ) -> VerifiedExecutableTransaction {
+        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
+            epoch,
+            self.round,
+            self.timestamp,
+            self.consensus_commit_digest,
+        );
+        VerifiedExecutableTransaction::new_system(transaction, epoch)
+    }
+
+    pub fn create_consensus_commit_prologue_transaction(
+        &self,
+        epoch: u64,
+        protocol_config: &ProtocolConfig,
+    ) -> VerifiedExecutableTransaction {
+        if protocol_config.include_consensus_digest_in_prologue() {
+            self.consensus_commit_prologue_v2_transaction(epoch)
+        } else {
+            self.consensus_commit_prologue_transaction(epoch)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
@@ -868,7 +908,7 @@ mod tests {
             epoch_store,
             Arc::new(CheckpointServiceNoop {}),
             state.transaction_manager().clone(),
-            state.get_cache_reader().clone(),
+            state.get_object_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
             committee.clone(),
             metrics,

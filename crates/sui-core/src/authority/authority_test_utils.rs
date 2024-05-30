@@ -88,7 +88,7 @@ pub async fn execute_certificate_with_execution_error(
     // for testing and regression detection.
     // We must do this before sending to consensus, otherwise consensus may already
     // lead to transaction execution and state change.
-    let state_acc = StateAccumulator::new(authority.execution_cache.clone());
+    let state_acc = StateAccumulator::new(authority.get_accumulator_store().clone());
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()
@@ -373,8 +373,9 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
         .process_consensus_transactions_for_tests(
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &authority.metrics,
+            true,
         )
         .await
         .unwrap();
@@ -396,8 +397,9 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
         .process_consensus_transactions_for_tests(
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &authority.metrics,
+            true,
         )
         .await
         .unwrap();
@@ -406,6 +408,7 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
 pub async fn send_batch_consensus_no_execution(
     authority: &AuthorityState,
     certificates: &[VerifiedCertificate],
+    skip_consensus_commit_prologue_in_test: bool,
 ) -> Vec<VerifiedExecutableTransaction> {
     let transactions = certificates
         .iter()
@@ -424,8 +427,9 @@ pub async fn send_batch_consensus_no_execution(
         .process_consensus_transactions_for_tests(
             transactions,
             &Arc::new(CheckpointServiceNoop {}),
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &authority.metrics,
+            skip_consensus_commit_prologue_in_test,
         )
         .await
         .unwrap()

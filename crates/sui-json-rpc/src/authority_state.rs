@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::AuthorityState;
-use sui_core::execution_cache::ExecutionCacheRead;
+use sui_core::execution_cache::ObjectCacheRead;
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc_types::{
     Coin as SuiCoin, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
@@ -88,7 +88,7 @@ pub trait StateRead: Send + Sync {
         limit: usize,
     ) -> StateReadResult<Vec<(ObjectID, DynamicFieldInfo)>>;
 
-    fn get_cache_reader(&self) -> &Arc<dyn ExecutionCacheRead>;
+    fn get_cache_reader(&self) -> &Arc<dyn ObjectCacheRead>;
 
     fn get_object_store(&self) -> &Arc<dyn ObjectStore + Send + Sync>;
 
@@ -310,8 +310,8 @@ impl StateRead for AuthorityState {
         Ok(self.get_dynamic_fields(owner, cursor, limit)?)
     }
 
-    fn get_cache_reader(&self) -> &Arc<dyn ExecutionCacheRead> {
-        self.get_cache_reader()
+    fn get_cache_reader(&self) -> &Arc<dyn ObjectCacheRead> {
+        self.get_object_cache_reader()
     }
 
     fn get_object_store(&self) -> &Arc<dyn ObjectStore + Send + Sync> {
@@ -432,7 +432,7 @@ impl StateRead for AuthorityState {
     }
     fn get_system_state(&self) -> StateReadResult<SuiSystemState> {
         Ok(self
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_sui_system_state_object_unsafe()?)
     }
     fn get_or_latest_committee(&self, epoch: Option<BigInt<u64>>) -> StateReadResult<Committee> {

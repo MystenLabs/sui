@@ -8,10 +8,10 @@ expression: "results.join(\"\\n\")"
 ├─────────────┬─────────────────────────────────────────────────┤
 │ command     │ values                                          │
 ├─────────────┼─────────────────────────────────────────────────┤
-│ split-coins │ gas [0u64, 1u64, 2u64, 3u64]                    │
+│ split-coins │ gas [0, 1, 2, 3]                                │
 │ assign      │ coins                                           │
 │ move-call   │ sui::coin::destroy_zero<sui::sui::SUI> coins.0  │
-│ split-coins │ coins.1 [0u64, 0u64]                            │
+│ split-coins │ coins.1 [0, 0]                                  │
 │ assign      │ zcoins                                          │
 │ move-call   │ sui::coin::destroy_zero<sui::sui::SUI> zcoins.0 │
 │ move-call   │ sui::coin::destroy_zero<sui::sui::SUI> zcoins.1 │

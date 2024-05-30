@@ -1,25 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO remove when integrated
-#![allow(unused)]
-
 use anyhow::anyhow;
 use async_trait::async_trait;
-use axum::response::sse::Event;
 use core::panic;
-use ethers::types::{Address, U256};
-use fastcrypto::traits::KeyPair;
 use fastcrypto::traits::ToFromBytes;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::from_utf8;
-use std::str::FromStr;
 use std::time::Duration;
 use sui_json_rpc_api::BridgeReadApiClient;
 use sui_json_rpc_types::DevInspectResults;
-use sui_json_rpc_types::{EventFilter, Page, SuiData, SuiEvent};
+use sui_json_rpc_types::{EventFilter, Page, SuiEvent};
 use sui_json_rpc_types::{
     EventPage, SuiObjectDataOptions, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
@@ -27,25 +19,13 @@ use sui_json_rpc_types::{
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
-use sui_types::bridge::get_bridge;
-use sui_types::bridge::BridgeCommitteeSummary;
-use sui_types::bridge::BridgeInnerDynamicField;
-use sui_types::bridge::BridgeRecordDyanmicField;
 use sui_types::bridge::BridgeSummary;
 use sui_types::bridge::BridgeTreasurySummary;
-use sui_types::bridge::MoveTypeBridgeCommittee;
 use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::bridge::MoveTypeParsedTokenTransferMessage;
-use sui_types::bridge::MoveTypeTokenTransferPayload;
-use sui_types::collection_types::LinkedTableNode;
-use sui_types::crypto::get_key_pair;
-use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::dynamic_field::Field;
-use sui_types::error::SuiObjectResponseError;
-use sui_types::error::UserInputError;
-use sui_types::event;
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::{Object, Owner};
+use sui_types::object::Owner;
+use sui_types::parse_sui_type_tag;
 use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::Command;
@@ -63,8 +43,6 @@ use sui_types::{
     event::EventID,
     Identifier,
 };
-use sui_types::{bridge, parse_sui_type_tag};
-use tap::TapFallible;
 use tokio::sync::OnceCell;
 use tracing::{error, warn};
 
@@ -236,15 +214,6 @@ where
             .collect()
     }
 
-    // TODO: cache this
-    pub async fn get_bridge_record_id(&self) -> BridgeResult<ObjectID> {
-        self.inner
-            .get_bridge_summary()
-            .await
-            .map_err(|e| BridgeError::InternalError(format!("Can't get bridge committee: {e}")))
-            .map(|bridge_summary| bridge_summary.bridge_records_id)
-    }
-
     pub async fn get_bridge_committee(&self) -> BridgeResult<BridgeCommittee> {
         let bridge_summary =
             self.inner.get_bridge_summary().await.map_err(|e| {
@@ -263,7 +232,7 @@ where
                 blocklisted,
             } = member;
             let pubkey = BridgeAuthorityPublicKey::from_bytes(&bridge_pubkey_bytes)?;
-            let base_url = from_utf8(&http_rest_url).unwrap_or_else(|e| {
+            let base_url = from_utf8(&http_rest_url).unwrap_or_else(|_e| {
                 warn!(
                     "Bridge authority address: {}, pubkey: {:?} has invalid http url: {:?}",
                     sui_address, bridge_pubkey_bytes, http_rest_url
@@ -284,6 +253,20 @@ where
         Ok(self.inner.get_chain_identifier().await?)
     }
 
+    pub async fn get_reference_gas_price_until_success(&self) -> u64 {
+        loop {
+            let Ok(Ok(rgp)) = retry_with_max_elapsed_time!(
+                self.inner.get_reference_gas_price(),
+                Duration::from_secs(30)
+            ) else {
+                // TODO: add metrics and fire alert
+                error!("Failed to get reference gas price");
+                continue;
+            };
+            return rgp;
+        }
+    }
+
     pub async fn execute_transaction_block_with_effects(
         &self,
         tx: sui_types::transaction::Transaction,
@@ -297,7 +280,6 @@ where
         source_chain_id: u8,
         seq_number: u64,
     ) -> BridgeActionStatus {
-        let now = std::time::Instant::now();
         loop {
             let bridge_object_arg = self.get_mutable_bridge_object_arg_must_succeed().await;
             let Ok(Ok(status)) = retry_with_max_elapsed_time!(
@@ -324,7 +306,6 @@ where
         source_chain_id: u8,
         seq_number: u64,
     ) -> Option<Vec<Vec<u8>>> {
-        let now = std::time::Instant::now();
         loop {
             let bridge_object_arg = self.get_mutable_bridge_object_arg_must_succeed().await;
             let Ok(Ok(sigs)) = retry_with_max_elapsed_time!(
@@ -389,6 +370,8 @@ pub trait SuiClientInner: Send + Sync {
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error>;
 
+    async fn get_reference_gas_price(&self) -> Result<u64, Self::Error>;
+
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error>;
 
     async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, Self::Error>;
@@ -450,6 +433,10 @@ impl SuiClientInner for SuiSdkClient {
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error> {
         self.read_api().get_chain_identifier().await
+    }
+
+    async fn get_reference_gas_price(&self) -> Result<u64, Self::Error> {
+        self.governance_api().get_reference_gas_price().await
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error> {
@@ -637,21 +624,14 @@ mod tests {
             approve_action_with_validator_secrets, bridge_token, get_test_eth_to_sui_bridge_action,
             get_test_sui_to_eth_bridge_action,
         },
-        types::{BridgeActionType, SuiToEthBridgeAction},
+        types::SuiToEthBridgeAction,
     };
-    use ethers::{
-        abi::Token,
-        types::{
-            Address as EthAddress, Block, BlockNumber, Filter, FilterBlockOption, Log,
-            ValueOrArray, U64,
-        },
-    };
+    use ethers::types::Address as EthAddress;
     use move_core_types::account_address::AccountAddress;
-    use prometheus::Registry;
-    use std::{collections::HashSet, str::FromStr};
-    use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-    use sui_sdk::wallet_context;
+    use serde::{Deserialize, Serialize};
+    use std::str::FromStr;
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_SUI, TOKEN_ID_USDC};
+    use sui_types::crypto::get_key_pair;
     use test_cluster::TestClusterBuilder;
 
     use super::*;
@@ -675,7 +655,7 @@ mod tests {
             sui_chain_id: BridgeChainId::SuiTestnet,
             sui_address: SuiAddress::random_for_testing_only(),
             eth_chain_id: BridgeChainId::EthSepolia,
-            eth_address: Address::random(),
+            eth_address: EthAddress::random(),
             token_id: TOKEN_ID_SUI,
             amount_sui_adjusted: 100,
         };
@@ -694,7 +674,7 @@ mod tests {
         sui_event_1.bcs = bcs::to_bytes(&emitted_event_1).unwrap();
 
         #[derive(Serialize, Deserialize)]
-        struct RandomStruct {};
+        struct RandomStruct {}
 
         let event_2: RandomStruct = RandomStruct {};
         // undeclared struct tag
@@ -716,7 +696,7 @@ mod tests {
                 sui_event_3.clone(),
             ],
         );
-        let mut expected_action_1 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
+        let expected_action_1 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
             sui_tx_digest: tx_digest,
             sui_tx_event_index: 0,
             sui_bridge_event: sanitized_event_1.clone(),
@@ -728,7 +708,7 @@ mod tests {
                 .unwrap(),
             expected_action_1,
         );
-        let mut expected_action_2 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
+        let expected_action_2 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
             sui_tx_digest: tx_digest,
             sui_tx_event_index: 2,
             sui_bridge_event: sanitized_event_1.clone(),
@@ -774,7 +754,7 @@ mod tests {
     // Test get_action_onchain_status.
     // Use validator secrets to bridge USDC from Ethereum initially.
     // TODO: we need an e2e test for this with published solidity contract and committee with BridgeNodes
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_get_action_onchain_status_for_sui_to_eth_transfer() {
         telemetry_subscribers::init_for_testing();
         let mut bridge_keys = vec![];
@@ -798,7 +778,6 @@ mod tests {
             .await;
         let context = &mut test_cluster.wallet;
         let sender = context.active_address().unwrap();
-        let summary = sui_client.inner.get_bridge_summary().await.unwrap();
         let usdc_amount = 5000000;
         let bridge_object_arg = sui_client
             .get_mutable_bridge_object_arg_must_succeed()

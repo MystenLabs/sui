@@ -419,6 +419,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         E::Loop { body, .. } => exp(context, body),
         E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
+        E::IDEAnnotation(_, e) => exp(context, e),
         E::Assign(sp!(_, lvs_), ty_opts, e) => {
             lvalues(context, lvs_);
             for ty_opt in ty_opts {
@@ -471,7 +472,11 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e);
             type_(context, ty)
         }
-        E::InvalidAccess(e) => exp(context, e),
+        E::AutocompleteDotAccess {
+            base_exp,
+            methods: _,
+            fields: _,
+        } => exp(context, base_exp),
         E::Unit { .. }
         | E::Value(_)
         | E::Move { .. }

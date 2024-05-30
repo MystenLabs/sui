@@ -6,7 +6,7 @@ pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
-use crate::authority::{AuthorityState, EffectsNotifyRead};
+use crate::authority::AuthorityState;
 use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
@@ -14,6 +14,7 @@ pub use crate::checkpoints::checkpoint_output::{
     LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
+use crate::execution_cache::TransactionCacheRead;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use crate::state_accumulator::StateAccumulator;
 use diffy::create_patch;
@@ -777,7 +778,7 @@ impl CheckpointStore {
                 panic!("checkpoint contents not found for locally computed checkpoint {:?} (digest: {:?})", seq, checkpoint.content_digest);
             };
 
-            let cache = state.get_cache_reader();
+            let cache = state.get_transaction_cache_reader();
 
             let tx_digests: Vec<_> = contents.iter().map(|digests| digests.transaction).collect();
             let fx_digests: Vec<_> = contents.iter().map(|digests| digests.effects).collect();
@@ -857,7 +858,7 @@ pub struct CheckpointBuilder {
     epoch_store: Arc<AuthorityPerEpochStore>,
     notify: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
-    effects_store: Arc<dyn EffectsNotifyRead>,
+    effects_store: Arc<dyn TransactionCacheRead>,
     accumulator: Arc<StateAccumulator>,
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
@@ -895,7 +896,7 @@ impl CheckpointBuilder {
         tables: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
-        effects_store: Arc<dyn EffectsNotifyRead>,
+        effects_store: Arc<dyn TransactionCacheRead>,
         accumulator: Arc<StateAccumulator>,
         output: Box<dyn CheckpointOutput>,
         exit: watch::Receiver<()>,
@@ -982,7 +983,7 @@ impl CheckpointBuilder {
             .await?;
         let root_effects = self
             .effects_store
-            .notify_read_executed_effects(root_digests)
+            .notify_read_executed_effects(&root_digests)
             .in_monitored_scope("CheckpointNotifyRead")
             .await?;
 
@@ -1161,7 +1162,7 @@ impl CheckpointBuilder {
             .collect();
         let transactions_and_sizes = self
             .state
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_transactions_and_serialized_sizes(&all_digests)?;
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
         let mut transactions = Vec::with_capacity(all_effects.len());
@@ -1171,7 +1172,7 @@ impl CheckpointBuilder {
             debug!(
                 ?last_checkpoint_seq,
                 "Waiting for {:?} certificates to appear in consensus",
-                all_effects_and_transaction_sizes.len()
+                all_effects.len()
             );
 
             for (effects, transaction_and_size) in all_effects
@@ -1920,7 +1921,7 @@ impl CheckpointService {
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        effects_store: Arc<dyn EffectsNotifyRead>,
+        effects_store: Arc<dyn TransactionCacheRead>,
         accumulator: Arc<StateAccumulator>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
@@ -2084,14 +2085,15 @@ impl From<PendingCheckpoint> for PendingCheckpointV2 {
 mod tests {
     use super::*;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use async_trait::async_trait;
+    use futures::future::BoxFuture;
     use shared_crypto::intent::{Intent, IntentScope};
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Deref;
     use sui_macros::sim_test;
     use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::{AuthoritySignInfo, Signature};
-    use sui_types::effects::TransactionEffects;
+    use sui_types::digests::TransactionEventsDigest;
+    use sui_types::effects::{TransactionEffects, TransactionEvents};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use sui_types::move_package::MovePackage;
     use sui_types::object;
@@ -2303,30 +2305,31 @@ mod tests {
         assert_eq!(c2sc.sequence_number, 1);
     }
 
-    #[async_trait]
-    impl EffectsNotifyRead for HashMap<TransactionDigest, TransactionEffects> {
-        async fn notify_read_executed_effects(
+    impl TransactionCacheRead for HashMap<TransactionDigest, TransactionEffects> {
+        fn notify_read_executed_effects(
             &self,
-            digests: Vec<TransactionDigest>,
-        ) -> SuiResult<Vec<TransactionEffects>> {
-            Ok(digests
-                .into_iter()
-                .map(|d| self.get(&d).expect("effects not found").clone())
-                .collect())
+            digests: &[TransactionDigest],
+        ) -> BoxFuture<'_, SuiResult<Vec<TransactionEffects>>> {
+            std::future::ready(Ok(digests
+                .iter()
+                .map(|d| self.get(d).expect("effects not found").clone())
+                .collect()))
+            .boxed()
         }
 
-        async fn notify_read_executed_effects_digests(
+        fn notify_read_executed_effects_digests(
             &self,
-            digests: Vec<TransactionDigest>,
-        ) -> SuiResult<Vec<TransactionEffectsDigest>> {
-            Ok(digests
-                .into_iter()
+            digests: &[TransactionDigest],
+        ) -> BoxFuture<'_, SuiResult<Vec<TransactionEffectsDigest>>> {
+            std::future::ready(Ok(digests
+                .iter()
                 .map(|d| {
-                    self.get(&d)
+                    self.get(d)
                         .map(|fx| fx.digest())
                         .expect("effects not found")
                 })
-                .collect())
+                .collect()))
+            .boxed()
         }
 
         fn multi_get_executed_effects(
@@ -2334,6 +2337,39 @@ mod tests {
             digests: &[TransactionDigest],
         ) -> SuiResult<Vec<Option<TransactionEffects>>> {
             Ok(digests.iter().map(|d| self.get(d).cloned()).collect())
+        }
+
+        // Unimplemented methods - its unfortunate to have this big blob of useless code, but it wasn't
+        // worth it to keep EffectsNotifyRead around just for these tests, as it caused a ton of
+        // complication in non-test code. (e.g. had to implement EFfectsNotifyRead for all
+        // ExecutionCacheRead implementors).
+
+        fn multi_get_transaction_blocks(
+            &self,
+            _: &[TransactionDigest],
+        ) -> SuiResult<Vec<Option<Arc<VerifiedTransaction>>>> {
+            unimplemented!()
+        }
+
+        fn multi_get_executed_effects_digests(
+            &self,
+            _: &[TransactionDigest],
+        ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
+            unimplemented!()
+        }
+
+        fn multi_get_effects(
+            &self,
+            _: &[TransactionEffectsDigest],
+        ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+            unimplemented!()
+        }
+
+        fn multi_get_events(
+            &self,
+            _: &[TransactionEventsDigest],
+        ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+            unimplemented!()
         }
     }
 

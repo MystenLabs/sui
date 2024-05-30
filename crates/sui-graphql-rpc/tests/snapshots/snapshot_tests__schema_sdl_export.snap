@@ -3025,6 +3025,10 @@ type ServiceConfig {
 	"""
 	isEnabled(feature: Feature!): Boolean!
 	"""
+	List the available versions for this GraphQL service.
+	"""
+	availableVersions: [String!]!
+	"""
 	List of all features that are enabled on this GraphQL service.
 	"""
 	enabledFeatures: [Feature!]!
@@ -3063,7 +3067,14 @@ type ServiceConfig {
 	"""
 	maxPageSize: Int!
 	"""
-	Maximum time in milliseconds that will be spent to serve one request.
+	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a
+	a transaction to execute. Note that the transaction may still succeed even in the case of a
+	timeout. Transactions are idempotent, so a transaction that times out should be resubmitted
+	until the network returns a definite response (success or failure, not timeout).
+	"""
+	mutationTimeoutMs: Int!
+	"""
+	Maximum time in milliseconds that will be spent to serve one query request.
 	"""
 	requestTimeoutMs: Int!
 	"""
@@ -4209,3 +4220,4 @@ schema {
 	query: Query
 	mutation: Mutation
 }
+

@@ -238,7 +238,7 @@ async fn test_create_authenticator_state_object() {
         h.with(|node| {
             assert!(node
                 .state()
-                .get_cache_reader()
+                .get_object_cache_reader()
                 .get_latest_object_ref_or_tombstone(SUI_AUTHENTICATOR_STATE_OBJECT_ID)
                 .unwrap()
                 .is_none());
@@ -254,7 +254,7 @@ async fn test_create_authenticator_state_object() {
     for h in &handles {
         h.with(|node| {
             node.state()
-                .get_cache_reader()
+                .get_object_cache_reader()
                 .get_latest_object_ref_or_tombstone(SUI_AUTHENTICATOR_STATE_OBJECT_ID)
                 .unwrap()
                 .expect("auth state object should exist");
@@ -295,7 +295,7 @@ async fn test_conflicting_jwks() {
             while let Some(tx) = txns.next().await {
                 let digest = *tx.transaction_digest();
                 let tx = state
-                    .get_cache_reader()
+                    .get_transaction_cache_reader()
                     .get_transaction_block(&digest)
                     .unwrap()
                     .unwrap();

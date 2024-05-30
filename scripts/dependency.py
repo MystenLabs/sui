@@ -88,7 +88,6 @@ def switch_to_local(project):
             "move-package": "tools/move-package",
             "move-resource-viewer": "tools/move-resource-viewer",
             "move-stackless-bytecode": "move-prover/bytecode",
-            "move-stackless-bytecode-interpreter": "move-prover/interpreter",
             "move-unit-test": "tools/move-unit-test",
             "move-vm-test-utils": "move-vm/test-utils",
             "move-vm-runtime": "move-vm/runtime",

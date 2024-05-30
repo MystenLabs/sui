@@ -1401,13 +1401,13 @@ mod tests {
         .await
         .unwrap();
 
-        if let SuiClientCommandResult::PayAllSui(response) = res {
+        if let SuiClientCommandResult::TransactionBlock(response) = res {
             assert!(matches!(
                 response.effects.unwrap().status(),
                 SuiExecutionStatus::Success
             ));
         } else {
-            panic!("PayAllSui command did not return SuiClientCommandResult::PayAllSui");
+            panic!("PayAllSui command did not return SuiClientCommandResult::TransactionBlock");
         };
 
         let number_of_coins = gases.len();
@@ -1522,12 +1522,12 @@ mod tests {
         .execute(&mut context)
         .await;
 
-        let tiny_coin_id = if let SuiClientCommandResult::SplitCoin(resp) = res.unwrap() {
+        let tiny_coin_id = if let SuiClientCommandResult::TransactionBlock(resp) = res.unwrap() {
             resp.effects.as_ref().unwrap().created()[0]
                 .reference
                 .object_id
         } else {
-            panic!("split command did not return SuiClientCommandResult::SplitCoin");
+            panic!("SplitCoin command did not return SuiClientCommandResult::TransactionBlock");
         };
 
         // Get the latest list of gas

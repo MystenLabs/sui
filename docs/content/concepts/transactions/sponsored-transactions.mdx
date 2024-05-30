@@ -118,15 +118,16 @@ For user and sponsor-initiated transactions, users can submit the dual-signed tr
 
 ## Sponsored transaction data structure
 
-The following code block describes the `TransactionData` structure for sponsored transactions and `GasObject`. You can view the [source code](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/messages.rs) in the Sui GitHub repository.
+The following code block describes the `TransactionData` structure for sponsored transactions and `GasObject`. You can view the [source code](https://github.com/MystenLabs/sui/blob/224a28ed9dece21a952547896bd5d794bdf8b562/crates/sui-types/src/transaction.rs) in the Sui GitHub repository.
 
 **`TransactionData` Structure**
 ```rust
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct TransactionData {
-   pub kind: TransactionKind,
-   pub sender: SuiAddress,
-   pub gas_data: GasData,
+pub struct TransactionDataV1 {
+    pub kind: TransactionKind,
+    pub sender: SuiAddress,
+    pub gas_data: GasData,
+    pub expiration: TransactionExpiration,
 }
 ```
 
@@ -134,10 +135,10 @@ pub struct TransactionData {
 ```rust
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct GasData {
-   pub payment: ObjectRef,
-   pub owner: SuiAddress,
-   pub price: u64,
-   pub budget: u64,
+    pub payment: Vec<ObjectRef>,
+    pub owner: SuiAddress,
+    pub price: u64,
+    pub budget: u64,
 }
 ```
 

@@ -179,6 +179,19 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub firewall_config: Option<RemoteFirewallConfig>,
+
+    #[serde(default)]
+    pub execution_cache: ExecutionCacheConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionCacheConfig {
+    #[default]
+    PassthroughCache,
+    WritebackCache {
+        max_cache_size: Option<usize>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -547,7 +560,7 @@ impl Default for CheckpointExecutorConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct AuthorityStorePruningConfig {
     /// number of the latest epoch dbs to retain

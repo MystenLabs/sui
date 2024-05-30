@@ -16,7 +16,7 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use sui_bridge::config::{read_bridge_authority_key, BridgeCommitteeConfig};
+use sui_bridge::config::BridgeCommitteeConfig;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::Genesis;
@@ -28,6 +28,7 @@ use sui_config::{
 use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
+use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
 use sui_move_build::SuiPackageHooks;
@@ -39,7 +40,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{SignatureScheme, SuiKeyPair};
+use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
 use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
@@ -393,13 +394,17 @@ impl SuiCommand {
                         .get_one_gas_object_owned_by_address(sui_address)
                         .await?
                         .expect("Validator does not own any gas objects");
-                    let kp = read_bridge_authority_key(&key_path)?;
+                    let kp = match read_key(&key_path, true)? {
+                        SuiKeyPair::Secp256k1(key) => key,
+                        _ => unreachable!("we required secp256k1 key in `read_key`"),
+                    };
+
                     // build registration tx
                     let tx = build_committee_register_transaction(
                         sui_address,
                         &gas_obj_ref,
                         bridge_arg,
-                        kp,
+                        kp.public().as_bytes().to_vec(),
                         &format!("http://127.0.0.1:{port}"),
                         rgp,
                     )
@@ -637,6 +642,7 @@ async fn genesis(
         alias: "localnet".to_string(),
         rpc: format!("http://{}", fullnode_config.json_rpc_address),
         ws: None,
+        basic_auth: None,
     });
     client_config.add_env(SuiEnv::devnet());
 
@@ -661,6 +667,7 @@ async fn prompt_if_no_config(
                 alias: "custom".to_string(),
                 rpc: v.into_string().unwrap(),
                 ws: None,
+                basic_auth: None,
             }),
             None => {
                 if accept_defaults {
@@ -696,6 +703,7 @@ async fn prompt_if_no_config(
                             alias,
                             rpc: url,
                             ws: None,
+                            basic_auth: None,
                         }
                     })
                 } else {

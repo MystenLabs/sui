@@ -17,6 +17,7 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
     error: VMError,
     vm: &MoveVM,
     state_view: &S,
+    resolve_abort_location_to_package_id: bool,
 ) -> ExecutionError {
     let kind = match (error.major_status(), error.sub_status(), error.location()) {
         (StatusCode::EXECUTED, _, _) => {
@@ -30,6 +31,11 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
             ExecutionFailureStatus::VMInvariantViolation
         }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
+            let abort_location_id = if resolve_abort_location_to_package_id {
+                state_view.relocate(id).unwrap_or_else(|_| id.clone())
+            } else {
+                id.clone()
+            };
             let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
             debug_assert!(offset.is_some(), "Move should set the location on aborts");
             let (function, instruction) = offset.unwrap_or((0, 0));
@@ -40,7 +46,7 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
             });
             ExecutionFailureStatus::MoveAbort(
                 MoveLocation {
-                    module: id.clone(),
+                    module: abort_location_id,
                     function,
                     instruction,
                     function_name,

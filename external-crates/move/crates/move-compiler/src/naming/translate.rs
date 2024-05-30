@@ -2614,7 +2614,7 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
         }
         E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
         E::ExpDotted_::DotUnresolved(loc, d) => {
-            N::ExpDotted_::DotUnresolved(loc, Box::new(dotted(context, *d)?))
+            N::ExpDotted_::DotAutocomplete(loc, Box::new(dotted(context, *d)?))
         }
         E::ExpDotted_::Index(inner, args) => {
             let args = call_args(context, args);
@@ -3785,6 +3785,7 @@ fn remove_unused_bindings_exp(
             from_macro_argument: _,
             seq,
         }) => remove_unused_bindings_seq(context, used, seq),
+        N::Exp_::IDEAnnotation(_, e) => remove_unused_bindings_exp(context, used, e),
         N::Exp_::Lambda(N::Lambda {
             parameters: sp!(_, parameters),
             return_label: _,
@@ -3843,7 +3844,7 @@ fn remove_unused_bindings_exp_dotted(
 ) {
     match ed_ {
         N::ExpDotted_::Exp(e) => remove_unused_bindings_exp(context, used, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => {
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
             remove_unused_bindings_exp_dotted(context, used, ed)
         }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {

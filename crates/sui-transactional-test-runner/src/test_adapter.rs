@@ -1908,6 +1908,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         }],
         None,
         Flags::empty(),
+        None,
     )
     .unwrap();
     match fully_compiled_res {

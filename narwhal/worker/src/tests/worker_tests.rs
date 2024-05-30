@@ -108,7 +108,7 @@ async fn reject_invalid_clients_transactions() {
     let mut client = TransactionsClient::new(channel);
     let tx = transaction();
     let txn = TransactionProto {
-        transaction: Bytes::from(tx.clone()),
+        transactions: vec![Bytes::from(tx.clone())],
     };
 
     // Check invalid transactions are rejected
@@ -240,7 +240,7 @@ async fn handle_remote_clients_transactions() {
         let mut fut_list = FuturesOrdered::new();
         for tx in batch.transactions() {
             let txn = TransactionProto {
-                transaction: Bytes::from(tx.clone()),
+                transactions: vec![Bytes::from(tx.clone())],
             };
 
             // Calls to submit_transaction are now blocking, so we need to drive them
@@ -359,7 +359,10 @@ async fn handle_local_clients_transactions() {
             // all at the same time, rather than sequentially.
             let inner_client = client.clone();
             fut_list.push_back(async move {
-                inner_client.submit_transaction(txn.clone()).await.unwrap();
+                inner_client
+                    .submit_transactions(vec![txn.clone()])
+                    .await
+                    .unwrap();
             });
         }
 

@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.25.1"
+    "version": "1.26.0"
   },
   "methods": [
     {
@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "46",
+              "maxSupportedProtocolVersion": "48",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1387,6 +1387,7 @@
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
                 "mysticeti_leader_scoring_and_schedule": false,
+                "mysticeti_use_committed_subdag_digest": false,
                 "narwhal_certificate_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
@@ -1398,6 +1399,7 @@
                 "recompute_has_public_transfer_in_execution": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "reshare_at_same_initial_version": false,
+                "resolve_abort_locations_to_package_id": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,

@@ -356,7 +356,7 @@ pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Field),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
-    DotUnresolved(Loc, Box<ExpDotted>), // Dot (and its location) where Field could not be parsed
+    DotAutocomplete(Loc, Box<ExpDotted>), // Dot (and its location) where Field could not be parsed
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
@@ -398,6 +398,11 @@ pub enum MacroArgument {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub enum IDEInfo {
+    ExpandedLambda,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
@@ -427,6 +432,7 @@ pub enum Exp_ {
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
     Block(Block),
+    IDEAnnotation(IDEInfo, Box<Exp>),
     Lambda(Lambda),
 
     Assign(LValueList, Box<Exp>),
@@ -1731,6 +1737,12 @@ impl AstDebug for Exp_ {
                 e.ast_debug(w);
             }
             E::Block(seq) => seq.ast_debug(w),
+            E::IDEAnnotation(info, e) => match info {
+                IDEInfo::ExpandedLambda => {
+                    w.write("ExpandedLambda:");
+                    e.ast_debug(w);
+                }
+            },
             E::Lambda(l) => l.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");
@@ -1890,7 +1902,7 @@ impl AstDebug for ExpDotted_ {
                 w.comma(args, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            D::DotUnresolved(_, e) => {
+            D::DotAutocomplete(_, e) => {
                 e.ast_debug(w);
                 w.write(".")
             }

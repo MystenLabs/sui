@@ -121,6 +121,7 @@ impl Indexer {
             ..Default::default()
         };
         executor.register(worker_pool).await?;
+        info!("Starting data ingestion executor...");
         executor
             .run(
                 config

@@ -128,15 +128,20 @@ async fn submit_transaction_to_consensus_adapter() {
     impl SubmitToConsensus for SubmitDirectly {
         async fn submit_to_consensus(
             &self,
-            transaction: &ConsensusTransaction,
+            transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
+            let sequenced_transactions = transactions
+                .iter()
+                .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
+                .collect();
             epoch_store
                 .process_consensus_transactions_for_tests(
-                    vec![SequencedConsensusTransaction::new_test(transaction.clone())],
+                    sequenced_transactions,
                     &Arc::new(CheckpointServiceNoop {}),
-                    self.0.get_cache_reader().as_ref(),
+                    self.0.get_object_cache_reader().as_ref(),
                     &self.0.metrics,
+                    true,
                 )
                 .await?;
             Ok(())

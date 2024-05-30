@@ -166,12 +166,14 @@ where
                 .send((contract_address, end_block, events))
                 .await
                 .expect("All Eth event channel receivers are closed");
-            tracing::info!(
-                ?contract_address,
-                start_block,
-                end_block,
-                "Observed {len} new Eth events",
-            );
+            if len != 0 {
+                tracing::info!(
+                    ?contract_address,
+                    start_block,
+                    end_block,
+                    "Observed {len} new Eth events",
+                );
+            }
             start_block = end_block + 1;
         }
     }

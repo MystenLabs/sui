@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{anyhow, Result};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
+use sui_data_ingestion_core::Worker;
 
-use sui_indexer::framework::Handler;
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
@@ -38,13 +38,14 @@ const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
 ];
 
 #[async_trait::async_trait]
-pub trait AnalyticsHandler<S>: Handler {
+pub trait AnalyticsHandler<S>: Worker {
     /// Read back rows which are ready to be persisted. This function
     /// will be invoked by the analytics processor after every call to
     /// process_checkpoint
-    fn read(&mut self) -> Result<Vec<S>>;
+    async fn read(&self) -> Result<Vec<S>>;
     /// Type of data being written by this processor i.e. checkpoint, object, etc
     fn file_type(&self) -> Result<FileType>;
+    fn name(&self) -> &str;
 }
 
 fn initial_shared_version(object: &Object) -> Option<u64> {

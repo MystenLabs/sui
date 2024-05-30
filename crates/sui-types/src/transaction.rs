@@ -2160,7 +2160,7 @@ impl TransactionDataAPI for TransactionDataV1 {
 impl TransactionDataV1 {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct SenderSignedData(Vec<SenderSignedTransaction>);
+pub struct SenderSignedData(SizeOneVec<SenderSignedTransaction>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SenderSignedTransaction {
@@ -2249,41 +2249,25 @@ impl SenderSignedTransaction {
 
 impl SenderSignedData {
     pub fn new(tx_data: TransactionData, tx_signatures: Vec<GenericSignature>) -> Self {
-        Self(vec![SenderSignedTransaction {
+        Self(SizeOneVec::new(SenderSignedTransaction {
             intent_message: IntentMessage::new(Intent::sui_transaction(), tx_data),
             tx_signatures,
-        }])
-    }
-
-    pub(crate) fn inner_transactions(&self) -> &[SenderSignedTransaction] {
-        &self.0
+        }))
     }
 
     pub fn new_from_sender_signature(tx_data: TransactionData, tx_signature: Signature) -> Self {
-        Self(vec![SenderSignedTransaction {
+        Self(SizeOneVec::new(SenderSignedTransaction {
             intent_message: IntentMessage::new(Intent::sui_transaction(), tx_data),
             tx_signatures: vec![tx_signature.into()],
-        }])
-    }
-
-    pub fn inner_vec_mut_for_testing(&mut self) -> &mut Vec<SenderSignedTransaction> {
-        &mut self.0
+        }))
     }
 
     pub fn inner(&self) -> &SenderSignedTransaction {
-        // assert is safe - SenderSignedTransaction::verify ensures length is 1.
-        assert_eq!(self.0.len(), 1);
-        self.0
-            .first()
-            .expect("SenderSignedData must contain exactly one transaction")
+        self.0.element()
     }
 
     pub fn inner_mut(&mut self) -> &mut SenderSignedTransaction {
-        // assert is safe - SenderSignedTransaction::verify ensures length is 1.
-        assert_eq!(self.0.len(), 1);
-        self.0
-            .get_mut(0)
-            .expect("SenderSignedData must contain exactly one transaction")
+        self.0.element_mut()
     }
 
     // This function does not check validity of the signature
@@ -2354,17 +2338,6 @@ impl SenderSignedData {
 
     /// Validate untrusted user transaction, including its size, input count, command count, etc.
     pub fn validity_check(&self, config: &ProtocolConfig, epoch: EpochId) -> SuiResult {
-        // SenderSignedData must contain exactly one transaction.
-        // Many operations assume this invariant, so it is safest to check this one before anything else.
-        fp_ensure!(
-            self.inner_transactions().len() == 1,
-            SuiError::UserInputError {
-                error: UserInputError::Unsupported(
-                    "SenderSignedData must contain exactly one transaction".to_string()
-                )
-            }
-        );
-
         // CRITICAL!!
         // Users cannot send system transactions.
         let tx_data = &self.transaction_data();

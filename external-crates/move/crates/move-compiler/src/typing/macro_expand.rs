@@ -613,6 +613,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             }
             recolor_seq(ctx, s);
         }
+        N::Exp_::IDEAnnotation(_, e) => recolor_exp(ctx, e),
         N::Exp_::FieldMutate(ed, e) => {
             recolor_exp_dotted(ctx, ed);
             recolor_exp(ctx, e)
@@ -677,7 +678,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
 fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => recolor_exp(ctx, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => {
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
             recolor_exp_dotted(ctx, ed)
         }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
@@ -897,6 +898,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             from_macro_argument: _,
             seq: s,
         }) => seq(context, s),
+        N::Exp_::IDEAnnotation(_, e) => exp(context, e),
         N::Exp_::FieldMutate(ed, e) => {
             exp_dotted(context, ed);
             exp(context, e)
@@ -1048,11 +1050,17 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 })
                 .collect();
             result.push_back(sp(body_loc, N::SequenceItem_::Seq(labeled_body)));
-            *e_ = N::Exp_::Block(N::Block {
+
+            let block = N::Exp_::Block(N::Block {
                 name: None,
                 from_macro_argument: None,
                 seq: (N::UseFuns::new(context.macro_color), result),
             });
+            *e_ = if context.core.env.ide_mode() {
+                N::Exp_::IDEAnnotation(N::IDEInfo::ExpandedLambda, Box::new(sp(*eloc, block)))
+            } else {
+                block
+            };
         }
 
         ///////
@@ -1147,7 +1155,9 @@ fn builtin_function(context: &mut Context, sp!(_, bf_): &mut N::BuiltinFunction)
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => exp_dotted(context, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+            exp_dotted(context, ed)
+        }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {

@@ -191,9 +191,9 @@ mod tests {
     use crate::config::BridgeNodeConfig;
     use crate::config::EthConfig;
     use crate::config::SuiConfig;
-    use crate::e2e_tests::test_utils::wait_for_server_to_be_up;
     use crate::e2e_tests::test_utils::BridgeTestCluster;
     use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
+    use crate::utils::wait_for_server_to_be_up;
     use fastcrypto::secp256k1::Secp256k1KeyPair;
     use sui_config::local_ip_utils::get_available_port;
     use sui_types::base_types::SuiAddress;
@@ -336,7 +336,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_starting_bridge_node() {
         telemetry_subscribers::init_for_testing();
         let bridge_test_cluster = setup().await;
@@ -352,11 +352,11 @@ mod tests {
         let config = BridgeNodeConfig {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
+            bridge_authority_key_path: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
                 sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_key_path: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
             },
@@ -380,7 +380,7 @@ mod tests {
         res.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_starting_bridge_node_with_client() {
         telemetry_subscribers::init_for_testing();
         let bridge_test_cluster = setup().await;
@@ -406,11 +406,11 @@ mod tests {
         let config = BridgeNodeConfig {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
+            bridge_authority_key_path: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
                 sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_key_path: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: Some(EventID {
                     tx_digest: TransactionDigest::random(),
@@ -439,7 +439,7 @@ mod tests {
         res.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_starting_bridge_node_with_client_and_separate_client_key() {
         telemetry_subscribers::init_for_testing();
         let bridge_test_cluster = setup().await;
@@ -474,11 +474,11 @@ mod tests {
         let config = BridgeNodeConfig {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
+            bridge_authority_key_path: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
                 sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: Some(tmp_dir.join(client_key_path)),
+                bridge_client_key_path: Some(tmp_dir.join(client_key_path)),
                 bridge_client_gas_object: Some(gas_obj),
                 sui_bridge_module_last_processed_event_id_override: Some(EventID {
                     tx_digest: TransactionDigest::random(),
