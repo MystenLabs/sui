@@ -36,7 +36,7 @@ pub struct DynamicFieldColumn {
 pub struct ObjectRefColumn {
     pub object_id: Vec<u8>,
     pub object_version: i64,
-    pub object_digest: Vec<u8>,
+    pub object_digest: Option<Vec<u8>>,
 }
 
 // NOTE: please add updating statement like below in pg_indexer_store.rs,
@@ -47,9 +47,10 @@ pub struct ObjectRefColumn {
 pub struct StoredObject {
     pub object_id: Vec<u8>,
     pub object_version: i64,
-    pub object_digest: Vec<u8>,
+    pub object_status: i16,
+    pub object_digest: Option<Vec<u8>>,
     pub checkpoint_sequence_number: i64,
-    pub owner_type: i16,
+    pub owner_type: Option<i16>,
     pub owner_id: Option<Vec<u8>>,
     /// The full type of this object, including package id, module, name and type parameters.
     /// This and following three fields will be None if the object is a Package
@@ -58,7 +59,7 @@ pub struct StoredObject {
     pub object_type_module: Option<String>,
     /// Name of the object type, e.g., "Coin", without type parameters.
     pub object_type_name: Option<String>,
-    pub serialized_object: Vec<u8>,
+    pub serialized_object: Option<Vec<u8>>,
     pub coin_type: Option<String>,
     // TODO deal with overflow
     pub coin_balance: Option<i64>,
@@ -94,12 +95,12 @@ impl From<StoredObject> for StoredObjectSnapshot {
             object_id: o.object_id,
             object_version: o.object_version,
             object_status: ObjectStatus::Active as i16,
-            object_digest: Some(o.object_digest),
+            object_digest: o.object_digest,
             checkpoint_sequence_number: o.checkpoint_sequence_number,
-            owner_type: Some(o.owner_type),
+            owner_type: o.owner_type,
             owner_id: o.owner_id,
             object_type: o.object_type,
-            serialized_object: Some(o.serialized_object),
+            serialized_object: o.serialized_object,
             coin_type: o.coin_type,
             coin_balance: o.coin_balance,
             df_kind: o.df_kind,
@@ -121,6 +122,31 @@ impl From<StoredDeletedObject> for StoredObjectSnapshot {
             owner_type: None,
             owner_id: None,
             object_type: None,
+            serialized_object: None,
+            coin_type: None,
+            coin_balance: None,
+            df_kind: None,
+            df_name: None,
+            df_object_type: None,
+            df_object_id: None,
+        }
+    }
+}
+
+impl From<StoredDeletedObject> for StoredObject {
+    fn from(o: StoredDeletedObject) -> Self {
+        Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_status: ObjectStatus::WrappedOrDeleted as i16,
+            object_digest: None,
+            checkpoint_sequence_number: o.checkpoint_sequence_number,
+            owner_type: None,
+            owner_id: None,
+            object_type: None,
+            object_type_package: None,
+            object_type_module: None,
+            object_type_name: None,
             serialized_object: None,
             coin_type: None,
             coin_balance: None,
@@ -160,16 +186,16 @@ impl From<StoredObject> for StoredHistoryObject {
         Self {
             object_id: o.object_id,
             object_version: o.object_version,
-            object_status: ObjectStatus::Active as i16,
-            object_digest: Some(o.object_digest),
+            object_status: o.object_status,
+            object_digest: o.object_digest,
             checkpoint_sequence_number: o.checkpoint_sequence_number,
-            owner_type: Some(o.owner_type),
+            owner_type: o.owner_type,
             object_type_package: o.object_type_package,
             object_type_module: o.object_type_module,
             object_type_name: o.object_type_name,
             owner_id: o.owner_id,
             object_type: o.object_type,
-            serialized_object: Some(o.serialized_object),
+            serialized_object: o.serialized_object,
             coin_type: o.coin_type,
             coin_balance: o.coin_balance,
             df_kind: o.df_kind,
@@ -223,9 +249,10 @@ impl From<IndexedObject> for StoredObject {
         Self {
             object_id: o.object_id.to_vec(),
             object_version: o.object_version as i64,
-            object_digest: o.object_digest.into_inner().to_vec(),
+            object_status: ObjectStatus::Active as i16,
+            object_digest: Some(o.object_digest.into_inner().to_vec()),
             checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
-            owner_type: o.owner_type as i16,
+            owner_type: Some(o.owner_type as i16),
             owner_id: o.owner_id.map(|id| id.to_vec()),
             object_type: o
                 .object
@@ -234,7 +261,7 @@ impl From<IndexedObject> for StoredObject {
             object_type_package: o.object.type_().map(|t| t.address().to_vec()),
             object_type_module: o.object.type_().map(|t| t.module().to_string()),
             object_type_name: o.object.type_().map(|t| t.name().to_string()),
-            serialized_object: bcs::to_bytes(&o.object).unwrap(),
+            serialized_object: Some(bcs::to_bytes(&o.object).unwrap()),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),
             df_kind: o.df_info.as_ref().map(|k| match k.type_ {
@@ -252,12 +279,19 @@ impl TryFrom<StoredObject> for Object {
     type Error = IndexerError;
 
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
-        bcs::from_bytes(&o.serialized_object).map_err(|e| {
-            IndexerError::SerdeError(format!(
-                "Failed to deserialize object: {:?}, error: {}",
-                o.object_id, e
-            ))
-        })
+        if let Some(serialized_object) = o.serialized_object {
+            let object = bcs::from_bytes(&serialized_object).map_err(|e| {
+                IndexerError::SerdeError(format!(
+                    "Failed to deserialize object: {:?}, error: {}",
+                    o.object_id, e
+                ))
+            })?;
+            return Ok(object);
+        }
+        Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+            "Failed to deserialize object {:?} has empty serialized_object, as it's either wrapped or deleted.",
+            o.object_id
+        )))
     }
 }
 
@@ -328,12 +362,20 @@ impl StoredObject {
                 self.object_id
             ))
         })?;
-        let object_digest = ObjectDigest::try_from(self.object_digest.as_slice()).map_err(|e| {
-            IndexerError::PersistentStorageDataCorruptionError(format!(
-                "object {} has incompatible object digest. Error: {e}",
+        let object_digest = if let Some(object_digest) = self.object_digest.clone() {
+            ObjectDigest::try_from(object_digest.as_slice()).map_err(|e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "object {} has incompatible object digest. Error: {e}",
+                    object_id
+                ))
+            })
+        } else {
+            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                "object {} has incompatible object digest: empty digest",
                 object_id
-            ))
-        })?;
+            )));
+        }?;
+
         let df_object_id = if let Some(df_object_id) = self.df_object_id.clone() {
             ObjectID::from_bytes(df_object_id).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -422,13 +464,21 @@ impl StoredObject {
         let object_id = ObjectID::from_bytes(self.object_id.clone()).map_err(|_| {
             IndexerError::SerdeError(format!("Can't convert {:?} to object_id", self.object_id))
         })?;
-        let object_digest =
-            ObjectDigest::try_from(self.object_digest.as_slice()).map_err(|_| {
+
+        let object_digest = if let Some(object_digest) = self.object_digest.clone() {
+            ObjectDigest::try_from(object_digest.as_slice()).map_err(|_| {
                 IndexerError::SerdeError(format!(
-                    "Can't convert {:?} to object_digest",
-                    self.object_digest
+                    "get_object_ref failed: Can't convert {:?} to object_digest",
+                    object_digest
                 ))
-            })?;
+            })
+        } else {
+            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                "get_object_ref failed: object {:?} has incompatible object digest: empty digest",
+                self.object_id
+            )));
+        }?;
+
         Ok((
             object_id,
             (self.object_version as u64).into(),
@@ -441,8 +491,11 @@ impl StoredObject {
         K: DeserializeOwned,
         V: DeserializeOwned,
     {
-        let object: Object = bcs::from_bytes(&self.serialized_object).ok()?;
-
+        let object: Object = if let Some(object) = self.serialized_object.clone() {
+            bcs::from_bytes(&object).ok()?
+        } else {
+            return None;
+        };
         let object = object.data.try_as_move()?;
         let ty = object.type_();
 

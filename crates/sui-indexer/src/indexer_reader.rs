@@ -1325,13 +1325,19 @@ impl<U: R2D2Connection> IndexerReader<U> {
                 ))
             })?;
             let seq = SequenceNumber::from_u64(object_ref.object_version as u64);
-            let object_digest = ObjectDigest::try_from(object_ref.object_digest.as_slice())
-                .map_err(|e| {
+            let object_digest = if let Some(object_digest) = object_ref.object_digest.clone() {
+                ObjectDigest::try_from(object_digest.as_slice()).map_err(|e| {
                     IndexerError::PersistentStorageDataCorruptionError(format!(
-                        "object {:?} has incompatible object digest. Error: {e}",
-                        object_ref.object_digest
+                        "object {} has incompatible object digest. Error: {e}",
+                        object_id
                     ))
-                })?;
+                })
+            } else {
+                return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "object {} has incompatible object digest: empty digest",
+                    object_id
+                )));
+            }?;
             Ok((object_id, (object_id, seq, object_digest)))
         })
         .collect::<IndexerResult<HashMap<_, _>>>()

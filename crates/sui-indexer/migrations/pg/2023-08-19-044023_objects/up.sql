@@ -1,10 +1,11 @@
 CREATE TABLE objects (
     object_id                   bytea         PRIMARY KEY,
     object_version              bigint        NOT NULL,
-    object_digest               bytea         NOT NULL,
+    object_status               smallint      NOT NULL,
+    object_digest               bytea,
     checkpoint_sequence_number  bigint        NOT NULL,
     -- Immutable/Address/Object/Shared, see types.rs
-    owner_type                  smallint      NOT NULL,
+    owner_type                  smallint,
     -- bytes of SuiAddress/ObjectID of the owner ID.
     -- Non-null for objects with an owner: Addresso or Objects
     owner_id                    bytea,
@@ -15,7 +16,7 @@ CREATE TABLE objects (
     object_type_module          text,
     object_type_name            text,
     -- bcs serialized Object
-    serialized_object           bytea         NOT NULL,
+    serialized_object           bytea,
     -- Non-null when the object is a coin.
     -- e.g. `0x2::sui::SUI`
     coin_type                   text,

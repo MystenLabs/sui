@@ -56,11 +56,11 @@ impl<T: R2D2Connection> PackageStore for IndexerStorePackageResolver<T> {
 
 impl<T: R2D2Connection> IndexerStorePackageResolver<T> {
     fn get_package_from_db(&self, id: AccountAddress) -> Result<Package, IndexerError> {
-        let Some(bcs) = read_only_blocking!(&self.cp, |conn| {
+        let Some(Some(bcs)) = read_only_blocking!(&self.cp, |conn| {
             let query = objects::dsl::objects
                 .select(objects::dsl::serialized_object)
                 .filter(objects::dsl::object_id.eq(id.to_vec()));
-            query.get_result::<Vec<u8>>(conn).optional()
+            query.get_result::<Option<Vec<u8>>>(conn).optional()
         })?
         else {
             return Err(IndexerError::PostgresReadError(format!(

@@ -1,5 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
@@ -96,15 +94,16 @@ diesel::table! {
     objects (object_id) {
         object_id -> Bytea,
         object_version -> Int8,
-        object_digest -> Bytea,
+        object_status -> Int2,
+        object_digest -> Nullable<Bytea>,
         checkpoint_sequence_number -> Int8,
-        owner_type -> Int2,
+        owner_type -> Nullable<Int2>,
         owner_id -> Nullable<Bytea>,
         object_type -> Nullable<Text>,
         object_type_package -> Nullable<Bytea>,
         object_type_module -> Nullable<Text>,
         object_type_name -> Nullable<Text>,
-        serialized_object -> Bytea,
+        serialized_object -> Nullable<Bytea>,
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
         df_kind -> Nullable<Int2>,

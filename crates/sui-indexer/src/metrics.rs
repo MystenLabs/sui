@@ -463,7 +463,7 @@ impl IndexerMetrics {
             checkpoint_db_commit_latency_objects_version: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_objects_version",
                 "Time spent commiting objects version",
-                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             checkpoint_db_commit_latency_objects_chunks: register_histogram_with_registry!(
@@ -489,7 +489,7 @@ impl IndexerMetrics {
             checkpoint_db_commit_latency_objects_version_chunks: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_objects_version_chunks",
                 "Time spent commiting objects version chunks",
-                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             checkpoint_db_commit_latency_events: register_histogram_with_registry!(
