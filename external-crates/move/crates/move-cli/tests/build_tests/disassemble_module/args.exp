@@ -22,11 +22,13 @@ public af(): u32 {
 B0:
 	0: LdConst[1](u32: 0)
 	1: Ret
+
 }
 public sf(): vector<u8> {
 B0:
 	0: LdConst[2](vector<u8>: "Thi..)
 	1: Ret
+
 }
 public nf(): vector<u16> {
 B0:

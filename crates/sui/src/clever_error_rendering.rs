@@ -114,12 +114,12 @@ fn parse_abort_status_string(
     let re = Regex::new(r"MoveAbort.*address:\s*(.*?),.*Identifier...(.*?)\\.*instruction:\s+(\d+),.*function_name:\s*Some...(\w+?)\\.*},\s*(\d+).*in command\s*(\d+)").unwrap();
     let captures = re.captures(s).unwrap();
 
-    let address = AccountAddress::from_hex(captures.get(1).unwrap().as_str())?;
-    let module_name = Identifier::new(captures.get(2).unwrap().as_str())?;
-    let instruction = captures.get(3).unwrap().as_str().parse::<u16>()?;
-    let function_name = Identifier::new(captures.get(4).unwrap().as_str())?;
-    let abort_code = captures.get(5).unwrap().as_str().parse::<u64>()?;
-    let command_index = captures.get(6).unwrap().as_str().parse::<u16>()?;
+    let address = AccountAddress::from_hex(&captures[1])?;
+    let module_name = Identifier::new(&captures[2])?;
+    let instruction = captures[3].parse::<u16>()?;
+    let function_name = Identifier::new(&captures[4])?;
+    let abort_code = captures[5].parse::<u64>()?;
+    let command_index = captures[6].parse::<u16>()?;
     Ok((
         address,
         module_name,
@@ -128,4 +128,25 @@ fn parse_abort_status_string(
         abort_code,
         command_index,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_abort_status_string() {
+        let corpus = vec![
+            r#"Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 0, instruction: 1, function_name: Some(\"aborter\") }, 0) in command 0" }"#,
+            r#"Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 1, instruction: 1, function_name: Some(\"aborter_line_no\") }, 9223372105574252543) in command 0" }"#,
+            r#"Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 2, instruction: 1, function_name: Some(\"clever_aborter\") }, 9223372118459154433) in command 0" }"#,
+            r#"Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 3, instruction: 1, function_name: Some(\"clever_aborter_not_a_string\") }, 9223372135639154691) in command 0" }"#,
+        ];
+        let parsed: Vec<_> = corpus.into_iter().map(|c| {
+            let (address, module_name, function_name, instruction, abort_code, command_index) =
+                parse_abort_status_string(c).unwrap();
+            format!("original abort message: {}\n address: {}\n module_name: {}\n function_name: {}\n instruction: {}\n abort_code: {}\n command_index: {}", c, address, module_name, function_name, instruction, abort_code, command_index)
+        }).collect();
+        insta::assert_snapshot!(parsed.join("\n------\n"));
+    }
 }

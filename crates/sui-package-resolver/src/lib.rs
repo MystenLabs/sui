@@ -11,7 +11,6 @@ use move_command_line_common::display::RenderResult;
 use move_command_line_common::{display::try_render_constant, error_bitset::ErrorBitset};
 use move_core_types::annotated_value::MoveEnumLayout;
 use move_core_types::language_storage::ModuleId;
-use std::collections::btree_map::Entry;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};

@@ -54,8 +54,8 @@ pub fn try_render_constant(constant: &Constant) -> RenderResult {
 
         SignatureToken::Signer
         | SignatureToken::Vector(_)
-        | SignatureToken::Struct(_)
-        | SignatureToken::StructInstantiation(_)
+        | SignatureToken::Datatype(_)
+        | SignatureToken::DatatypeInstantiation(_)
         | SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_)
         | SignatureToken::TypeParameter(_) => RenderResult::NotRendered,
