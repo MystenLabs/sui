@@ -1,0 +1,14 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:3:16
+  │
+3 │         match (0) {
+  │                ^ Pattern '_0' not covered
+  │
+  = When '_0' is not 1
+
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:9:16
+  │
+9 │         match (0) {
+  │                ^ Pattern '_' not covered
+

@@ -1,10 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fmt};
 
 use crate::{
-    expansion::ast as E, naming::ast as N, parser::ast as P, shared::Name, typing::ast as T,
+    debug_display, diag, diagnostics::Diagnostic, expansion::ast as E, naming::ast as N,
+    parser::ast as P, shared::string_utils::format_oxford_list, shared::Name, typing::ast as T,
 };
 
 use move_ir_types::location::Loc;
@@ -16,7 +17,7 @@ use move_symbol_pool::Symbol;
 
 #[derive(Debug, Clone, Default)]
 pub struct IDEInfo {
-    annotations: Vec<(Loc, IDEAnnotation)>,
+    pub(crate) annotations: Vec<(Loc, IDEAnnotation)>,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +29,8 @@ pub enum IDEAnnotation {
     ExpandedLambda,
     /// Autocomplete information.
     AutocompleteInfo(Box<AutocompleteInfo>),
+    /// Match Missing Arm.
+    MissingMatchArms(Box<MissingMatchArmsInfo>),
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +54,54 @@ pub struct AutocompleteInfo {
     /// Fields that are valid autocompletes (e.g., for a struct)
     /// TODO: possibly extend this with type information?
     pub fields: BTreeSet<Symbol>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MissingMatchArmsInfo {
+    /// A vector of arm patterns that can be inserted to make the match complete.
+    /// Note the span information on these is _wrong_ and must be recomputed after insertion.
+    pub arms: Vec<PatternSuggestion>,
+}
+
+/// Suggested new entries for a pattern. Note that any location information points to the
+/// definition site. As this is largely suggested text, it lacks location information.
+#[derive(Debug, Clone)]
+pub enum PatternSuggestion {
+    Wildcard,
+    Binder(Symbol),
+    Value(E::Value_),
+    UnpackPositionalStruct {
+        module: E::ModuleIdent,
+        name: P::DatatypeName,
+        /// The number of wildcards to generate.
+        field_count: usize,
+    },
+    UnpackNamedStruct {
+        module: E::ModuleIdent,
+        name: P::DatatypeName,
+        /// The fields, in order, to generate
+        fields: Vec<Symbol>,
+    },
+    /// A tag-style variant that takes no arguments
+    UnpackEmptyVariant {
+        module: E::ModuleIdent,
+        enum_name: P::DatatypeName,
+        variant_name: P::VariantName,
+    },
+    UnpackPositionalVariant {
+        module: E::ModuleIdent,
+        enum_name: P::DatatypeName,
+        variant_name: P::VariantName,
+        /// The number of wildcards to generate.
+        field_count: usize,
+    },
+    UnpackNamedVariant {
+        module: E::ModuleIdent,
+        enum_name: P::DatatypeName,
+        variant_name: P::VariantName,
+        /// The fields, in order, to generate
+        fields: Vec<Symbol>,
+    },
 }
 
 //*************************************************************************************************
@@ -89,5 +140,124 @@ impl IntoIterator for IDEInfo {
 
     fn into_iter(self) -> Self::IntoIter {
         self.annotations.into_iter()
+    }
+}
+
+impl From<(Loc, IDEAnnotation)> for Diagnostic {
+    fn from((loc, ann): (Loc, IDEAnnotation)) -> Self {
+        match ann {
+            IDEAnnotation::MacroCallInfo(info) => {
+                let MacroCallInfo {
+                    module,
+                    name,
+                    method_name,
+                    type_arguments,
+                    by_value_args,
+                } = *info;
+                let mut diag = diag!(IDE::MacroCallInfo, (loc, "macro call info"));
+                diag.add_note(format!("Called {module}::{name}"));
+                if let Some(mname) = method_name {
+                    diag.add_note(format!("as method call {mname}"));
+                }
+                if !type_arguments.is_empty() {
+                    let tyargs_string = debug_display!(type_arguments).to_string();
+                    diag.add_note(format!("Type arguments: {tyargs_string}"));
+                }
+                if let Some(entry) = by_value_args.first() {
+                    let subject_arg_string = debug_display!(entry).to_string();
+                    diag.add_note(format!("Subject arg: {subject_arg_string}"));
+                }
+                diag
+            }
+            IDEAnnotation::ExpandedLambda => {
+                diag!(IDE::ExpandedLambda, (loc, "expanded lambda"))
+            }
+            IDEAnnotation::AutocompleteInfo(info) => {
+                let AutocompleteInfo { methods, fields } = *info;
+                let names = methods
+                    .into_iter()
+                    .map(|(m, f)| format!("{m}::{f}"))
+                    .chain(fields.into_iter().map(|n| format!("{n}")))
+                    .collect::<Vec<_>>();
+                let msg = format!(
+                    "Autocompletes to: {}",
+                    format_oxford_list!("or", "'{}'", names)
+                );
+                diag!(IDE::Autocomplete, (loc, msg))
+            }
+            IDEAnnotation::MissingMatchArms(info) => {
+                let MissingMatchArmsInfo { arms } = *info;
+                let msg = format!("Missing arms: {}", format_oxford_list!("and", "'{}'", arms));
+                diag!(IDE::MissingMatchArms, (loc, msg))
+            }
+        }
+    }
+}
+
+impl fmt::Display for PatternSuggestion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use PatternSuggestion as PS;
+        match self {
+            PS::Wildcard => write!(f, "_"),
+            PS::Binder(n) => write!(f, "{n}"),
+            PS::Value(v) => write!(f, "{v}"),
+            PS::UnpackPositionalStruct {
+                module,
+                name,
+                field_count,
+            } => {
+                write!(f, "{module}::{name}")?;
+                let wildcards = std::iter::repeat("_")
+                    .take(*field_count)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "({wildcards})")
+            }
+            PS::UnpackPositionalVariant {
+                module,
+                enum_name,
+                variant_name,
+                field_count,
+            } => {
+                write!(f, "{module}::{enum_name}::{variant_name}")?;
+                let wildcards = std::iter::repeat("_")
+                    .take(*field_count)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "({wildcards})")
+            }
+            PS::UnpackNamedStruct {
+                module,
+                name,
+                fields,
+            } => {
+                write!(f, "{module}::{name} ")?;
+                let field_names = fields
+                    .iter()
+                    .map(|name| format!("{}", name))
+                    .collect::<Vec<_>>()
+                    .join(" , ");
+                write!(f, "{{ {field_names} }}")
+            }
+            PS::UnpackNamedVariant {
+                module,
+                enum_name,
+                variant_name,
+                fields,
+            } => {
+                write!(f, "{module}::{enum_name}::{variant_name} ")?;
+                let field_names = fields
+                    .iter()
+                    .map(|name| format!("{}", name))
+                    .collect::<Vec<_>>()
+                    .join(" , ");
+                write!(f, "{{ {field_names} }}")
+            }
+            PS::UnpackEmptyVariant {
+                module,
+                enum_name,
+                variant_name,
+            } => write!(f, "{module}::{enum_name}::{variant_name}"),
+        }
     }
 }

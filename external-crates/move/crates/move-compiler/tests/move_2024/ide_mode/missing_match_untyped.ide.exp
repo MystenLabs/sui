@@ -1,0 +1,47 @@
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:3:16
+  │
+3 │         match (e) {
+  │                ^ Unbound variable 'e'
+
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:3:16
+  │
+3 │         match (e) {
+  │                ^ Pattern '_' not covered
+
+note[I15004]: IDE missing match arms
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:3:19
+  │  
+3 │           match (e) {
+  │ ╭───────────────────^
+4 │ │         }
+  │ ╰─────────^ Missing arms: '_'
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:8:16
+  │
+8 │         match (e) {
+  │                ^ Unbound variable 'e'
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:8:19
+   │  
+ 8 │           match (e) {
+   │ ╭───────────────────^
+ 9 │ │             E::Two(n) => n
+10 │ │         }
+   │ ╰─────────^ Missing arms: '_'
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:13
+  │
+9 │             E::Two(n) => n
+  │             ^ Could not resolve the name 'E'
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:26
+  │
+9 │             E::Two(n) => n
+  │                          ^ Unbound variable 'n'
+

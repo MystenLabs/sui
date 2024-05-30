@@ -665,10 +665,20 @@ impl CompilationEnv {
     }
 
     pub fn extend_ide_info(&mut self, info: IDEInfo) {
+        if self.flags().ide_test_mode() {
+            for entry in info.annotations.iter() {
+                let diag = entry.clone().into();
+                self.diags.add(diag);
+            }
+        }
         self.ide_information.extend(info);
     }
 
     pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+        if self.flags().ide_test_mode() {
+            let diag = (loc, info.clone()).into();
+            self.diags.add(diag);
+        }
         self.ide_information.add_ide_annotation(loc, info);
     }
 }
@@ -763,7 +773,11 @@ pub struct Flags {
     #[clap(skip)]
     keep_testing_functions: bool,
 
-    /// If set, all warnings are silenced
+    /// If set, we are in IDE testing mode. This will report IDE annotations as diagnostics.
+    #[clap(skip = false)]
+    ide_test_mode: bool,
+
+    /// If set, we are in IDE mode.
     #[clap(skip = false)]
     ide_mode: bool,
 }
@@ -779,6 +793,7 @@ impl Flags {
             json_errors: false,
             keep_testing_functions: false,
             ide_mode: false,
+            ide_test_mode: false,
         }
     }
 
@@ -792,6 +807,7 @@ impl Flags {
             silence_warnings: false,
             keep_testing_functions: false,
             ide_mode: false,
+            ide_test_mode: false,
         }
     }
 
@@ -826,6 +842,13 @@ impl Flags {
     pub fn set_json_errors(self, value: bool) -> Self {
         Self {
             json_errors: value,
+            ..self
+        }
+    }
+
+    pub fn set_ide_test_mode(self, value: bool) -> Self {
+        Self {
+            ide_test_mode: value,
             ..self
         }
     }
@@ -867,6 +890,10 @@ impl Flags {
 
     pub fn silence_warnings(&self) -> bool {
         self.silence_warnings
+    }
+
+    pub fn ide_test_mode(&self) -> bool {
+        self.ide_test_mode
     }
 
     pub fn ide_mode(&self) -> bool {
