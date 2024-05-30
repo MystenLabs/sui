@@ -1643,7 +1643,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         NE::Lambda(_) => {
             if context
                 .env
-                .check_feature(context.current_package, FeatureGate::MacroFuns, eloc)
+                .check_feature(context.current_package, FeatureGate::Lambda, eloc)
             {
                 let msg = "Lambdas can only be used directly as arguments to 'macro' functions";
                 context

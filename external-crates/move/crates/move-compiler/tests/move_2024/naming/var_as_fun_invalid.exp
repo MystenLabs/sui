@@ -1,0 +1,8 @@
+error[E04029]: invalid function call
+  ┌─ tests/move_2024/naming/var_as_fun_invalid.move:4:9
+  │
+4 │         var();
+  │         ^^^ Unexpected invocation of parameter or local 'var'. Non-syntax variables cannot be invoked as functions
+  │
+  = Only macro syntax variables, e.g. '$var', may be invoked as functions.
+
