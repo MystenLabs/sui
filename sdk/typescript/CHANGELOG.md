@@ -1,5 +1,17 @@
 # @mysten/sui.js
 
+## 1.0.3
+
+### Patch Changes
+
+- 1f20580841: Fix parsing of object refs from v1 json
+
+## 1.0.2
+
+### Patch Changes
+
+- f0a839f874: Fix serialization bug when converting object inputs to v1 JSON
+
 ## 1.0.1
 
 ### Patch Changes

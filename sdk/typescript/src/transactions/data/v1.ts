@@ -6,6 +6,7 @@ import type { BaseSchema, Input, Output } from 'valibot';
 import {
 	array,
 	bigint,
+	boolean,
 	custom,
 	integer,
 	is,
@@ -24,18 +25,28 @@ import {
 
 import { TypeTagSerializer } from '../../bcs/index.js';
 import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../bcs/types.js';
-import { ObjectArg, safeEnum, TransactionData } from './internal.js';
+import { JsonU64, ObjectID, safeEnum, TransactionData } from './internal.js';
 import type { Argument } from './internal.js';
-
-export const NormalizedCallArg = safeEnum({
-	Object: ObjectArg,
-	Pure: array(number([integer()])),
-});
 
 export const ObjectRef = object({
 	digest: string(),
 	objectId: string(),
 	version: union([number([integer()]), string(), bigint()]),
+});
+
+const ObjectArg = safeEnum({
+	ImmOrOwned: ObjectRef,
+	Shared: object({
+		objectId: ObjectID,
+		initialSharedVersion: JsonU64,
+		mutable: boolean(),
+	}),
+	Receiving: ObjectRef,
+});
+
+export const NormalizedCallArg = safeEnum({
+	Object: ObjectArg,
+	Pure: array(number([integer()])),
 });
 
 const TransactionInput = union([
@@ -195,25 +206,27 @@ export function serializeV1TransactionData(
 			return {
 				kind: 'Input',
 				index,
-				value: input.Object.ImmOrOwnedObject
-					? {
-							ImmOrOwnedObject: input.Object.ImmOrOwnedObject,
-					  }
-					: input.Object.Receiving
-					? {
-							Receiving: {
-								digest: input.Object.Receiving.digest,
-								version: input.Object.Receiving.version,
-								objectId: input.Object.Receiving.objectId,
-							},
-					  }
-					: {
-							SharedObject: {
-								mutable: input.Object.SharedObject.mutable,
-								initialSharedVersion: input.Object.SharedObject.initialSharedVersion,
-								objectId: input.Object.SharedObject.objectId,
-							},
-					  },
+				value: {
+					Object: input.Object.ImmOrOwnedObject
+						? {
+								ImmOrOwned: input.Object.ImmOrOwnedObject,
+						  }
+						: input.Object.Receiving
+						? {
+								Receiving: {
+									digest: input.Object.Receiving.digest,
+									version: input.Object.Receiving.version,
+									objectId: input.Object.Receiving.objectId,
+								},
+						  }
+						: {
+								Shared: {
+									mutable: input.Object.SharedObject.mutable,
+									initialSharedVersion: input.Object.SharedObject.initialSharedVersion,
+									objectId: input.Object.SharedObject.objectId,
+								},
+						  },
+				},
 				type: 'object',
 			};
 		}
@@ -380,9 +393,41 @@ export function transactionDataFromV1(data: SerializedTransactionDataV1): Transa
 					const value = parse(NormalizedCallArg, input.value);
 
 					if (value.Object) {
-						return {
-							Object: value.Object,
-						};
+						if (value.Object.ImmOrOwned) {
+							return {
+								Object: {
+									ImmOrOwnedObject: {
+										objectId: value.Object.ImmOrOwned.objectId,
+										version: String(value.Object.ImmOrOwned.version),
+										digest: value.Object.ImmOrOwned.digest,
+									},
+								},
+							};
+						}
+						if (value.Object.Shared) {
+							return {
+								Object: {
+									SharedObject: {
+										mutable: value.Object.Shared.mutable ?? null,
+										initialSharedVersion: value.Object.Shared.initialSharedVersion,
+										objectId: value.Object.Shared.objectId,
+									},
+								},
+							};
+						}
+						if (value.Object.Receiving) {
+							return {
+								Object: {
+									Receiving: {
+										digest: value.Object.Receiving.digest,
+										version: String(value.Object.Receiving.version),
+										objectId: value.Object.Receiving.objectId,
+									},
+								},
+							};
+						}
+
+						throw new Error('Invalid object input');
 					}
 
 					return {

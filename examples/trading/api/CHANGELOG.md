@@ -1,5 +1,19 @@
 # escrow-api-demo
 
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [1f20580841]
+  - @mysten/sui@1.0.3
+
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [f0a839f874]
+  - @mysten/sui@1.0.2
+
 ## 1.0.2
 
 ### Patch Changes
