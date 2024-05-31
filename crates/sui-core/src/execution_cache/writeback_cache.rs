@@ -61,6 +61,7 @@ use prometheus::Registry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
 use std::sync::Arc;
+use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point_async;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
@@ -254,8 +255,7 @@ impl UncommittedData {
     }
 }
 
-// TODO: set this via the config
-static MAX_CACHE_SIZE: u64 = 10000;
+static DEFAULT_MAX_CACHE_SIZE: u64 = 10000;
 
 /// CachedData stores data that has been committed to the db, but is likely to be read soon.
 struct CachedCommittedData {
@@ -286,38 +286,38 @@ struct CachedCommittedData {
 }
 
 impl CachedCommittedData {
-    fn new() -> Self {
+    fn new(max_cache_size: u64) -> Self {
         let object_cache = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(max_cache_size)
+            .max_capacity(max_cache_size)
             .build();
         let object_by_id_cache = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(max_cache_size)
+            .max_capacity(max_cache_size)
             .build();
         let marker_cache = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(max_cache_size)
+            .max_capacity(max_cache_size)
             .build();
         let transactions = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(max_cache_size)
+            .max_capacity(max_cache_size)
             .build();
         let transaction_effects = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(max_cache_size)
+            .max_capacity(max_cache_size)
             .build();
         let transaction_events = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(max_cache_size)
+            .max_capacity(max_cache_size)
             .build();
         let executed_effects_digests = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(max_cache_size)
+            .max_capacity(max_cache_size)
             .build();
         let transaction_objects = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(max_cache_size)
+            .max_capacity(max_cache_size)
             .build();
 
         Self {
@@ -424,14 +424,22 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
-    pub fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
+    pub fn new(
+        cache_config: &ExecutionCacheConfig,
+        store: Arc<AuthorityStore>,
+        metrics: Arc<ExecutionCacheMetrics>,
+    ) -> Self {
+        let max_cache_size = cache_config
+            .get_max_cache_size()
+            .unwrap_or(DEFAULT_MAX_CACHE_SIZE);
+
         let packages = MokaCache::builder()
-            .max_capacity(MAX_CACHE_SIZE)
-            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(max_cache_size)
+            .max_capacity(max_cache_size)
             .build();
         Self {
             dirty: UncommittedData::new(),
-            cached: CachedCommittedData::new(),
+            cached: CachedCommittedData::new(max_cache_size),
             packages,
             object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
@@ -441,12 +449,20 @@ impl WritebackCache {
     }
 
     pub fn new_for_tests(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
-        Self::new(store, ExecutionCacheMetrics::new(registry).into())
+        Self::new(
+            &Default::default(),
+            store,
+            ExecutionCacheMetrics::new(registry).into(),
+        )
     }
 
     #[cfg(test)]
     pub fn reset_for_test(&mut self) {
-        let mut new = Self::new(self.store.clone(), self.metrics.clone());
+        let mut new = Self::new(
+            &Default::default(),
+            self.store.clone(),
+            self.metrics.clone(),
+        );
         std::mem::swap(self, &mut new);
     }
 

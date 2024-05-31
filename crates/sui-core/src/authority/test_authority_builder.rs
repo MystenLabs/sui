@@ -235,8 +235,12 @@ impl<'a> TestAuthorityBuilder<'a> {
             Some(config) => config,
         };
 
-        let cache_traits =
-            build_execution_cache(&epoch_start_configuration, &registry, &authority_store);
+        let cache_traits = build_execution_cache(
+            &Default::default(),
+            &epoch_start_configuration,
+            &registry,
+            &authority_store,
+        );
 
         let epoch_store = AuthorityPerEpochStore::new(
             name,

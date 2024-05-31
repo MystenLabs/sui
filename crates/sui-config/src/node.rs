@@ -184,14 +184,28 @@ pub struct NodeConfig {
     pub execution_cache: ExecutionCacheConfig,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ExecutionCacheConfig {
-    #[default]
     PassthroughCache,
-    WritebackCache {
-        max_cache_size: Option<usize>,
-    },
+    WritebackCache { max_cache_size: Option<u64> },
+}
+
+impl ExecutionCacheConfig {
+    pub fn get_max_cache_size(&self) -> Option<u64> {
+        match self {
+            ExecutionCacheConfig::PassthroughCache => None,
+            ExecutionCacheConfig::WritebackCache { max_cache_size } => *max_cache_size,
+        }
+    }
+}
+
+impl Default for ExecutionCacheConfig {
+    fn default() -> Self {
+        ExecutionCacheConfig::WritebackCache {
+            max_cache_size: Some(100000),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

@@ -35,7 +35,7 @@ use sui_types::{
     object::Owner,
     storage::InputKey,
 };
-use tracing::instrument;
+use tracing::{info, instrument};
 
 pub(crate) mod cache_types;
 pub mod metrics;
@@ -105,6 +105,7 @@ impl ExecutionCacheTraitPointers {
 }
 
 static ENABLE_WRITEBACK_CACHE_ENV_VAR: &str = "ENABLE_WRITEBACK_CACHE";
+static WRITEBACK_CACHE_MAX_CACHE_SIZE: &str = "WRITEBACK_CACHE_MAX_CACHE_SIZE";
 
 #[derive(Debug)]
 pub enum ExecutionCacheConfigType {
@@ -140,13 +141,20 @@ pub fn choose_execution_cache(config: &ExecutionCacheConfig) -> ExecutionCacheCo
 }
 
 pub fn build_execution_cache(
+    cache_config: &ExecutionCacheConfig,
     epoch_start_config: &EpochStartConfiguration,
     prometheus_registry: &Registry,
     store: &Arc<AuthorityStore>,
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
     ExecutionCacheTraitPointers::new(
-        ProxyCache::new(epoch_start_config, store.clone(), execution_cache_metrics).into(),
+        ProxyCache::new(
+            cache_config,
+            epoch_start_config,
+            store.clone(),
+            execution_cache_metrics,
+        )
+        .into(),
     )
 }
 
@@ -159,10 +167,18 @@ pub fn build_execution_cache_from_env(
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
     if std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
+        let max_cache_size = std::env::var(WRITEBACK_CACHE_MAX_CACHE_SIZE)
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok());
+
+        let cache_config = ExecutionCacheConfig::WritebackCache { max_cache_size };
+
+        info!("Using writeback cache with config: {:?}", cache_config);
         ExecutionCacheTraitPointers::new(
-            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
+            WritebackCache::new(&cache_config, store.clone(), execution_cache_metrics).into(),
         )
     } else {
+        info!("Using passthrough cache");
         ExecutionCacheTraitPointers::new(
             PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
         )

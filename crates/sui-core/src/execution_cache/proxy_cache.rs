@@ -14,6 +14,7 @@ use futures::FutureExt;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_config::ExecutionCacheConfig;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::VerifiedExecutionData;
@@ -57,6 +58,10 @@ pub struct ProxyCache {
 
 impl ProxyCache {
     pub fn new(
+        // Note: the cache type is determined by epoch_start_config, but settings for the
+        // writeback cache are taken from cache_config. This is because the cache impl
+        // cannot be changed except at epoch boundaries.
+        cache_config: &ExecutionCacheConfig,
         epoch_start_config: &EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         metrics: Arc<ExecutionCacheMetrics>,
@@ -64,7 +69,7 @@ impl ProxyCache {
         let cache_type = epoch_start_config.execution_cache_type();
         tracing::info!("using cache impl {:?}", cache_type);
         let passthrough_cache = PassthroughCache::new(store.clone(), metrics.clone());
-        let writeback_cache = WritebackCache::new(store.clone(), metrics.clone());
+        let writeback_cache = WritebackCache::new(cache_config, store.clone(), metrics.clone());
 
         Self {
             passthrough_cache,
