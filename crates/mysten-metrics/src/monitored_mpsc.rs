@@ -19,8 +19,8 @@ use crate::get_metrics;
 #[derive(Debug)]
 pub struct Sender<T> {
     inner: mpsc::Sender<T>,
-    inflight: IntGauge,
-    sent: IntGauge,
+    inflight: Option<IntGauge>,
+    sent: Option<IntGauge>,
 }
 
 impl<T> Sender<T> {
@@ -30,8 +30,12 @@ impl<T> Sender<T> {
         self.inner
             .send(value)
             .inspect_ok(|_| {
-                self.inflight.inc();
-                self.sent.inc();
+                if let Some(inflight) = &self.inflight {
+                    inflight.inc();
+                }
+                if let Some(sent) = &self.sent {
+                    sent.inc();
+                }
             })
             .await
     }
@@ -48,8 +52,12 @@ impl<T> Sender<T> {
             .try_send(message)
             // remove this unsightly hack once https://github.com/rust-lang/rust/issues/91345 is resolved
             .map(|val| {
-                self.inflight.inc();
-                self.sent.inc();
+                if let Some(inflight) = &self.inflight {
+                    inflight.inc();
+                }
+                if let Some(sent) = &self.sent {
+                    sent.inc();
+                }
                 val
             })
     }
@@ -69,7 +77,9 @@ impl<T> Sender<T> {
     /// Increments the gauge in case of a successful `reserve`.
     pub async fn reserve(&self) -> Result<Permit<'_, T>, SendError<()>> {
         self.inner.reserve().await.map(|permit| {
-            self.inflight.inc();
+            if let Some(inflight) = &self.inflight {
+                inflight.inc();
+            }
             Permit::new(permit, &self.inflight, &self.sent)
         })
     }
@@ -79,7 +89,9 @@ impl<T> Sender<T> {
     /// Increments the gauge in case of a successful `try_reserve`.
     pub fn try_reserve(&self) -> Result<Permit<'_, T>, TrySendError<()>> {
         self.inner.try_reserve().map(|val| {
-            self.inflight.inc();
+            if let Some(inflight) = &self.inflight {
+                inflight.inc();
+            }
             Permit::new(val, &self.inflight, &self.sent)
         })
     }
@@ -101,13 +113,17 @@ impl<T> Sender<T> {
     }
 
     /// Returns a reference to the underlying inflight gauge.
-    pub fn inflight(&self) -> &IntGauge {
-        &self.inflight
+    #[cfg(test)]
+    fn inflight(&self) -> &IntGauge {
+        self.inflight
+            .as_ref()
+            .expect("Metrics should have initialized")
     }
 
     /// Returns a reference to the underlying sent gauge.
-    pub fn sent(&self) -> &IntGauge {
-        &self.sent
+    #[cfg(test)]
+    fn sent(&self) -> &IntGauge {
+        self.sent.as_ref().expect("Metrics should have initialized")
     }
 }
 
@@ -126,15 +142,15 @@ impl<T> Clone for Sender<T> {
 /// in the case the permit is dropped w/o sending
 pub struct Permit<'a, T> {
     permit: Option<mpsc::Permit<'a, T>>,
-    inflight_ref: &'a IntGauge,
-    sent_ref: &'a IntGauge,
+    inflight_ref: &'a Option<IntGauge>,
+    sent_ref: &'a Option<IntGauge>,
 }
 
 impl<'a, T> Permit<'a, T> {
     pub fn new(
         permit: mpsc::Permit<'a, T>,
-        inflight_ref: &'a IntGauge,
-        sent_ref: &'a IntGauge,
+        inflight_ref: &'a Option<IntGauge>,
+        sent_ref: &'a Option<IntGauge>,
     ) -> Permit<'a, T> {
         Permit {
             permit: Some(permit),
@@ -146,7 +162,9 @@ impl<'a, T> Permit<'a, T> {
     pub fn send(mut self, value: T) {
         let sender = self.permit.take().expect("Permit invariant violated!");
         sender.send(value);
-        self.sent_ref.inc();
+        if let Some(sent_ref) = self.sent_ref {
+            sent_ref.inc();
+        }
         // skip the drop logic, see https://github.com/tokio-rs/tokio/blob/a66884a2fb80d1180451706f3c3e006a3fdcb036/tokio/src/sync/mpsc/bounded.rs#L1155-L1163
         std::mem::forget(self);
     }
@@ -157,7 +175,9 @@ impl<'a, T> Drop for Permit<'a, T> {
         // In the case the permit is dropped without sending, we still want to decrease the occupancy of the channel.
         // Otherwise, receiver should be responsible for decreasing the inflight gauge.
         if self.permit.is_some() {
-            self.inflight_ref.dec();
+            if let Some(inflight_ref) = self.inflight_ref {
+                inflight_ref.dec();
+            }
         }
     }
 }
@@ -181,8 +201,8 @@ impl<T: Send> WithPermit<T> for Sender<T> {
 #[derive(Debug)]
 pub struct WeakSender<T> {
     inner: mpsc::WeakSender<T>,
-    inflight: IntGauge,
-    sent: IntGauge,
+    inflight: Option<IntGauge>,
+    sent: Option<IntGauge>,
 }
 
 impl<T> WeakSender<T> {
@@ -210,8 +230,8 @@ impl<T> Clone for WeakSender<T> {
 #[derive(Debug)]
 pub struct Receiver<T> {
     inner: mpsc::Receiver<T>,
-    inflight: IntGauge,
-    received: IntGauge,
+    inflight: Option<IntGauge>,
+    received: Option<IntGauge>,
 }
 
 impl<T> Receiver<T> {
@@ -220,8 +240,12 @@ impl<T> Receiver<T> {
     pub async fn recv(&mut self) -> Option<T> {
         self.inner.recv().await.tap(|opt| {
             if opt.is_some() {
-                self.inflight.dec();
-                self.received.inc();
+                if let Some(inflight) = &self.inflight {
+                    inflight.dec();
+                }
+                if let Some(received) = &self.received {
+                    received.inc();
+                }
             }
         })
     }
@@ -230,16 +254,24 @@ impl<T> Receiver<T> {
     /// Decrements the gauge in case of a successful `try_recv`.
     pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
         self.inner.try_recv().map(|val| {
-            self.inflight.dec();
-            self.received.inc();
+            if let Some(inflight) = &self.inflight {
+                inflight.dec();
+            }
+            if let Some(received) = &self.received {
+                received.inc();
+            }
             val
         })
     }
 
     pub fn blocking_recv(&mut self) -> Option<T> {
         self.inner.blocking_recv().map(|val| {
-            self.inflight.dec();
-            self.received.inc();
+            if let Some(inflight) = &self.inflight {
+                inflight.dec();
+            }
+            if let Some(received) = &self.received {
+                received.inc();
+            }
             val
         })
     }
@@ -254,41 +286,43 @@ impl<T> Receiver<T> {
     pub fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
         match self.inner.poll_recv(cx) {
             res @ Poll::Ready(Some(_)) => {
-                self.inflight.dec();
-                self.received.inc();
+                if let Some(inflight) = &self.inflight {
+                    inflight.dec();
+                }
+                if let Some(received) = &self.received {
+                    received.inc();
+                }
                 res
             }
             s => s,
         }
     }
 
-    /// Returns a reference to the underlying inflight gauge.
-    pub fn inflight(&self) -> &IntGauge {
-        &self.inflight
-    }
-
     /// Returns a reference to the underlying received gauge.
-    pub fn received(&self) -> &IntGauge {
-        &self.received
+    #[cfg(test)]
+    fn received(&self) -> &IntGauge {
+        self.received
+            .as_ref()
+            .expect("Metrics should have initialized")
     }
 }
 
 impl<T> Unpin for Receiver<T> {}
 
-/// Wraps `mpsc::channel` to create a pair of `Sender` and `Receiver`
+/// Wraps [`mpsc::channel()`] to create a pair of `Sender` and `Receiver`
 pub fn channel<T>(name: &str, size: usize) -> (Sender<T>, Receiver<T>) {
-    let metrics = get_metrics().expect("Metrics uninitialized");
+    let metrics = get_metrics();
     let (sender, receiver) = mpsc::channel(size);
     (
         Sender {
             inner: sender,
-            inflight: metrics.channel_inflight.with_label_values(&[name]),
-            sent: metrics.channel_sent.with_label_values(&[name]),
+            inflight: metrics.map(|m| m.channel_inflight.with_label_values(&[name])),
+            sent: metrics.map(|m| m.channel_sent.with_label_values(&[name])),
         },
         Receiver {
             inner: receiver,
-            inflight: metrics.channel_inflight.with_label_values(&[name]),
-            received: metrics.channel_received.with_label_values(&[name]),
+            inflight: metrics.map(|m| m.channel_inflight.with_label_values(&[name])),
+            received: metrics.map(|m| m.channel_received.with_label_values(&[name])),
         },
     )
 }
@@ -297,8 +331,8 @@ pub fn channel<T>(name: &str, size: usize) -> (Sender<T>, Receiver<T>) {
 #[derive(Debug)]
 pub struct UnboundedSender<T> {
     inner: mpsc::UnboundedSender<T>,
-    inflight: IntGauge,
-    sent: IntGauge,
+    inflight: Option<IntGauge>,
+    sent: Option<IntGauge>,
 }
 
 impl<T> UnboundedSender<T> {
@@ -306,8 +340,12 @@ impl<T> UnboundedSender<T> {
     /// Increments the gauge in case of a successful `send`.
     pub fn send(&self, value: T) -> Result<(), SendError<T>> {
         self.inner.send(value).map(|_| {
-            self.inflight.inc();
-            self.sent.inc();
+            if let Some(inflight) = &self.inflight {
+                inflight.inc();
+            }
+            if let Some(sent) = &self.sent {
+                sent.inc();
+            }
         })
     }
 
@@ -333,13 +371,17 @@ impl<T> UnboundedSender<T> {
     }
 
     /// Returns a reference to the underlying inflight gauge.
-    pub fn inflight(&self) -> &IntGauge {
-        &self.inflight
+    #[cfg(test)]
+    fn inflight(&self) -> &IntGauge {
+        self.inflight
+            .as_ref()
+            .expect("Metrics should have initialized")
     }
 
     /// Returns a reference to the underlying sent gauge.
-    pub fn sent(&self) -> &IntGauge {
-        &self.sent
+    #[cfg(test)]
+    fn sent(&self) -> &IntGauge {
+        self.sent.as_ref().expect("Metrics should have initialized")
     }
 }
 
@@ -358,8 +400,8 @@ impl<T> Clone for UnboundedSender<T> {
 #[derive(Debug)]
 pub struct WeakUnboundedSender<T> {
     inner: mpsc::WeakUnboundedSender<T>,
-    inflight: IntGauge,
-    sent: IntGauge,
+    inflight: Option<IntGauge>,
+    sent: Option<IntGauge>,
 }
 
 impl<T> WeakUnboundedSender<T> {
@@ -387,8 +429,8 @@ impl<T> Clone for WeakUnboundedSender<T> {
 #[derive(Debug)]
 pub struct UnboundedReceiver<T> {
     inner: mpsc::UnboundedReceiver<T>,
-    inflight: IntGauge,
-    received: IntGauge,
+    inflight: Option<IntGauge>,
+    received: Option<IntGauge>,
 }
 
 impl<T> UnboundedReceiver<T> {
@@ -397,8 +439,12 @@ impl<T> UnboundedReceiver<T> {
     pub async fn recv(&mut self) -> Option<T> {
         self.inner.recv().await.tap(|opt| {
             if opt.is_some() {
-                self.inflight.dec();
-                self.received.inc();
+                if let Some(inflight) = &self.inflight {
+                    inflight.dec();
+                }
+                if let Some(received) = &self.received {
+                    received.inc();
+                }
             }
         })
     }
@@ -407,16 +453,24 @@ impl<T> UnboundedReceiver<T> {
     /// Decrements the gauge in case of a successful `try_recv`.
     pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
         self.inner.try_recv().map(|val| {
-            self.inflight.dec();
-            self.received.inc();
+            if let Some(inflight) = &self.inflight {
+                inflight.dec();
+            }
+            if let Some(received) = &self.received {
+                received.inc();
+            }
             val
         })
     }
 
     pub fn blocking_recv(&mut self) -> Option<T> {
         self.inner.blocking_recv().map(|val| {
-            self.inflight.dec();
-            self.received.inc();
+            if let Some(inflight) = &self.inflight {
+                inflight.dec();
+            }
+            if let Some(received) = &self.received {
+                received.inc();
+            }
             val
         })
     }
@@ -431,42 +485,44 @@ impl<T> UnboundedReceiver<T> {
     pub fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
         match self.inner.poll_recv(cx) {
             res @ Poll::Ready(Some(_)) => {
-                self.inflight.dec();
-                self.received.inc();
+                if let Some(inflight) = &self.inflight {
+                    inflight.dec();
+                }
+                if let Some(received) = &self.received {
+                    received.inc();
+                }
                 res
             }
             s => s,
         }
     }
 
-    /// Returns a reference to the underlying inflight gauge.
-    pub fn inflight(&self) -> &IntGauge {
-        &self.inflight
-    }
-
     /// Returns a reference to the underlying received gauge.
-    pub fn received(&self) -> &IntGauge {
-        &self.received
+    #[cfg(test)]
+    fn received(&self) -> &IntGauge {
+        self.received
+            .as_ref()
+            .expect("Metrics should have initialized")
     }
 }
 
 impl<T> Unpin for UnboundedReceiver<T> {}
 
-/// Wraps an [`mpsc::UnboundedChannel`] to create a pair of `UnboundedSender` and `UnboundedReceiver`
+/// Wraps [`mpsc::unbounded_channel()`] to create a pair of `UnboundedSender` and `UnboundedReceiver`
 pub fn unbounded_channel<T>(name: &str) -> (UnboundedSender<T>, UnboundedReceiver<T>) {
-    let metrics = get_metrics().expect("Metrics uninitialized");
+    let metrics = get_metrics();
     #[allow(clippy::disallowed_methods)]
     let (sender, receiver) = mpsc::unbounded_channel();
     (
         UnboundedSender {
             inner: sender,
-            inflight: metrics.channel_inflight.with_label_values(&[name]),
-            sent: metrics.channel_sent.with_label_values(&[name]),
+            inflight: metrics.map(|m| m.channel_inflight.with_label_values(&[name])),
+            sent: metrics.map(|m| m.channel_sent.with_label_values(&[name])),
         },
         UnboundedReceiver {
             inner: receiver,
-            inflight: metrics.channel_inflight.with_label_values(&[name]),
-            received: metrics.channel_received.with_label_values(&[name]),
+            inflight: metrics.map(|m| m.channel_inflight.with_label_values(&[name])),
+            received: metrics.map(|m| m.channel_received.with_label_values(&[name])),
         },
     )
 }
