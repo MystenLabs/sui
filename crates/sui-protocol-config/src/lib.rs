@@ -135,6 +135,7 @@ const MAX_PROTOCOL_VERSION: u64 = 49;
 //             Enable random beacon in testnet.
 // Version 49: Enable Move enums on devnet.
 //             Enable VDF in devnet
+//             Run Mysticeti consensus by default.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2303,6 +2304,9 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .record_consensus_determined_version_assignments_in_prologue = true;
                     }
+
+                    // Run Mysticeti consensus by default.
+                    cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
                 }
                 // Use this template when making changes:
                 //
