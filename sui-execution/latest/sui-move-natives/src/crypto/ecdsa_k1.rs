@@ -370,8 +370,8 @@ pub fn secp256k1_keypair_from_seed(
 
     let kp = Secp256k1KeyPair::generate(&mut StdRng::from_seed(seed_array));
 
-    let sk_bytes = kp.private().as_bytes().to_vec();
     let pk_bytes = kp.public().as_bytes().to_vec();
+    let sk_bytes = kp.private().as_bytes().to_vec();
 
     Ok(NativeResult::ok(
         cost,
