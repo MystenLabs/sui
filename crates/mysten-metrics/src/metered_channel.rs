@@ -320,6 +320,7 @@ impl<T> From<Receiver<T>> for ReceiverStream<T> {
 ////////////////////////////////////////////////////////////////
 
 /// Similar to `mpsc::channel`, `channel` creates a pair of `Sender` and `Receiver`
+/// Deprecated: use `monitored_mpsc::channel` instead.
 #[track_caller]
 pub fn channel<T>(size: usize, gauge: &IntGauge) -> (Sender<T>, Receiver<T>) {
     gauge.set(0);
@@ -337,6 +338,7 @@ pub fn channel<T>(size: usize, gauge: &IntGauge) -> (Sender<T>, Receiver<T>) {
     )
 }
 
+/// Deprecated: use `monitored_mpsc::channel` instead.
 #[track_caller]
 pub fn channel_with_total<T>(
     size: usize,

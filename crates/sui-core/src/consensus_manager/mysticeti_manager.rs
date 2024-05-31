@@ -133,7 +133,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         // TODO: that should be replaced by a metered channel. We can discuss if unbounded approach
         // is the one we want to go with.
         #[allow(clippy::disallowed_methods)]
-        let (commit_sender, commit_receiver) = unbounded_channel("committed_subdag");
+        let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
 
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
         let consumer = CommitConsumer::new(
