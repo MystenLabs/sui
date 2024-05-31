@@ -505,8 +505,6 @@ impl ValidatorService {
                 .start_timer()
         };
 
-        let mut responses = Vec::with_capacity(certificates.len());
-
         // 1) Check if the certificate is already executed.
         //    This is only needed when we have only one certificate (not a soft bundle).
         if !is_soft_bundle {
@@ -554,17 +552,17 @@ impl ValidatorService {
             }
         }
 
-        let mut verified_certificates = Vec::with_capacity(certificates.len());
-        for certificate in certificates {
+        let verified_certificates = {
             let _timer = self.metrics.cert_verification_latency.start_timer();
-            let verified_certificate = epoch_store
+            epoch_store
                 .signature_verifier
-                .verify_cert(certificate)
-                .await?;
-            verified_certificates.push(verified_certificate);
-        }
+                .multi_verify_certs(certificates)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?
+        };
 
-        let submit_to_consensus = || -> SuiResult<()> {
+        {
             // code block within reconfiguration lock
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
             if !reconfiguration_lock.should_accept_user_certs() {
@@ -599,11 +597,7 @@ impl ValidatorService {
                 // Do not wait for the result, because the transaction might have already executed.
                 // Instead, check or wait for the existence of certificate effects below.
             }
-            drop(reconfiguration_lock);
-            Ok(())
-        };
-
-        submit_to_consensus()?;
+        }
 
         if !wait_for_effects {
             // It is useful to enqueue owned object transaction for execution locally,
@@ -622,43 +616,44 @@ impl ValidatorService {
             return Ok(None);
         }
 
-        for certificate in verified_certificates {
-            // 4) Execute the certificate if it contains only owned object transactions, or wait for
-            // the execution results if it contains shared objects.
-            // TODO: for soft bundle, we can execute all the certs at once.
-            let response = {
-                let effects = self
-                    .state
-                    .execute_certificate(&certificate, epoch_store)
-                    .await?;
-                let events = if include_events {
-                    if let Some(digest) = effects.events_digest() {
-                        Some(self.state.get_transaction_events(digest)?)
+        // 4) Execute the certificates immediately if they contain only owned object transactions,
+        // or wait for the execution results if it contains shared objects.
+        let responses = futures::future::try_join_all(
+            verified_certificates
+                .into_iter()
+                .map(|certificate| async move {
+                    let effects = self
+                        .state
+                        .execute_certificate(&certificate, epoch_store)
+                        .await?;
+                    let events = if include_events {
+                        if let Some(digest) = effects.events_digest() {
+                            Some(self.state.get_transaction_events(digest)?)
+                        } else {
+                            None
+                        }
                     } else {
                         None
-                    }
-                } else {
-                    None
-                };
+                    };
 
-                let input_objects = include_input_objects
-                    .then(|| self.state.get_transaction_input_objects(&effects))
-                    .and_then(Result::ok);
+                    let input_objects = include_input_objects
+                        .then(|| self.state.get_transaction_input_objects(&effects))
+                        .and_then(Result::ok);
 
-                let output_objects = include_output_objects
-                    .then(|| self.state.get_transaction_output_objects(&effects))
-                    .and_then(Result::ok);
+                    let output_objects = include_output_objects
+                        .then(|| self.state.get_transaction_output_objects(&effects))
+                        .and_then(Result::ok);
 
-                HandleCertificateResponseV3 {
-                    effects: effects.into_inner(),
-                    events,
-                    input_objects,
-                    output_objects,
-                    auxiliary_data: None, // We don't have any aux data generated presently
-                }
-            };
-            responses.push(response);
-        }
+                    Ok::<_, SuiError>(HandleCertificateResponseV3 {
+                        effects: effects.into_inner(),
+                        events,
+                        input_objects,
+                        output_objects,
+                        auxiliary_data: None, // We don't have any aux data generated presently
+                    })
+                }),
+        )
+        .await?;
 
         Ok(Some(responses))
     }
