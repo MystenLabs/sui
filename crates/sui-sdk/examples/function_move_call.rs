@@ -1,23 +1,31 @@
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 mod utils;
+use anyhow::anyhow;
 use shared_crypto::intent::Intent;
 use sui_config::{sui_config_dir, SUI_KEYSTORE_FILENAME};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_sdk::{
     rpc_types::SuiTransactionBlockResponseOptions,
     types::{
-        base_types::ObjectID, programmable_transaction_builder::ProgrammableTransactionBuilder, quorum_driver_types::ExecuteTransactionRequestType, transaction::{Argument, CallArg, Command, Transaction, TransactionData}, Identifier, TypeTag
+        base_types::ObjectID,
+        programmable_transaction_builder::ProgrammableTransactionBuilder,
+        quorum_driver_types::ExecuteTransactionRequestType,
+        transaction::{
+            Argument, CallArg, Command, ProgrammableMoveCall, Transaction, TransactionData,
+        },
+        Identifier,
     },
 };
 use utils::setup_for_write;
 
 // This example shows how to use programmable transactions to chain multiple
-// actions into one transaction. Specifically, the example retrieves two addresses
-// from the local wallet, and then
+// commands into one transaction, and specifically how to call a function from a move package
+// These are the following steps:
 // 1) finds a coin from the active address that has Sui,
-// 2) splits the coin into one coin of 1000 MIST and the rest,
-// 3  transfers the split coin to second Sui address,
+// 2) creates a PTB and adds an input to it,
+// 3) adds a move call to the PTB,
 // 4) signs the transaction,
 // 5) executes it.
 // For some of these actions it prints some output.
@@ -30,7 +38,7 @@ use utils::setup_for_write;
 async fn main() -> Result<(), anyhow::Error> {
     // 1) get the Sui client, the sender and recipient that we will use
     // for the transaction, and find the coin we use as gas
-    let (sui, sender, recipient) = setup_for_write().await?;
+    let (sui, sender, _recipient) = setup_for_write().await?;
 
     // we need to find the coin we will use as gas
     let coins = sui
@@ -39,7 +47,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .await?;
     let coin = coins.data.into_iter().next().unwrap();
 
-    // programmable transactions allows the user to bundle a number of actions into one transaction
+    // 2) create a programmable transaction builder to add commands and create a PTB
     let mut ptb = ProgrammableTransactionBuilder::new();
 
     // Create an Argument::Input for Pure 6 value of type u64
@@ -47,19 +55,23 @@ async fn main() -> Result<(), anyhow::Error> {
     let input_argument = CallArg::Pure(bcs::to_bytes(&input_value).unwrap());
 
     // Add this input to the builder
-    ptb.input(input_argument);
+    ptb.input(input_argument)?;
 
-    ptb.command(Command::MoveCall(Box::new(
-        sui_sdk::types::transaction::ProgrammableMoveCall {
-            package: ObjectID::from_hex_literal("0x883393ee444fb828aa0e977670cf233b0078b41d144e6208719557cb3888244d").unwrap(),
-            module: Identifier::new("hello_wolrd").unwrap(),
-            function: Identifier::new("hello_world").unwrap(),
-            type_arguments: vec![],
-            arguments: vec![Argument::Input(0)],
-        }
-    )));
+    // 3) add a move call to the PTB
+    // Replace the pkg_id with the package id you want to call
+    let pkg_id = "0x883393ee444fb828aa0e977670cf233b0078b41d144e6208719557cb3888244d";
+    let package = ObjectID::from_hex_literal(pkg_id).map_err(|e| anyhow!(e))?;
+    let module = Identifier::new("hello_wolrd").map_err(|e| anyhow!(e))?;
+    let function = Identifier::new("hello_world").map_err(|e| anyhow!(e))?;
+    ptb.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+        package,
+        module,
+        function,
+        type_arguments: vec![],
+        arguments: vec![Argument::Input(0)],
+    })));
 
-    // finish building the transaction block by calling finish on the ptb
+    // build the transaction block by calling finish on the ptb
     let builder = ptb.finish();
 
     let gas_budget = 10_000_000;
@@ -87,7 +99,6 @@ async fn main() -> Result<(), anyhow::Error> {
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
-    print!("done\n Transaction information: ");
-    println!("{:?}", transaction_response);
+    println!("{}", transaction_response);
     Ok(())
 }
