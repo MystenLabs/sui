@@ -1,0 +1,16 @@
+warning[W09003]: unused assignment
+  ┌─ tests/linter/incorrect_almost_swapped.move:4:13
+  │
+4 │         let foo = 1;
+  │             ^^^ Unused assignment for variable 'foo'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_foo')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00018]: Unnecessary swap sequence detected. Consider simplifying the code or using a temporary variable if swapping is intended.
+  ┌─ tests/linter/incorrect_almost_swapped.move:8:9
+  │
+8 │         bar = foo;
+  │         ^^^^^^^^^ Unnecessary swap sequence detected. Consider simplifying the code or using a temporary variable if swapping is intended.
+  │
+  = This warning can be suppressed with '#[allow(lint(swap_sequence))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
