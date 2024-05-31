@@ -11,7 +11,7 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimProgressStore, WorkerPool,
 };
@@ -19,7 +19,7 @@ use sui_data_ingestion_core::{
 use crate::build_json_rpc_server;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
-use crate::handlers::objects_snapshot_processor::{ObjectChangeBuffer, ObjectsSnapshotProcessor, SnapshotLagConfig};
+use crate::handlers::objects_snapshot_processor::{ObjectsSnapshotProcessor, SnapshotLagConfig};
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
@@ -87,19 +87,31 @@ impl Indexer {
             .unwrap_or(CHECKPOINT_PROCESSING_BATCH_DATA_LIMIT.to_string())
             .parse::<usize>()
             .unwrap();
+        let object_change_buffer_size = std::env::var("OBJECT_CHANGE_BUFFER_SIZE")
+            .unwrap_or(crate::handlers::objects_snapshot_processor::OBJECT_CHANGE_BUFFER_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
+        let global_metrics = get_metrics().unwrap();
 
         let rest_client = sui_rest_api::Client::new(format!("{}/rest", config.rpc_client_url));
-        let objects_snapshot_buffer = Arc::new(Mutex::new(ObjectChangeBuffer::default()));
+        let (object_change_sender, object_change_receiver) =
+            mysten_metrics::metered_channel::channel(
+                object_change_buffer_size,
+                &global_metrics
+                    .channels
+                    .with_label_values(&["object_change_buffering"]),
+            );
+
+        // let objects_snapshot_buffer = Arc::new(Mutex::new(ObjectChangeBuffer::default()));
 
         let objects_snapshot_processor = ObjectsSnapshotProcessor::new_with_config(
             rest_client.clone(),
             store.clone(),
-            objects_snapshot_buffer.clone(),
             metrics.clone(),
             snapshot_config,
             cancel.clone(),
         );
-        spawn_monitored_task!(objects_snapshot_processor.start());
+        spawn_monitored_task!(objects_snapshot_processor.start(object_change_receiver));
 
         let cancel_clone = cancel.clone();
         let (exit_sender, exit_receiver) = oneshot::channel();
@@ -115,7 +127,7 @@ impl Indexer {
             DataIngestionMetrics::new(&Registry::new()),
         );
         let worker =
-            new_handlers::<S, T>(store, rest_client, objects_snapshot_buffer.clone(), metrics, watermark, cancel.clone()).await?;
+            new_handlers::<S, T>(store, rest_client, object_change_sender, metrics, watermark, cancel.clone()).await?;
         let worker_pool = WorkerPool::new(worker, "workflow".to_string(), download_queue_size);
         let extra_reader_options = ReaderOptions {
             batch_size: download_queue_size,
