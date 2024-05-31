@@ -13,7 +13,6 @@ use crate::{
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
-
 pub mod coin_field;
 pub mod collection_equality;
 pub mod custom_state_change;
@@ -24,8 +23,8 @@ pub mod public_mut_tx_context;
 pub mod public_random;
 pub mod self_transfer;
 pub mod share_owned;
-
 pub const SUI_PKG_NAME: &str = "sui";
+pub const INCLUDE_NEW_RULES: bool = true;
 
 pub const TRANSFER_MOD_NAME: &str = "transfer";
 pub const TRANSFER_FUN: &str = "transfer";
