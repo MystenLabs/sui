@@ -114,7 +114,12 @@ impl Token for TypeToken {
                 let len = 1 + chars.take_while(char::is_ascii_whitespace).count();
                 (Self::Whitespace, len)
             }
-            c if c.is_ascii_alphabetic() => {
+            c if c.is_ascii_alphabetic()
+                || (c == '_'
+                    && chars
+                        .peek()
+                        .is_some_and(|c| identifier::is_valid_identifier_char(*c))) =>
+            {
                 // c + remaining
                 let len = 1 + chars
                     .take_while(|c| identifier::is_valid_identifier_char(*c))
