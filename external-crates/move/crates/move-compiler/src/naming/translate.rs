@@ -444,7 +444,12 @@ pub fn build_member_map(
                 tyarg_arity,
                 field_info,
             };
-            assert!(members.insert(name.value(), M::Datatype(ResolvedDatatype::Struct(Box::new(struct_def)))).is_none())
+            assert!(members
+                .insert(
+                    name.value(),
+                    M::Datatype(ResolvedDatatype::Struct(Box::new(struct_def)))
+                )
+                .is_none())
         }
         for (enum_name, edef) in mdef.enums.key_cloned_iter() {
             let tyarg_arity = edef.type_parameters.len();
