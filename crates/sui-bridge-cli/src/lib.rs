@@ -56,7 +56,7 @@ pub enum BridgeCommand {
     #[clap(name = "create-bridge-client-key")]
     CreateBridgeClientKey {
         path: PathBuf,
-        #[clap(name = "use-ecdsa", long, default_value = "false")]
+        #[clap(long = "use-ecdsa", default_value = "false")]
         use_ecdsa: bool,
     },
     /// Read bridge key from a file and print related information
@@ -64,13 +64,13 @@ pub enum BridgeCommand {
     #[clap(name = "examine-key")]
     ExamineKey {
         path: PathBuf,
-        #[clap(name = "is-validator-key", long)]
+        #[clap(long = "is-validator-key")]
         is_validator_key: bool,
     },
     #[clap(name = "create-bridge-node-config-template")]
     CreateBridgeNodeConfigTemplate {
         path: PathBuf,
-        #[clap(name = "run-client", long)]
+        #[clap(long = "run-client")]
         run_client: bool,
     },
     /// Governance client to facilitate and execute Bridge governance actions
@@ -101,8 +101,9 @@ pub enum BridgeCommand {
     /// Print current committee info
     #[clap(name = "print-bridge-committee-info")]
     PrintBridgeCommitteeInfo {
-        #[clap(long = "sui-rpc-url")]
         sui_rpc_url: String,
+        #[clap(long, default_value = "false")]
+        ping: bool,
     },
     /// Client to facilitate and execute Bridge actions
     #[clap(name = "client")]
@@ -389,7 +390,6 @@ pub struct LoadedBridgeCliConfig {
     /// Key pair for Sui operations
     sui_key: SuiKeyPair,
     /// Key pair for Eth operations, must be Secp256k1 key
-    // pub eth_key: SuiKeyPair,
     eth_signer: EthSigner,
 }
 
