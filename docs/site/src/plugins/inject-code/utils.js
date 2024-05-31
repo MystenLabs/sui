@@ -23,12 +23,14 @@ exports.trimContent = (content) => {
 // Fix the spurious whitespace when copying code
 // from the middle of source.
 exports.removeLeadingSpaces = (codeText, prepend = "") => {
-  const numSpaces = codeText.match(/^ */) ? codeText.match(/^ */)[0].length : 0;
+  codeText = codeText.replace(/^\n/, "");
+  const numSpaces = codeText.match(/^\s*/)
+    ? codeText.match(/^\s*/)[0].length
+    : 0;
   if (numSpaces === 0) {
     return [prepend, codeText].join("\n");
   }
   const lines = codeText.split("\n");
-
   return [
     prepend,
     lines.map((line) => line.substring(numSpaces)).join("\n"),
@@ -55,6 +57,7 @@ const removeTests = (text, options) => {
     element.toLowerCase().includes("notest"),
   );
   if (cont) {
+    console.log(text)
     return text
       .replace(/\s*#\[test.*?\n.*?}(?!;)\n?/gs, "\n{{plugin-removed-test}}\n")
       .replace(/\{\{plugin-removed-test\}\}\s*/gm, "");
@@ -88,7 +91,7 @@ exports.capturePrepend = (match, text) => {
       ? match[1].length - 1
       : match[1].length
     : 0;
-  let preFun = text.substring(0, match.index - 1);
+  let preFun = text.substring(0, match.index);
   const lines = preFun.split("\n");
   let pre = [];
   for (let x = lines.length - 1; x > 0; x--) {

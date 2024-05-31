@@ -79,7 +79,7 @@ const addCodeInject = function (source) {
                 let funContent = [];
                 for (let fn of funs) {
                   fn = fn.trim();
-                  const funStr = `^(\\s*)*?(public )?fun ${fn}\\b(?=[^\\w]).*?}\\n(\\s*?})?(?=\\n)?`;
+                  const funStr = `^(\\s*)*?(public )?fun \\b${fn}\\b.*?}\\n(\\s*?})?(?=\\n)?`;
                   const funRE = new RegExp(funStr, "msi");
                   const funMatch = funRE.exec(injectFileContent);
                   if (funMatch) {
@@ -107,14 +107,14 @@ const addCodeInject = function (source) {
                 }
                 injectFileContent = funContent
                   .join("\n")
-                  .replace(/\n+/gm, "\n")
+                  .replace(/\n{3}/gm, "\n\n")
                   .trim();
               } else if (structName) {
                 const structs = structName.split(",");
                 let structContent = [];
                 for (let struct of structs) {
                   struct = struct.trim();
-                  const structStr = `^(\\s*)*?(public )?struct \\b${struct}(?=[^\\w]).*?}\\n(?=\\n)`;
+                  const structStr = `^(\\s*)*?(public )?struct \\b${struct}\\b.*?}`;
                   const structRE = new RegExp(structStr, "msi");
                   const structMatch = structRE.exec(injectFileContent);
                   if (structMatch) {
@@ -136,12 +136,9 @@ const addCodeInject = function (source) {
                       "Struct not found. If code is formatted correctly, consider using code comments instead.";
                   }
                 }
-                injectFileContent = structContent
-                  .join("\n")
-                  .replace(/\n+/gm, "\n")
-                  .trim();
+                injectFileContent = structContent.join("\n").trim();
               } else if (moduleName) {
-                const modStr = `^(\\s*)*module \\b${moduleName}\\b(?=[^\\w]).*?}\\n(?=\\n)?`;
+                const modStr = `^(\\s*)*module \\b${moduleName}\\b.*?}\\n(?=\\n)?`;
                 const modRE = new RegExp(modStr, "msi");
                 const modMatch = modRE.exec(injectFileContent);
                 if (modMatch) {
