@@ -1,0 +1,8 @@
+warning[Lint W01002]: 
+  ┌─ tests/linter/true_positive_case_redundant_ref_deref.move:8:20
+  │
+8 │         let _ref = &*(&resource);  // Redundant borrow-dereference
+  │                    ^^^^^^^^^^^^^ Redundant borrow-dereference detected. Consider removing the borrow-dereference operation and using the expression directly.
+  │
+  = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
