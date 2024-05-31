@@ -8,7 +8,7 @@ import { useCheckBlocklist } from '../../hooks/useDomainBlocklist';
 
 export function useShowScamWarning({ hostname }: { hostname?: string }) {
 	const [userBypassed, setUserBypassed] = useState(false);
-	const { data, isPending } = useCheckBlocklist(hostname);
+	const { data, isPending, isError } = useCheckBlocklist(hostname);
 	const bypass = () => setUserBypassed(true);
 
 	useEffect(() => {
@@ -20,6 +20,7 @@ export function useShowScamWarning({ hostname }: { hostname?: string }) {
 	return {
 		isOpen: !!data?.block && !userBypassed,
 		isPending: isPending,
+		isError,
 		userBypassed,
 		bypass,
 	};

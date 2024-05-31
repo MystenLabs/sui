@@ -63,6 +63,7 @@ export function UserApproveContainer({
 	const {
 		isOpen,
 		isPending: isDomainCheckLoading,
+		isError,
 		bypass,
 	} = useShowScamWarning({ hostname: parsedOrigin.hostname });
 
@@ -84,6 +85,7 @@ export function UserApproveContainer({
 						permissions={permissions}
 						iconUrl={originFavIcon}
 						connectedAddress={!addressHidden && address ? address : undefined}
+						showSecurityWarning={isError}
 					/>
 					<div className="flex flex-1 flex-col px-6 bg-hero-darkest/5">{children}</div>
 				</div>
