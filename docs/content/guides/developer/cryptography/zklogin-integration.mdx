@@ -334,7 +334,7 @@ Compared to traditional signatures, zkLogin signatures take a longer time to gen
 
 Carefully consider how many requests your application needs to make to the prover. Broadly speaking, the right metric to consider is the number of active user sessions and not the number of signatures. This is because you can cache the same ZK proof and reuse it across the session, as previously explained. For example, if you expect a million active user sessions per day, then you need a prover that can handle one or two requests per second (RPS), assuming evenly distributed traffic.
 
-The prover that Mysten Labs maintains is set to auto-scale to handle traffic surges. If you are not sure whether Mysten Labs can handle a specific number of requests or expect a sudden spike in the number of prover requests your application needs to make, please reach out to us on Discord. Our plan is to horizontally scale the prover to handle any RPS you require.
+The prover that Mysten Labs maintains is set to auto-scale to handle traffic surges. If you are not sure whether Mysten Labs can handle a specific number of requests or expect a sudden spike in the number of prover requests your application needs to make, please reach out to us on [Discord](https://discord.gg/sui). Our plan is to horizontally scale the prover to handle any RPS you require.
 
 ## Related links
 
