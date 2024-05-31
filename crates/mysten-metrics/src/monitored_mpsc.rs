@@ -70,7 +70,7 @@ impl<T> Sender<T> {
     pub async fn reserve(&self) -> Result<Permit<'_, T>, SendError<()>> {
         self.inner.reserve().await.map(|permit| {
             self.inflight.inc();
-            Permit::new(permit, &self.inflight)
+            Permit::new(permit, &self.inflight, &self.sent)
         })
     }
 
@@ -80,7 +80,7 @@ impl<T> Sender<T> {
     pub fn try_reserve(&self) -> Result<Permit<'_, T>, TrySendError<()>> {
         self.inner.try_reserve().map(|val| {
             self.inflight.inc();
-            Permit::new(val, &self.inflight)
+            Permit::new(val, &self.inflight, &self.sent)
         })
     }
 
@@ -91,11 +91,6 @@ impl<T> Sender<T> {
         self.inner.capacity()
     }
 
-    /// Returns a reference to the underlying inflight gauge.
-    pub fn inflight(&self) -> &IntGauge {
-        &self.inflight
-    }
-
     pub fn downgrade(&self) -> WeakSender<T> {
         let sender = self.inner.downgrade();
         WeakSender {
@@ -103,6 +98,16 @@ impl<T> Sender<T> {
             inflight: self.inflight.clone(),
             sent: self.sent.clone(),
         }
+    }
+
+    /// Returns a reference to the underlying inflight gauge.
+    pub fn inflight(&self) -> &IntGauge {
+        &self.inflight
+    }
+
+    /// Returns a reference to the underlying sent gauge.
+    pub fn sent(&self) -> &IntGauge {
+        &self.sent
     }
 }
 
@@ -122,19 +127,26 @@ impl<T> Clone for Sender<T> {
 pub struct Permit<'a, T> {
     permit: Option<mpsc::Permit<'a, T>>,
     inflight_ref: &'a IntGauge,
+    sent_ref: &'a IntGauge,
 }
 
 impl<'a, T> Permit<'a, T> {
-    pub fn new(permit: mpsc::Permit<'a, T>, inflight_ref: &'a IntGauge) -> Permit<'a, T> {
+    pub fn new(
+        permit: mpsc::Permit<'a, T>,
+        inflight_ref: &'a IntGauge,
+        sent_ref: &'a IntGauge,
+    ) -> Permit<'a, T> {
         Permit {
             permit: Some(permit),
             inflight_ref,
+            sent_ref,
         }
     }
 
     pub fn send(mut self, value: T) {
         let sender = self.permit.take().expect("Permit invariant violated!");
         sender.send(value);
+        self.sent_ref.inc();
         // skip the drop logic, see https://github.com/tokio-rs/tokio/blob/a66884a2fb80d1180451706f3c3e006a3fdcb036/tokio/src/sync/mpsc/bounded.rs#L1155-L1163
         std::mem::forget(self);
     }
@@ -142,8 +154,11 @@ impl<'a, T> Permit<'a, T> {
 
 impl<'a, T> Drop for Permit<'a, T> {
     fn drop(&mut self) {
-        // in the case the permit is dropped without sending, we still want to decrease the occupancy of the channel
-        self.inflight_ref.dec()
+        // In the case the permit is dropped without sending, we still want to decrease the occupancy of the channel.
+        // Otherwise, receiver should be responsible for decreasing the inflight gauge.
+        if self.permit.is_some() {
+            self.inflight_ref.dec();
+        }
     }
 }
 
@@ -246,6 +261,16 @@ impl<T> Receiver<T> {
             s => s,
         }
     }
+
+    /// Returns a reference to the underlying inflight gauge.
+    pub fn inflight(&self) -> &IntGauge {
+        &self.inflight
+    }
+
+    /// Returns a reference to the underlying received gauge.
+    pub fn received(&self) -> &IntGauge {
+        &self.received
+    }
 }
 
 impl<T> Unpin for Receiver<T> {}
@@ -298,11 +323,6 @@ impl<T> UnboundedSender<T> {
         self.inner.is_closed()
     }
 
-    /// Returns a reference to the underlying inflight gauge.
-    pub fn inflight(&self) -> &IntGauge {
-        &self.inflight
-    }
-
     pub fn downgrade(&self) -> WeakUnboundedSender<T> {
         let sender = self.inner.downgrade();
         WeakUnboundedSender {
@@ -310,6 +330,16 @@ impl<T> UnboundedSender<T> {
             inflight: self.inflight.clone(),
             sent: self.sent.clone(),
         }
+    }
+
+    /// Returns a reference to the underlying inflight gauge.
+    pub fn inflight(&self) -> &IntGauge {
+        &self.inflight
+    }
+
+    /// Returns a reference to the underlying sent gauge.
+    pub fn sent(&self) -> &IntGauge {
+        &self.sent
     }
 }
 
@@ -408,6 +438,16 @@ impl<T> UnboundedReceiver<T> {
             s => s,
         }
     }
+
+    /// Returns a reference to the underlying inflight gauge.
+    pub fn inflight(&self) -> &IntGauge {
+        &self.inflight
+    }
+
+    /// Returns a reference to the underlying received gauge.
+    pub fn received(&self) -> &IntGauge {
+        &self.received
+    }
 }
 
 impl<T> Unpin for UnboundedReceiver<T> {}
@@ -429,4 +469,320 @@ pub fn unbounded_channel<T>(name: &str) -> (UnboundedSender<T>, UnboundedReceive
             received: metrics.channel_received.with_label_values(&[name]),
         },
     )
+}
+
+#[cfg(test)]
+mod test {
+    use std::task::{Context, Poll};
+
+    use futures::{task::noop_waker, FutureExt as _};
+    use prometheus::Registry;
+    use tokio::sync::mpsc::error::TrySendError;
+
+    use crate::{
+        init_metrics,
+        monitored_mpsc::{channel, unbounded_channel},
+    };
+
+    #[tokio::test]
+    async fn test_bounded_send_and_receive() {
+        init_metrics(&Registry::new());
+        let (tx, mut rx) = channel("test_bounded_send_and_receive", 8);
+        let inflight = tx.inflight();
+        let sent = tx.sent();
+        let received = rx.received().clone();
+
+        assert_eq!(inflight.get(), 0);
+        let item = 42;
+        tx.send(item).await.unwrap();
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        let received_item = rx.recv().await.unwrap();
+        assert_eq!(received_item, item);
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_try_send() {
+        init_metrics(&Registry::new());
+        let (tx, mut rx) = channel("test_try_send", 1);
+        let inflight = tx.inflight();
+        let sent = tx.sent();
+        let received = rx.received().clone();
+
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(sent.get(), 0);
+        assert_eq!(received.get(), 0);
+
+        let item = 42;
+        tx.try_send(item).unwrap();
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        let received_item = rx.recv().await.unwrap();
+        assert_eq!(received_item, item);
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_try_send_full() {
+        init_metrics(&Registry::new());
+        let (tx, mut rx) = channel("test_try_send_full", 2);
+        let inflight = tx.inflight();
+        let sent = tx.sent();
+        let received = rx.received().clone();
+
+        assert_eq!(inflight.get(), 0);
+
+        let item = 42;
+        tx.try_send(item).unwrap();
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        tx.try_send(item).unwrap();
+        assert_eq!(inflight.get(), 2);
+        assert_eq!(sent.get(), 2);
+        assert_eq!(received.get(), 0);
+
+        if let Err(e) = tx.try_send(item) {
+            assert!(matches!(e, TrySendError::Full(_)));
+        } else {
+            panic!("Expect try_send return channel being full error");
+        }
+        assert_eq!(inflight.get(), 2);
+        assert_eq!(sent.get(), 2);
+        assert_eq!(received.get(), 0);
+
+        let received_item = rx.recv().await.unwrap();
+        assert_eq!(received_item, item);
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 2);
+        assert_eq!(received.get(), 1);
+
+        let received_item = rx.recv().await.unwrap();
+        assert_eq!(received_item, item);
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(sent.get(), 2);
+        assert_eq!(received.get(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_unbounded_send_and_receive() {
+        init_metrics(&Registry::new());
+        let (tx, mut rx) = unbounded_channel("test_unbounded_send_and_receive");
+        let inflight = tx.inflight();
+        let sent = tx.sent();
+        let received = rx.received().clone();
+
+        assert_eq!(inflight.get(), 0);
+        let item = 42;
+        tx.send(item).unwrap();
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        let received_item = rx.recv().await.unwrap();
+        assert_eq!(received_item, item);
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_empty_closed_channel() {
+        init_metrics(&Registry::new());
+        let (tx, mut rx) = channel("test_empty_closed_channel", 8);
+        let inflight = tx.inflight();
+        let received = rx.received().clone();
+
+        assert_eq!(inflight.get(), 0);
+        let item = 42;
+        tx.send(item).await.unwrap();
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        let received_item = rx.recv().await.unwrap();
+        assert_eq!(received_item, item);
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(received.get(), 1);
+
+        // channel is empty
+        let res = rx.try_recv();
+        assert!(res.is_err());
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(received.get(), 1);
+
+        // channel is closed
+        rx.close();
+        let res2 = rx.recv().now_or_never().unwrap();
+        assert!(res2.is_none());
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(received.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_reserve() {
+        init_metrics(&Registry::new());
+        let (tx, mut rx) = channel("test_reserve", 8);
+        let inflight = tx.inflight();
+        let sent = tx.sent();
+        let received = rx.received().clone();
+
+        assert_eq!(inflight.get(), 0);
+        let item = 42;
+        let permit = tx.reserve().await.unwrap();
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 0);
+        assert_eq!(received.get(), 0);
+
+        permit.send(item);
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        let received_item = rx.recv().await.unwrap();
+        assert_eq!(received_item, item);
+
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_reserve_and_drop() {
+        init_metrics(&Registry::new());
+        let (tx, _rx) = channel::<usize>("test_reserve_and_drop", 8);
+        let inflight = tx.inflight();
+
+        assert_eq!(inflight.get(), 0);
+
+        let permit = tx.reserve().await.unwrap();
+        assert_eq!(inflight.get(), 1);
+
+        drop(permit);
+
+        assert_eq!(inflight.get(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_send_backpressure() {
+        init_metrics(&Registry::new());
+        let waker = noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        let (tx, mut rx) = channel("test_send_backpressure", 1);
+        let inflight = tx.inflight();
+        let sent = tx.sent();
+        let received = rx.received().clone();
+
+        assert_eq!(inflight.get(), 0);
+
+        tx.send(1).await.unwrap();
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        // channel is full. send should be blocked.
+        let mut task = Box::pin(tx.send(2));
+        assert!(matches!(task.poll_unpin(&mut cx), Poll::Pending));
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        let item = rx.recv().await.unwrap();
+        assert_eq!(item, 1);
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 1);
+
+        assert!(task.now_or_never().is_some());
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 2);
+        assert_eq!(received.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_reserve_backpressure() {
+        init_metrics(&Registry::new());
+        let waker = noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        let (tx, mut rx) = channel("test_reserve_backpressure", 1);
+        let inflight = tx.inflight();
+        let sent = tx.sent();
+        let received = rx.received().clone();
+
+        assert_eq!(inflight.get(), 0);
+
+        let permit = tx.reserve().await.unwrap();
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 0);
+        assert_eq!(received.get(), 0);
+
+        let mut task = Box::pin(tx.send(2));
+        assert!(matches!(task.poll_unpin(&mut cx), Poll::Pending));
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 0);
+        assert_eq!(received.get(), 0);
+
+        permit.send(1);
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        let item = rx.recv().await.unwrap();
+        assert_eq!(item, 1);
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 1);
+
+        assert!(task.now_or_never().is_some());
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 2);
+        assert_eq!(received.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_send_backpressure_multi_senders() {
+        init_metrics(&Registry::new());
+        let waker = noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        let (tx1, mut rx) = channel("test_send_backpressure_multi_senders", 1);
+        let inflight = tx1.inflight();
+        let sent = tx1.sent();
+        let received = rx.received().clone();
+
+        assert_eq!(inflight.get(), 0);
+
+        tx1.send(1).await.unwrap();
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        let tx2 = tx1.clone();
+        let mut task = Box::pin(tx2.send(2));
+        assert!(matches!(task.poll_unpin(&mut cx), Poll::Pending));
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        let item = rx.recv().await.unwrap();
+        assert_eq!(item, 1);
+        assert_eq!(inflight.get(), 0);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 1);
+
+        assert!(task.now_or_never().is_some());
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 2);
+        assert_eq!(received.get(), 1);
+    }
 }

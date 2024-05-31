@@ -167,7 +167,9 @@ impl<'a, T> Permit<'a, T> {
 impl<'a, T> Drop for Permit<'a, T> {
     fn drop(&mut self) {
         // in the case the permit is dropped without sending, we still want to decrease the occupancy of the channel
-        self.gauge_ref.dec()
+        if self.permit.is_some() {
+            self.gauge_ref.dec();
+        }
     }
 }
 
