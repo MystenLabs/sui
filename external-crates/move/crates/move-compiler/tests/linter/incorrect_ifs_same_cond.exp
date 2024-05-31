@@ -1,0 +1,20 @@
+warning[Lint W00010]: Consecutive `if` statements with the same condition detected. Consider combining these statements to simplify the code.
+   ┌─ tests/linter/incorrect_ifs_same_cond.move:8:9
+   │  
+ 8 │ ╭         if (x > 10) {
+ 9 │ │             // Some other logic here
+10 │ │         };
+   │ ╰─────────^ Consecutive `if` statements with the same condition detected. Consider combining these statements to simplify the code.
+   │  
+   = This warning can be suppressed with '#[allow(lint(consecutive_ifs))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00010]: Consecutive `if` statements with the same condition detected. Consider combining these statements to simplify the code.
+   ┌─ tests/linter/incorrect_ifs_same_cond.move:17:9
+   │  
+17 │ ╭         if (x == 3) {
+18 │ │             // Some other logic here
+19 │ │         };
+   │ ╰─────────^ Consecutive `if` statements with the same condition detected. Consider combining these statements to simplify the code.
+   │  
+   = This warning can be suppressed with '#[allow(lint(consecutive_ifs))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
