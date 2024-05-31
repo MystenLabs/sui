@@ -418,9 +418,9 @@ impl ConsensusAdapter {
         let (position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
 
-        const DEFAULT_LATENCY: Duration = Duration::from_secs(3); // > p50 consensus latency with global deployment
+        const DEFAULT_LATENCY: Duration = Duration::from_secs(1); // > p50 consensus latency with global deployment
         const MIN_LATENCY: Duration = Duration::from_millis(150);
-        const MAX_LATENCY: Duration = Duration::from_secs(10);
+        const MAX_LATENCY: Duration = Duration::from_secs(3);
 
         let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
         self.metrics
