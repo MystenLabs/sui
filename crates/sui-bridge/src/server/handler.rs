@@ -218,21 +218,21 @@ impl BridgeRequestHandler {
             1000,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["server_sui_action_signing_queue"]),
         );
         let (eth_signer_tx, eth_rx) = mysten_metrics::metered_channel::channel(
             1000,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["server_eth_action_signing_queue"]),
         );
         let (governance_signer_tx, governance_rx) = mysten_metrics::metered_channel::channel(
             1000,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["server_governance_action_signing_queue"]),
         );
         let signer = Arc::new(signer);

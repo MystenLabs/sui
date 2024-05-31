@@ -3,8 +3,7 @@
 
 use std::sync::Arc;
 
-use mysten_metrics::metered_channel;
-use mysten_metrics::metered_channel::channel_with_total;
+use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
 use sui_protocol_config::ProtocolConfig;
 use tap::tap::TapFallible;
 use thiserror::Error;
@@ -35,7 +34,7 @@ pub(crate) struct TransactionsGuard {
 /// The transactions are submitted to a channel which is shared between the TransactionConsumer and the TransactionClient
 /// and are pulled every time the `next` method is called.
 pub(crate) struct TransactionConsumer {
-    tx_receiver: metered_channel::Receiver<TransactionsGuard>,
+    tx_receiver: Receiver<TransactionsGuard>,
     max_consumed_bytes_per_request: u64,
     max_consumed_transactions_per_request: u64,
     pending_transactions: Option<TransactionsGuard>,
@@ -43,7 +42,7 @@ pub(crate) struct TransactionConsumer {
 
 impl TransactionConsumer {
     pub(crate) fn new(
-        tx_receiver: metered_channel::Receiver<TransactionsGuard>,
+        tx_receiver: Receiver<TransactionsGuard>,
         context: Arc<Context>,
         max_consumed_transactions_per_request: Option<u64>,
     ) -> Self {
@@ -143,7 +142,7 @@ impl TransactionConsumer {
 
 #[derive(Clone)]
 pub struct TransactionClient {
-    sender: metered_channel::Sender<TransactionsGuard>,
+    sender: Sender<TransactionsGuard>,
     max_transaction_size: u64,
 }
 
@@ -157,14 +156,8 @@ pub enum ClientError {
 }
 
 impl TransactionClient {
-    pub(crate) fn new(
-        context: Arc<Context>,
-    ) -> (Self, metered_channel::Receiver<TransactionsGuard>) {
-        let (sender, receiver) = channel_with_total(
-            MAX_PENDING_TRANSACTIONS,
-            &context.metrics.channel_metrics.tx_transactions_submit,
-            &context.metrics.channel_metrics.tx_transactions_submit_total,
-        );
+    pub(crate) fn new(context: Arc<Context>) -> (Self, Receiver<TransactionsGuard>) {
+        let (sender, receiver) = channel("consensus_input", MAX_PENDING_TRANSACTIONS);
 
         (
             Self {

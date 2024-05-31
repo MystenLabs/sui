@@ -11,7 +11,7 @@ use std::{
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use lru::LruCache;
-use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use mysten_metrics::{monitored_mpsc::UnboundedReceiver, monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
@@ -501,7 +501,7 @@ pub struct MysticetiConsensusHandler {
 impl MysticetiConsensusHandler {
     pub fn new(
         mut consensus_handler: ConsensusHandler<CheckpointService>,
-        mut receiver: tokio::sync::mpsc::UnboundedReceiver<consensus_core::CommittedSubDag>,
+        mut receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
     ) -> Self {
         let handle = spawn_monitored_task!(async move {
             while let Some(consensus_output) = receiver.recv().await {

@@ -3,8 +3,8 @@
 
 use std::{sync::Arc, time::Duration};
 
+use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{BlockAPI, VerifiedBlock},
@@ -188,8 +188,8 @@ impl CommitObserver {
 
 #[cfg(test)]
 mod tests {
+    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
     use parking_lot::RwLock;
-    use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
     use super::*;
     use crate::{
@@ -213,7 +213,7 @@ mod tests {
         )));
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel();
+        let (sender, mut receiver) = unbounded_channel("consensus_output");
 
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -317,7 +317,7 @@ mod tests {
         )));
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel();
+        let (sender, mut receiver) = unbounded_channel("consensus_output");
 
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -465,7 +465,7 @@ mod tests {
         )));
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel();
+        let (sender, mut receiver) = unbounded_channel("consensus_output");
 
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
