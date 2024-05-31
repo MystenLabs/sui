@@ -152,6 +152,7 @@ export function TokenRow({
 									ampli.selectedCoin({
 										coinType: coinBalance.coinType,
 										totalBalance: Number(formatted),
+										sourceFlow: 'TokenDetails',
 									})
 								}
 							>

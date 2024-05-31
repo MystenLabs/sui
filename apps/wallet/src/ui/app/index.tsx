@@ -10,14 +10,13 @@ import { persistableStorage } from '_src/shared/analytics/amplitude';
 import { type LedgerAccountsPublicKeys } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import { toB64 } from '@mysten/sui/utils';
 import { useEffect, useMemo } from 'react';
-import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { throttle } from 'throttle-debounce';
 
 import { useSuiLedgerClient } from './components/ledger/SuiLedgerClientProvider';
 import { useAccounts } from './hooks/useAccounts';
 import { useAutoLockMinutes } from './hooks/useAutoLockMinutes';
 import { useBackgroundClient } from './hooks/useBackgroundClient';
-import { useDomainBlocklist } from './hooks/useDomainBlocklist';
 import { useInitialPageView } from './hooks/useInitialPageView';
 import { useStorageMigrationStatus } from './hooks/useStorageMigrationStatus';
 import { AccountsPage } from './pages/accounts/AccountsPage';
@@ -51,7 +50,6 @@ import HomePage, {
 	TransferCoinPage,
 } from './pages/home';
 import TokenDetailsPage from './pages/home/tokens/TokenDetailsPage';
-import { KnownScam } from './pages/known-scam';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
 import { RestrictedPage } from './pages/restricted';
@@ -91,14 +89,6 @@ const App = () => {
 		[accounts],
 	);
 	const backgroundClient = useBackgroundClient();
-	const { data: blockedDomains } = useDomainBlocklist();
-	const navigate = useNavigate();
-	useEffect(() => {}, [blockedDomains]);
-
-	// const isBlocked = useMemo(
-	// 	() => permissionRequest && blockedDomains?.includes(permissionRequest.origin),
-	// 	[blockedDomains, permissionRequest],
-	// );
 	const { connectToLedger, suiLedgerClient } = useSuiLedgerClient();
 	useEffect(() => {
 		if (accounts?.length) {
@@ -174,7 +164,6 @@ const App = () => {
 	return (
 		<Routes>
 			<Route path="restricted" element={<RestrictedPage />} />
-			<Route path="blocked" element={<KnownScam />} />
 			<Route path="/*" element={<HomePage />}>
 				<Route path="apps/*" element={<AppsPage />} />
 				<Route path="kiosk" element={<KioskDetailsPage />} />

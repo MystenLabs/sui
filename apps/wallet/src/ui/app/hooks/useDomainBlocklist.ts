@@ -3,13 +3,11 @@
 import { useAppsBackend } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
-type BlocklistResponse = string[];
-
-export function useDomainBlocklist() {
+export function useCheckBlocklist(hostname?: string) {
 	const { request } = useAppsBackend();
 	return useQuery({
-		queryKey: ['apps-backend', 'domain-blocklist'],
-		queryFn: () => request<BlocklistResponse>('blocklist'),
-		refetchInterval: 24 * 5 * 1000, // refetch list every 5 minutes
+		queryKey: ['apps-backend', 'blocklist', hostname],
+		queryFn: () => request<{ block: boolean }>(`blocklist/${hostname}`),
+		enabled: !!hostname,
 	});
 }
