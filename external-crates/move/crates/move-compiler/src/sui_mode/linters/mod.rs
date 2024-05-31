@@ -21,6 +21,7 @@ pub mod freeze_wrapped;
 pub mod public_random;
 pub mod self_transfer;
 pub mod share_owned;
+pub mod freezing_capability;
 
 pub const SUI_PKG_NAME: &str = "sui";
 
@@ -68,6 +69,7 @@ pub const COIN_FIELD_FILTER_NAME: &str = "coin_field";
 pub const FREEZE_WRAPPED_FILTER_NAME: &str = "freeze_wrapped";
 pub const COLLECTION_EQUALITY_FILTER_NAME: &str = "collection_equality";
 pub const PUBLIC_RANDOM_FILTER_NAME: &str = "public_random";
+pub const FREEZING_CAPABILITY_FILTER_NAME: &str = "freezing_capability";
 
 pub const RANDOM_MOD_NAME: &str = "random";
 pub const RANDOM_STRUCT_NAME: &str = "Random";
@@ -84,6 +86,7 @@ pub enum LinterDiagnosticCode {
     FreezeWrapped,
     CollectionEquality,
     PublicRandom,
+    FreezingCapability,
 }
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
@@ -131,6 +134,12 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
             LinterDiagnosticCode::PublicRandom as u8,
             Some(PUBLIC_RANDOM_FILTER_NAME),
         ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::FreezingCapability as u8,
+            Some(FREEZING_CAPABILITY_FILTER_NAME),
+        ),
     ];
     (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }
@@ -147,6 +156,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 freeze_wrapped::FreezeWrappedVisitor.visitor(),
                 collection_equality::CollectionEqualityVisitor.visitor(),
                 public_random::PublicRandomVisitor.visitor(),
+                freezing_capability::WarnFreezeCapability.visitor()
             ]
         }
     }
