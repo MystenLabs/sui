@@ -60,7 +60,11 @@ export function UserApproveContainer({
 	const { data: selectedAccount } = useAccountByAddress(address);
 	const parsedOrigin = useMemo(() => new URL(origin), [origin]);
 
-	const { isOpen, bypass } = useShowScamWarning({ hostname: parsedOrigin.hostname });
+	const {
+		isOpen,
+		isPending: isDomainCheckLoading,
+		bypass,
+	} = useShowScamWarning({ hostname: parsedOrigin.hostname });
 
 	return (
 		<>
@@ -110,7 +114,7 @@ export function UserApproveContainer({
 										handleOnResponse(true);
 									}}
 									disabled={approveDisabled}
-									loading={submitting || approveLoading}
+									loading={submitting || approveLoading || isDomainCheckLoading}
 									text={approveTitle}
 								/>
 							</>
