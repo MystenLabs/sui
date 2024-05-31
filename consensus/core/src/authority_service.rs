@@ -381,14 +381,13 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             }
         }
 
-        // First read from the dag state to find the latest blocks. Then find out if there are any
-        // suspended blocks
+        // Read from the dag state to find the latest blocks.
         let mut blocks = vec![];
         let dag_state = self.dag_state.read();
         for authority in authorities {
             let block = dag_state.get_last_block_for_authority(authority);
 
-            info!("Latest block for {authority}: {block:?}");
+            debug!("Latest block for {authority}: {block:?} as requested from {peer}");
 
             // no reason to serve back the genesis block - it's equal as if it has not received any block
             if block.round() != GENESIS_ROUND {

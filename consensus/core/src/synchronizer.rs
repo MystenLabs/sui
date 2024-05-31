@@ -784,6 +784,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     panic!("No peer has returned any acceptable result, can not safely update min round");
                 }
 
+                context.metrics.node_metrics.last_own_block_round.set(highest_round as i64);
+
                 info!("{} out of {} total stake returned acceptable results for our own last block with highest round {}", total_stake, context.committee.total_stake(), highest_round);
                 if let Err(err) = core_dispatcher.set_min_propose_round(highest_round).await {
                     warn!("Error received while calling dispatcher, probably dispatcher is shutting down, will now exit: {err:?}");
