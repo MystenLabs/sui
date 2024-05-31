@@ -252,7 +252,7 @@ export const bcs = {
 					return { Some: value };
 				},
 				output: (value) => {
-					if ('Some' in value) {
+					if (value.$kind === 'Some') {
 						return value.Some;
 					}
 
