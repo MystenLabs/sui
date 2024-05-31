@@ -1,0 +1,91 @@
+warning[Lint W99007]: The struct's first field is 'id' of type 'UID' but is missing the 'key' ability.
+  ┌─ tests/sui_mode/linter/missing_key.move:5:5
+  │  
+5 │ ╭     struct MissingKeyAbility {
+6 │ │         id: UID,
+7 │ │     }
+  │ ╰─────^ Struct has an 'id' field of type 'UID' but is missing the 'key' ability.
+  │  
+  = This warning can be suppressed with '#[allow(lint(missing_key))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99007]: The struct's first field is 'id' of type 'UID' but is missing the 'key' ability.
+   ┌─ tests/sui_mode/linter/missing_key.move:22:5
+   │  
+22 │ ╭     struct FN2_MissingKeyUIDNotFirst {
+23 │ │         point: u64,
+24 │ │         id: UID,
+25 │ │     }
+   │ ╰─────^ Struct has an 'id' field of type 'UID' but is missing the 'key' ability.
+   │  
+   = This warning can be suppressed with '#[allow(lint(missing_key))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99007]: The struct's first field is 'id' of type 'UID' but is missing the 'key' ability.
+   ┌─ tests/sui_mode/linter/missing_key.move:32:5
+   │  
+32 │ ╭     struct Wrapper {
+33 │ │         id: UID,
+34 │ │     }
+   │ ╰─────^ Struct has an 'id' field of type 'UID' but is missing the 'key' ability.
+   │  
+   = This warning can be suppressed with '#[allow(lint(missing_key))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[Sui E02007]: invalid object declaration
+   ┌─ tests/sui_mode/linter/missing_key.move:40:9
+   │
+39 │     struct FP1_HasKeyButDifferentFieldName has key {
+   │                                                --- The 'key' ability is used to declare objects in Sui
+40 │         uid: UID,
+   │         ^^^ Invalid object 'FP1_HasKeyButDifferentFieldName'. Structs with the 'key' ability must have 'id: sui::object::UID' as their first field
+
+error[Sui E02007]: invalid object declaration
+   ┌─ tests/sui_mode/linter/missing_key.move:45:9
+   │
+44 │     struct FP2_HasKeyUIDNotFirst has key {
+   │                                      --- The 'key' ability is used to declare objects in Sui
+45 │         point: u64,
+   │         ^^^^^ Invalid object 'FP2_HasKeyUIDNotFirst'. Structs with the 'key' ability must have 'id: sui::object::UID' as their first field
+
+error[Sui E02007]: invalid object declaration
+   ┌─ tests/sui_mode/linter/missing_key.move:51:9
+   │
+50 │     struct FP3_HasKeyButIDNotUID has key {
+   │                                      --- The 'key' ability is used to declare objects in Sui
+51 │         id: address,
+   │         ^^  ------- But found type: 'address'
+   │         │    
+   │         Invalid object 'FP3_HasKeyButIDNotUID'. Structs with the 'key' ability must have 'id: sui::object::UID' as their first field
+
+warning[Lint W99007]: The struct's first field is 'id' of type 'UID' but is missing the 'key' ability.
+   ┌─ tests/sui_mode/linter/missing_key.move:61:5
+   │  
+61 │ ╭     struct FP5_HasAbilityButNotKey has store, copy, drop {
+62 │ │         id: UID,
+63 │ │     }
+   │ ╰─────^ Struct has an 'id' field of type 'UID' but is missing the 'key' ability.
+   │  
+   = This warning can be suppressed with '#[allow(lint(missing_key))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/sui_mode/linter/missing_key.move:62:13
+   │
+62 │         id: UID,
+   │             ^^^
+   │             │
+   │             Invalid field type. The struct was declared with the ability 'copy' so all fields require the ability 'copy'
+   │             The type 'sui::object::UID' does not have the ability 'copy'
+   ·
+67 │     struct UID has store {
+   │            --- To satisfy the constraint, the 'copy' ability would need to be added here
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/sui_mode/linter/missing_key.move:62:13
+   │
+62 │         id: UID,
+   │             ^^^
+   │             │
+   │             Invalid field type. The struct was declared with the ability 'drop' so all fields require the ability 'drop'
+   │             The type 'sui::object::UID' does not have the ability 'drop'
+   ·
+67 │     struct UID has store {
+   │            --- To satisfy the constraint, the 'drop' ability would need to be added here
+
