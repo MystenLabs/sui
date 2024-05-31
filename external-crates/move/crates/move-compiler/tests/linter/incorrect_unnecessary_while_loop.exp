@@ -1,0 +1,50 @@
+warning[Lint W01004]: 
+  ┌─ tests/linter/incorrect_unnecessary_while_loop.move:6:9
+  │  
+6 │ ╭         while (true) {
+7 │ │             // This loop will run forever
+8 │ │         }
+  │ ╰─────────^ Detected `while(true) {}` loop. Consider replacing with `loop {}`
+  │  
+  = This warning can be suppressed with '#[allow(lint(while_true_to_loop))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01004]: 
+   ┌─ tests/linter/incorrect_unnecessary_while_loop.move:14:9
+   │  
+14 │ ╭         while (true) {
+15 │ │             if (counter == 10) {
+16 │ │                 break
+17 │ │             };
+18 │ │             counter = counter + 1;
+19 │ │         }
+   │ ╰─────────^ Detected `while(true) {}` loop. Consider replacing with `loop {}`
+   │  
+   = This warning can be suppressed with '#[allow(lint(while_true_to_loop))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01004]: 
+   ┌─ tests/linter/incorrect_unnecessary_while_loop.move:43:9
+   │  
+43 │ ╭         while (true) {
+44 │ │             if (vector::length(&vec1) == 5) break;
+45 │ │             vector::push_back(&mut vec1, vector::length(&vec1));
+46 │ │         };
+   │ ╰─────────^ Detected `while(true) {}` loop. Consider replacing with `loop {}`
+   │  
+   = This warning can be suppressed with '#[allow(lint(while_true_to_loop))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E07001]: referential transparency violated
+   ┌─ tests/linter/incorrect_unnecessary_while_loop.move:45:57
+   │
+45 │             vector::push_back(&mut vec1, vector::length(&vec1));
+   │                               ---------                 ^^^^^ Invalid borrow of variable 'vec1'
+   │                               │                          
+   │                               It is still being mutably borrowed by this reference
+
+error[E07001]: referential transparency violated
+   ┌─ tests/linter/incorrect_unnecessary_while_loop.move:51:57
+   │
+51 │             vector::push_back(&mut vec2, vector::length(&vec2));
+   │                               ---------                 ^^^^^ Invalid borrow of variable 'vec2'
+   │                               │                          
+   │                               It is still being mutably borrowed by this reference
+
