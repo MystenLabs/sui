@@ -1,0 +1,8 @@
+warning[Lint W02006]: 
+  ┌─ tests/linter/false_negative_public_mut_tx_context.move:4:56
+  │
+4 │     public fun tricky_function(condition: bool, ctx1: &TxContext, ctx2: &mut TxContext) {
+  │                                                        ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+  │
+  = This warning can be suppressed with '#[allow(lint(require_mutable_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

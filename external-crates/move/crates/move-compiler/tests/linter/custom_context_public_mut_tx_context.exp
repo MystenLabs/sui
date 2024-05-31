@@ -1,0 +1,16 @@
+warning[Lint W02006]: 
+  ┌─ tests/linter/custom_context_public_mut_tx_context.move:9:39
+  │
+9 │     public fun sui_tx_function(_ctx: &SuiTxContext) {}
+  │                                       ^^^^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+  │
+  = This warning can be suppressed with '#[allow(lint(require_mutable_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02006]: 
+   ┌─ tests/linter/custom_context_public_mut_tx_context.move:15:52
+   │
+15 │     public fun mixed_function(_a: &TxContext, _b: &SuiTxContext) {}
+   │                                                    ^^^^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+   │
+   = This warning can be suppressed with '#[allow(lint(require_mutable_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
