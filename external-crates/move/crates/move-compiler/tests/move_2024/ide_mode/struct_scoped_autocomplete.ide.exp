@@ -1,3 +1,15 @@
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:1:1
+   │  
+ 1 │ ╭ module a::m {
+ 2 │ │ 
+ 3 │ │     public struct A(u64) has copy, drop;
+ 4 │ │ 
+   · │
+10 │ │     public fun t1(_s: B): u64 { abort 0 }
+11 │ │ }
+   │ ╰─^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+
 warning[W09009]: unused struct field
   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:3:21
   │
@@ -15,10 +27,52 @@ warning[W09009]: unused struct field
   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 note[I15001]: IDE autocomplete
+  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:6:12
+  │
+6 │         a: A
+  │            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 't0 -> a::m::t0', 't1 -> a::m::t1', or 'unit_test_poison -> a::m::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:9:23
+  │
+9 │     public fun t0(_s: A): u64 { abort 0 }
+  │                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 't0 -> a::m::t0', 't1 -> a::m::t1', or 'unit_test_poison -> a::m::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:10:23
+   │
+10 │     public fun t1(_s: B): u64 { abort 0 }
+   │                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 't0 -> a::m::t0', 't1 -> a::m::t1', or 'unit_test_poison -> a::m::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:13:1
+   │  
+13 │ ╭ module a::n {
+14 │ │     use a::m::{A,B};
+15 │ │ 
+16 │ │     public fun foo(_a: A, _b: B) {
+   · │
+19 │ │     }
+20 │ │ }
+   │ ╰─^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'Self -> a::n', 'option -> std::option', 'vector -> std::vector', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:16:24
+   │
+16 │     public fun foo(_a: A, _b: B) {
+   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::n::foo', or 'unit_test_poison -> a::n::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:16:31
+   │
+16 │     public fun foo(_a: A, _b: B) {
+   │                               ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::n::foo', or 'unit_test_poison -> a::n::unit_test_poison'
+
+note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:17:23
    │
 17 │         let _tmp1 = _a.;
-   │                       ^ Autocompletes to: 'a::m::t0'
+   │                       ^ Possible dot names: 'a::m::t0'
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:17:24
@@ -33,7 +87,7 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:18:23
    │
 18 │         let _tmp2 = _b.;
-   │                       ^ Autocompletes to: 'a::m::t1'
+   │                       ^ Possible dot names: 'a::m::t1'
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:18:24

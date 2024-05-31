@@ -1,3 +1,15 @@
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:1:1
+   │  
+ 1 │ ╭ module 0x42::m {
+ 2 │ │     public fun t0(): u64 {
+ 3 │ │         match (e) {
+ 4 │ │         }
+   · │
+11 │ │     }
+12 │ │ }
+   │ ╰─^ Possible in-scope names: 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+
 error[E03009]: unbound variable
   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:3:16
   │
@@ -32,6 +44,12 @@ note[I15004]: IDE missing match arms
  9 │ │             E::Two(n) => n
 10 │ │         }
    │ ╰─────────^ Missing arms: '_'
+
+note[I15001]: IDE autocomplete
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:13
+  │
+9 │             E::Two(n) => n
+  │             ^ Possible in-scope names: 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
 
 error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:13

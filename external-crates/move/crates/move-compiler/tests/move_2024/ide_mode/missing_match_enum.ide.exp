@@ -1,3 +1,21 @@
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:1:1
+   │  
+ 1 │ ╭ module 0x42::m {
+ 2 │ │     public enum E {
+ 3 │ │         One,
+ 4 │ │         Two(u64),
+   · │
+31 │ │     }
+32 │ │ }
+   │ ╰─^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+
+note[I15001]: IDE autocomplete
+  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:8:23
+  │
+8 │     public fun t0(e: &E): u64 {
+  │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', 't3 -> 0x42::m::t3', or 'unit_test_poison -> 0x42::m::unit_test_poison'
+
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:9:16
   │
@@ -11,6 +29,12 @@ note[I15004]: IDE missing match arms
    │ ╭───────────────────^
 10 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::One', '0x42::m::E::Two(_)', and '0x42::m::E::Three { x }'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:13:23
+   │
+13 │     public fun t1(e: &E): u64 {
+   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', 't3 -> 0x42::m::t3', or 'unit_test_poison -> 0x42::m::unit_test_poison'
 
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/ide_mode/missing_match_enum.move:14:16
@@ -26,6 +50,18 @@ note[I15004]: IDE missing match arms
 15 │ │             E::Two(n) => *n
 16 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::One' and '0x42::m::E::Three { x }'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:15:13
+   │
+15 │             E::Two(n) => *n
+   │             ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:19:23
+   │
+19 │     public fun t2(e: &E): u64 {
+   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', 't3 -> 0x42::m::t3', or 'unit_test_poison -> 0x42::m::unit_test_poison'
 
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/ide_mode/missing_match_enum.move:20:16
@@ -43,6 +79,24 @@ note[I15004]: IDE missing match arms
 23 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::Three { x }'
 
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:21:13
+   │
+21 │             E::One => 0,
+   │             ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:22:13
+   │
+22 │             E::Two(n) => *n
+   │             ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:26:23
+   │
+26 │     public fun t3(e: &E): u64 {
+   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', 't3 -> 0x42::m::t3', or 'unit_test_poison -> 0x42::m::unit_test_poison'
+
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/ide_mode/missing_match_enum.move:27:16
    │
@@ -58,4 +112,16 @@ note[I15004]: IDE missing match arms
 29 │ │             E::Two(n) => *n
 30 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::One'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:28:13
+   │
+28 │             E::Three { x } => *x,
+   │             ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:29:13
+   │
+29 │             E::Two(n) => *n
+   │             ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
 

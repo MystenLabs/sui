@@ -1,3 +1,63 @@
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:1:1
+   │  
+ 1 │ ╭ module a::m {
+ 2 │ │ 
+ 3 │ │     public struct A has copy, drop { }
+ 4 │ │ 
+   · │
+20 │ │     }
+21 │ │ }
+   │ ╰─^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+
+note[I15001]: IDE autocomplete
+  ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:7:23
+  │
+7 │     public fun t0(_s: A): u64 { abort 0 }
+  │                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+  ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:8:24
+  │
+8 │     public fun t1(_s: &A): u64 { abort 0 }
+  │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+  ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:9:24
+  │
+9 │     public fun t2(_s: &A): u64 { abort 0 }
+  │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:11:23
+   │
+11 │     public fun t3(_s: B): u64 { abort 0 }
+   │                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:12:24
+   │
+12 │     public fun t4(_s: &B): u64 { abort 0 }
+   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:13:24
+   │
+13 │     public fun t5(_s: &B): u64 { abort 0 }
+   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:16:18
+   │
+16 │         let _a = A {};
+   │                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:17:18
+   │
+17 │         let _b = B();
+   │                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+
 error[E04023]: invalid method call
    ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:18:21
    │
@@ -11,7 +71,7 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:18:24
    │
 18 │         let _tmp1 = _a.t7();
-   │                        ^^ Autocompletes to: 'a::m::t0', 'a::m::t1', or 'a::m::t2'
+   │                        ^^ Possible dot names: 'a::m::t0', 'a::m::t1', or 'a::m::t2'
 
 error[E04023]: invalid method call
    ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:19:21
@@ -26,5 +86,5 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:19:24
    │
 19 │         let _tmp2 = _b.t8();
-   │                        ^^ Autocompletes to: 'a::m::t3', 'a::m::t4', or 'a::m::t5'
+   │                        ^^ Possible dot names: 'a::m::t3', 'a::m::t4', or 'a::m::t5'
 
