@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{
 use crate::get_metrics;
 
 /// Wraps an [`mpsc::Sender`] with gauges counting the sent and inflight items.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Sender<T> {
     inner: mpsc::Sender<T>,
     inflight: IntGauge,
@@ -106,6 +106,17 @@ impl<T> Sender<T> {
     }
 }
 
+// Derive Clone manually to avoid the `T: Clone` bound
+impl<T> Clone for Sender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            inflight: self.inflight.clone(),
+            sent: self.sent.clone(),
+        }
+    }
+}
+
 /// A newtype for an `mpsc::Permit` which allows us to inject gauge accounting
 /// in the case the permit is dropped w/o sending
 pub struct Permit<'a, T> {
@@ -152,7 +163,7 @@ impl<T: Send> WithPermit<T> for Sender<T> {
 }
 
 /// Wraps an [`mpsc::WeakSender`] with gauges counting the sent and inflight items.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct WeakSender<T> {
     inner: mpsc::WeakSender<T>,
     inflight: IntGauge,
@@ -166,6 +177,17 @@ impl<T> WeakSender<T> {
             inflight: self.inflight.clone(),
             sent: self.sent.clone(),
         })
+    }
+}
+
+// Derive Clone manually to avoid the `T: Clone` bound
+impl<T> Clone for WeakSender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            inflight: self.inflight.clone(),
+            sent: self.sent.clone(),
+        }
     }
 }
 
@@ -247,7 +269,7 @@ pub fn channel<T>(name: &str, size: usize) -> (Sender<T>, Receiver<T>) {
 }
 
 /// Wraps an [`mpsc::UnboundedSender`] with gauges counting the sent and inflight items.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct UnboundedSender<T> {
     inner: mpsc::UnboundedSender<T>,
     inflight: IntGauge,
@@ -291,8 +313,19 @@ impl<T> UnboundedSender<T> {
     }
 }
 
+// Derive Clone manually to avoid the `T: Clone` bound
+impl<T> Clone for UnboundedSender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            inflight: self.inflight.clone(),
+            sent: self.sent.clone(),
+        }
+    }
+}
+
 /// Wraps an [`mpsc::WeakUnboundedSender`] with gauges counting the sent and inflight items.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct WeakUnboundedSender<T> {
     inner: mpsc::WeakUnboundedSender<T>,
     inflight: IntGauge,
@@ -306,6 +339,17 @@ impl<T> WeakUnboundedSender<T> {
             inflight: self.inflight.clone(),
             sent: self.sent.clone(),
         })
+    }
+}
+
+// Derive Clone manually to avoid the `T: Clone` bound
+impl<T> Clone for WeakUnboundedSender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            inflight: self.inflight.clone(),
+            sent: self.sent.clone(),
+        }
     }
 }
 
@@ -371,6 +415,7 @@ impl<T> Unpin for UnboundedReceiver<T> {}
 /// Wraps an [`mpsc::UnboundedChannel`] to create a pair of `UnboundedSender` and `UnboundedReceiver`
 pub fn unbounded_channel<T>(name: &str) -> (UnboundedSender<T>, UnboundedReceiver<T>) {
     let metrics = get_metrics().expect("Metrics uninitialized");
+    #[allow(clippy::disallowed_methods)]
     let (sender, receiver) = mpsc::unbounded_channel();
     (
         UnboundedSender {

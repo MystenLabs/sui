@@ -13,8 +13,8 @@ use bytes::Bytes;
 use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction as _};
+use mysten_metrics::monitored_mpsc::UnboundedSender;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
