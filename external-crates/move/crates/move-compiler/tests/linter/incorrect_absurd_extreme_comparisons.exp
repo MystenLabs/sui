@@ -1,0 +1,16 @@
+warning[Lint W00015]: Expression suggests an unintended comparison
+  ┌─ tests/linter/incorrect_absurd_extreme_comparisons.move:6:13
+  │
+6 │         if (x > u64_max){
+  │             ^^^^^^^^^^^ Cannot compare parameter with max value
+  │
+  = This warning can be suppressed with '#[allow(lint(absurd_extreme_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00015]: Expression suggests an unintended comparison
+   ┌─ tests/linter/incorrect_absurd_extreme_comparisons.move:10:13
+   │
+10 │         if (x < u64_min){
+   │             ^^^^^^^^^^^ Cannot compare declared variable with min value
+   │
+   = This warning can be suppressed with '#[allow(lint(absurd_extreme_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

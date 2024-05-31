@@ -1,13 +1,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_symbol_pool::Symbol;
-
 use crate::{
     command_line::compiler::Visitor, diagnostics::codes::WarningFilter,
+    linters::absurd_extreme_comparisons::LikelyComparisonMistake,
     linters::constant_naming::ConstantNamingVisitor, typing::visitor::TypingVisitor,
 };
+use move_symbol_pool::Symbol;
+
+pub mod absurd_extreme_comparisons;
 pub mod constant_naming;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
     // No linters
@@ -32,22 +35,28 @@ pub enum LinterDiagnosticCategory {
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
-
 pub const CONSTANT_NAMING_DIAG_CODE: u8 = 1;
 
-pub enum LinterDiagCategory {
-    Style,
-}
+pub const LIKELY_MISTAKE_FILTER_NAME: &str = "absurd_extreme_comparisons";
+pub const LIKELY_MISTAKE_DIAG_CODE: u8 = 15;
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     (
         Some(ALLOW_ATTR_CATEGORY.into()),
-        vec![WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::Style as u8,
-            CONSTANT_NAMING_DIAG_CODE,
-            Some(CONSTANT_NAMING_FILTER_NAME),
-        )],
+        vec![
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagnosticCategory::Style as u8,
+                CONSTANT_NAMING_DIAG_CODE,
+                Some(CONSTANT_NAMING_FILTER_NAME),
+            ),
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagnosticCategory::Correctness as u8,
+                LIKELY_MISTAKE_DIAG_CODE,
+                Some(LIKELY_MISTAKE_FILTER_NAME),
+            ),
+        ],
     )
 }
 
@@ -56,9 +65,12 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
         LintLevel::None => vec![],
         LintLevel::Default => vec![],
         LintLevel::All => {
-            vec![constant_naming::ConstantNamingVisitor::visitor(
-                ConstantNamingVisitor,
-            )]
+            vec![
+                constant_naming::ConstantNamingVisitor::visitor(ConstantNamingVisitor),
+                absurd_extreme_comparisons::LikelyComparisonMistake::visitor(
+                    LikelyComparisonMistake,
+                ),
+            ]
         }
     }
 }
