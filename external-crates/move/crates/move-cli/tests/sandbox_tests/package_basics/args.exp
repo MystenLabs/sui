@@ -94,7 +94,6 @@ B0:
 
 }
 }
-Command `errmap`:
 Command `info`:
 PackageBasics
 ├── std:0x1

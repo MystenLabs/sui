@@ -29,8 +29,6 @@ exclude = [
   "external-crates/move/crates/move-coverage",
   "external-crates/move/crates/move-disassembler",
   "external-crates/move/crates/move-docgen",
-  "external-crates/move/crates/move-errmapgen",
-  "external-crates/move/crates/move-explain",
   "external-crates/move/crates/move-ir-compiler",
   "external-crates/move/crates/move-ir-compiler-transactional-tests",
   "external-crates/move/crates/move-ir-to-bytecode",

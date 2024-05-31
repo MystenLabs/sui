@@ -12,7 +12,6 @@ move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-model.workspace = true
 move-docgen.workspace = true
-move-errmapgen.workspace = true
 move-stackless-bytecode.workspace = true
 
 # external dependencies
