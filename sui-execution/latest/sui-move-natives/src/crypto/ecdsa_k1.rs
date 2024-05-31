@@ -38,6 +38,7 @@ pub const SHA256: u8 = 1;
 
 const KECCAK256_BLOCK_SIZE: usize = 136;
 const SHA256_BLOCK_SIZE: usize = 64;
+const SEED_LENGTH: usize = 32;
 
 #[derive(Clone)]
 pub struct EcdsaK1EcrecoverCostParams {
@@ -295,6 +296,13 @@ pub fn secp256k1_verify(
     Ok(NativeResult::ok(cost, smallvec![Value::bool(result)]))
 }
 
+/***************************************************************************************************
+ * native fun secp256k1_sign (TEST ONLY)
+ * Implementation of the Move native function `secp256k1_sign(private_key: &vector<u8>, msg: &vector<u8>, hash: u8): vector<u8>`
+ * This function has two cost modes depending on the hash being set to`KECCAK256` or `SHA256`. The core formula is same but constants differ.
+ * If hash = 0, we use the `keccak256` cost constants, otherwise we use the `sha256` cost constants.
+ *   gas cost: 0 (because it is only for test purposes)
+ **************************************************************************************************/
 pub fn secp256k1_sign(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -306,6 +314,15 @@ pub fn secp256k1_sign(
     // The corresponding Move function, sui::ecdsa_k1::secp256k1_sign, is only used for testing, so
     // we don't need to charge any gas.
     let cost = 0.into();
+
+    // Load the cost parameters from the protocol config
+    let (ecdsa_k1_secp256k1_sign_cost_params, crypto_invalid_arguments_cost) = {
+        let cost_table = &context.extensions().get::<NativesCostTable>();
+        (
+            cost_table.ecdsa_k1_secp256k1_sign_cost_params.clone(),
+            cost_table.crypto_invalid_arguments_cost,
+        )
+    };
 
     let hash = pop_arg!(args, u8);
     let msg = pop_arg!(args, VectorRef);
@@ -333,6 +350,12 @@ pub fn secp256k1_sign(
     ))
 }
 
+/***************************************************************************************************
+ * native fun secp256k1_keypair_from_seed (TEST ONLY)
+ * Implementation of the Move native function `secp256k1_sign(seed: &vector<u8>): KeyPair`
+ * Seed must be exactly 32 bytes long.
+ *   gas cost: 0 (because it is only for test purposes)
+ **************************************************************************************************/
 pub fn secp256k1_keypair_from_seed(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -348,10 +371,10 @@ pub fn secp256k1_keypair_from_seed(
     let seed = pop_arg!(args, VectorRef);
     let seed_ref = seed.as_bytes_ref();
 
-    if seed_ref.len() != 32 {
+    if seed_ref.len() != SEED_LENGTH {
         return Ok(NativeResult::err(cost, INVALID_SEED));
     }
-    let mut seed_array = [0u8; 32];
+    let mut seed_array = [0u8; SEED_LENGTH];
     seed_array.clone_from_slice(&seed_ref);
 
     let kp = Secp256k1KeyPair::generate(&mut StdRng::from_seed(seed_array));
