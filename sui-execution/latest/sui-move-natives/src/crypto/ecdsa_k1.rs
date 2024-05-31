@@ -315,15 +315,6 @@ pub fn secp256k1_sign(
     // we don't need to charge any gas.
     let cost = 0.into();
 
-    // Load the cost parameters from the protocol config
-    let (ecdsa_k1_secp256k1_sign_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
-        (
-            cost_table.ecdsa_k1_secp256k1_sign_cost_params.clone(),
-            cost_table.crypto_invalid_arguments_cost,
-        )
-    };
-
     let hash = pop_arg!(args, u8);
     let msg = pop_arg!(args, VectorRef);
     let private_key_bytes = pop_arg!(args, VectorRef);
