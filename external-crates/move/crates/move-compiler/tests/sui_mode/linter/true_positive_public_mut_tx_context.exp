@@ -1,0 +1,30 @@
+warning[Lint W02009]: Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+  ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:6:38
+  │
+6 │     public fun incorrect_mint(_ctx: &TxContext) {
+  │                                      ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+
+warning[Lint W02009]: Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+   ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:10:48
+   │
+10 │     public fun another_incorrect(_a: u64, _b: &TxContext, _c: u64) {
+   │                                                ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+
+warning[Lint W02009]: Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+   ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:16:42
+   │
+16 │     public fun incorrect_function(_ctx: &TxContext) {} // Should warn
+   │                                          ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+
+warning[Lint W02009]: Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+   ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:18:55
+   │
+18 │     public fun mixed_function(_a: &CustomStruct, _b: &TxContext, _c: &mut TxContext) {} // Should warn for _b
+   │                                                       ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+
+warning[Lint W02009]: Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+   ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:26:14
+   │
+26 │         _b: &TxContext, // Should warn
+   │              ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+
