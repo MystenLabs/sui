@@ -106,13 +106,14 @@ impl Loader<u64> for Db {
             );
         }
 
-        let requested_epoch = keys
-            .first()
-            .unwrap_or_else(|| &(latest_sui_system_state.epoch));
+        let requested_epoch = match keys.first() {
+            Some(x) => *x,
+            None => latest_sui_system_state.epoch,
+        };
 
         let mut r = HashMap::new();
         r.insert(
-            *requested_epoch,
+            requested_epoch,
             (latest_sui_system_state.stake_subsidy_start_epoch, results),
         );
 

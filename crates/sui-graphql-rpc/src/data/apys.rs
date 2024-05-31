@@ -13,7 +13,7 @@ use sui_types::sui_system_state::PoolTokenExchangeRate;
 /// <https://github.com/MystenLabs/sui/blob/c3feec3ac3b626bf2fd40c668ba32be9c73e7528/crates/sui-json-rpc/src/governance_api.rs#L280>
 pub(crate) fn calculate_apy(
     stake_subsidy_start_epoch: u64,
-    rates: &Vec<(u64, PoolTokenExchangeRate)>,
+    rates: &[(u64, PoolTokenExchangeRate)],
 ) -> f64 {
     // we start the apy calculation from the epoch when the stake subsidy starts
     let exchange_rates = rates
