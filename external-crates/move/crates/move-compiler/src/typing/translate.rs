@@ -34,7 +34,7 @@ use crate::{
         core::{
             self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
-        dependency_ordering, deprecations, expand, infinite_instantiations, macro_expand,
+        dependency_ordering, deprecation_warnings, expand, infinite_instantiations, macro_expand,
         match_analysis, recursive_datatypes,
         syntax_methods::validate_syntax_methods,
     },
@@ -85,7 +85,7 @@ pub fn program(
         modules,
         info: Arc::new(module_info),
     };
-    deprecations::add_deprecation_warnings(compilation_env, &mut prog);
+    deprecation_warnings::program(compilation_env, &mut prog);
     for v in &compilation_env.visitors().typing {
         let mut v = v.borrow_mut();
         v.visit(compilation_env, &mut prog);

@@ -5,7 +5,7 @@
 pub mod ast;
 pub mod core;
 mod dependency_ordering;
-pub mod deprecations;
+mod deprecation_warnings;
 mod expand;
 mod infinite_instantiations;
 mod macro_expand;

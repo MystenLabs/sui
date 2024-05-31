@@ -24,6 +24,7 @@ module 0x42::m {
 
     public fun baz() { 
         foo();
+        foo();
         bar_dep();
     }
 

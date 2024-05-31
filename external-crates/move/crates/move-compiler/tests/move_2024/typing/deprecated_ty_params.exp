@@ -1,20 +1,20 @@
-warning[W04039]: use of deprecated struct
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_ty_params.move:9:19
    │
  9 │         let _ = Y<X>();
    │                   ^ This struct is deprecated
 10 │         let Y<X>() = Y<X>();
-   │               -        - Deprecated struct used here
+   │               -        - Deprecated struct also used here
    │               │         
-   │               Deprecated struct used here
+   │               Deprecated struct also used here
 
-warning[W04039]: use of deprecated struct
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_ty_params.move:16:11
    │
 16 │         g<X>();
    │           ^ This struct is deprecated
 17 │         g<Y<X>>();
-   │             - Deprecated struct used here
+   │             - Deprecated struct also used here
 18 │         g<Y<Y<Y<Y<X>>>>>();
-   │                   - Deprecated struct used here
+   │                   - Deprecated struct also used here
 

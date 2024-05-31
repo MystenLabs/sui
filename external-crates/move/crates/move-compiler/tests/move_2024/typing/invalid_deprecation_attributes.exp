@@ -1,24 +1,24 @@
-error[E04043]: Invalid `deprecated` attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_2024/typing/invalid_deprecation_attributes.move:2:7
   │
 2 │     #[deprecated = b"This is a deprecated function"]
-  │       ^^^^^^^^^^ Invalid deprecation attribute
+  │       ^^^^^^^^^^ Invalid 'deprecated' attribute
   │
   = Deprecation attributes must be written as `#[deprecated]` or `#[deprecated(note = b"message")]`
 
-error[E04043]: Invalid `deprecated` attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_2024/typing/invalid_deprecation_attributes.move:5:7
   │
 5 │     #[deprecated(msg = b"This is a deprecated function")]
-  │       ^^^^^^^^^^ Invalid deprecation attribute
+  │       ^^^^^^^^^^ Invalid 'deprecated' attribute
   │
   = Deprecation attributes must be written as `#[deprecated]` or `#[deprecated(note = b"message")]`
 
-error[E04043]: Invalid `deprecated` attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_2024/typing/invalid_deprecation_attributes.move:8:7
   │
 8 │     #[deprecated(b"This is a deprecated function")]
-  │       ^^^^^^^^^^ Invalid deprecation attribute
+  │       ^^^^^^^^^^ Invalid 'deprecated' attribute
   │
   = Deprecation attributes must be written as `#[deprecated]` or `#[deprecated(note = b"message")]`
 
@@ -28,19 +28,19 @@ error[E01002]: unexpected token
 8 │     #[deprecated(b"This is a deprecated function")]
   │                  ^ Expected attribute
 
-error[E04043]: Invalid `deprecated` attribute
+error[E10004]: invalid usage of known attribute
    ┌─ tests/move_2024/typing/invalid_deprecation_attributes.move:11:7
    │
 11 │     #[deprecated(note = b"This is a deprecated function", other = b"other")]
-   │       ^^^^^^^^^^ Invalid deprecation attribute
+   │       ^^^^^^^^^^ Invalid 'deprecated' attribute
    │
    = Deprecation attributes must be written as `#[deprecated]` or `#[deprecated(note = b"message")]`
 
-error[E04043]: Invalid `deprecated` attribute
+error[E10004]: invalid usage of known attribute
    ┌─ tests/move_2024/typing/invalid_deprecation_attributes.move:14:7
    │
 14 │     #[deprecated(note = 123)]
-   │       ^^^^^^^^^^ Invalid deprecation attribute
+   │       ^^^^^^^^^^ Invalid 'deprecated' attribute
    │
    = Deprecation attributes must be written as `#[deprecated]` or `#[deprecated(note = b"message")]`
 
@@ -50,11 +50,11 @@ warning[W02018]: unknown attribute
 17 │     #[deprication]
    │       ^^^^^^^^^^^ Unknown attribute 'deprication'. Custom attributes must be wrapped in 'ext', e.g. #[ext(deprication)]
 
-error[E04043]: Invalid `deprecated` attribute
+error[E10004]: invalid usage of known attribute
    ┌─ tests/move_2024/typing/invalid_deprecation_attributes.move:20:7
    │
 20 │     #[deprecated(foo)]
-   │       ^^^^^^^^^^ Invalid deprecation attribute
+   │       ^^^^^^^^^^ Invalid 'deprecated' attribute
    │
    = Deprecation attributes must be written as `#[deprecated]` or `#[deprecated(note = b"message")]`
 

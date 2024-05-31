@@ -1,42 +1,36 @@
-warning[W04039]: use of deprecated struct
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:13:26
    │
 13 │     public fun other(y: &Y): &Y { y }
-   │                          ^    - Deprecated struct used here
+   │                          ^    - Deprecated struct also used here
    │                          │     
    │                          This struct is deprecated: Use the other struct instead.
-
-warning[W04039]: use of deprecated struct
-   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:13:31
-   │
-13 │     public fun other(y: &Y): &Y { y }
-   │                               ^ This struct is deprecated: Use the other struct instead.
    ·
 21 │         let y = other(&Y());
-   │                        - Deprecated struct used here
+   │                        - Deprecated struct also used here
 
-warning[W04041]: use of deprecated function
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:19:9
    │
 19 │         internal();
    │         ^^^^^^^^ This function is deprecated: This is a deprecated function within a deprecated module.
 
-warning[W04041]: use of deprecated function
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:21:17
    │
 21 │         let y = other(&Y());
    │                 ^^^^^ This function is deprecated: Use the other function instead.
    ·
 24 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
-   │         ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- Deprecated function used here
+   │         ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- Deprecated function also used here
    │         │     │     │     │     │     │     │     │     │      
-   │         │     │     │     │     │     │     │     │     Deprecated function used here
-   │         │     │     │     │     │     │     │     Deprecated function used here
-   │         │     │     │     │     │     │     Deprecated function used here
-   │         │     │     │     │     │     Deprecated function used here
-   │         │     │     │     │     Deprecated function used here
-   │         │     │     │     Deprecated function used here
-   │         │     │     Deprecated function used here
-   │         │     Deprecated function used here
-   │         Deprecated function used here
+   │         │     │     │     │     │     │     │     │     Deprecated function also used here
+   │         │     │     │     │     │     │     │     Deprecated function also used here
+   │         │     │     │     │     │     │     Deprecated function also used here
+   │         │     │     │     │     │     Deprecated function also used here
+   │         │     │     │     │     Deprecated function also used here
+   │         │     │     │     Deprecated function also used here
+   │         │     │     Deprecated function also used here
+   │         │     Deprecated function also used here
+   │         Deprecated function also used here
 

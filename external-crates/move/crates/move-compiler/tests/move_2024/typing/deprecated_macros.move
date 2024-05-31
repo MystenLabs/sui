@@ -2,6 +2,8 @@ module 0x42::m {
     #[deprecated]
     public struct X() has drop;
 
+    public struct Y<phantom T>() has drop;
+
     #[deprecated]
     fun f() { }
 
