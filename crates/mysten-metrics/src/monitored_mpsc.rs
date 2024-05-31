@@ -15,7 +15,7 @@ use tokio::sync::mpsc::{
 
 use crate::get_metrics;
 
-/// Wraps an [`mpsc::Sender`] with gauges counting the sent and inflight items.
+/// Wraps [`mpsc::Sender`] with gauges counting the sent and inflight items.
 #[derive(Debug)]
 pub struct Sender<T> {
     inner: mpsc::Sender<T>,
@@ -197,7 +197,7 @@ impl<T: Send> WithPermit<T> for Sender<T> {
     }
 }
 
-/// Wraps an [`mpsc::WeakSender`] with gauges counting the sent and inflight items.
+/// Wraps [`mpsc::WeakSender`] with gauges counting the sent and inflight items.
 #[derive(Debug)]
 pub struct WeakSender<T> {
     inner: mpsc::WeakSender<T>,
@@ -226,7 +226,7 @@ impl<T> Clone for WeakSender<T> {
     }
 }
 
-/// Wraps an [`mpsc::Receiver`] with gauges counting the inflight and received items.
+/// Wraps [`mpsc::Receiver`] with gauges counting the inflight and received items.
 #[derive(Debug)]
 pub struct Receiver<T> {
     inner: mpsc::Receiver<T>,
@@ -327,7 +327,7 @@ pub fn channel<T>(name: &str, size: usize) -> (Sender<T>, Receiver<T>) {
     )
 }
 
-/// Wraps an [`mpsc::UnboundedSender`] with gauges counting the sent and inflight items.
+/// Wraps [`mpsc::UnboundedSender`] with gauges counting the sent and inflight items.
 #[derive(Debug)]
 pub struct UnboundedSender<T> {
     inner: mpsc::UnboundedSender<T>,
@@ -396,7 +396,7 @@ impl<T> Clone for UnboundedSender<T> {
     }
 }
 
-/// Wraps an [`mpsc::WeakUnboundedSender`] with gauges counting the sent and inflight items.
+/// Wraps [`mpsc::WeakUnboundedSender`] with gauges counting the sent and inflight items.
 #[derive(Debug)]
 pub struct WeakUnboundedSender<T> {
     inner: mpsc::WeakUnboundedSender<T>,
@@ -425,7 +425,7 @@ impl<T> Clone for WeakUnboundedSender<T> {
     }
 }
 
-/// Wraps an [`mpsc::UnboundedReceiver`] with gauges counting the inflight and received items.
+/// Wraps [`mpsc::UnboundedReceiver`] with gauges counting the inflight and received items.
 #[derive(Debug)]
 pub struct UnboundedReceiver<T> {
     inner: mpsc::UnboundedReceiver<T>,
@@ -693,13 +693,24 @@ mod test {
         let received = rx.received().clone();
 
         assert_eq!(inflight.get(), 0);
-        let item = 42;
+
         let permit = tx.reserve().await.unwrap();
         assert_eq!(inflight.get(), 1);
         assert_eq!(sent.get(), 0);
         assert_eq!(received.get(), 0);
 
+        let item = 42;
         permit.send(item);
+        assert_eq!(inflight.get(), 1);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        let permit_2 = tx.reserve().await.unwrap();
+        assert_eq!(inflight.get(), 2);
+        assert_eq!(sent.get(), 1);
+        assert_eq!(received.get(), 0);
+
+        drop(permit_2);
         assert_eq!(inflight.get(), 1);
         assert_eq!(sent.get(), 1);
         assert_eq!(received.get(), 0);

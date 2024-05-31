@@ -157,7 +157,7 @@ pub enum ClientError {
 
 impl TransactionClient {
     pub(crate) fn new(context: Arc<Context>) -> (Self, Receiver<TransactionsGuard>) {
-        let (sender, receiver) = channel("consensus_transactions", MAX_PENDING_TRANSACTIONS);
+        let (sender, receiver) = channel("consensus_input", MAX_PENDING_TRANSACTIONS);
 
         (
             Self {
