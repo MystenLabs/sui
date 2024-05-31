@@ -1780,16 +1780,13 @@ impl AuthorityPerEpochStore {
         &self,
         certificates: &[VerifiedCertificate],
     ) -> SuiResult<bool> {
-        let keys: Vec<_> = certificates
-            .iter()
-            .map(|cert| {
-                SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
-                    *cert.digest(),
-                ))
-            })
-            .collect();
+        let keys = certificates.iter().map(|cert| {
+            SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                *cert.digest(),
+            ))
+        });
         Ok(self
-            .check_consensus_messages_processed(keys.iter())?
+            .check_consensus_messages_processed(keys)?
             .into_iter()
             .all(|processed| processed))
     }
@@ -1804,9 +1801,9 @@ impl AuthorityPerEpochStore {
             .contains_key(key)?)
     }
 
-    pub fn check_consensus_messages_processed<'a>(
+    pub fn check_consensus_messages_processed(
         &self,
-        keys: impl Iterator<Item = &'a SequencedConsensusTransactionKey>,
+        keys: impl Iterator<Item = SequencedConsensusTransactionKey>,
     ) -> SuiResult<Vec<bool>> {
         Ok(self
             .tables()?
@@ -1822,7 +1819,7 @@ impl AuthorityPerEpochStore {
 
         let unprocessed_keys_registrations = registrations
             .into_iter()
-            .zip(self.check_consensus_messages_processed(keys.iter())?)
+            .zip(self.check_consensus_messages_processed(keys.iter().cloned())?)
             .filter(|(_, processed)| !processed)
             .map(|(registration, _)| registration);
 

@@ -221,6 +221,19 @@ impl SignatureVerifier {
             .tap_ok(|_| self.certificate_cache.cache_digest(cert_digest))
     }
 
+    pub async fn multi_verify_certs(
+        &self,
+        certs: Vec<CertifiedTransaction>,
+    ) -> Vec<SuiResult<VerifiedCertificate>> {
+        // TODO: We could do better by pushing the all of `certs` into the verification queue at once,
+        // but that's significantly more complex.
+        let mut futures = Vec::with_capacity(certs.len());
+        for cert in certs {
+            futures.push(self.verify_cert(cert));
+        }
+        futures::future::join_all(futures).await
+    }
+
     /// exposed as a public method for the benchmarks
     pub async fn verify_cert_skip_cache(
         &self,
