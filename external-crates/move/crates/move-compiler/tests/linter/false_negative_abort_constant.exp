@@ -1,0 +1,51 @@
+warning[Lint W02009]: Prefer using named constants with 'abort' and 'assert' for clarity
+  ┌─ tests/linter/false_negative_abort_constant.move:5:15
+  │
+5 │         abort 1 + 2 // Should ideally trigger, but might be missed due to complexity
+  │               ^^^^^ Prefer using a named constant.
+  │
+  = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02009]: Prefer using named constants with 'abort' and 'assert' for clarity
+  ┌─ tests/linter/false_negative_abort_constant.move:9:16
+  │
+9 │         assert!(false, 1 + 1); // Should ideally trigger, but might be missed
+  │                ^^^^^^^^^^^^^^ Prefer using a named constant.
+  │
+  = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02009]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/false_negative_abort_constant.move:14:15
+   │
+14 │         abort 0 // Should trigger: even though 0 is special, it's still a literal
+   │               ^ Prefer using a named constant.
+   │
+   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02009]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/false_negative_abort_constant.move:18:16
+   │
+18 │         assert!(false, true); // Interesting case: using a bool literal instead of u64
+   │                ^^^^^^^^^^^^^ Prefer using a named constant.
+   │
+   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04035]: invalid constant usage in error context
+   ┌─ tests/linter/false_negative_abort_constant.move:18:24
+   │
+18 │         assert!(false, true); // Interesting case: using a bool literal instead of u64
+   │                        ^^^^
+   │                        │
+   │                        Invalid error code for assertion, expected a u64 or constant declared with '#[error]' annotation
+   │                        If you want to use a non-u64 as an abort code, you must use a '#[error]' attribute on a constant
+   │
+   = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
+
+warning[Lint W02009]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/false_negative_abort_constant.move:22:15
+   │
+22 │         abort 0x1F // Should trigger: hex literals are still literals
+   │               ^^^^ Prefer using a named constant.
+   │
+   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
