@@ -50,15 +50,14 @@ impl<T> Sender<T> {
     pub fn try_send(&self, message: T) -> Result<(), TrySendError<T>> {
         self.inner
             .try_send(message)
-            // remove this unsightly hack once https://github.com/rust-lang/rust/issues/91345 is resolved
-            .map(|val| {
+            // TODO: switch to inspect() once the repo upgrades to Rust 1.76 or higher.
+            .map(|_| {
                 if let Some(inflight) = &self.inflight {
                     inflight.inc();
                 }
                 if let Some(sent) = &self.sent {
                     sent.inc();
                 }
-                val
             })
     }
 

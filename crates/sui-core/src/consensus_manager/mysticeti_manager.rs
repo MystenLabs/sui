@@ -130,9 +130,6 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
-        // TODO: that should be replaced by a metered channel. We can discuss if unbounded approach
-        // is the one we want to go with.
-        #[allow(clippy::disallowed_methods)]
         let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
 
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
