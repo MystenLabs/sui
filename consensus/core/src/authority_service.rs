@@ -381,10 +381,14 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             }
         }
 
+        // First read from the dag state to find the latest blocks. Then find out if there are any
+        // suspended blocks
         let mut blocks = vec![];
         let dag_state = self.dag_state.read();
         for authority in authorities {
             let block = dag_state.get_last_block_for_authority(authority);
+
+            info!("Latest block for {authority}: {block:?}");
 
             // no reason to serve back the genesis block - it's equal as if it has not received any block
             if block.round() != GENESIS_ROUND {
@@ -608,6 +612,9 @@ mod tests {
         }
 
         fn set_consumer_availability(&self, available: bool) -> Result<(), CoreError> {
+            todo!()
+        }
+        async fn set_min_propose_round(&self, _round: Round) -> Result<(), CoreError> {
             todo!()
         }
     }

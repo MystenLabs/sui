@@ -170,6 +170,9 @@ mod tests {
         fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
             todo!()
         }
+        async fn set_min_propose_round(&self, _round: Round) -> Result<(), CoreError> {
+            todo!()
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
