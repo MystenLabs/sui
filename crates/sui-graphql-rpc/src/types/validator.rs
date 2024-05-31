@@ -38,8 +38,8 @@ pub(crate) struct Validator {
 
 type EpochStakeSubsidyStarted = u64;
 
-/// Loads the exchange rates from the cache and return it together with the epoch at which stake
-/// subsidies started as a tuple.
+/// Loads the exchange rates from the cache and return a tuple (epoch stake subsidy started, and
+/// a BTreeMap holiding the exchange rates for each epoch for each validator.
 ///
 /// It automatically filters the exchange rate table to only include data for the epochs that are
 /// less than or equal to the requested epoch.
@@ -69,10 +69,12 @@ impl Loader<u64> for Db {
             .spawn_blocking(move |this| this.get_latest_sui_system_state())
             .await
             .map_err(|_| Error::Internal("Failed to fetch latest Sui system state".to_string()))?;
+        tracing::info!("Making governance api");
         let governance_api = GovernanceReadApi::new(self.inner.clone());
         let exchange_rates = exchange_rates(&governance_api, &latest_sui_system_state)
             .await
             .map_err(|e| Error::Internal(format!("Error fetching exchange rates. {e}")))?;
+        tracing::info!("Got exchange rates");
         let mut results = BTreeMap::new();
 
         // The requested epoch is the epoch for which we want to compute the APY.
@@ -81,7 +83,7 @@ impl Loader<u64> for Db {
         // then subtract one as the APY cannot be computed for a running epoch.
         // If no epoch is passed in the key, then we default to the latest epoch - 1
         // for the same reasons as above.
-        let requested_epoch = if let Some(epoch) = keys.first() {
+        let epoch_to_filter_out = if let Some(epoch) = keys.first() {
             if epoch == &latest_sui_system_state.epoch {
                 *epoch - 1
             } else {
@@ -99,18 +101,22 @@ impl Loader<u64> for Db {
         for er in exchange_rates {
             results.insert(
                 er.address,
-                (
-                    latest_sui_system_state.stake_subsidy_start_epoch,
-                    er.rates
-                        .into_iter()
-                        .filter(|(epoch, _)| epoch <= &requested_epoch)
-                        .collect(),
-                ),
+                er.rates
+                    .into_iter()
+                    .filter(|(epoch, _)| epoch <= &epoch_to_filter_out)
+                    .collect(),
             );
         }
 
-        let mut r = HashMap::with_capacity(1);
-        r.insert(requested_epoch, results);
+        let requested_epoch = keys
+            .first()
+            .unwrap_or_else(|| &(latest_sui_system_state.epoch));
+
+        let mut r = HashMap::new();
+        r.insert(
+            *requested_epoch,
+            (latest_sui_system_state.stake_subsidy_start_epoch, results),
+        );
 
         Ok(r)
     }

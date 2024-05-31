@@ -50,6 +50,7 @@ impl TriggerExchangeRatesTask {
                             .await
                             .map_err(|e| error!("Failed to fetch exchange rates: {:?}", e))
                             .ok();
+                        info!("Finished fetching exchange rates");
                     }
                 }
             }

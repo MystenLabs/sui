@@ -13,9 +13,7 @@ use sui_indexer::{apis::GovernanceReadApi, indexer_reader::IndexerReader};
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     governance::StakedSui as NativeStakedSui,
-    sui_system_state::sui_system_state_summary::{
-        SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
-    },
+    sui_system_state::sui_system_state_summary::SuiSystemStateSummary as NativeSuiSystemStateSummary,
 };
 
 pub(crate) struct PgManager {
@@ -51,15 +49,6 @@ impl PgManager {
 
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
-    /// Retrieve the validator APYs
-    pub(crate) async fn fetch_validator_apys(
-        &self,
-        _address: &NativeSuiAddress,
-    ) -> Result<Option<f64>, Error> {
-        // TODO will fixed in PR 17701, right after this PR is merged
-        Ok(None)
-    }
-
     /// If no epoch was requested or if the epoch requested is in progress,
     /// returns the latest sui system state.
     pub(crate) async fn fetch_sui_system_state(
@@ -71,18 +60,22 @@ impl PgManager {
             .spawn_blocking(move |this| this.get_latest_sui_system_state())
             .await?;
 
-        match epoch_id {
-            Some(epoch_id) => {
-                if epoch_id == latest_sui_system_state.epoch {
-                    Ok(latest_sui_system_state)
-                } else {
-                    Ok(self
-                        .inner
-                        .spawn_blocking(move |this| this.get_epoch_sui_system_state(Some(epoch_id)))
-                        .await?)
-                }
+        tracing::info!(
+            "Fetched latest system state, let's check the epoch {}. Passed epoch_id was {:?}",
+            latest_sui_system_state.epoch,
+            epoch_id
+        );
+        if let Some(epoch_id) = epoch_id {
+            if epoch_id == latest_sui_system_state.epoch {
+                Ok(latest_sui_system_state)
+            } else {
+                Ok(self
+                    .inner
+                    .spawn_blocking(move |this| this.get_epoch_sui_system_state(Some(epoch_id)))
+                    .await?)
             }
-            None => Ok(latest_sui_system_state),
+        } else {
+            Ok(latest_sui_system_state)
         }
     }
 
@@ -121,10 +114,11 @@ impl PgManager {
 pub(crate) fn convert_to_validators(
     system_state_at_requested_epoch: NativeSuiSystemStateSummary,
     checkpoint_viewed_at: u64,
+    requested_for_epoch: u64,
 ) -> Vec<Validator> {
-    let requested_for_epoch = system_state_at_requested_epoch.epoch;
     let at_risk = BTreeMap::from_iter(system_state_at_requested_epoch.at_risk_validators);
     let reports = BTreeMap::from_iter(system_state_at_requested_epoch.validator_report_records);
+
     system_state_at_requested_epoch
         .active_validators
         .into_iter()

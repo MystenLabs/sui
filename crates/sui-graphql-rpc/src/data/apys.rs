@@ -55,15 +55,14 @@ pub(crate) fn apy_rate(
     (rate_e.rate() / rate_e_1.rate()).powf(365.0) - 1.0
 }
 
+#[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::*;
     use sui_json_rpc::governance_api::ValidatorExchangeRates;
-    use sui_types::{
-        base_types::{ObjectID, SuiAddress},
-        sui_system_state::PoolTokenExchangeRate,
-    };
+    use sui_types::base_types::{ObjectID, SuiAddress};
+
+    use super::*;
 
     #[test]
     fn test_apys_calculation_filter_outliers() {
