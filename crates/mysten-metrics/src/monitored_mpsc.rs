@@ -86,15 +86,10 @@ impl<T> Sender<T> {
 
     // TODO: consider exposing the _owned methods
 
-    // Note: not exposing `same_channel`, as it is hard to implement with callers able to
-    // break the coupling between channel and gauge using `gauge`.
-
     /// Returns the current capacity of the channel.
     pub fn capacity(&self) -> usize {
         self.inner.capacity()
     }
-
-    // We're voluntarily not putting WeakSender under a facade.
 
     /// Returns a reference to the underlying inflight gauge.
     pub fn inflight(&self) -> &IntGauge {
@@ -244,6 +239,146 @@ pub fn channel<T>(name: &str, size: usize) -> (Sender<T>, Receiver<T>) {
             sent: metrics.channel_sent.with_label_values(&[name]),
         },
         Receiver {
+            inner: receiver,
+            inflight: metrics.channel_inflight.with_label_values(&[name]),
+            received: metrics.channel_received.with_label_values(&[name]),
+        },
+    )
+}
+
+/// Wraps an [`mpsc::UnboundedSender`] with gauges counting the sent and inflight items.
+#[derive(Clone, Debug)]
+pub struct UnboundedSender<T> {
+    inner: mpsc::UnboundedSender<T>,
+    inflight: IntGauge,
+    sent: IntGauge,
+}
+
+impl<T> UnboundedSender<T> {
+    /// Sends a value, waiting until there is capacity.
+    /// Increments the gauge in case of a successful `send`.
+    pub fn send(&self, value: T) -> Result<(), SendError<T>> {
+        self.inner.send(value).map(|_| {
+            self.inflight.inc();
+            self.sent.inc();
+        })
+    }
+
+    /// Completes when the receiver has dropped.
+    pub async fn closed(&self) {
+        self.inner.closed().await
+    }
+
+    /// Checks if the channel has been closed. This happens when the
+    /// [`Receiver`] is dropped, or when the [`Receiver::close`] method is
+    /// called.
+    pub fn is_closed(&self) -> bool {
+        self.inner.is_closed()
+    }
+
+    /// Returns a reference to the underlying inflight gauge.
+    pub fn inflight(&self) -> &IntGauge {
+        &self.inflight
+    }
+
+    pub fn downgrade(&self) -> WeakUnboundedSender<T> {
+        let sender = self.inner.downgrade();
+        WeakUnboundedSender {
+            inner: sender,
+            inflight: self.inflight.clone(),
+            sent: self.sent.clone(),
+        }
+    }
+}
+
+/// Wraps an [`mpsc::WeakUnboundedSender`] with gauges counting the sent and inflight items.
+#[derive(Clone, Debug)]
+pub struct WeakUnboundedSender<T> {
+    inner: mpsc::WeakUnboundedSender<T>,
+    inflight: IntGauge,
+    sent: IntGauge,
+}
+
+impl<T> WeakUnboundedSender<T> {
+    pub fn upgrade(&self) -> Option<UnboundedSender<T>> {
+        self.inner.upgrade().map(|s| UnboundedSender {
+            inner: s,
+            inflight: self.inflight.clone(),
+            sent: self.sent.clone(),
+        })
+    }
+}
+
+/// Wraps an [`mpsc::UnboundedReceiver`] with gauges counting the inflight and received items.
+#[derive(Debug)]
+pub struct UnboundedReceiver<T> {
+    inner: mpsc::UnboundedReceiver<T>,
+    inflight: IntGauge,
+    received: IntGauge,
+}
+
+impl<T> UnboundedReceiver<T> {
+    /// Receives the next value for this receiver.
+    /// Decrements the gauge in case of a successful `recv`.
+    pub async fn recv(&mut self) -> Option<T> {
+        self.inner.recv().await.tap(|opt| {
+            if opt.is_some() {
+                self.inflight.dec();
+                self.received.inc();
+            }
+        })
+    }
+
+    /// Attempts to receive the next value for this receiver.
+    /// Decrements the gauge in case of a successful `try_recv`.
+    pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
+        self.inner.try_recv().map(|val| {
+            self.inflight.dec();
+            self.received.inc();
+            val
+        })
+    }
+
+    pub fn blocking_recv(&mut self) -> Option<T> {
+        self.inner.blocking_recv().map(|val| {
+            self.inflight.dec();
+            self.received.inc();
+            val
+        })
+    }
+
+    /// Closes the receiving half of a channel without dropping it.
+    pub fn close(&mut self) {
+        self.inner.close()
+    }
+
+    /// Polls to receive the next message on this channel.
+    /// Decrements the gauge in case of a successful `poll_recv`.
+    pub fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
+        match self.inner.poll_recv(cx) {
+            res @ Poll::Ready(Some(_)) => {
+                self.inflight.dec();
+                self.received.inc();
+                res
+            }
+            s => s,
+        }
+    }
+}
+
+impl<T> Unpin for UnboundedReceiver<T> {}
+
+/// Wraps an [`mpsc::UnboundedChannel`] to create a pair of `UnboundedSender` and `UnboundedReceiver`
+pub fn unbounded_channel<T>(name: &str) -> (UnboundedSender<T>, UnboundedReceiver<T>) {
+    let metrics = get_metrics().expect("Metrics uninitialized");
+    let (sender, receiver) = mpsc::unbounded_channel();
+    (
+        UnboundedSender {
+            inner: sender,
+            inflight: metrics.channel_inflight.with_label_values(&[name]),
+            sent: metrics.channel_sent.with_label_values(&[name]),
+        },
+        UnboundedReceiver {
             inner: receiver,
             inflight: metrics.channel_inflight.with_label_values(&[name]),
             received: metrics.channel_received.with_label_values(&[name]),
