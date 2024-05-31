@@ -1,0 +1,8 @@
+warning[Lint W00002]: Potential overflow detected in multiplication operation
+  ┌─ tests/linter/false_negative_multiplication_overflow.move:7:31
+  │
+7 │         let _c = (d * 1) + (a * b); // The a * b part might be missed
+  │                               ^ Potential overflow detected in multiplication operation
+  │
+  = This warning can be suppressed with '#[allow(lint(multiplication_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
