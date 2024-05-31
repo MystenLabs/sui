@@ -1,5 +1,13 @@
 # @mysten/sui.js
 
+## 1.0.4
+
+### Patch Changes
+
+- f1e828f557: Export types needed for defining Transaction plugins
+- Updated dependencies [f1e828f557]
+  - @mysten/bcs@1.0.1
+
 ## 1.0.3
 
 ### Patch Changes

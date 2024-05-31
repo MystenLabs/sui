@@ -1,5 +1,11 @@
 # Change Log
 
+## 1.0.1
+
+### Patch Changes
+
+- f1e828f557: Remove undefined from bcs.option output types
+
 ## 1.0.0
 
 ### Major Changes
