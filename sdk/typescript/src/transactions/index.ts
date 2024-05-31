@@ -39,3 +39,9 @@ export { SerialTransactionExecutor } from './executor/serial.js';
 export { ParallelTransactionExecutor } from './executor/parallel.js';
 export type { ParallelTransactionExecutorOptions } from './executor/parallel.js';
 export { coinWithBalance } from './intents/CoinWithBalance.js';
+
+export type {
+	BuildTransactionOptions,
+	SerializeTransactionOptions,
+	TransactionPlugin,
+} from './json-rpc-resolver.js';
