@@ -3245,6 +3245,11 @@ type ServiceConfig {
 	"""
 	requestTimeoutMs: Int!
 	"""
+	Maximum mutation payload size in bytes. This is the maximum size allowed for a transaction
+	plus the Base64 overhead, plus the max query payload size allowed.
+	"""
+	maxMutationPayloadSize: Int!
+	"""
 	Maximum length of a query payload string.
 	"""
 	maxQueryPayloadSize: Int!
