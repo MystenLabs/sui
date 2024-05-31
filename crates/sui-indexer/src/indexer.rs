@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::env;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use diesel::r2d2::R2D2Connection;
@@ -18,7 +19,7 @@ use sui_data_ingestion_core::{
 use crate::build_json_rpc_server;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
-use crate::handlers::objects_snapshot_processor::{ObjectsSnapshotProcessor, SnapshotLagConfig};
+use crate::handlers::objects_snapshot_processor::{ObjectChangeBuffer, ObjectsSnapshotProcessor, SnapshotLagConfig};
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
@@ -88,10 +89,12 @@ impl Indexer {
             .unwrap();
 
         let rest_client = sui_rest_api::Client::new(format!("{}/rest", config.rpc_client_url));
+        let objects_snapshot_buffer = Arc::new(Mutex::new(ObjectChangeBuffer::default()));
 
         let objects_snapshot_processor = ObjectsSnapshotProcessor::new_with_config(
             rest_client.clone(),
             store.clone(),
+            objects_snapshot_buffer.clone(),
             metrics.clone(),
             snapshot_config,
             cancel.clone(),
@@ -112,7 +115,7 @@ impl Indexer {
             DataIngestionMetrics::new(&Registry::new()),
         );
         let worker =
-            new_handlers::<S, T>(store, rest_client, metrics, watermark, cancel.clone()).await?;
+            new_handlers::<S, T>(store, rest_client, objects_snapshot_buffer.clone(), metrics, watermark, cancel.clone()).await?;
         let worker_pool = WorkerPool::new(worker, "workflow".to_string(), download_queue_size);
         let extra_reader_options = ReaderOptions {
             batch_size: download_queue_size,

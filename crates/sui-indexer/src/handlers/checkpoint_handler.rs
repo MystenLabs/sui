@@ -46,8 +46,9 @@ use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 
 use crate::db::ConnectionPool;
+use crate::handlers::objects_snapshot_processor::ObjectChangeBuffer;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
-use crate::store::{IndexerStore, PgIndexerStore};
+use crate::store::{IndexerStore, ObjectChangeToCommit, PgIndexerStore};
 use crate::types::{
     IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
     IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
@@ -64,6 +65,7 @@ const CHECKPOINT_QUEUE_SIZE: usize = 100;
 pub async fn new_handlers<S, T>(
     state: S,
     client: Client,
+    objects_snapshot_buffer: Arc<Mutex<ObjectChangeBuffer>>,
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
@@ -92,6 +94,7 @@ where
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
         client_clone,
+        objects_snapshot_buffer,
         metrics_clone,
         indexed_checkpoint_receiver,
         tx,

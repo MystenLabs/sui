@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use tap::tap::TapFallible;
 use tokio::sync::watch;
@@ -11,6 +12,7 @@ use tracing::{error, info};
 
 use sui_rest_api::Client;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use crate::handlers::objects_snapshot_processor::ObjectChangeBuffer;
 
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
@@ -24,6 +26,7 @@ const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: u64 = 900;
 pub async fn start_tx_checkpoint_commit_task<S>(
     state: S,
     client: Client,
+    objects_snapshot_buffer: Arc<Mutex<ObjectChangeBuffer>>,
     metrics: IndexerMetrics,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
     commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
@@ -91,6 +94,7 @@ where
                     &state,
                     batch,
                     epoch,
+                    objects_snapshot_buffer.clone(),
                     &metrics,
                     &commit_notifier,
                     object_snapshot_backfill_mode,
@@ -104,6 +108,7 @@ where
                 &state,
                 batch,
                 None,
+                objects_snapshot_buffer.clone(),
                 &metrics,
                 &commit_notifier,
                 object_snapshot_backfill_mode,
@@ -130,6 +135,7 @@ async fn commit_checkpoints<S>(
     state: &S,
     indexed_checkpoint_batch: Vec<CheckpointDataToCommit>,
     epoch: Option<EpochToCommit>,
+    objects_snapshot_buffer: Arc<Mutex<ObjectChangeBuffer>>,
     metrics: &IndexerMetrics,
     commit_notifier: &watch::Sender<Option<CheckpointSequenceNumber>>,
     object_snapshot_backfill_mode: bool,
@@ -189,9 +195,20 @@ async fn commit_checkpoints<S>(
             state.persist_objects(object_changes_batch.clone()),
             state.persist_object_history(object_history_changes_batch.clone()),
         ];
+
+        // If object snapshot in backfill mode then backfill it
         if object_snapshot_backfill_mode {
             persist_tasks.push(state.backfill_objects_snapshot(object_changes_batch));
+        } else {
+            // Fill up the buffer otherwise
+            let mut buffer = objects_snapshot_buffer.lock().unwrap();
+            // The buffer has never been used so we need to set the startup_checkpoint
+            if buffer.startup_checkpoint.is_none() {
+                buffer.startup_checkpoint = Some(first_checkpoint_seq);
+            }
+            buffer.buffer.extend(object_changes_batch);
         }
+
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));
         }
