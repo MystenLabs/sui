@@ -60,11 +60,6 @@ impl PgManager {
             .spawn_blocking(move |this| this.get_latest_sui_system_state())
             .await?;
 
-        tracing::info!(
-            "Fetched latest system state, let's check the epoch {}. Passed epoch_id was {:?}",
-            latest_sui_system_state.epoch,
-            epoch_id
-        );
         if let Some(epoch_id) = epoch_id {
             if epoch_id == latest_sui_system_state.epoch {
                 Ok(latest_sui_system_state)

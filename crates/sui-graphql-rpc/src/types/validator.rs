@@ -69,16 +69,14 @@ impl Loader<u64> for Db {
             .spawn_blocking(move |this| this.get_latest_sui_system_state())
             .await
             .map_err(|_| Error::Internal("Failed to fetch latest Sui system state".to_string()))?;
-        tracing::info!("Making governance api");
         let governance_api = GovernanceReadApi::new(self.inner.clone());
         let exchange_rates = exchange_rates(&governance_api, &latest_sui_system_state)
             .await
             .map_err(|e| Error::Internal(format!("Error fetching exchange rates. {e}")))?;
-        tracing::info!("Got exchange rates");
         let mut results = BTreeMap::new();
 
-        // The requested epoch is the epoch for which we want to compute the APY.
-        // The APY is computed by taking the values from epoch - 1 of the requested epoch
+        // The requested epoch is the epoch for which we want to compute the APY. For the current
+        // ongoing epoch we cannot compute an APY, so we compute it for epoch - 1.
         // First need to check if that requested epoch is not the current running one. If it is,
         // then subtract one as the APY cannot be computed for a running epoch.
         // If no epoch is passed in the key, then we default to the latest epoch - 1
