@@ -1414,7 +1414,7 @@ impl AuthorityState {
                 let mut layout_resolver = epoch_store.executor().type_layout_resolver(Box::new(
                     TemporaryPackageStore::new(
                         &inner_temporary_store,
-                        self.execution_cache.clone(),
+                        self.get_backing_package_store().clone(),
                     ),
                 ));
 
