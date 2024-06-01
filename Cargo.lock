@@ -12087,6 +12087,7 @@ dependencies = [
  "futures",
  "hex-literal 0.3.4",
  "lru 0.10.0",
+ "maplit",
  "move-core-types",
  "mysten-metrics",
  "num_enum 0.6.1",

@@ -534,7 +534,7 @@ impl TestCluster {
         let bridge_ports = self.bridge_server_ports.as_ref().unwrap();
         let mut tasks = vec![];
         for port in bridge_ports.iter() {
-            let server_url = format!("http://127.0.0.1:{}", port);
+            let server_url = format!("http://127.0.0.1:{}/ping", port);
             tasks.push(wait_for_server_to_be_up(server_url, timeout_sec));
         }
         join_all(tasks)
