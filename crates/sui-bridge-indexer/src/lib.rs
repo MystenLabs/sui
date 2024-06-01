@@ -6,6 +6,7 @@ use crate::models::TokenTransferData as DBTokenTransferData;
 use std::fmt::{Display, Formatter};
 
 pub mod config;
+pub mod metrics;
 pub mod models;
 pub mod postgres_writer;
 pub mod schema;
