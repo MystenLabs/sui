@@ -107,7 +107,7 @@ impl<T: R2D2Connection + 'static> GovernanceReadApi<T> {
         let system_state_summary = self.get_latest_sui_system_state().await?;
         let epoch = system_state_summary.epoch;
 
-        let rates = exchange_rates(self, system_state_summary)
+        let rates = exchange_rates(self, &system_state_summary)
             .await?
             .into_iter()
             .map(|rates| (rates.pool_id, rates))
@@ -172,17 +172,17 @@ impl<T: R2D2Connection + 'static> GovernanceReadApi<T> {
 #[cached(
     type = "SizedCache<EpochId, Vec<ValidatorExchangeRates>>",
     create = "{ SizedCache::with_size(1) }",
-    convert = " {system_state_summary.epoch} ",
+    convert = " { system_state_summary.epoch } ",
     result = true
 )]
 pub async fn exchange_rates(
     state: &GovernanceReadApi<impl R2D2Connection>,
-    system_state_summary: SuiSystemStateSummary,
+    system_state_summary: &SuiSystemStateSummary,
 ) -> Result<Vec<ValidatorExchangeRates>, IndexerError> {
     // Get validator rate tables
     let mut tables = vec![];
 
-    for validator in system_state_summary.active_validators {
+    for validator in &system_state_summary.active_validators {
         tables.push((
             validator.sui_address,
             validator.staking_pool_id,
