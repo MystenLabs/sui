@@ -1,6 +1,10 @@
+// Copyright (c) Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Detect potential overflow scenarios where the number of bits being shifted exceeds the bit width of
 //! the variable being shifted, which could lead to unintended behavior or loss of data. If such a
 //! potential overflow is detected, a warning is generated to alert the developer.
+use super::{LinterDiagnosticCategory, LINT_WARNING_PREFIX, SHIFT_OVERFLOW_DIAG_CODE};
 use crate::{
     diag,
     diagnostics::{
@@ -8,24 +12,21 @@ use crate::{
         WarningFilters,
     },
     expansion::ast::Value_,
-    naming::ast::{BuiltinTypeName_, TypeName_, Type_},
+    naming::ast::{BuiltinTypeName_, Type_},
     parser::ast::BinOp_,
-    shared::{program_info::TypingProgramInfo, CompilationEnv},
+    shared::CompilationEnv,
     typing::{
         ast::{self as T, UnannotatedExp_},
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
 use move_ir_types::location::Loc;
-use std::str::FromStr;
-
-use super::{LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX};
 
 const SHIFT_OPERATION_OVERFLOW_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::ShiftOperationOverflow as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagnosticCategory::Correctness as u8,
+    SHIFT_OVERFLOW_DIAG_CODE,
     "Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.",
 );
 
@@ -38,41 +39,35 @@ pub struct Context<'a> {
 impl TypingVisitorConstructor for ShiftOperationOverflow {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(
-        env: &'a mut CompilationEnv,
-        _program_info: &'a TypingProgramInfo,
-        _program: &T::Program_,
-    ) -> Self::Context<'a> {
+    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
         Context { env }
     }
 }
 
 impl TypingVisitorContext for Context<'_> {
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
-        // Check if the expression is a binary operation and if it is a shift operation.
-        if let UnannotatedExp_::BinopExp(lhs, op, _, rhs) = &exp.exp.value {
-            // can't do  let UnannotatedExp_::BinopExp(lhs, BinOp_::Shl | BinOp_::Shr, _, rhs) = &exp.exp.value else { return };
-            // because the op is Spanned<BinOp_> and not BinOp_
-            if matches!(op.value, BinOp_::Shl | BinOp_::Shr) {
-                match (
-                    get_bit_width(&lhs.ty.value),
-                    get_shift_amount(&rhs.exp.value),
-                ) {
-                    (Some(bit_width), Some(shift_amount)) if shift_amount >= bit_width => {
-                        report_overflow(self.env, shift_amount, bit_width, op.loc);
-                    }
-                    _ => (),
-                }
-            }
-        }
-        false
-    }
     fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
         self.env.add_warning_filter_scope(filter)
     }
-
     fn pop_warning_filter_scope(&mut self) {
         self.env.pop_warning_filter_scope()
+    }
+
+    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+        // Check if the expression is a binary operation and if it is a shift operation.
+        if let UnannotatedExp_::BinopExp(lhs, sp!(_, BinOp_::Shl | BinOp_::Shr), _, rhs) =
+            &exp.exp.value
+        {
+            match (
+                get_bit_width(&lhs.ty.value),
+                get_shift_amount(&rhs.exp.value),
+            ) {
+                (Some(bit_width), Some(shift_amount)) if shift_amount >= bit_width => {
+                    report_overflow(self.env, shift_amount, bit_width, exp.exp.loc);
+                }
+                _ => (),
+            }
+        }
+        false
     }
 }
 
@@ -89,11 +84,43 @@ fn get_bit_width(ty: &Type_) -> Option<u128> {
 }
 
 fn get_shift_amount(value: &UnannotatedExp_) -> Option<u128> {
-    if let UnannotatedExp_::Value(v) = value {
-        match &v.value {
-            Value_::U8(v) => Some(*v as u128),
-            _ => None,
-        }
+    if let UnannotatedExp_::BinopExp(lhs, op, _, rhs) = value {
+        let shift_amount = match op {
+            sp!(_, BinOp_::Mul) => match (&lhs.exp.value, &rhs.exp.value) {
+                (
+                    UnannotatedExp_::Value(sp!(_, Value_::U8(v1))),
+                    UnannotatedExp_::Value(sp!(_, Value_::U8(v2))),
+                ) => v1 * v2,
+                _ => 0,
+            },
+            sp!(_, BinOp_::Add) => match (&lhs.exp.value, &rhs.exp.value) {
+                (
+                    UnannotatedExp_::Value(sp!(_, Value_::U8(v1))),
+                    UnannotatedExp_::Value(sp!(_, Value_::U8(v2))),
+                ) => v1 + v2,
+                _ => 0,
+            },
+            sp!(_, BinOp_::Sub) => match (&lhs.exp.value, &rhs.exp.value) {
+                (
+                    UnannotatedExp_::Value(sp!(_, Value_::U8(v1))),
+                    UnannotatedExp_::Value(sp!(_, Value_::U8(v2))),
+                ) => v1 - v2,
+                _ => 0,
+            },
+            sp!(_, BinOp_::Div) => match (&lhs.exp.value, &rhs.exp.value) {
+                (
+                    UnannotatedExp_::Value(sp!(_, Value_::U8(v1))),
+                    UnannotatedExp_::Value(sp!(_, Value_::U8(v2))),
+                ) => v1 / v2,
+                _ => 0,
+            },
+
+            _ => 0,
+        };
+        return Some(shift_amount as u128);
+    };
+    if let UnannotatedExp_::Value(sp!(_, Value_::U8(v))) = value {
+        Some(*v as u128)
     } else {
         None
     }
