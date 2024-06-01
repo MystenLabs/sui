@@ -36,7 +36,7 @@ use crate::consensus_handler::SequencedConsensusTransactionKey;
 use chrono::Utc;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -1034,11 +1034,66 @@ impl CheckpointBuilder {
             .in_monitored_scope("CheckpointNotifyRead")
             .await?;
 
+        let consensus_commit_prologue = if !root_digests.is_empty()
+            && self
+                .epoch_store
+                .protocol_config()
+                .prepose_consensus_commit_prologue_in_checkpoints()
+        {
+            if let Some(tx) = self
+                .state
+                .get_transaction_cache_reader()
+                .get_transaction_block(&root_digests[0])?
+            {
+                if matches!(
+                    tx.transaction_data().kind(),
+                    TransactionKind::ConsensusCommitPrologue(_)
+                        | TransactionKind::ConsensusCommitPrologueV2(_)
+                        | TransactionKind::ConsensusCommitPrologueV3(_)
+                ) {
+                    assert_eq!(tx.digest(), root_effects[0].transaction_digest());
+                    Some((tx.digest().clone(), root_effects[0].clone()))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let mut effects_in_current_checkpoint = BTreeSet::new();
+
         let _scope = monitored_scope("CheckpointBuilder");
-        let unsorted = self.complete_checkpoint_effects(root_effects)?;
+        #[cfg(debug_assertions)]
+        {
+            if self
+                .epoch_store
+                .protocol_config()
+                .prepose_consensus_commit_prologue_in_checkpoints()
+            {
+                if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue.clone() {
+                    let unsorted_ccp = self.complete_checkpoint_effects(
+                        vec![ccp_effects],
+                        &mut effects_in_current_checkpoint,
+                    )?;
+                    assert_eq!(unsorted_ccp.len(), 1);
+                    assert_eq!(unsorted_ccp[0].transaction_digest(), &ccp_digest);
+                }
+            }
+        }
+        let unsorted =
+            self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
+
         let sorted = {
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
-            CausalOrder::causal_sort(unsorted)
+            let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
+            if let Some((_, prologue_effects)) = consensus_commit_prologue {
+                sorted.push(prologue_effects);
+            }
+            sorted.extend(CausalOrder::causal_sort(unsorted));
+            sorted
         };
         let new_checkpoints = self.create_checkpoints(sorted, &last_details).await?;
         self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
@@ -1224,9 +1279,10 @@ impl CheckpointBuilder {
                 all_effects.len()
             );
 
-            for (effects, transaction_and_size) in all_effects
+            for (index, (effects, transaction_and_size)) in all_effects
                 .into_iter()
                 .zip(transactions_and_sizes.into_iter())
+                .enumerate()
             {
                 let (transaction, size) = transaction_and_size
                     .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
@@ -1459,6 +1515,7 @@ impl CheckpointBuilder {
     fn complete_checkpoint_effects(
         &self,
         mut roots: Vec<TransactionEffects>,
+        existing_tx_digests: &mut BTreeSet<TransactionDigest>,
     ) -> SuiResult<Vec<TransactionEffects>> {
         let _scope = monitored_scope("CheckpointBuilder::complete_checkpoint_effects");
         let mut results = vec![];
@@ -1476,6 +1533,10 @@ impl CheckpointBuilder {
                 let digest = effect.transaction_digest();
                 // Unnecessary to read effects of a dependency if the effect is already processed.
                 seen.insert(*digest);
+
+                if existing_tx_digests.contains(effect.transaction_digest()) {
+                    continue;
+                }
 
                 // Skip roots already included in checkpoints or roots from previous epochs
                 if tx_included || effect.executed_epoch() < self.epoch_store.epoch() {
@@ -1520,6 +1581,8 @@ impl CheckpointBuilder {
                 .collect::<Vec<_>>();
             roots = effects;
         }
+
+        existing_tx_digests.extend(results.iter().map(|e| e.transaction_digest()));
         Ok(results)
     }
 }

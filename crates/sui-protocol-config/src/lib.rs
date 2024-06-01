@@ -482,6 +482,9 @@ struct FeatureFlags {
     // Run verification of framework upgrades using a new/fresh VM.
     #[serde(skip_serializing_if = "is_false")]
     fresh_vm_on_framework_upgrade: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    prepose_consensus_commit_prologue_in_checkpoints: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1344,6 +1347,11 @@ impl ProtocolConfig {
     pub fn record_consensus_determined_version_assignments_in_prologue(&self) -> bool {
         self.feature_flags
             .record_consensus_determined_version_assignments_in_prologue
+    }
+
+    pub fn prepose_consensus_commit_prologue_in_checkpoints(&self) -> bool {
+        self.feature_flags
+            .prepose_consensus_commit_prologue_in_checkpoints
     }
 
     pub fn hardened_otw_check(&self) -> bool {
@@ -2336,6 +2344,8 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags
                             .record_consensus_determined_version_assignments_in_prologue = true;
+                        cfg.feature_flags
+                            .prepose_consensus_commit_prologue_in_checkpoints = true;
                     }
 
                     // Run Mysticeti consensus in testnet.
