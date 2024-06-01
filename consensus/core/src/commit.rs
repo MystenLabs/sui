@@ -565,10 +565,14 @@ impl CommitRange {
         *self.0.end()
     }
 
-    /// Check if the provided range is sequentially after this range with the same
-    /// range length.
+    /// Check whether the two ranges have the same size.
+    pub(crate) fn is_equal_size(&self, other: &Self) -> bool {
+        self.0.size_hint() == other.0.size_hint()
+    }
+
+    /// Check if the provided range is sequentially after this range.
     pub(crate) fn is_next_range(&self, other: &Self) -> bool {
-        self.0.size_hint() == other.0.size_hint() && self.end() + 1 == other.start()
+        &self.end() + 1 == other.start()
     }
 }
 
@@ -685,6 +689,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_commit_range() {
+        telemetry_subscribers::init_for_testing();
         let range1 = CommitRange::new(1..=5);
         let range2 = CommitRange::new(2..=6);
         let range3 = CommitRange::new(5..=10);
@@ -694,11 +699,19 @@ mod tests {
         assert_eq!(range1.start(), 1);
         assert_eq!(range1.end(), 5);
 
+        tracing::debug!("test");
+
         // Test next range check
         assert!(!range1.is_next_range(&range2));
         assert!(!range1.is_next_range(&range3));
         assert!(range1.is_next_range(&range4));
-        assert!(!range1.is_next_range(&range5));
+        assert!(range1.is_next_range(&range5));
+
+        // Test equal size range check
+        assert!(range1.is_equal_size(&range2));
+        assert!(!range1.is_equal_size(&range3));
+        assert!(range1.is_equal_size(&range4));
+        assert!(!range1.is_equal_size(&range5));
 
         // Test range ordering
         assert!(range1 < range2);

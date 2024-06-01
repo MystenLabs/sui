@@ -319,7 +319,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         fail_point_async!("consensus-rpc-response");
 
         // Compute an inclusive end index and bound the maximum number of commits scanned.
-        let inclusive_end = (commit_range.end()).min(
+        let inclusive_end = commit_range.end().min(
             commit_range.start() + self.context.parameters.commit_sync_batch_size as CommitIndex
                 - 1,
         );

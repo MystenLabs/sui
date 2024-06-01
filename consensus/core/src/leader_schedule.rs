@@ -228,7 +228,7 @@ impl LeaderSchedule {
         // preceding commit range of the old swap table.
         if *old_commit_range != CommitRange::default() {
             assert!(
-                old_commit_range.is_next_range(new_commit_range),
+                old_commit_range.is_next_range(new_commit_range) && old_commit_range.is_equal_size(new_commit_range),
                 "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable {old_commit_range:?} vs new LeaderSwapTable {new_commit_range:?}",
             );
         }
