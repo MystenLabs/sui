@@ -1,24 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
 use futures::future::err;
-use futures::StreamExt;
 use futures::pin_mut;
 use futures::stream::{Peekable, ReadyChunks};
+use futures::StreamExt;
 use itertools::Itertools;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
+use std::thread::sleep;
 
+use mysten_metrics::metered_channel::{Receiver, ReceiverStream};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-use mysten_metrics::metered_channel::{Receiver, ReceiverStream};
 
 use sui_rest_api::Client;
 
-use crate::types::IndexerResult;
-use crate::{metrics::IndexerMetrics, store::IndexerStore};
 use crate::handlers::TransactionObjectChangesToCommit;
 use crate::store::ObjectChangeToCommit;
+use crate::types::IndexerResult;
+use crate::{metrics::IndexerMetrics, store::IndexerStore};
 
 const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;
 const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
@@ -119,7 +120,10 @@ where
     // the min lag threshold. Then, we have a consistent read range between
     // `latest_snapshot_cp` and `latest_cp` based on `objects_snapshot` and `objects_history`,
     // where the size of this range varies between the min and max lag values.
-    pub async fn start(&self, buffer_receiver: Receiver<CheckpointObjectChanges>) -> IndexerResult<()> {
+    pub async fn start(
+        &self,
+        buffer_receiver: Receiver<CheckpointObjectChanges>,
+    ) -> IndexerResult<()> {
         info!("Starting object snapshot processor...");
         let latest_snapshot_cp = self
             .store
@@ -166,7 +170,11 @@ where
         }
 
         let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(buffer_receiver)
-            .ready_chunks(OBJECT_CHANGE_BATCH_SIZE).peekable();
+            .ready_chunks(OBJECT_CHANGE_BATCH_SIZE)
+            .peekable();
+
+        // Give some time for the buffer to fill up
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
         // We are not in backfill mode but it's possible that the snapshot checkpoint is behind the
         // indexer, so we first update the objects snapshot table using objects history until it has
@@ -176,14 +184,13 @@ where
 
         // Use objects_history to update objects_snapshot table until the buffer has contents and
         // the snapshot checkpoint has caught up to the first checkpoint in the buffer.
-        while (buffer_cp.is_none() || buffer_cp.unwrap() >= start_cp) {
+        while (buffer_cp.is_none() || buffer_cp.unwrap() > start_cp + 1) {
             tokio::select! {
                 _ = self.cancel.cancelled() => {
                     info!("Shutdown signal received, terminating object snapshot processor");
                     return Ok(());
                 }
                 _ = tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration)) => {
-
                     let latest_cp = self
                         .store
                         .get_latest_checkpoint_sequence_number()
@@ -191,8 +198,7 @@ where
                         .unwrap_or_default();
 
                     if latest_cp > start_cp + self.config.snapshot_max_lag as u64 {
-                        let end_cp =
-                        info!("Objects snapshot processor is updating objects snapshot table from {} to {}", start_cp, start_cp + snapshot_window);
+                        info!("Objects snapshot processor is updating objects snapshot table from {} to {} using objects history", start_cp, start_cp + snapshot_window);
                         self.store
                             .update_objects_snapshot(start_cp, start_cp + snapshot_window)
                             .await?;
@@ -204,6 +210,9 @@ where
 
                     // Only peek again if we don't have the cp yet since once there is contents there
                     // the cp doesn't change for now.
+                    // Notice that in this loop, buffer cp will never change because since we never
+                    // consume anything from the buffer, the buffer will always have the same cp at
+                    // the front.
                     if buffer_cp.is_none() {
                         buffer_cp = get_next_buffer_cp(&mut stream).await;
                     }
@@ -238,7 +247,7 @@ where
 
                             if !object_changes.is_empty() {
                                 let end_cp = object_changes.last().unwrap().checkpoint;
-                                info!("Objects snapshot processor is committing object changes to objects_snapshot table from checkpoint {} to {}", start_cp, end_cp);
+                                info!("Objects snapshot processor is committing object changes to objects_snapshot table from checkpoint {} to {} using buffer", start_cp, end_cp);
 
                                 // TODO: change the name of this function to `persist_objects_snapshot` since
                                 // it's used beyond backfill mode
@@ -254,12 +263,12 @@ where
                 }
             }
         }
-
-
     }
 }
 
-async fn get_next_buffer_cp(buffer_stream: &mut Peekable<ReadyChunks<ReceiverStream<CheckpointObjectChanges>>>) -> Option<u64> {
+async fn get_next_buffer_cp(
+    buffer_stream: &mut Peekable<ReadyChunks<ReceiverStream<CheckpointObjectChanges>>>,
+) -> Option<u64> {
     if let Some(v) = Pin::new(buffer_stream).peek().await {
         v.get(0).map(|v| v.checkpoint)
     } else {

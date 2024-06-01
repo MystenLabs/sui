@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::TryFutureExt;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
-use futures::TryFutureExt;
 
+use mysten_metrics::metered_channel::Sender;
 use tap::tap::TapFallible;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 use tracing::{error, info};
-use mysten_metrics::metered_channel::Sender;
 
+use crate::handlers::objects_snapshot_processor::CheckpointObjectChanges;
 use sui_rest_api::Client;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use crate::handlers::objects_snapshot_processor::CheckpointObjectChanges;
 
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
@@ -175,7 +175,10 @@ async fn commit_checkpoints<S>(
         object_changes_batch.push(object_changes.clone());
         object_history_changes_batch.push(object_history_changes);
         packages_batch.push(packages);
-        buffered_object_changes.push(CheckpointObjectChanges { checkpoint: sequence_number, object_changes });
+        buffered_object_changes.push(CheckpointObjectChanges {
+            checkpoint: sequence_number,
+            object_changes,
+        });
     }
 
     let first_checkpoint_seq = checkpoint_batch.first().as_ref().unwrap().sequence_number;
@@ -201,7 +204,6 @@ async fn commit_checkpoints<S>(
             state.persist_object_history(object_history_changes_batch.clone()),
         ];
 
-        // If object snapshot in backfill mode then backfill it
         if object_snapshot_backfill_mode {
             persist_tasks.push(state.backfill_objects_snapshot(object_changes_batch));
         } else {
@@ -211,7 +213,10 @@ async fn commit_checkpoints<S>(
                     .send(object_changes)
                     .await
                     .map_err(|e| {
-                        error!("Failed to send object changes to buffer with error: {}", e.to_string());
+                        error!(
+                            "Failed to send object changes to buffer with error: {}",
+                            e.to_string()
+                        );
                     });
             }
         }

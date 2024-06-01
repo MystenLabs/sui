@@ -26,6 +26,7 @@ use tokio_util::sync::CancellationToken;
 use tokio::sync::watch;
 
 use diesel::r2d2::R2D2Connection;
+use mysten_metrics::metered_channel::Sender;
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use sui_data_ingestion_core::Worker;
@@ -37,7 +38,6 @@ use sui_types::object::Owner;
 use sui_types::transaction::TransactionDataAPI;
 use tap::tap::TapFallible;
 use tracing::{info, warn};
-use mysten_metrics::metered_channel::Sender;
 
 use sui_types::base_types::ObjectID;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
@@ -47,7 +47,7 @@ use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 
 use crate::db::ConnectionPool;
-use crate::handlers::objects_snapshot_processor::{CheckpointObjectChanges};
+use crate::handlers::objects_snapshot_processor::CheckpointObjectChanges;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::{IndexerStore, ObjectChangeToCommit, PgIndexerStore};
 use crate::types::{

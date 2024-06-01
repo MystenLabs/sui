@@ -88,7 +88,9 @@ impl Indexer {
             .parse::<usize>()
             .unwrap();
         let object_change_buffer_size = std::env::var("OBJECT_CHANGE_BUFFER_SIZE")
-            .unwrap_or(crate::handlers::objects_snapshot_processor::OBJECT_CHANGE_BUFFER_SIZE.to_string())
+            .unwrap_or(
+                crate::handlers::objects_snapshot_processor::OBJECT_CHANGE_BUFFER_SIZE.to_string(),
+            )
             .parse::<usize>()
             .unwrap();
         let global_metrics = get_metrics().unwrap();
@@ -126,8 +128,15 @@ impl Indexer {
             1,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker =
-            new_handlers::<S, T>(store, rest_client, object_change_sender, metrics, watermark, cancel.clone()).await?;
+        let worker = new_handlers::<S, T>(
+            store,
+            rest_client,
+            object_change_sender,
+            metrics,
+            watermark,
+            cancel.clone(),
+        )
+        .await?;
         let worker_pool = WorkerPool::new(worker, "workflow".to_string(), download_queue_size);
         let extra_reader_options = ReaderOptions {
             batch_size: download_queue_size,
