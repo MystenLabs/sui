@@ -21,21 +21,27 @@ use sui_types::accumulator::Accumulator;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiResult;
-use sui_types::messages_checkpoint::{
-    CheckpointSequenceNumber, ECMHLiveObjectSetDigest, VerifiedCheckpoint,
-};
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSetDigest};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_tables::LiveObject;
 
-pub struct StateAccumulator {
+pub enum StateAccumulator {
+    V1(StateAccumulatorV1),
+    V2(StateAccumulatorV2),
+}
+
+pub struct StateAccumulatorV1 {
     store: Arc<dyn AccumulatorStore>,
-    /// Running root accumulator for the epoch. This is used to amortize the
-    /// cost of accumulating the root state hash across multiple checkpoints.
-    /// Note that, as it is only representative of all checkpoints in the current
-    /// epoch, it must be unioned with the previous epoch's root state accumulator
-    /// at end of epoch.
-    running_root_accumulator: Mutex<Option<Accumulator>>,
+}
+
+pub struct StateAccumulatorV2 {
+    store: Arc<dyn AccumulatorStore>,
+    /// An in-memory, non-finalized running computation of the root state accumulator,
+    /// guaranteed to be updated in checkpoint sequence number order.
+    /// This should be equivalent to the root state accumulator for the epoch once all
+    /// checkpoints have been executed and accumulated.
+    running_root_accumulator: Mutex<Option<(CheckpointSequenceNumber, Accumulator)>>,
 }
 
 pub trait AccumulatorStore: ObjectStore + Send + Sync {
@@ -367,109 +373,105 @@ impl StateAccumulator {
         store: Arc<dyn AccumulatorStore>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Self {
-        Self {
-            store,
-            running_root_accumulator: Mutex::new(
-                epoch_store
-                    .get_running_root_accumulator()
-                    .unwrap_or_default(),
-            ),
+        if epoch_store.state_accumulator_v2_enabled() {
+            StateAccumulator::V2(StateAccumulatorV2::new(store, epoch_store))
+        } else {
+            StateAccumulator::V1(StateAccumulatorV1::new(store))
         }
     }
 
     /// Accumulates the effects of a single checkpoint and persists the accumulator.
-    /// Requires a VerifiedCheckpoint as a means to enforce that it is never called
-    /// by checkpoint builder (for end of epoch checkpoint, use accumulate_final_checkpoint).
     pub fn accumulate_checkpoint(
-        &self,
-        effects: Vec<TransactionEffects>,
-        checkpoint: &VerifiedCheckpoint,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<Accumulator> {
-        let _scope = monitored_scope("AccumulateCheckpoint");
-        let checkpoint_seq_num = checkpoint.sequence_number();
-        self.accumulate_checkpoint_impl(effects, checkpoint_seq_num, epoch_store)
-    }
-
-    /// Accumulates the effects of a final checkpoint and persists the accumulator.
-    /// We separate this from all other checkpoints as it is the only checkpoint
-    /// that can be accumulated from two different callsites. As a result of this
-    /// property, it is possible that it is called nonsequentially (i.e. there can
-    /// be a gap between the checkpoint accumulated here and the next highest accumulated
-    /// checkpoint). Therefore this function, unlike accumulate_checkpoint, may need to wait
-    /// for others to finish being accumulated. This also allows accumulate_checkpoint to
-    /// make guarantees on sequentiality, thereby avoiding disk writes or in-memory bookkeeping.
-    pub async fn accumulate_final_checkpoint(
         &self,
         effects: Vec<TransactionEffects>,
         checkpoint_seq_num: CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Accumulator> {
-        let _scope = monitored_scope("AccumulateFinalCheckpoint");
-        debug!("Accumulating final checkpoint {}", checkpoint_seq_num);
-
-        let last_accumulated = epoch_store.get_last_accumulated_checkpoint()?;
-        let next_to_accumulate = last_accumulated.map(|last| last + 1).unwrap_or(0);
-
-        // Check to see if we need to wait for other checkpoints to be
-        // accumulated first in order to maintain sequentiality
-        if next_to_accumulate < checkpoint_seq_num {
-            debug!(
-                "Awaiting accumulation of checkpoints in range {:?} to {:?} (inclusive) for epoch {} accumulation",
-                next_to_accumulate,
-                checkpoint_seq_num - 1,
-                epoch_store.epoch(),
-            );
-            let remaining_checkpoints = (next_to_accumulate..=checkpoint_seq_num - 1).collect_vec();
-            epoch_store
-                .notify_read_checkpoint_state_digests(remaining_checkpoints)
-                .await
-                .expect("Failed to notify read checkpoint state digests");
-        }
-
-        self.accumulate_checkpoint_impl(effects, &checkpoint_seq_num, epoch_store)
-    }
-
-    fn accumulate_checkpoint_impl(
-        &self,
-        effects: Vec<TransactionEffects>,
-        checkpoint_seq_num: &CheckpointSequenceNumber,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<Accumulator> {
-        // NB: it's important that we aquire this lock for the entire function call, as
-        // two callers can race to accumulate the final checkpoint, and we may otherwise
-        // re-accumulate the same checkpoint twice against the running_root_accumulator,
-        // leading to a different root state hash. In the worst case, this could result
-        // in a split brain fork.
-        let mut running_root = self.running_root_accumulator.lock();
-        if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(checkpoint_seq_num)? {
+        let _scope = monitored_scope("AccumulateCheckpoint");
+        if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
             return Ok(acc);
         }
 
         let acc = self.accumulate_effects(effects, epoch_store.protocol_config());
-        if let Some(running_root) = running_root.as_mut() {
-            running_root.union(&acc);
-        } else {
-            *running_root = Some(acc.clone());
-        }
 
-        let mut batch = epoch_store.tables()?.state_hash_by_checkpoint.batch();
-        batch.insert_batch(
-            &epoch_store.tables()?.state_hash_by_checkpoint,
-            std::iter::once((checkpoint_seq_num, running_root.clone().unwrap())),
-        )?;
-        batch.insert_batch(
-            &epoch_store.tables()?.running_root_accumulator,
-            std::iter::once(((), running_root.clone().unwrap())),
-        )?;
-        batch.write()?;
+        epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);
 
         epoch_store
             .checkpoint_state_notify_read
-            .notify(checkpoint_seq_num, &acc);
+            .notify(&checkpoint_seq_num, &acc);
 
         Ok(acc)
+    }
+
+    pub async fn accumulate_running_root(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        checkpoint_seq_num: CheckpointSequenceNumber,
+        checkpoint_acc: Option<Accumulator>,
+    ) -> SuiResult {
+        match self {
+            StateAccumulator::V1(_) => {
+                // V1 does not have a running root accumulator
+                Ok(())
+            }
+            StateAccumulator::V2(impl_v2) => {
+                impl_v2
+                    .accumulate_running_root(epoch_store, checkpoint_seq_num, checkpoint_acc)
+                    .await
+            }
+        }
+    }
+
+    pub async fn accumulate_epoch(
+        &self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        last_checkpoint_of_epoch: CheckpointSequenceNumber,
+    ) -> SuiResult<Accumulator> {
+        match self {
+            StateAccumulator::V1(impl_v1) => {
+                impl_v1
+                    .accumulate_epoch(epoch_store, last_checkpoint_of_epoch)
+                    .await
+            }
+            StateAccumulator::V2(impl_v2) => {
+                impl_v2.accumulate_epoch(epoch_store, last_checkpoint_of_epoch)
+            }
+        }
+    }
+
+    pub fn accumulate_cached_live_object_set_for_testing(
+        &self,
+        include_wrapped_tombstone: bool,
+    ) -> Accumulator {
+        match self {
+            StateAccumulator::V1(impl_v1) => Self::accumulate_live_object_set_impl(
+                impl_v1
+                    .store
+                    .iter_cached_live_object_set_for_testing(include_wrapped_tombstone),
+            ),
+            StateAccumulator::V2(impl_v2) => Self::accumulate_live_object_set_impl(
+                impl_v2
+                    .store
+                    .iter_cached_live_object_set_for_testing(include_wrapped_tombstone),
+            ),
+        }
+    }
+
+    /// Returns the result of accumulating the live object set, without side effects
+    pub fn accumulate_live_object_set(&self, include_wrapped_tombstone: bool) -> Accumulator {
+        match self {
+            StateAccumulator::V1(impl_v1) => Self::accumulate_live_object_set_impl(
+                impl_v1
+                    .store
+                    .iter_live_object_set(include_wrapped_tombstone),
+            ),
+            StateAccumulator::V2(impl_v2) => Self::accumulate_live_object_set_impl(
+                impl_v2
+                    .store
+                    .iter_live_object_set(include_wrapped_tombstone),
+            ),
+        }
     }
 
     /// Accumulates given effects and returns the accumulator without side effects.
@@ -478,71 +480,10 @@ impl StateAccumulator {
         effects: Vec<TransactionEffects>,
         protocol_config: &ProtocolConfig,
     ) -> Accumulator {
-        accumulate_effects(&*self.store, effects, protocol_config)
-    }
-
-    /// Must be called after all checkpoints have been accumulated for the epoch.
-    /// Will force failure otherwise
-    pub fn write_root_accumulator(
-        &self,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        last_checkpoint_of_epoch: CheckpointSequenceNumber,
-    ) -> SuiResult<Accumulator> {
-        let _scope = monitored_scope("WriteRootAccumulator");
-        // Important that we lock for the entire function as two callers
-        // may race to read or write the root accumulator for the epoch.
-        // We need to check for prior existence while we have the lock
-        let mut running_root = self.running_root_accumulator.lock();
-        let epoch = epoch_store.epoch();
-
-        if let Some((_checkpoint, acc)) = self.store.get_root_state_accumulator_for_epoch(epoch)? {
-            return Ok(acc);
+        match self {
+            StateAccumulator::V1(impl_v1) => impl_v1.accumulate_effects(effects, protocol_config),
+            StateAccumulator::V2(impl_v2) => impl_v2.accumulate_effects(effects, protocol_config),
         }
-        let last_accumulated = epoch_store.get_last_accumulated_checkpoint()?;
-        // If this fails then we have broken the invariant that checkpoints are
-        // accumulated sequentially
-        assert!(
-            last_accumulated == Some(last_checkpoint_of_epoch),
-            "Last accumulated checkpoint {} does not match last checkpoint of epoch {}",
-            last_accumulated.unwrap_or(0),
-            last_checkpoint_of_epoch,
-        );
-
-        let (_, (_, mut root_state_accumulator)) = self
-            .store
-            .get_root_state_accumulator_for_highest_epoch()?
-            .unwrap_or((0, (0, Accumulator::default())));
-
-        root_state_accumulator.union(&running_root.clone().unwrap_or_default());
-        // Important! Do this to reset for the next epoch
-        // TODO: instead we could make StateAccumulator a per-epoch component
-        *running_root = None;
-
-        debug!("Writing root accumulator for epoch {:?}", epoch);
-        self.store.insert_state_accumulator_for_epoch(
-            epoch,
-            &last_checkpoint_of_epoch,
-            &root_state_accumulator,
-        )?;
-
-        Ok(root_state_accumulator)
-    }
-
-    pub fn accumulate_cached_live_object_set_for_testing(
-        &self,
-        include_wrapped_tombstone: bool,
-    ) -> Accumulator {
-        Self::accumulate_live_object_set_impl(
-            self.store
-                .iter_cached_live_object_set_for_testing(include_wrapped_tombstone),
-        )
-    }
-
-    /// Returns the result of accumulating the live object set, without side effects
-    pub fn accumulate_live_object_set(&self, include_wrapped_tombstone: bool) -> Accumulator {
-        Self::accumulate_live_object_set_impl(
-            self.store.iter_live_object_set(include_wrapped_tombstone),
-        )
     }
 
     fn accumulate_live_object_set_impl(iter: impl Iterator<Item = LiveObject>) -> Accumulator {
@@ -575,14 +516,252 @@ impl StateAccumulator {
         acc.digest().into()
     }
 
-    pub fn digest_epoch(
+    pub async fn digest_epoch(
         &self,
         epoch_store: Arc<AuthorityPerEpochStore>,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
     ) -> SuiResult<ECMHLiveObjectSetDigest> {
         Ok(self
-            .write_root_accumulator(epoch_store, last_checkpoint_of_epoch)?
+            .accumulate_epoch(epoch_store, last_checkpoint_of_epoch)
+            .await?
             .digest()
             .into())
+    }
+}
+
+impl StateAccumulatorV1 {
+    pub fn new(store: Arc<dyn AccumulatorStore>) -> Self {
+        Self { store }
+    }
+
+    /// Unions all checkpoint accumulators at the end of the epoch to generate the
+    /// root state hash and persists it to db. This function is idempotent. Can be called on
+    /// non-consecutive epochs, e.g. to accumulate epoch 3 after having last
+    /// accumulated epoch 1.
+    pub async fn accumulate_epoch(
+        &self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        last_checkpoint_of_epoch: CheckpointSequenceNumber,
+    ) -> SuiResult<Accumulator> {
+        let _scope = monitored_scope("AccumulateEpochV1");
+        let epoch = epoch_store.epoch();
+        if let Some((_checkpoint, acc)) = self.store.get_root_state_accumulator_for_epoch(epoch)? {
+            return Ok(acc);
+        }
+
+        // Get the next checkpoint to accumulate (first checkpoint of the epoch)
+        // by adding 1 to the highest checkpoint of the previous epoch
+        let (_highest_epoch, (next_to_accumulate, mut root_state_accumulator)) = self
+            .store
+            .get_root_state_accumulator_for_highest_epoch()?
+            .map(|(epoch, (checkpoint, acc))| {
+                (
+                    epoch,
+                    (
+                        checkpoint
+                            .checked_add(1)
+                            .expect("Overflowed u64 for epoch ID"),
+                        acc,
+                    ),
+                )
+            })
+            .unwrap_or((0, (0, Accumulator::default())));
+
+        debug!(
+            "Accumulating epoch {} from checkpoint {} to checkpoint {} (inclusive)",
+            epoch, next_to_accumulate, last_checkpoint_of_epoch
+        );
+
+        let (checkpoints, mut accumulators) = epoch_store
+            .get_accumulators_in_checkpoint_range(next_to_accumulate, last_checkpoint_of_epoch)?
+            .into_iter()
+            .unzip::<_, _, Vec<_>, Vec<_>>();
+
+        let remaining_checkpoints: Vec<_> = (next_to_accumulate..=last_checkpoint_of_epoch)
+            .filter(|seq_num| !checkpoints.contains(seq_num))
+            .collect();
+
+        if !remaining_checkpoints.is_empty() {
+            debug!(
+                "Awaiting accumulation of checkpoints {:?} for epoch {} accumulation",
+                remaining_checkpoints, epoch
+            );
+        }
+
+        let mut remaining_accumulators = epoch_store
+            .notify_read_checkpoint_state_digests(remaining_checkpoints)
+            .await
+            .expect("Failed to notify read checkpoint state digests");
+
+        accumulators.append(&mut remaining_accumulators);
+
+        assert!(accumulators.len() == (last_checkpoint_of_epoch - next_to_accumulate + 1) as usize);
+
+        for acc in accumulators {
+            root_state_accumulator.union(&acc);
+        }
+
+        self.store.insert_state_accumulator_for_epoch(
+            epoch,
+            &last_checkpoint_of_epoch,
+            &root_state_accumulator,
+        )?;
+
+        Ok(root_state_accumulator)
+    }
+
+    pub fn accumulate_effects(
+        &self,
+        effects: Vec<TransactionEffects>,
+        protocol_config: &ProtocolConfig,
+    ) -> Accumulator {
+        accumulate_effects(&*self.store, effects, protocol_config)
+    }
+}
+
+impl StateAccumulatorV2 {
+    pub fn new(
+        store: Arc<dyn AccumulatorStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Self {
+        let epoch = epoch_store.epoch();
+        let running_root = epoch_store
+            .get_highest_running_root_accumulator()
+            .expect("Failed to get running root accumulator from disk");
+        let running_root_data = match (epoch, running_root) {
+            // running from genesis - start from scratch
+            (0, None) => None,
+            // reconfig || snapshot restore - start from previous root state hash
+            (epoch, None) => {
+                let (highest_acc, running_root) = store
+                    .get_root_state_accumulator_for_epoch(epoch - 1)
+                    .expect("Failed to get root state accumulator for previous epoch")
+                    .expect("Expected root state accumulator for previous epoch to exist");
+                Some((highest_acc, running_root.clone()))
+            }
+            // Mid-epoch restart - load from disk
+            (_, Some((highest_acc, running_root))) => Some((highest_acc, running_root)),
+        };
+        Self {
+            store,
+            running_root_accumulator: Mutex::new(running_root_data),
+        }
+    }
+
+    pub async fn accumulate_running_root(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        checkpoint_seq_num: CheckpointSequenceNumber,
+        checkpoint_acc: Option<Accumulator>,
+    ) -> SuiResult {
+        let _scope = monitored_scope("AccumulateRunningRootV2");
+        // first check if we need to wait for other checkpoints to be accumulated. This can happen for the end
+        // of epoch checkpoint. Create a new scope to avoid deadlocking while we wait
+        let await_checkpoints = {
+            match self.running_root_accumulator.lock().as_ref() {
+                Some((highest_accumulated, _)) if *highest_accumulated < checkpoint_seq_num - 1 => {
+                    // TODO: take the checkpoint and check for EndOfEpochData to confirm we're at
+                    // the end of the epoch
+                    true
+                }
+                Some(_) => false,
+                None => false,
+            }
+        };
+        if await_checkpoints {
+            debug!(
+                "Awaiting accumulation up to checkpoint {} for epoch {} before adding to running root",
+                checkpoint_seq_num - 1,
+                epoch_store.epoch()
+            );
+            epoch_store
+                .notify_read_running_root(checkpoint_seq_num - 1)
+                .await
+                .expect("Failed to notify read running root");
+        }
+
+        let mut guard = self.running_root_accumulator.lock();
+
+        if let Some((highest_accumulated, running_root)) = guard.as_mut() {
+            if checkpoint_seq_num == *highest_accumulated {
+                // Enforce idempotency
+                Ok(())
+            } else {
+                let checkpoint_acc = checkpoint_acc.unwrap_or_else(|| {
+                    epoch_store
+                        .get_state_hash_for_checkpoint(&checkpoint_seq_num)
+                        .expect("Failed to get checkpoint accumulator from disk")
+                        .expect("Expected checkpoint accumulator to exist")
+                });
+
+                running_root.union(&checkpoint_acc);
+                *highest_accumulated = checkpoint_seq_num;
+                epoch_store.insert_running_root_accumulator(&checkpoint_seq_num, running_root)?;
+                debug!(
+                    "Accumulated checkpoint {} to running root accumulator",
+                    checkpoint_seq_num,
+                );
+                Ok(())
+            }
+        } else {
+            // This can only be the case at genesis
+            assert_eq!(
+                checkpoint_seq_num,
+                0,
+                "Attempted to accumulate non-genesis checkpoint {} without a running root accumulator or previous epoch root state hash.",
+                checkpoint_seq_num,
+            );
+            let checkpoint_acc = checkpoint_acc.unwrap_or_else(|| {
+                epoch_store
+                    .get_state_hash_for_checkpoint(&checkpoint_seq_num)
+                    .expect("Failed to get checkpoint accumulator from disk")
+                    .expect("Expected checkpoint accumulator to exist")
+            });
+            *guard = Some((checkpoint_seq_num, checkpoint_acc.clone()));
+            epoch_store.insert_running_root_accumulator(&checkpoint_seq_num, &checkpoint_acc)?;
+            debug!(
+                "Accumulated checkpoint {} to running root accumulator",
+                checkpoint_seq_num,
+            );
+            Ok(())
+        }
+    }
+
+    pub fn accumulate_epoch(
+        &self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        last_checkpoint_of_epoch: CheckpointSequenceNumber,
+    ) -> SuiResult<Accumulator> {
+        let _scope = monitored_scope("AccumulateEpochV2");
+        let guard = self.running_root_accumulator.lock();
+        let (highest_accumulated, running_root) = guard
+            .as_ref()
+            .expect("Expected in memory running root accumulator to exist at end of epoch");
+
+        assert_eq!(
+            last_checkpoint_of_epoch,
+            *highest_accumulated,
+            "Epoch acucmulation must only be called after all previous checkpoints of epoch have already been accumulated",
+        );
+        self.store.insert_state_accumulator_for_epoch(
+            epoch_store.epoch(),
+            &last_checkpoint_of_epoch,
+            running_root,
+        )?;
+        debug!(
+            "Finalized root state hash for epoch {} (up to checkpoint {})",
+            epoch_store.epoch(),
+            last_checkpoint_of_epoch
+        );
+
+        Ok(running_root.clone())
+    }
+
+    pub fn accumulate_effects(
+        &self,
+        effects: Vec<TransactionEffects>,
+        protocol_config: &ProtocolConfig,
+    ) -> Accumulator {
+        accumulate_effects(&*self.store, effects, protocol_config)
     }
 }

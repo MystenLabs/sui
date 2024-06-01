@@ -182,6 +182,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub execution_cache: ExecutionCacheConfig,
+
+    #[serde(default)]
+    pub state_accumulator_v2: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

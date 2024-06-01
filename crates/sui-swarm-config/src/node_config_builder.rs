@@ -228,6 +228,7 @@ impl ValidatorConfigBuilder {
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             execution_cache: ExecutionCacheConfig::default(),
+            state_accumulator_v2: true,
         }
     }
 
@@ -496,6 +497,7 @@ impl FullnodeConfigBuilder {
             policy_config: self.policy_config,
             firewall_config: self.fw_config,
             execution_cache: ExecutionCacheConfig::default(),
+            state_accumulator_v2: true,
         }
     }
 }

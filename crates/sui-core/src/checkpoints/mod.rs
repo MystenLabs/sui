@@ -1266,17 +1266,18 @@ impl CheckpointBuilder {
 
                 // This must happen after the call to augment_epoch_last_checkpoint,
                 // otherwise we will not capture the change_epoch tx
+                let acc = self.accumulator.accumulate_checkpoint(
+                    effects.clone(),
+                    sequence_number,
+                    self.epoch_store.clone(),
+                )?;
                 self.accumulator
-                    .accumulate_final_checkpoint(
-                        effects.clone(),
-                        sequence_number,
-                        self.epoch_store.clone(),
-                    )
+                    .accumulate_running_root(&self.epoch_store, sequence_number, Some(acc))
                     .await?;
-
                 let root_state_digest = self
                     .accumulator
-                    .digest_epoch(self.epoch_store.clone(), sequence_number)?;
+                    .digest_epoch(self.epoch_store.clone(), sequence_number)
+                    .await?;
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
