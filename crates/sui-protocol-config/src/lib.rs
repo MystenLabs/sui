@@ -133,6 +133,7 @@ const MAX_PROTOCOL_VERSION: u64 = 49;
 // Version 48: Use tonic networking for Mysticeti.
 //             Resolve Move abort locations to the package id instead of the runtime module ID.
 //             Enable random beacon in testnet.
+//             Use new VM when verifying framework packages.
 // Version 49: Enable Move enums on devnet.
 //             Enable VDF in devnet
 //             Run Mysticeti consensus by default.
@@ -463,6 +464,10 @@ struct FeatureFlags {
     // The purpose of doing this is to enable replaying transaction without transaction effects.
     #[serde(skip_serializing_if = "is_false")]
     record_consensus_determined_version_assignments_in_prologue: bool,
+
+    // Run verification of framework upgrades using a new/fresh VM.
+    #[serde(skip_serializing_if = "is_false")]
+    fresh_vm_on_framework_upgrade: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1375,6 +1380,10 @@ impl ProtocolConfig {
 
     pub fn enable_vdf(&self) -> bool {
         self.feature_flags.enable_vdf
+    }
+
+    pub fn fresh_vm_on_framework_upgrade(&self) -> bool {
+        self.feature_flags.fresh_vm_on_framework_upgrade
     }
 }
 
@@ -2309,6 +2318,9 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
                     }
+
+                    // Run Move verification on framework upgrades in its own VM
+                    cfg.feature_flags.fresh_vm_on_framework_upgrade = true;
                 }
                 // Use this template when making changes:
                 //
