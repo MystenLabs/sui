@@ -618,41 +618,39 @@ impl ValidatorService {
 
         // 4) Execute the certificates immediately if they contain only owned object transactions,
         // or wait for the execution results if it contains shared objects.
-        let responses = futures::future::try_join_all(
-            verified_certificates
-                .into_iter()
-                .map(|certificate| async move {
-                    let effects = self
-                        .state
-                        .execute_certificate(&certificate, epoch_store)
-                        .await?;
-                    let events = if include_events {
-                        if let Some(digest) = effects.events_digest() {
-                            Some(self.state.get_transaction_events(digest)?)
-                        } else {
-                            None
-                        }
+        let responses = futures::future::try_join_all(verified_certificates.into_iter().map(
+            |certificate| async move {
+                let effects = self
+                    .state
+                    .execute_certificate(&certificate, epoch_store)
+                    .await?;
+                let events = if include_events {
+                    if let Some(digest) = effects.events_digest() {
+                        Some(self.state.get_transaction_events(digest)?)
                     } else {
                         None
-                    };
+                    }
+                } else {
+                    None
+                };
 
-                    let input_objects = include_input_objects
-                        .then(|| self.state.get_transaction_input_objects(&effects))
-                        .and_then(Result::ok);
+                let input_objects = include_input_objects
+                    .then(|| self.state.get_transaction_input_objects(&effects))
+                    .and_then(Result::ok);
 
-                    let output_objects = include_output_objects
-                        .then(|| self.state.get_transaction_output_objects(&effects))
-                        .and_then(Result::ok);
+                let output_objects = include_output_objects
+                    .then(|| self.state.get_transaction_output_objects(&effects))
+                    .and_then(Result::ok);
 
-                    Ok::<_, SuiError>(HandleCertificateResponseV3 {
-                        effects: effects.into_inner(),
-                        events,
-                        input_objects,
-                        output_objects,
-                        auxiliary_data: None, // We don't have any aux data generated presently
-                    })
-                }),
-        )
+                Ok::<_, SuiError>(HandleCertificateResponseV3 {
+                    effects: effects.into_inner(),
+                    events,
+                    input_objects,
+                    output_objects,
+                    auxiliary_data: None, // We don't have any aux data generated presently
+                })
+            },
+        ))
         .await?;
 
         Ok(Some(responses))
@@ -773,7 +771,7 @@ impl ValidatorService {
         let certificates = request.certificates;
 
         for certificate in &certificates {
-            // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+            // CRITICAL: DO NOT USE `certificates` BEFORE THIS CHECK.
             // This must be the first thing to check before anything else, because the transaction
             // may not even be valid to access for any other checks.
             // We need to check this first because we haven't verified the cert signature.
