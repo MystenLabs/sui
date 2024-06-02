@@ -86,6 +86,7 @@ impl Build {
             layout_filename.push(pkg.package.compiled_package_info.package_name.as_str());
             layout_filename.push(LAYOUTS_DIR);
             layout_filename.push(STRUCT_LAYOUTS_FILENAME);
+            fs::create_dir_all(layout_filename.parent().unwrap()).unwrap();
             fs::write(layout_filename, layout_str)?
         }
 
