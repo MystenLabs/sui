@@ -10,10 +10,11 @@ use crate::shared::FILTER_ALL;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub enum Severity {
-    Warning = 0,
-    NonblockingError = 1,
-    BlockingError = 2,
-    Bug = 3,
+    Note = 0,
+    Warning = 1,
+    NonblockingError = 2,
+    BlockingError = 3,
+    Bug = 4,
 }
 
 /// A an optional prefix to distinguish between different types of warnings (internal vs. possibly
@@ -374,7 +375,13 @@ codes!(
         MakePubPackage: { msg: "move 2024 migration: make 'public(package)'", severity: NonblockingError },
         AddressRemove: { msg: "move 2024 migration: address remove", severity: NonblockingError },
         AddressAdd: { msg: "move 2024 migration: address add", severity: NonblockingError },
-    ]
+    ],
+    IDE: [
+        Autocomplete: { msg: "IDE autocomplete", severity: Note },
+        MacroCallInfo: { msg: "IDE macro call info", severity: Note },
+        ExpandedLambda: { msg: "IDE expanded lambda", severity: Note },
+        MissingMatchArms: { msg: "IDE missing match arms", severity: Note },
+    ],
 );
 
 //**************************************************************************************************
@@ -432,6 +439,7 @@ impl DiagnosticInfo {
         let sev_prefix = match severity {
             Severity::BlockingError | Severity::NonblockingError => "E",
             Severity::Warning => "W",
+            Severity::Note => "I",
             Severity::Bug => "ICE",
         };
         debug_assert!(category <= 99);
@@ -487,6 +495,7 @@ impl Severity {
             Severity::Bug => CSRSeverity::Bug,
             Severity::BlockingError | Severity::NonblockingError => CSRSeverity::Error,
             Severity::Warning => CSRSeverity::Warning,
+            Severity::Note => CSRSeverity::Note,
         }
     }
 }

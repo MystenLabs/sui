@@ -16,7 +16,11 @@ use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use futures::{stream, Stream, StreamExt as _};
 use hyper::server::conn::Http;
 use mysten_common::sync::notify_once::NotifyOnce;
-use mysten_network::{multiaddr::Protocol, Multiaddr};
+use mysten_network::{
+    callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
+    multiaddr::Protocol,
+    Multiaddr,
+};
 use parking_lot::RwLock;
 use tokio::{
     pin,
@@ -25,14 +29,15 @@ use tokio::{
 };
 use tokio_rustls::TlsAcceptor;
 use tokio_stream::{iter, Iter};
-use tonic::{
-    transport::{Channel, Server},
-    Request, Response, Streaming,
+use tonic::{transport::Server, Request, Response, Streaming};
+use tower_http::{
+    trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
+    ServiceBuilderExt,
 };
-use tower_http::ServiceBuilderExt;
 use tracing::{debug, error, info, trace, warn};
 
 use super::{
+    metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
     tonic_gen::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
@@ -89,8 +94,8 @@ impl TonicClient {
             .get_channel(self.network_keypair.clone(), peer, timeout)
             .await?;
         Ok(ConsensusServiceClient::new(channel)
-            .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit))
+            .max_encoding_message_size(config.max_message_size())
+            .max_decoding_message_size(config.max_message_size()))
     }
 }
 
@@ -240,6 +245,15 @@ impl NetworkClient for TonicClient {
     }
 }
 
+// Tonic channel wrapped with layers.
+type Channel = mysten_network::callback::Callback<
+    tower_http::trace::Trace<
+        tonic::transport::Channel,
+        tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
+    >,
+    MetricsCallbackMaker,
+>;
+
 /// Manages a pool of connections to peers to avoid constantly reconnecting,
 /// which can be expensive.
 struct ChannelPool {
@@ -276,7 +290,7 @@ impl ChannelPool {
         let address = format!("https://{address}");
         let config = &self.context.parameters.tonic;
         let buffer_size = config.connection_buffer_size;
-        let endpoint = Channel::from_shared(address.clone())
+        let endpoint = tonic::transport::Channel::from_shared(address.clone())
             .unwrap()
             .connect_timeout(timeout)
             .initial_connection_window_size(Some(buffer_size as u32))
@@ -315,6 +329,18 @@ impl ChannelPool {
             }
         };
         trace!("Connected to {address}");
+
+        let channel = tower::ServiceBuilder::new()
+            .layer(CallbackLayer::new(MetricsCallbackMaker::new(
+                self.context.metrics.network_metrics.outbound.clone(),
+                self.context.parameters.tonic.excessive_message_size(),
+            )))
+            .layer(
+                TraceLayer::new_for_grpc()
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
+                    .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
+            )
+            .service(channel);
 
         let mut channels = self.channels.write();
         // There should not be many concurrent attempts at connecting to the same peer.
@@ -531,6 +557,11 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         let config = &self.context.parameters.tonic;
 
         let consensus_service = Server::builder()
+            .layer(
+                TraceLayer::new_for_grpc()
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
+                    .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
+            )
             .initial_connection_window_size(64 << 20)
             .initial_stream_window_size(32 << 20)
             .http2_keepalive_interval(Some(config.keepalive_interval))
@@ -538,10 +569,13 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             // tcp keepalive is unsupported by msim
             .add_service(
                 ConsensusServiceServer::new(service)
-                    .max_encoding_message_size(config.message_size_limit)
-                    .max_decoding_message_size(config.message_size_limit),
+                    .max_encoding_message_size(config.max_message_size())
+                    .max_decoding_message_size(config.max_message_size()),
             )
             .into_service();
+
+        let inbound_metrics = self.context.metrics.network_metrics.inbound.clone();
+        let excessive_message_size = self.context.parameters.tonic.excessive_message_size();
 
         let mut http = Http::new();
         http.http2_only(true);
@@ -649,6 +683,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
 
                 let tls_acceptor = tls_acceptor.clone();
                 let consensus_service = consensus_service.clone();
+                let inbound_metrics = inbound_metrics.clone();
                 let http = http.clone();
                 let connections_info = connections_info.clone();
                 let shutdown_notif = shutdown_notif.clone();
@@ -698,6 +733,10 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                         // NOTE: the PeerInfo extension is copied to every request served.
                         // If PeerInfo starts to contain complex values, it should be wrapped in an Arc<>.
                         .add_extension(PeerInfo { authority_index })
+                        .layer(CallbackLayer::new(MetricsCallbackMaker::new(
+                            inbound_metrics,
+                            excessive_message_size,
+                        )))
                         .service(consensus_service.clone());
 
                     pin! {
@@ -825,6 +864,56 @@ impl ConnectionsInfo {
 #[derive(Clone, Debug)]
 struct PeerInfo {
     authority_index: AuthorityIndex,
+}
+
+// Adapt MetricsCallbackMaker and MetricsResponseCallback to http.
+
+impl SizedRequest for http::request::Parts {
+    fn size(&self) -> usize {
+        // TODO: implement this.
+        0
+    }
+
+    fn route(&self) -> String {
+        let path = self.uri.path();
+        path.rsplit_once('/')
+            .map(|(_, route)| route)
+            .unwrap_or("unknown")
+            .to_string()
+    }
+}
+
+impl SizedResponse for http::response::Parts {
+    fn size(&self) -> usize {
+        // TODO: implement this.
+        0
+    }
+
+    fn error_type(&self) -> Option<String> {
+        if self.status.is_success() {
+            None
+        } else {
+            Some(self.status.to_string())
+        }
+    }
+}
+
+impl MakeCallbackHandler for MetricsCallbackMaker {
+    type Handler = MetricsResponseCallback;
+
+    fn make_handler(&self, request: &http::request::Parts) -> Self::Handler {
+        self.handle_request(request)
+    }
+}
+
+impl ResponseHandler for MetricsResponseCallback {
+    fn on_response(self, response: &http::response::Parts) {
+        self.on_response(response)
+    }
+
+    fn on_error<E>(self, err: &E) {
+        self.on_error(err)
+    }
 }
 
 /// Network message types.

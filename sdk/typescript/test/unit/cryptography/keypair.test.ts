@@ -5,7 +5,6 @@ import { toB64 } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../../src/bcs/index.js';
-import { IntentScope } from '../../../src/cryptography/intent';
 import { PublicKey } from '../../../src/cryptography/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
@@ -45,11 +44,11 @@ describe('Keypair', () => {
 
 	it('`signWithIntent()` should return the correct signature', async () => {
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
-		const bytes = bcs.ser(['vector', 'u8'], data).toBytes();
+		const bytes = bcs.vector(bcs.U8).serialize(data).toBytes();
 
-		const sig1 = await k1.signWithIntent(bytes, IntentScope.PersonalMessage);
-		const sig2 = await k2.signWithIntent(data, IntentScope.TransactionData);
-		const sig3 = await k3.signWithIntent(bytes, IntentScope.PersonalMessage);
+		const sig1 = await k1.signWithIntent(bytes, 'PersonalMessage');
+		const sig2 = await k2.signWithIntent(data, 'TransactionData');
+		const sig3 = await k3.signWithIntent(bytes, 'PersonalMessage');
 
 		expect(sig1.bytes).toEqual(toB64(bytes));
 		expect(sig1.bytes).toEqual('CQAAAAVIZWxsbw==');
@@ -70,12 +69,12 @@ describe('Keypair', () => {
 		);
 	});
 
-	it('`signTransactionBlock()` should correctly sign a transaction block', async () => {
+	it('`signTransaction()` should correctly sign a transaction block', async () => {
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 
-		const sig1 = await k1.signTransactionBlock(data);
-		const sig2 = await k2.signTransactionBlock(data);
-		const sig3 = await k3.signTransactionBlock(data);
+		const sig1 = await k1.signTransaction(data);
+		const sig2 = await k2.signTransaction(data);
+		const sig3 = await k3.signTransaction(data);
 
 		expect(sig1.bytes).toEqual(toB64(data));
 		expect(sig1.bytes).toEqual('AAAABUhlbGxv');
@@ -103,22 +102,20 @@ describe('Keypair', () => {
 		const sig2 = await k2.signPersonalMessage(data);
 		const sig3 = await k3.signPersonalMessage(data);
 
-		const bytes = bcs.ser(['vector', 'u8'], data).toBytes();
-
-		expect(sig1.bytes).toEqual(toB64(bytes));
-		expect(sig1.bytes).toEqual('CQAAAAVIZWxsbw==');
+		expect(sig1.bytes).toEqual(toB64(data));
+		expect(sig1.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig1.signature).toEqual(
 			'ADXvYCSZk+ZtVL6VfB4+5zson++q0uWYINW4u1QKbbPisLUnNgYPFieiwXxp2SroKzqrULJOXdkPiDESw+IWJgVa4iC0svZel3wS7eYVef9RcLbCLABhaMN7XnxhrwGAgw==',
 		);
 
-		expect(sig2.bytes).toEqual(toB64(bytes));
-		expect(sig2.bytes).toEqual('CQAAAAVIZWxsbw==');
+		expect(sig2.bytes).toEqual(toB64(data));
+		expect(sig2.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig2.signature).toEqual(
 			'AViWuVdzTX9lJ2DBIPd4YR2bqTHC07AC9NZ1vbA1k/YeeSCuH6Kd1g3izZB332JgLP7GxjppPmWk4GwNlvbH0vICHRUjB8a3Kw7QQYsOcM2A5/UpW42G9XItP1IT+9I5TzY=',
 		);
 
-		expect(sig3.bytes).toEqual(toB64(bytes));
-		expect(sig3.bytes).toEqual('CQAAAAVIZWxsbw==');
+		expect(sig3.bytes).toEqual(toB64(data));
+		expect(sig3.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig3.signature).toEqual(
 			'Apd48/4qVHSja5u2i7ZxobPL6iTLulNIuCxbd5GhfWVvcd69k9BtIqpFGMYXYyn7zapyvnJbtUZsF2ILc7Rp/X0CJzIrOokaCigNa8H7LLsj0o9UkG/WQH9fdB9t71diYJo=',
 		);

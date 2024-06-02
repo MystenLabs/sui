@@ -1,0 +1,48 @@
+//# publish
+module 0x1.MonoTooMany {
+    enum Foo{ V { x: u64 } }
+
+    bar(x: u64, y: u64): Self.Foo {
+        let t: Self.Foo;
+    label b0:
+        t = Foo.V { x: move(x), y: move(y) };
+        return move(t);
+    }
+}
+
+//# publish
+module 0x1.MonoTooFew {
+    enum Foo{ V { x: u64 } }
+
+    bar(x: u64, y: u64): Self.Foo {
+        let t: Self.Foo;
+    label b0:
+        t = Foo.V { };
+        return move(t);
+    }
+}
+
+//# publish
+module 0x1.PolyTooMany {
+    enum Foo<T>{ V { x: T } }
+
+    bar(x: u64, y: u64): Self.Foo<u64> {
+        let t: Self.Foo<u64>;
+    label b0:
+        t = Foo.V<u64> { x: move(x), y: move(y) };
+        return move(t);
+    }
+}
+
+//# publish
+module 0x1.PolyTooFew {
+    enum Foo<T>{ V { x: T } }
+
+    bar(x: u64, y: u64): Self.Foo<u64> {
+        let t: Self.Foo<u64>;
+    label b0:
+        t = Foo.V<u64> { };
+        return move(t);
+    }
+}
+

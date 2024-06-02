@@ -187,6 +187,10 @@ impl SuiClientInner for SuiMockClient {
         Ok(DUMMY_MUTALBE_BRIDGE_OBJECT_ARG)
     }
 
+    async fn get_reference_gas_price(&self) -> Result<u64, Self::Error> {
+        Ok(1000)
+    }
+
     async fn get_bridge_summary(&self) -> Result<BridgeSummary, Self::Error> {
         Ok(BridgeSummary {
             bridge_version: 0,

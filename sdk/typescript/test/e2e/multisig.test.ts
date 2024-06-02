@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { decodeSuiPrivateKey } from '../../src/cryptography';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
 import { MultiSigPublicKey } from '../../src/multisig/publickey';
-import { TransactionBlock } from '../../src/transactions';
+import { Transaction } from '../../src/transactions';
 import { getZkLoginSignature } from '../../src/zklogin';
 import { toZkLoginPublicIdentifier } from '../../src/zklogin/publickey';
 import { DEFAULT_RECIPIENT, setupWithFundedAddress } from './utils/setup';
@@ -46,15 +46,15 @@ describe('MultiSig with zklogin signature', () => {
 		let toolbox = await setupWithFundedAddress(kp, multisigAddr);
 
 		// construct a transfer from the multisig address.
-		const txb = new TransactionBlock();
-		txb.setSenderIfNotSet(multisigAddr);
-		const coin = txb.splitCoins(txb.gas, [1]);
-		txb.transferObjects([coin], DEFAULT_RECIPIENT);
+		const tx = new Transaction();
+		tx.setSenderIfNotSet(multisigAddr);
+		const coin = tx.splitCoins(tx.gas, [1]);
+		tx.transferObjects([coin], DEFAULT_RECIPIENT);
 		let client = toolbox.client;
-		let bytes = await txb.build({ client: toolbox.client });
+		let bytes = await tx.build({ client: toolbox.client });
 
 		// sign with the single keypair.
-		const singleSig = (await kp.signTransactionBlock(bytes)).signature;
+		const singleSig = (await kp.signTransaction(bytes)).signature;
 
 		const zkLoginInputs = {
 			addressSeed: '2455937816256448139232531453880118833510874847675649348355284726183344259587',
@@ -87,7 +87,7 @@ describe('MultiSig with zklogin signature', () => {
 				],
 			},
 		};
-		const ephemeralSig = (await ephemeralKeypair.signTransactionBlock(bytes)).signature;
+		const ephemeralSig = (await ephemeralKeypair.signTransaction(bytes)).signature;
 		// create zklogin signature based on default zk proof.
 		const zkLoginSig = getZkLoginSignature({
 			inputs: zkLoginInputs,
@@ -104,7 +104,7 @@ describe('MultiSig with zklogin signature', () => {
 		});
 
 		// check the execution result and digest.
-		const localDigest = await txb.getDigest({ client });
+		const localDigest = await tx.getDigest({ client });
 		expect(localDigest).toEqual(result.digest);
 		expect(result.effects?.status.status).toEqual('success');
 	});

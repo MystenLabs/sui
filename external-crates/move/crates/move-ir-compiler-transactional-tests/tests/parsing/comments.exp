@@ -5,9 +5,12 @@ task 0 'print-bytecode'. lines 1-8:
 module 1.m {
 
 
+
+
 entry foo() {
 B0:
 	0: Ret
+
 }
 }
 
@@ -16,9 +19,12 @@ task 1 'print-bytecode'. lines 10-18:
 module 2.m {
 
 
+
+
 entry foo() {
 B0:
 	0: Ret
+
 }
 }
 
@@ -27,9 +33,12 @@ task 2 'print-bytecode'. lines 20-26:
 module 3.m {
 
 
+
+
 entry foo() {
 B0:
 	0: Ret
+
 }
 }
 
@@ -38,9 +47,12 @@ task 3 'print-bytecode'. lines 28-35:
 module 4.m {
 
 
+
+
 entry foo() {
 B0:
 	0: Ret
+
 }
 }
 
@@ -52,8 +64,11 @@ task 5 'print-bytecode'. lines 48-58:
 module 6.m {
 
 
+
+
 entry foo() {
 B0:
 	0: Ret
+
 }
 }

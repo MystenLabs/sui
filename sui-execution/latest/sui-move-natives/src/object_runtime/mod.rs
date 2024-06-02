@@ -593,6 +593,10 @@ impl ObjectRuntimeState {
         })
     }
 
+    pub fn events(&self) -> &[(Type, StructTag, Value)] {
+        &self.events
+    }
+
     pub fn total_events_size(&self) -> u64 {
         self.total_events_size
     }

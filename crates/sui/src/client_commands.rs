@@ -32,7 +32,7 @@ use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sui_move::build::resolve_lock_file_path;
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
@@ -2641,9 +2641,9 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         opts.serialize_unsigned_transaction,
         opts.serialize_signed_transaction,
     );
-    assert!(
+    ensure!(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
-        "Cannot specify both --serialize-unsigned-transaction and --serialize-signed-transaction"
+        "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
     );
     let gas_price = if let Some(gas_price) = gas_price {
         gas_price

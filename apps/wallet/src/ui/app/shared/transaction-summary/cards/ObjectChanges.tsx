@@ -12,7 +12,7 @@ import {
 	type SuiObjectChangeWithDisplay,
 } from '@mysten/core';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 import cx from 'clsx';
 
 import { ExpandableList } from '../../ExpandableList';

@@ -24,7 +24,6 @@ im.workspace = true
 itertools.workspace = true
 log.workspace = true
 serde.workspace = true
-paste.workspace = true
 petgraph.workspace = true
 
 [dev-dependencies]

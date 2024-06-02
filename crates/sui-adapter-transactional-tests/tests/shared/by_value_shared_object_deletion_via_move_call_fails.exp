@@ -16,7 +16,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4 'view-object'. lines 63-63:
-Owner: Shared
+Owner: Shared( 3 )
 Version: 3
 Contents: t2::o2::Obj2 {
     id: sui::object::UID {
@@ -27,7 +27,7 @@ Contents: t2::o2::Obj2 {
 }
 
 task 5 'view-object'. lines 65-67:
-Owner: Shared
+Owner: Shared( 4 )
 Version: 4
 Contents: t2::o2::Obj2 {
     id: sui::object::UID {
@@ -59,7 +59,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 11 'view-object'. lines 89-91:
-Owner: Shared
+Owner: Shared( 9 )
 Version: 9
 Contents: sui::coin::Coin<sui::sui::SUI> {
     id: sui::object::UID {

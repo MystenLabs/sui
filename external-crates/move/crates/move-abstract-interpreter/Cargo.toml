@@ -11,5 +11,8 @@ edition = "2021"
 move-binary-format.workspace = true
 move-bytecode-verifier-meter.workspace = true
 
+[dev-dependencies]
+itertools.workspace = true
+
 [features]
 default = []

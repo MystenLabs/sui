@@ -10,3 +10,16 @@ module 0x1.M {
         return move(y);
     }
 }
+
+//# publish
+module 0x2.M {
+    enum R { V{ b: bool } }
+    enum Box<T> { V{ x: T } }
+
+    foo(x: Self.Box<Self.R>): Self.Box<Self.R> {
+        let y: Self.Box<Self.R>;
+    label b0:
+        y = copy(x); // type does not have copy
+        return move(y);
+    }
+}

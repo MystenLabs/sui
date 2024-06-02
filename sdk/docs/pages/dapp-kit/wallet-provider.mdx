@@ -23,8 +23,8 @@ to other dApp Kit hooks and components.
 All props are optional.
 
 - `preferredWallets` - A list of wallets that are sorted to the top of the wallet list.
-- `requiredFeatures` - A list of features that are required for the dApp to function. This filters
-  the list of wallets presented to users when selecting a wallet to connect from, ensuring that only
+- `walletFilter` - A filter function that accepts a wallet and returns a boolean. This filters the
+  list of wallets presented to users when selecting a wallet to connect from, ensuring that only
   wallets that meet the dApp requirements can connect.
 - `enableUnsafeBurner` - Enables the development-only unsafe burner wallet, useful for testing.
 - `autoConnect` - Enables automatically reconnecting to the most recently used wallet account upon

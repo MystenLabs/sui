@@ -8,9 +8,9 @@ import type {
 	SuiArgument,
 	SuiClient,
 	SuiMoveNormalizedModule,
-} from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
+} from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
+import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui/utils';
 
 import type {
 	ObjectFilter,
@@ -607,6 +607,7 @@ export const RPC_METHODS: {
 					...pagination,
 					showBalanceChanges: options?.showBalanceChanges,
 					showEffects: options?.showEffects,
+					showRawEffects: options?.showRawEffects,
 					showObjectChanges: options?.showObjectChanges,
 					showRawInput: options?.showRawInput,
 					showInput: options?.showInput,
@@ -659,6 +660,7 @@ export const RPC_METHODS: {
 					digest,
 					showBalanceChanges: options?.showBalanceChanges,
 					showEffects: options?.showEffects,
+					showRawEffects: options?.showRawEffects,
 					showObjectChanges: options?.showObjectChanges,
 					showRawInput: options?.showRawInput,
 					showInput: options?.showInput,
@@ -680,6 +682,7 @@ export const RPC_METHODS: {
 					digests: digests,
 					showBalanceChanges: options?.showBalanceChanges,
 					showEffects: options?.showEffects,
+					showRawEffects: options?.showEffects,
 					showObjectChanges: options?.showObjectChanges,
 					showRawInput: options?.showRawInput,
 					showInput: options?.showInput,
@@ -820,10 +823,10 @@ export const RPC_METHODS: {
 			validatorLowStakeThreshold: systemState.systemParameters?.validatorLowStakeThreshold,
 			validatorReportRecords: [], // TODO
 			validatorVeryLowStakeThreshold: systemState.systemParameters?.validatorVeryLowStakeThreshold,
-			validatorCandidatesId: '', // TODO
-			inactivePoolsId: '', // TODO
-			pendingActiveValidatorsId: '', // TODO
-			stakingPoolMappingsId: '', // TODO
+			validatorCandidatesId: systemState.validatorSet?.validatorCandidatesId,
+			inactivePoolsId: systemState.validatorSet?.inactivePoolsId,
+			pendingActiveValidatorsId: systemState.validatorSet?.pendingActiveValidatorsId,
+			stakingPoolMappingsId: systemState.validatorSet?.stakingPoolMappingsId,
 		};
 	},
 	async queryEvents(transport, [query, cursor, limit, descending]) {
@@ -1062,6 +1065,7 @@ export const RPC_METHODS: {
 					signatures,
 					showBalanceChanges: options?.showBalanceChanges,
 					showEffects: options?.showEffects,
+					showRawEffects: options?.showRawEffects,
 					showInput: options?.showInput,
 					showEvents: options?.showEvents,
 					showObjectChanges: options?.showObjectChanges,
@@ -1072,8 +1076,8 @@ export const RPC_METHODS: {
 		);
 
 		if (!effects?.transactionBlock) {
-			const txb = TransactionBlock.from(fromB64(txBytes));
-			return { errors: errors ?? undefined, digest: await txb.getDigest() };
+			const tx = Transaction.from(fromB64(txBytes));
+			return { errors: errors ?? undefined, digest: await tx.getDigest() };
 		}
 
 		await paginateTransactionBlockLists(transport, effects.transactionBlock);
@@ -1085,7 +1089,7 @@ export const RPC_METHODS: {
 		);
 	},
 	async dryRunTransactionBlock(transport, [txBytes]) {
-		const txb = TransactionBlock.from(fromB64(txBytes));
+		const tx = Transaction.from(fromB64(txBytes));
 		const { transaction, error } = await transport.graphqlQuery(
 			{
 				query: DryRunTransactionBlockDocument,
@@ -1106,7 +1110,7 @@ export const RPC_METHODS: {
 		}
 
 		const result = mapGraphQLTransactionBlockToRpcTransactionBlock(
-			{ ...transaction, digest: await txb.getDigest() },
+			{ ...transaction, digest: await tx.getDigest() },
 			{
 				showBalanceChanges: true,
 				showEffects: true,
@@ -1431,13 +1435,11 @@ async function paginateTransactionBlockLists(
 	let hasMoreBalanceChanges =
 		transactionBlock.effects?.balanceChanges?.pageInfo.hasNextPage ?? false;
 	let hasMoreObjectChanges = transactionBlock.effects?.objectChanges?.pageInfo.hasNextPage ?? false;
-	let hasMoreDependencies = transactionBlock.effects?.dependencies?.pageInfo.hasNextPage ?? false;
 	let afterEvents = transactionBlock.effects?.events?.pageInfo.endCursor;
 	let afterBalanceChanges = transactionBlock.effects?.balanceChanges?.pageInfo.endCursor;
 	let afterObjectChanges = transactionBlock.effects?.objectChanges?.pageInfo.endCursor;
-	let afterDependencies = transactionBlock.effects?.dependencies?.pageInfo.endCursor;
 
-	while (hasMoreEvents || hasMoreBalanceChanges || hasMoreObjectChanges || hasMoreDependencies) {
+	while (hasMoreEvents || hasMoreBalanceChanges || hasMoreObjectChanges) {
 		const page = await transport.graphqlQuery(
 			{
 				query: PaginateTransactionBlockListsDocument,
@@ -1446,11 +1448,9 @@ async function paginateTransactionBlockLists(
 					afterEvents,
 					afterBalanceChanges,
 					afterObjectChanges,
-					afterDependencies,
 					hasMoreEvents,
 					hasMoreBalanceChanges,
 					hasMoreObjectChanges,
-					hasMoreDependencies,
 				},
 			},
 			(data) => data.transactionBlock?.effects,
@@ -1459,15 +1459,12 @@ async function paginateTransactionBlockLists(
 		transactionBlock.effects?.events?.nodes.push(...(page.events?.nodes ?? []));
 		transactionBlock.effects?.balanceChanges?.nodes.push(...(page.balanceChanges?.nodes ?? []));
 		transactionBlock.effects?.objectChanges?.nodes.push(...(page.objectChanges?.nodes ?? []));
-		transactionBlock.effects?.dependencies?.nodes.push(...(page.dependencies?.nodes ?? []));
 		hasMoreEvents = page.events?.pageInfo.hasNextPage ?? false;
 		hasMoreBalanceChanges = page.balanceChanges?.pageInfo.hasNextPage ?? false;
 		hasMoreObjectChanges = page.objectChanges?.pageInfo.hasNextPage ?? false;
-		hasMoreDependencies = page.dependencies?.pageInfo.hasNextPage ?? false;
 		afterEvents = page.events?.pageInfo.endCursor;
 		afterBalanceChanges = page.balanceChanges?.pageInfo.endCursor;
 		afterObjectChanges = page.objectChanges?.pageInfo.endCursor;
-		afterDependencies = page.dependencies?.pageInfo.endCursor;
 	}
 }
 

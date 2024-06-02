@@ -13,8 +13,8 @@ use bytes::Bytes;
 use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction as _};
+use mysten_metrics::monitored_mpsc::UnboundedSender;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
@@ -214,6 +214,10 @@ impl CommitDigest {
     /// Lexicographic min & max digest.
     pub const MIN: Self = Self([u8::MIN; consensus_config::DIGEST_LENGTH]);
     pub const MAX: Self = Self([u8::MAX; consensus_config::DIGEST_LENGTH]);
+
+    pub fn into_inner(self) -> [u8; consensus_config::DIGEST_LENGTH] {
+        self.0
+    }
 }
 
 impl Hash for CommitDigest {
@@ -253,8 +257,8 @@ impl fmt::Debug for CommitDigest {
 /// Uniquely identifies a commit with its index and digest.
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommitRef {
-    pub(crate) index: CommitIndex,
-    pub(crate) digest: CommitDigest,
+    pub index: CommitIndex,
+    pub digest: CommitDigest,
 }
 
 impl CommitRef {
@@ -292,10 +296,10 @@ pub struct CommittedSubDag {
     pub blocks: Vec<VerifiedBlock>,
     /// The timestamp of the commit, obtained from the timestamp of the leader block.
     pub timestamp_ms: BlockTimestampMs,
-    /// Index of the commit.
+    /// The reference of the commit.
     /// First commit after genesis has a index of 1, then every next commit has a
     /// index incremented by 1.
-    pub commit_index: CommitIndex,
+    pub commit_ref: CommitRef,
     /// Optional scores that are provided as part of the consensus output to Sui
     /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
@@ -307,38 +311,35 @@ impl CommittedSubDag {
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
         timestamp_ms: BlockTimestampMs,
-        commit_index: CommitIndex,
+        commit_ref: CommitRef,
+        reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> Self {
         Self {
             leader,
             blocks,
             timestamp_ms,
-            commit_index,
-            reputation_scores_desc: vec![],
+            commit_ref,
+            reputation_scores_desc,
         }
     }
+}
 
-    pub(crate) fn update_scores(&mut self, reputation_scores_desc: Vec<(AuthorityIndex, u64)>) {
-        self.reputation_scores_desc = reputation_scores_desc;
-    }
-
-    /// Sort the blocks of the sub-dag by round number then authority index. Any
-    /// deterministic & stable algorithm works.
-    pub(crate) fn sort(&mut self) {
-        self.blocks.sort_by(|a, b| {
-            a.round()
-                .cmp(&b.round())
-                .then_with(|| a.author().cmp(&b.author()))
-        });
-    }
+// Sort the blocks of the sub-dag blocks by round number then authority index. Any
+// deterministic & stable algorithm works.
+pub(crate) fn sort_sub_dag_blocks(blocks: &mut [VerifiedBlock]) {
+    blocks.sort_by(|a, b| {
+        a.round()
+            .cmp(&b.round())
+            .then_with(|| a.author().cmp(&b.author()))
+    })
 }
 
 impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CommittedSubDag(leader={}, index={}, blocks=[",
-            self.leader, self.commit_index
+            "CommittedSubDag(leader={}, ref={}, blocks=[",
+            self.leader, self.commit_ref
         )?;
         for (idx, block) in self.blocks.iter().enumerate() {
             if idx > 0 {
@@ -352,7 +353,7 @@ impl Display for CommittedSubDag {
 
 impl fmt::Debug for CommittedSubDag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{} ([", self.leader, self.commit_index)?;
+        write!(f, "{}@{} ([", self.leader, self.commit_ref)?;
         for block in &self.blocks {
             write!(f, "{}, ", block.reference())?;
         }
@@ -368,6 +369,7 @@ impl fmt::Debug for CommittedSubDag {
 pub fn load_committed_subdag_from_store(
     store: &dyn Store,
     commit: TrustedCommit,
+    reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
 ) -> CommittedSubDag {
     let mut leader_block_idx = None;
     let commit_blocks = store
@@ -391,7 +393,8 @@ pub fn load_committed_subdag_from_store(
         leader_block_ref,
         blocks,
         commit.timestamp_ms(),
-        commit.index(),
+        commit.reference(),
+        reputation_scores_desc,
     )
 }
 
@@ -664,14 +667,15 @@ mod tests {
             leader_ref,
             blocks.clone(),
         );
-        let subdag = load_committed_subdag_from_store(store.as_ref(), commit);
+        let subdag = load_committed_subdag_from_store(store.as_ref(), commit.clone(), vec![]);
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
         assert_eq!(
             subdag.blocks.len(),
             (num_authorities * wave_length) as usize + 1
         );
-        assert_eq!(subdag.commit_index, commit_index);
+        assert_eq!(subdag.commit_ref, commit.reference());
+        assert_eq!(subdag.reputation_scores_desc, vec![]);
     }
 
     #[tokio::test]

@@ -182,11 +182,13 @@ pub struct TonicParameters {
     #[serde(default = "TonicParameters::default_connection_buffer_size")]
     pub connection_buffer_size: usize,
 
-    /// Message size limits for both requests and responses.
+    /// Hard message size limit for both requests and responses.
+    /// This value is higher than strictly necessary, to allow overheads.
+    /// Message size targets and soft limits are computed based on this value.
     ///
-    /// If unspecified, this will default to 8MiB.
+    /// If unspecified, this will default to 32MiB.
     #[serde(default = "TonicParameters::default_message_size_limit")]
-    pub message_size_limit: usize,
+    message_size_limit: usize,
 }
 
 impl TonicParameters {
@@ -199,7 +201,15 @@ impl TonicParameters {
     }
 
     fn default_message_size_limit() -> usize {
-        8 << 20
+        32 << 20
+    }
+
+    pub fn excessive_message_size(&self) -> usize {
+        self.message_size_limit * 3 / 4
+    }
+
+    pub fn max_message_size(&self) -> usize {
+        self.message_size_limit
     }
 }
 

@@ -47,6 +47,7 @@ const references = [
 			id: 'references/cli',
 		},
 		items: [
+			'references/cli/cheatsheet',
 			'references/cli/client',
 			'references/cli/ptb',
 			'references/cli/console',

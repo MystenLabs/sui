@@ -28,6 +28,15 @@ const MAX_MOVE_VALUE_DEPTH: u32 = 128;
 
 pub(crate) const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
+/// The time to wait for a transaction to be executed such that the effects can be returned to the
+/// GraphQL query. If the transaction takes longer than this time to execute, the query will return
+/// a timeout error, but the transaction will continue its execution.
+///
+/// It's the sum of pre+post quorum timeouts from [`sui_core::authority_aggregator::TimeoutConfig`]
+/// plus a small buffer of 10% rounded up: 60 + 7 => round_up(67 * 1.1) = 74
+/// <https://github.com/MystenLabs/sui/blob/eaf05fe5d293c06e3a2dfc22c87ba2aef419d8ea/crates/sui-core/src/authority_aggregator.rs#L84-L85>
+pub(crate) const DEFAULT_MUTATION_TIMEOUT_MS: u64 = 74_000;
+
 const DEFAULT_IDE_TITLE: &str = "Sui GraphQL IDE";
 
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
@@ -125,6 +134,8 @@ pub struct Limits {
     pub default_page_size: u64,
     #[serde(default)]
     pub max_page_size: u64,
+    #[serde(default)]
+    pub mutation_timeout_ms: u64,
     #[serde(default)]
     pub request_timeout_ms: u64,
     #[serde(default)]
@@ -300,7 +311,15 @@ impl ServiceConfig {
         self.limits.max_page_size
     }
 
-    /// Maximum time in milliseconds that will be spent to serve one request.
+    /// Maximum time in milliseconds spent waiting for a response from fullnode after issuing a
+    /// a transaction to execute. Note that the transaction may still succeed even in the case of a
+    /// timeout. Transactions are idempotent, so a transaction that times out should be resubmitted
+    /// until the network returns a definite response (success or failure, not timeout).
+    async fn mutation_timeout_ms(&self) -> u64 {
+        self.limits.mutation_timeout_ms
+    }
+
+    /// Maximum time in milliseconds that will be spent to serve one query request.
     async fn request_timeout_ms(&self) -> u64 {
         self.limits.request_timeout_ms
     }
@@ -483,6 +502,7 @@ impl Default for Limits {
             max_db_query_cost: MAX_DB_QUERY_COST,
             default_page_size: DEFAULT_PAGE_SIZE,
             max_page_size: MAX_PAGE_SIZE,
+            mutation_timeout_ms: DEFAULT_MUTATION_TIMEOUT_MS,
             request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
             max_type_argument_depth: MAX_TYPE_ARGUMENT_DEPTH,
             max_type_argument_width: MAX_TYPE_ARGUMENT_WIDTH,
@@ -537,6 +557,7 @@ mod tests {
                 max-db-query-cost = 50
                 default-page-size = 20
                 max-page-size = 50
+                mutation-timeout-ms = 74000
                 request-timeout-ms = 27000
                 max-type-argument-depth = 32
                 max-type-argument-width = 64
@@ -555,6 +576,7 @@ mod tests {
                 max_db_query_cost: 50,
                 default_page_size: 20,
                 max_page_size: 50,
+                mutation_timeout_ms: 74_000,
                 request_timeout_ms: 27_000,
                 max_type_argument_depth: 32,
                 max_type_argument_width: 64,
@@ -617,6 +639,7 @@ mod tests {
                 max-db-query-cost = 20
                 default-page-size = 10
                 max-page-size = 20
+                mutation-timeout-ms = 74000
                 request-timeout-ms = 30000
                 max-type-argument-depth = 32
                 max-type-argument-width = 64
@@ -638,6 +661,7 @@ mod tests {
                 max_db_query_cost: 20,
                 default_page_size: 10,
                 max_page_size: 20,
+                mutation_timeout_ms: 74_000,
                 request_timeout_ms: 30_000,
                 max_type_argument_depth: 32,
                 max_type_argument_width: 64,

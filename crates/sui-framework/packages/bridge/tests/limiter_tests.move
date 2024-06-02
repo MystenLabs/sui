@@ -5,11 +5,11 @@
 module bridge::limiter_tests {
 
     use bridge::{
-        chain_ids, 
+        chain_ids,
         limiter::{
-            check_and_record_sending_transfer, make_transfer_limiter, 
+            check_and_record_sending_transfer, make_transfer_limiter,
             max_transfer_limit, new,
-            transfer_limits_mut, total_amount, transfer_records, 
+            transfer_limits_mut, total_amount, transfer_records,
             update_route_limit, usd_value_multiplier,
         },
         treasury::{Self, BTC, ETH, USDC, USDT},
@@ -18,7 +18,7 @@ module bridge::limiter_tests {
     use sui::clock;
     use sui::test_scenario;
     use sui::test_utils::{assert_eq, destroy};
-    
+
     #[test]
     fun test_24_hours_windows() {
         let mut limiter = make_transfer_limiter();
@@ -41,16 +41,16 @@ module bridge::limiter_tests {
         // transfer 10000 ETH every hour, the totol should be 10000 * 5
         assert!(
             limiter.check_and_record_sending_transfer<ETH>(
-                &treasury, 
-                &clock, 
-                route, 
+                &treasury,
+                &clock,
+                route,
                 10_000 * treasury.decimal_multiplier<ETH>(),
-            ), 
+            ),
             0,
         );
 
         let record = limiter.transfer_records().get(&route);
-        assert!(record.total_amount() == 10000 * 5 * usd_value_multiplier(), 0);
+        assert!(record.total_amount() == 10000 * 5 * usd_value_multiplier());
 
         // transfer 1000 ETH every hour for 50 hours, the 24 hours totol should be 24000 * 10
         let mut i = 0;
@@ -58,11 +58,11 @@ module bridge::limiter_tests {
             clock.increment_for_testing(60 * 60 * 1000);
             assert!(
                 limiter.check_and_record_sending_transfer<ETH>(
-                    &treasury, 
-                    &clock, 
-                    route, 
+                    &treasury,
+                    &clock,
+                    route,
                     1_000 * treasury.decimal_multiplier<ETH>(),
-                ), 
+                ),
                 0,
             );
             i = i + 1;
@@ -128,29 +128,29 @@ module bridge::limiter_tests {
         // Transfer 10000 ETH on route 1
         assert!(
             limiter.check_and_record_sending_transfer<ETH>(
-                &treasury, 
-                &clock, 
-                route, 
+                &treasury,
+                &clock,
+                route,
                 10_000 * treasury::decimal_multiplier<ETH>(&treasury),
-            ), 
+            ),
             0,
         );
         // Transfer 50000 ETH on route 2
         assert!(
             limiter.check_and_record_sending_transfer<ETH>(
-                &treasury, 
-                &clock, 
-                route2, 
+                &treasury,
+                &clock,
+                route2,
                 50_000 * treasury::decimal_multiplier<ETH>(&treasury),
-            ), 
+            ),
             0,
         );
 
         let record = limiter.transfer_records().get(&route);
-        assert!(record.total_amount() == 10000 * 5 * usd_value_multiplier(), 0);
+        assert!(record.total_amount() == 10000 * 5 * usd_value_multiplier());
 
         let record = limiter.transfer_records().get(&route2);
-        assert!(record.total_amount() == 50000 * 5 * usd_value_multiplier(), 0);
+        assert!(record.total_amount() == 50000 * 5 * usd_value_multiplier());
 
         destroy(limiter);
         destroy(treasury);
@@ -178,11 +178,11 @@ module bridge::limiter_tests {
 
         assert!(
             limiter.check_and_record_sending_transfer<ETH>(
-                &treasury, 
-                &clock, 
-                route, 
+                &treasury,
+                &clock,
+                route,
                 90_000 * treasury::decimal_multiplier<ETH>(&treasury),
-            ), 
+            ),
             0,
         );
 
@@ -192,11 +192,11 @@ module bridge::limiter_tests {
         clock.increment_for_testing(60 * 60 * 1000);
         assert!(
             limiter.check_and_record_sending_transfer<ETH>(
-                &treasury, 
-                &clock, 
-                route, 
+                &treasury,
+                &clock,
+                route,
                 10_000 * treasury::decimal_multiplier<ETH>(&treasury),
-            ), 
+            ),
             0,
         );
         let record = limiter.transfer_records().get(&route);
@@ -204,16 +204,16 @@ module bridge::limiter_tests {
 
         // Tx should fail with a tiny amount because the limit is hit
         assert!(
-            !limiter.check_and_record_sending_transfer<ETH>(&treasury, &clock, route, 1), 
+            !limiter.check_and_record_sending_transfer<ETH>(&treasury, &clock, route, 1),
             0,
         );
         assert!(
             !limiter.check_and_record_sending_transfer<ETH>(
-                &treasury, 
-                &clock, 
-                route, 
+                &treasury,
+                &clock,
+                route,
                 90_000 * treasury::decimal_multiplier<ETH>(&treasury),
-            ), 
+            ),
             0,
         );
 
@@ -221,11 +221,11 @@ module bridge::limiter_tests {
         clock.increment_for_testing(60 * 60 * 1000 * 23);
         assert!(
             limiter.check_and_record_sending_transfer<ETH>(
-                &treasury, 
-                &clock, 
-                route, 
+                &treasury,
+                &clock,
+                route,
                 90_000 * treasury::decimal_multiplier<ETH>(&treasury),
-            ), 
+            ),
             0,
         );
         let record = limiter.transfer_records().get(&route);
@@ -258,8 +258,8 @@ module bridge::limiter_tests {
         clock.set_for_testing(1706288001377);
         // We don't limit sui -> eth transfers. This aborts with `ELimitNotFoundForRoute`
         limiter.check_and_record_sending_transfer<ETH>(
-            &treasury, 
-            &clock, 
+            &treasury,
+            &clock,
             route, 1 * treasury::decimal_multiplier<ETH>(&treasury),
         );
         destroy(limiter);
@@ -298,11 +298,11 @@ module bridge::limiter_tests {
         // 15 eth = $37.5
         assert!(
             limiter.check_and_record_sending_transfer<ETH>(
-                &treasury, 
-                &clock, 
-                route, 
+                &treasury,
+                &clock,
+                route,
                 15 * treasury::decimal_multiplier<ETH>(&treasury),
-            ), 
+            ),
             0,
         );
         let record = limiter.transfer_records().get(&route);
@@ -311,7 +311,7 @@ module bridge::limiter_tests {
         assert!(
             record.per_hour_amounts() ==
             &vector[
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 15 * eth_price,
             ],
             0,
@@ -322,10 +322,10 @@ module bridge::limiter_tests {
         // 10 uddc = $10
         assert!(
             limiter.check_and_record_sending_transfer<USDC>(
-                &treasury, 
-                &clock, 
+                &treasury,
+                &clock,
                 route, 10 * treasury::decimal_multiplier<USDC>(&treasury),
-            ), 
+            ),
             0,
         );
         let record = limiter.transfer_records().get(&route);
@@ -335,8 +335,8 @@ module bridge::limiter_tests {
         assert!(
             record.per_hour_amounts() ==
             &vector[
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 expected_notion_amount_10023,
             ],
             0,
@@ -348,10 +348,10 @@ module bridge::limiter_tests {
         // 2 btc = $20
         assert!(
             limiter.check_and_record_sending_transfer<BTC>(
-                &treasury, 
-                &clock, 
+                &treasury,
+                &clock,
                 route, 2 * treasury::decimal_multiplier<BTC>(&treasury),
-            ), 
+            ),
             0,
         );
         let record = limiter.transfer_records().get(&route);
@@ -361,8 +361,8 @@ module bridge::limiter_tests {
         assert!(
             record.per_hour_amounts() ==
             &vector[
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-                expected_notion_amount_10023, 
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                expected_notion_amount_10023,
                 expected_notion_amount_10024,
             ],
             0,
@@ -386,7 +386,7 @@ module bridge::limiter_tests {
         assert!(
             record.per_hour_amounts() ==
             &vector[
-                expected_notion_amount_10023, expected_notion_amount_10024, 
+                expected_notion_amount_10023, expected_notion_amount_10024,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ],
             0,
@@ -398,7 +398,7 @@ module bridge::limiter_tests {
         assert!(
             limiter.check_and_record_sending_transfer<USDT>(
                 &treasury, &clock, route, 65 * 1_000_000,
-            ), 
+            ),
             0,
         );
         let record = limiter.transfer_records().get(&route);
@@ -408,9 +408,9 @@ module bridge::limiter_tests {
         assert!(
             record.per_hour_amounts() ==
             &vector[
-                expected_notion_amount_10023, 
-                expected_notion_amount_10024, 
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+                expected_notion_amount_10023,
+                expected_notion_amount_10024,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 expected_notion_amount_10046,
             ],
             0,
@@ -431,9 +431,9 @@ module bridge::limiter_tests {
         assert!(
             record.per_hour_amounts() ==
             &vector[
-                expected_notion_amount_10024, 
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-                expected_notion_amount_10046, 
+                expected_notion_amount_10024,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                expected_notion_amount_10046,
                 expected_notion_amount_10047,
             ],
             0,
@@ -445,11 +445,11 @@ module bridge::limiter_tests {
         // 1 usdc = $1
         assert!(
             limiter.check_and_record_sending_transfer<USDC>(
-                &treasury, 
-                &clock, 
-                route, 
+                &treasury,
+                &clock,
+                route,
                 1 * treasury::decimal_multiplier<USDC>(&treasury),
-            ), 
+            ),
             0,
         );
         let record = limiter.transfer_records().get(&route);
@@ -459,10 +459,10 @@ module bridge::limiter_tests {
         assert!(
             record.per_hour_amounts() ==
             &vector[
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-                expected_notion_amount_10046, 
-                expected_notion_amount_10047, 
-                0, 0, 0, 0, 0, 
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                expected_notion_amount_10046,
+                expected_notion_amount_10047,
+                0, 0, 0, 0, 0,
                 expected_notion_amount_10053,
             ],
             0,
@@ -474,11 +474,11 @@ module bridge::limiter_tests {
         // 1 usdc = $1
         assert!(
             limiter.check_and_record_sending_transfer<USDC>(
-                &treasury, 
-                &clock, 
-                route, 
+                &treasury,
+                &clock,
+                route,
                 treasury::decimal_multiplier<USDC>(&treasury),
-            ), 
+            ),
             0,
         );
         let record = limiter.transfer_records().get(&route);
@@ -488,8 +488,8 @@ module bridge::limiter_tests {
         assert!(
             record.per_hour_amounts() ==
             &vector[
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 expected_notion_amount_10153,
             ],
             0,
@@ -556,7 +556,7 @@ module bridge::limiter_tests {
             ],
             new_limit,
         );
-        
+
         // pick a new route limit
         update_route_limit(&mut limiter, &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia()), new_limit);
         assert_eq(
@@ -565,7 +565,7 @@ module bridge::limiter_tests {
             ],
             new_limit,
         );
-        
+
 
         destroy(limiter);
     }

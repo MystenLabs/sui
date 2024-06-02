@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.26.0"
+    "version": "1.27.0"
   },
   "methods": [
     {
@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "45",
+              "maxSupportedProtocolVersion": "49",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1379,6 +1379,7 @@
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_poseidon": false,
+                "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
                 "hardened_otw_check": false,
                 "include_consensus_digest_in_prologue": false,
@@ -1387,6 +1388,7 @@
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
                 "mysticeti_leader_scoring_and_schedule": false,
+                "mysticeti_use_committed_subdag_digest": false,
                 "narwhal_certificate_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
@@ -1396,7 +1398,10 @@
                 "random_beacon": false,
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
+                "record_consensus_determined_version_assignments_in_prologue": false,
                 "reject_mutable_random_on_entry_functions": false,
+                "reshare_at_same_initial_version": false,
+                "resolve_abort_locations_to_package_id": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,
@@ -1425,6 +1430,8 @@
                 },
                 "binary_address_identifiers": null,
                 "binary_constant_pool": null,
+                "binary_enum_def_instantiations": null,
+                "binary_enum_defs": null,
                 "binary_field_handles": null,
                 "binary_field_instantiations": null,
                 "binary_friend_decls": null,
@@ -1437,6 +1444,8 @@
                 "binary_struct_def_instantiations": null,
                 "binary_struct_defs": null,
                 "binary_struct_handles": null,
+                "binary_variant_handles": null,
+                "binary_variant_instantiation_handles": null,
                 "bls12381_bls12381_min_pk_verify_cost_base": {
                   "u64": "52"
                 },
@@ -1768,6 +1777,7 @@
                 "max_modules_in_publish": {
                   "u32": "128"
                 },
+                "max_move_enum_variants": null,
                 "max_move_identifier_len": null,
                 "max_move_object_size": {
                   "u64": "256000"
@@ -1950,7 +1960,9 @@
                 },
                 "validator_validate_metadata_data_cost_per_byte": {
                   "u64": "2"
-                }
+                },
+                "vdf_hash_to_input_cost": null,
+                "vdf_verify_vdf_cost": null
               }
             }
           }
@@ -5608,6 +5620,49 @@
       "ConsensusCommitDigest": {
         "$ref": "#/components/schemas/Digest"
       },
+      "ConsensusDeterminedVersionAssignments": {
+        "description": "Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "CancelledTransactions"
+            ],
+            "properties": {
+              "CancelledTransactions": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "$ref": "#/components/schemas/TransactionDigest"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": [
+                          {
+                            "$ref": "#/components/schemas/ObjectID"
+                          },
+                          {
+                            "$ref": "#/components/schemas/SequenceNumber"
+                          }
+                        ],
+                        "maxItems": 2,
+                        "minItems": 2
+                      }
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "Data": {
         "oneOf": [
           {
@@ -6748,8 +6803,33 @@
                 "type": "null"
               }
             ]
+          },
+          {
+            "$ref": "#/components/schemas/MoveVariant"
           }
         ]
+      },
+      "MoveVariant": {
+        "type": "object",
+        "required": [
+          "fields",
+          "type",
+          "variant"
+        ],
+        "properties": {
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MoveValue"
+            }
+          },
+          "type": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          }
+        }
       },
       "MultiSig": {
         "description": "The struct that contains signatures and public keys necessary for authenticating a MultiSig.",
@@ -10460,6 +10540,51 @@
                 "$ref": "#/components/schemas/BigInt_for_uint64"
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "commit_timestamp_ms",
+              "consensus_commit_digest",
+              "consensus_determined_version_assignments",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "commit_timestamp_ms": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "consensus_commit_digest": {
+                "$ref": "#/components/schemas/ConsensusCommitDigest"
+              },
+              "consensus_determined_version_assignments": {
+                "$ref": "#/components/schemas/ConsensusDeterminedVersionAssignments"
+              },
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologueV3"
+                ]
+              },
+              "round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "sub_dag_index": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/BigInt_for_uint64"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
           }
         ]
       },
@@ -10847,19 +10972,19 @@
         "description": "Identifies a struct and the module it was defined in",
         "type": "object",
         "required": [
+          "datatype_name",
           "module_name",
-          "package",
-          "struct_name"
+          "package"
         ],
         "properties": {
+          "datatype_name": {
+            "type": "string"
+          },
           "module_name": {
             "type": "string"
           },
           "package": {
             "$ref": "#/components/schemas/ObjectID"
-          },
-          "struct_name": {
-            "type": "string"
           }
         }
       },

@@ -211,7 +211,7 @@ fn unreachable_code(loc: Loc) -> Option<ControlFlow> {
 
 pub fn program(compilation_env: &mut CompilationEnv, prog: &T::Program) {
     let mut context = Context::new(compilation_env);
-    modules(&mut context, &prog.inner.modules);
+    modules(&mut context, &prog.modules);
 }
 
 fn modules(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>) {
@@ -526,8 +526,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::UnaryExp(_, base_exp)
         | E::Borrow(_, base_exp, _)
         | E::Cast(base_exp, _)
-        | E::TempBorrow(_, base_exp)
-        | E::InvalidAccess(base_exp) => value_report!(base_exp),
+        | E::TempBorrow(_, base_exp) => value_report!(base_exp),
 
         E::BorrowLocal(_, _) => None,
 
@@ -739,7 +738,6 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::ErrorConstant { .. }
         | E::Move { .. }
         | E::Copy { .. }
-        | E::InvalidAccess(_)
         | E::UnresolvedError => value(context, e),
 
         E::Value(_) | E::Unit { .. } => None,

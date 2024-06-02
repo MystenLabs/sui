@@ -49,3 +49,55 @@ label b0:
     return;
 }
 }
+
+//# publish
+module 0x3.Test {
+    enum X { V{ b: bool } }
+    enum T { V{ i: u64, x: Self.X, b: bool } }
+
+    public new_x(): Self.X {
+    label b0:
+        return X.V { b: true };
+    }
+
+    public new_t(x: Self.X): Self.T {
+    label b0:
+        return T.V { i: 0, x: move(x), b: false };
+    }
+
+    public destroy_x(x: Self.X) {
+        let b: bool;
+    label b0:
+        X.V { b } = move(x);
+        return;
+    }
+
+    // can unpack a resource and return it
+    public destroy_t(t: Self.T): u64 * Self.X * bool {
+        let i: u64;
+        let x: Self.X;
+        let flag: bool;
+    label b0:
+        T.V { i, x, b: flag } = move(t);
+        return move(i), move(x), move(flag);
+    }
+
+}
+
+//# run
+module 0x43.m {
+import 0x3.Test;
+
+entry foo() {
+    let x: Test.X;
+    let i: u64;
+    let t: Test.T;
+    let b: bool;
+label b0:
+    x = Test.new_x();
+    t = Test.new_t(move(x));
+    i, x, b = Test.destroy_t(move(t));
+    Test.destroy_x(move(x));
+    return;
+}
+}

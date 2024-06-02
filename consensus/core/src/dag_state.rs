@@ -129,8 +129,11 @@ impl DagState {
                         .protocol_config
                         .mysticeti_leader_scoring_and_schedule()
                     {
-                        let committed_subdag =
-                            load_committed_subdag_from_store(store.as_ref(), commit.clone());
+                        let committed_subdag = load_committed_subdag_from_store(
+                            store.as_ref(),
+                            commit.clone(),
+                            vec![],
+                        ); // We don't need to recover reputation scores for unscored_committed_subdags
                         unscored_committed_subdags.push(committed_subdag);
                     }
                 });
@@ -1359,23 +1362,15 @@ mod test {
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
-            let subdag =
-                dag_builder.get_subdag(leader.clone(), last_committed_rounds.clone(), commit_index);
+            let (subdag, commit) = dag_builder.get_sub_dag_and_commit(
+                leader.clone(),
+                last_committed_rounds.clone(),
+                commit_index,
+            );
             for block in subdag.blocks.iter() {
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
             }
-            let commit = TrustedCommit::new_for_test(
-                commit_index,
-                CommitDigest::MIN,
-                leader.timestamp_ms(),
-                leader.reference(),
-                subdag
-                    .blocks
-                    .iter()
-                    .map(|block| block.reference())
-                    .collect::<Vec<_>>(),
-            );
             commits.push(commit);
         }
 

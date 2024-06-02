@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClientContext } from "@mysten/dapp-kit";
-import { formatAddress } from "@mysten/sui.js/utils";
+import { formatAddress } from "@mysten/sui/utils";
 import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import toast from "react-hot-toast";

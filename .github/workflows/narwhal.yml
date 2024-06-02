@@ -1,15 +1,6 @@
 name: Narwhal
 
 on:
-  push:
-    branches:
-      - 'main'
-      - 'devnet'
-      - 'testnet'
-      - 'mainnet'
-      - 'releases/sui-*-release'
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
       sui_repo_ref:
@@ -49,6 +40,8 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
+  # Some integration tests can produce too much INFO logs that are infeasible to be printed on failure.
+  RUST_LOG: error
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
 

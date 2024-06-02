@@ -1,0 +1,7 @@
+//# publish
+module 0x1.M {
+    // duplicate field of the same name
+    enum T{ V { f: u64, f: u64 }  }
+}
+
+// check: DUPLICATE_ELEMENT

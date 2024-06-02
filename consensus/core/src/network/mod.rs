@@ -45,6 +45,7 @@ pub(crate) mod anemo_network;
 pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
+mod metrics_layer;
 #[cfg(test)]
 mod network_tests;
 #[cfg(test)]
@@ -96,7 +97,7 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
 
     /// Fetches serialized commits from a peer, with index in [start, end].
     /// Returns a tuple of both the serialized commits, and serialized blocks that contain
-    /// votes certifiying the last commit.
+    /// votes certifying the last commit.
     async fn fetch_commits(
         &self,
         peer: AuthorityIndex,

@@ -9,7 +9,7 @@
 		"wallet": "turbo --filter ./apps/wallet",
 		"sdk": "turbo --filter ./sdk/typescript",
 		"bcs": "turbo --filter ./sdk/bcs",
-		"changeset-version": "pnpm changeset version && pnpm --filter @mysten/sui.js codegen:version",
+		"changeset-version": "pnpm changeset version && pnpm --filter @mysten/sui codegen:version",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
 		"prettier:fix:watch": "onchange '**' -i -f add -f change -j 5 -- prettier -w --ignore-unknown {{file}}",
@@ -29,7 +29,7 @@
 		}
 	},
 	"engines": {
-		"pnpm": ">=9.1.0"
+		"pnpm": ">=9.0.0"
 	},
 	"manypkg": {
 		"ignoredRules": [

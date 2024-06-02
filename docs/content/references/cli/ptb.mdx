@@ -52,7 +52,7 @@ Options:
           Examples:
            --merge-coins @coin_object_id [@coin_obj_id1, @coin_obj_id2]
 
-      --move-call <PACKAGE::MODULE::FUNCTION> <TYPE> <FUNCTION_ARGS>
+      --move-call <PACKAGE::MODULE::FUNCTION> <TYPE_ARGS> <FUNCTION_ARGS>
           Make a move call to a function.
 
           Examples:
@@ -117,7 +117,7 @@ Options:
 
 The main philosophy behind the CLI PTB support is to enable a user to build and execute a PTB from the command line. Bash scripts can be used to construct and execute the PTB just as you would do from the command line, providing great flexibility when it comes to automating different tasks.
 
-Besides using existing [traditional PTB](/concepts/transactions/prog-txn-blocks/) related concepts, we introduce a few new and important concepts for this command. 
+Besides using existing [traditional PTB](/concepts/transactions/prog-txn-blocks/) related concepts, we introduce a few new and important concepts for this command.
 
 :::warning
 
@@ -175,7 +175,7 @@ Use the `--assign` argument to bind values to variables. There are two ways you 
 - assign a value to a variable
 - assign a variable to the result of the previous command
 
-Let's look at the first case where you assign a value to a variable. You want to check if some variable's value is `none`. Call the `0x1::option::is_none` function from the Move standard library, and pass in the variable name: 
+Let's look at the first case where you assign a value to a variable. You want to check if some variable's value is `none`. Call the `0x1::option::is_none` function from the Move standard library, and pass in the variable name:
 
 ```bash
 sui client ptb \
@@ -233,7 +233,7 @@ To call a specific function from a specific package, you can use the following c
 
 ### Publish
 
-Publishing a package is one of the most important commands you need when working with Sui. While the CLI has a standalone `publish` command, PTBs also support publishing and upgrading packages. One main difference is that with `sui client ptb`, you must explicitly transfer the `UpgradeCap` object that is returned when creating a package, or destroy it with a call to [`make_immutable`](/concepts/sui-move-concepts/packages.mdx). Here is an example on how to publish a Move project on chain using the `sui client ptb` command. It makes a call to the `sui::tx_context::sender` to acquire the sender and assigns the result of that call to the `sender` variable, and then calls the publish command. The result of `publish` is bounded to `upgrade_cap` variable, and then this object is transferred to the sender. 
+Publishing a package is one of the most important commands you need when working with Sui. While the CLI has a standalone `publish` command, PTBs also support publishing and upgrading packages. One main difference is that with `sui client ptb`, you must explicitly transfer the `UpgradeCap` object that is returned when creating a package, or destroy it with a call to [`make_immutable`](/concepts/sui-move-concepts/packages.mdx). Here is an example on how to publish a Move project on chain using the `sui client ptb` command. It makes a call to the `sui::tx_context::sender` to acquire the sender and assigns the result of that call to the `sender` variable, and then calls the publish command. The result of `publish` is bounded to `upgrade_cap` variable, and then this object is transferred to the sender.
 
 ```bash
 sui client ptb \
@@ -298,7 +298,7 @@ You cannot use the following words for variable names:
 - `u32`
 - `u64`
 - `u128`
-- `u256` 
+- `u256`
 
 ## JSON output
 
