@@ -56,6 +56,7 @@ feature_flags:
   mysticeti_use_committed_subdag_digest: true
   enable_vdf: true
   record_consensus_determined_version_assignments_in_prologue: true
+  fresh_vm_on_framework_upgrade: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -283,3 +284,4 @@ random_beacon_dkg_timeout_round: 3000
 random_beacon_min_round_interval_ms: 200
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
+
