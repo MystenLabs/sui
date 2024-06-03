@@ -108,7 +108,7 @@ impl Parameters {
             // Exercise commit sync.
             5
         } else {
-            100
+            50
         }
     }
 
@@ -199,7 +199,7 @@ impl TonicParameters {
     }
 
     fn default_message_size_limit() -> usize {
-        8 << 20
+        2 << 30
     }
 }
 

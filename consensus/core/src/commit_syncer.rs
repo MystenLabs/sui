@@ -321,7 +321,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         start: CommitIndex,
         end: CommitIndex,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
-        const FETCH_COMMITS_TIMEOUT: Duration = Duration::from_secs(10);
+        const FETCH_COMMITS_TIMEOUT: Duration = Duration::from_secs(30);
         const FETCH_BLOCKS_TIMEOUT: Duration = Duration::from_secs(60);
         const FETCH_RETRY_BASE_INTERVAL: Duration = Duration::from_secs(1);
         const FETCH_RETRY_INTERVAL_LIMIT: u32 = 30;
@@ -372,6 +372,22 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 return Err(e);
             }
         };
+        let total_commit_size: usize = serialized_commits.iter().map(|c| c.len()).sum();
+        inner
+            .context
+            .metrics
+            .node_metrics
+            .commit_sync_fetched_commit_bytes
+            .with_label_values(&[&"commits"])
+            .observe(total_commit_size as f64);
+        let total_verifier_block_size: usize = serialized_blocks.iter().map(|b| b.len()).sum();
+        inner
+            .context
+            .metrics
+            .node_metrics
+            .commit_sync_fetched_commit_bytes
+            .with_label_values(&[&"verifier_blocks"])
+            .observe(total_verifier_block_size as f64);
 
         // 3. Verify the response contains blocks that can certify the last returned commit,
         // and the returned commits are chained by digest, so earlier commits are certified
