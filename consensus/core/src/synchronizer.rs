@@ -612,6 +612,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             } // network error
             Err(err) => {
                 // timeout
+                sleep_until(start + request_timeout).await;
+                retries += 1;
                 Err(ConsensusError::NetworkRequestTimeout(err.to_string()))
             }
             Ok(result) => result,
