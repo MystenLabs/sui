@@ -57,9 +57,11 @@ const removeTests = (text, options) => {
     element.toLowerCase().includes("notest"),
   );
   if (cont) {
-    console.log(text)
     return text
-      .replace(/\s*#\[test.*?\n.*?}(?!;)\n?/gs, "\n{{plugin-removed-test}}\n")
+      .replace(
+        /\s*#\[test.*?\n.*?(}(?!;)\n?|$)/gs,
+        "\n{{plugin-removed-test}}\n",
+      )
       .replace(/\{\{plugin-removed-test\}\}\s*/gm, "");
   } else {
     return text;
@@ -84,17 +86,15 @@ exports.processOptions = (text, options) => {
 // When including a function, struct by name
 // Need to catch the stuff that comes before
 // For example, comments, #[] style directives, and so on
-
 exports.capturePrepend = (match, text) => {
-  const numSpaces = match[1]
-    ? match[1].match(/^\n/)
-      ? match[1].length - 1
-      : match[1].length
-    : 0;
-  let preFun = text.substring(0, match.index);
-  const lines = preFun.split("\n");
+  const numSpaces = match[1] || 0;
+  let preText = text.substring(0, match.index);
+  const lines = preText.split("\n");
   let pre = [];
-  for (let x = lines.length - 1; x > 0; x--) {
+  // Ignore the first blank line.
+  const start =
+    lines[lines.length - 1].trim() === "" ? lines.length - 2 : lines.length - 1;
+  for (let x = start; x > 0; x--) {
     if (lines[x].trim() === "}" || lines[x].trim() === "") {
       break;
     } else {
