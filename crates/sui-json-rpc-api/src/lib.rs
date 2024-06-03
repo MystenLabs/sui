@@ -23,7 +23,10 @@ pub use move_utils::MoveUtilsClient;
 pub use move_utils::MoveUtilsOpenRpc;
 pub use move_utils::MoveUtilsServer;
 use once_cell::sync::Lazy;
-use prometheus::{register_int_counter_with_registry, IntCounter};
+use prometheus::{
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry, IntCounter,
+    IntGaugeVec,
+};
 pub use read::ReadApiClient;
 pub use read::ReadApiOpenRpc;
 pub use read::ReadApiServer;
@@ -97,6 +100,7 @@ pub struct JsonRpcMetrics {
     pub query_tx_blocks_limit: Histogram,
     pub query_tx_blocks_result_size: Histogram,
     pub query_tx_blocks_result_size_total: IntCounter,
+    pub query_tx_blocks_by_filter: IntGaugeVec,
     pub query_events_limit: Histogram,
     pub query_events_result_size: Histogram,
     pub query_events_result_size_total: IntCounter,
@@ -223,6 +227,13 @@ impl JsonRpcMetrics {
             query_tx_blocks_result_size_total: register_int_counter_with_registry!(
                 "json_rpc_query_tx_blocks_result_size_total",
                 "The total return size for query_tx_blocks",
+                registry
+            )
+            .unwrap(),
+            query_tx_blocks_by_filter: register_int_gauge_vec_with_registry!(
+                "json_rpc_query_tx_blocks_by_filter",
+                "Number of requests by tx block filter",
+                &["filter"],
                 registry
             )
             .unwrap(),

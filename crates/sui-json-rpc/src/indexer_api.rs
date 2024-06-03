@@ -205,6 +205,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             self.metrics.query_tx_blocks_limit.report(limit as u64);
             let descending = descending_order.unwrap_or_default();
             let opts = query.options.unwrap_or_default();
+            let filter_name = query_transactions_filter_name(&query.filter);
 
             // Retrieve 1 extra item for next cursor
             let mut digests = self
@@ -245,6 +246,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             self.metrics
                 .query_tx_blocks_result_size_total
                 .inc_by(data.len() as u64);
+            self.metrics
+                .query_tx_blocks_by_filter
+                .with_label_values(&[&filter_name])
+                .inc();
             Ok(Page {
                 data,
                 next_cursor,
@@ -508,4 +513,21 @@ impl<R: ReadApiServer> SuiRpcModule for IndexerApi<R> {
     fn rpc_doc_module() -> Module {
         IndexerApiOpenRpc::module_doc()
     }
+}
+
+fn query_transactions_filter_name(filter: &Option<TransactionFilter>) -> String {
+    match filter {
+        None => "none",
+        Some(TransactionFilter::Checkpoint(..)) => "checkpoint",
+        Some(TransactionFilter::MoveFunction { .. }) => "move_function",
+        Some(TransactionFilter::InputObject(..)) => "input_object",
+        Some(TransactionFilter::ChangedObject(..)) => "changed_object",
+        Some(TransactionFilter::FromAddress(..)) => "from_address",
+        Some(TransactionFilter::ToAddress(..)) => "to_address",
+        Some(TransactionFilter::FromAndToAddress { .. }) => "from_and_to_address",
+        Some(TransactionFilter::FromOrToAddress { .. }) => "from_or_to_address",
+        Some(TransactionFilter::TransactionKind(..)) => "transaction_kind",
+        Some(TransactionFilter::TransactionKindIn(..)) => "transaction_kind_in",
+    }
+    .to_string()
 }
