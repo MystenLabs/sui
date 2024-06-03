@@ -3,6 +3,7 @@
 use crate::NativesCostTable;
 use fastcrypto::secp256k1::Secp256k1KeyPair;
 use fastcrypto::secp256k1::Secp256k1PrivateKey;
+use fastcrypto::traits::RecoverableSigner;
 use fastcrypto::{
     error::FastCryptoError,
     hash::{Keccak256, Sha256},
@@ -25,7 +26,6 @@ use rand::SeedableRng;
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::crypto::KeypairTraits;
-use fastcrypto::traits::RecoverableSigner;
 
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
@@ -332,9 +332,15 @@ pub fn secp256k1_sign(
     let kp = Secp256k1KeyPair::from(sk);
 
     let signature = match (hash, recoverable) {
-        (KECCAK256, true) => kp.sign_recoverable_with_hash::<Keccak256>(&msg_ref).as_bytes().to_vec(),
+        (KECCAK256, true) => kp
+            .sign_recoverable_with_hash::<Keccak256>(&msg_ref)
+            .as_bytes()
+            .to_vec(),
         (KECCAK256, false) => kp.sign_with_hash::<Keccak256>(&msg_ref).as_bytes().to_vec(),
-        (SHA256, true) => kp.sign_recoverable_with_hash::<Sha256>(&msg_ref).as_bytes().to_vec(),
+        (SHA256, true) => kp
+            .sign_recoverable_with_hash::<Sha256>(&msg_ref)
+            .as_bytes()
+            .to_vec(),
         (SHA256, false) => kp.sign_with_hash::<Sha256>(&msg_ref).as_bytes().to_vec(),
         _ => return Ok(NativeResult::err(cost, INVALID_HASH_FUNCTION)),
     };
