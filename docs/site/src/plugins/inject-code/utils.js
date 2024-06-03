@@ -1,25 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Pass in an array of lines from code source.
-// Return the array without blank lines in beg or end
-// but leave whitespace indentation alone.
-exports.trimContent = (content) => {
-  let arr = content.split("\n");
-  let start = 0;
-  let end = arr.length;
-
-  while (start < end && arr[start].trim() === "") {
-    start++;
-  }
-
-  while (end > start && arr[end - 1].trim() === "") {
-    end--;
-  }
-
-  return arr.slice(start, end).join("\n");
-};
-
 // Fix the spurious whitespace when copying code
 // from the middle of source.
 exports.removeLeadingSpaces = (codeText, prepend = "") => {
@@ -46,7 +27,7 @@ const removeComments = (text, options) => {
     element.toLowerCase().includes("nocomment"),
   );
   if (cont) {
-    return text.replace(/^\s*\/\/.*$(?:\r\n?|\n)?/gm, "");
+    return text.replace(/^ *\/\/.*\n/gm, "");
   } else {
     return text;
   }
@@ -68,6 +49,31 @@ const removeTests = (text, options) => {
   }
 };
 
+// Remove blank lines from beginning and end of code source
+// but leave whitespace indentation alone. Also, replace multiple
+// blank lines that occur in succession.
+const trimContent = (content) => {
+  let arr = content.split("\n");
+  const filtered = arr.filter((line, index) => {
+    return (
+      line.trim() !== "" ||
+      (line.trim() === "" && arr[index - 1] && arr[index - 1].trim() !== "")
+    );
+  });
+  let start = 0;
+  let end = filtered.length;
+
+  while (start < end && filtered[start].trim() === "") {
+    start++;
+  }
+
+  while (end > start && filtered[end - 1].trim() === "") {
+    end--;
+  }
+
+  return filtered.slice(start, end).join("\n");
+};
+
 exports.processOptions = (text, options) => {
   // Replace all the //docs:: lines in code and license header
   let processed = text
@@ -82,6 +88,7 @@ exports.processOptions = (text, options) => {
     );
   processed = removeComments(processed, options);
   processed = removeTests(processed, options);
+  processed = trimContent(processed);
 
   return processed;
 };
@@ -93,18 +100,24 @@ exports.processOptions = (text, options) => {
 // match[1] is the (\s*) capture group to count indentation
 // text is all the code in the particular file
 exports.capturePrepend = (match, text) => {
-  const numSpaces = match[1] || 0;
+  const numSpaces =
+    Array.isArray(match) && match[1] ? match[1].replace(/\n/, "").length : 0;
   let preText = text.substring(0, match.index);
   const lines = preText.split("\n");
   let pre = [];
-  // Ignore the first blank line.
-  const start =
-    lines[lines.length - 1].trim() === "" ? lines.length - 2 : lines.length - 1;
-  for (let x = start; x > 0; x--) {
-    if (lines[x].trim() === "}" || lines[x].trim() === "") {
-      break;
+  for (let x = lines.length - 1; x > 0; x--) {
+    if (
+      lines[x].match(/^\s*\/\//) ||
+      lines[x].match(/^\s*#/) ||
+      lines[x].trim() === ""
+    ) {
+      // Capture sometimes incorrectly includes a blank line
+      // before function/struct. Don't include.
+      if (!(lines[x].trim() === "" && x === lines.length - 1)) {
+        pre.push(lines[x].substring(numSpaces));
+      }
     } else {
-      pre.push(lines[x].substring(numSpaces));
+      break;
     }
   }
   return pre.reverse().join("\n");

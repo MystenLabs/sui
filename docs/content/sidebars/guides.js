@@ -74,15 +74,6 @@ const guides = [
 			},
 			{
 				type: 'category',
-				label: 'NFTs',
-				link: {
-					type: 'doc',
-					id: 'guides/developer/nft',
-				},
-				items: ['guides/developer/nft/nft-rental'],
-			},
-			{
-				type: 'category',
 				label: 'Coins and Tokens',
 				link: {
 					type: 'doc',
@@ -93,6 +84,15 @@ const guides = [
 					'guides/developer/coin/in-game-token',
 					'guides/developer/coin/loyalty',
 				],
+			},
+			{
+				type: 'category',
+				label: 'NFTs',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/nft',
+				},
+				items: ['guides/developer/nft/nft-rental'],
 			},
 			{
 				type: 'category',

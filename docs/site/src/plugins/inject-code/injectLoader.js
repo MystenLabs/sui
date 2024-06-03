@@ -87,17 +87,17 @@ const addCodeInject = function (source) {
                       funMatch,
                       injectFileContent,
                     );
-                    if (!utils.checkBracesBalance(funMatch[0])) {
-                      const lastFun = funMatch[0].replace(/}$/, "");
-                      if (utils.checkBracesBalance(lastFun)) {
-                        funContent.push(
-                          utils.removeLeadingSpaces(lastFun, preFun),
-                        );
-                      } else {
-                        funContent.push(
-                          "Could not find valid function definition. If code is formatted correctly, consider using code comments instead.",
-                        );
-                      }
+                    // Check if last function in module, removing last } if true.
+                    if (
+                      funMatch[0].match(/}\s*}\s*$/s) &&
+                      !utils.checkBracesBalance(funMatch[0])
+                    ) {
+                      funContent.push(
+                        utils.removeLeadingSpaces(
+                          funMatch[0].replace(/}$/, ""),
+                          preFun,
+                        ),
+                      );
                     } else {
                       funContent.push(
                         utils.removeLeadingSpaces(funMatch[0], preFun),
@@ -122,15 +122,9 @@ const addCodeInject = function (source) {
                       structMatch,
                       injectFileContent,
                     );
-                    if (!utils.checkBracesBalance(structMatch[0])) {
-                      structContent.push(
-                        "Could not find valid struct definition. If code is formatted correctly, consider using code comments instead.",
-                      );
-                    } else {
-                      structContent.push(
-                        utils.removeLeadingSpaces(structMatch[0], preStruct),
-                      );
-                    }
+                    structContent.push(
+                      utils.removeLeadingSpaces(structMatch[0], preStruct),
+                    );
                   } else {
                     injectFileContent =
                       "Struct not found. If code is formatted correctly, consider using code comments instead.";
@@ -250,9 +244,7 @@ const addCodeInject = function (source) {
                   }
                 }
                 injectFileContent =
-                  utils.removeLeadingSpaces(
-                    utils.trimContent(injectFileContent),
-                  ) + closing;
+                  utils.removeLeadingSpaces(injectFileContent) + closing;
               }
 
               injectFileContent = utils.processOptions(
@@ -260,7 +252,6 @@ const addCodeInject = function (source) {
                 options,
               );
 
-              injectFileContent = utils.trimContent(injectFileContent);
               injectFileContent = utils.formatOutput(
                 language,
                 injectFile,

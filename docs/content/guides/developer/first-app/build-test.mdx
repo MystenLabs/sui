@@ -89,7 +89,7 @@ One of the solutions (as suggested in the error message), is to add the `drop` a
 
 To get the test to work, we will need to use the `transfer` module, which is imported by default. Add the following lines to the end of the test function (after the `assert!` call) to transfer ownership of the `sword` to a freshly created dummy address:
 
-{@inject: examples/move/first_package/sources/example.move#test-dummy}
+{@inject: examples/move/first_package/sources/example.move#test-dummy noComments}
 
 Run the test command again. Now the output shows a single successful test has run:
 
@@ -134,7 +134,7 @@ An instance of the `Scenario` struct contains a per-address object pool emulatin
 
 Update your `my_module.move` file to include a function callable from Sui that implements `sword` creation. With this in place, you can then add a multi-transaction test that uses the `test_scenario` module to test these new capabilities. Put this functions after the accessors (Part 5 in comments).
 
-{@inject: examples/move/first_package/sources/example.move#fun=sword_create}
+{@inject: examples/move/first_package/sources/example.move#fun=sword_create noComments}
 
 The code of the new functions uses struct creation and Sui-internal modules (`tx_context`) in a way similar to what you have seen in the previous sections. The important part is for the function to have correct signatures.
 
@@ -189,11 +189,11 @@ While the `sui move` command does not support publishing explicitly, you can sti
 
 The `init` function for the module in the running example creates a `Forge` object.
 
-{@inject: examples/move/first_package/sources/example.move#fun=init}
+{@inject: examples/move/first_package/sources/example.move#fun=init noComments}
 
 The tests you have so far call the `init` function, but the initializer function itself isn't tested to ensure it properly creates a `Forge` object. To test this functionality, add a `new_sword` function to take the forge as a parameter and to update the number of created swords at the end of the function. If this were an actual module, you'd replace the `sword_create` function with `new_sword`. To keep the existing tests from failing, however, we will keep both functions.
 
-{@inject: examples/move/first_package/sources/example.move#fun=new_sword}
+{@inject: examples/move/first_package/sources/example.move#fun=new_sword noComments}
 
 Now, create a function to test the module initialization:
 
@@ -201,7 +201,16 @@ Now, create a function to test the module initialization:
 
 As the new test function shows, the first transaction (explicitly) calls the initializer. The next transaction checks if the `Forge` object has been created and properly initialized. Finally, the admin uses the `Forge` to create a sword and transfer it to the initial owner.
 
-You can refer to the source code for the package (with all the tests and functions properly adjusted) in the [first_package](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package/sources/example.move) module in the `sui/examples` directory.
+You can refer to the source code for the package (with all the tests and functions properly adjusted) in the [first_package](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package/sources/example.move) module in the `sui/examples` directory. You can also use the following toggle to review the complete code.
+
+<details>
+<summary>
+Toggle complete source code 
+</summary>
+
+{@inject: examples/move/first_package/sources/example.move}
+
+</details>
 
 ## Related links
 
