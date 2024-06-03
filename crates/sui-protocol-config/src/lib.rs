@@ -2305,8 +2305,10 @@ impl ProtocolConfig {
                             .record_consensus_determined_version_assignments_in_prologue = true;
                     }
 
-                    // Run Mysticeti consensus by default.
-                    cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
+                    // Run Mysticeti consensus in testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
+                    }
                 }
                 // Use this template when making changes:
                 //
