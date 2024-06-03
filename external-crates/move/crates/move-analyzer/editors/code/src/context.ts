@@ -2,21 +2,54 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-import type { Configuration } from './configuration';
-import { lint, inlayHintsForType } from './configuration';
+import {
+    MOVE_CONF_NAME, LINT_OPT, TYPE_HINTS_OPT,
+    SUI_PATH_OPT, SERVER_PATH_OPT, Configuration,
+} from './configuration';
+import * as childProcess from 'child_process';
 import * as vscode from 'vscode';
 import * as lc from 'vscode-languageclient/node';
+import * as semver from 'semver';
 import { log } from './log';
-import { sync as commandExistsSync } from 'command-exists';
+import { assert } from 'console';
 import { IndentAction } from 'vscode';
+
+function semanticVersion(path: string, args?: readonly string[]): semver.SemVer | null {
+    const versionString = childProcess.spawnSync(
+        path, args, { encoding: 'utf8' },
+    );
+    if (versionString.stdout) {
+        // Version string looks as follows: 'COMMAND_NAME SEMVER-SHA'
+        const versionStringWords = versionString.stdout.split(' ');
+        if (versionStringWords.length < 2) {
+            return null;
+        }
+        const versionParts = versionStringWords[1]?.split('-');
+        if (!versionParts) {
+            return null;
+        }
+        if (versionParts.length < 2) {
+            return null;
+        }
+        return semver.parse(versionParts[0]);
+
+    }
+    return null;
+}
 
 /** Information passed along to each VS Code command defined by this extension. */
 export class Context {
     private client: lc.LanguageClient | undefined;
 
+    configuration: Configuration;
+
     private lintLevel: string;
 
     private inlayHintsType: boolean;
+
+    resolvedServerPath: string;
+
+    resolvedServerArgs: string[];
 
     // The vscode-languageclient module reads a configuration option named
     // "<extension-name>.trace.server" to determine whether to log messages. If a trace output
@@ -26,30 +59,22 @@ export class Context {
     // https://code.visualstudio.com/api/language-extensions/language-server-extension-guide#logging-support-for-language-server
     private readonly traceOutputChannel: vscode.OutputChannel;
 
-    private constructor(
+    constructor(
         private readonly extensionContext: Readonly<vscode.ExtensionContext>,
-        readonly configuration: Readonly<Configuration>,
         client: lc.LanguageClient | undefined = undefined,
     ) {
         this.client = client;
-        this.lintLevel = lint();
-        this.inlayHintsType = inlayHintsForType();
+        this.configuration = new Configuration();
+        log.info(`configuration: ${this.configuration.toString()}`);
+        this.lintLevel = this.configuration.lint;
+        this.inlayHintsType = this.configuration.inlayHintsForType;
+        // Default to configuration.serverPath but may change during server installation
+        this.resolvedServerPath = this.configuration.serverPath;
+        // Default to no additional args but may change during server installation
+        this.resolvedServerArgs = [];
         this.traceOutputChannel = vscode.window.createOutputChannel(
             'Move Language Server Trace',
         );
-    }
-
-    static create(
-        extensionContext: Readonly<vscode.ExtensionContext>,
-        configuration: Readonly<Configuration>,
-    ): Context | Error {
-        if (!commandExistsSync(configuration.serverPath)) {
-            return new Error(
-                `language server executable '${configuration.serverPath}' could not be found, so ` +
-                'most extension features will be unavailable to you.',
-            );
-        }
-        return new Context(extensionContext, configuration);
     }
 
     /**
@@ -120,7 +145,8 @@ export class Context {
      **/
     async startClient(): Promise<void> {
         const executable: lc.Executable = {
-            command: this.configuration.serverPath,
+            command: this.resolvedServerPath,
+            args: this.resolvedServerArgs,
         };
         const serverOptions: lc.ServerOptions = {
             run: executable,
@@ -177,25 +203,199 @@ export class Context {
      */
     registerOnDidChangeConfiguration(): void {
         vscode.workspace.onDidChangeConfiguration(async event => {
-            const changed = event.affectsConfiguration('move.lint') ||
-                            event.affectsConfiguration('move.inlay-hints.type');
-            if (changed) {
-                const newLintLevel = lint();
-                const newInlayHintsType = inlayHintsForType();
-                if (this.lintLevel !== newLintLevel ||
-                    this.inlayHintsType !== newInlayHintsType) {
-                    this.lintLevel = newLintLevel;
-                    this.inlayHintsType = newInlayHintsType;
-                    try {
-                        await this.stopClient();
+
+            const server_path_conf = MOVE_CONF_NAME.concat('.').concat(SERVER_PATH_OPT);
+            const sui_path_conf = MOVE_CONF_NAME.concat('.').concat(SUI_PATH_OPT);
+            const lint_conf = MOVE_CONF_NAME.concat('.').concat(LINT_OPT);
+            const type_hints_conf = MOVE_CONF_NAME.concat('.').concat(TYPE_HINTS_OPT);
+
+            const optionsChanged = event.affectsConfiguration(lint_conf) ||
+                event.affectsConfiguration(type_hints_conf);
+            const pathsChanged = event.affectsConfiguration(server_path_conf) ||
+                event.affectsConfiguration(sui_path_conf);
+
+            if (optionsChanged || pathsChanged) {
+                this.configuration = new Configuration();
+                log.info(`configuration: ${this.configuration.toString()}`);
+
+                this.lintLevel = this.configuration.lint;
+                this.inlayHintsType = this.configuration.inlayHintsForType;
+                try {
+                    await this.stopClient();
+                        if (pathsChanged) {
+                            await this.installServerBinary(this.extensionContext);
+                        }
                         await this.startClient();
-                    } catch (err) {
-                        // Handle error
-                        log.info(String(err));
-                    }
+                } catch (err) {
+                    // Handle error
+                    log.info(String(err));
                 }
             }
         });
 
     }
+
+    /**
+     * Installs language server binary in the default location if needed.
+     * On a happy path we just compare versions of installed and bundled
+     * binaries and don't do any actual file operations at all.
+     *
+     * The actual algorithm deciding on how this works as follows.
+     *
+     * - if the user set an explicit path for the binary, this path is used
+     *   even if the binary at that path does not work (which is reported)
+     * - otherwise the highest version of installed binary is determined
+     *   (between previously installed standalone binary and the CLI binary)
+     * - if nothing is installed and no binary is bundled an error is reported
+     * - if something is installed and no binary is bundled then the highest
+     *   installed version is used
+     * - if the highest installed version is higher than the bundled one,
+     *   the installed version is used
+     * - otherwise, either there is nothing installed or the highest installed
+     *   version is lower than the bundled one in which case we attempt installation
+     *
+     * @returns `true` if server binary installation succeeded, `false` otherwise.
+     */
+    async installServerBinary(extensionContext: vscode.ExtensionContext): Promise<boolean> {
+        log.info('Installing language server binary');
+        // Args to run move-analyzer by invoking server binary
+        const serverArgs: string[] = [];
+        // Args to run move-analyzer by invoking CLI binary
+        const cliArgs = ['analyzer'];
+
+        // Args to get version out of the server binary
+        const serverVersionArgs = serverArgs.concat(['--version']);
+        // Args to get version out of CLI binary
+        const cliVersionArgs = cliArgs.concat(['--version']);
+
+        // Check if server binary is bundled with the extension
+        const bundledServerPath = vscode.Uri.joinPath(extensionContext.extensionUri,
+                                                    'language-server',
+                                                    this.configuration.serverName);
+        const bundledVersion = semanticVersion(bundledServerPath.fsPath, serverVersionArgs);
+        log.info(`bundled version: ${bundledVersion}`);
+
+        const standaloneVersion = semanticVersion(this.configuration.serverPath, serverVersionArgs);
+        log.info(`standalone version: ${standaloneVersion}`);
+
+        const cliVersion = semanticVersion(this.configuration.suiPath, cliVersionArgs);
+        log.info(`cli version: ${cliVersion}`);
+
+        if (this.configuration.serverPath !== this.configuration.defaultServerPath.fsPath) {
+            // User has overwritten default server path (need to compare paths as comparing URIs fails
+            // for some reason even if one is initialized from another).
+            if (standaloneVersion === null) {
+                // The server binary on user-overwritten path does not return version number.
+                // Need to use modal messages, otherwise the promise returned from is not resolved
+                // (and the extension blocks), which can confusing.
+                const items: vscode.MessageItem = { title: 'OK', isCloseAffordance: true };
+                await vscode.window.showInformationMessage(
+                    `The move-analyzer binary at the user-specified path ('${this.configuration.serverPath}') ` +
+                    'is not working. Put the corrent binary in the path or reset user settings and ' +
+                    'reinstall the extension to use binary in the default location.',
+                    { modal: true },
+                    items,
+                );
+                return false;
+            } // Otherwise simply return and use the existing user-specified binary.
+            log.info(`Using move-analyzer binary at user-specified path '${this.configuration.serverPath}'`);
+            return true;
+        }
+
+        assert(this.configuration.serverPath === this.configuration.defaultServerPath.fsPath);
+
+        // What's the highest version installed? Also track path and arguments to run analyzer
+        // with the highest version
+        let highestVersion = null;
+        if (standaloneVersion !== null) {
+            highestVersion = standaloneVersion;
+            this.resolvedServerPath = this.configuration.serverPath;
+            this.resolvedServerArgs = serverArgs;
+        }
+        if (cliVersion !== null) {
+            if (standaloneVersion === null || semver.gt(cliVersion, standaloneVersion)) {
+                highestVersion = cliVersion;
+                this.resolvedServerPath = this.configuration.suiPath;
+                this.resolvedServerArgs = cliArgs;
+            }
+        }
+
+        if (highestVersion === null && bundledVersion === null) {
+            // There is no installed binary and there is no bundled binary.
+            // See a comment earlier in this function for why we need to use modal messages. In this
+            // particular case,  the extension would never activate and its settings that could be
+            // used to override location of the server binary would not be available.
+            const items: vscode.MessageItem = { title: 'OK', isCloseAffordance: true };
+             await vscode.window.showErrorMessage(
+                'Pre-built move-analyzer binary is not available for this platform. ' +
+                'Follow the instructions in the move-analyzer Visual Studio Code extension ' +
+                'README to manually install the language server.',
+                { modal: true },
+                items,
+            );
+            return false;
+        }
+
+        if (highestVersion !== null && bundledVersion === null) {
+            // No bundled binary but it's OK because we already have one installed
+            log.info(`Using installed move-analyzer at '${this.resolvedServerPath}'`);
+            return true;
+        }
+
+        if (highestVersion !== null &&
+            bundledVersion !== null &&
+            !semver.gt(bundledVersion, highestVersion)) {
+            // Bundled binary is available but it has lower version than
+            // the installed one or they are equal
+            log.info(`Using (highest version) installed move-analyzer at '${this.resolvedServerPath}'`);
+            return true;
+        }
+
+        assert(highestVersion === null ||
+            bundledVersion === null ||
+            !semver.gt(bundledVersion, highestVersion));
+
+        // Install bundled version if it exists
+
+        if (bundledVersion === null) {
+            // See a comment earlier in this function for why we need to use modal messages. In this
+            // particular case,  the extension would never activate and its settings that could be
+            // used to override location of the server binary would not be available.
+            const items: vscode.MessageItem = { title: 'OK', isCloseAffordance: true };
+            await vscode.window.showErrorMessage(
+                'Pre-built move-analyzer binary is not available for this platform. ' +
+                'Follow the instructions in the move-analyzer Visual Studio Code extension ' +
+                'README to manually install the language server.',
+                { modal: true },
+                items,
+            );
+            return false;
+        }
+
+        // Check if directory to store server binary exists (create it if necessary).
+        const serverDirExists = await vscode.workspace.fs.stat(this.configuration.defaultServerDir).then(
+            () => true,
+            () => false,
+        );
+        if (serverDirExists) {
+            const serverPathExists = await vscode.workspace.fs.stat(this.configuration.defaultServerPath).then(
+                () => true,
+                () => false,
+            );
+            if (serverPathExists) {
+                // Delete existing binary just in case
+                await vscode.workspace.fs.delete(this.configuration.defaultServerPath);
+            }
+        } else {
+            await vscode.workspace.fs.createDirectory(this.configuration.defaultServerDir);
+        }
+
+        await vscode.workspace.fs.copy(bundledServerPath, this.configuration.defaultServerPath);
+
+        this.resolvedServerPath = this.configuration.defaultServerPath.fsPath;
+        this.resolvedServerArgs = serverArgs;
+        log.info(`Installed move-analyzer at '${this.configuration.defaultServerPath.fsPath}'`);
+        return true;
+    }
+
 } // Context
