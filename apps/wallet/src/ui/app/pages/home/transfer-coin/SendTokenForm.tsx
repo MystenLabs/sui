@@ -14,7 +14,6 @@ import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
 import {
 	CoinFormat,
-	isSuiNSName,
 	useCoinMetadata,
 	useFormatCoin,
 	useSuiNSEnabled,
@@ -22,7 +21,7 @@ import {
 import { useSuiClient } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
 import { type CoinStruct } from '@mysten/sui/client';
-import { SUI_TYPE_ARG } from '@mysten/sui/utils';
+import { SUI_TYPE_ARG, isValidSuiNSName } from '@mysten/sui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { Field, Form, Formik, useFormikContext } from 'formik';
 import { useEffect, useMemo } from 'react';
@@ -92,7 +91,7 @@ function GasBudgetEstimation({
 			}
 
 			let to = values.to;
-			if (suiNSEnabled && isSuiNSName(values.to)) {
+			if (suiNSEnabled && isValidSuiNSName(values.to)) {
 				const address = await client.resolveNameServiceAddress({
 					name: values.to,
 				});
@@ -201,7 +200,7 @@ export function SendTokenForm({
 						.sort((a, b) => Number(b.balance) - Number(a.balance))
 						.map(({ coinObjectId }) => coinObjectId);
 
-					if (suiNSEnabled && isSuiNSName(to)) {
+					if (suiNSEnabled && isValidSuiNSName(to)) {
 						const address = await client.resolveNameServiceAddress({
 							name: to,
 						});
@@ -298,7 +297,7 @@ export function SendTokenForm({
 									variant="primary"
 									loading={isSubmitting}
 									disabled={
-										!isValid || isSubmitting || !hasEnoughBalance || values.gasBudgetEst === ''
+										 isSubmitting || !hasEnoughBalance || values.gasBudgetEst === ''
 									}
 									size="tall"
 									text="Review"
