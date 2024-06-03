@@ -342,8 +342,8 @@ The `useSignTransactionBlock` has been named to `useSignTransaction` and now ret
 of transactionBlockBytes
 
 ```diff
-- const { signTransactionBlock } = useSignTransactionBlock()
-+ const { signTransaction } = useSignTransaction()
+- const { mutate: signTransactionBlock } = useSignTransactionBlock()
++ const { mutate: signTransaction } = useSignTransaction()
   ...
 - const { signature, transactionBlockBytes } = await signTransactionBlock({ transactionBlock })
 + const { signature, bytes } = await signTransaction({ transaction })
@@ -361,7 +361,7 @@ By default useSignAndExecuteTransactionBlock will now return an object with the 
 and the bcs encoded transaction effects:
 
 ```ts
-const { signAndExecuteTransaction } = useSignAndExecuteTransaction()
+const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction()
 ...
 const { digest, effects } = await signAndExecuteTransaction({ transaction })
 ```
