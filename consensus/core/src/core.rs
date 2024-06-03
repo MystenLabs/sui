@@ -484,8 +484,7 @@ impl Core {
                     tracing::info!(
                         "Leader schedule change triggered at commit index {last_commit_index}"
                     );
-                    self.leader_schedule
-                        .update_leader_schedule(self.dag_state.clone());
+                    self.leader_schedule.update_leader_schedule(&self.dag_state);
                     commits_until_update = self
                         .leader_schedule
                         .commits_until_leader_schedule_update(self.dag_state.clone());
@@ -722,11 +721,9 @@ mod test {
     use std::{collections::BTreeSet, time::Duration};
 
     use consensus_config::{local_committee_and_keys, AuthorityIndex, Parameters, Stake};
+    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
     use sui_protocol_config::ProtocolConfig;
-    use tokio::{
-        sync::mpsc::{unbounded_channel, UnboundedReceiver},
-        time::sleep,
-    };
+    use tokio::time::sleep;
 
     use super::*;
     use crate::{
@@ -783,7 +780,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -899,7 +896,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -994,7 +991,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -1102,7 +1099,7 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -1647,7 +1644,7 @@ mod test {
             // Need at least one subscriber to the block broadcast channel.
             let block_receiver = signal_receivers.block_broadcast_receiver();
 
-            let (commit_sender, commit_receiver) = unbounded_channel();
+            let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
             let commit_observer = CommitObserver::new(
                 context.clone(),
                 CommitConsumer::new(commit_sender.clone(), 0, 0),

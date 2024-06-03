@@ -27,8 +27,20 @@ export const suiFeatures: SuiFeatures = {
 		version: '1.0.0',
 		signTransactionBlock: vi.fn(),
 	},
+	'sui:signTransaction': {
+		version: '2.0.0',
+		signTransaction: vi.fn(),
+	},
 	'sui:signAndExecuteTransactionBlock': {
 		version: '1.0.0',
 		signAndExecuteTransactionBlock: vi.fn(),
+	},
+	'sui:signAndExecuteTransaction': {
+		version: '2.0.0',
+		signAndExecuteTransaction: vi.fn(),
+	},
+	'sui:reportTransactionEffects': {
+		version: '1.0.0',
+		reportTransactionEffects: vi.fn(),
 	},
 };

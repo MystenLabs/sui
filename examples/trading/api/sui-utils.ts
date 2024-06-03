@@ -5,10 +5,10 @@ import { execSync } from 'child_process';
 import { readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui/transactions';
+import { fromB64 } from '@mysten/sui/utils';
 
 export type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
 
@@ -87,7 +87,7 @@ export const publishPackage = async ({
 	});
 
 	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
-	txb.transferObjects([cap], txb.pure(getActiveAddress()));
+	txb.transferObjects([cap], getActiveAddress());
 
 	const results = await signAndExecute(txb, network);
 

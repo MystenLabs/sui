@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::abi::{EthBridgeCommittee, EthSuiBridge};
 use crate::config::BridgeNodeConfig;
 use crate::config::EthConfig;
 use crate::config::SuiConfig;
@@ -14,9 +15,12 @@ use ethers::middleware::SignerMiddleware;
 use ethers::prelude::*;
 use ethers::providers::{Http, Provider};
 use ethers::signers::Wallet;
+use ethers::types::Address as EthAddress;
 use fastcrypto::ed25519::Ed25519KeyPair;
+use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::secp256k1::Secp256k1KeyPair;
 use fastcrypto::traits::EncodeDecodeBase64;
+use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -25,6 +29,7 @@ use sui_config::Config;
 use sui_json_rpc_types::SuiExecutionStatus;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_keys::keypair_file::read_key;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::SuiAddress;
@@ -32,6 +37,7 @@ use sui_types::bridge::BridgeChainId;
 use sui_types::bridge::{BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME};
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::crypto::ToFromBytes;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::BRIDGE_PACKAGE_ID;
@@ -81,6 +87,52 @@ pub fn generate_bridge_client_key_and_write_to_file(
     let contents = kp.encode_base64();
     std::fs::write(path, contents)
         .map_err(|err| anyhow!("Failed to write encoded key to path: {:?}", err))
+}
+
+/// Given the address of SuiBridge Proxy, return the addresses of the committee, limiter, vault, and config.
+pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 'static>(
+    bridge_proxy_address: EthAddress,
+    provider: &Arc<Provider<P>>,
+) -> anyhow::Result<(EthAddress, EthAddress, EthAddress, EthAddress)> {
+    let sui_bridge = EthSuiBridge::new(bridge_proxy_address, provider.clone());
+    let committee_address: EthAddress = sui_bridge.committee().call().await?;
+    let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
+    let vault_address: EthAddress = sui_bridge.vault().call().await?;
+    let committee = EthBridgeCommittee::new(committee_address, provider.clone());
+    let config_address: EthAddress = committee.config().call().await?;
+
+    Ok((
+        committee_address,
+        limiter_address,
+        vault_address,
+        config_address,
+    ))
+}
+
+/// Read bridge key from a file and print the corresponding information.
+/// If `is_validator_key` is true, the key must be a Secp256k1 key.
+pub fn examine_key(path: &PathBuf, is_validator_key: bool) -> Result<(), anyhow::Error> {
+    let key = read_key(path, is_validator_key)?;
+    let sui_address = SuiAddress::from(&key.public());
+    let pubkey = match key {
+        SuiKeyPair::Secp256k1(kp) => {
+            println!("Secp256k1 key:");
+            let eth_address = BridgeAuthorityPublicKeyBytes::from(&kp.public).to_eth_address();
+            println!("Corresponding Ethereum address: {:x}", eth_address);
+            kp.public.as_bytes().to_vec()
+        }
+        SuiKeyPair::Ed25519(kp) => {
+            println!("Ed25519 key:");
+            kp.public().as_bytes().to_vec()
+        }
+        SuiKeyPair::Secp256r1(kp) => {
+            println!("Secp256r1 key:");
+            kp.public().as_bytes().to_vec()
+        }
+    };
+    println!("Corresponding Sui address: {:?}", sui_address);
+    println!("Corresponding PublicKey: {:?}", Hex::encode(pubkey));
+    Ok(())
 }
 
 /// Generate Bridge Node Config template and write to a file.

@@ -66,14 +66,14 @@ The backend code is split in the following sub directories:
 
 ### High-Level endpoints specification
 
-| HTTP Method | Path                  | Description                                                   | Request Body                                      |
-| ----------- | --------------------- | ------------------------------------------------------------- | ------------------------------------------------- |
+| HTTP Method | Path                    | Description                                                   | Request Body                                      |
+| ----------- | ----------------------- | ------------------------------------------------------------- | ------------------------------------------------- |
 | GET         | `/api/health`           | A simple healthcheck endpoint to check the API availability   | txDigest                                          |
 | POST        | `/api/games/{id}/deal`  | Executes the initial deal transaction after the game creation | txDigest                                          |
 | POST        | `/api/games/{id}/hit`   | Executes a hit move                                           | txDigest, id of corresponding HitRequest object   |
 | POST        | `/api/games/{id}/stand` | Executes a stand move                                         | txDigest, id of corresponding StandRequest object |
 
-### Need of usage of waitForTransactionBlock
+### Need of usage of waitForTransaction
 
 An interesting aspect of developing a dApp on Sui, that is coupled to using a full node with/without a load balancer, and requires attention by the developer, is the occurrence of read-after-write and write-after-write cases.
 
@@ -81,13 +81,13 @@ An interesting aspect of developing a dApp on Sui, that is coupled to using a fu
 
 As an example, in the blackjack game, just after the create-game transaction that the user executes, the dealer executes the initial-deal transaction. This one accepts an argument and modifies the game object, meaning that you are using an object that was just created.
 
-To ensure that the game object is available in the Full node that the dealer is using, we need to call waitForTransactionBlock after the create-game transaction.
+To ensure that the game object is available in the Full node that the dealer is using, we need to call waitForTransaction after the create-game transaction.
 
 #### Hit and stand transactions
 
 In the same way, every time you re-fetch the game object in the frontend, make sure that the previous transaction that modified the game object is already available in the Full node.
 
-This leads to the need of exchanging the `txDigest` between the frontend and the backend, and use `waitForTransactionBlock` on each write-after-write or read-after-write case.
+This leads to the need of exchanging the `txDigest` between the frontend and the backend, and use `waitForTransaction` on each write-after-write or read-after-write case.
 
 ## Frontend
 
@@ -98,12 +98,13 @@ The [`page` component](https://github.com/MystenLabs/blackjack-sui/blob/main/app
 The frontend is a NextJS project, that follows the NextJS App Router [project structure](https://nextjs.org/docs/app/building-your-application/routing).
 The main code of the frontend lies under the [app/src/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/) directory.
 The main sub-directories are:
-  - [app/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/): The main code of the pages and the API endpoints.
-  - [components/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components): The reusable components of the app, organized in sub-directories.
-  - [hooks/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks): The custom hooks used in the app.
-  - [helpers/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/helpers), [utils/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/utils), [lib/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/lib): Multiple helper functions and utilities.
-  - [types/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/types): The types/interfaces used in the app.
-  - [styles/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/styles): The global css files to style our app.
+
+- [app/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/): The main code of the pages and the API endpoints.
+- [components/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components): The reusable components of the app, organized in sub-directories.
+- [hooks/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks): The custom hooks used in the app.
+- [helpers/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/helpers), [utils/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/utils), [lib/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/lib): Multiple helper functions and utilities.
+- [types/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/types): The types/interfaces used in the app.
+- [styles/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/styles): The global css files to style our app.
 
 ### Components and custom hooks for state management
 

@@ -3,8 +3,8 @@
 
 import { isSuiNSName, useSuiNSEnabled } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
-import { type SuiClient } from '@mysten/sui.js/client';
-import { isValidSuiAddress } from '@mysten/sui.js/utils';
+import { type SuiClient } from '@mysten/sui/client';
+import { isValidSuiAddress } from '@mysten/sui/utils';
 import { useMemo } from 'react';
 import * as Yup from 'yup';
 

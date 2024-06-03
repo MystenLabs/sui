@@ -14,6 +14,7 @@ use crate::{
     block::BlockAPI as _,
     context::Context,
     dag_state::DagState,
+    error::ConsensusError,
     network::{NetworkClient, NetworkService},
     Round,
 };
@@ -170,10 +171,17 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                             .handle_send_block(peer, block.clone())
                             .await;
                         if let Err(e) = result {
-                            info!(
-                                "Failed to process block from peer {}: {}. Block: {:?}",
-                                peer, e, block,
-                            );
+                            match e {
+                                ConsensusError::BlockRejected { block_ref, reason } => {
+                                    debug!(
+                                        "Failed to process block from peer {} for block {:?}: {}",
+                                        peer, block_ref, reason
+                                    );
+                                }
+                                _ => {
+                                    info!("Invalid block received from peer {}: {}", peer, e,);
+                                }
+                            }
                         }
                         // Reset retries when a block is received.
                         retries = 0;

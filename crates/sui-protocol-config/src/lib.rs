@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 47;
+const MAX_PROTOCOL_VERSION: u64 = 49;
 
 // Record history of protocol version allocations here:
 //
@@ -129,8 +129,13 @@ const MAX_PROTOCOL_VERSION: u64 = 47;
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 // Version 46: Enable native bridge in testnet
 //             Enable resharing at the same initial shared version.
-// Version 47: Use tonic networking for Mysticeti.
+// Version 47: Deepbook changes (framework update)
+// Version 48: Use tonic networking for Mysticeti.
 //             Resolve Move abort locations to the package id instead of the runtime module ID.
+//             Enable random beacon in testnet.
+// Version 49: Enable Move enums on devnet.
+//             Enable VDF in devnet
+//             Run Mysticeti consensus by default.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -442,6 +447,22 @@ struct FeatureFlags {
     // Resolve Move abort locations to the package id instead of the runtime module ID.
     #[serde(skip_serializing_if = "is_false")]
     resolve_abort_locations_to_package_id: bool,
+
+    // Enables the use of the Mysticeti committed sub dag digest to the `ConsensusCommitInfo` in checkpoints.
+    // When disabled the default digest is used instead. It's important to have this guarded behind
+    // a flag as it will lead to checkpoint forks.
+    #[serde(skip_serializing_if = "is_false")]
+    mysticeti_use_committed_subdag_digest: bool,
+
+    // Enable VDF
+    #[serde(skip_serializing_if = "is_false")]
+    enable_vdf: bool,
+
+    // Controls whether consensus handler should record consensus determined shared object version
+    // assignments in consensus commit prologue transaction.
+    // The purpose of doing this is to enable replaying transaction without transaction effects.
+    #[serde(skip_serializing_if = "is_false")]
+    record_consensus_determined_version_assignments_in_prologue: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -474,6 +495,7 @@ pub enum PerObjectCongestionControlMode {
     #[default]
     None, // No congestion control.
     TotalGasBudget, // Use txn gas budget as execution cost.
+    TotalTxCount,   // Use total txn count as execution cost.
 }
 
 impl PerObjectCongestionControlMode {
@@ -615,6 +637,10 @@ pub struct ProtocolConfig {
     binary_field_handles: Option<u16>,
     binary_field_instantiations: Option<u16>,
     binary_friend_decls: Option<u16>,
+    binary_enum_defs: Option<u16>,
+    binary_enum_def_instantiations: Option<u16>,
+    binary_variant_handles: Option<u16>,
+    binary_variant_instantiation_handles: Option<u16>,
 
     /// Maximum size of the `contents` part of an object, in bytes. Enforced by the Sui adapter when effects are produced.
     max_move_object_size: Option<u64>,
@@ -706,6 +732,9 @@ pub struct ProtocolConfig {
 
     /// Maximum depth of a Move value within the VM.
     max_move_value_depth: Option<u64>,
+
+    /// Maximum number of variants in an enum. Enforced by the bytecode verifier at signing.
+    max_move_enum_variants: Option<u64>,
 
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
@@ -1023,6 +1052,9 @@ pub struct ProtocolConfig {
     // zklogin::check_zklogin_issuer
     check_zklogin_issuer_cost_base: Option<u64>,
 
+    vdf_verify_vdf_cost: Option<u64>,
+    vdf_hash_to_input_cost: Option<u64>,
+
     // Const params for consensus scoring decision
     // The scaling factor property for the MED outlier detection
     scoring_decision_mad_divisor: Option<f64>,
@@ -1284,6 +1316,11 @@ impl ProtocolConfig {
         self.feature_flags.include_consensus_digest_in_prologue
     }
 
+    pub fn record_consensus_determined_version_assignments_in_prologue(&self) -> bool {
+        self.feature_flags
+            .record_consensus_determined_version_assignments_in_prologue
+    }
+
     pub fn hardened_otw_check(&self) -> bool {
         self.feature_flags.hardened_otw_check
     }
@@ -1330,6 +1367,14 @@ impl ProtocolConfig {
 
     pub fn resolve_abort_locations_to_package_id(&self) -> bool {
         self.feature_flags.resolve_abort_locations_to_package_id
+    }
+
+    pub fn mysticeti_use_committed_subdag_digest(&self) -> bool {
+        self.feature_flags.mysticeti_use_committed_subdag_digest
+    }
+
+    pub fn enable_vdf(&self) -> bool {
+        self.feature_flags.enable_vdf
     }
 }
 
@@ -1482,6 +1527,10 @@ impl ProtocolConfig {
             binary_field_handles: None,
             binary_field_instantiations: None,
             binary_friend_decls: None,
+            binary_enum_defs: None,
+            binary_enum_def_instantiations: None,
+            binary_variant_handles: None,
+            binary_variant_instantiation_handles: None,
             max_move_object_size: Some(250 * 1024),
             max_move_package_size: Some(100 * 1024),
             max_publish_or_upgrade_per_ptb: None,
@@ -1737,6 +1786,9 @@ impl ProtocolConfig {
             // zklogin::check_zklogin_issuer
             check_zklogin_issuer_cost_base: None,
 
+            vdf_verify_vdf_cost: None,
+            vdf_hash_to_input_cost: None,
+
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
 
@@ -1747,6 +1799,7 @@ impl ProtocolConfig {
             // Limits the length of a Move identifier
             max_move_identifier_len: None,
             max_move_value_depth: None,
+            max_move_enum_variants: None,
 
             gas_rounding_step: None,
 
@@ -2213,12 +2266,47 @@ impl ProtocolConfig {
                     // Enable resharing at same initial version
                     cfg.feature_flags.reshare_at_same_initial_version = true;
                 }
-                47 => {
+                47 => {}
+                48 => {
                     // Use tonic networking for Mysticeti.
                     cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
 
                     // Enable resolving abort code IDs to package ID instead of runtime module ID
                     cfg.feature_flags.resolve_abort_locations_to_package_id = true;
+
+                    // Enable random beacon on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(3000);
+                        cfg.random_beacon_min_round_interval_ms = Some(200);
+                    }
+
+                    // Enable the committed sub dag digest inclusion on the commit output
+                    cfg.feature_flags.mysticeti_use_committed_subdag_digest = true;
+                }
+                49 => {
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.move_binary_format_version = Some(7);
+                    }
+
+                    // enable vdf in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_vdf = true;
+                        // Set to 30x and 2x the cost of a signature verification for now. This
+                        // should be updated along with other native crypto functions.
+                        cfg.vdf_verify_vdf_cost = Some(1500);
+                        cfg.vdf_hash_to_input_cost = Some(100);
+                    }
+
+                    // Only enable consensus commit prologue V3 in devnet.
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .record_consensus_determined_version_assignments_in_prologue = true;
+                    }
+
+                    // Run Mysticeti consensus by default.
+                    cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
                 }
                 // Use this template when making changes:
                 //
@@ -2259,7 +2347,7 @@ impl ProtocolConfig {
             max_dependency_depth: Some(self.max_dependency_depth() as usize),
             max_fields_in_struct: Some(self.max_fields_in_struct() as usize),
             max_function_definitions: Some(self.max_function_definitions() as usize),
-            max_struct_definitions: Some(self.max_struct_definitions() as usize),
+            max_data_definitions: Some(self.max_struct_definitions() as usize),
             max_constant_vector_len: Some(self.max_move_vector_len()),
             max_back_edges_per_function,
             max_back_edges_per_module,
@@ -2269,6 +2357,7 @@ impl ProtocolConfig {
             reject_mutable_random_on_entry_functions: self
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
+            max_variants_in_enum: self.max_move_enum_variants_as_option(),
         }
     }
 

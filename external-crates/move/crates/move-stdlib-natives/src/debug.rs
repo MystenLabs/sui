@@ -221,10 +221,15 @@ mod testing {
     fn get_annotated_struct_layout(
         context: &NativeContext,
         ty: &Type,
-    ) -> PartialVMResult<A::MoveStructLayout> {
+    ) -> PartialVMResult<A::MoveDatatypeLayout> {
         let annotated_type_layout = context.type_to_fully_annotated_layout(ty)?.unwrap();
         match annotated_type_layout {
-            A::MoveTypeLayout::Struct(annotated_struct_layout) => Ok(annotated_struct_layout),
+            A::MoveTypeLayout::Struct(annotated_struct_layout) => {
+                Ok(A::MoveDatatypeLayout::Struct(annotated_struct_layout))
+            }
+            A::MoveTypeLayout::Enum(annotated_enum_layout) => {
+                Ok(A::MoveDatatypeLayout::Enum(annotated_enum_layout))
+            }
             _ => Err(
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR).with_message(
                     "Could not convert Type to fully-annotated MoveTypeLayout via NativeContext"
@@ -289,8 +294,11 @@ mod testing {
         }
     }
 
-    fn is_vector_or_struct_move_value(mv: &A::MoveValue) -> bool {
-        matches!(mv, A::MoveValue::Vector(_) | A::MoveValue::Struct(_))
+    fn is_vector_or_data_move_value(mv: &A::MoveValue) -> bool {
+        matches!(
+            mv,
+            A::MoveValue::Vector(_) | A::MoveValue::Struct(_) | A::MoveValue::Variant(_)
+        )
     }
 
     /// Prints any `Value` in a user-friendly manner.
@@ -385,7 +393,12 @@ mod testing {
                     }
                 };
 
-                let annotated_struct_layout = get_annotated_struct_layout(context, &ty)?;
+                let A::MoveDatatypeLayout::Struct(annotated_struct_layout) =
+                    get_annotated_struct_layout(context, &ty)?
+                else {
+                    return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                        .with_message("Expected MoveDatatypeLayout::Struct".to_string()));
+                };
                 let decorated_struct = move_struct.decorate(&annotated_struct_layout);
 
                 print_move_value(
@@ -398,7 +411,34 @@ mod testing {
                     include_int_types,
                 )?;
             }
-            // For non-structs and non-vectors, convert them to a MoveValue and print them
+            R::MoveTypeLayout::Enum(_) => {
+                let move_struct = match val.as_move_value(&ty_layout) {
+                    R::MoveValue::Variant(v) => v,
+                    _ => {
+                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                            .with_message("Expected MoveValue::MoveStruct".to_string()))
+                    }
+                };
+
+                let A::MoveDatatypeLayout::Enum(annotated_enum_layout) =
+                    get_annotated_struct_layout(context, &ty)?
+                else {
+                    return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                        .with_message("Expected MoveDatatypeLayout::Enum".to_string()));
+                };
+                let decorated_struct = move_struct.decorate(&annotated_enum_layout);
+
+                print_move_value(
+                    out,
+                    A::MoveValue::Variant(decorated_struct),
+                    move_std_addr,
+                    depth,
+                    canonicalize,
+                    single_line,
+                    include_int_types,
+                )?;
+            }
+            // For non-structs, non-enums, and non-vectors, convert them to a MoveValue and print them
             _ => {
                 let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
                 print_move_value(
@@ -498,7 +538,7 @@ mod testing {
                         .map_err(fmt_error_to_partial_vm_error)?;
                 } else {
                     let is_complex_inner_type =
-                        vec.last().map_or(false, is_vector_or_struct_move_value);
+                        vec.last().map_or(false, is_vector_or_data_move_value);
                     print_non_u8_vector(
                         out,
                         move_std_addr,
@@ -612,6 +652,69 @@ mod testing {
                     }
                     write!(out, "{}", STRUCT_END).map_err(fmt_error_to_partial_vm_error)?;
                 }
+            }
+            A::MoveValue::Variant(A::MoveVariant {
+                type_,
+                variant_name,
+                fields,
+                tag: _,
+            }) => {
+                let type_tag = TypeTag::from(type_.clone());
+                write!(out, "{}::{} ", type_tag, variant_name)
+                    .map_err(fmt_error_to_partial_vm_error)?;
+                write!(out, "{}", STRUCT_BEGIN).map_err(fmt_error_to_partial_vm_error)?;
+
+                // For each field, print its name and value (and type)
+                let mut iter = fields.into_iter();
+                if let Some((field_name, field_value)) = iter.next() {
+                    // Start an indented new line
+                    if !single_line {
+                        writeln!(out).map_err(fmt_error_to_partial_vm_error)?;
+                        print_padding_at_depth(out, depth + 1)?;
+                    }
+
+                    write!(out, "{}: ", field_name.into_string())
+                        .map_err(fmt_error_to_partial_vm_error)?;
+                    print_move_value(
+                        out,
+                        field_value,
+                        move_std_addr,
+                        depth + 1,
+                        canonicalize,
+                        single_line,
+                        include_int_types,
+                    )?;
+
+                    for (field_name, field_value) in iter {
+                        write!(out, "{}", VECTOR_OR_STRUCT_SEP)
+                            .map_err(fmt_error_to_partial_vm_error)?;
+
+                        if !single_line {
+                            writeln!(out).map_err(fmt_error_to_partial_vm_error)?;
+                            print_padding_at_depth(out, depth + 1)?;
+                        } else {
+                            write!(out, " ").map_err(fmt_error_to_partial_vm_error)?;
+                        }
+                        write!(out, "{}: ", field_name.into_string())
+                            .map_err(fmt_error_to_partial_vm_error)?;
+                        print_move_value(
+                            out,
+                            field_value,
+                            move_std_addr,
+                            depth + 1,
+                            canonicalize,
+                            single_line,
+                            include_int_types,
+                        )?;
+                    }
+                }
+
+                // Ends printing the struct with "}", which could be on its own line
+                if !single_line {
+                    writeln!(out).map_err(fmt_error_to_partial_vm_error)?;
+                    print_padding_at_depth(out, depth)?;
+                }
+                write!(out, "{}", STRUCT_END).map_err(fmt_error_to_partial_vm_error)?;
             }
         }
 

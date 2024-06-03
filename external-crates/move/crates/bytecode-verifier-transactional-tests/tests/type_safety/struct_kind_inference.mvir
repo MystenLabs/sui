@@ -60,3 +60,66 @@ module 0x1.M5 {
         return (copy(s), move(s));
     }
 }
+
+//# publish
+// ensure that generic enums instantiated with enum types behave like resources
+module 0x2.M1 {
+    enum MyResource { V{ b: bool } }
+    enum S<T> { V{ t: T } }
+
+    // verifer should reject; didn't move resource;
+    public p(s: Self.S<Self.MyResource>) {
+    label b0:
+        return;
+    }
+}
+
+//# publish
+module 0x2.M2 {
+    enum MyResource { V{ b: bool } }
+    enum S<T> { V{ t: T } }
+
+    // verifier should reject; drops s2 on the floor
+    public p(s1: Self.S<Self.MyResource>, s2: Self.S<Self.MyResource>): Self.S<Self.MyResource> {
+    label b0:
+        s1 = move(s2);
+        return move(s1);
+    }
+}
+
+//# publish
+module 0x2.M3 {
+    enum MyResource { V{ b: bool } }
+    enum S<T> { V{ t: T } }
+
+    // verifier should reject; copies s
+    public p(s: &Self.S<Self.MyResource>): Self.S<Self.MyResource> {
+    label b0:
+        return *move(s);
+    }
+}
+
+//# publish
+module 0x2.M4 {
+    enum MyResource { V{ b: bool } }
+    enum S<T> { V{ t: T } }
+
+    // verifier should reject; drops s1 on the floor
+    public p(s1: &mut Self.S<Self.MyResource>, s2: Self.S<Self.MyResource>) {
+    label b0:
+        *move(s1) = move(s2);
+        return;
+    }
+}
+
+//# publish
+module 0x2.M5 {
+    enum MyResource { V{ b: bool } }
+    enum S<T> { V{ t: T } }
+
+    // verifier should reject; copies s
+    public p(s: Self.S<Self.MyResource>): Self.S<Self.MyResource> * Self.S<Self.MyResource> {
+    label b0:
+        return (copy(s), move(s));
+    }
+}

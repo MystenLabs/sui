@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { MIST_PER_SUI } from '@mysten/sui.js/utils';
+import { MIST_PER_SUI } from '@mysten/sui/utils';
 import { useState } from 'react';
 
 import { usePlaceAndListMutation } from '../../mutations/kiosk';

@@ -464,9 +464,19 @@ impl From<&ObjectRef> for ObjectKey {
     }
 }
 
+#[derive(Clone)]
 pub enum ObjectOrTombstone {
     Object(Object),
     Tombstone(ObjectRef),
+}
+
+impl ObjectOrTombstone {
+    pub fn as_objref(&self) -> ObjectRef {
+        match self {
+            ObjectOrTombstone::Object(obj) => obj.compute_object_reference(),
+            ObjectOrTombstone::Tombstone(obref) => *obref,
+        }
+    }
 }
 
 impl From<Object> for ObjectOrTombstone {

@@ -46,8 +46,11 @@ fn serialize_identifier_index(binary: &mut BinaryData, idx: &IdentifierIndex) ->
     write_as_uleb128(binary, idx.0, IDENTIFIER_INDEX_MAX)
 }
 
-fn serialize_struct_handle_index(binary: &mut BinaryData, idx: &StructHandleIndex) -> Result<()> {
-    write_as_uleb128(binary, idx.0, STRUCT_HANDLE_INDEX_MAX)
+fn serialize_datatype_handle_index(
+    binary: &mut BinaryData,
+    idx: &DatatypeHandleIndex,
+) -> Result<()> {
+    write_as_uleb128(binary, idx.0, DATATYPE_HANDLE_INDEX_MAX)
 }
 
 fn serialize_address_identifier_index(
@@ -59,6 +62,10 @@ fn serialize_address_identifier_index(
 
 fn serialize_struct_def_index(binary: &mut BinaryData, idx: &StructDefinitionIndex) -> Result<()> {
     write_as_uleb128(binary, idx.0, STRUCT_DEF_INDEX_MAX)
+}
+
+fn serialize_enum_def_index(binary: &mut BinaryData, idx: &EnumDefinitionIndex) -> Result<()> {
+    write_as_uleb128(binary, idx.0, ENUM_DEF_INDEX_MAX)
 }
 
 fn serialize_function_handle_index(
@@ -91,6 +98,13 @@ fn serialize_struct_def_inst_index(
     idx: &StructDefInstantiationIndex,
 ) -> Result<()> {
     write_as_uleb128(binary, idx.0, STRUCT_DEF_INST_INDEX_MAX)
+}
+
+fn serialize_enum_def_inst_index(
+    binary: &mut BinaryData,
+    idx: &EnumDefInstantiationIndex,
+) -> Result<()> {
+    write_as_uleb128(binary, idx.0, ENUM_DEF_INST_INDEX_MAX)
 }
 
 fn seiralize_table_offset(binary: &mut BinaryData, offset: u32) -> Result<()> {
@@ -129,6 +143,14 @@ fn serialize_field_count(binary: &mut BinaryData, len: usize) -> Result<()> {
     write_as_uleb128(binary, len as u64, FIELD_COUNT_MAX)
 }
 
+fn serialize_variant_count(binary: &mut BinaryData, len: usize) -> Result<()> {
+    write_as_uleb128(binary, len as u64, VARIANT_COUNT_MAX)
+}
+
+fn serialize_variant_tag(binary: &mut BinaryData, tag: u16) -> Result<()> {
+    write_as_uleb128(binary, tag as u64, VARIANT_COUNT_MAX)
+}
+
 fn serialize_field_offset(binary: &mut BinaryData, offset: u16) -> Result<()> {
     write_as_uleb128(binary, offset, FIELD_OFFSET_MAX)
 }
@@ -151,6 +173,29 @@ fn serialize_type_parameter_count(binary: &mut BinaryData, len: usize) -> Result
 
 fn serialize_bytecode_offset(binary: &mut BinaryData, offset: u16) -> Result<()> {
     write_as_uleb128(binary, offset, BYTECODE_INDEX_MAX)
+}
+
+fn serialize_variant_instantiation_handle_index(
+    binary: &mut BinaryData,
+    idx: &VariantInstantiationHandleIndex,
+) -> Result<()> {
+    write_as_uleb128(binary, idx.0, VARIANT_INSTANTIATION_HANDLE_INDEX_MAX)
+}
+
+fn serialize_variant_handle_index(binary: &mut BinaryData, idx: &VariantHandleIndex) -> Result<()> {
+    write_as_uleb128(binary, idx.0, VARIANT_HANDLE_INDEX_MAX)
+}
+
+fn serialize_jump_table_index(binary: &mut BinaryData, index: u16) -> Result<()> {
+    write_as_uleb128(binary, index, JUMP_TABLE_INDEX_MAX)
+}
+
+fn serialize_jump_table_count(binary: &mut BinaryData, len: u8) -> Result<()> {
+    write_as_uleb128(binary, len, JUMP_TABLE_INDEX_MAX)
+}
+
+fn serialize_jump_table_branch_count(binary: &mut BinaryData, len: usize) -> Result<()> {
+    write_as_uleb128(binary, len as u64, VARIANT_COUNT_MAX)
 }
 
 fn serialize_table_count(binary: &mut BinaryData, len: u8) -> Result<()> {
@@ -221,7 +266,7 @@ struct CommonSerializer {
     major_version: u32,
     table_count: u8,
     module_handles: (u32, u32),
-    struct_handles: (u32, u32),
+    datatype_handles: (u32, u32),
     function_handles: (u32, u32),
     function_instantiations: (u32, u32),
     signatures: (u32, u32),
@@ -241,6 +286,10 @@ struct ModuleSerializer {
     field_handles: (u32, u32),
     field_instantiations: (u32, u32),
     friend_decls: (u32, u32),
+    enum_defs: (u32, u32),
+    enum_def_instantiations: (u32, u32),
+    variant_handles: (u32, u32),
+    variant_instantiation_handles: (u32, u32),
 }
 
 //
@@ -282,7 +331,7 @@ fn serialize_magic(binary: &mut BinaryData) -> Result<()> {
 /// used by `CommonSerializer`.
 trait CommonTables {
     fn get_module_handles(&self) -> &[ModuleHandle];
-    fn get_struct_handles(&self) -> &[StructHandle];
+    fn get_datatype_handles(&self) -> &[DatatypeHandle];
     fn get_function_handles(&self) -> &[FunctionHandle];
     fn get_function_instantiations(&self) -> &[FunctionInstantiation];
     fn get_identifiers(&self) -> &[Identifier];
@@ -297,8 +346,8 @@ impl CommonTables for CompiledModule {
         &self.module_handles
     }
 
-    fn get_struct_handles(&self) -> &[StructHandle] {
-        &self.struct_handles
+    fn get_datatype_handles(&self) -> &[DatatypeHandle] {
+        &self.datatype_handles
     }
 
     fn get_function_handles(&self) -> &[FunctionHandle] {
@@ -341,22 +390,25 @@ fn serialize_module_handle(binary: &mut BinaryData, module_handle: &ModuleHandle
     Ok(())
 }
 
-/// Serializes a `StructHandle`.
+/// Serializes a `DatatypeHandle`.
 ///
-/// A `StructHandle` gets serialized as follows:
-/// - `StructHandle.module` as a ULEB128 (index into the `ModuleHandle` table)
-/// - `StructHandle.name` as a ULEB128 (index into the `IdentifierPool`)
-/// - `StructHandle.is_nominal_resource` as a 1 byte boolean (0 for false, 1 for true)
-fn serialize_struct_handle(binary: &mut BinaryData, struct_handle: &StructHandle) -> Result<()> {
-    serialize_module_handle_index(binary, &struct_handle.module)?;
-    serialize_identifier_index(binary, &struct_handle.name)?;
-    serialize_ability_set(binary, struct_handle.abilities)?;
-    serialize_type_parameters(binary, &struct_handle.type_parameters)
+/// A `DatatypeHandle` gets serialized as follows:
+/// - `DatatypeHandle.module` as a ULEB128 (index into the `ModuleHandle` table)
+/// - `DatatypeHandle.name` as a ULEB128 (index into the `IdentifierPool`)
+/// - `DatatypeHandle.abilities` as a 1 byte bitflag set of abilities
+fn serialize_datatype_handle(
+    binary: &mut BinaryData,
+    datatype_handle: &DatatypeHandle,
+) -> Result<()> {
+    serialize_module_handle_index(binary, &datatype_handle.module)?;
+    serialize_identifier_index(binary, &datatype_handle.name)?;
+    serialize_ability_set(binary, datatype_handle.abilities)?;
+    serialize_type_parameters(binary, &datatype_handle.type_parameters)
 }
 
 fn serialize_type_parameters(
     binary: &mut BinaryData,
-    type_parameters: &[StructTypeParameter],
+    type_parameters: &[DatatypeTyParameter],
 ) -> Result<()> {
     serialize_type_parameter_count(binary, type_parameters.len())?;
     for type_param in type_parameters {
@@ -367,7 +419,7 @@ fn serialize_type_parameters(
 
 fn serialize_type_parameter(
     binary: &mut BinaryData,
-    type_param: &StructTypeParameter,
+    type_param: &DatatypeTyParameter,
 ) -> Result<()> {
     serialize_ability_set(binary, type_param.constraints)?;
     write_as_uleb128(binary, type_param.is_phantom as u8, 1u64)
@@ -466,7 +518,7 @@ fn serialize_struct_definition(
     binary: &mut BinaryData,
     struct_definition: &StructDefinition,
 ) -> Result<()> {
-    serialize_struct_handle_index(binary, &struct_definition.struct_handle)?;
+    serialize_datatype_handle_index(binary, &struct_definition.struct_handle)?;
     match &struct_definition.field_information {
         StructFieldInformation::Native => binary.push(SerializedNativeStructFlag::NATIVE as u8),
         StructFieldInformation::Declared(fields) => {
@@ -476,12 +528,49 @@ fn serialize_struct_definition(
     }
 }
 
+/// Serializes a `EnumDefinition`.
+///
+/// A `EnumDefinition` gets serialized as follows:
+/// - `EnumDefinition.handle` as a ULEB128 (index into the `ModuleHandle` table)
+/// - Enum flag bit to specify type of declaration (only non-native enums are supported right now)
+/// - `EnumDefinition.variant_count` as a ULEB128 (number of variants defined in the enum)
+/// - `EnumDefinition.variants` are then each serialized out.
+fn serialize_enum_definition(
+    binary: &mut BinaryData,
+    enum_definition: &EnumDefinition,
+) -> Result<()> {
+    serialize_datatype_handle_index(binary, &enum_definition.enum_handle)?;
+    binary.push(SerializedEnumFlag::DECLARED as u8)?;
+    serialize_variant_count(binary, enum_definition.variants.len())?;
+    for variant in &enum_definition.variants {
+        serialize_variant_definition(binary, variant)?;
+    }
+    Ok(())
+}
+
+fn serialize_variant_definition(
+    binary: &mut BinaryData,
+    variant_definition: &VariantDefinition,
+) -> Result<()> {
+    serialize_identifier_index(binary, &variant_definition.variant_name)?;
+    serialize_field_definitions(binary, &variant_definition.fields)
+}
+
 fn serialize_struct_def_instantiation(
     binary: &mut BinaryData,
     struct_inst: &StructDefInstantiation,
 ) -> Result<()> {
     serialize_struct_def_index(binary, &struct_inst.def)?;
     serialize_signature_index(binary, &struct_inst.type_parameters)?;
+    Ok(())
+}
+
+fn serialize_enum_def_instantiation(
+    binary: &mut BinaryData,
+    enum_inst: &EnumDefInstantiation,
+) -> Result<()> {
+    serialize_enum_def_index(binary, &enum_inst.def)?;
+    serialize_signature_index(binary, &enum_inst.type_parameters)?;
     Ok(())
 }
 
@@ -497,7 +586,7 @@ fn serialize_field_definitions(binary: &mut BinaryData, fields: &[FieldDefinitio
 /// Serializes a `FieldDefinition`.
 ///
 /// A `FieldDefinition` gets serialized as follows:
-/// - `FieldDefinition.struct_` as a ULEB128 (index into the `StructHandle` table)
+/// - `FieldDefinition.struct_` as a ULEB128 (index into the `DatatypeHandle` table)
 /// - `StructDefinition.name` as a ULEB128 (index into the `IdentifierPool` table)
 /// - `StructDefinition.signature` a serialized `TypeSignatureToekn`)
 fn serialize_field_definition(
@@ -520,6 +609,20 @@ fn serialize_field_instantiation(
 ) -> Result<()> {
     serialize_field_handle_index(binary, &field_inst.handle)?;
     serialize_signature_index(binary, &field_inst.type_parameters)?;
+    Ok(())
+}
+
+fn serialize_variant_handle(binary: &mut BinaryData, variant_handle: &VariantHandle) -> Result<()> {
+    serialize_enum_def_index(binary, &variant_handle.enum_def)?;
+    serialize_variant_tag(binary, variant_handle.variant)
+}
+
+fn serialize_variant_instantiation_handle(
+    binary: &mut BinaryData,
+    variant_inst_handle: &VariantInstantiationHandle,
+) -> Result<()> {
+    serialize_enum_def_inst_index(binary, &variant_inst_handle.enum_def)?;
+    serialize_variant_tag(binary, variant_inst_handle.variant)?;
     Ok(())
 }
 
@@ -565,14 +668,14 @@ fn serialize_signature_token_single_node_impl(
         SignatureToken::Vector(_) => {
             binary.push(SerializedType::VECTOR as u8)?;
         }
-        SignatureToken::Struct(idx) => {
+        SignatureToken::Datatype(idx) => {
             binary.push(SerializedType::STRUCT as u8)?;
-            serialize_struct_handle_index(binary, idx)?;
+            serialize_datatype_handle_index(binary, idx)?;
         }
-        SignatureToken::StructInstantiation(struct_inst) => {
-            let (idx, type_params) = &**struct_inst;
-            binary.push(SerializedType::STRUCT_INST as u8)?;
-            serialize_struct_handle_index(binary, idx)?;
+        SignatureToken::DatatypeInstantiation(inst) => {
+            let (idx, type_params) = &**inst;
+            binary.push(SerializedType::DATATYPE_INST as u8)?;
+            serialize_datatype_handle_index(binary, idx)?;
             serialize_signature_size(binary, type_params.len())?;
         }
         SignatureToken::Reference(_) => {
@@ -638,9 +741,54 @@ fn serialize_ability_sets(binary: &mut BinaryData, sets: &[AbilitySet]) -> Resul
 /// - `CodeUnit.max_stack_size` as a ULEB128
 /// - `CodeUnit.locals` as a ULEB128 (index into the `LocalSignaturePool`)
 /// - `CodeUnit.code` as variable size byte stream for the bytecode
+/// - `CodeUnit.jump_tables` as variable size table of jump targets used by switch operations.
 fn serialize_code_unit(major_version: u32, binary: &mut BinaryData, code: &CodeUnit) -> Result<()> {
     serialize_signature_index(binary, &code.locals)?;
-    serialize_code(major_version, binary, &code.code)
+    serialize_code(major_version, binary, &code.code)?;
+    serialize_jump_tables(major_version, binary, &code.jump_tables)?;
+    Ok(())
+}
+
+fn serialize_jump_tables(
+    major_version: u32,
+    binary: &mut BinaryData,
+    jump_tables: &[VariantJumpTable],
+) -> Result<()> {
+    if major_version < VERSION_7 {
+        if !jump_tables.is_empty() {
+            bail!(
+                "Jump tables not supported in bytecode version {}",
+                major_version
+            );
+        }
+    } else {
+        serialize_jump_table_count(binary, jump_tables.len() as u8)?;
+        for jump_table in jump_tables {
+            serialize_jump_table(binary, jump_table)?;
+        }
+    }
+    Ok(())
+}
+
+fn serialize_jump_table(binary: &mut BinaryData, jump_table: &VariantJumpTable) -> Result<()> {
+    let JumpTableInner::Full(jump_table_inner) = &jump_table.jump_table;
+    serialize_enum_def_index(binary, &jump_table.head_enum)?;
+    serialize_jump_table_branch_count(binary, jump_table_inner.len())?;
+    binary.push(SerializedJumpTableFlag::FULL as u8)?;
+    for code_offset in jump_table_inner {
+        serialize_bytecode_offset(binary, *code_offset)?;
+    }
+    Ok(())
+}
+
+fn check_enum_opcode_version(major_version: u32) -> Result<()> {
+    if major_version < VERSION_7 {
+        bail!(
+            "Enum instructions not supported in bytecode version {}",
+            major_version
+        );
+    }
+    Ok(())
 }
 
 /// Serializes a single `Bytecode` instruction.
@@ -875,6 +1023,51 @@ fn serialize_instruction_inner(
         Bytecode::CastU16 => binary.push(Opcodes::CAST_U16 as u8),
         Bytecode::CastU32 => binary.push(Opcodes::CAST_U32 as u8),
         Bytecode::CastU256 => binary.push(Opcodes::CAST_U256 as u8),
+        Bytecode::PackVariant(handle_idx) => {
+            check_enum_opcode_version(major_version)?;
+            binary.push(Opcodes::PACK_VARIANT as u8)?;
+            serialize_variant_handle_index(binary, handle_idx)
+        }
+        Bytecode::PackVariantGeneric(handle_idx) => {
+            check_enum_opcode_version(major_version)?;
+            binary.push(Opcodes::PACK_VARIANT_GENERIC as u8)?;
+            serialize_variant_instantiation_handle_index(binary, handle_idx)
+        }
+        Bytecode::UnpackVariant(handle_idx) => {
+            check_enum_opcode_version(major_version)?;
+            binary.push(Opcodes::UNPACK_VARIANT as u8)?;
+            serialize_variant_handle_index(binary, handle_idx)
+        }
+        Bytecode::UnpackVariantImmRef(handle_idx) => {
+            check_enum_opcode_version(major_version)?;
+            binary.push(Opcodes::UNPACK_VARIANT_IMM_REF as u8)?;
+            serialize_variant_handle_index(binary, handle_idx)
+        }
+        Bytecode::UnpackVariantMutRef(handle_idx) => {
+            check_enum_opcode_version(major_version)?;
+            binary.push(Opcodes::UNPACK_VARIANT_MUT_REF as u8)?;
+            serialize_variant_handle_index(binary, handle_idx)
+        }
+        Bytecode::UnpackVariantGeneric(handle_idx) => {
+            check_enum_opcode_version(major_version)?;
+            binary.push(Opcodes::UNPACK_VARIANT_GENERIC as u8)?;
+            serialize_variant_instantiation_handle_index(binary, handle_idx)
+        }
+        Bytecode::UnpackVariantGenericImmRef(handle_idx) => {
+            check_enum_opcode_version(major_version)?;
+            binary.push(Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF as u8)?;
+            serialize_variant_instantiation_handle_index(binary, handle_idx)
+        }
+        Bytecode::UnpackVariantGenericMutRef(handle_idx) => {
+            check_enum_opcode_version(major_version)?;
+            binary.push(Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF as u8)?;
+            serialize_variant_instantiation_handle_index(binary, handle_idx)
+        }
+        Bytecode::VariantSwitch(jti) => {
+            check_enum_opcode_version(major_version)?;
+            binary.push(Opcodes::VARIANT_SWITCH as u8)?;
+            serialize_jump_table_index(binary, jti.0)
+        }
     };
     res?;
     Ok(())
@@ -902,7 +1095,7 @@ impl CommonSerializer {
             major_version,
             table_count: 0,
             module_handles: (0, 0),
-            struct_handles: (0, 0),
+            datatype_handles: (0, 0),
             function_handles: (0, 0),
             function_instantiations: (0, 0),
             signatures: (0, 0),
@@ -915,7 +1108,7 @@ impl CommonSerializer {
 
     fn serialize_header(&mut self, binary: &mut BinaryData) -> Result<()> {
         serialize_magic(binary)?;
-        write_u32(binary, self.major_version)?;
+        write_u32(binary, BinaryFlavor::encode_version(self.major_version))?;
         Ok(())
     }
 
@@ -931,9 +1124,9 @@ impl CommonSerializer {
         )?;
         serialize_table_index(
             binary,
-            TableType::STRUCT_HANDLES,
-            self.struct_handles.0,
-            self.struct_handles.1,
+            TableType::DATATYPE_HANDLES,
+            self.datatype_handles.0,
+            self.datatype_handles.1,
         )?;
         serialize_table_index(
             binary,
@@ -990,7 +1183,7 @@ impl CommonSerializer {
     ) -> Result<()> {
         debug_assert!(self.table_count == 0);
         self.serialize_module_handles(binary, tables.get_module_handles())?;
-        self.serialize_struct_handles(binary, tables.get_struct_handles())?;
+        self.serialize_datatype_handles(binary, tables.get_datatype_handles())?;
         self.serialize_function_handles(binary, tables.get_function_handles())?;
         debug_assert!(self.table_count < 6);
         self.serialize_function_instantiations(binary, tables.get_function_instantiations())?;
@@ -1021,19 +1214,20 @@ impl CommonSerializer {
         Ok(())
     }
 
-    /// Serializes `StructHandle` table.
-    fn serialize_struct_handles(
+    /// Serializes `DatatypeHandle` table.
+    fn serialize_datatype_handles(
         &mut self,
         binary: &mut BinaryData,
-        struct_handles: &[StructHandle],
+        datatype_handles: &[DatatypeHandle],
     ) -> Result<()> {
-        if !struct_handles.is_empty() {
+        if !datatype_handles.is_empty() {
             self.table_count += 1;
-            self.struct_handles.0 = check_index_in_binary(binary.len())?;
-            for struct_handle in struct_handles {
-                serialize_struct_handle(binary, struct_handle)?;
+            self.datatype_handles.0 = check_index_in_binary(binary.len())?;
+            for datatype_handle in datatype_handles {
+                serialize_datatype_handle(binary, datatype_handle)?;
             }
-            self.struct_handles.1 = checked_calculate_table_size(binary, self.struct_handles.0)?;
+            self.datatype_handles.1 =
+                checked_calculate_table_size(binary, self.datatype_handles.0)?;
         }
         Ok(())
     }
@@ -1168,6 +1362,10 @@ impl ModuleSerializer {
             common: CommonSerializer::new(major_version),
             struct_defs: (0, 0),
             struct_def_instantiations: (0, 0),
+            enum_defs: (0, 0),
+            enum_def_instantiations: (0, 0),
+            variant_handles: (0, 0),
+            variant_instantiation_handles: (0, 0),
             function_defs: (0, 0),
             field_handles: (0, 0),
             field_instantiations: (0, 0),
@@ -1182,7 +1380,11 @@ impl ModuleSerializer {
         self.serialize_function_definitions(binary, &module.function_defs)?;
         self.serialize_field_handles(binary, &module.field_handles)?;
         self.serialize_field_instantiations(binary, &module.field_instantiations)?;
-        self.serialize_friend_declarations(binary, &module.friend_decls)
+        self.serialize_friend_declarations(binary, &module.friend_decls)?;
+        self.serialize_enum_definitions(binary, &module.enum_defs)?;
+        self.serialize_enum_def_instantiations(binary, &module.enum_def_instantiations)?;
+        self.serialize_variant_handles(binary, &module.variant_handles)?;
+        self.serialize_variant_instantiation_handles(binary, &module.variant_instantiation_handles)
     }
 
     fn serialize_table_indices(&mut self, binary: &mut BinaryData) -> Result<()> {
@@ -1223,6 +1425,32 @@ impl ModuleSerializer {
             self.friend_decls.0,
             self.friend_decls.1,
         )?;
+        if self.common.major_version >= VERSION_7 {
+            serialize_table_index(
+                binary,
+                TableType::ENUM_DEFS,
+                self.enum_defs.0,
+                self.enum_defs.1,
+            )?;
+            serialize_table_index(
+                binary,
+                TableType::ENUM_DEF_INST,
+                self.enum_def_instantiations.0,
+                self.enum_def_instantiations.1,
+            )?;
+            serialize_table_index(
+                binary,
+                TableType::VARIANT_HANDLES,
+                self.variant_handles.0,
+                self.variant_handles.1,
+            )?;
+            serialize_table_index(
+                binary,
+                TableType::VARIANT_INST_HANDLES,
+                self.variant_instantiation_handles.0,
+                self.variant_instantiation_handles.1,
+            )?;
+        }
         Ok(())
     }
 
@@ -1243,6 +1471,74 @@ impl ModuleSerializer {
         Ok(())
     }
 
+    /// Serializes `EnumDefinition` table.
+    fn serialize_enum_definitions(
+        &mut self,
+        binary: &mut BinaryData,
+        enum_definitions: &[EnumDefinition],
+    ) -> Result<()> {
+        if !enum_definitions.is_empty() {
+            if self.common.major_version < VERSION_7 {
+                bail!(
+                    "Enum definitions not supported in bytecode version {}",
+                    self.common.major_version
+                );
+            }
+            self.common.table_count = self.common.table_count.wrapping_add(1); // the count will bound to a small number
+            self.enum_defs.0 = check_index_in_binary(binary.len())?;
+            for enum_definition in enum_definitions {
+                serialize_enum_definition(binary, enum_definition)?;
+            }
+            self.enum_defs.1 = checked_calculate_table_size(binary, self.enum_defs.0)?;
+        }
+        Ok(())
+    }
+
+    fn serialize_variant_handles(
+        &mut self,
+        binary: &mut BinaryData,
+        variant_handles: &[VariantHandle],
+    ) -> Result<()> {
+        if !variant_handles.is_empty() {
+            if self.common.major_version < VERSION_7 {
+                bail!(
+                    "Enum definitions not supported in bytecode version {}",
+                    self.common.major_version
+                );
+            }
+            self.common.table_count = self.common.table_count.wrapping_add(1); // the count will bound to a small number
+            self.variant_handles.0 = check_index_in_binary(binary.len())?;
+            for variant_handle in variant_handles {
+                serialize_variant_handle(binary, variant_handle)?;
+            }
+            self.variant_handles.1 = checked_calculate_table_size(binary, self.variant_handles.0)?;
+        }
+        Ok(())
+    }
+
+    fn serialize_variant_instantiation_handles(
+        &mut self,
+        binary: &mut BinaryData,
+        variant_instantiation_handles: &[VariantInstantiationHandle],
+    ) -> Result<()> {
+        if !variant_instantiation_handles.is_empty() {
+            if self.common.major_version < VERSION_7 {
+                bail!(
+                    "Enum definitions not supported in bytecode version {}",
+                    self.common.major_version
+                );
+            }
+            self.common.table_count = self.common.table_count.wrapping_add(1); // the count will bound to a small number
+            self.variant_instantiation_handles.0 = check_index_in_binary(binary.len())?;
+            for variant_instantiation_handle in variant_instantiation_handles {
+                serialize_variant_instantiation_handle(binary, variant_instantiation_handle)?;
+            }
+            self.variant_instantiation_handles.1 =
+                checked_calculate_table_size(binary, self.variant_instantiation_handles.0)?;
+        }
+        Ok(())
+    }
+
     /// Serializes `StructInstantiation` table.
     fn serialize_struct_def_instantiations(
         &mut self,
@@ -1257,6 +1553,30 @@ impl ModuleSerializer {
             }
             self.struct_def_instantiations.1 =
                 checked_calculate_table_size(binary, self.struct_def_instantiations.0)?;
+        }
+        Ok(())
+    }
+
+    /// Serializes `EnumDefInstantiation` table.
+    fn serialize_enum_def_instantiations(
+        &mut self,
+        binary: &mut BinaryData,
+        enum_def_instantiations: &[EnumDefInstantiation],
+    ) -> Result<()> {
+        if !enum_def_instantiations.is_empty() {
+            if self.common.major_version < VERSION_7 {
+                bail!(
+                    "Enum definitions not supported in bytecode version {}",
+                    self.common.major_version
+                );
+            }
+            self.common.table_count = self.common.table_count.wrapping_add(1); // the count will bound to a small number
+            self.enum_def_instantiations.0 = check_index_in_binary(binary.len())?;
+            for enum_instantiation in enum_def_instantiations {
+                serialize_enum_def_instantiation(binary, enum_instantiation)?;
+            }
+            self.enum_def_instantiations.1 =
+                checked_calculate_table_size(binary, self.enum_def_instantiations.0)?;
         }
         Ok(())
     }

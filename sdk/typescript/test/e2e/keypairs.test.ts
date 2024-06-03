@@ -4,7 +4,7 @@
 import { blake2b } from '@noble/hashes/blake2b';
 import { describe, expect, it } from 'vitest';
 
-import { IntentScope, messageWithIntent, parseSerializedSignature } from '../../src/cryptography';
+import { messageWithIntent, parseSerializedSignature } from '../../src/cryptography';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../src/keypairs/secp256k1';
 import { fromB64, toB64 } from '../../src/utils';
@@ -70,7 +70,8 @@ const TEST_CASES_SECP256K1 = [
 describe('Keypairs', () => {
 	it('Ed25519 keypair signData', async () => {
 		const tx_bytes = fromB64(TX_BYTES);
-		const intentMessage = messageWithIntent(IntentScope.TransactionData, tx_bytes);
+		const intentMessage = messageWithIntent('TransactionData', tx_bytes);
+
 		const digest = blake2b(intentMessage, { dkLen: 32 });
 		expect(toB64(digest)).toEqual(DIGEST);
 
@@ -79,14 +80,12 @@ describe('Keypairs', () => {
 			expect(keypair.getPublicKey().toBase64()).toEqual(t[1]);
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-			const { signature: serializedSignature } = await keypair.signTransactionBlock(tx_bytes);
+			const { signature: serializedSignature } = await keypair.signTransaction(tx_bytes);
 			const { signature } = parseSerializedSignature(serializedSignature);
 
 			expect(toB64(signature!)).toEqual(t[3]);
 
-			const isValid = await keypair
-				.getPublicKey()
-				.verifyTransactionBlock(tx_bytes, serializedSignature);
+			const isValid = await keypair.getPublicKey().verifyTransaction(tx_bytes, serializedSignature);
 			expect(isValid).toBeTruthy();
 		}
 	});
@@ -113,7 +112,7 @@ describe('Keypairs', () => {
 
 	it('Secp256k1 keypair signData', async () => {
 		const tx_bytes = fromB64(TX_BYTES);
-		const intentMessage = messageWithIntent(IntentScope.TransactionData, tx_bytes);
+		const intentMessage = messageWithIntent('TransactionData', tx_bytes);
 		const digest = blake2b(intentMessage, { dkLen: 32 });
 		expect(toB64(digest)).toEqual(DIGEST);
 
@@ -122,14 +121,12 @@ describe('Keypairs', () => {
 			expect(keypair.getPublicKey().toBase64()).toEqual(t[1]);
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-			const { signature: serializedSignature } = await keypair.signTransactionBlock(tx_bytes);
+			const { signature: serializedSignature } = await keypair.signTransaction(tx_bytes);
 			const { signature } = parseSerializedSignature(serializedSignature);
 
 			expect(toB64(signature!)).toEqual(t[3]);
 
-			const isValid = await keypair
-				.getPublicKey()
-				.verifyTransactionBlock(tx_bytes, serializedSignature);
+			const isValid = await keypair.getPublicKey().verifyTransaction(tx_bytes, serializedSignature);
 			expect(isValid).toBeTruthy();
 		}
 	});

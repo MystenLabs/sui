@@ -4,9 +4,3 @@ error[E10008]: ambiguous attribute value
 7 │     #[ext(attr = foo)]
   │                  ^^^ Ambiguous attribute value. It can resolve to both a module member and a module
 
-error[E03006]: unexpected name in this position
-   ┌─ tests/move_2024/expansion/ambiguous_attribute_value_invalid.move:12:18
-   │
-12 │     #[ext(attr = S::x)]
-   │                  ^ Expected a module or address in this position, not a module member
-

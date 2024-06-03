@@ -5,7 +5,7 @@
 //! with the key ability. In other words flags freezing of structs whose fields (directly or not)
 //! wrap objects.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     diag,
@@ -75,7 +75,7 @@ pub struct FreezeWrappedVisitor;
 
 pub struct Context<'a> {
     env: &'a mut CompilationEnv,
-    program_info: &'a TypingProgramInfo,
+    program_info: Arc<TypingProgramInfo>,
     /// Memoizes information about struct fields wrapping other objects as they are discovered
     wrapping_fields: WrappingFields,
 }
@@ -83,14 +83,10 @@ pub struct Context<'a> {
 impl TypingVisitorConstructor for FreezeWrappedVisitor {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(
-        env: &'a mut CompilationEnv,
-        program_info: &'a TypingProgramInfo,
-        _program: &T::Program_,
-    ) -> Self::Context<'a> {
+    fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a> {
         Context {
             env,
-            program_info,
+            program_info: program.info.clone(),
             wrapping_fields: WrappingFields::new(),
         }
     }
@@ -226,7 +222,8 @@ impl<'a> Context<'a> {
         mident: E::ModuleIdent,
         sname: P::DatatypeName,
     ) -> Option<WrappingFieldInfo> {
-        let sdef = self.program_info.struct_definition(&mident, &sname);
+        let info = self.program_info.clone();
+        let sdef = info.struct_definition(&mident, &sname);
         let N::StructFields::Defined(_, sfields) = &sdef.fields else {
             return None;
         };

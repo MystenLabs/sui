@@ -42,7 +42,7 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
     fn get_annotated_layout(
         &mut self,
         struct_tag: &StructTag,
-    ) -> Result<A::MoveStructLayout, SuiError> {
+    ) -> Result<A::MoveDatatypeLayout, SuiError> {
         let type_tag: TypeTag = TypeTag::from(struct_tag.clone());
         let Ok(ty) = load_type(&mut self.session, &type_tag) else {
             return Err(SuiError::FailObjectLayout {
@@ -55,7 +55,7 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
                 st: format!("{}", struct_tag),
             });
         };
-        Ok(layout)
+        Ok(A::MoveDatatypeLayout::Struct(layout))
     }
 }
 

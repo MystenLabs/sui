@@ -4,7 +4,11 @@ use bytes::Bytes;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt as _;
 use itertools::Itertools as _;
-use mysten_metrics::{monitored_future, monitored_scope};
+use mysten_metrics::{
+    monitored_future,
+    monitored_mpsc::{channel, Receiver, Sender},
+    monitored_scope,
+};
 use parking_lot::{Mutex, RwLock};
 #[cfg(not(test))]
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
@@ -12,7 +16,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout, Instant};
@@ -223,7 +226,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         block_verifier: Arc<V>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Arc<SynchronizerHandle> {
-        let (commands_sender, commands_receiver) = channel(1_000);
+        let (commands_sender, commands_receiver) =
+            channel("consensus_synchronizer_commands", 1_000);
         let inflight_blocks_map = InflightBlocksMap::new();
 
         // Spawn the tasks to fetch the blocks from the others
@@ -233,7 +237,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             if index == context.own_index {
                 continue;
             }
-            let (sender, receiver) = channel(FETCH_BLOCKS_CONCURRENCY);
+            let (sender, receiver) =
+                channel("consensus_synchronizer_fetches", FETCH_BLOCKS_CONCURRENCY);
             tasks.spawn(Self::fetch_blocks_from_authority(
                 index,
                 network_client.clone(),

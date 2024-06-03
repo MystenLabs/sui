@@ -45,6 +45,7 @@ use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
 use sui_types::crypto::RandomnessRound;
 use sui_types::execution_status::ExecutionStatus;
+use sui_types::type_resolver::into_struct_layout;
 use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
@@ -270,6 +271,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
+    pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
@@ -661,6 +663,11 @@ impl AuthorityMetrics {
             consensus_handler_congested_transactions: register_int_counter_with_registry!(
                 "consensus_handler_congested_transactions",
                 "Number of transactions deferred by consensus handler due to congestion",
+                registry,
+            ).unwrap(),
+            consensus_handler_cancelled_transactions: register_int_counter_with_registry!(
+                "consensus_handler_cancelled_transactions",
+                "Number of transactions cancelled by consensus handler",
                 registry,
             ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(
@@ -1510,7 +1517,7 @@ impl AuthorityState {
 
         // Cheap validity checks for a transaction, including input size limits.
         let tx_data = certificate.data().transaction_data();
-        tx_data.check_version_supported(epoch_store.protocol_config())?;
+        tx_data.check_version_and_features_supported(epoch_store.protocol_config())?;
         tx_data.validity_check(epoch_store.protocol_config())?;
 
         // The cost of partially re-auditing a transaction before execution is tolerated.
@@ -1638,7 +1645,7 @@ impl AuthorityState {
         Option<ObjectID>,
     )> {
         // Cheap validity checks for a transaction, including input size limits.
-        transaction.check_version_supported(epoch_store.protocol_config())?;
+        transaction.check_version_and_features_supported(epoch_store.protocol_config())?;
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
         let input_object_kinds = transaction.input_objects()?;
@@ -1858,7 +1865,7 @@ impl AuthorityState {
             vec![]
         };
 
-        transaction.check_version_supported(protocol_config)?;
+        transaction.check_version_and_features_supported(protocol_config)?;
         transaction.validity_check_no_gas_check(protocol_config)?;
 
         let input_object_kinds = transaction.input_objects()?;
@@ -2232,7 +2239,9 @@ impl AuthorityState {
             return Ok(None);
         }
 
-        let layout = resolver.get_annotated_layout(&move_object.type_().clone().into())?;
+        let layout = into_struct_layout(
+            resolver.get_annotated_layout(&move_object.type_().clone().into())?,
+        )?;
         let move_struct = move_object.to_move_struct(&layout)?;
 
         let (name_value, type_, object_id) =
@@ -2447,12 +2456,12 @@ impl AuthorityState {
         let layout = if let (LayoutGenerationOption::Generate, Some(move_obj)) =
             (request.generate_layout, object.data.try_as_move())
         {
-            Some(
+            Some(into_struct_layout(
                 self.load_epoch_store_one_call_per_task()
                     .executor()
                     .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
                     .get_annotated_layout(&move_obj.type_().clone().into())?,
-            )
+            )?)
         } else {
             None
         };
@@ -2596,7 +2605,7 @@ impl AuthorityState {
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             store.objects_lock_table.clone(),
-            config.authority_store_pruning_config,
+            config.authority_store_pruning_config.clone(),
             epoch_store.committee().authority_exists(&name),
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
@@ -3255,11 +3264,13 @@ impl AuthorityState {
             .data
             .try_as_move()
             .map(|object| {
-                self.load_epoch_store_one_call_per_task()
-                    .executor()
-                    // TODO(cache) - must read through cache
-                    .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
-                    .get_annotated_layout(&object.type_().clone().into())
+                into_struct_layout(
+                    self.load_epoch_store_one_call_per_task()
+                        .executor()
+                        // TODO(cache) - must read through cache
+                        .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
+                        .get_annotated_layout(&object.type_().clone().into())?,
+                )
             })
             .transpose()?;
         Ok(layout)

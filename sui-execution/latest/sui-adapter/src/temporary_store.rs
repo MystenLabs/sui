@@ -5,6 +5,7 @@ use crate::gas_charger::GasCharger;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::StructTag;
 use move_core_types::resolver::ResourceResolver;
+use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
@@ -939,6 +940,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
         if obj_opt.is_some() {
             Ok(obj_opt.cloned())
         } else {
+            let _scope = monitored_scope("Execution::read_child_object");
             self.store
                 .read_child_object(parent, child, child_version_upper_bound)
         }

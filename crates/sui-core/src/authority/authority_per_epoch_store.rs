@@ -83,7 +83,7 @@ use prometheus::IntCounter;
 use std::str::FromStr;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::TransactionEffects;
 use sui_types::executable_transaction::{
@@ -1605,7 +1605,7 @@ impl AuthorityPerEpochStore {
         if !dkg_failed
             && !generating_randomness
             && self.randomness_state_enabled()
-            && cert.uses_randomness()
+            && cert.transaction_data().uses_randomness()
         {
             let deferred_from_round = previously_deferred_tx_digests
                 .get(cert.digest())
@@ -1617,45 +1617,28 @@ impl AuthorityPerEpochStore {
             ));
         }
 
-        // Defer transaction if it uses shared objects that are congested.
-        match self.protocol_config().per_object_congestion_control_mode() {
-            PerObjectCongestionControlMode::None => None,
-            PerObjectCongestionControlMode::TotalGasBudget => {
-                if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
-                    .should_defer_due_to_object_congestion(
-                        cert,
-                        self.protocol_config()
-                            .max_accumulated_txn_cost_per_object_in_checkpoint(),
-                        previously_deferred_tx_digests,
-                        commit_round,
-                    )
-                {
-                    Some((
-                        deferral_key,
-                        DeferralReason::SharedObjectCongestion(congested_objects),
-                    ))
-                } else {
-                    None
-                }
+        if let Some(max_accumulated_txn_cost_per_object_in_checkpoint) = self
+            .protocol_config()
+            .max_accumulated_txn_cost_per_object_in_checkpoint_as_option()
+        {
+            // Defer transaction if it uses shared objects that are congested.
+            if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
+                .should_defer_due_to_object_congestion(
+                    cert,
+                    max_accumulated_txn_cost_per_object_in_checkpoint,
+                    previously_deferred_tx_digests,
+                    commit_round,
+                )
+            {
+                Some((
+                    deferral_key,
+                    DeferralReason::SharedObjectCongestion(congested_objects),
+                ))
+            } else {
+                None
             }
-        }
-    }
-
-    // Update shared objects' execution cost used in `cert` using `cert`'s execution cost.
-    // This is called when `cert` is scheduled for execution.
-    fn update_object_execution_cost(
-        &self,
-        cert: &VerifiedExecutableTransaction,
-        shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
-    ) {
-        match self.protocol_config().per_object_congestion_control_mode() {
-            PerObjectCongestionControlMode::None => {}
-            PerObjectCongestionControlMode::TotalGasBudget => {
-                shared_object_congestion_tracker.bump_object_execution_cost(
-                    &cert.shared_input_objects().collect::<Vec<_>>(),
-                    cert.gas_budget(),
-                );
-            }
+        } else {
+            None
         }
     }
 
@@ -2657,6 +2640,7 @@ impl AuthorityPerEpochStore {
         transactions: &mut VecDeque<VerifiedExecutableTransaction>,
         consensus_commit_info: &ConsensusCommitInfo,
         roots: &mut BTreeSet<TransactionKey>,
+        cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> SuiResult {
         #[cfg(any(test, feature = "test-utils"))]
         {
@@ -2665,8 +2649,39 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        let transaction = consensus_commit_info
-            .create_consensus_commit_prologue_transaction(self.epoch(), self.protocol_config());
+        let mut version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)> =
+            Vec::new();
+
+        let mut shared_input_next_version = HashMap::new();
+        for txn in transactions.iter() {
+            if let Some(CancelConsensusCertificateReason::CongestionOnObjects(_)) =
+                cancelled_txns.get(txn.digest())
+            {
+                let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
+                    txn,
+                    &mut shared_input_next_version,
+                    cancelled_txns,
+                );
+
+                version_assignment.push((*txn.digest(), assigned_versions));
+            }
+        }
+
+        fail_point_arg!(
+            "additional_cancelled_txns_for_tests",
+            |additional_cancelled_txns: Vec<(
+                TransactionDigest,
+                Vec<(ObjectID, SequenceNumber)>
+            )>| {
+                version_assignment.extend(additional_cancelled_txns);
+            }
+        );
+
+        let transaction = consensus_commit_info.create_consensus_commit_prologue_transaction(
+            self.epoch(),
+            self.protocol_config(),
+            version_assignment,
+        );
         match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
                 roots.insert(processed_tx.key());
@@ -2820,10 +2835,13 @@ impl AuthorityPerEpochStore {
 
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
         // they will be in different checkpoints.
-        let mut shared_object_congestion_tracker: SharedObjectCongestionTracker =
-            Default::default();
-        let mut shared_object_using_randomness_congestion_tracker: SharedObjectCongestionTracker =
-            Default::default();
+        let mut shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
+            self.protocol_config().per_object_congestion_control_mode(),
+        );
+        let mut shared_object_using_randomness_congestion_tracker =
+            SharedObjectCongestionTracker::new(
+                self.protocol_config().per_object_congestion_control_mode(),
+            );
 
         fail_point_arg!(
             "initial_congestion_tracker",
@@ -2925,6 +2943,9 @@ impl AuthorityPerEpochStore {
         authority_metrics
             .consensus_handler_deferred_transactions
             .inc_by(total_deferred_txns as u64);
+        authority_metrics
+            .consensus_handler_cancelled_transactions
+            .inc_by(cancelled_txns.len() as u64);
 
         if randomness_state_updated {
             if let Some(randomness_manager) = randomness_manager.as_mut() {
@@ -2942,6 +2963,7 @@ impl AuthorityPerEpochStore {
             &mut verified_certificates,
             consensus_commit_info,
             roots,
+            &cancelled_txns,
         )?;
 
         let verified_certificates: Vec<_> = verified_certificates.into();
@@ -3182,7 +3204,10 @@ impl AuthorityPerEpochStore {
                     return Ok(deferral_result);
                 }
 
-                if dkg_failed && self.randomness_state_enabled() && certificate.uses_randomness() {
+                if dkg_failed
+                    && self.randomness_state_enabled()
+                    && certificate.transaction_data().uses_randomness()
+                {
                     // TODO: Cancel these immediately instead of waiting until end of epoch.
                     debug!(
                         "Ignoring randomness-using certificate for transaction {:?} because DKG failed",
@@ -3193,10 +3218,7 @@ impl AuthorityPerEpochStore {
 
                 // This certificate will be scheduled. Update object execution cost.
                 if certificate.contains_shared_object() {
-                    self.update_object_execution_cost(
-                        &certificate,
-                        shared_object_congestion_tracker,
-                    );
+                    shared_object_congestion_tracker.bump_object_execution_cost(&certificate);
                 }
 
                 Ok(ConsensusCertificateResult::SuiTransaction(certificate))
@@ -3280,22 +3302,13 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgMessage from {:?}",
                             authority.concise()
                         );
-                        if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
-                            warn!(
-                                "Ignoring RandomnessDkgMessage from {:?} because it is too large",
-                                authority.concise()
-                            );
-                        } else {
-                            match bcs::from_bytes(bytes) {
-                                Ok(message) => {
-                                    randomness_manager.add_message(authority, message)?
-                                }
-                                Err(e) => {
-                                    warn!(
+                        match bcs::from_bytes(bytes) {
+                            Ok(message) => randomness_manager.add_message(authority, message)?,
+                            Err(e) => {
+                                warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
                                     authority.concise(),
                                 );
-                                }
                             }
                         }
                     } else {
@@ -3322,24 +3335,17 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgConfirmation from {:?}",
                             authority.concise()
                         );
-                        if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
-                            warn!(
-                                "Ignoring RandomnessDkgConfirmation from {:?} because it is too large",
-                                authority.concise()
-                            );
-                        } else {
-                            match bcs::from_bytes(bytes) {
-                                Ok(confirmation) => randomness_manager.add_confirmation(
-                                    batch,
-                                    authority,
-                                    confirmation,
-                                )?,
-                                Err(e) => {
-                                    warn!(
+                        match bcs::from_bytes(bytes) {
+                            Ok(confirmation) => randomness_manager.add_confirmation(
+                                batch,
+                                authority,
+                                confirmation,
+                            )?,
+                            Err(e) => {
+                                warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
                                     authority.concise(),
                                 );
-                                }
                             }
                         }
                     } else {

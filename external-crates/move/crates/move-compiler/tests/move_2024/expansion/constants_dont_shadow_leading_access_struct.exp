@@ -1,6 +1,9 @@
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/expansion/constants_dont_shadow_leading_access_struct.move:15:13
    │
+ 3 │     public struct S() has copy, drop;
+   │                   - But 'S' is an struct
+   ·
 15 │             S::foo(); // resolves to struct
-   │             ^ Expected a module or address in this position, not a module member
+   │             ^ Invalid construction. Expected an enum
 

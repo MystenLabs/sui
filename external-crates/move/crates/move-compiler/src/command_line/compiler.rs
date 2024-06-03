@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::{self, visitor::AbsIntVisitorObj},
+    cfgir::{
+        self,
+        visitor::{AbsIntVisitorObj, CFGIRVisitorObj},
+    },
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{
@@ -107,6 +110,7 @@ pub struct FullyCompiledProgram {
 
 pub enum Visitor {
     TypingVisitor(TypingVisitorObj),
+    CFGIRVisitor(CFGIRVisitorObj),
     AbsIntVisitor(AbsIntVisitorObj),
 }
 

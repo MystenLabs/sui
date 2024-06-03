@@ -1,0 +1,330 @@
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-17:
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'create-checkpoint'. lines 19-19:
+Checkpoint created: 1
+
+task 3 'run-graphql'. lines 21-66:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x1b38b133dc9169e70d62e15808097530ff69ae0b64a9fedeea261f34daf981b8",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0x8eb33e5615087bbfb4e9f90ebae065d58d9f2237b5367be68c9590bde22c0091",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xb2a541308be23fdde5ed0e9e61e5ae54df1733f93c68a2415b314158b96f1e77",
+                    "asMovePackage": {
+                      "module": {
+                        "enum": {
+                          "name": "S",
+                          "abilities": [
+                            "COPY",
+                            "DROP"
+                          ],
+                          "typeParameters": [],
+                          "variants": [
+                            {
+                              "name": "V1",
+                              "fields": [
+                                {
+                                  "name": "pos0",
+                                  "type": {
+                                    "repr": "u64",
+                                    "signature": {
+                                      "ref": null,
+                                      "body": "u64"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "name": "V2",
+                              "fields": [
+                                {
+                                  "name": "x",
+                                  "type": {
+                                    "repr": "bool",
+                                    "signature": {
+                                      "ref": null,
+                                      "body": "bool"
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "y",
+                                  "type": {
+                                    "repr": "u64",
+                                    "signature": {
+                                      "ref": null,
+                                      "body": "u64"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 4 'upgrade'. lines 68-81:
+created: object(4,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 5 'create-checkpoint'. lines 83-83:
+Checkpoint created: 2
+
+task 6 'run-graphql'. lines 85-148:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x083ecfe550093498f9486af3e70df8230bb99034ce253061c72a44cd6a7d8e12",
+                    "asMovePackage": {
+                      "module": {
+                        "s": {
+                          "module": {
+                            "package": {
+                              "address": "0xb2a541308be23fdde5ed0e9e61e5ae54df1733f93c68a2415b314158b96f1e77"
+                            }
+                          },
+                          "name": "S",
+                          "abilities": [
+                            "COPY",
+                            "DROP"
+                          ],
+                          "typeParameters": [],
+                          "variants": [
+                            {
+                              "name": "V1",
+                              "fields": [
+                                {
+                                  "name": "pos0",
+                                  "type": {
+                                    "repr": "u64",
+                                    "signature": {
+                                      "ref": null,
+                                      "body": "u64"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "name": "V2",
+                              "fields": [
+                                {
+                                  "name": "x",
+                                  "type": {
+                                    "repr": "bool",
+                                    "signature": {
+                                      "ref": null,
+                                      "body": "bool"
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "y",
+                                  "type": {
+                                    "repr": "u64",
+                                    "signature": {
+                                      "ref": null,
+                                      "body": "u64"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "t": {
+                          "module": {
+                            "package": {
+                              "address": "0x083ecfe550093498f9486af3e70df8230bb99034ce253061c72a44cd6a7d8e12"
+                            }
+                          },
+                          "name": "T",
+                          "abilities": [],
+                          "typeParameters": [
+                            {
+                              "constraints": [
+                                "DROP"
+                              ],
+                              "isPhantom": false
+                            }
+                          ],
+                          "variants": [
+                            {
+                              "name": "VV",
+                              "fields": [
+                                {
+                                  "name": "y",
+                                  "type": {
+                                    "repr": "u64",
+                                    "signature": {
+                                      "ref": null,
+                                      "body": "u64"
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "s",
+                                  "type": {
+                                    "repr": "0xb2a541308be23fdde5ed0e9e61e5ae54df1733f93c68a2415b314158b96f1e77::m::S",
+                                    "signature": {
+                                      "ref": null,
+                                      "body": {
+                                        "datatype": {
+                                          "package": "0xb2a541308be23fdde5ed0e9e61e5ae54df1733f93c68a2415b314158b96f1e77",
+                                          "module": "m",
+                                          "type": "S",
+                                          "typeParameters": []
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "u",
+                                  "type": {
+                                    "repr": "$0",
+                                    "signature": {
+                                      "ref": null,
+                                      "body": {
+                                        "typeParameter": 0
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "v": {
+                          "name": "V",
+                          "variants": [
+                            {
+                              "name": "V",
+                              "fields": [
+                                {
+                                  "name": "t",
+                                  "type": {
+                                    "repr": "0xb2a541308be23fdde5ed0e9e61e5ae54df1733f93c68a2415b314158b96f1e77::m::T<0xb2a541308be23fdde5ed0e9e61e5ae54df1733f93c68a2415b314158b96f1e77::m::S>"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0x1b38b133dc9169e70d62e15808097530ff69ae0b64a9fedeea261f34daf981b8",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0x8eb33e5615087bbfb4e9f90ebae065d58d9f2237b5367be68c9590bde22c0091",
+                    "asMovePackage": null
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 7 'run-graphql'. lines 150-185:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "asMovePackage": {
+                      "module": {
+                        "s": {
+                          "module": {
+                            "enum": null
+                          }
+                        },
+                        "t": {
+                          "module": {
+                            "enum": {
+                              "name": "T"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

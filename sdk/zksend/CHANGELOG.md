@@ -1,5 +1,53 @@
 # @mysten/zksend
 
+## 0.9.4
+
+### Patch Changes
+
+- 8e0e8eb643: fix connect issue
+- Updated dependencies [f1e828f557]
+  - @mysten/sui@1.0.4
+  - @mysten/wallet-standard@0.12.4
+
+## 0.9.3
+
+### Patch Changes
+
+- Updated dependencies [1f20580841]
+  - @mysten/sui@1.0.3
+  - @mysten/wallet-standard@0.12.3
+
+## 0.9.2
+
+### Patch Changes
+
+- Updated dependencies [f0a839f874]
+  - @mysten/sui@1.0.2
+  - @mysten/wallet-standard@0.12.2
+
+## 0.9.1
+
+### Patch Changes
+
+- Updated dependencies [6fc6235984]
+  - @mysten/sui@1.0.1
+  - @mysten/wallet-standard@0.12.1
+
+## 0.9.0
+
+### Minor Changes
+
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
+  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+
+### Patch Changes
+
+- 3e1d716642: Fix loading links with large number of inputs
+- Updated dependencies [ebdfe7cf21]
+- Updated dependencies [a92b03de42]
+  - @mysten/sui@1.0.0
+  - @mysten/wallet-standard@0.12.0
+
 ## 0.8.2
 
 ### Patch Changes

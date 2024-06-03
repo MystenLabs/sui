@@ -1,0 +1,12 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:3:16
+  │
+3 │         match (true) {
+  │                ^^^^ Pattern 'false' not covered
+
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:9:16
+  │
+9 │         match (true) {
+  │                ^^^^ Pattern '_' not covered
+

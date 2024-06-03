@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiObjectResponse } from '@mysten/sui.js/client';
+import type { SuiObjectResponse } from '@mysten/sui/client';
 
 import type {
 	MoveValue,

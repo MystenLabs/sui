@@ -3,7 +3,7 @@
 
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import { useTransactionSummary } from '@mysten/core';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import { type SuiTransactionBlockResponse } from '@mysten/sui/client';
 
 import { DateCard } from '../../shared/date-card';
 import { TransactionSummary } from '../../shared/transaction-summary';

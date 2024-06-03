@@ -114,7 +114,15 @@ impl LeaderSchedule {
             .unwrap() as usize
     }
 
-    pub(crate) fn update_leader_schedule(&self, dag_state: Arc<RwLock<DagState>>) {
+    /// Checks whether the dag state unscored sub dags list is empty. If yes then that means that
+    /// either (1) the system has just started and there is no unscored sub dag available (2) the
+    /// schedule has updated - new scores have been calculated. Both cases we consider as valid cases
+    /// where the schedule has been updated.
+    pub(crate) fn leader_schedule_updated(&self, dag_state: &RwLock<DagState>) -> bool {
+        dag_state.read().unscored_committed_subdags_count() == 0
+    }
+
+    pub(crate) fn update_leader_schedule(&self, dag_state: &RwLock<DagState>) {
         let _s = self
             .context
             .metrics
@@ -143,7 +151,7 @@ impl LeaderSchedule {
 
         reputation_scores.update_metrics(self.context.clone());
 
-        let last_commit_index = unscored_subdags.last().unwrap().commit_index;
+        let last_commit_index = unscored_subdags.last().unwrap().commit_ref.index;
         self.update_leader_swap_table(LeaderSwapTable::new(
             self.context.clone(),
             last_commit_index,
@@ -650,27 +658,19 @@ mod tests {
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
-            let mut subdag =
-                dag_builder.get_subdag(leader.clone(), last_committed_rounds.clone(), commit_index);
-            for block in subdag.blocks.iter() {
+            let (sub_dag, commit) = dag_builder.get_sub_dag_and_commit(
+                leader.clone(),
+                last_committed_rounds.clone(),
+                commit_index,
+            );
+            for block in sub_dag.blocks.iter() {
                 blocks_to_write.push(block.clone());
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
             }
-            let commit = TrustedCommit::new_for_test(
-                commit_index,
-                CommitDigest::MIN,
-                leader.timestamp_ms(),
-                leader.reference(),
-                subdag
-                    .blocks
-                    .iter()
-                    .map(|block| block.reference())
-                    .collect::<Vec<_>>(),
-            );
+
             expected_commits.push(commit);
-            subdag.sort();
-            subdags.push(subdag);
+            subdags.push(sub_dag);
         }
 
         // The CommitInfo for the first 10 commits are written to store. This is the
@@ -678,7 +678,7 @@ mod tests {
         let commit_range = (1..11).into();
         let reputation_scores = ReputationScores::new(commit_range, vec![4, 1, 1, 3]);
         let committed_rounds = vec![9, 9, 10, 9];
-        let commit_ref = CommitRef::new(10, CommitDigest::MIN);
+        let commit_ref = expected_commits[9].reference();
         let commit_info = CommitInfo {
             reputation_scores,
             committed_rounds,
@@ -705,8 +705,7 @@ mod tests {
         );
         let actual_unscored_subdags = dag_state.read().unscored_committed_subdags();
         assert_eq!(1, dag_state.read().unscored_committed_subdags_count());
-        let mut actual_subdag = actual_unscored_subdags[0].clone();
-        actual_subdag.sort();
+        let actual_subdag = actual_unscored_subdags[0].clone();
         assert_eq!(*subdags.last().unwrap(), actual_subdag);
 
         let leader_schedule = LeaderSchedule::from_store(context.clone(), dag_state.clone());
@@ -783,26 +782,17 @@ mod tests {
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
-            let mut subdag =
-                dag_builder.get_subdag(leader.clone(), last_committed_rounds.clone(), commit_index);
+            let (subdag, commit) = dag_builder.get_sub_dag_and_commit(
+                leader.clone(),
+                last_committed_rounds.clone(),
+                commit_index,
+            );
             for block in subdag.blocks.iter() {
                 blocks_to_write.push(block.clone());
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
             }
-            let commit = TrustedCommit::new_for_test(
-                commit_index,
-                CommitDigest::MIN,
-                leader.timestamp_ms(),
-                leader.reference(),
-                subdag
-                    .blocks
-                    .iter()
-                    .map(|block| block.reference())
-                    .collect::<Vec<_>>(),
-            );
             expected_commits.push(commit);
-            subdag.sort();
             expected_unscored_subdags.push(subdag);
         }
 
@@ -832,8 +822,7 @@ mod tests {
             dag_state.read().unscored_committed_subdags_count()
         );
         for (idx, expected_subdag) in expected_unscored_subdags.into_iter().enumerate() {
-            let mut actual_subdag = actual_unscored_subdags[idx].clone();
-            actual_subdag.sort();
+            let actual_subdag = actual_unscored_subdags[idx].clone();
             assert_eq!(expected_subdag, actual_subdag);
         }
 
@@ -859,7 +848,8 @@ mod tests {
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             vec![],
             context.clock.timestamp_utc_ms(),
-            1,
+            CommitRef::new(1, CommitDigest::MIN),
+            vec![],
         )];
         dag_state
             .write()
@@ -956,7 +946,8 @@ mod tests {
             leader_ref,
             blocks,
             context.clock.timestamp_utc_ms(),
-            commit_index,
+            last_commit.reference(),
+            vec![],
         )];
 
         let mut dag_state_write = dag_state.write();
@@ -969,7 +960,7 @@ mod tests {
             AuthorityIndex::new_for_test(0)
         );
 
-        leader_schedule.update_leader_schedule(dag_state.clone());
+        leader_schedule.update_leader_schedule(&dag_state);
 
         let leader_swap_table = leader_schedule.leader_swap_table.read();
         assert_eq!(leader_swap_table.good_nodes.len(), 1);
