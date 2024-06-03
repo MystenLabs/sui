@@ -71,12 +71,15 @@ const removeTests = (text, options) => {
 exports.processOptions = (text, options) => {
   // Replace all the //docs:: lines in code and license header
   let processed = text
-
     .replace(
       /^\/\/\s*Copyright.*Mysten Labs.*\n\/\/\s*SPDX-License.*?\n?$/gim,
       "",
     )
-    .replace(/^\s*\/\/\s*docs::\/?.*\r?$\n?/gm, "");
+    .replace(/^\s*\/\/\s*docs::\/?.*\r?$\n?/gm, "")
+    .replace(
+      /sui\s?=\s?{\s?local\s?=.*sui-framework.*/i,
+      'Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }',
+    );
   processed = removeComments(processed, options);
   processed = removeTests(processed, options);
 
@@ -86,6 +89,9 @@ exports.processOptions = (text, options) => {
 // When including a function, struct by name
 // Need to catch the stuff that comes before
 // For example, comments, #[] style directives, and so on
+// match is the regex match for particular code section
+// match[1] is the (\s*) capture group to count indentation
+// text is all the code in the particular file
 exports.capturePrepend = (match, text) => {
   const numSpaces = match[1] || 0;
   let preText = text.substring(0, match.index);
