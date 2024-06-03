@@ -58,6 +58,13 @@ export function getPureBcsSchema(typeSignature: OpenMoveTypeSignatureBody): BcsT
 	}
 
 	if ('vector' in typeSignature) {
+		if (typeSignature.vector === 'u8') {
+			return bcs.vector(bcs.U8).transform({
+				input: (val: string | Uint8Array) =>
+					typeof val === 'string' ? new TextEncoder().encode(val) : val,
+				output: (val) => val,
+			});
+		}
 		const type = getPureBcsSchema(typeSignature.vector);
 		return type ? bcs.vector(type) : null;
 	}
