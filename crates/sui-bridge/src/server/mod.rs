@@ -37,7 +37,9 @@ pub(crate) mod mock_handler;
 
 pub const APPLICATION_JSON: &str = "application/json";
 
-// Important: the paths need to match the ones in bridge_client.rs
+pub const PING_PATH: &str = "/ping";
+
+// Important: for BridgeActions, the paths need to match the ones in bridge_client.rs
 pub const ETH_TO_SUI_TX_PATH: &str = "/sign/bridge_tx/eth/sui/:tx_hash/:event_index";
 pub const SUI_TO_ETH_TX_PATH: &str = "/sign/bridge_tx/sui/eth/:tx_digest/:event_index";
 pub const COMMITTEE_BLOCKLIST_UPDATE_PATH: &str =
@@ -56,13 +58,33 @@ pub const ADD_TOKENS_ON_SUI_PATH: &str =
 pub const ADD_TOKENS_ON_EVM_PATH: &str =
     "/sign/add_tokens_on_evm/:chain_id/:nonce/:native/:token_ids/:token_addresses/:token_sui_decimals/:token_prices";
 
+/// BridgeNode's public metadata that is acceesible via the `/ping` endpoint.
+// Be careful with what to put here, as it is public.
+#[derive(serde::Serialize, Clone)]
+pub struct BridgeNodePublicMetadata {
+    pub version: Option<String>,
+}
+
+impl BridgeNodePublicMetadata {
+    pub fn new(version: String) -> Self {
+        Self {
+            version: Some(version),
+        }
+    }
+
+    pub fn empty_for_testing() -> Self {
+        Self { version: None }
+    }
+}
+
 pub fn run_server(
     socket_address: &SocketAddr,
     handler: BridgeRequestHandler,
     metrics: Arc<BridgeMetrics>,
+    metadata: Arc<BridgeNodePublicMetadata>,
 ) -> tokio::task::JoinHandle<()> {
     let service = axum::Server::bind(socket_address)
-        .serve(make_router(Arc::new(handler), metrics).into_make_service());
+        .serve(make_router(Arc::new(handler), metrics, metadata).into_make_service());
     tokio::spawn(async move {
         service.await.unwrap();
     })
@@ -71,9 +93,11 @@ pub fn run_server(
 pub(crate) fn make_router(
     handler: Arc<impl BridgeRequestHandlerTrait + Sync + Send + 'static>,
     metrics: Arc<BridgeMetrics>,
+    metadata: Arc<BridgeNodePublicMetadata>,
 ) -> Router {
     Router::new()
         .route("/", get(health_check))
+        .route(PING_PATH, get(ping))
         .route(ETH_TO_SUI_TX_PATH, get(handle_eth_tx_hash))
         .route(SUI_TO_ETH_TX_PATH, get(handle_sui_tx_digest))
         .route(
@@ -93,7 +117,7 @@ pub(crate) fn make_router(
         )
         .route(ADD_TOKENS_ON_SUI_PATH, get(handle_add_tokens_on_sui))
         .route(ADD_TOKENS_ON_EVM_PATH, get(handle_add_tokens_on_evm))
-        .with_state((handler, metrics))
+        .with_state((handler, metrics, metadata))
 }
 
 impl axum::response::IntoResponse for BridgeError {
@@ -120,12 +144,23 @@ async fn health_check() -> StatusCode {
     StatusCode::OK
 }
 
+async fn ping(
+    State((_handler, _metrics, metadata)): State<(
+        Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
+        Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
+    )>,
+) -> Result<Json<BridgeNodePublicMetadata>, BridgeError> {
+    Ok(Json(metadata.as_ref().clone()))
+}
+
 #[instrument(level = "error", skip_all, fields(tx_hash_hex=tx_hash_hex, event_idx=event_idx))]
 async fn handle_eth_tx_hash(
     Path((tx_hash_hex, event_idx)): Path<(String, u16)>,
-    State((handler, metrics)): State<(
+    State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
     let future = async {
@@ -138,9 +173,10 @@ async fn handle_eth_tx_hash(
 #[instrument(level = "error", skip_all, fields(tx_digest_base58=tx_digest_base58, event_idx=event_idx))]
 async fn handle_sui_tx_digest(
     Path((tx_digest_base58, event_idx)): Path<(String, u16)>,
-    State((handler, metrics)): State<(
+    State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
     let future = async {
@@ -155,9 +191,10 @@ async fn handle_sui_tx_digest(
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, blocklist_type=blocklist_type, keys=keys))]
 async fn handle_update_committee_blocklist_action(
     Path((chain_id, nonce, blocklist_type, keys)): Path<(u8, u64, u8, String)>,
-    State((handler, metrics)): State<(
+    State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
     let future = async {
@@ -200,9 +237,10 @@ async fn handle_update_committee_blocklist_action(
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, action_type=action_type))]
 async fn handle_emergency_action(
     Path((chain_id, nonce, action_type)): Path<(u8, u64, u8)>,
-    State((handler, metrics)): State<(
+    State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
     let future = async {
@@ -229,9 +267,10 @@ async fn handle_emergency_action(
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, sending_chain_id=sending_chain_id, new_usd_limit=new_usd_limit))]
 async fn handle_limit_update_action(
     Path((chain_id, nonce, sending_chain_id, new_usd_limit)): Path<(u8, u64, u8, u64)>,
-    State((handler, metrics)): State<(
+    State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
     let future = async {
@@ -256,9 +295,10 @@ async fn handle_limit_update_action(
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, token_id=token_id, new_usd_price=new_usd_price))]
 async fn handle_asset_price_update_action(
     Path((chain_id, nonce, token_id, new_usd_price)): Path<(u8, u64, u8, u64)>,
-    State((handler, metrics)): State<(
+    State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
     let future = async {
@@ -286,9 +326,10 @@ async fn handle_evm_contract_upgrade_with_calldata(
         EthAddress,
         String,
     )>,
-    State((handler, metrics)): State<(
+    State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
     let future = async {
@@ -328,9 +369,10 @@ async fn handle_evm_contract_upgrade(
         EthAddress,
         EthAddress,
     )>,
-    State((handler, metrics)): State<(
+    State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
     let future = async {
@@ -361,9 +403,10 @@ async fn handle_add_tokens_on_sui(
         String,
         String,
     )>,
-    State((handler, metrics)): State<(
+    State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
     let future = async {
@@ -442,9 +485,10 @@ async fn handle_add_tokens_on_evm(
         String,
         String,
     )>,
-    State((handler, metrics)): State<(
+    State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
     let future = async {
