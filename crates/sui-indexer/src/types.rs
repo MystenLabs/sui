@@ -152,7 +152,6 @@ impl IndexedEpochInfo {
                 .end_of_epoch_data
                 .as_ref()
                 .map(|e| e.epoch_commitments.clone()),
-            system_state: bcs::to_bytes(system_state_summary).unwrap(),
             // The following felds will not and shall not be upserted
             // into DB. We have them below to make compiler and diesel happy
             first_checkpoint_id: 0,
@@ -161,6 +160,7 @@ impl IndexedEpochInfo {
             protocol_version: 0,
             total_stake: 0,
             storage_fund_balance: 0,
+            system_state: vec![],
         }
     }
 }
