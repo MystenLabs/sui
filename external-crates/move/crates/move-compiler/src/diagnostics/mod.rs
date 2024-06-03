@@ -139,14 +139,14 @@ pub struct MappedFiles {
 
 /// A file, and the line:column start, and line:column end that corresponds to a `Loc`
 #[allow(dead_code)]
-pub struct FileLineColSpan {
+pub struct FilePosition {
     pub file_id: FileId,
-    pub start: LineColLocation,
-    pub end: LineColLocation,
+    pub start: Position,
+    pub end: Position,
 }
 
-/// A line and column location in a file
-pub struct LineColLocation {
+/// A position holds the byte offset  along with the  line and column location in a file.
+pub struct Position {
     pub line: usize,
     pub column: usize,
     pub byte: usize,
@@ -193,37 +193,86 @@ impl MappedFiles {
         let id = self.files.add(fname, source);
         self.file_mapping.insert(fhash, id);
     }
+}
 
-    #[allow(dead_code)]
-    pub fn location(&self, loc: Loc) -> FileLineColSpan {
+// This is abstracted into a trait for reuse by the Move Analyzer.
+
+pub trait PositionInfo {
+    type FileContents: AsRef<str>;
+    fn files(&self) -> &SimpleFiles<Symbol, Self::FileContents>;
+    fn file_mapping(&self) -> &HashMap<FileHash, FileId>;
+
+    fn filename(&self, fhash: &FileHash) -> &str {
+        let file_id = self.file_mapping().get(fhash).unwrap();
+        self.files().get(*file_id).unwrap().name()
+    }
+
+    fn start_position(&self, loc: &Loc) -> Position {
+        self.position(loc).start
+    }
+
+    fn end_position(&self, loc: &Loc) -> Position {
+        self.position(loc).end
+    }
+
+    fn position(&self, loc: &Loc) -> FilePosition {
+        self.position_opt(loc).unwrap()
+    }
+
+    fn byte_span(&self, loc: &Loc) -> FileByteSpan {
+        self.byte_span_opt(loc).unwrap()
+    }
+
+    fn start_position_opt(&self, loc: &Loc) -> Option<Position> {
+        self.position_opt(loc).map(|posn| posn.start)
+    }
+
+    fn end_position_opt(&self, loc: &Loc) -> Option<Position> {
+        self.position_opt(loc).map(|posn| posn.end)
+    }
+
+    fn position_opt(&self, loc: &Loc) -> Option<FilePosition> {
         let start_loc = loc.start() as usize;
         let end_loc = loc.end() as usize;
-        let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
-        let start_file_loc = self.files.location(file_id, start_loc).unwrap();
-        let end_file_loc = self.files.location(file_id, end_loc).unwrap();
-        FileLineColSpan {
+        let file_id = *self.file_mapping().get(&loc.file_hash())?;
+        let start_file_loc = self.files().location(file_id, start_loc).ok()?;
+        let end_file_loc = self.files().location(file_id, end_loc).ok()?;
+        let posn = FilePosition {
             file_id,
-            start: LineColLocation {
+            start: Position {
                 line: start_file_loc.line_number,
                 column: start_file_loc.column_number - 1,
                 byte: start_loc,
             },
-            end: LineColLocation {
+            end: Position {
                 line: end_file_loc.line_number,
                 column: end_file_loc.column_number - 1,
                 byte: end_loc,
             },
-        }
+        };
+        Some(posn)
     }
 
-    pub fn byte_location(&self, loc: Loc) -> FileByteSpan {
+    fn byte_span_opt(&self, loc: &Loc) -> Option<FileByteSpan> {
         let start = loc.start() as usize;
         let end = loc.end() as usize;
-        let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
-        FileByteSpan {
+        let file_id = *self.file_mapping().get(&loc.file_hash())?;
+        let posn = FileByteSpan {
             byte_span: ByteSpan { start, end },
             file_id,
-        }
+        };
+        Some(posn)
+    }
+}
+
+impl PositionInfo for MappedFiles {
+    type FileContents = Arc<str>;
+    fn files(&self) -> &SimpleFiles<Symbol, Self::FileContents> {
+        &self.files
+    }
+
+    fn file_mapping(&self) -> &HashMap<FileHash, FileId> {
+        &self.file_mapping
     }
 }
 
@@ -780,7 +829,7 @@ impl Diagnostic {
             notes: _,
         } = self;
 
-        let bloc = mapped_files.location(*ploc);
+        let bloc = mapped_files.position(ploc);
         JsonDiagnostic {
             file: mapped_files
                 .files
@@ -1098,7 +1147,7 @@ impl Migration {
 
     fn find_file_location(&mut self, diag: &Diagnostic) -> FileByteSpan {
         let (loc, _msg) = &diag.primary_label;
-        self.mapped_files.byte_location(*loc)
+        self.mapped_files.byte_span(loc)
     }
 
     fn get_file_contents(&self, file_id: FileId) -> String {

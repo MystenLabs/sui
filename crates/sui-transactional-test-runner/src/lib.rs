@@ -324,7 +324,7 @@ impl ReadStore for ValidatorWithFullnode {
     ) -> sui_types::storage::error::Result<Option<Arc<sui_types::transaction::VerifiedTransaction>>>
     {
         self.validator
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_transaction_block(tx_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }
@@ -334,7 +334,7 @@ impl ReadStore for ValidatorWithFullnode {
         tx_digest: &TransactionDigest,
     ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
         self.validator
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_executed_effects(tx_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }
@@ -344,7 +344,7 @@ impl ReadStore for ValidatorWithFullnode {
         event_digest: &TransactionEventsDigest,
     ) -> sui_types::storage::error::Result<Option<TransactionEvents>> {
         self.validator
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_events(event_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiObjectRef } from '@mysten/sui.js/client';
-import { getFaucetHost, requestSuiFromFaucetV1 } from '@mysten/sui.js/faucet';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SuiObjectRef } from '@mysten/sui/client';
+import { getFaucetHost, requestSuiFromFaucetV1 } from '@mysten/sui/faucet';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
 
 import { client } from './rpc';
 
@@ -33,10 +33,10 @@ export async function sponsorTransaction(sender: string, transactionKindBytes: U
 		retires -= 1;
 	}
 
-	const tx = TransactionBlock.fromKind(transactionKindBytes);
+	const tx = Transaction.fromKind(transactionKindBytes);
 	tx.setSender(sender);
 	tx.setGasOwner(address);
 	tx.setGasPayment(payment);
 
-	return keypair.signTransactionBlock(await tx.build({ client }));
+	return keypair.signTransaction(await tx.build({ client }));
 }

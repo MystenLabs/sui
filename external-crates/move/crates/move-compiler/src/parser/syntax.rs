@@ -1107,6 +1107,10 @@ fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> 
 // Parse attributes. Used to annotate a variety of AST nodes
 //      Attributes = ("#" "[" Comma<Attribute> "]")*
 fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagnostic>> {
+    let mut doc_comments = context
+        .tokens
+        .read_doc_comments()
+        .map_or_else(Vec::new, |doc_comments| vec![doc_comments]);
     let mut attributes_vec = vec![];
     while let Tok::NumSign = context.tokens.peek() {
         let start_loc = context.tokens.start_loc();
@@ -1125,8 +1129,18 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
             start_loc,
             end_loc,
             attributes_,
-        ))
+        ));
+        if let Some(new_doc_comments) = context.tokens.read_doc_comments() {
+            doc_comments.push(new_doc_comments);
+        }
     }
+
+    // Attaches the doc comments to the start of the location of the member that these
+    // attributes/doc comments are attached to.
+    if !doc_comments.is_empty() {
+        context.tokens.attach_doc_comments(doc_comments.join("\n"));
+    }
+
     Ok(attributes_vec)
 }
 
@@ -4203,7 +4217,6 @@ fn parse_module(
     attributes: Vec<Attributes>,
     context: &mut Context,
 ) -> Result<(ModuleDefinition, Option<Vec<Attributes>>), Box<Diagnostic>> {
-    context.tokens.match_doc_comments();
     let start_loc = context.tokens.start_loc();
 
     let is_spec_module = if context.tokens.peek() == Tok::Spec {
@@ -4309,7 +4322,6 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
     match context.tokens.peek() {
         // Top-level specification constructs
         Tok::Invariant => {
-            context.tokens.match_doc_comments();
             let spec_string = consume_spec_string(context)?;
             consume_token(context.tokens, Tok::Semicolon)?;
             Ok(ModuleMember::Spec(spec_string))
@@ -4317,7 +4329,6 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
         Tok::Spec => {
             match context.tokens.lookahead() {
                 Ok(Tok::Fun) | Ok(Tok::Native) => {
-                    context.tokens.match_doc_comments();
                     context.tokens.advance()?;
                     // Add an extra check for better error message
                     // if old syntax is used
@@ -4342,7 +4353,6 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
             attributes, context,
         )?)),
         _ => {
-            context.tokens.match_doc_comments();
             let start_loc = context.tokens.start_loc();
             let modifiers = parse_module_member_modifiers(context)?;
             let tok = context.tokens.peek();

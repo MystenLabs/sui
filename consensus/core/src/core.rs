@@ -28,7 +28,7 @@ use crate::{
     leader_schedule::LeaderSchedule,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     threshold_clock::ThresholdClock,
-    transaction::{TransactionConsumer, TransactionGuard},
+    transaction::TransactionConsumer,
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
@@ -331,6 +331,7 @@ impl Core {
                     .saturating_duration_since(self.threshold_clock.get_quorum_ts())
                     .as_millis() as u64,
             );
+
         self.context
             .metrics
             .node_metrics
@@ -365,11 +366,7 @@ impl Core {
 
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
         // the inclusion of transactions. Just let this be done in the end of the method.
-        let transaction_guards = self.transaction_consumer.next();
-        let transactions = transaction_guards
-            .iter()
-            .map(|t| t.transaction.clone())
-            .collect::<Vec<_>>();
+        let (transactions, ack_transactions) = self.transaction_consumer.next();
 
         // Consume the commit votes to be included.
         let commit_votes = self
@@ -418,9 +415,7 @@ impl Core {
         self.last_proposed_block = verified_block.clone();
 
         // Now acknowledge the transactions for their inclusion to block
-        transaction_guards
-            .into_iter()
-            .for_each(TransactionGuard::acknowledge);
+        ack_transactions();
 
         info!("Created block {:?}", verified_block);
 
@@ -489,11 +484,12 @@ impl Core {
                     tracing::info!(
                         "Leader schedule change triggered at commit index {last_commit_index}"
                     );
-                    self.leader_schedule
-                        .update_leader_schedule(self.dag_state.clone());
+                    self.leader_schedule.update_leader_schedule(&self.dag_state);
                     commits_until_update = self
                         .leader_schedule
                         .commits_until_leader_schedule_update(self.dag_state.clone());
+
+                    fail_point!("consensus-after-leader-schedule-change");
                 }
                 assert!(commits_until_update > 0);
 
@@ -725,11 +721,9 @@ mod test {
     use std::{collections::BTreeSet, time::Duration};
 
     use consensus_config::{local_committee_and_keys, AuthorityIndex, Parameters, Stake};
+    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
     use sui_protocol_config::ProtocolConfig;
-    use tokio::{
-        sync::mpsc::{unbounded_channel, UnboundedReceiver},
-        time::sleep,
-    };
+    use tokio::time::sleep;
 
     use super::*;
     use crate::{
@@ -786,7 +780,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -902,7 +896,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -997,7 +991,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -1026,7 +1020,7 @@ mod test {
             total += transaction.len();
             index += 1;
             let _w = transaction_client
-                .submit_no_wait(transaction)
+                .submit_no_wait(vec![transaction])
                 .await
                 .unwrap();
 
@@ -1105,7 +1099,7 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -1650,7 +1644,7 @@ mod test {
             // Need at least one subscriber to the block broadcast channel.
             let block_receiver = signal_receivers.block_broadcast_receiver();
 
-            let (commit_sender, commit_receiver) = unbounded_channel();
+            let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
             let commit_observer = CommitObserver::new(
                 context.clone(),
                 CommitConsumer::new(commit_sender.clone(), 0, 0),

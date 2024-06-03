@@ -32,7 +32,7 @@ use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sui_move::build::resolve_lock_file_path;
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
@@ -858,6 +858,12 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&opts.gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
+                let package_path =
+                    package_path
+                        .canonicalize()
+                        .map_err(|e| SuiError::ModulePublishFailure {
+                            error: format!("Failed to canonicalize package path: {}", e),
+                        })?;
                 let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
                     upgrade_package(
                         client.read_api(),
@@ -931,6 +937,12 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&opts.gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
+                let package_path =
+                    package_path
+                        .canonicalize()
+                        .map_err(|e| SuiError::ModulePublishFailure {
+                            error: format!("Failed to canonicalize package path: {}", e),
+                        })?;
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     client.read_api(),
                     build_config.clone(),
@@ -2629,9 +2641,9 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         opts.serialize_unsigned_transaction,
         opts.serialize_signed_transaction,
     );
-    assert!(
+    ensure!(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
-        "Cannot specify both --serialize-unsigned-transaction and --serialize-signed-transaction"
+        "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
     );
     let gas_price = if let Some(gas_price) = gas_price {
         gas_price

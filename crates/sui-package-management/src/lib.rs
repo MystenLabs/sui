@@ -36,19 +36,19 @@ pub async fn update_lock_file(
 
     let (original_id, version, _) = get_new_package_obj_from_response(response).context(
         "Expected a valid published package response but didn't see \
-	 one when attempting to update the `Move.lock`.",
+         one when attempting to update the `Move.lock`.",
     )?;
     let Some(lock_file) = lock_file else {
         bail!(
             "Expected a `Move.lock` file to exist after publishing \
-	     package, but none found. Consider running `sui move build` to \
-	     generate the `Move.lock` file in the package directory."
+             package, but none found. Consider running `sui move build` to \
+             generate the `Move.lock` file in the package directory."
         )
     };
     let install_dir = install_dir.unwrap_or(PathBuf::from("."));
     let env = context.config.get_active_env().context(
         "Could not resolve environment from active wallet context. \
-	 Try ensure `sui client active-env` is valid.",
+         Try ensure `sui client active-env` is valid.",
     )?;
 
     let mut lock = LockFile::from(install_dir.clone(), &lock_file)?;

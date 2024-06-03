@@ -11,6 +11,7 @@ use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
+use crate::commit::{sort_sub_dag_blocks, CommitDigest, TrustedCommit};
 use crate::{
     block::{
         genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot, TestBlock,
@@ -124,12 +125,12 @@ impl DagBuilder {
     }
 
     // TODO: reuse logic from Linearizer.
-    pub(crate) fn get_subdag(
+    pub(crate) fn get_sub_dag_and_commit(
         &self,
         leader_block: VerifiedBlock,
         last_committed_rounds: Vec<Round>,
         commit_index: u32,
-    ) -> CommittedSubDag {
+    ) -> (CommittedSubDag, TrustedCommit) {
         let mut to_commit = Vec::new();
         let mut committed = HashSet::new();
 
@@ -158,7 +159,29 @@ impl DagBuilder {
                 assert!(committed.insert(ancestor.reference()));
             }
         }
-        CommittedSubDag::new(leader_block_ref, to_commit, timestamp_ms, commit_index)
+
+        sort_sub_dag_blocks(&mut to_commit);
+
+        let commit = TrustedCommit::new_for_test(
+            commit_index,
+            CommitDigest::MIN,
+            timestamp_ms,
+            leader_block_ref,
+            to_commit
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+        );
+
+        let sub_dag = CommittedSubDag::new(
+            leader_block_ref,
+            to_commit,
+            timestamp_ms,
+            commit.reference(),
+            vec![],
+        );
+
+        (sub_dag, commit)
     }
 
     pub(crate) fn leader_blocks(

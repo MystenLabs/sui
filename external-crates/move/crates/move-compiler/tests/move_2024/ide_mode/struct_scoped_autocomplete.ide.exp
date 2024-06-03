@@ -1,0 +1,46 @@
+warning[W09009]: unused struct field
+  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:3:21
+  │
+3 │     public struct A(u64) has copy, drop;
+  │                     ^^^ The '0' field of the 'A' type is unused
+  │
+  = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09009]: unused struct field
+  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:6:9
+  │
+6 │         a: A
+  │         ^ The 'a' field of the 'B' type is unused
+  │
+  = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:17:23
+   │
+17 │         let _tmp1 = _a.;
+   │                       ^ Autocompletes to: 'a::m::t0'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:17:24
+   │
+17 │         let _tmp1 = _a.;
+   │                        ^
+   │                        │
+   │                        Unexpected ';'
+   │                        Expected an identifier or a decimal number
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:18:23
+   │
+18 │         let _tmp2 = _b.;
+   │                       ^ Autocompletes to: 'a::m::t1'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:18:24
+   │
+18 │         let _tmp2 = _b.;
+   │                        ^
+   │                        │
+   │                        Unexpected ';'
+   │                        Expected an identifier or a decimal number
+

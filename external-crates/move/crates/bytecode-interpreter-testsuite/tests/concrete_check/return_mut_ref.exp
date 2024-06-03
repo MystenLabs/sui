@@ -1,5 +1,0 @@
-Running Move unit tests
-[ PASS    ] 0x2::A::return_ref_path
-[ PASS    ] 0x2::A::return_ref_path_vec_1
-[ PASS    ] 0x2::A::return_ref_root
-Test result: OK. Total tests: 3; passed: 3; failed: 0

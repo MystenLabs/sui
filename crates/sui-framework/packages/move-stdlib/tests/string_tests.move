@@ -11,7 +11,7 @@ module std::string_tests {
     fun test_valid_utf8() {
         let sparkle_heart = vector[240, 159, 146, 150];
         let s = sparkle_heart.to_string();
-        assert!(s.length() == 4, 22);
+        assert!(s.length() == 4);
     }
 
     #[test]
@@ -19,14 +19,14 @@ module std::string_tests {
     fun test_invalid_utf8() {
         let no_sparkle_heart = vector[0, 159, 146, 150];
         let s = no_sparkle_heart.to_string();
-        assert!(s.length() == 1, 22);
+        assert!(s.length() == 1);
     }
 
     #[test]
     fun test_sub_string() {
         let s = b"abcd".to_string();
         let sub = s.sub_string(2, 4);
-        assert!(sub == b"cd".to_string(), 22)
+        assert!(sub == b"cd".to_string())
     }
 
     #[test]
@@ -48,7 +48,7 @@ module std::string_tests {
     fun test_sub_string_empty() {
         let s = b"abcd".to_string();
         let sub = s.sub_string(4, 4);
-        assert!(sub.is_empty(), 22)
+        assert!(sub.is_empty())
     }
 
     #[test]
@@ -56,7 +56,7 @@ module std::string_tests {
         let s = b"abcd".to_string();
         let r = b"bc".to_string();
         let p = s.index_of(&r);
-        assert!(p == 1, 22)
+        assert!(p == 1)
     }
 
     #[test]
@@ -64,20 +64,20 @@ module std::string_tests {
         let s = b"abcd".to_string();
         let r = b"bce".to_string();
         let p = s.index_of(&r);
-        assert!(p == 4, 22)
+        assert!(p == 4)
     }
 
     #[test]
     fun test_append() {
         let mut s = b"abcd".to_string();
         s.append(b"ef".to_string());
-        assert!(s == b"abcdef".to_string(), 22)
+        assert!(s == b"abcdef".to_string())
     }
 
     #[test]
     fun test_insert() {
         let mut s = b"abcd".to_string();
         s.insert(1, b"xy".to_string());
-        assert!(s == b"axybcd".to_string(), 22)
+        assert!(s == b"axybcd".to_string())
     }
 }

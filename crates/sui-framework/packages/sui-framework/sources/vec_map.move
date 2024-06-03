@@ -18,6 +18,9 @@ module sui::vec_map {
     /// Trying to pop from a map that is empty
     const EMapEmpty: u64 = 4;
 
+    /// Trying to construct a map from keys and values of different lengths
+    const EUnequalLengths: u64 = 5;
+
     /// A map data structure backed by a vector. The map is guaranteed not to contain duplicate keys, but entries
     /// are *not* sorted by key--entries are included in insertion order.
     /// All operations are O(N) in the size of the map--the intention of this data structure is only to provide
@@ -129,6 +132,25 @@ module sui::vec_map {
         };
         contents.destroy_empty();
         (keys, values)
+    }
+
+    /// Construct a new `VecMap` from two vectors, one for keys and one for values.
+    /// The key value pairs are associated via their indices in the vectors, e.g. the key at index i
+    /// in `keys` is associated with the value at index i in `values`.
+    /// The key value pairs are stored in insertion order (the original vectors ordering)
+    /// and are *not* sorted.
+    public fun from_keys_values<K: copy, V>(
+        mut keys: vector<K>,
+        mut values: vector<V>,
+    ): VecMap<K, V> {
+        assert!(keys.length() == values.length(), EUnequalLengths);
+        keys.reverse();
+        values.reverse();
+        let mut map = empty();
+        while (!keys.is_empty()) map.insert(keys.pop_back(), values.pop_back());
+        keys.destroy_empty();
+        values.destroy_empty();
+        map
     }
 
     /// Returns a list of keys in the map.

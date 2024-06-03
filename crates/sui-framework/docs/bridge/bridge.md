@@ -1465,7 +1465,7 @@ title: Module `0xb::bridge`
     <b>assert</b>!(token_ids.length() == token_type_names.length(), <a href="bridge.md#0xb_bridge_EMalformedMessageError">EMalformedMessageError</a>);
     <b>assert</b>!(token_ids.length() == token_prices.length(), <a href="bridge.md#0xb_bridge_EMalformedMessageError">EMalformedMessageError</a>);
 
-    <b>while</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&token_ids) &gt; 0) {
+    <b>while</b> (token_ids.length() &gt; 0) {
         <b>let</b> token_id = token_ids.pop_back();
         <b>let</b> token_type_name = token_type_names.pop_back();
         <b>let</b> token_price = token_prices.pop_back();

@@ -1,0 +1,159 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                 │
+├───────────────┬─────────────────────────────────────────────────────────────────────────────────────────────┤
+│ command       │ values                                                                                      │
+├───────────────┼─────────────────────────────────────────────────────────────────────────────────────────────┤
+│ make-move-vec │ <u8> [1, 2, 3, 4u16]                                                                        │
+│ make-move-vec │ <u16> [1, 2, 3, 4u128]                                                                      │
+│ make-move-vec │ <u32> [1, 2, 3, 4u8]                                                                        │
+│ make-move-vec │ <u64> [1, 2, 3, 4u32]                                                                       │
+│ make-move-vec │ <u128> [1, 2u8, 3, 4]                                                                       │
+│ make-move-vec │ <u256> [1u64, 2, 3, 4]                                                                      │
+│ make-move-vec │ <vector<u8>> [vector[1, 2u16, 3, 4]]                                                        │
+│ make-move-vec │ <vector<u16>> [1, 2, 3, 4]                                                                  │
+│ make-move-vec │ <vector<u32>> [vector[1u64, 2, 3, 4]]                                                       │
+│ make-move-vec │ <vector<u64>> [vector[1, 2u128, 3, 4]]                                                      │
+│ make-move-vec │ <vector<u128>> [vector[1, 2u256, 3, 4]]                                                     │
+│ make-move-vec │ <vector<u256>> [vector[1, 2, 3u8, 4]]                                                       │
+│ make-move-vec │ <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(vector[1, 2, 3, 4])]           │
+│ make-move-vec │ <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(some(vector[1, 2u128, 3, 4]))] │
+│ gas-budget    │ 100000000                                                                                   │
+╰───────────────┴─────────────────────────────────────────────────────────────────────────────────────────────╯
+ === BUILDING PTB ERRORS === 
+  × Error when processing PTB
+   ╭─[1:29]
+ 1 │ --make-move-vec <u8> [1,2,3,4u16]
+   ·                             ──┬─
+   ·                               ╰── Unable to serialize '4u16' as a u8 value
+ 2 │ --make-move-vec <u16> [1,2,3,4u128]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[2:30]
+ 1 │ --make-move-vec <u8> [1,2,3,4u16]
+ 2 │ --make-move-vec <u16> [1,2,3,4u128]
+   ·                              ──┬──
+   ·                                ╰── Unable to serialize '4u128' as a u16 value
+ 3 │ --make-move-vec <u32> [1,2,3,4u8]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[3:30]
+ 2 │ --make-move-vec <u16> [1,2,3,4u128]
+ 3 │ --make-move-vec <u32> [1,2,3,4u8]
+   ·                              ─┬─
+   ·                               ╰── Unable to serialize '4u8' as a u32 value
+ 4 │ --make-move-vec <u64> [1,2,3,4u32]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[4:30]
+ 3 │ --make-move-vec <u32> [1,2,3,4u8]
+ 4 │ --make-move-vec <u64> [1,2,3,4u32]
+   ·                              ──┬─
+   ·                                ╰── Unable to serialize '4u32' as a u64 value
+ 5 │ --make-move-vec <u128> [1,2u8,3,4]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[5:27]
+ 4 │ --make-move-vec <u64> [1,2,3,4u32]
+ 5 │ --make-move-vec <u128> [1,2u8,3,4]
+   ·                           ─┬─
+   ·                            ╰── Unable to serialize '2u8' as a u128 value
+ 6 │ --make-move-vec <u256> [1u64,2,3,4]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[6:25]
+ 5 │ --make-move-vec <u128> [1,2u8,3,4]
+ 6 │ --make-move-vec <u256> [1u64,2,3,4]
+   ·                         ──┬─
+   ·                           ╰── Unable to serialize '1u64' as a u256 value
+ 7 │ --make-move-vec <vector<u8>> [vector[1,2u16,3,4]]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[7:40]
+ 6 │ --make-move-vec <u256> [1u64,2,3,4]
+ 7 │ --make-move-vec <vector<u8>> [vector[1,2u16,3,4]]
+   ·                                        ──┬─
+   ·                                          ╰── Unable to serialize '2u16' as a u8 value
+ 8 │ --make-move-vec <vector<u16>> [1,2,3,4]
+   ╰────
+  help: Literal vectors cannot contain object values.
+
+  × Error when processing PTB
+   ╭─[8:32]
+ 7 │ --make-move-vec <vector<u8>> [vector[1,2u16,3,4]]
+ 8 │ --make-move-vec <vector<u16>> [1,2,3,4]
+   ·                                ┬
+   ·                                ╰── Expected an integer type but got vector<u16> for '1'
+ 9 │ --make-move-vec <vector<u32>> [vector[1u64,2,3,4]]
+   ╰────
+
+  × Error when processing PTB
+    ╭─[9:39]
+  8 │ --make-move-vec <vector<u16>> [1,2,3,4]
+  9 │ --make-move-vec <vector<u32>> [vector[1u64,2,3,4]]
+    ·                                       ──┬─
+    ·                                         ╰── Unable to serialize '1u64' as a u32 value
+ 10 │ --make-move-vec <vector<u64>> [vector[1,2u128,3,4]]
+    ╰────
+  help: Literal vectors cannot contain object values.
+
+  × Error when processing PTB
+    ╭─[10:41]
+  9 │ --make-move-vec <vector<u32>> [vector[1u64,2,3,4]]
+ 10 │ --make-move-vec <vector<u64>> [vector[1,2u128,3,4]]
+    ·                                         ──┬──
+    ·                                           ╰── Unable to serialize '2u128' as a u64 value
+ 11 │ --make-move-vec <vector<u128>> [vector[1,2u256,3,4]]
+    ╰────
+  help: Literal vectors cannot contain object values.
+
+  × Error when processing PTB
+    ╭─[11:42]
+ 10 │ --make-move-vec <vector<u64>> [vector[1,2u128,3,4]]
+ 11 │ --make-move-vec <vector<u128>> [vector[1,2u256,3,4]]
+    ·                                          ──┬──
+    ·                                            ╰── Unable to serialize '2u256' as a u128 value
+ 12 │ --make-move-vec <vector<u256>> [vector[1,2,3u8,4]]
+    ╰────
+  help: Literal vectors cannot contain object values.
+
+  × Error when processing PTB
+    ╭─[12:44]
+ 11 │ --make-move-vec <vector<u128>> [vector[1,2u256,3,4]]
+ 12 │ --make-move-vec <vector<u256>> [vector[1,2,3u8,4]]
+    ·                                            ─┬─
+    ·                                             ╰── Unable to serialize '3u8' as a u256 value
+ 13 │ --make-move-vec <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(vector[1,2,3,4])]
+    ╰────
+  help: Literal vectors cannot contain object values.
+
+  × Error when processing PTB
+    ╭─[13:78]
+ 12 │ --make-move-vec <vector<u256>> [vector[1,2,3u8,4]]
+ 13 │ --make-move-vec <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(vector[1,2,3,4])]
+    ·                                                                              ───────┬───────
+    ·                                                                                     ╰── Unable to serialize 'vector[1, 2, 3, 4]' as a 0x1::option::Option<vector<u8>> value
+ 14 │ --make-move-vec <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(some(vector[1,2u128,3,4]))]
+    ╰────
+  help: Literal option values cannot contain object values.
+
+  × Error when processing PTB
+    ╭─[14:92]
+ 13 │ --make-move-vec <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(vector[1,2,3,4])]
+ 14 │ --make-move-vec <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(some(vector[1,2u128,3,4]))]
+    ·                                                                                            ──┬──
+    ·                                                                                              ╰── Unable to serialize '2u128' as a u8 value
+ 15 │ --gas-budget 100000000 
+    ╰────
+  help: Literal option values cannot contain object values.
+

@@ -22,6 +22,9 @@ pub struct Disassemble {
     /// Whether to display the disassembly in raw Debug format
     #[clap(long = "Xdebug")]
     debug: bool,
+
+    #[clap(short = 'i', long = "interactive")]
+    interactive: bool,
 }
 
 impl Disassemble {
@@ -40,7 +43,7 @@ impl Disassemble {
                 .expect("Cannot convert module name to string")
                 .to_owned();
             move_cli::base::disassemble::Disassemble {
-                interactive: false,
+                interactive: self.interactive,
                 package_name: None,
                 module_or_script_name: module_name,
                 debug: self.debug,

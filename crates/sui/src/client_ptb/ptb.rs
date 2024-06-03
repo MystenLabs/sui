@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
-use anyhow::{anyhow, Error};
+use anyhow::{anyhow, ensure, Error};
 use clap::{arg, Args, ValueHint};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
@@ -83,9 +83,10 @@ impl PTB {
             Ok(parsed) => parsed,
         };
 
-        if program_metadata.serialize_unsigned_set && program_metadata.serialize_signed_set {
-            anyhow::bail!("Cannot serialize both signed and unsigned PTBs");
-        }
+        ensure!(
+            !program_metadata.serialize_unsigned_set || !program_metadata.serialize_signed_set,
+            "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
+        );
 
         if program_metadata.preview_set {
             println!(
@@ -160,17 +161,19 @@ impl PTB {
         )
         .await?;
 
-        if let SuiClientCommandResult::DryRun(response) = transaction_response {
-            println!("{}", Pretty(&response));
-            return Ok(());
-        }
-
-        let transaction_response =
-            if let SuiClientCommandResult::TransactionBlock(response) = transaction_response {
-                response
-            } else {
-                anyhow::bail!("Internal error. Cannot run the PTB")
-            };
+        let transaction_response = match transaction_response {
+            SuiClientCommandResult::DryRun(_) => {
+                println!("{}", transaction_response);
+                return Ok(());
+            }
+            SuiClientCommandResult::SerializedUnsignedTransaction(_)
+            | SuiClientCommandResult::SerializedSignedTransaction(_) => {
+                println!("{}", transaction_response);
+                return Ok(());
+            }
+            SuiClientCommandResult::TransactionBlock(response) => response,
+            _ => anyhow::bail!("Internal error, unexpected response from PTB execution."),
+        };
 
         if let Some(effects) = transaction_response.effects.as_ref() {
             if effects.status().is_err() {
@@ -339,7 +342,7 @@ pub fn ptb_description() -> clap::Command {
             \n --assign a none\
             \n --move-call std::option::is_none <u64> a"
         )
-        .value_names(["PACKAGE::MODULE::FUNCTION", "TYPE", "FUNCTION_ARGS"]))
+        .value_names(["PACKAGE::MODULE::FUNCTION", "TYPE_ARGS", "FUNCTION_ARGS"]))
         .arg(arg!(
             --"split-coins" <SPLIT_COINS>
             "Split the coin into N coins as per the given array of amounts."
@@ -359,7 +362,7 @@ pub fn ptb_description() -> clap::Command {
         .long_help(
             "Transfer objects to the specified address.\
             \n\nExamples:\
-            \n --transfer-objects [obj1, obj2, obj3] @address 
+            \n --transfer-objects [obj1, obj2, obj3] @address
             \n --split-coins gas [1000, 5000, 75000]\
             \n --assign new_coins # bound new_coins to result of split-coins to use next\
             \n --transfer-objects [new_coins.0, new_coins.1, new_coins.2] @to_address"
@@ -379,7 +382,7 @@ pub fn ptb_description() -> clap::Command {
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
             --"upgrade" <MOVE_PACKAGE_PATH>
-            "Upgrade the move package. It takes as input the folder where the package exists."
+            "Upgrade the Move package. It takes as input the folder where the package exists."
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
             --"preview"

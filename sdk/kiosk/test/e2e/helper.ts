@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { expect } from 'vitest';
 
 import type { KioskClient, KioskOwnerCap } from '../../src/index.js';
@@ -11,7 +11,7 @@ import {
 	TransferPolicyTransaction,
 } from '../../src/index.js';
 import type { TestToolbox } from './setup.js';
-import { executeTransactionBlock, getPublisherObject } from './setup.js';
+import { executeTransaction, getPublisherObject } from './setup.js';
 
 // Creates a fresh transfer policy for Heroes and attaches all the rules.
 export async function prepareHeroRuleset({
@@ -25,8 +25,8 @@ export async function prepareHeroRuleset({
 }) {
 	/// Do a full rule setup for `Hero` type.
 	const publisher = await getPublisherObject(toolbox);
-	const txb = new TransactionBlock();
-	const tpTx = new TransferPolicyTransaction({ kioskClient, transactionBlock: txb });
+	const tx = new Transaction();
+	const tpTx = new TransferPolicyTransaction({ kioskClient, transaction: tx });
 
 	await tpTx.create({
 		type: `${heroPackageId}::hero::Hero`,
@@ -40,7 +40,7 @@ export async function prepareHeroRuleset({
 		.addPersonalKioskRule()
 		.shareAndTransferCap(toolbox.address());
 
-	await executeTransactionBlock(toolbox, txb);
+	await executeTransaction(toolbox, tx);
 }
 
 // Creates a fresh transfer policy for Heroes and attaches all the rules.
@@ -55,8 +55,8 @@ export async function prepareVillainTransferPolicy({
 }) {
 	/// Do a plain TP creation for `Villain` type.
 	const publisher = await getPublisherObject(toolbox);
-	const txb = new TransactionBlock();
-	const tpTx = new TransferPolicyTransaction({ kioskClient, transactionBlock: txb });
+	const tx = new Transaction();
+	const tpTx = new TransferPolicyTransaction({ kioskClient, transaction: tx });
 
 	await tpTx.createAndShare({
 		type: `${heroPackageId}::hero::Villain`,
@@ -64,7 +64,7 @@ export async function prepareVillainTransferPolicy({
 		address: toolbox.address(),
 	});
 
-	await executeTransactionBlock(toolbox, txb);
+	await executeTransaction(toolbox, tx);
 }
 
 export async function testLockItemFlow(
@@ -74,8 +74,8 @@ export async function testLockItemFlow(
 	itemType: string,
 	itemId: string,
 ) {
-	const txb = new TransactionBlock();
-	const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
+	const tx = new Transaction();
+	const kioskTx = new KioskTransaction({ transaction: tx, kioskClient, cap });
 
 	const policies = await kioskClient.getTransferPolicies({ type: itemType });
 	expect(policies).toHaveLength(1);
@@ -88,7 +88,7 @@ export async function testLockItemFlow(
 		})
 		.finalize();
 
-	await executeTransactionBlock(toolbox, txb);
+	await executeTransaction(toolbox, tx);
 }
 
 // A helper that does a full run for kiosk management.
@@ -99,8 +99,8 @@ export async function existingKioskManagementFlow(
 	itemType: string,
 	itemId: string,
 ) {
-	const txb = new TransactionBlock();
-	const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
+	const tx = new Transaction();
+	const kioskTx = new KioskTransaction({ transaction: tx, kioskClient, cap });
 
 	kioskTx
 		.place({
@@ -140,7 +140,7 @@ export async function existingKioskManagementFlow(
 		.withdraw(toolbox.address())
 		.finalize();
 
-	await executeTransactionBlock(toolbox, txb);
+	await executeTransaction(toolbox, tx);
 }
 
 /**
@@ -159,8 +159,8 @@ export async function purchaseFlow(
 	 * Lists an item for sale
 	 */
 	const SALE_PRICE = 100000n;
-	const sellTxb = new TransactionBlock();
-	new KioskTransaction({ transactionBlock: sellTxb, kioskClient, cap: sellerCap })
+	const sellTxb = new Transaction();
+	new KioskTransaction({ transaction: sellTxb, kioskClient, cap: sellerCap })
 		.placeAndList({
 			itemType,
 			item: itemId,
@@ -168,14 +168,14 @@ export async function purchaseFlow(
 		})
 		.finalize();
 
-	await executeTransactionBlock(toolbox, sellTxb);
+	await executeTransaction(toolbox, sellTxb);
 
 	/**
 	 * Purchases the item using a different kiosk (must be personal)
 	 */
-	const purchaseTxb = new TransactionBlock();
+	const purchaseTxb = new Transaction();
 	const purchaseTx = new KioskTransaction({
-		transactionBlock: purchaseTxb,
+		transaction: purchaseTxb,
 		kioskClient,
 		cap: buyerCap,
 	});
@@ -189,7 +189,7 @@ export async function purchaseFlow(
 		})
 	).finalize();
 
-	await executeTransactionBlock(toolbox, purchaseTxb);
+	await executeTransaction(toolbox, purchaseTxb);
 }
 
 export async function purchaseOnNewKiosk(
@@ -204,8 +204,8 @@ export async function purchaseOnNewKiosk(
 	 * Lists an item for sale
 	 */
 	const SALE_PRICE = 100000n;
-	const sellTxb = new TransactionBlock();
-	new KioskTransaction({ transactionBlock: sellTxb, kioskClient, cap: sellerCap })
+	const sellTxb = new Transaction();
+	new KioskTransaction({ transaction: sellTxb, kioskClient, cap: sellerCap })
 		.placeAndList({
 			itemType,
 			item: itemId,
@@ -213,13 +213,13 @@ export async function purchaseOnNewKiosk(
 		})
 		.finalize();
 
-	await executeTransactionBlock(toolbox, sellTxb);
+	await executeTransaction(toolbox, sellTxb);
 
 	/**
 	 * Purchases the item using a different kiosk (must be personal)
 	 */
-	const purchaseTxb = new TransactionBlock();
-	const purchaseTx = new KioskTransaction({ transactionBlock: purchaseTxb, kioskClient });
+	const purchaseTxb = new Transaction();
+	const purchaseTx = new KioskTransaction({ transaction: purchaseTxb, kioskClient });
 
 	// create personal kiosk (`true` means that we can use this kiosk for extra transactions)
 	if (personal) purchaseTx.createPersonal(true);
@@ -235,5 +235,5 @@ export async function purchaseOnNewKiosk(
 	if (!personal) purchaseTx.shareAndTransferCap(toolbox.address());
 	purchaseTx.finalize();
 
-	await executeTransactionBlock(toolbox, purchaseTxb);
+	await executeTransaction(toolbox, purchaseTxb);
 }

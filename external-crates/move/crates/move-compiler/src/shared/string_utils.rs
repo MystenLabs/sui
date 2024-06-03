@@ -22,21 +22,47 @@ pub fn is_upper_snake_case(s: &str) -> bool {
 // String Construction Helpers
 //**************************************************************************************************
 
+/// Converts the first letter of a string to uppercase (ascii-only)
+pub fn make_ascii_titlecase(in_s: &str) -> String {
+    let mut s = in_s.to_string();
+    if let Some(c) = s.get_mut(0..1) {
+        c.make_ascii_uppercase();
+    }
+    s
+}
+
+/// Formats a string into an oxford list as: `format_oxford_list("or", "{}", vs);`. Calls `iter()`
+/// and `len()` on `vs`.
+///
+/// This will use `or` as the separator for the last two elements, interspersing commas as
+/// appropriate:
+/// ```text
+/// format_oxford_list("or", "{}", [1]);
+/// ==> "1"
+///
+/// format_oxford_list("or", "{}", [1, 2]);
+/// ==> "1 or 2"
+///
+/// format_oxford_list("or", "{}", [1, 2, 3]);
+/// ==> "1, 2, or 3"
+///```
+///
 macro_rules! format_oxford_list {
     ($sep:expr, $format_str:expr, $e:expr) => {{
-        let entries = $e;
-        match entries.len() {
+        let in_entries = $e;
+        let e_len = in_entries.len();
+        let mut entries = in_entries.iter();
+        match e_len {
             0 => String::new(),
-            1 => format!($format_str, entries[0]),
+            1 => format!($format_str, entries.next().unwrap()),
             2 => format!(
                 "{} {} {}",
-                format!($format_str, entries[0]),
+                format!($format_str, entries.next().unwrap()),
                 $sep,
-                format!($format_str, entries[1])
+                format!($format_str, entries.next().unwrap())
             ),
             _ => {
                 let entries = entries
-                    .iter()
                     .map(|entry| format!($format_str, entry))
                     .collect::<Vec<_>>();
                 if let Some((last, init)) = entries.split_last() {
@@ -95,7 +121,9 @@ pub(crate) use debug_print_format;
 macro_rules! debug_print_internal {
     () => {};
     ((msg $msg:expr)) => {
+        {
         println!("{}", $msg);
+        }
     };
     (($name:expr => $val:expr $(; $fmt:ident)?)) => {
         {

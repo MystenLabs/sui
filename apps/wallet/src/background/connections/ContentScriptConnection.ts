@@ -31,7 +31,7 @@ import {
 	type SignMessageRequest,
 } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 import { type SignedTransaction } from '_src/ui/app/WalletSigner';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import { type SuiTransactionBlockResponse } from '@mysten/sui/client';
 import type { Runtime } from 'webextension-polyfill';
 
 import { getAccountsStatusData } from '../accounts';

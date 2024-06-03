@@ -1,0 +1,18 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:9:24
+  │
+9 │         let _tmp1 = _s.;
+  │                        ^
+  │                        │
+  │                        Unexpected ';'
+  │                        Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:10:26
+   │
+10 │         let _tmp2 = _s.0.;
+   │                          ^
+   │                          │
+   │                          Unexpected ';'
+   │                          Expected an identifier or a decimal number
+

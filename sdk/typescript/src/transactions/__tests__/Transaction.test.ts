@@ -5,25 +5,25 @@ import { toB58 } from '@mysten/bcs';
 import { describe, expect, it } from 'vitest';
 
 import { bcs } from '../../bcs/index.js';
-import { TransactionBlock, Transactions } from '../index.js';
+import { Commands, Transaction } from '../index.js';
 import { Inputs } from '../Inputs.js';
 
 it('can construct and serialize an empty tranaction', () => {
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	expect(() => tx.serialize()).not.toThrow();
 });
 
 it('can construct a receiving transaction argument', () => {
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	tx.object(Inputs.ReceivingRef(ref()));
 	expect(() => tx.serialize()).not.toThrow();
 });
 
 it('receiving transaction argument different from object argument', () => {
 	const oref = ref();
-	const rtx = new TransactionBlock();
+	const rtx = new Transaction();
 	rtx.object(Inputs.ReceivingRef(oref));
-	const otx = new TransactionBlock();
+	const otx = new Transaction();
 	otx.object(Inputs.ObjectRef(oref));
 	expect(() => rtx.serialize()).not.toThrow();
 	expect(() => otx.serialize()).not.toThrow();
@@ -31,23 +31,23 @@ it('receiving transaction argument different from object argument', () => {
 });
 
 it('can be serialized and deserialized to the same values', () => {
-	const tx = new TransactionBlock();
-	tx.add(Transactions.SplitCoins(tx.gas, [tx.pure.u64(100)]));
+	const tx = new Transaction();
+	tx.add(Commands.SplitCoins(tx.gas, [tx.pure.u64(100)]));
 	const serialized = tx.serialize();
-	const tx2 = TransactionBlock.from(serialized);
+	const tx2 = Transaction.from(serialized);
 	expect(serialized).toEqual(tx2.serialize());
 });
 
-it('allows transfer with the result of split transactions', () => {
-	const tx = new TransactionBlock();
-	const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure.u64(100)]));
-	tx.add(Transactions.TransferObjects([coin], tx.object('0x2')));
+it('allows transfer with the result of split Commands', () => {
+	const tx = new Transaction();
+	const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure.u64(100)]));
+	tx.add(Commands.TransferObjects([coin], tx.object('0x2')));
 });
 
 it('supports nested results through either array index or destructuring', () => {
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	const registerResult = tx.add(
-		Transactions.MoveCall({
+		Commands.MoveCall({
 			target: '0x2::game::register',
 		}),
 	);
@@ -73,13 +73,13 @@ describe('offline build', () => {
 
 	it('builds a split transaction', async () => {
 		const tx = setup();
-		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(100, 'u64'))]));
+		tx.add(Commands.SplitCoins(tx.gas, [tx.pure.u64(100)]));
 		await tx.build();
 	});
 
 	it('breaks reference equality', () => {
 		const tx = setup();
-		const tx2 = new TransactionBlock(tx);
+		const tx2 = Transaction.from(tx);
 
 		tx.setGasBudget(999);
 
@@ -93,28 +93,26 @@ describe('offline build', () => {
 		expect(tx.blockData.inputs).not.toBe(tx.blockData.inputs);
 	});
 
-	it('can determine the type of inputs for built-in transactions', async () => {
+	it('can determine the type of inputs for built-in Commands', async () => {
 		const tx = setup();
-		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
+		tx.splitCoins(tx.gas, [100]);
 		await tx.build();
 	});
 
 	it('supports pre-serialized inputs as Uint8Array', async () => {
 		const tx = setup();
-		const inputBytes = bcs.ser('u64', 100n).toBytes();
+		const inputBytes = bcs.U64.serialize(100n).toBytes();
 		// Use bytes directly in pure value:
-		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(inputBytes)]));
-		// Use bytes in input helper:
-		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(inputBytes))]));
+		tx.add(Commands.SplitCoins(tx.gas, [tx.pure(inputBytes)]));
 		await tx.build();
 	});
 
 	it('builds a more complex interaction', async () => {
 		const tx = setup();
 		const coin = tx.splitCoins(tx.gas, [100]);
-		tx.add(Transactions.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]));
+		tx.add(Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]));
 		tx.add(
-			Transactions.MoveCall({
+			Commands.MoveCall({
 				target: '0x2::devnet_nft::mint',
 				typeArguments: [],
 				arguments: [tx.pure.string('foo'), tx.pure.string('bar'), tx.pure.string('baz')],
@@ -126,10 +124,10 @@ describe('offline build', () => {
 	it('uses a receiving argument', async () => {
 		const tx = setup();
 		tx.object(Inputs.ObjectRef(ref()));
-		const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
-		tx.add(Transactions.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]));
+		const coin = tx.splitCoins(tx.gas, [100]);
+		tx.add(Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]));
 		tx.add(
-			Transactions.MoveCall({
+			Commands.MoveCall({
 				target: '0x2::devnet_nft::mint',
 				typeArguments: [],
 				arguments: [tx.object(Inputs.ObjectRef(ref())), tx.object(Inputs.ReceivingRef(ref()))],
@@ -137,7 +135,7 @@ describe('offline build', () => {
 		);
 
 		const bytes = await tx.build();
-		const tx2 = TransactionBlock.from(bytes);
+		const tx2 = Transaction.from(bytes);
 		const bytes2 = await tx2.build();
 
 		expect(bytes).toEqual(bytes2);
@@ -146,9 +144,9 @@ describe('offline build', () => {
 	it('builds a more complex interaction', async () => {
 		const tx = setup();
 		const coin = tx.splitCoins(tx.gas, [100]);
-		tx.add(Transactions.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]));
+		tx.add(Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]));
 		tx.add(
-			Transactions.MoveCall({
+			Commands.MoveCall({
 				target: '0x2::devnet_nft::mint',
 				typeArguments: [],
 				arguments: [tx.pure.string('foo'), tx.pure.string('bar'), tx.pure.string('baz')],
@@ -156,7 +154,7 @@ describe('offline build', () => {
 		);
 
 		const bytes = await tx.build();
-		const tx2 = TransactionBlock.from(bytes);
+		const tx2 = Transaction.from(bytes);
 		const bytes2 = await tx2.build();
 
 		expect(bytes).toEqual(bytes2);
@@ -167,12 +165,17 @@ function ref(): { objectId: string; version: string; digest: string } {
 	return {
 		objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
 		version: String((Math.random() * 10000).toFixed(0)),
-		digest: toB58(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9])),
+		digest: toB58(
+			new Uint8Array([
+				0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1,
+				2,
+			]),
+		),
 	};
 }
 
 function setup() {
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	tx.setSender('0x2');
 	tx.setGasPrice(5);
 	tx.setGasBudget(100);

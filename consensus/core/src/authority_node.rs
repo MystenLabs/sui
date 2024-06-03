@@ -167,7 +167,7 @@ where
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
-        let mut network_manager = N::new(context.clone());
+        let mut network_manager = N::new(context.clone(), network_keypair);
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listening on the
@@ -287,9 +287,7 @@ where
             None
         };
 
-        network_manager
-            .install_service(network_keypair, network_service)
-            .await;
+        network_manager.install_service(network_service).await;
 
         Self {
             context,
@@ -348,15 +346,13 @@ mod tests {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::{local_committee_and_keys, Parameters};
+    use mysten_metrics::monitored_mpsc::unbounded_channel;
     use parking_lot::Mutex;
     use prometheus::Registry;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
-    use tokio::{
-        sync::{broadcast, mpsc::unbounded_channel},
-        time::sleep,
-    };
+    use tokio::{sync::broadcast, time::sleep};
     use typed_store::DBMetrics;
 
     use super::*;
@@ -473,7 +469,7 @@ mod tests {
         let protocol_keypair = keypairs[own_index].1.clone();
         let network_keypair = keypairs[own_index].0.clone();
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_consumer = CommitConsumer::new(sender, 0, 0);
 
         let authority = ConsensusAuthority::start(
@@ -584,7 +580,7 @@ mod tests {
             let protocol_keypair = keypairs[index].1.clone();
             let network_keypair = keypairs[index].0.clone();
 
-            let (sender, receiver) = unbounded_channel();
+            let (sender, receiver) = unbounded_channel("consensus_output");
             let commit_consumer = CommitConsumer::new(sender, 0, 0);
 
             async move {
@@ -618,7 +614,7 @@ mod tests {
             submitted_transactions.insert(txn.clone());
             authorities[i as usize % authorities.len()]
                 .transaction_client()
-                .submit(txn)
+                .submit(vec![txn])
                 .await
                 .unwrap();
         }

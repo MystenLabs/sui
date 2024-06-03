@@ -9,10 +9,20 @@ use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
 use std::collections::VecDeque;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::time::Duration;
 use std::time::{Instant, SystemTime};
 use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, Weight};
 use tracing::info;
+
+#[derive(Hash, Eq, PartialEq, Debug)]
+enum IpType {
+    Connection,
+    Proxy,
+}
+
+#[derive(Hash, Eq, PartialEq, Debug)]
+struct SketchKey(IpAddr, IpType);
 
 pub struct TrafficSketch {
     /// Circular buffer Count Min Sketches representing a sliding window
@@ -24,7 +34,7 @@ pub struct TrafficSketch {
     /// expect 100,000, which can be represented in 17 bits, but not 16. We can
     /// potentially lower the memory consumption by using CountMinSketch16, which
     /// will reliably support up to ~65,000 unique IP addresses in the window.
-    sketches: VecDeque<CountMinSketch32<IpAddr>>,
+    sketches: VecDeque<CountMinSketch32<SketchKey>>,
     window_size: Duration,
     update_interval: Duration,
     last_reset_time: Instant,
@@ -76,7 +86,7 @@ impl TrafficSketch {
         let mut sketches = VecDeque::with_capacity(num_sketches as usize);
         for _ in 0..num_sketches {
             sketches.push_back(
-                CountMinSketch32::<IpAddr>::new(
+                CountMinSketch32::<SketchKey>::new(
                     sketch_capacity,
                     sketch_probability,
                     sketch_tolerance,
@@ -93,7 +103,7 @@ impl TrafficSketch {
         }
     }
 
-    pub fn increment_count(&mut self, ip: IpAddr) {
+    fn increment_count(&mut self, key: &SketchKey) {
         // reset all expired intervals
         let current_time = Instant::now();
         let mut elapsed = current_time.duration_since(self.last_reset_time);
@@ -102,11 +112,15 @@ impl TrafficSketch {
             elapsed -= self.update_interval;
         }
         // Increment in the current active sketch
-        self.sketches[self.current_sketch_index].increment(&ip);
+        self.sketches[self.current_sketch_index].increment(key);
     }
 
-    pub fn get_request_rate(&self, ip: &IpAddr) -> f64 {
-        let count: u32 = self.sketches.iter().map(|sketch| sketch.estimate(ip)).sum();
+    fn get_request_rate(&self, key: &SketchKey) -> f64 {
+        let count: u32 = self
+            .sketches
+            .iter()
+            .map(|sketch| sketch.estimate(key))
+            .sum();
         count as f64 / self.window_size.as_secs() as f64
     }
 
@@ -160,7 +174,6 @@ pub enum TrafficControlPolicy {
     NoOp(NoOpPolicy),
     // Test policies below this point
     TestNConnIP(TestNConnIPPolicy),
-    TestInspectIp(TestInspectIpPolicy),
     TestPanicOnInvocation(TestPanicOnInvocationPolicy),
 }
 
@@ -170,7 +183,6 @@ impl Policy for TrafficControlPolicy {
             TrafficControlPolicy::NoOp(policy) => policy.handle_tally(tally),
             TrafficControlPolicy::FreqThreshold(policy) => policy.handle_tally(tally),
             TrafficControlPolicy::TestNConnIP(policy) => policy.handle_tally(tally),
-            TrafficControlPolicy::TestInspectIp(policy) => policy.handle_tally(tally),
             TrafficControlPolicy::TestPanicOnInvocation(policy) => policy.handle_tally(tally),
         }
     }
@@ -180,7 +192,6 @@ impl Policy for TrafficControlPolicy {
             TrafficControlPolicy::NoOp(policy) => policy.policy_config(),
             TrafficControlPolicy::FreqThreshold(policy) => policy.policy_config(),
             TrafficControlPolicy::TestNConnIP(policy) => policy.policy_config(),
-            TrafficControlPolicy::TestInspectIp(policy) => policy.policy_config(),
             TrafficControlPolicy::TestPanicOnInvocation(policy) => policy.policy_config(),
         }
     }
@@ -202,9 +213,6 @@ impl TrafficControlPolicy {
             PolicyType::TestNConnIP(n) => {
                 Self::TestNConnIP(TestNConnIPPolicy::new(policy_config, n).await)
             }
-            PolicyType::TestInspectIp => {
-                Self::TestInspectIp(TestInspectIpPolicy::new(policy_config))
-            }
             PolicyType::TestPanicOnInvocation => {
                 Self::TestPanicOnInvocation(TestPanicOnInvocationPolicy::new(policy_config))
             }
@@ -217,14 +225,16 @@ impl TrafficControlPolicy {
 pub struct FreqThresholdPolicy {
     config: PolicyConfig,
     sketch: TrafficSketch,
-    threshold: u64,
+    connection_threshold: u64,
+    proxy_threshold: u64,
 }
 
 impl FreqThresholdPolicy {
     pub fn new(
         config: PolicyConfig,
         FreqThresholdConfig {
-            threshold,
+            connection_threshold,
+            proxy_threshold,
             window_size_secs,
             update_interval_secs,
             sketch_capacity,
@@ -242,21 +252,38 @@ impl FreqThresholdPolicy {
         Self {
             config,
             sketch,
-            threshold,
+            connection_threshold,
+            proxy_threshold,
         }
     }
 
     fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
-        if let Some(ip) = tally.connection_ip {
-            self.sketch.increment_count(ip);
-            if self.sketch.get_request_rate(&ip) >= self.threshold as f64 {
-                return PolicyResponse {
-                    block_connection_ip: Some(ip),
-                    block_proxy_ip: None,
-                };
+        let block_connection_ip = if let Some(ip) = tally.connection_ip {
+            let key = SketchKey(ip, IpType::Connection);
+            self.sketch.increment_count(&key);
+            if self.sketch.get_request_rate(&key) >= self.connection_threshold as f64 {
+                Some(ip)
+            } else {
+                None
             }
+        } else {
+            None
+        };
+        let block_proxy_ip = if let Some(ip) = tally.proxy_ip {
+            let key = SketchKey(ip, IpType::Proxy);
+            self.sketch.increment_count(&key);
+            if self.sketch.get_request_rate(&key) >= self.proxy_threshold as f64 {
+                Some(ip)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        PolicyResponse {
+            block_connection_ip,
+            block_proxy_ip,
         }
-        PolicyResponse::default()
     }
 
     fn policy_config(&self) -> &PolicyConfig {
@@ -341,29 +368,6 @@ async fn run_clear_frequencies(frequencies: Arc<RwLock<HashMap<IpAddr, u64>>>, w
 }
 
 #[derive(Clone)]
-pub struct TestInspectIpPolicy {
-    config: PolicyConfig,
-}
-
-impl TestInspectIpPolicy {
-    pub fn new(config: PolicyConfig) -> Self {
-        Self { config }
-    }
-
-    fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
-        assert!(tally.proxy_ip.is_some(), "Expected proxy_ip to be present");
-        PolicyResponse {
-            block_connection_ip: None,
-            block_proxy_ip: None,
-        }
-    }
-
-    fn policy_config(&self) -> &PolicyConfig {
-        &self.config
-    }
-}
-
-#[derive(Clone)]
 pub struct TestPanicOnInvocationPolicy {
     config: PolicyConfig,
 }
@@ -394,25 +398,36 @@ mod tests {
     #[sim_test]
     async fn test_freq_threshold_policy() {
         // Create freq policy that will block on average frequency 2 requests per second
-        // as observed over a 5 second window
+        // for proxied connections and 4 requests per second for direct connections
+        // as observed over a 5 second window.
         let mut policy = TrafficControlPolicy::FreqThreshold(FreqThresholdPolicy::new(
             PolicyConfig::default(),
             FreqThresholdConfig {
-                threshold: 2,
+                connection_threshold: 5,
+                proxy_threshold: 2,
                 window_size_secs: 5,
                 update_interval_secs: 1,
                 ..Default::default()
             },
         ));
+        // alice and bob connection from different IPs through the
+        // same fullnode, thus have the same connection IP on
+        // validator, but different proxy IPs
         let alice = TrafficTally {
-            connection_ip: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
-            proxy_ip: None,
+            connection_ip: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
+            proxy_ip: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
             error_weight: Weight::zero(),
             timestamp: SystemTime::now(),
         };
         let bob = TrafficTally {
-            connection_ip: Some(IpAddr::V4(Ipv4Addr::new(4, 3, 2, 1))),
-            proxy_ip: None,
+            connection_ip: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
+            proxy_ip: Some(IpAddr::V4(Ipv4Addr::new(4, 3, 2, 1))),
+            error_weight: Weight::zero(),
+            timestamp: SystemTime::now(),
+        };
+        let charlie = TrafficTally {
+            connection_ip: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
+            proxy_ip: Some(IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8))),
             error_weight: Weight::zero(),
             timestamp: SystemTime::now(),
         };
@@ -420,8 +435,8 @@ mod tests {
         // initial 2 tallies for alice, should not block
         for _ in 0..2 {
             let response = policy.handle_tally(alice.clone());
-            assert_eq!(response.block_connection_ip, None);
             assert_eq!(response.block_proxy_ip, None);
+            assert_eq!(response.block_connection_ip, None);
         }
 
         // meanwhile bob spams 10 requests at once and is blocked
@@ -431,8 +446,8 @@ mod tests {
             assert_eq!(response.block_proxy_ip, None);
         }
         let response = policy.handle_tally(bob.clone());
-        assert_eq!(response.block_proxy_ip, None);
-        assert_eq!(response.block_connection_ip, bob.connection_ip);
+        assert_eq!(response.block_connection_ip, None);
+        assert_eq!(response.block_proxy_ip, bob.proxy_ip);
 
         // 2 more tallies, so far we are above 2 tallies
         // per second, but over the average window of 5 seconds
@@ -447,22 +462,43 @@ mod tests {
         // in the sliding window
         let _ = policy.handle_tally(bob.clone());
         let response = policy.handle_tally(bob.clone());
-        assert_eq!(response.block_proxy_ip, None);
-        assert_eq!(response.block_connection_ip, bob.connection_ip);
+        assert_eq!(response.block_connection_ip, None);
+        assert_eq!(response.block_proxy_ip, bob.proxy_ip);
 
         // close to threshold for alice, but still below
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-        for _ in 0..5 {
+        for i in 0..5 {
             let response = policy.handle_tally(alice.clone());
-            assert_eq!(response.block_connection_ip, None);
+            assert_eq!(response.block_connection_ip, None, "Blocked at i = {}", i);
             assert_eq!(response.block_proxy_ip, None);
         }
 
         // should block alice now
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         let response = policy.handle_tally(alice.clone());
-        assert_eq!(response.block_connection_ip, alice.connection_ip);
+        assert_eq!(response.block_connection_ip, None);
+        assert_eq!(response.block_proxy_ip, alice.proxy_ip);
+
+        // spam through charlie to block connection
+        for i in 0..2 {
+            let response = policy.handle_tally(charlie.clone());
+            assert_eq!(response.block_connection_ip, None, "Blocked at i = {}", i);
+            assert_eq!(response.block_proxy_ip, None);
+        }
+        // Now we block connection IP
+        let response = policy.handle_tally(charlie.clone());
         assert_eq!(response.block_proxy_ip, None);
+        assert_eq!(response.block_connection_ip, charlie.connection_ip);
+
+        // Ensure that if we wait another second, we are no longer blocked
+        // as the bursty first second has finally rotated out of the sliding
+        // window
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        for i in 0..3 {
+            let response = policy.handle_tally(charlie.clone());
+            assert_eq!(response.block_connection_ip, None, "Blocked at i = {}", i);
+            assert_eq!(response.block_proxy_ip, None);
+        }
     }
 
     #[sim_test]

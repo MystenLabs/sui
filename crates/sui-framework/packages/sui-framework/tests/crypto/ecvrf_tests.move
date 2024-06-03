@@ -12,7 +12,7 @@ module sui::ecvrf_tests {
         let alpha_string = b"Hello, world!";
         let public_key = x"1ea6f0f467574295a2cd5d21a3fd3a712ade354d520d3bd0fe6088d7b7c2e00e";
         let proof = x"d8ad2eafb4f2eaf317447726e541359f26dfce248431fe09984fdc73144abb6ceb006c57a29a742eae5a81dd04239870769e310a81046cbbaff8b0bd27a6d6affee167ebba50549b58ffdf9aa192f506";
-        assert!(ecvrf::ecvrf_verify(&output, &alpha_string, &public_key, &proof), 0);
+        assert!(ecvrf::ecvrf_verify(&output, &alpha_string, &public_key, &proof));
     }
 
     #[test]
@@ -21,7 +21,7 @@ module sui::ecvrf_tests {
         let alpha_string = b"Hello, world!";
         let public_key = x"1ea6f0f467574295a2cd5d21a3fd3a712ade354d520d3bd0fe6088d7b7c2e00e";
         let proof = x"d8ad2eafb4f2eaf317447726e541359f26dfce248431fe09984fdc73144abb6ceb006c57a29a742eae5a81dd04239870769e310a81046cbbaff8b0bd27a6d6affee167ebba50549b58ffdf9aa192f506";
-        assert!(!ecvrf::ecvrf_verify(&output, &alpha_string, &public_key, &proof), 1);
+        assert!(!ecvrf::ecvrf_verify(&output, &alpha_string, &public_key, &proof));
     }
 
     #[test]

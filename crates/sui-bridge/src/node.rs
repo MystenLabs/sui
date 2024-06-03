@@ -7,6 +7,7 @@ use crate::{
     config::{BridgeClientConfig, BridgeNodeConfig},
     eth_syncer::EthSyncer,
     events::init_all_struct_tags,
+    metrics::BridgeMetrics,
     orchestrator::BridgeOrchestrator,
     server::{handler::BridgeRequestHandler, run_server},
     storage::BridgeOrchestratorTables,
@@ -27,13 +28,17 @@ use sui_types::{
 use tokio::task::JoinHandle;
 use tracing::info;
 
-pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<JoinHandle<()>> {
+pub async fn run_bridge_node(
+    config: BridgeNodeConfig,
+    prometheus_registry: prometheus::Registry,
+) -> anyhow::Result<JoinHandle<()>> {
     init_all_struct_tags();
+    let metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
     let (server_config, client_config) = config.validate().await?;
 
     // Start Client
     let _handles = if let Some(client_config) = client_config {
-        start_client_components(client_config).await
+        start_client_components(client_config, metrics.clone()).await
     } else {
         Ok(vec![])
     }?;
@@ -51,12 +56,14 @@ pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<JoinHan
             server_config.eth_client,
             server_config.approved_governance_actions,
         ),
+        metrics,
     ))
 }
 
 // TODO: is there a way to clean up the overrides after it's stored in DB?
 async fn start_client_components(
     client_config: BridgeClientConfig,
+    metrics: Arc<BridgeMetrics>,
 ) -> anyhow::Result<Vec<JoinHandle<()>>> {
     let store: std::sync::Arc<BridgeOrchestratorTables> =
         BridgeOrchestratorTables::new(&client_config.db_path.join("client"));
@@ -103,6 +110,7 @@ async fn start_client_components(
         client_config.key,
         client_config.sui_address,
         client_config.gas_object_ref.0,
+        metrics,
     )
     .await;
 
@@ -186,14 +194,15 @@ fn get_eth_contracts_to_watch(
 #[cfg(test)]
 mod tests {
     use ethers::types::Address as EthAddress;
+    use prometheus::Registry;
 
     use super::*;
     use crate::config::BridgeNodeConfig;
     use crate::config::EthConfig;
     use crate::config::SuiConfig;
-    use crate::e2e_tests::test_utils::wait_for_server_to_be_up;
     use crate::e2e_tests::test_utils::BridgeTestCluster;
     use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
+    use crate::utils::wait_for_server_to_be_up;
     use fastcrypto::secp256k1::Secp256k1KeyPair;
     use sui_config::local_ip_utils::get_available_port;
     use sui_types::base_types::SuiAddress;
@@ -336,7 +345,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_starting_bridge_node() {
         telemetry_subscribers::init_for_testing();
         let bridge_test_cluster = setup().await;
@@ -352,11 +361,11 @@ mod tests {
         let config = BridgeNodeConfig {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
+            bridge_authority_key_path: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
                 sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_key_path: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
             },
@@ -372,7 +381,7 @@ mod tests {
             db_path: None,
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config).await.unwrap();
+        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
@@ -380,7 +389,7 @@ mod tests {
         res.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_starting_bridge_node_with_client() {
         telemetry_subscribers::init_for_testing();
         let bridge_test_cluster = setup().await;
@@ -406,11 +415,11 @@ mod tests {
         let config = BridgeNodeConfig {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
+            bridge_authority_key_path: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
                 sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_key_path: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: Some(EventID {
                     tx_digest: TransactionDigest::random(),
@@ -429,7 +438,7 @@ mod tests {
             db_path: Some(db_path),
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config).await.unwrap();
+        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
@@ -439,7 +448,7 @@ mod tests {
         res.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_starting_bridge_node_with_client_and_separate_client_key() {
         telemetry_subscribers::init_for_testing();
         let bridge_test_cluster = setup().await;
@@ -474,11 +483,11 @@ mod tests {
         let config = BridgeNodeConfig {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
+            bridge_authority_key_path: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
                 sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: Some(tmp_dir.join(client_key_path)),
+                bridge_client_key_path: Some(tmp_dir.join(client_key_path)),
                 bridge_client_gas_object: Some(gas_obj),
                 sui_bridge_module_last_processed_event_id_override: Some(EventID {
                     tx_digest: TransactionDigest::random(),
@@ -497,7 +506,7 @@ mod tests {
             db_path: Some(db_path),
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config).await.unwrap();
+        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.

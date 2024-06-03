@@ -4,7 +4,7 @@
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityPerEpochStore;
-use crate::execution_cache::ExecutionCacheRead;
+use crate::execution_cache::ObjectCacheRead;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -39,7 +39,7 @@ pub struct ConsensusSharedObjVerAssignment {
 impl SharedObjVerManager {
     pub async fn assign_versions_from_consensus(
         epoch_store: &AuthorityPerEpochStore,
-        cache_reader: &dyn ExecutionCacheRead,
+        cache_reader: &dyn ObjectCacheRead,
         certificates: &[VerifiedExecutableTransaction],
         randomness_round: Option<RandomnessRound>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
@@ -71,7 +71,7 @@ impl SharedObjVerManager {
             if !cert.contains_shared_object() {
                 continue;
             }
-            let cert_assigned_versions = assign_versions_for_certificate(
+            let cert_assigned_versions = Self::assign_versions_for_certificate(
                 cert,
                 &mut shared_input_next_versions,
                 cancelled_txns,
@@ -88,7 +88,7 @@ impl SharedObjVerManager {
     pub async fn assign_versions_from_effects(
         certs_and_effects: &[(&VerifiedExecutableTransaction, &TransactionEffects)],
         epoch_store: &AuthorityPerEpochStore,
-        cache_reader: &dyn ExecutionCacheRead,
+        cache_reader: &dyn ObjectCacheRead,
     ) -> SuiResult<AssignedTxAndVersions> {
         // We don't care about the results since we can use effects to assign versions.
         // But we must call it to make sure whenever a shared object is touched the first time
@@ -121,12 +121,106 @@ impl SharedObjVerManager {
         }
         Ok(assigned_versions)
     }
+
+    pub fn assign_versions_for_certificate(
+        cert: &VerifiedExecutableTransaction,
+        shared_input_next_versions: &mut HashMap<ObjectID, SequenceNumber>,
+        cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+    ) -> Vec<(ObjectID, SequenceNumber)> {
+        let tx_digest = cert.digest();
+
+        // Check if the transaction is cancelled due to congestion.
+        let cancellation_info: Option<HashSet<_>> =
+            if let Some(CancelConsensusCertificateReason::CongestionOnObjects(congested_objects)) =
+                cancelled_txns.get(tx_digest)
+            {
+                Some(congested_objects.clone().into_iter().collect())
+            } else {
+                None
+            };
+        let txn_cancelled = cancellation_info.is_some();
+
+        // Make an iterator to update the locks of the transaction's shared objects.
+        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
+
+        let mut input_object_keys = transaction_non_shared_input_object_keys(cert)
+            .expect("Transaction input should have been verified");
+        let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
+        let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
+        // Record receiving object versions towards the shared version computation.
+        let receiving_object_keys = transaction_receiving_object_keys(cert);
+        input_object_keys.extend(receiving_object_keys);
+
+        if let Some(congested_objects) = cancellation_info {
+            // For cancelled transaction due to congestion, assign special versions to all shared objects.
+            // Note that new lamport version does not depend on any shared objects.
+            for SharedInputObject { id, .. } in shared_input_objects.iter() {
+                let assigned_version = if congested_objects.contains(id) {
+                    SequenceNumber::CONGESTED
+                } else {
+                    SequenceNumber::CANCELLED_READ
+                };
+                assigned_versions.push((*id, assigned_version));
+                is_mutable_input.push(false);
+            }
+        } else {
+            for (SharedInputObject { id, mutable, .. }, assigned_version) in shared_input_objects
+                .iter()
+                .map(|obj| (obj, *shared_input_next_versions.get(&obj.id()).unwrap()))
+            {
+                assigned_versions.push((*id, assigned_version));
+                input_object_keys.push(ObjectKey(*id, assigned_version));
+                is_mutable_input.push(*mutable);
+            }
+        }
+
+        let next_version =
+            SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
+        assert!(
+            next_version.is_valid(),
+            "Assigned version must be valid. Got {:?}",
+            next_version
+        );
+
+        if !txn_cancelled {
+            // Update the next version for the shared objects.
+            assigned_versions
+                .iter()
+                .zip(is_mutable_input)
+                .filter_map(|((id, _), mutable)| {
+                    if mutable {
+                        Some((*id, next_version))
+                    } else {
+                        None
+                    }
+                })
+                .for_each(|(id, version)| {
+                    assert!(
+                        version.is_valid(),
+                        "Assigned version must be a valid version."
+                    );
+                    shared_input_next_versions
+                        .insert(id, version)
+                        .expect("Object must exist in shared_input_next_versions.");
+                });
+        }
+
+        trace!(
+            ?tx_digest,
+            ?assigned_versions,
+            ?next_version,
+            ?txn_cancelled,
+            "locking shared objects"
+        );
+
+        assigned_versions
+    }
 }
 
 async fn get_or_init_versions(
     transactions: impl Iterator<Item = &SenderSignedData>,
     epoch_store: &AuthorityPerEpochStore,
-    cache_reader: &dyn ExecutionCacheRead,
+    cache_reader: &dyn ObjectCacheRead,
     generate_randomness: bool,
 ) -> SuiResult<HashMap<ObjectID, SequenceNumber>> {
     let mut shared_input_objects: Vec<_> = transactions
@@ -156,99 +250,6 @@ async fn get_or_init_versions(
     epoch_store
         .get_or_init_next_object_versions(&shared_input_objects, cache_reader)
         .await
-}
-
-fn assign_versions_for_certificate(
-    cert: &VerifiedExecutableTransaction,
-    shared_input_next_versions: &mut HashMap<ObjectID, SequenceNumber>,
-    cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-) -> Vec<(ObjectID, SequenceNumber)> {
-    let tx_digest = cert.digest();
-
-    // Check if the transaction is cancelled due to congestion.
-    let cancellation_info: Option<HashSet<_>> =
-        if let Some(CancelConsensusCertificateReason::CongestionOnObjects(congested_objects)) =
-            cancelled_txns.get(tx_digest)
-        {
-            Some(congested_objects.clone().into_iter().collect())
-        } else {
-            None
-        };
-    let txn_cancelled = cancellation_info.is_some();
-
-    // Make an iterator to update the locks of the transaction's shared objects.
-    let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
-
-    let mut input_object_keys = transaction_non_shared_input_object_keys(cert)
-        .expect("Transaction input should have been verified");
-    let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
-    let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
-    // Record receiving object versions towards the shared version computation.
-    let receiving_object_keys = transaction_receiving_object_keys(cert);
-    input_object_keys.extend(receiving_object_keys);
-
-    if let Some(congested_objects) = cancellation_info {
-        // For cancelled transaction due to congestion, assign special versions to all shared objects.
-        // Note that new lamport version does not depend on any shared objects.
-        for SharedInputObject { id, .. } in shared_input_objects.iter() {
-            let assigned_version = if congested_objects.contains(id) {
-                SequenceNumber::CONGESTED
-            } else {
-                SequenceNumber::CANCELLED_READ
-            };
-            assigned_versions.push((*id, assigned_version));
-            is_mutable_input.push(false);
-        }
-    } else {
-        for (SharedInputObject { id, mutable, .. }, assigned_version) in shared_input_objects
-            .iter()
-            .map(|obj| (obj, *shared_input_next_versions.get(&obj.id()).unwrap()))
-        {
-            assigned_versions.push((*id, assigned_version));
-            input_object_keys.push(ObjectKey(*id, assigned_version));
-            is_mutable_input.push(*mutable);
-        }
-    }
-
-    let next_version = SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
-    assert!(
-        next_version.is_valid(),
-        "Assigned version must be valid. Got {:?}",
-        next_version
-    );
-
-    if !txn_cancelled {
-        // Update the next version for the shared objects.
-        assigned_versions
-            .iter()
-            .zip(is_mutable_input)
-            .filter_map(|((id, _), mutable)| {
-                if mutable {
-                    Some((*id, next_version))
-                } else {
-                    None
-                }
-            })
-            .for_each(|(id, version)| {
-                assert!(
-                    version.is_valid(),
-                    "Assigned version must be a valid version."
-                );
-                shared_input_next_versions
-                    .insert(id, version)
-                    .expect("Object must exist in shared_input_next_versions.");
-            });
-    }
-
-    trace!(
-        ?tx_digest,
-        ?assigned_versions,
-        ?next_version,
-        ?txn_cancelled,
-        "locking shared objects"
-    );
-
-    assigned_versions
 }
 
 #[cfg(test)]
@@ -301,7 +302,7 @@ mod tests {
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &certs,
             None,
             &BTreeMap::new(),
@@ -366,7 +367,7 @@ mod tests {
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &certs,
             Some(RandomnessRound::new(1)),
             &BTreeMap::new(),
@@ -491,7 +492,7 @@ mod tests {
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &certs,
             None,
             &cancelled_txns,
@@ -577,7 +578,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .as_slice(),
             &epoch_store,
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
         )
         .await
         .unwrap();

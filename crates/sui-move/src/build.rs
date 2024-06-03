@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::manage_package::resolve_lock_file_path;
 use clap::Parser;
 use move_cli::base;
-use move_package::source_package::layout::SourcePackageLayout;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use std::{fs, path::PathBuf};
@@ -96,17 +96,4 @@ impl Build {
 
         Ok(())
     }
-}
-
-/// Resolve Move.lock file path in package directory (where Move.toml is).
-pub fn resolve_lock_file_path(
-    mut build_config: MoveBuildConfig,
-    package_path: Option<PathBuf>,
-) -> Result<MoveBuildConfig, anyhow::Error> {
-    if build_config.lock_file.is_none() {
-        let package_root = base::reroot_path(package_path)?;
-        let lock_file_path = package_root.join(SourcePackageLayout::Lock.path());
-        build_config.lock_file = Some(lock_file_path);
-    }
-    Ok(build_config)
 }

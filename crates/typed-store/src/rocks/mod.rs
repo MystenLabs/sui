@@ -291,7 +291,7 @@ impl RocksDB {
         delegate_call!(self.multi_get_cf_opt(keys, readopts))
     }
 
-    pub fn batched_multi_get_cf_opt<I, K>(
+    pub fn batched_multi_get_cf_opt<'a, I, K>(
         &self,
         cf: &impl AsColumnFamilyRef,
         keys: I,
@@ -299,8 +299,8 @@ impl RocksDB {
         readopts: &ReadOptions,
     ) -> Vec<Result<Option<DBPinnableSlice<'_>>, Error>>
     where
-        I: IntoIterator<Item = K>,
-        K: AsRef<[u8]>,
+        K: AsRef<[u8]> + 'a + ?Sized,
+        I: IntoIterator<Item = &'a K>,
     {
         delegate_call!(self.batched_multi_get_cf_opt(cf, keys, sorted_input, readopts))
     }
@@ -932,7 +932,7 @@ impl<K, V> DBMap<K, V> {
             .rocksdb
             .batched_multi_get_cf_opt(
                 &self.cf(),
-                keys_bytes?,
+                &(keys_bytes?),
                 /*sorted_keys=*/ false,
                 &self.opts.readopts(),
             )
@@ -2370,13 +2370,6 @@ impl DBOptions {
         self.options
             .set_max_bytes_for_level_base((write_buffer_size * max_level_zero_file_num) as u64);
 
-        self
-    }
-
-    // Optimize tables receiving significant deletions.
-    // TODO: revisit when intra-epoch pruning is enabled.
-    pub fn optimize_for_pruning(mut self) -> DBOptions {
-        self.options.set_min_write_buffer_number_to_merge(2);
         self
     }
 }

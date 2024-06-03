@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::exchange_rates_task::TriggerExchangeRatesTask;
 use super::system_package_task::SystemPackageTask;
 use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
@@ -11,6 +12,7 @@ use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::{DataLoader, Db};
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::types::datatype::IMoveDatatype;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -64,6 +66,7 @@ pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
     watermark_task: WatermarkTask,
     system_package_task: SystemPackageTask,
+    trigger_exchange_rates_task: TriggerExchangeRatesTask,
     state: AppState,
 }
 
@@ -90,6 +93,13 @@ impl Server {
             })
         };
 
+        let trigger_exchange_rates_task = {
+            info!("Starting trigger exchange rates task");
+            spawn_monitored_task!(async move {
+                self.trigger_exchange_rates_task.run().await;
+            })
+        };
+
         let server_task = {
             info!("Starting graphql service");
             let cancellation_token = self.state.cancellation_token.clone();
@@ -106,7 +116,12 @@ impl Server {
 
         // Wait for all tasks to complete. This ensures that the service doesn't fully shut down
         // until all tasks and the server have completed their shutdown processes.
-        let _ = join!(watermark_task, system_package_task, server_task);
+        let _ = join!(
+            watermark_task,
+            system_package_task,
+            trigger_exchange_rates_task,
+            server_task
+        );
 
         Ok(())
     }
@@ -304,6 +319,12 @@ impl ServerBuilder {
             state.cancellation_token.clone(),
         );
 
+        let trigger_exchange_rates_task = TriggerExchangeRatesTask::new(
+            db_reader.clone(),
+            watermark_task.epoch_receiver(),
+            state.cancellation_token.clone(),
+        );
+
         let app = router
             .route_layer(middleware::from_fn_with_state(
                 state.version,
@@ -326,6 +347,7 @@ impl ServerBuilder {
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
             watermark_task,
             system_package_task,
+            trigger_exchange_rates_task,
             state,
         })
     }
@@ -456,6 +478,7 @@ fn schema_builder() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
         .register_output_type::<IMoveObject>()
         .register_output_type::<IObject>()
         .register_output_type::<IOwner>()
+        .register_output_type::<IMoveDatatype>()
 }
 
 /// Return the string representation of the schema used by this server.
@@ -577,8 +600,7 @@ pub mod tests {
     use crate::{
         config::{ConnectionConfig, Limits, ServiceConfig, Version},
         context_data::db_data_provider::PgManager,
-        extensions::query_limits_checker::QueryLimitsChecker,
-        extensions::timeout::Timeout,
+        extensions::{query_limits_checker::QueryLimitsChecker, timeout::Timeout},
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
@@ -586,6 +608,8 @@ pub mod tests {
     };
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_sdk::{wallet_context::WalletContext, SuiClient};
+    use sui_types::transaction::TransactionData;
     use uuid::Uuid;
 
     /// Prepares a schema for tests dealing with extensions. Returns a `ServerBuilder` that can be
@@ -641,7 +665,7 @@ pub mod tests {
         Uuid::new_v4()
     }
 
-    pub async fn test_timeout_impl() {
+    pub async fn test_timeout_impl(wallet: WalletContext) {
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
         }
@@ -667,37 +691,92 @@ pub mod tests {
             }
         }
 
-        async fn test_timeout(delay: Duration, timeout: Duration) -> Response {
+        async fn test_timeout(
+            delay: Duration,
+            timeout: Duration,
+            query: &str,
+            sui_client: &SuiClient,
+        ) -> Response {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
+            cfg.limits.mutation_timeout_ms = timeout.as_millis() as u64;
 
             let schema = prep_schema(None, Some(cfg))
+                .context_data(Some(sui_client.clone()))
                 .extension(Timeout)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
                 .build_schema();
 
-            schema.execute("{ chainIdentifier }").await
+            schema.execute(query).await
         }
 
+        let query = "{ chainIdentifier }";
         let timeout = Duration::from_millis(1000);
         let delay = Duration::from_millis(100);
+        let sui_client = wallet.get_client().await.unwrap();
 
-        test_timeout(delay, timeout)
+        test_timeout(delay, timeout, query, &sui_client)
             .await
             .into_result()
             .expect("Should complete successfully");
 
         // Should timeout
-        let errs: Vec<_> = test_timeout(delay, delay)
+        let errs: Vec<_> = test_timeout(delay, delay, query, &sui_client)
             .await
             .into_result()
             .unwrap_err()
             .into_iter()
             .map(|e| e.message)
             .collect();
-        let exp = format!("Request timed out. Limit: {}s", delay.as_secs_f32());
+        let exp = format!("Query request timed out. Limit: {}s", delay.as_secs_f32());
+        assert_eq!(errs, vec![exp]);
+
+        // Should timeout for mutation
+        // Create a transaction and sign it, and use the tx_bytes + signatures for the GraphQL
+        // executeTransactionBlock mutation call.
+        let addresses = wallet.get_addresses();
+        let gas = wallet
+            .get_one_gas_object_owned_by_address(addresses[0])
+            .await
+            .unwrap();
+        let tx_data = TransactionData::new_transfer_sui(
+            addresses[1],
+            addresses[0],
+            Some(1000),
+            gas.unwrap(),
+            1_000_000,
+            wallet.get_reference_gas_price().await.unwrap(),
+        );
+
+        let tx = wallet.sign_transaction(&tx_data);
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+        let signature_base64 = &signatures[0];
+        let query = format!(
+            r#"
+            mutation {{
+              executeTransactionBlock(txBytes: "{}", signatures: "{}") {{
+                effects {{
+                  status
+                }}
+              }}
+            }}"#,
+            tx_bytes.encoded(),
+            signature_base64.encoded()
+        );
+        let errs: Vec<_> = test_timeout(delay, delay, &query, &sui_client)
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        let exp = format!(
+            "Mutation request timed out. Limit: {}s",
+            delay.as_secs_f32()
+        );
         assert_eq!(errs, vec![exp]);
     }
 

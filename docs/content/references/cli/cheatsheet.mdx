@@ -1,0 +1,243 @@
+---
+title: Sui CLI Cheat Sheet
+---
+
+The cheat sheet highlights common Sui CLI commands.
+
+:::tip
+
+<a href="/doc/sui-cli-cheatsheet.pdf" target="_blank" rel="noreferrer">Download sheet as PDF</a>
+
+:::
+
+## Addresses & Aliases
+
+<table class="w-100">
+	<thead>
+		<tr>
+			<td>Command</td>
+			<td>Description</td>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td class="w-2/3">`sui client active-address`</td>
+			<td class="w-1/3">Get the active address</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client addresses`</td>
+			<td class="w-1/3">List the addresses, their aliases, and the active address</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client new-address ed25519`</td>
+			<td class="w-1/3">Create a new address with ED25519 scheme</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client new-address ed25519 MY_ALIAS`</td>
+			<td class="w-1/3">Create a new address with ED25519 scheme and alias</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client switch --address ADDRESS`</td>
+			<td class="w-1/3">Make this the active address (accepts also an alias)</td>
+		</tr>
+		<tr> 	
+			<td class="w-2/3">`sui keytool convert PRIVATE_KEY`</td>
+			<td class="w-1/3">Convert private key in Hex or Base64 to new format (Bech32 encoded 33 byte flag || private key starting with "suiprivkey")</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui keytool generate ed25519`</td>
+			<td class="w-1/3">Generate a new keypair with ED25519 scheme and save it to file</td>
+		</tr>
+		<tr> 	
+      <td class="w-2/3">`sui keytool import INPUT KEY_SCHEME`</td>
+			<td class="w-1/3">Add a new key to Sui CLI Keystore using either the input mnemonic phrase or a Bech32 encoded 33-byte flag || privkey starting with "suiprivkey"</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui keytool update-alias OLD_ALIAS NEW_ALIAS`</td>
+			<td class="w-1/3">Update the alias of an address</td>
+		</tr>
+	</tbody>
+</table>
+
+## Faucet & Gas
+
+<table class="w-100">
+	<thead>
+		<tr>
+			<td>Command</td>
+			<td>Description</td>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td class="w-2/3">`sui client faucet`</td>
+			<td class="w-1/3">Get a SUI coin from the faucet associated with the active network</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client faucet --address ADDRESS`</td>
+			<td class="w-1/3">Get a SUI coin for the address (accepts also an alias)</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client faucet --url CUSTOM_FAUCET_URL`</td>
+			<td class="w-1/3">Get a SUI coin from custom faucet</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client gas`</td>
+			<td class="w-1/3">List the gas coins for the active address</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client gas ADDRESS`</td>
+			<td class="w-1/3">List the gas coins for the given address (accepts also an alias)</td>
+		</tr>
+	</tbody>
+</table>
+
+## Network Command Description
+
+<table class="w-100">
+	<thead>
+		<tr>
+			<td>Command</td>
+			<td>Description</td>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td class="w-2/3">`sui client active-env`</td>
+			<td class="w-1/3">Get the active environment</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client envs`</td>
+			<td class="w-1/3">List defined environments</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client new-env --rpc URL --alias ALIAS`</td>
+			<td class="w-1/3">Create a new environment with URL and alias</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client switch --env ENV_ALIAS`</td>
+			<td class="w-1/3">Switch to the given environment</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui genesis`</td>
+			<td class="w-1/3">Bootstrap and initialize a new Sui network</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui start`</td>
+			<td class="w-1/3">Start the local Sui network</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui-faucet`</td>
+			<td class="w-1/3">Start a local faucet. Note this is a different binary</td>
+		</tr>
+	</tbody>
+</table>
+
+## Create, Build, and Test a Move Project
+
+<table class="w-100">
+	<thead>
+		<tr>
+			<td>Command</td>
+			<td>Description</td>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td class="w-2/3">`sui move build`</td>
+			<td class="w-1/3">Build the Move project in the current directory</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui move build --path PATH`</td>
+			<td class="w-1/3">Build the Move project from the given path</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui move migrate PATH`</td>
+			<td class="w-1/3">Migrate to Move 2024 for the package at provided path</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui move new PROJECT_NAME`</td>
+			<td class="w-1/3">Create a new Move project in the given folder</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui move test`</td>
+			<td class="w-1/3">Test the Move project in the current directory</td>
+		</tr>
+	</tbody>
+</table>
+
+## Executing Transactions
+
+<table class="w-100">
+	<thead>
+		<tr>
+			<td>Command</td>
+			<td>Description</td>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td class="w-2/3">`sui client call \`<br/>&nbsp;&nbsp;`--package PACKAGE \`<br/>&nbsp;&nbsp;`--module MODULE \`<br/>&nbsp;&nbsp;`--function FUNCTION`</td>
+			<td class="w-1/3">Call a Move package</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client merge-coins \`<br/>&nbsp;&nbsp;`--primary-coin COIN_ID \`<br/>&nbsp;&nbsp;`--coin-to-merge COIN_ID`</td>
+			<td class="w-1/3">Merge two coins</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client split-coins \`<br/>&nbsp;&nbsp;`--coin-id COIN_ID \`<br/>&nbsp;&nbsp;`--amounts 1000`</td>
+			<td class="w-1/3">Split a coin into two coins: one with 1000 MIST and the rest</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">
+				`sui client pay-sui \`<br/>&nbsp;&nbsp;`--input-coins COIN_ID \`<br/>&nbsp;&nbsp;`--recipients ADDRESS \`<br/>&nbsp;&nbsp;`--amounts 100000000`
+			</td>
+			<td class="w-1/3">Transfer 0.1 SUI to an address and use the same coin for gas</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client transfer-sui \`<br/>&nbsp;&nbsp;`--sui-coin-object-id COIN_ID \`<br/>&nbsp;&nbsp;`--to ADDRESS`</td>
+			<td class="w-1/3">Transfer SUI object to an address and use the same coin for gas</td>
+		</tr>
+	</tbody>
+</table>
+
+## Programmable Transaction Blocks (PTBs)
+
+<table class="w-100">
+	<thead>
+		<tr>
+			<td>Command</td>
+			<td>Description</td>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td class="w-2/3">`sui client ptb --move-call p::m::f "<type>" args`</td>
+			<td class="w-1/3">Call a Move function from a package and module</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client ptb --make-move-vec "<u64>" "[1000,2000]"`</td>
+			<td class="w-1/3">Make a Move vector with two elements of type u64</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">
+				`sui client ptb \`<br/>&nbsp;&nbsp;`--split-coins gas "[1000]" \`<br/>&nbsp;&nbsp;`--assign new_coins \`<br/>&nbsp;&nbsp;`--transfer-objects
+				"[new_coins]" ADDRESS`
+			</td>
+			<td class="w-1/3">Split a gas coin and transfer it to address</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client ptb --transfer-objects "[object_id]" ADDRESS`</td>
+			<td class="w-1/3">
+				Transfer an object to an address. Note that you can pass multiple objects in the array
+			</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">
+				`sui client ptb \`<br/>&nbsp;&nbsp;`--move-call sui::tx_context::sender \`<br/>&nbsp;&nbsp;`--assign sender \`<br/>&nbsp;&nbsp;`--publish "." \`<br/>&nbsp;&nbsp;`--assign
+				upgrade_cap \`<br/>&nbsp;&nbsp;`--transfer-objects "[upgrade_cap]" sender`
+			</td>
+			<td class="w-1/3">Publish a Move package, and transfer the upgrade capability to sender</td>
+		</tr>
+	</tbody>
+</table>

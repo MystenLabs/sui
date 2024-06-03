@@ -14,6 +14,7 @@ use crate::{
     block::BlockAPI as _,
     context::Context,
     dag_state::DagState,
+    error::ConsensusError,
     network::{NetworkClient, NetworkService},
     Round,
 };
@@ -110,6 +111,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         last_received: Round,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
+        // When not immediately retrying, limit retry delay between 100ms and 10s.
         const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
         const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(10);
         const RETRY_INTERVAL_MULTIPLIER: f32 = 1.2;
@@ -118,14 +120,14 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         let mut delay = INITIAL_RETRY_INTERVAL;
         'subscription: loop {
             if retries > IMMEDIATE_RETRIES {
-                // When not immediately retrying, delay retries from 100ms and to 10s.
                 debug!(
-                    "Delaying retry {} to subscribe to blocks from peer {} in {} seconds",
+                    "Delaying retry {} of peer {} subscription, in {} seconds",
                     retries,
                     peer,
                     delay.as_secs_f32(),
                 );
                 sleep(delay).await;
+                // Update delay for the next retry.
                 delay = delay
                     .mul_f32(RETRY_INTERVAL_MULTIPLIER)
                     .min(MAX_RETRY_INTERVAL);
@@ -136,11 +138,13 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 // First attempt, reset delay for next retries but no waiting.
                 delay = INITIAL_RETRY_INTERVAL;
             }
+            retries += 1;
             let mut blocks = match network_client
                 .subscribe_blocks(peer, last_received, MAX_RETRY_INTERVAL)
                 .await
             {
                 Ok(blocks) => {
+                    debug!("Subscribed to peer {} after {} attempts", peer, retries);
                     context
                         .metrics
                         .node_metrics
@@ -157,7 +161,6 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                         .subscriber_connection_attempts
                         .with_label_values(&[&peer_hostname, "failure"])
                         .inc();
-                    retries += 1;
                     continue 'subscription;
                 }
             };
@@ -168,10 +171,17 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                             .handle_send_block(peer, block.clone())
                             .await;
                         if let Err(e) = result {
-                            info!(
-                                "Failed to process block from peer {}: {}. Block: {:?}",
-                                peer, e, block,
-                            );
+                            match e {
+                                ConsensusError::BlockRejected { block_ref, reason } => {
+                                    debug!(
+                                        "Failed to process block from peer {} for block {:?}: {}",
+                                        peer, block_ref, reason
+                                    );
+                                }
+                                _ => {
+                                    info!("Invalid block received from peer {}: {}", peer, e,);
+                                }
+                            }
                         }
                         // Reset retries when a block is received.
                         retries = 0;

@@ -10,7 +10,7 @@ use prometheus::{
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 
-use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
+use crate::network::metrics::{NetworkMetrics, QuinnConnectionMetrics};
 
 // starts from 1μs, 50μs, 100μs...
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -54,20 +54,17 @@ const SIZE_BUCKETS: &[f64] = &[
 
 pub(crate) struct Metrics {
     pub(crate) node_metrics: NodeMetrics,
-    pub(crate) channel_metrics: ChannelMetrics,
     pub(crate) network_metrics: NetworkMetrics,
     pub(crate) quinn_connection_metrics: QuinnConnectionMetrics,
 }
 
 pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     let node_metrics = NodeMetrics::new(&registry);
-    let channel_metrics = ChannelMetrics::new(&registry);
     let network_metrics = NetworkMetrics::new(&registry);
     let quinn_connection_metrics = QuinnConnectionMetrics::new(&registry);
 
     Arc::new(Metrics {
         node_metrics,
-        channel_metrics,
         network_metrics,
         quinn_connection_metrics,
     })
@@ -445,67 +442,6 @@ impl NodeMetrics {
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
-        }
-    }
-}
-
-pub(crate) struct ChannelMetrics {
-    /// occupancy of the channel from TransactionClient to TransactionConsumer
-    pub(crate) tx_transactions_submit: IntGauge,
-    /// total received on channel from TransactionClient to TransactionConsumer
-    pub(crate) tx_transactions_submit_total: IntCounter,
-    /// occupancy of the CoreThread commands channel
-    pub(crate) core_thread: IntGauge,
-    /// total received on the CoreThread commands channel
-    pub(crate) core_thread_total: IntCounter,
-}
-
-impl ChannelMetrics {
-    pub(crate) fn new(registry: &Registry) -> Self {
-        Self {
-            tx_transactions_submit: register_int_gauge_with_registry!(
-                "tx_transactions_submit",
-                "occupancy of the channel from the `TransactionClient` to the `TransactionConsumer`",
-                registry
-            ).unwrap(),
-            tx_transactions_submit_total: register_int_counter_with_registry!(
-                "tx_transactions_submit_total",
-                "total received on channel from the `TransactionClient` to the `TransactionConsumer`",
-                registry
-            ).unwrap(),
-            core_thread: register_int_gauge_with_registry!(
-                "core_thread",
-                "occupancy of the `CoreThread` commands channel",
-                registry
-            ).unwrap(),
-            core_thread_total: register_int_counter_with_registry!(
-                "core_thread_total",
-                "total received on the `CoreThread` commands channel",
-                registry
-            ).unwrap(),
-        }
-    }
-}
-
-// Fields for network-agnostic metrics can be added here
-pub(crate) struct NetworkMetrics {
-    pub(crate) network_type: IntGaugeVec,
-    pub(crate) inbound: NetworkRouteMetrics,
-    pub(crate) outbound: NetworkRouteMetrics,
-}
-
-impl NetworkMetrics {
-    pub(crate) fn new(registry: &Registry) -> Self {
-        Self {
-            network_type: register_int_gauge_vec_with_registry!(
-                "network_type",
-                "Type of the network used: anemo or tonic",
-                &["type"],
-                registry
-            )
-            .unwrap(),
-            inbound: NetworkRouteMetrics::new("inbound", registry),
-            outbound: NetworkRouteMetrics::new("outbound", registry),
         }
     }
 }

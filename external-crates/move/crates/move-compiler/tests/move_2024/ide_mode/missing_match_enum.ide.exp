@@ -1,0 +1,61 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:9:16
+  │
+9 │         match (e) {
+  │                ^ Pattern '_' not covered
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:9:19
+   │  
+ 9 │           match (e) {
+   │ ╭───────────────────^
+10 │ │         }
+   │ ╰─────────^ Missing arms: '0x42::m::E::One', '0x42::m::E::Two(_)', and '0x42::m::E::Three { x }'
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:14:16
+   │
+14 │         match (e) {
+   │                ^ Pattern 'E::One' not covered
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:14:19
+   │  
+14 │           match (e) {
+   │ ╭───────────────────^
+15 │ │             E::Two(n) => *n
+16 │ │         }
+   │ ╰─────────^ Missing arms: '0x42::m::E::One' and '0x42::m::E::Three { x }'
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:20:16
+   │
+20 │         match (e) {
+   │                ^ Pattern 'E::Three { x: _ }' not covered
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:20:19
+   │  
+20 │           match (e) {
+   │ ╭───────────────────^
+21 │ │             E::One => 0,
+22 │ │             E::Two(n) => *n
+23 │ │         }
+   │ ╰─────────^ Missing arms: '0x42::m::E::Three { x }'
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:27:16
+   │
+27 │         match (e) {
+   │                ^ Pattern 'E::One' not covered
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:27:19
+   │  
+27 │           match (e) {
+   │ ╭───────────────────^
+28 │ │             E::Three { x } => *x,
+29 │ │             E::Two(n) => *n
+30 │ │         }
+   │ ╰─────────^ Missing arms: '0x42::m::E::One'
+
