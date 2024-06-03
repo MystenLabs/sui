@@ -26,7 +26,9 @@ brew services start postgresql@version
 
 ### Local Development(Recommended)
 
-Use [sui-test-validator](../../crates/sui-test-validator/README.md)
+Start a local network using `sui start`. For more information, refer to `sui start --help`:
+* `cargo run --bin sui -- start --with-faucet --force-regenesis`
+
 
 ### Running standalone indexer
 1. DB setup, under `sui/crates/sui-indexer` run:

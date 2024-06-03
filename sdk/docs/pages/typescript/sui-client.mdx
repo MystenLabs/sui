@@ -34,8 +34,9 @@ during development. In a production application, however, you should use the
 - `testnet`
 - `mainnet`
 
-For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network
-with a local validator, a Full node, and a faucet server. Refer to
+For local development, you can run `cargo run --bin sui -- start --with-faucet --force-regenesis` to
+spin up a local network with four local validators, a Full node, and a faucet server. Note that the
+local network will not be persisted when passing the `--force-regenesis` flag. Refer to
 [the Local Network guide](https://docs.sui.io/guides/developer/getting-started/local-network) for
 more information.
 

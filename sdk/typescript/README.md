@@ -123,8 +123,8 @@ await client.getCoins({
 });
 ```
 
-For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network
-with a local validator, a fullnode, and a faucet server. Refer to
+For local development, you can run `cargo run --bin sui -- start --with-faucet --force-regenesis` to
+spin up a local network with four validators, a fullnode, and a faucet server. Refer to
 [this guide](https://docs.sui.io/build/sui-local-network) for more information.
 
 ```typescript
