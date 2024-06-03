@@ -12,16 +12,11 @@ import { parseAmount } from '_helpers';
 import { useGetAllCoins } from '_hooks';
 import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
-import {
-	CoinFormat,
-	useCoinMetadata,
-	useFormatCoin,
-	useSuiNSEnabled,
-} from '@mysten/core';
+import { CoinFormat, useCoinMetadata, useFormatCoin, useSuiNSEnabled } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
 import { type CoinStruct } from '@mysten/sui/client';
-import { SUI_TYPE_ARG, isValidSuiNSName } from '@mysten/sui/utils';
+import { isValidSuiNSName, SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { Field, Form, Formik, useFormikContext } from 'formik';
 import { useEffect, useMemo } from 'react';
