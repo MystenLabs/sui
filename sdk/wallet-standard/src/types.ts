@@ -31,6 +31,8 @@ export interface SerializedTransactionDataV2 {
 	inputs: CallArg[];
 	/** The commands to execute */
 	commands: Command[];
+	/** Extra metadata for implementation specific use-cases */
+	extensions?: { [key: string]: unknown };
 }
 
 /**
