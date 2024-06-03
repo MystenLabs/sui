@@ -16,7 +16,7 @@ export function createSuiAddressValidation(client: SuiClient, suiNSEnabled: bool
 		.trim()
 		.required()
 		.test('is-sui-address', 'Invalid address. Please check again.', async (value) => {
-			if (isValidSuiNSName(value)) {
+			if (suiNSEnabled && isValidSuiNSName(value)) {
 				if (resolveCache.has(value)) {
 					return resolveCache.get(value)!;
 				}
