@@ -657,6 +657,31 @@ impl AuthorityEpochTables {
         batch.write()?;
         Ok(())
     }
+
+    pub fn check_and_fix_consistency(&self) {
+        if let Some(randomness_highest_completed_round) = self
+            .randomness_highest_completed_round
+            .get(&crate::epoch::randomness::SINGLETON_KEY)
+            .expect("typed_store should not fail")
+        {
+            let old_randomness_rounds = self
+                .randomness_rounds_pending
+                .unbounded_iter()
+                .map(|(round, _)| round)
+                .take_while(|round| *round <= randomness_highest_completed_round)
+                .collect::<Vec<_>>();
+            // TODO: enable this debug_assert once race is fixed.
+            // debug_assert!(old_randomness_rounds.is_empty());
+            if !old_randomness_rounds.is_empty() {
+                error!("Found {} pending randomness rounds that are older than the highest completed round {randomness_highest_completed_round}. Removing them now.", old_randomness_rounds.len());
+            };
+            for round in old_randomness_rounds {
+                self.randomness_rounds_pending
+                    .remove(&round)
+                    .expect("typed_store should not fail");
+            }
+        }
+    }
 }
 
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
@@ -681,6 +706,8 @@ impl AuthorityPerEpochStore {
         let epoch_id = committee.epoch;
 
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
+        tables.check_and_fix_consistency();
+
         let end_of_publish =
             StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.unbounded_iter());
         let reconfig_state = tables
