@@ -135,6 +135,7 @@ const MAX_PROTOCOL_VERSION: u64 = 49;
 //             Enable random beacon in testnet.
 // Version 49: Enable Move enums on devnet.
 //             Enable VDF in devnet
+//             Enable consensus commit prologue V3 in devnet.
 //             Run Mysticeti consensus by default.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
