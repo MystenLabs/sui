@@ -2305,6 +2305,9 @@ impl ProtocolConfig {
                             .record_consensus_determined_version_assignments_in_prologue = true;
                     }
 
+                    // Return to running anemo for Mysticeti
+                    cfg.feature_flags.consensus_network = ConsensusNetwork::Anemo;
+
                     // Run Mysticeti consensus by default.
                     cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
                 }
