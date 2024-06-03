@@ -15,7 +15,7 @@ max_forward_time_drift:
 max_blocks_per_fetch: 1000
 dag_state_cached_rounds: 500
 commit_sync_parallel_fetches: 20
-commit_sync_batch_size: 100
+commit_sync_batch_size: 50
 commit_sync_batches_ahead: 200
 anemo:
   excessive_message_size: 8388608
@@ -24,4 +24,4 @@ tonic:
     secs: 5
     nanos: 0
   connection_buffer_size: 33554432
-  message_size_limit: 8388608
+  message_size_limit: 2147483648

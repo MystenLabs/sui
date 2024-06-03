@@ -29,6 +29,8 @@ use crate::{
     CommitIndex, Round,
 };
 
+const TARGET_RESPONSE_DATA_SIZE: usize = 3 * 1024 * 1024;
+
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
@@ -322,7 +324,20 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         // Compute an exclusive end index and bound the maximum number of commits scanned.
         let exclusive_end =
             (end + 1).min(start + self.context.parameters.commit_sync_batch_size as CommitIndex);
-        let mut commits = self.store.scan_commits((start..exclusive_end).into())?;
+        let mut accumulated_size = 0;
+        let mut accumulated_count = 0;
+        let mut commits = self
+            .store
+            .scan_commits((start..exclusive_end).into())?
+            .into_iter()
+            .take_while(|c| {
+                accumulated_size += c.serialized().len();
+                accumulated_count += 1;
+                // Soft limit response to TARGET_RESPONSE_DATA_SIZE.
+                accumulated_size < TARGET_RESPONSE_DATA_SIZE || accumulated_count == 1
+            })
+            .collect::<Vec<_>>();
+
         let mut certifier_block_refs = vec![];
         'commit: while let Some(c) = commits.last() {
             let index = c.index();

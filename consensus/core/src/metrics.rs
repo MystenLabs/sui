@@ -20,8 +20,8 @@ const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
 ];
 
 const COMMITTED_BLOCKS_BUCKETS: &[f64] = &[
-    1.0, 2.0, 4.0, 8.0, 10.0, 20.0, 40.0, 80.0, 100.0, 150.0, 200.0, 400.0, 800.0, 1000.0, 2000.0,
-    3000.0,
+    1.0, 2.0, 4.0, 8.0, 10.0, 20.0, 40.0, 80.0, 100.0, 150.0, 200.0, 400.0, 600.0, 800.0, 1000.0,
+    2000.0, 4000.0, 6000.0, 8000.0, 10000.0, 20000.0, 40000.0, 60000.0, 80000.0, 100000.0,
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -50,6 +50,14 @@ const SIZE_BUCKETS: &[f64] = &[
     3_000_000.0,
     5_000_000.0,
     10_000_000.0,
+    20_000_000.0,
+    30_000_000.0,
+    50_000_000.0,
+    100_000_000.0,
+    200_000_000.0,
+    300_000_000.0,
+    500_000_000.0,
+    1_000_000_000.0,
 ]; // size in bytes
 
 pub(crate) struct Metrics {
@@ -127,6 +135,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_pending_fetches: IntGauge,
     pub(crate) commit_sync_fetched_commits: IntCounter,
     pub(crate) commit_sync_fetched_blocks: IntCounter,
+    pub(crate) commit_sync_fetched_commit_bytes: HistogramVec,
     pub(crate) commit_sync_total_fetched_blocks_size: IntCounter,
     pub(crate) commit_sync_quorum_index: IntGauge,
     pub(crate) commit_sync_fetched_index: IntGauge,
@@ -405,6 +414,13 @@ impl NodeMetrics {
             commit_sync_fetched_blocks: register_int_counter_with_registry!(
                 "commit_sync_fetched_blocks",
                 "The number of blocks fetched via commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_fetched_commit_bytes: register_histogram_vec_with_registry!(
+                "commit_sync_fetched_commit_bytes",
+                "The number of bytes fetched with fetch_commit()",
+                &["type"],
+                SIZE_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             commit_sync_total_fetched_blocks_size: register_int_counter_with_registry!(
