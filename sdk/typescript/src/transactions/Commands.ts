@@ -46,13 +46,13 @@ export const Commands = {
 					typeArguments?: string[];
 			  },
 	): TransactionShape<'MoveCall'> {
-		const [pkg, mod, fn] =
+		const [pkg, mod = '', fn = ''] =
 			'target' in input ? input.target.split('::') : [input.package, input.module, input.function];
 
 		return {
 			$kind: 'MoveCall',
 			MoveCall: {
-				package: normalizeSuiObjectId(pkg),
+				package: pkg,
 				module: mod,
 				function: fn,
 				typeArguments: input.typeArguments ?? [],
