@@ -532,6 +532,11 @@
 			],
 			"description": "The expiration of the transaction"
 		},
+		"extensions": {
+			"additionalProperties": {},
+			"description": "Extra metadata for implementation specific use-cases",
+			"type": "object"
+		},
 		"gasData": {
 			"$ref": "#/definitions/GasData",
 			"description": "The gas data"
