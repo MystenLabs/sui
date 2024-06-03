@@ -1,5 +1,11 @@
 # Change Log
 
+## 1.0.2
+
+### Patch Changes
+
+- 369b924343: Improve error messages when attempting to serialze non-array values that should be arrays
+
 ## 1.0.1
 
 ### Patch Changes
