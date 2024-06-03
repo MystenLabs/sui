@@ -9,7 +9,7 @@ use crate::{
     events::init_all_struct_tags,
     metrics::BridgeMetrics,
     orchestrator::BridgeOrchestrator,
-    server::{handler::BridgeRequestHandler, run_server},
+    server::{handler::BridgeRequestHandler, run_server, BridgeNodePublicMetadata},
     storage::BridgeOrchestratorTables,
     sui_syncer::SuiSyncer,
 };
@@ -30,6 +30,7 @@ use tracing::info;
 
 pub async fn run_bridge_node(
     config: BridgeNodeConfig,
+    metadata: BridgeNodePublicMetadata,
     prometheus_registry: prometheus::Registry,
 ) -> anyhow::Result<JoinHandle<()>> {
     init_all_struct_tags();
@@ -57,6 +58,7 @@ pub async fn run_bridge_node(
             server_config.approved_governance_actions,
         ),
         metrics,
+        Arc::new(metadata),
     ))
 }
 
@@ -386,7 +388,13 @@ mod tests {
             db_path: None,
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
+        let _handle = run_bridge_node(
+            config,
+            BridgeNodePublicMetadata::empty_for_testing(),
+            Registry::new(),
+        )
+        .await
+        .unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
@@ -443,7 +451,13 @@ mod tests {
             db_path: Some(db_path),
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
+        let _handle = run_bridge_node(
+            config,
+            BridgeNodePublicMetadata::empty_for_testing(),
+            Registry::new(),
+        )
+        .await
+        .unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
@@ -511,7 +525,13 @@ mod tests {
             db_path: Some(db_path),
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
+        let _handle = run_bridge_node(
+            config,
+            BridgeNodePublicMetadata::empty_for_testing(),
+            Registry::new(),
+        )
+        .await
+        .unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
