@@ -25,6 +25,7 @@ use rand::SeedableRng;
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::crypto::KeypairTraits;
+use fastcrypto::traits::RecoverableSigner;
 
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
@@ -309,12 +310,13 @@ pub fn secp256k1_sign(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    debug_assert!(args.len() == 4);
 
     // The corresponding Move function, sui::ecdsa_k1::secp256k1_sign, is only used for testing, so
     // we don't need to charge any gas.
     let cost = 0.into();
 
+    let recoverable = pop_arg!(args, bool);
     let hash = pop_arg!(args, u8);
     let msg = pop_arg!(args, VectorRef);
     let private_key_bytes = pop_arg!(args, VectorRef);
@@ -329,15 +331,17 @@ pub fn secp256k1_sign(
 
     let kp = Secp256k1KeyPair::from(sk);
 
-    let signature = match hash {
-        KECCAK256 => kp.sign_with_hash::<Keccak256>(&msg_ref),
-        SHA256 => kp.sign_with_hash::<Sha256>(&msg_ref),
+    let signature = match (hash, recoverable) {
+        (KECCAK256, true) => kp.sign_recoverable_with_hash::<Keccak256>(&msg_ref).as_bytes().to_vec(),
+        (KECCAK256, false) => kp.sign_with_hash::<Keccak256>(&msg_ref).as_bytes().to_vec(),
+        (SHA256, true) => kp.sign_recoverable_with_hash::<Sha256>(&msg_ref).as_bytes().to_vec(),
+        (SHA256, false) => kp.sign_with_hash::<Sha256>(&msg_ref).as_bytes().to_vec(),
         _ => return Ok(NativeResult::err(cost, INVALID_HASH_FUNCTION)),
     };
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::vector_u8(signature.as_bytes().to_vec())],
+        smallvec![Value::vector_u8(signature)],
     ))
 }
 

@@ -69,10 +69,13 @@ module sui::ecdsa_k1 {
     /// @param private_key: A 32-bytes private key that is used to sign the message.
     /// @param msg: The message to sign, this is raw message without hashing.
     /// @param hash: The hash function used to hash the message when signing.
+    /// @param recoverable: A boolean flag to indicate if the produced signature should be recoverable.
     ///
-    /// Return the 64-bytes signature in form (r, s) that is signed using Secp256k1.
+    /// Return the signature in form (r, s) that is signed using Secp256k1.
+    /// If `recoverable` is true, the signature will be in form (r, s, v) where v is the recovery id.
+    ///
     /// This should ONLY be used in tests, because it will reveal the private key onchain.
-    public native fun secp256k1_sign(private_key: &vector<u8>, msg: &vector<u8>, hash: u8): vector<u8>;
+    public native fun secp256k1_sign(private_key: &vector<u8>, msg: &vector<u8>, hash: u8, recoverable: bool): vector<u8>;
 
     #[test_only]
     public struct KeyPair has drop {
