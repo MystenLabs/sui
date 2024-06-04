@@ -601,7 +601,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
 
     function testSuiBridgeInvalidERC20DecimalConversion() public {
         IERC20(wETH).approve(address(bridge), 10 ether);
-        vm.expectRevert(bytes("SuiBridge: Invalid amount provided"));
+        vm.expectRevert(bytes("BridgeUtils: Insufficient amount provided"));
         bridge.bridgeERC20(
             BridgeUtils.ETH,
             1,
