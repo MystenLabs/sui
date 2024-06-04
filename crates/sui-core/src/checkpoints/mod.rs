@@ -1645,6 +1645,14 @@ impl CheckpointBuilder {
         root_digests: &[TransactionDigest],
         sorted: &[TransactionEffects],
     ) {
+        if !self
+            .epoch_store
+            .protocol_config()
+            .prepose_consensus_commit_prologue_in_checkpoints()
+        {
+            return;
+        }
+
         // Gets all the consensus commit prologue transactions from the roots.
         let root_txs = self
             .state

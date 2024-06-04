@@ -2746,6 +2746,7 @@ impl AuthorityPerEpochStore {
 
     // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update
     // the system clock used in all transactions in the current consensus commit.
+    // Returns the root of the consensus commit prologue transaction if it was added to the input.
     fn add_consensus_commit_prologue_transaction(
         &self,
         batch: &mut DBBatch,
