@@ -20,7 +20,6 @@ RUN cargo build --profile ${PROFILE} \
     --bin sui-node \
     --bin sui \
     --bin sui-faucet \
-    --bin stress \
     --bin sui-cluster-test \
     --bin sui-tool
 
@@ -34,7 +33,6 @@ RUN apt-get update && apt-get install -y libpq5 libpq-dev
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
-COPY --from=builder /sui/target/release/stress /usr/local/bin
 COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
 COPY --from=builder /sui/target/release/sui-tool /usr/local/bin
 
