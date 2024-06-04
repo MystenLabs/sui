@@ -8,7 +8,7 @@ ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
 WORKDIR "$WORKDIR/sui"
 
-# sui-indexer needs postgres libpq5 and ca-certificates
+# bridge-indexer needs postgres libpq5 and ca-certificates
 RUN apt update && apt install -y libpq5 ca-certificates libpq-dev postgresql
 
 RUN apt-get update && apt-get install -y cmake clang
