@@ -343,7 +343,7 @@ impl TypingAnalysisContext<'_> {
 
         let mut use_defs = std::mem::replace(&mut self.use_defs, UseDefMap::new());
         let mut refs = std::mem::take(self.references);
-        if add_struct_use_def(
+        add_struct_use_def(
             self.mod_outer_defs,
             self.files(),
             self.file_mapping(),
@@ -355,11 +355,7 @@ impl TypingAnalysisContext<'_> {
             self.def_info,
             &mut use_defs,
             self.alias_lengths,
-        )
-        .is_none()
-        {
-            debug_assert!(false);
-        }
+        );
         let _ = std::mem::replace(&mut self.use_defs, use_defs);
         let _ = std::mem::replace(self.references, refs);
     }
@@ -596,7 +592,6 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 ident_type_def_loc,
             ),
         );
-        // scope must be passed here but it's not expected to be populated
         self.visit_exp(&mut cdef.value);
     }
 
