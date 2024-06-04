@@ -151,6 +151,10 @@ pub enum SuiCommand {
         /// Package build options
         #[clap(flatten)]
         build_config: BuildConfig,
+        #[clap(long = "client.config")]
+        client_config: Option<PathBuf>,
+        #[clap(short = 'y', long = "yes")]
+        accept_defaults: bool,
         /// Subcommands.
         #[clap(subcommand)]
         cmd: sui_move::Command,
@@ -339,8 +343,22 @@ impl SuiCommand {
             SuiCommand::Move {
                 package_path,
                 build_config,
+                client_config,
+                accept_defaults,
                 cmd,
-            } => execute_move_command(package_path, build_config, cmd),
+            } => {
+                let config_path =
+                    client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                prompt_if_no_config(&config_path, accept_defaults).await?;
+                let context = WalletContext::new(&config_path, None, None)?;
+                let chain_id = context
+                    .get_client()
+                    .await?
+                    .read_api()
+                    .get_chain_identifier()
+                    .await?;
+                execute_move_command(package_path, build_config, Some(chain_id), cmd)
+            }
             SuiCommand::BridgeInitialize {
                 network_config,
                 client_config,

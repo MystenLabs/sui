@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
+import { homedir } from 'os';
+import path from 'path';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
@@ -68,7 +70,13 @@ export function getClient(url = DEFAULT_FULLNODE_URL): SuiClient {
 export async function setup(options: { graphQLURL?: string; rpcURL?: string } = {}) {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
+	setupClientConfig();
 	return setupWithFundedAddress(keypair, address, options);
+}
+
+export async function setupClientConfig() {
+	const configPath = path.join(homedir(), '.sui', 'sui_config', 'client.yaml');
+	execSync(`${SUI_BIN} client --yes --client.config ${configPath}`, { encoding: 'utf-8' });
 }
 
 export async function setupWithFundedAddress(

@@ -45,6 +45,7 @@ pub struct Calib {
 pub fn execute_move_command(
     package_path: Option<PathBuf>,
     mut build_config: BuildConfig,
+    chain_id: Option<String>,
     command: Command,
 ) -> anyhow::Result<()> {
     if let Some(err_msg) = set_sui_flavor(&mut build_config) {
@@ -52,7 +53,7 @@ pub fn execute_move_command(
     }
     match command {
         #[cfg(feature = "build")]
-        Command::Build(c) => c.execute(package_path, build_config),
+        Command::Build(c) => c.execute(package_path, build_config, chain_id),
         #[cfg(feature = "coverage")]
         Command::Coverage(c) => c.execute(package_path, build_config),
         #[cfg(feature = "disassemble")]

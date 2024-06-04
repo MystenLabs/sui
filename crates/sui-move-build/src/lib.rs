@@ -40,6 +40,7 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
+use sui_package_management::{resolve_published_id, PublishedAtError};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
@@ -75,6 +76,9 @@ pub struct BuildConfig {
     pub run_bytecode_verifier: bool,
     /// If true, print build diagnostics to stderr--no printing if false
     pub print_diags_to_stderr: bool,
+    /// The chain ID that compilation is with respect to (e.g., required to resolve
+    /// published dependency IDs from the `Move.lock`).
+    pub chain_id: Option<String>,
 }
 
 impl BuildConfig {
@@ -157,12 +161,14 @@ impl BuildConfig {
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
+        let chain_id = self.chain_id.clone();
         let resolution_graph = self.resolution_graph(&path)?;
         build_from_resolution_graph(
             path.clone(),
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
+            chain_id,
         )
     }
 
@@ -222,8 +228,9 @@ pub fn build_from_resolution_graph(
     resolution_graph: ResolvedGraph,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
+    chain_id: Option<String>,
 ) -> SuiResult<CompiledPackage> {
-    let (published_at, dependency_ids) = gather_published_ids(&resolution_graph);
+    let (published_at, dependency_ids) = gather_published_ids(&resolution_graph, chain_id);
 
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
@@ -572,6 +579,7 @@ impl Default for BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
+            chain_id: None,
         }
     }
 }
@@ -634,12 +642,8 @@ pub struct PackageDependencies {
     pub unpublished: BTreeSet<Symbol>,
     /// Set of dependencies with invalid `published-at` addresses.
     pub invalid: BTreeMap<Symbol, String>,
-}
-
-#[derive(Debug, Clone)]
-pub enum PublishedAtError {
-    Invalid(String),
-    NotPresent,
+    /// Set of dependencies that have conflicting `published-at` addresses in Move.lock and Move.toml.
+    pub conflicting: BTreeMap<Symbol, (String, String)>,
 }
 
 /// Partition packages in `resolution_graph` into one of four groups:
@@ -649,16 +653,18 @@ pub enum PublishedAtError {
 /// - The names of packages that have a `published-at` field that isn't filled with a valid address.
 pub fn gather_published_ids(
     resolution_graph: &ResolvedGraph,
+    chain_id: Option<String>,
 ) -> (Result<ObjectID, PublishedAtError>, PackageDependencies) {
     let root = resolution_graph.root_package();
 
     let mut published = BTreeMap::new();
     let mut unpublished = BTreeSet::new();
     let mut invalid = BTreeMap::new();
+    let mut conflicting = BTreeMap::new();
     let mut published_at = Err(PublishedAtError::NotPresent);
 
     for (name, package) in &resolution_graph.package_table {
-        let property = published_at_property(package);
+        let property = resolve_published_id(package, chain_id.clone());
         if name == &root {
             // Separate out the root package as a special case
             published_at = property;
@@ -675,6 +681,9 @@ pub fn gather_published_ids(
             Err(PublishedAtError::Invalid(value)) => {
                 invalid.insert(*name, value);
             }
+            Err(PublishedAtError::Conflict(id_lock, id_manifest)) => {
+                conflicting.insert(*name, (id_lock, id_manifest));
+            }
         };
     }
 
@@ -684,6 +693,7 @@ pub fn gather_published_ids(
             published,
             unpublished,
             invalid,
+            conflicting,
         },
     )
 }

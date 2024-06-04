@@ -36,12 +36,14 @@ impl Build {
         &self,
         path: Option<PathBuf>,
         build_config: MoveBuildConfig,
+        chain_id: Option<String>,
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path)?;
         let build_config = resolve_lock_file_path(build_config, Some(rerooted_path.clone()))?;
         Self::execute_internal(
             rerooted_path,
             build_config,
+            chain_id,
             self.with_unpublished_dependencies,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
@@ -51,6 +53,7 @@ impl Build {
     pub fn execute_internal(
         rerooted_path: PathBuf,
         config: MoveBuildConfig,
+        chain_id: Option<String>,
         with_unpublished_deps: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
@@ -59,6 +62,7 @@ impl Build {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
+            chain_id,
         }
         .build(rerooted_path.clone())?;
         if dump_bytecode_as_base64 {

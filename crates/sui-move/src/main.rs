@@ -64,9 +64,11 @@ async fn main() {
         .init();
     debug!("Sui-Move CLI version: {VERSION}");
 
+    let chain_id = None; // TODO: Require and populate via client config?
     exit_main!(execute_move_command(
         args.package_path,
         args.build_config,
+        chain_id,
         args.cmd
     ));
 }
