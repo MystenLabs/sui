@@ -11,7 +11,6 @@ import "./interfaces/IBridgeVault.sol";
 import "./interfaces/IBridgeLimiter.sol";
 import "./interfaces/IBridgeConfig.sol";
 import "./interfaces/IWETH9.sol";
-import "forge-std/Test.sol";
 
 /// @title SuiBridge
 /// @notice This contract implements a token bridge that enables users to deposit and withdraw
@@ -20,7 +19,7 @@ import "forge-std/Test.sol";
 /// for verifying and processing bridge messages. The bridge is designed to be upgradeable and
 /// can be paused in case of an emergency. The bridge also enforces limits on the amount of
 /// assets that can be withdrawn to prevent abuse.
-contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
+contract SuiBridgeV1 is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /* ========== STATE VARIABLES ========== */
 
     mapping(uint64 nonce => bool isProcessed) public isTransferProcessed;
@@ -137,8 +136,6 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         bytes memory recipientAddress,
         uint8 destinationChainID
     ) external whenNotPaused nonReentrant onlySupportedChain(destinationChainID) {
-        require(recipientAddress.length == 32, "SuiBridge: Invalid recipient address length");
-
         IBridgeConfig config = committee.config();
 
         require(config.isTokenSupported(tokenID), "SuiBridge: Unsupported token");
@@ -170,6 +167,8 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
             amountTransfered
         );
 
+        require(suiAdjustedAmount > 0, "SuiBridge: Invalid amount provided");
+
         emit TokensDeposited(
             config.chainID(),
             nonces[BridgeUtils.TOKEN_TRANSFER],
@@ -195,8 +194,6 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         nonReentrant
         onlySupportedChain(destinationChainID)
     {
-        require(recipientAddress.length == 32, "SuiBridge: Invalid recipient address length");
-
         uint256 amount = msg.value;
 
         // Transfer the unwrapped ETH to the target address
