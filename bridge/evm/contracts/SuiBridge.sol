@@ -167,8 +167,6 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
             amountTransfered
         );
 
-        require(suiAdjustedAmount > 0, "SuiBridge: Invalid amount provided");
-
         emit TokensDeposited(
             config.chainID(),
             nonces[BridgeUtils.TOKEN_TRANSFER],
