@@ -95,7 +95,7 @@ jobs:
           forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
       - name: cargo test
         run: |
-          cargo nextest run --profile ci -E package(sui-bridge)
+          cargo nextest run --profile ci -E 'package(sui-bridge)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
