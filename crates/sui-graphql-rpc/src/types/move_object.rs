@@ -455,6 +455,10 @@ impl MoveObject {
         .await
     }
 
+    /// Optional root parent object version if this is a dynamic field.
+    ///
+    /// It may be `None` if the GQL query is rooted in this object and it is a child object /
+    /// dynamic field. Check [`Object::root_version`] for details.
     pub(crate) fn root_version(&self) -> Option<u64> {
         self.super_.root_version()
     }

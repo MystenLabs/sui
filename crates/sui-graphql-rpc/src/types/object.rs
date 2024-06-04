@@ -684,27 +684,22 @@ impl Object {
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
     /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
     /// be as if it was read at the same checkpoint.
+    ///
+    /// `root_version` represents the version of the root object in some nested ownership, and if
+    /// None, then the current object being instantiated is the root object (as long as it's not
+    /// immutable or is itself a child object / dynamic field)
     pub(crate) fn from_native(
         address: SuiAddress,
         native: NativeObject,
         checkpoint_viewed_at: u64,
         root_version: Option<u64>,
     ) -> Object {
-        let root_version = root_version.or_else(|| Self::infer_root_version(&native));
+        let root_version = root_version.or_else(|| infer_root_version(&native));
         Object {
             address,
             kind: ObjectKind::NotIndexed(native),
             checkpoint_viewed_at,
             root_version,
-        }
-    }
-
-    fn infer_root_version(native: &NativeObject) -> Option<u64> {
-        match native.as_inner().owner {
-            NativeOwner::AddressOwner(_) | NativeOwner::Shared { .. } => {
-                Some(native.as_inner().version().into())
-            }
-            _ => None,
         }
     }
 
@@ -726,6 +721,10 @@ impl Object {
         }
     }
 
+    /// Optional root parent object version if this is a dynamic field.
+    ///
+    /// It may be `None` if the GQL query is rooted in this object and it is a child object /
+    /// dynamic field. Check [`Object::root_version`] for details.
     pub(crate) fn root_version(&self) -> Option<u64> {
         self.root_version
     }
@@ -883,6 +882,10 @@ impl Object {
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
     /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
     /// be as if it was read at the same checkpoint.
+    ///
+    /// `root_version` represents the version of the root object in some nested ownership, and if
+    /// None, then the current object being instantiated is the root object (as long as it's not
+    /// immutable or is itself a child object / dynamic field)
     pub(crate) fn try_from_stored_history_object(
         history_object: StoredHistoryObject,
         checkpoint_viewed_at: u64,
@@ -911,8 +914,7 @@ impl Object {
                     Error::Internal(format!("Failed to deserialize object {address}"))
                 })?;
 
-                let root_version =
-                    root_version.or_else(|| Self::infer_root_version(&native_object));
+                let root_version = root_version.or_else(|| infer_root_version(&native_object));
                 Ok(Self {
                     address,
                     kind: ObjectKind::Indexed(native_object, history_object),
@@ -932,6 +934,15 @@ impl Object {
                 root_version: None,
             }),
         }
+    }
+}
+
+fn infer_root_version(native: &NativeObject) -> Option<u64> {
+    match native.as_inner().owner {
+        NativeOwner::AddressOwner(_) | NativeOwner::Shared { .. } => {
+            Some(native.as_inner().version().into())
+        }
+        _ => None,
     }
 }
 
@@ -1204,9 +1215,9 @@ impl Loader<HistoricalKey> for Db {
             let object = Object::try_from_stored_history_object(
                 stored.clone(),
                 key.checkpoint_viewed_at,
-                // This will infer the `Object::root_version` if it's not a child object, but if it
-                // is, it will be set to `None`, so dynamic object queries will be bounded by
-                // `checkpoint_viewed_at`.
+                // This conversion will use the object's own version as the `Object::root_version`
+                // if it's not a child object, but if it is, it will be set to `None`, since we do
+                // not have any information on the `root_version` of the fetched dynamic object.
                 None,
             )?;
             result.insert(*key, object);
