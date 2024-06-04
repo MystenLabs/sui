@@ -2031,6 +2031,30 @@ pub fn unfold_type(subst: &Subst, sp!(loc, t_): Type) -> Type {
     }
 }
 
+pub fn unfold_type_recur(subst: &Subst, sp!(_loc, t_): &mut Type) {
+    match t_ {
+        Type_::Var(i) => {
+            let last_tvar = forward_tvar(subst, *i);
+            match subst.get(last_tvar) {
+                Some(sp!(_, Type_::Var(_))) => unreachable!(),
+                None => {
+                    *t_ = Type_::Anything;
+                }
+                Some(inner) => {
+                    *t_ = inner.value.clone();
+                }
+            }
+        }
+        Type_::Unit | Type_::Param(_) | Type_::Anything | Type_::UnresolvedError => (),
+        Type_::Ref(_, inner) => unfold_type_recur(subst, inner),
+        Type_::Apply(_, _, args) => args.iter_mut().for_each(|ty| unfold_type_recur(subst, ty)),
+        Type_::Fun(args, ret) => {
+            args.iter_mut().for_each(|ty| unfold_type_recur(subst, ty));
+            unfold_type_recur(subst, ret);
+        }
+    }
+}
+
 // Equivelent to unfold_type, but only returns the loc.
 // The hope is to point to the last loc in a chain of type var's, giving the loc closest to the
 // actual type in the source code
