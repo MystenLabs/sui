@@ -292,7 +292,7 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![2, 1, 1, 1]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     #[tokio::test]
@@ -303,7 +303,7 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     #[tokio::test]
@@ -314,7 +314,7 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![1, 1, 1, 1]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     #[tokio::test]
@@ -325,7 +325,7 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![5, 5, 5, 5]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     fn basic_setup() -> (Arc<Context>, Vec<CommittedSubDag>) {

@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::VecDeque,
-    ops::Bound::{Excluded, Included},
-    time::Duration,
-};
+use std::{collections::VecDeque, ops::Bound::Included, time::Duration};
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
@@ -268,7 +264,7 @@ impl Store for RocksDBStore {
         let mut commits = vec![];
         for result in self.commits.safe_range_iter((
             Included((range.start(), CommitDigest::MIN)),
-            Excluded((range.end(), CommitDigest::MIN)),
+            Included((range.end(), CommitDigest::MAX)),
         )) {
             let ((_index, digest), serialized) = result?;
             let commit = TrustedCommit::new_trusted(
