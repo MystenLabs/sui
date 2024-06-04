@@ -483,6 +483,7 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     fresh_vm_on_framework_upgrade: bool,
 
+    // Controls whether consensus handler should prepose consensus commit prologue in checkpoints.
     #[serde(skip_serializing_if = "is_false")]
     prepose_consensus_commit_prologue_in_checkpoints: bool,
 }

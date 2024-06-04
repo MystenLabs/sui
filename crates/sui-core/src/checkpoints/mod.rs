@@ -1063,6 +1063,9 @@ impl CheckpointBuilder {
             .protocol_config()
             .prepose_consensus_commit_prologue_in_checkpoints()
         {
+            // If the roots contains consensus commit prologue transaction, we want to extract it,
+            // and put it to the front of the checkpoint.
+
             let consensus_commit_prologue = self
                 .extract_consensus_commit_prologue(&root_digests, &root_effects)
                 .await?;
@@ -1095,7 +1098,7 @@ impl CheckpointBuilder {
         if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
             #[cfg(debug_assertions)]
             {
-                // When consensus_commit_prologue is extracted, it should be included in the `unsorted`.
+                // When consensus_commit_prologue is extracted, it should not be included in the `unsorted`.
                 for tx in unsorted.iter() {
                     assert!(tx.transaction_digest() != &ccp_digest);
                 }
@@ -1120,6 +1123,10 @@ impl CheckpointBuilder {
             return Ok(None);
         }
 
+        // Reads the first transaction in the roots, and checks whether it is a consensus commit prologue
+        // transaction.
+        // When prepose_consensus_commit_prologue_in_checkpoints is enabled, the consensus commit prologue
+        // transaction should be the first transaction in the roots written by the consensus handler.
         Ok(self
             .state
             .get_transaction_cache_reader()
@@ -1133,7 +1140,7 @@ impl CheckpointBuilder {
                 )
             })
             .map(|tx| {
-                debug_assert_eq!(tx.digest(), root_effects[0].transaction_digest());
+                assert_eq!(tx.digest(), root_effects[0].transaction_digest());
                 (tx.digest().clone(), root_effects[0].clone())
             }))
     }
@@ -1547,12 +1554,14 @@ impl CheckpointBuilder {
     }
 
     /// For the given roots return complete list of effects to include in checkpoint
-    /// This list includes the roots and all their dependencies, which are not part of checkpoint already
+    /// This list includes the roots and all their dependencies, which are not part of checkpoint already.
+    /// Note that this function may be called multiple times to construct the checkpoint.
+    /// `existing_tx_digests_in_checkpoint` is used to track the transactions that are already included in the checkpoint.
     #[instrument(level = "debug", skip_all)]
     fn complete_checkpoint_effects(
         &self,
         mut roots: Vec<TransactionEffects>,
-        existing_tx_digests: &mut BTreeSet<TransactionDigest>,
+        existing_tx_digests_in_checkpoint: &mut BTreeSet<TransactionDigest>,
     ) -> SuiResult<Vec<TransactionEffects>> {
         let _scope = monitored_scope("CheckpointBuilder::complete_checkpoint_effects");
         let mut results = vec![];
@@ -1571,7 +1580,8 @@ impl CheckpointBuilder {
                 // Unnecessary to read effects of a dependency if the effect is already processed.
                 seen.insert(*digest);
 
-                if existing_tx_digests.contains(effect.transaction_digest()) {
+                // Skip roots that are already included in the checkpoint.
+                if existing_tx_digests_in_checkpoint.contains(effect.transaction_digest()) {
                     continue;
                 }
 
@@ -1619,7 +1629,7 @@ impl CheckpointBuilder {
             roots = effects;
         }
 
-        existing_tx_digests.extend(results.iter().map(|e| e.transaction_digest()));
+        existing_tx_digests_in_checkpoint.extend(results.iter().map(|e| e.transaction_digest()));
         Ok(results)
     }
 }
