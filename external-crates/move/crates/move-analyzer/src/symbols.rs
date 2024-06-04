@@ -1106,7 +1106,7 @@ fn has_precompiled_deps(
     pkg_path: &Path,
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
 ) -> bool {
-    let mut pkg_deps = pkg_dependencies.lock().unwrap();
+    let pkg_deps = pkg_dependencies.lock().unwrap();
     pkg_deps.contains_key(pkg_path)
 }
 
