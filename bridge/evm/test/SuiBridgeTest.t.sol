@@ -548,10 +548,15 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         reentrantAttack.attack();
     }
 
-    function testSuiBridgeInvalidDecimalConversion() public {
+    function testSuiBridgeInvalidERC20DecimalConversion() public {
         IERC20(wETH).approve(address(bridge), 10 ether);
-        vm.expectRevert(bytes("SuiBridge: Invalid amount provided"));
+        vm.expectRevert(bytes("BridgeUtils: Insufficient amount provided"));
         bridge.bridgeERC20(BridgeUtils.ETH, 1, abi.encode("suiAddress"), 0);
+    }
+
+    function testSuiBridgeInvalidEthDecimalConversion() public {
+        vm.expectRevert(bytes("BridgeUtils: Insufficient amount provided"));
+        bridge.bridgeETH{value: 1}(abi.encode("suiAddress"), 0);
     }
 
     // An e2e token transfer regression test covering message ser/de and signature verification
