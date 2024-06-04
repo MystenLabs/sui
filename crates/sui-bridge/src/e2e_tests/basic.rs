@@ -455,7 +455,7 @@ pub async fn initiate_bridge_sui_to_eth(
     )
     .await
     .unwrap();
-    info!("Sui to Eth bridge transfer approved");
+    info!("Sui to Eth bridge transfer approved.");
 
     Ok(bridge_event)
 }
