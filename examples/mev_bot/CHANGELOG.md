@@ -1,5 +1,14 @@
 # mev-bot
 
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [369b924343]
+- Updated dependencies [369b924343]
+  - @mysten/bcs@1.0.2
+  - @mysten/sui@1.0.5
+
 ## 1.0.5
 
 ### Patch Changes

@@ -43,7 +43,6 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   reject_mutable_random_on_entry_functions: true
-  consensus_choice: Mysticeti
   consensus_network: Tonic
   zklogin_max_epoch_upper_bound_delta: 30
   reshare_at_same_initial_version: true
