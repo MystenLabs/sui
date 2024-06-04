@@ -26,7 +26,6 @@ pub(crate) struct DynamicField {
     pub super_: MoveObject,
     pub df_object_id: SuiAddress,
     pub df_kind: DynamicFieldType,
-    parent_version: Option<u64>,
 }
 
 #[derive(Union)]
@@ -108,7 +107,7 @@ impl DynamicField {
             let obj = MoveObject::query(
                 ctx,
                 self.df_object_id,
-                if let Some(parent_version) = self.parent_version {
+                if let Some(parent_version) = self.root_version() {
                     Object::under_parent(parent_version, self.super_.super_.checkpoint_viewed_at)
                 } else {
                     Object::latest_at(self.super_.super_.checkpoint_viewed_at)
@@ -181,9 +180,7 @@ impl DynamicField {
         )
         .await?;
 
-        super_
-            .map(|mo| Self::try_from((mo, parent_version)))
-            .transpose()
+        super_.map(Self::try_from).transpose()
     }
 
     /// Query the `db` for a `page` of dynamic fields attached to object with ID `parent`. The
@@ -243,18 +240,22 @@ impl DynamicField {
                 ))
             })?;
 
-            let dynamic_field = DynamicField::try_from((move_, parent_version))?;
+            let dynamic_field = DynamicField::try_from(move_)?;
             conn.edges.push(Edge::new(cursor, dynamic_field));
         }
 
         Ok(conn)
     }
+
+    pub(crate) fn root_version(&self) -> Option<u64> {
+        self.super_.root_version()
+    }
 }
 
-impl TryFrom<(MoveObject, Option<u64>)> for DynamicField {
+impl TryFrom<MoveObject> for DynamicField {
     type Error = Error;
 
-    fn try_from((stored, parent_version): (MoveObject, Option<u64>)) -> Result<Self, Error> {
+    fn try_from(stored: MoveObject) -> Result<Self, Error> {
         let super_ = &stored.super_;
 
         let (df_object_id, df_kind) = match &super_.kind {
@@ -290,7 +291,6 @@ impl TryFrom<(MoveObject, Option<u64>)> for DynamicField {
             super_: stored,
             df_object_id,
             df_kind,
-            parent_version,
         })
     }
 }
