@@ -814,6 +814,8 @@ mod test {
         test_duration_secs: u64,
         config: SimulatedLoadConfig,
     ) {
+        register_fail_point_if("assert-prologue-first-in-checkpoint", || true);
+
         let sender = test_cluster.get_address_0();
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let genesis = test_cluster.swarm.config().genesis.clone();

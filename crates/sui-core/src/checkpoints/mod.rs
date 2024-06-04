@@ -24,7 +24,7 @@ use itertools::Itertools;
 use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use sui_macros::fail_point;
+use sui_macros::{fail_point, fail_point_if};
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -1106,6 +1106,11 @@ impl CheckpointBuilder {
             sorted.push(ccp_effects);
         }
         sorted.extend(CausalOrder::causal_sort(unsorted));
+
+        fail_point_if!("assert-prologue-first-in-checkpoint", || {
+            self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
+        });
+
         Ok(sorted)
     }
 
@@ -1141,7 +1146,7 @@ impl CheckpointBuilder {
             })
             .map(|tx| {
                 assert_eq!(tx.digest(), root_effects[0].transaction_digest());
-                (tx.digest().clone(), root_effects[0].clone())
+                (*tx.digest(), root_effects[0].clone())
             }))
     }
 
@@ -1323,10 +1328,9 @@ impl CheckpointBuilder {
                 all_effects.len()
             );
 
-            for (index, (effects, transaction_and_size)) in all_effects
+            for (effects, transaction_and_size) in all_effects
                 .into_iter()
                 .zip(transactions_and_sizes.into_iter())
-                .enumerate()
             {
                 let (transaction, size) = transaction_and_size
                     .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
@@ -1631,6 +1635,92 @@ impl CheckpointBuilder {
 
         existing_tx_digests_in_checkpoint.extend(results.iter().map(|e| e.transaction_digest()));
         Ok(results)
+    }
+
+    // This function is used to check the invariants of the consensus commit prologue transactions in the checkpoint
+    // in simtest.
+    #[cfg(msim)]
+    fn expensive_consensus_commit_prologue_invariants_check(
+        &self,
+        root_digests: &[TransactionDigest],
+        sorted: &[TransactionEffects],
+    ) {
+        // Gets all the consensus commit prologue transactions from the roots.
+        let root_txs = self
+            .state
+            .get_transaction_cache_reader()
+            .multi_get_transaction_blocks(root_digests)
+            .unwrap();
+        let ccps = root_txs
+            .iter()
+            .filter_map(|tx| {
+                if let Some(tx) = tx {
+                    if matches!(
+                        tx.transaction_data().kind(),
+                        TransactionKind::ConsensusCommitPrologue(_)
+                            | TransactionKind::ConsensusCommitPrologueV2(_)
+                            | TransactionKind::ConsensusCommitPrologueV3(_)
+                    ) {
+                        Some(tx)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // There should be at most one consensus commit prologue transaction in the roots.
+        assert!(ccps.len() <= 1);
+
+        // Get all the transactions in the checkpoint.
+        let txs = self
+            .state
+            .get_transaction_cache_reader()
+            .multi_get_transaction_blocks(
+                &sorted
+                    .iter()
+                    .map(|tx| tx.transaction_digest().clone())
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+
+        if ccps.len() == 0 {
+            // If there is no consensus commit prologue transaction in the roots, then there should be no
+            // consensus commit prologue transaction in the checkpoint.
+            for tx in txs.iter() {
+                if let Some(tx) = tx {
+                    assert!(!matches!(
+                        tx.transaction_data().kind(),
+                        TransactionKind::ConsensusCommitPrologue(_)
+                            | TransactionKind::ConsensusCommitPrologueV2(_)
+                            | TransactionKind::ConsensusCommitPrologueV3(_)
+                    ));
+                }
+            }
+        } else {
+            // If there is one consensus commit prologue, it must be the first one in the checkpoint.
+            assert!(matches!(
+                txs[0].as_ref().unwrap().transaction_data().kind(),
+                TransactionKind::ConsensusCommitPrologue(_)
+                    | TransactionKind::ConsensusCommitPrologueV2(_)
+                    | TransactionKind::ConsensusCommitPrologueV3(_)
+            ));
+
+            assert_eq!(ccps[0].digest(), txs[0].as_ref().unwrap().digest());
+
+            for tx in txs.iter().skip(1) {
+                if let Some(tx) = tx {
+                    assert!(!matches!(
+                        tx.transaction_data().kind(),
+                        TransactionKind::ConsensusCommitPrologue(_)
+                            | TransactionKind::ConsensusCommitPrologueV2(_)
+                            | TransactionKind::ConsensusCommitPrologueV3(_)
+                    ));
+                }
+            }
+        }
     }
 }
 
