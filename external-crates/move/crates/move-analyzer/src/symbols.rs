@@ -2536,7 +2536,6 @@ pub fn add_struct_use_def(
         debug_assert!(false);
         return None;
     };
-    println!("name_start: {mod_ident_str:?}");
     if let Some(def) = mod_defs.structs.get(use_name) {
         let def_fhash = mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
         let struct_info = def_info
