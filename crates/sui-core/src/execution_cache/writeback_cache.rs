@@ -97,12 +97,19 @@ enum ObjectEntry {
     Wrapped,
 }
 
-#[cfg(test)]
 impl ObjectEntry {
+    #[cfg(test)]
     fn unwrap_object(&self) -> &Object {
         match self {
             ObjectEntry::Object(o) => o,
             _ => panic!("unwrap_object called on non-Object"),
+        }
+    }
+
+    fn is_tombstone(&self) -> bool {
+        match self {
+            ObjectEntry::Deleted | ObjectEntry::Wrapped => true,
+            ObjectEntry::Object(_) => false,
         }
     }
 }
@@ -456,7 +463,7 @@ impl WritebackCache {
         version: SequenceNumber,
         object: ObjectEntry,
     ) {
-        debug!("inserting object entry {:?}", object);
+        debug!(?object_id, ?version, ?object, "inserting object entry");
         fail_point_async!("write_object_entry");
         self.metrics.record_cache_write("object");
         self.dirty
@@ -589,15 +596,22 @@ impl WritebackCache {
                         obj
                     });
 
-                assert_eq!(
-                    highest,
-                    match &*entry.lock() {
-                        LatestObjectCacheEntry::Object(_, entry) => Some(entry.clone()),
-                        LatestObjectCacheEntry::NonExistent => None,
-                    },
-                    "object_by_id cache is incoherent for {:?}",
-                    object_id
-                );
+                let cache_entry = match &*entry.lock() {
+                    LatestObjectCacheEntry::Object(_, entry) => Some(entry.clone()),
+                    LatestObjectCacheEntry::NonExistent => None,
+                };
+
+                // If the cache entry is a tombstone, the db entry may be missing if it was pruned.
+                let tombstone_possibly_pruned = highest.is_none()
+                    && cache_entry
+                        .as_ref()
+                        .map(|e| e.is_tombstone())
+                        .unwrap_or(false);
+
+                if highest != cache_entry && !tombstone_possibly_pruned {
+                    tracing::error!("object_by_id cache is incoherent for {:?}", object_id);
+                    panic!("object_by_id cache is incoherent for {:?}", object_id);
+                }
             }
         }
 
@@ -831,13 +845,14 @@ impl WritebackCache {
     }
 
     // Commits dirty data for the given TransactionDigest to the db.
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(level = "debug", skip_all)]
     async fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
         digests: &[TransactionDigest],
     ) -> SuiResult {
         fail_point_async!("writeback-cache-commit");
+        trace!(?digests);
 
         let mut all_outputs = Vec::with_capacity(digests.len());
         for tx in digests {
