@@ -2660,18 +2660,12 @@ impl AuthorityPerEpochStore {
                 consensus_commit_info.round
             };
 
-            let mut checkpoint_roots: Vec<TransactionKey> = Vec::with_capacity(1 + roots.len());
-            if self
-                .protocol_config()
-                .prepose_consensus_commit_prologue_in_checkpoints()
-            {
-                if let Some(consensus_commit_prologue_root) = consensus_commit_prologue_root {
-                    checkpoint_roots.push(consensus_commit_prologue_root);
-                }
-            } else {
-                if let Some(consensus_commit_prologue_root) = consensus_commit_prologue_root {
-                    roots.insert(consensus_commit_prologue_root);
-                }
+            let mut checkpoint_roots: Vec<TransactionKey> = Vec::with_capacity(roots.len() + 1);
+
+            if let Some(consensus_commit_prologue_root) = consensus_commit_prologue_root {
+                // TODO: tests that if some validators have first transaction as consensus commit prologue, but
+                // others don't, the checkpoint is still created correctly.
+                checkpoint_roots.push(consensus_commit_prologue_root);
             }
             checkpoint_roots.extend(roots.into_iter());
             let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {

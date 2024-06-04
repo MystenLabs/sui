@@ -1015,10 +1015,32 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
     async fn make_checkpoint(&self, pendings: Vec<PendingCheckpointV2>) -> anyhow::Result<()> {
         let last_details = pendings.last().unwrap().details().clone();
-        let roots = pendings
-            .into_iter()
-            .flat_map(|pending| pending.into_v2().roots)
-            .collect::<Vec<_>>();
+        let mut effects_in_current_checkpoint = BTreeSet::new();
+        let sorted_tx_effects_included_in_checkpoint;
+        for pending_checkpoint in pendings.into_iter() {
+            let pending = pending_checkpoint.into_v2();
+            let sorted_tx_effects_included_in_checkpoint = self
+                .resolve_checkpoint_transactions(pending.roots, &mut effects_in_current_checkpoint)
+                .await?;
+            txn_in_checkpoint.extend(sorted_tx_effects_included_in_checkpoint);
+        }
+        let new_checkpoint = self
+            .create_checkpoints(sorted_tx_effects_included_in_checkpoint, pending.details)
+            .await?;
+        self.write_checkpoints(height, new_checkpoint).await?;
+        Ok(())
+    }
+
+    // Given the root transactions of a checkpoint, resolve the transactions should be included in
+    // the checkpoint, and return them in the order they should be included in the checkpoint.
+    // `effects_in_current_checkpoint` tracks the transactions that already exist in the current
+    // checkpoint.
+    #[instrument(level = "debug", skip_all)]
+    async fn resolve_checkpoint_transactions(
+        &self,
+        roots: Vec<TransactionKey>,
+        effects_in_current_checkpoint: &mut BTreeSet<TransactionDigest>,
+    ) -> SuiResult<Vec<TransactionEffects>> {
         self.metrics
             .checkpoint_roots_count
             .inc_by(roots.len() as u64);
@@ -1034,71 +1056,86 @@ impl CheckpointBuilder {
             .in_monitored_scope("CheckpointNotifyRead")
             .await?;
 
-        let consensus_commit_prologue = if !root_digests.is_empty()
-            && self
-                .epoch_store
-                .protocol_config()
-                .prepose_consensus_commit_prologue_in_checkpoints()
+        let _scope = monitored_scope("CheckpointBuilder");
+
+        let consensus_commit_prologue = if self
+            .epoch_store
+            .protocol_config()
+            .prepose_consensus_commit_prologue_in_checkpoints()
         {
-            if let Some(tx) = self
-                .state
-                .get_transaction_cache_reader()
-                .get_transaction_block(&root_digests[0])?
-            {
-                if matches!(
-                    tx.transaction_data().kind(),
-                    TransactionKind::ConsensusCommitPrologue(_)
-                        | TransactionKind::ConsensusCommitPrologueV2(_)
-                        | TransactionKind::ConsensusCommitPrologueV3(_)
-                ) {
-                    assert_eq!(tx.digest(), root_effects[0].transaction_digest());
-                    Some((tx.digest().clone(), root_effects[0].clone()))
-                } else {
-                    None
-                }
-            } else {
-                None
+            let consensus_commit_prologue = self
+                .extract_consensus_commit_prologue(&root_digests, &root_effects)
+                .await?;
+
+            // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
+            // other dependencies that haven't been included in any previous checkpoints.
+            if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
+                let unsorted_ccp = self.complete_checkpoint_effects(
+                    vec![ccp_effects.clone()],
+                    effects_in_current_checkpoint,
+                )?;
+
+                // No other dependencies of this consensus commit prologue that haven't been included
+                // in any previous checkpoint.
+                assert_eq!(effects_in_current_checkpoint.len(), 1);
+                assert_eq!(effects_in_current_checkpoint.first(), Some(ccp_digest));
+                assert_eq!(unsorted_ccp.len(), 1);
+                assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
             }
+            consensus_commit_prologue
         } else {
             None
         };
 
-        let mut effects_in_current_checkpoint = BTreeSet::new();
+        let unsorted =
+            self.complete_checkpoint_effects(root_effects, effects_in_current_checkpoint)?;
 
-        let _scope = monitored_scope("CheckpointBuilder");
-        #[cfg(debug_assertions)]
-        {
-            if self
-                .epoch_store
-                .protocol_config()
-                .prepose_consensus_commit_prologue_in_checkpoints()
+        let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+        let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
+        if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
+            #[cfg(debug_assertions)]
             {
-                if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue.clone() {
-                    let unsorted_ccp = self.complete_checkpoint_effects(
-                        vec![ccp_effects],
-                        &mut effects_in_current_checkpoint,
-                    )?;
-                    assert_eq!(unsorted_ccp.len(), 1);
-                    assert_eq!(unsorted_ccp[0].transaction_digest(), &ccp_digest);
+                // When consensus_commit_prologue is extracted, it should be included in the `unsorted`.
+                for tx in unsorted.iter() {
+                    assert!(tx.transaction_digest() != &ccp_digest);
                 }
             }
+            sorted.push(ccp_effects);
         }
-        let unsorted =
-            self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
+        sorted.extend(CausalOrder::causal_sort(unsorted));
+        Ok(sorted)
+    }
 
-        let sorted = {
-            let _scope = monitored_scope("CheckpointBuilder::causal_sort");
-            let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
-            if let Some((_, prologue_effects)) = consensus_commit_prologue {
-                sorted.push(prologue_effects);
-            }
-            sorted.extend(CausalOrder::causal_sort(unsorted));
-            sorted
-        };
-        let new_checkpoints = self.create_checkpoints(sorted, &last_details).await?;
-        self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
-            .await?;
-        Ok(())
+    // This function is used to extract the consensus commit prologue digest and effects from the root
+    // transactions.
+    // This function can only be used when prepose_consensus_commit_prologue_in_checkpoints is enabled.
+    // The consensus commit prologue is expected to be the first transaction in the roots.
+    async fn extract_consensus_commit_prologue(
+        &self,
+        root_digests: &[TransactionDigest],
+        root_effects: &[TransactionEffects],
+    ) -> SuiResult<Option<(TransactionDigest, TransactionEffects)>> {
+        let _scope = monitored_scope("CheckpointBuilder::extract_consensus_commit_prologue");
+        if root_digests.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(self
+            .state
+            .get_transaction_cache_reader()
+            .get_transaction_block(&root_digests[0])?
+            .filter(|tx| {
+                matches!(
+                    tx.transaction_data().kind(),
+                    TransactionKind::ConsensusCommitPrologue(_)
+                        | TransactionKind::ConsensusCommitPrologueV2(_)
+                        | TransactionKind::ConsensusCommitPrologueV3(_)
+                )
+            })
+            .map(|tx| {
+                debug_assert_eq!(tx.digest(), root_effects[0].transaction_digest());
+                (tx.digest().clone(), root_effects[0].clone())
+            }))
     }
 
     #[instrument(level = "debug", skip_all)]
