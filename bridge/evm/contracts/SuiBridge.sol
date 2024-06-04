@@ -11,7 +11,6 @@ import "./interfaces/IBridgeVault.sol";
 import "./interfaces/IBridgeLimiter.sol";
 import "./interfaces/IBridgeConfig.sol";
 import "./interfaces/IWETH9.sol";
-import "forge-std/Test.sol";
 
 /// @title SuiBridge
 /// @notice This contract implements a token bridge that enables users to deposit and withdraw
