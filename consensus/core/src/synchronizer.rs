@@ -20,10 +20,7 @@ use parking_lot::{Mutex, RwLock};
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 use sui_macros::fail_point_async;
 use tokio::{
-    sync::{
-        mpsc::{channel, error::TrySendError, Receiver, Sender},
-        oneshot,
-    },
+    sync::{mpsc::error::TrySendError, oneshot},
     task::JoinSet,
     time::{sleep, sleep_until, timeout, Instant},
 };

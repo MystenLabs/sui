@@ -699,8 +699,6 @@ mod tests {
         assert_eq!(range1.start(), 1);
         assert_eq!(range1.end(), 5);
 
-        tracing::debug!("test");
-
         // Test next range check
         assert!(!range1.is_next_range(&range2));
         assert!(!range1.is_next_range(&range3));
