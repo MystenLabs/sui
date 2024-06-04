@@ -26,6 +26,8 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     IBridgeVault public vault;
     IBridgeLimiter public limiter;
 
+    uint8 public constant SUI_ADDRESS_LENGTH = 32;
+
     /* ========== INITIALIZER ========== */
 
     /// @notice Initializes the SuiBridge contract with the provided parameters.
@@ -136,7 +138,10 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         bytes memory recipientAddress,
         uint8 destinationChainID
     ) external whenNotPaused nonReentrant onlySupportedChain(destinationChainID) {
-        require(recipientAddress.length == 32, "SuiBridge: Invalid recipient address length");
+        require(
+            recipientAddress.length == SUI_ADDRESS_LENGTH,
+            "SuiBridge: Invalid recipient address length"
+        );
 
         IBridgeConfig config = committee.config();
 
@@ -194,7 +199,10 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         nonReentrant
         onlySupportedChain(destinationChainID)
     {
-        require(recipientAddress.length == 32, "SuiBridge: Invalid recipient address length");
+        require(
+            recipientAddress.length == SUI_ADDRESS_LENGTH,
+            "SuiBridge: Invalid recipient address length"
+        );
 
         uint256 amount = msg.value;
 
