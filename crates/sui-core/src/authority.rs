@@ -2649,15 +2649,17 @@ impl AuthorityState {
             TransactionInputLoader::new(execution_cache_trait_pointers.object_cache_reader.clone());
         let epoch = epoch_store.epoch();
         let sniffer = match std::env::var_os("MAMORU_SNIFFER_ENABLE") {
-            Some(val) => if val.to_string_lossy() == "1" || val.to_string_lossy() == "true" {
-                Some(
-                SuiSniffer::new()
-                    .await
-                    .expect("Failed to connect to validation chain"),
-                )
-            } else {
-                None
-            },
+            Some(val) => {
+                if val.to_string_lossy() == "1" || val.to_string_lossy() == "true" {
+                    Some(
+                        SuiSniffer::new()
+                            .await
+                            .expect("Failed to connect to validation chain"),
+                    )
+                } else {
+                    None
+                }
+            }
             None => None,
         };
         let sniffer_emit_debug_info = std::env::var_os("MAMORU_SNIFFER_DEBUG").is_some();
