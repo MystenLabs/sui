@@ -26,7 +26,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     IBridgeVault public vault;
     IBridgeLimiter public limiter;
 
-    uint8 public constant SUI_ADDRESS_LENGTH = 32;
+    uint8 constant SUI_ADDRESS_LENGTH = 32;
 
     /* ========== INITIALIZER ========== */
 
