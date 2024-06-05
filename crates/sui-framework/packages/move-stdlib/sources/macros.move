@@ -50,6 +50,34 @@ module std::macros {
         res
     }
 
+    public(package) macro fun range_do($start: _, $stop: _, $f: |_|) {
+        let start = $start;
+        let stop = $stop;
+        let mut i = start;
+        while (i < stop) {
+            $f(i);
+            i = i + 1;
+        }
+    }
+
+    public(package) macro fun range_do_eq($start: _, $stop: _, $f: |_|) {
+        let start = $start;
+        let stop = $stop;
+        let mut i = start;
+        while (i <= stop) {
+            $f(i);
+            i = i + 1;
+        }
+    }
+
+    public(package) macro fun do($stop: _, $f: |_|) {
+        range_do(0, $stop, $f)
+    }
+
+    public(package) macro fun do_eq($stop: _, $f: |_|) {
+        range_do_eq(0, $stop, $f)
+    }
+
     public(package) macro fun num_sqrt<$T, $U>($x: $T, $bitsize: u8): $T {
         let x = $x;
         let mut bit = (1: $U) << $bitsize;
