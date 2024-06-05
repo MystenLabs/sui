@@ -12,7 +12,7 @@ module examples::my_coin {
     // Module initializer is called once on module publish. A treasury
     // cap is sent to the publisher, who then controls minting and burning
     fun init(witness: MY_COIN, ctx: &mut TxContext) {
-        let (treasury, metadata) = coin::create_currency(witness, 6, b"MY_COIN", b"", b"", option::none(), ctx);
+        let (treasury, _metadata) = coin::create_currency(witness, 6, b"MY_COIN", b"", b"", option::none(), ctx);
         transfer::public_transfer(treasury, ctx.sender())
     }
 
