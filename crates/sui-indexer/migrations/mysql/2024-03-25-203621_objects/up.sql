@@ -72,7 +72,7 @@ CREATE TABLE objects_history (
 );
 CREATE INDEX objects_history_id_version ON objects_history (object_id(32), object_version, checkpoint_sequence_number);
 CREATE INDEX objects_history_owner ON objects_history (checkpoint_sequence_number, owner_type, owner_id(32));
-CREATE INDEX objects_history_coin ON objects_history (checkpoint_sequence_number, owner_id(32), coin_type(256), object_id(32));
+CREATE INDEX objects_history_coin_owner ON objects_history (checkpoint_sequence_number, owner_id(32), coin_type(256), object_id(32));
 CREATE INDEX objects_history_coin_only ON objects_history (checkpoint_sequence_number, coin_type(256), object_id(32));
 CREATE INDEX objects_history_type ON objects_history (checkpoint_sequence_number, object_type(256));
 CREATE INDEX objects_history_package_module_name_full_type ON objects_history (checkpoint_sequence_number, object_type_package(32), object_type_module(128), object_type_name(128), object_type(256));
