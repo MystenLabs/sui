@@ -70,9 +70,9 @@ impl Indexer {
         );
 
         let watermark = store
-            .get_latest_checkpoint_sequence_number()
+            .get_latest_object_snapshot_checkpoint_sequence_number()
             .await
-            .expect("Failed to get latest tx checkpoint sequence number from DB")
+            .expect("Failed to get latest object snapshot checkpoint sequence number from DB")
             .map(|seq| seq + 1)
             .unwrap_or_default();
         let download_queue_size = env::var("DOWNLOAD_QUEUE_SIZE")

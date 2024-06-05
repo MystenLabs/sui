@@ -130,11 +130,7 @@ where
             .get_latest_object_snapshot_checkpoint_sequence_number()
             .await?
             .unwrap_or_default();
-        let latest_indexer_cp = self
-            .store
-            .get_latest_checkpoint_sequence_number()
-            .await?
-            .unwrap_or_default();
+
         // make sure cp 0 is handled
         let mut start_cp = if latest_snapshot_cp == 0 {
             0
@@ -149,22 +145,20 @@ where
         // While the below is true, we are in backfill mode, and so `ObjectsSnapshotProcessor` will
         // no-op. Once we exit the loop, this task will then be responsible for updating the
         // `objects_snapshot` table.
-        if latest_snapshot_cp == latest_indexer_cp {
-            while latest_fn_cp > start_cp + self.config.snapshot_max_lag as u64 {
-                tokio::select! {
-                    _ = self.cancel.cancelled() => {
-                        info!("Shutdown signal received, terminating object snapshot processor");
-                        return Ok(());
-                    }
-                    _ = tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration)) => {
-                        info!("Objects snapshot is in backfill mode, objects snapshot processor is sleeping for {} seconds", self.config.sleep_duration);
-                        latest_fn_cp = self.client.get_latest_checkpoint().await?.sequence_number;
-                        start_cp = self
-                            .store
-                            .get_latest_object_snapshot_checkpoint_sequence_number()
-                            .await?
-                            .unwrap_or_default();
-                    }
+        while latest_fn_cp > start_cp + self.config.snapshot_max_lag as u64 {
+            tokio::select! {
+                _ = self.cancel.cancelled() => {
+                    info!("Shutdown signal received, terminating object snapshot processor");
+                    return Ok(());
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration)) => {
+                    info!("Objects snapshot is in backfill mode, objects snapshot processor is sleeping for {} seconds", self.config.sleep_duration);
+                    latest_fn_cp = self.client.get_latest_checkpoint().await?.sequence_number;
+                    start_cp = self
+                    .store
+                    .get_latest_object_snapshot_checkpoint_sequence_number()
+                    .await?
+                    .unwrap_or_default();
                 }
             }
         }

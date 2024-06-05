@@ -54,7 +54,7 @@ where
     let latest_object_snapshot_seq = state
         .get_latest_object_snapshot_checkpoint_sequence_number()
         .await?;
-    let latest_cp_seq = state.get_latest_checkpoint_sequence_number().await?;
+    let latest_cp_seq = latest_object_snapshot_seq;
     if latest_object_snapshot_seq != latest_cp_seq {
         info!("Flipping object_snapshot_backfill_mode to false because objects_snapshot is behind already!");
         object_snapshot_backfill_mode = false;
