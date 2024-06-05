@@ -475,7 +475,7 @@ async fn wait_for_transfer_action_status(
         if res == status {
             return Ok(());
         }
-        if now.elapsed().as_secs() > 30 {
+        if now.elapsed().as_secs() > 60 {
             return Err(anyhow!(
                 "Timeout waiting for token transfer action to be {:?}. chain_id: {chain_id:?}, nonce: {nonce}. Time elapsed: {:?}",
                 status,

@@ -50,7 +50,9 @@ async fn main() -> Result<()> {
     let config_path = if let Some(path) = args.config_path {
         path.join("config.yaml")
     } else {
-        env::current_dir().unwrap().join("config.yaml")
+        env::current_dir()
+            .expect("Current directory is invalid.")
+            .join("config.yaml")
     };
 
     let config = load_config(&config_path).unwrap();
@@ -69,7 +71,12 @@ async fn main() -> Result<()> {
     // start eth client
     let provider = Arc::new(
         ethers::prelude::Provider::<ethers::providers::Http>::try_from(&config.eth_rpc_url)
-            .unwrap()
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Cannot create Ethereum HTTP provider, URL: {}",
+                    &config.eth_rpc_url
+                )
+            })
             .interval(std::time::Duration::from_millis(2000)),
     );
     let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;

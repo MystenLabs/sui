@@ -1102,6 +1102,14 @@ impl Symbols {
     }
 }
 
+fn has_precompiled_deps(
+    pkg_path: &Path,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
+) -> bool {
+    let pkg_deps = pkg_dependencies.lock().unwrap();
+    pkg_deps.contains_key(pkg_path)
+}
+
 /// Main driver to get symbols for the whole package. Returned symbols is an option as only the
 /// correctly computed symbols should be a replacement for the old set - if symbols are not
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
@@ -1117,6 +1125,7 @@ pub fn get_symbols(
         install_dir: Some(tempdir().unwrap().path().to_path_buf()),
         default_flavor: Some(Flavor::Sui),
         lint_flag: lint.into(),
+        skip_fetch_latest_git_deps: has_precompiled_deps(pkg_path, pkg_dependencies.clone()),
         ..Default::default()
     };
 
@@ -2536,7 +2545,6 @@ pub fn add_struct_use_def(
         debug_assert!(false);
         return None;
     };
-    println!("name_start: {mod_ident_str:?}");
     if let Some(def) = mod_defs.structs.get(use_name) {
         let def_fhash = mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
         let struct_info = def_info

@@ -369,14 +369,15 @@ const { digest, effects } = await signAndExecuteTransaction({ transaction })
 To fetch additional data, you can provide a customized `execute` function:
 
 ```diff
+- const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock()
 - const { digest, objectChanges } = await signAndExecuteTransactionBlock({
 -   transactionBlock: transaction,
 -   options: {
 -     showObjectChanges: true,
+-   },
 - })
 
-+ const { digest, objectChanges } = await signAndExecuteTransaction({
-+ 	transaction,
++ const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock({
 + 	execute: async ({ bytes, signature }) =>
 + 		await suiClient.executeTransactionBlock({
 + 			transactionBlock: bytes,
@@ -388,6 +389,10 @@ To fetch additional data, you can provide a customized `execute` function:
 + 				showObjectChanges: true,
 + 			},
 + 		}),
++ });
+
++ const { digest, objectChanges } = await signAndExecuteTransaction({
++ 	transaction,
 + });
 ```
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 45 --simulator
+//# init --protocol-version 49 --simulator
 
 // Tests for representations of all the various system transactions
 
