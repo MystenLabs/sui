@@ -4564,16 +4564,18 @@ fn parse_file_def(
         Tok::Spec | Tok::Module => {
             loop {
                 let (module, next_mod_attributes) = parse_module(attributes, context)?;
-                if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon)
-                    && !defs.is_empty()
-                {
-                    let msg = "Cannot define a 'module' label form in a file with multiple modules";
-                    let mut diag = diag!(Declarations::InvalidModule, (module.name.loc(), msg));
-                    diag.add_note(
-                        "Either move each 'module' label and definitions into its own file or \
-                        define each as 'module <name> { contents }'",
-                    );
-                    context.env.add_diag(diag);
+                if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon) {
+                    if let Some(prev) = defs.last() {
+                        let msg =
+                            "Cannot define a 'module' label form in a file with multiple modules";
+                        let mut diag = diag!(Declarations::InvalidModule, (module.name.loc(), msg));
+                        diag.add_secondary_label((prev.name_loc(), "Previous definition here"));
+                        diag.add_note(
+                            "Either move each 'module' label and definitions into its own file or \
+                            define each as 'module <name> { contents }'",
+                        );
+                        context.env.add_diag(diag);
+                    }
                 }
                 defs.push(Definition::Module(module));
                 let Some(attrs) = next_mod_attributes else {

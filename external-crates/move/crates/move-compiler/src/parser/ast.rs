@@ -986,6 +986,13 @@ impl Definition {
             Definition::Address(a) => a.loc.file_hash(),
         }
     }
+
+    pub fn name_loc(&self) -> Loc {
+        match self {
+            Definition::Module(mdef) => mdef.name.loc(),
+            Definition::Address(aref) => aref.addr.loc,
+        }
+    }
 }
 
 impl ModuleName {
