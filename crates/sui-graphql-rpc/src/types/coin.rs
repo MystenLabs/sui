@@ -394,7 +394,11 @@ fn apply_filter(mut query: RawQuery, coin_type: &TypeTag, owner: Option<SuiAddre
     if let Some(owner) = owner {
         query = filter!(
             query,
-            format!("owner_id = '\\x{}'::bytea", hex::encode(owner.into_vec()),)
+            format!(
+                "owner_id = '\\x{}'::bytea AND owner_type = {}",
+                hex::encode(owner.into_vec()),
+                OwnerType::Address as i16
+            )
         );
     }
 
@@ -403,8 +407,4 @@ fn apply_filter(mut query: RawQuery, coin_type: &TypeTag, owner: Option<SuiAddre
         "coin_type IS NOT NULL AND coin_type = {}",
         coin_type.to_canonical_display(/* with_prefix */ true)
     );
-
-    // Since we have partial indexes on `coin_type IS NOT NULL` and `owner_type = 1`, every coin
-    // query will have this filter condition.
-    filter!(query, format!("owner_type = {}", OwnerType::Address as i16))
 }
