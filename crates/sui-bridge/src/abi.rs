@@ -105,7 +105,7 @@ impl EthBridgeEvent {
                             // We log error here.
                             // TODO: add metrics and alert
                             Err(e) => {
-                                tracing::error!(?eth_tx_hash, eth_event_index, "Failed to convert TokensDepositedFilter log to EthToSuiTokenBridgeV1. This indicates incorrect parameters or a bug in the code: {:?}. Err: {:?}", event, e);
+                                tracing::error!(?eth_tx_hash, eth_event_index, "Manual intervention is required. Failed to convert TokensDepositedFilter log to EthToSuiTokenBridgeV1. This indicates incorrect parameters or a bug in the code: {:?}. Err: {:?}", event, e);
                                 return None;
                             }
                         };

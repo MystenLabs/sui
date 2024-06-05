@@ -529,11 +529,11 @@ macro_rules! with_metrics {
         async move {
             info!("Received {} request", $type_);
             $metrics
-                .total_requests_received
+                .requests_received
                 .with_label_values(&[$type_])
                 .inc();
             $metrics
-                .total_requests_inflight
+                .requests_inflight
                 .with_label_values(&[$type_])
                 .inc();
 
@@ -542,22 +542,16 @@ macro_rules! with_metrics {
             match &result {
                 Ok(_) => {
                     info!("{} request succeeded", $type_);
-                    $metrics
-                        .total_requests_ok
-                        .with_label_values(&[$type_])
-                        .inc();
+                    $metrics.requests_ok.with_label_values(&[$type_]).inc();
                 }
                 Err(e) => {
                     info!("{} request failed: {:?}", $type_, e);
-                    $metrics
-                        .total_requests_error
-                        .with_label_values(&[$type_])
-                        .inc();
+                    $metrics.err_requests.with_label_values(&[$type_]).inc();
                 }
             }
 
             $metrics
-                .total_requests_inflight
+                .requests_inflight
                 .with_label_values(&[$type_])
                 .dec();
             result
