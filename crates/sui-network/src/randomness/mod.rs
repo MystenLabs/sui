@@ -318,18 +318,22 @@ impl RandomnessEventLoop {
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
     fn complete_round(&mut self, epoch: EpochId, round: RandomnessRound) {
         debug!("completing randomness round");
-        self.round_request_time.remove(&(epoch, round));
-        self.highest_completed_round
+        let new_highest_round = *self
+            .highest_completed_round
             .entry(epoch)
             .and_modify(|r| *r = std::cmp::max(*r, round))
             .or_insert(round);
-        // In case we first received the full sig from a checkpoint instead of aggregating it
-        // locally, update completed_sigs here as well.
-        self.completed_sigs.insert((epoch, round));
+        if round != new_highest_round {
+            // This round completion came out of order, and we're already ahead. Nothing more
+            // to do in that case.
+            return;
+        }
+
+        self.round_request_time = self.round_request_time.split_off(&(epoch, round + 1));
 
         if epoch == self.epoch {
             self.remove_partial_sigs_in_range((
-                Bound::Included((round, PeerId([0; 32]))),
+                Bound::Included((RandomnessRound(0), PeerId([0; 32]))),
                 Bound::Excluded((round + 1, PeerId([0; 32]))),
             ));
             for (_, task) in self.send_tasks.iter().take_while(|(r, _)| **r <= round) {
@@ -337,9 +341,9 @@ impl RandomnessEventLoop {
             }
             self.send_tasks = self.send_tasks.split_off(&(round + 1));
             self.maybe_start_pending_tasks();
-        } else {
-            self.update_rounds_pending_metric();
         }
+
+        self.update_rounds_pending_metric();
     }
 
     #[instrument(level = "debug", skip_all, fields(?peer_id, ?epoch, ?round))]
