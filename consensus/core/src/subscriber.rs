@@ -74,13 +74,6 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             peer,
             last_received,
         )));
-        let peer_hostname = &self.context.committee.authority(peer).hostname;
-        self.context
-            .metrics
-            .node_metrics
-            .subscriber_connections
-            .with_label_values(&[peer_hostname])
-            .set(1);
     }
 
     pub(crate) fn stop(&self) {
@@ -115,10 +108,16 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
         const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(10);
         const RETRY_INTERVAL_MULTIPLIER: f32 = 1.2;
+        let metrics = &context.metrics.node_metrics;
         let peer_hostname = &context.committee.authority(peer).hostname;
         let mut retries: i64 = 0;
         let mut delay = INITIAL_RETRY_INTERVAL;
+
         'subscription: loop {
+            metrics
+                .subscriber_connections
+                .with_label_values(&[peer_hostname])
+                .set(0);
             if retries > IMMEDIATE_RETRIES {
                 debug!(
                     "Delaying retry {} of peer {} subscription, in {} seconds",
@@ -145,9 +144,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             {
                 Ok(blocks) => {
                     debug!("Subscribed to peer {} after {} attempts", peer, retries);
-                    context
-                        .metrics
-                        .node_metrics
+                    metrics
                         .subscriber_connection_attempts
                         .with_label_values(&[&peer_hostname, "success"])
                         .inc();
@@ -164,6 +161,11 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                     continue 'subscription;
                 }
             };
+            metrics
+                .subscriber_connections
+                .with_label_values(&[peer_hostname])
+                .set(1);
+
             'stream: loop {
                 match blocks.next().await {
                     Some(block) => {

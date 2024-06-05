@@ -2390,7 +2390,13 @@ impl AuthorityPerEpochStore {
         let mut current_commit_sequenced_randomness_transactions =
             Vec::with_capacity(verified_transactions.len());
         let mut end_of_publish_transactions = Vec::with_capacity(verified_transactions.len());
+        let authority_index = self.committee.authority_index(&self.name).unwrap();
         for tx in verified_transactions {
+            if let SequencedConsensusTransactionKind::External(txn) = &tx.0.transaction {
+                if let ConsensusTransactionKind::EndOfPublish(_) = txn.kind {
+                    error!("epoch {} authority {}: received eop from {} ({:?})", self.epoch(), authority_index, tx.0.certificate_author_index, tx.0.certificate_author);
+                }
+            }
             if tx.0.is_end_of_publish() {
                 end_of_publish_transactions.push(tx);
             } else if tx.0.is_system() {
