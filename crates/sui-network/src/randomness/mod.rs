@@ -474,6 +474,13 @@ impl RandomnessEventLoop {
             return;
         }
 
+        if let Some(highest_completed_round) = self.highest_completed_round.get(&epoch) {
+            if round <= *highest_completed_round {
+                info!("skipping aggregation for already-completed round");
+                return;
+            }
+        }
+
         let highest_requested_round = self.highest_requested_round.get(&epoch);
         if highest_requested_round.is_none() || round > *highest_requested_round.unwrap() {
             // We have to wait here, because even if we have enough information from other nodes
