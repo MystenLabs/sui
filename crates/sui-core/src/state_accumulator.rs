@@ -695,8 +695,8 @@ impl StateAccumulatorV2 {
                 });
 
                 running_root.union(&checkpoint_acc);
-                *highest_accumulated = checkpoint_seq_num;
                 epoch_store.insert_running_root_accumulator(&checkpoint_seq_num, running_root)?;
+                *highest_accumulated = checkpoint_seq_num;
                 debug!(
                     "Accumulated checkpoint {} to running root accumulator",
                     checkpoint_seq_num,
@@ -717,8 +717,8 @@ impl StateAccumulatorV2 {
                     .expect("Failed to get checkpoint accumulator from disk")
                     .expect("Expected checkpoint accumulator to exist")
             });
-            *guard = Some((checkpoint_seq_num, checkpoint_acc.clone()));
             epoch_store.insert_running_root_accumulator(&checkpoint_seq_num, &checkpoint_acc)?;
+            *guard = Some((checkpoint_seq_num, checkpoint_acc));
             debug!(
                 "Accumulated checkpoint {} to running root accumulator",
                 checkpoint_seq_num,
