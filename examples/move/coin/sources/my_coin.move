@@ -13,7 +13,6 @@ module examples::my_coin {
     // cap is sent to the publisher, who then controls minting and burning
     fun init(witness: MY_COIN, ctx: &mut TxContext) {
         let (treasury, metadata) = coin::create_currency(witness, 6, b"MY_COIN", b"", b"", option::none(), ctx);
-        transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury, ctx.sender())
     }
 
