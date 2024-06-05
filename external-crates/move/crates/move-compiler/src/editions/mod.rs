@@ -51,7 +51,7 @@ pub enum FeatureGate {
     NoParensCast,
     TypeHoles,
     Lambda,
-    InlineModule,
+    ModuleLabel,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -155,7 +155,7 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::TypeHoles,
     FeatureGate::CleverAssertions,
     FeatureGate::Lambda,
-    FeatureGate::InlineModule,
+    FeatureGate::ModuleLabel,
 ];
 
 const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
@@ -281,7 +281,7 @@ impl FeatureGate {
             FeatureGate::NoParensCast => "'as' without parentheses is",
             FeatureGate::TypeHoles => "'_' placeholders for type inference are",
             FeatureGate::Lambda => "lambda expressions are",
-            FeatureGate::InlineModule => "inline 'module' forms (ending with ';') are",
+            FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
         }
     }
 }

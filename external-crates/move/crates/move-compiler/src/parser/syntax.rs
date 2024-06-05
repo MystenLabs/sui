@@ -3971,7 +3971,7 @@ fn parse_address_block(
                         Declarations::InvalidModule,
                         (
                             module.name.loc(),
-                            "Cannot define inline 'module' in address block"
+                            "Cannot define 'module' label in address block"
                         )
                     ));
                 }
@@ -4266,7 +4266,7 @@ fn parse_module(
         Tok::Semicolon => {
             context.env.check_feature(
                 context.current_package,
-                FeatureGate::InlineModule,
+                FeatureGate::ModuleLabel,
                 name.loc(),
             );
             definition_mode = ModuleDefinitionMode::Semicolon;
@@ -4567,12 +4567,11 @@ fn parse_file_def(
                 if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon)
                     && !defs.is_empty()
                 {
-                    let msg =
-                        "Cannot define multiple 'module' forms in the same file if any is inlined.";
+                    let msg = "Cannot define a 'module' label form in a file with multiple modules";
                     let mut diag = diag!(Declarations::InvalidModule, (module.name.loc(), msg));
                     diag.add_note(
-                        "Either move each 'module' into its own file or define \
-                                  each as 'module <name> { contents }'",
+                        "Either move each 'module' label and definitions into its own file or \
+                        define each as 'module <name> { contents }'",
                     );
                     context.env.add_diag(diag);
                 }
