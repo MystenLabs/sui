@@ -502,8 +502,9 @@ pub struct AuthorityEpochTables {
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares.
     pub(crate) dkg_output: DBMap<u64, dkg::Output<PkG, EncG>>,
-    /// RandomnessRound numbers that are still pending generation.
-    pub(crate) randomness_rounds_pending: DBMap<RandomnessRound, ()>,
+    /// This table is no longer used (can be removed when DBMap supports removing tables)
+    #[allow(dead_code)]
+    randomness_rounds_pending: DBMap<RandomnessRound, ()>,
     /// Holds the value of the next RandomnessRound to be generated.
     pub(crate) randomness_next_round: DBMap<u64, RandomnessRound>,
     /// Holds the value of the highest completed RandomnessRound (as reported to RandomnessReporter).
@@ -657,31 +658,6 @@ impl AuthorityEpochTables {
         batch.write()?;
         Ok(())
     }
-
-    pub fn check_and_fix_consistency(&self) {
-        if let Some(randomness_highest_completed_round) = self
-            .randomness_highest_completed_round
-            .get(&crate::epoch::randomness::SINGLETON_KEY)
-            .expect("typed_store should not fail")
-        {
-            let old_randomness_rounds = self
-                .randomness_rounds_pending
-                .unbounded_iter()
-                .map(|(round, _)| round)
-                .take_while(|round| *round <= randomness_highest_completed_round)
-                .collect::<Vec<_>>();
-            // TODO: enable this debug_assert once race is fixed.
-            // debug_assert!(old_randomness_rounds.is_empty());
-            if !old_randomness_rounds.is_empty() {
-                error!("Found {} pending randomness rounds that are older than the highest completed round {randomness_highest_completed_round}. Removing them now.", old_randomness_rounds.len());
-            };
-            for round in old_randomness_rounds {
-                self.randomness_rounds_pending
-                    .remove(&round)
-                    .expect("typed_store should not fail");
-            }
-        }
-    }
 }
 
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
@@ -706,8 +682,6 @@ impl AuthorityPerEpochStore {
         let epoch_id = committee.epoch;
 
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
-        tables.check_and_fix_consistency();
-
         let end_of_publish =
             StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.unbounded_iter());
         let reconfig_state = tables
