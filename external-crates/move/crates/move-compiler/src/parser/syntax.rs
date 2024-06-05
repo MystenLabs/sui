@@ -4266,7 +4266,7 @@ fn parse_module(
         Tok::Semicolon => {
             context.env.check_feature(
                 context.current_package,
-                FeatureGate::SemicolonModule,
+                FeatureGate::InlineModule,
                 name.loc(),
             );
             definition_mode = ModuleDefinitionMode::Semicolon;
