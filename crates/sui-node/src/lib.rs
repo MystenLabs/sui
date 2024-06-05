@@ -478,6 +478,8 @@ impl SuiNode {
             ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
 
+        info!("created epoch store");
+
         replay_log!(
             "Beginning replay run. Epoch: {:?}, Protocol config: {:?}",
             epoch_store.epoch(),
@@ -486,6 +488,7 @@ impl SuiNode {
 
         // the database is empty at genesis time
         if is_genesis {
+            info!("checking SUI conservation at genesis");
             // When we are opening the db table, the only time when it's safe to
             // check SUI conservation is at genesis. Otherwise we may be in the middle of
             // an epoch and the SUI conservation check will fail. This also initialize
@@ -508,6 +511,8 @@ impl SuiNode {
             );
         }
 
+        info!("creating checkpoint store");
+
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         checkpoint_store.insert_genesis_checkpoint(
             genesis.checkpoint(),
@@ -515,6 +520,7 @@ impl SuiNode {
             &epoch_store,
         );
 
+        info!("creating state sync store");
         let state_sync_store = RocksDbStore::new(
             cache_traits.clone(),
             committee_store.clone(),
@@ -522,6 +528,7 @@ impl SuiNode {
         );
 
         let index_store = if is_full_node && config.enable_index_processing {
+            info!("creating index store");
             Some(Arc::new(IndexStore::new(
                 config.db_path().join("indexes"),
                 &prometheus_registry,
@@ -537,6 +544,7 @@ impl SuiNode {
         // It's ok if the value is already set due to data races.
         let _ = CHAIN_IDENTIFIER.set(chain_identifier);
 
+        info!("creating archive reader");
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
@@ -571,16 +579,19 @@ impl SuiNode {
         )
         .expect("Initial trusted peers must be set");
 
+        info!("start state archival");
         // Start archiving local state to remote store
         let state_archive_handle =
             Self::start_state_archival(&config, &prometheus_registry, state_sync_store.clone())
                 .await?;
 
+        info!("start snapshot upload");
         // Start uploading state snapshot to remote store
         let state_snapshot_handle =
             Self::start_state_snapshot(&config, &prometheus_registry, checkpoint_store.clone())?;
 
         // Start uploading db checkpoints to remote store
+        info!("start db checkpoint");
         let (db_checkpoint_config, db_checkpoint_handle) = Self::start_db_checkpoint(
             &config,
             &prometheus_registry,
@@ -597,6 +608,7 @@ impl SuiNode {
                 .set_killswitch_tombstone_pruning(true);
         }
 
+        info!("create authority state");
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
