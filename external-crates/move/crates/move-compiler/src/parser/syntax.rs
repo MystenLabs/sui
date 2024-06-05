@@ -3965,6 +3965,17 @@ fn parse_address_block(
                     attributes = attrs;
                 }
             }
+            for module in &modules {
+                if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon) {
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidModule,
+                        (
+                            module.name.loc(),
+                            "Cannot define inline 'module' in address block"
+                        )
+                    ));
+                }
+            }
 
             if in_migration_mode {
                 let loc = context.tokens.current_token_loc();
@@ -4207,6 +4218,14 @@ fn parse_use_alias(context: &mut Context) -> Result<Option<Name>, Box<Diagnostic
 //                  )
 //              )*
 //          "}"
+//          |
+//          <DocComments> ( "spec" | "module") (<LeadingNameAccess>::)?<ModuleName> ";"
+//          ( <Attributes>
+//              ( <FriendDecl> | <SpecBlock> |
+//                <DocComments> <ModuleMemberModifiers>
+//                    (<ConstantDecl> | <StructDecl> | <FunctionDecl> | <UseDecl>) )
+//              )
+//          )*
 //
 // Due to parsing error recovery, while parsing a module the parser may advance past the end of the
 // current module and encounter the next module which also should be parsed. At the point of
@@ -4238,12 +4257,42 @@ fn parse_module(
         }
         (LeadingNameAccess_::Name(name), _) => (None, ModuleName(name)),
     };
-    consume_token(context.tokens, Tok::LBrace)?;
+    let definition_mode: ModuleDefinitionMode;
+    match context.tokens.peek() {
+        Tok::LBrace => {
+            definition_mode = ModuleDefinitionMode::Braces;
+            consume_token(context.tokens, Tok::LBrace)?;
+        }
+        Tok::Semicolon => {
+            context.env.check_feature(
+                context.current_package,
+                FeatureGate::SemicolonModule,
+                name.loc(),
+            );
+            definition_mode = ModuleDefinitionMode::Semicolon;
+            consume_token(context.tokens, Tok::Semicolon)?;
+        }
+        _ => {
+            return Err(unexpected_token_error(
+                context.tokens,
+                "'{' or ':' after the module name",
+            ));
+        }
+    }
 
     let mut members = vec![];
     let mut next_mod_attributes = None;
     let mut stop_parsing = false;
     while context.tokens.peek() != Tok::RBrace {
+        // If we are in semicolon mode, EOF is a fine place to stop.
+        // If we see the `module` keyword, this is most-likely someone defining a second module
+        // (erroneously), so we also bail in that case.
+        if matches!(definition_mode, ModuleDefinitionMode::Semicolon)
+            && (context.tokens.peek() == Tok::EOF || context.tokens.peek() == Tok::Module)
+        {
+            stop_parsing = true;
+            break;
+        }
         context.stop_set.union(&MODULE_MEMBER_OR_MODULE_START_SET);
         match parse_module_member(context) {
             Ok(m) => {
@@ -4292,6 +4341,7 @@ fn parse_module(
         name,
         is_spec_module,
         members,
+        definition_mode,
     };
 
     Ok((def, next_mod_attributes))
@@ -4514,6 +4564,18 @@ fn parse_file_def(
         Tok::Spec | Tok::Module => {
             loop {
                 let (module, next_mod_attributes) = parse_module(attributes, context)?;
+                if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon)
+                    && !defs.is_empty()
+                {
+                    let msg =
+                        "Cannot define multiple 'module' forms in the same file if any is inlined.";
+                    let mut diag = diag!(Declarations::InvalidModule, (module.name.loc(), msg));
+                    diag.add_note(
+                        "Either move each 'module' into its own file or define \
+                                  each as 'module <name> { contents }'",
+                    );
+                    context.env.add_diag(diag);
+                }
                 defs.push(Definition::Module(module));
                 let Some(attrs) = next_mod_attributes else {
                     // no attributes returned from parse_module - just keep parsing next module

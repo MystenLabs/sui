@@ -176,12 +176,19 @@ pub struct ModuleIdent_ {
 pub type ModuleIdent = Spanned<ModuleIdent_>;
 
 #[derive(Debug, Clone)]
+pub enum ModuleDefinitionMode {
+    Braces,
+    Semicolon,
+}
+
+#[derive(Debug, Clone)]
 pub struct ModuleDefinition {
     pub attributes: Vec<Attributes>,
     pub loc: Loc,
     pub address: Option<LeadingNameAccess>,
     pub name: ModuleName,
     pub is_spec_module: bool,
+    pub definition_mode: ModuleDefinitionMode,
     pub members: Vec<ModuleMember>,
 }
 
@@ -1415,6 +1422,7 @@ impl AstDebug for ModuleDefinition {
             name,
             is_spec_module,
             members,
+            definition_mode: _,
         } = self;
         attributes.ast_debug(w);
         match address {
