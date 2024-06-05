@@ -1333,7 +1333,6 @@ pub fn get_symbols(
     let mut def_info = BTreeMap::new();
 
     pre_process_typed_modules(
-        &parsed_program,
         &typed_modules,
         &files,
         &file_id_mapping,
@@ -1347,7 +1346,6 @@ pub fn get_symbols(
 
     if let Some(libs) = compiled_libs.clone() {
         pre_process_typed_modules(
-            &parsed_program,
             &libs.typing.modules,
             &files,
             &file_id_mapping,
@@ -1443,7 +1441,6 @@ pub fn get_symbols(
 }
 
 fn pre_process_typed_modules(
-    parsed_program: &P::Program,
     typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
     files: &SimpleFiles<Symbol, String>,
     file_id_mapping: &HashMap<FileHash, usize>,
@@ -1456,7 +1453,7 @@ fn pre_process_typed_modules(
 ) {
     for (pos, module_ident, module_def) in typed_modules {
         let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
-        let (mut defs, symbols) = get_mod_outer_defs(
+        let (defs, symbols) = get_mod_outer_defs(
             &pos,
             &sp(pos, *module_ident),
             module_def,
@@ -1467,64 +1464,8 @@ fn pre_process_typed_modules(
             def_info,
             edition,
         );
-        mark_positional_struct(parsed_program, &mut defs, &mod_ident_str);
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
         mod_use_defs.insert(mod_ident_str, symbols);
-    }
-}
-
-/// Marks symbolicator's struct metadata as having positional fields
-/// based on the information in the parsed AST.
-fn mark_positional_struct(
-    parsed_program: &P::Program,
-    defs: &mut ModuleDefs,
-    mod_ident_str: &String,
-) {
-    let Some(pkg_def) = parsed_program
-        .source_definitions
-        .iter()
-        .find(|pkg_def| {
-            if let P::Definition::Module(mod_def) = &pkg_def.def {
-                if let Some(parsed_mod_ident_str) = parsing_mod_def_to_map_key(
-                    parsed_program
-                        .named_address_maps
-                        .get(pkg_def.named_address_map),
-                    mod_def,
-                ) {
-                    return mod_ident_str == &parsed_mod_ident_str;
-                }
-            }
-            false
-        })
-        .or_else(|| {
-            parsed_program.lib_definitions.iter().find(|pkg_def| {
-                if let P::Definition::Module(mod_def) = &pkg_def.def {
-                    if let Some(parsed_mod_ident_str) = parsing_mod_def_to_map_key(
-                        parsed_program
-                            .named_address_maps
-                            .get(pkg_def.named_address_map),
-                        mod_def,
-                    ) {
-                        return mod_ident_str == &parsed_mod_ident_str;
-                    }
-                }
-                false
-            })
-        })
-    else {
-        return;
-    };
-
-    if let P::Definition::Module(mod_def) = &pkg_def.def {
-        for member in &mod_def.members {
-            let P::ModuleMember::Struct(parsed_sdef) = member else {
-                continue;
-            };
-            let Some(sdef) = defs.structs.get_mut(&parsed_sdef.name.value()) else {
-                continue;
-            };
-            sdef.positional = matches!(parsed_sdef.fields, P::StructFields::Positional(_));
-        }
     }
 }
 
@@ -1704,11 +1645,13 @@ fn get_mod_outer_defs(
 
     let fhash = loc.file_hash();
 
+    let mut positional = false;
     for (pos, name, def) in &mod_def.structs {
-        // process field structs first
+        // process struct fields first
         let mut field_defs = vec![];
         let mut field_types = vec![];
-        if let StructFields::Defined(_positional, fields) = &def.fields {
+        if let StructFields::Defined(pos_fields, fields) = &def.fields {
+            positional = *pos_fields;
             for (fpos, fname, (_, t)) in fields {
                 let start = match get_start_loc(&fpos, files, file_id_mapping) {
                     Some(s) => s,
@@ -1750,7 +1693,7 @@ fn get_mod_outer_defs(
             StructDef {
                 name_start,
                 field_defs,
-                positional: false, // will be set during parsed AST symbolication
+                positional,
             },
         );
         let pub_struct = edition
