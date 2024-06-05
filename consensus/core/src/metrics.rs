@@ -80,14 +80,18 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) block_size: Histogram,
     pub(crate) block_ancestors: Histogram,
+    pub(crate) block_highest_received_round: IntGaugeVec,
+    pub(crate) block_lowest_received_round: IntGaugeVec,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
     pub(crate) block_proposal_leader_wait_count: IntCounterVec,
     pub(crate) block_timestamp_drift_wait_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
+    pub(crate) committed_blocks: IntGaugeVec,
+    pub(crate) core_add_blocks: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
-    pub(crate) highest_accepted_round: IntGauge,
+    pub(crate) highest_accepted_round: IntGaugeVec,
     pub(crate) accepted_blocks: IntCounterVec,
     pub(crate) dag_state_recent_blocks: IntGauge,
     pub(crate) dag_state_recent_refs: IntGauge,
@@ -100,6 +104,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) rejected_future_blocks: IntCounterVec,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
+    pub(crate) last_committed_authority_round: IntGaugeVec,
     pub(crate) last_committed_leader_round: IntGauge,
     pub(crate) commit_round_advancement_interval: Histogram,
     pub(crate) last_decided_leader_round: IntGauge,
@@ -160,6 +165,18 @@ impl NodeMetrics {
                 exponential_buckets(1.0, 1.4, 20).unwrap(),
                 registry,
             ).unwrap(),
+            block_highest_received_round: register_int_gauge_vec_with_registry!(
+                "block_highest_received_round",
+                "The highest received block round for the corresponding authority",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            block_lowest_received_round: register_int_gauge_vec_with_registry!(
+                "block_lowest_received_round",
+                "The lowest received block round for the corresponding authority",
+                &["authority"],
+                registry,
+            ).unwrap(),
             block_proposal_leader_wait_ms: register_int_counter_vec_with_registry!(
                 "block_proposal_leader_wait_ms",
                 "Total time in ms spent waiting for a leader when proposing blocks.",
@@ -190,6 +207,17 @@ impl NodeMetrics {
                 &["peer"],
                 registry,
             ).unwrap(),
+            committed_blocks: register_int_gauge_vec_with_registry!(
+                "committed_blocks",
+                "Number of committed blocks per authority",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            core_add_blocks: register_histogram_with_registry!(
+                "core_add_blocks",
+                "The number of blocks received from Core for processing on a single batch",
+                registry,
+            ).unwrap(),
             core_lock_dequeued: register_int_counter_with_registry!(
                 "core_lock_dequeued",
                 "Number of dequeued core requests",
@@ -200,9 +228,10 @@ impl NodeMetrics {
                 "Number of enqueued core requests",
                 registry,
             ).unwrap(),
-            highest_accepted_round: register_int_gauge_with_registry!(
+            highest_accepted_round: register_int_gauge_vec_with_registry!(
                 "highest_accepted_round",
-                "The highest round where a block has been accepted. Resets on restart.",
+                "The highest round where a block has been accepted by author. Resets on restart.",
+                &["author"],
                 registry,
             ).unwrap(),
             accepted_blocks: register_int_counter_vec_with_registry!(
@@ -239,8 +268,8 @@ impl NodeMetrics {
             ).unwrap(),
             fetched_blocks: register_int_counter_vec_with_registry!(
                 "fetched_blocks",
-                "Number of fetched blocks per peer authority via the synchronizer.",
-                &["authority", "type"],
+                "Number of fetched blocks per peer authority via the synchronizer and also by block authority",
+                &["peer", "type", "authority"],
                 registry,
             ).unwrap(),
             // TODO: add a short status label.
@@ -272,6 +301,12 @@ impl NodeMetrics {
                 "committed_leaders_total",
                 "Total number of (direct or indirect) committed leaders per authority",
                 &["authority", "commit_type"],
+                registry,
+            ).unwrap(),
+            last_committed_authority_round: register_int_gauge_vec_with_registry!(
+                "last_committed_authority_round",
+                "The last round committed by authority.",
+                &["authority"],
                 registry,
             ).unwrap(),
             last_committed_leader_round: register_int_gauge_with_registry!(
@@ -380,8 +415,8 @@ impl NodeMetrics {
             ).unwrap(),
             subscriber_connections: register_int_gauge_vec_with_registry!(
                 "subscriber_connections",
-                "The number of block stream connections broken down by peer",
-                &["authority"],
+                "The number of block stream connections broken down by peer. The direction can be outbound (our node is subscribed to a peer) or inbound (a peer is subscribed to our node)",
+                &["authority", "direction"],
                 registry,
             ).unwrap(),
             commit_sync_inflight_fetches: register_int_gauge_with_registry!(

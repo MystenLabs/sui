@@ -395,19 +395,15 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 Some((response, blocks_guard, retries, _peer, highest_rounds)) = requests.next() => {
                     match response {
                         Ok(blocks) => {
-                            let peer_hostname = &context.committee.authority(peer_index).hostname;
-                            context
-                                .metrics
-                                .node_metrics
-                                .fetched_blocks.with_label_values(&[peer_hostname, "live"]).inc_by(blocks.len() as u64);
-
                             if let Err(err) = Self::process_fetched_blocks(blocks,
                                 peer_index,
                                 blocks_guard,
                                 core_dispatcher.clone(),
                                 block_verifier.clone(),
                                 context.clone(),
-                                commands_sender.clone()).await {
+                                commands_sender.clone(),
+                                "live"
+                            ).await {
                                 warn!("Error while processing fetched blocks from peer {peer_index}: {err}");
                             }
                         },
@@ -440,6 +436,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         block_verifier: Arc<V>,
         context: Arc<Context>,
         commands_sender: Sender<Command>,
+        sync_method: &str,
     ) -> ConsensusResult<()> {
         // The maximum number of blocks that can be additionally fetched from the one requested - those
         // are potentially missing ancestors.
@@ -478,6 +475,17 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     block_ref: block.reference(),
                 });
             }
+        }
+
+        for block in &blocks {
+            let peer_hostname = &context.committee.authority(peer_index).hostname;
+            let block_hostname = &context.committee.authority(block.author()).hostname;
+            context
+                .metrics
+                .node_metrics
+                .fetched_blocks
+                .with_label_values(&[peer_hostname, &sync_method, block_hostname])
+                .inc_by(1u64);
         }
 
         debug!(
@@ -663,10 +671,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 let mut total_fetched = 0;
                 for (blocks_guard, fetched_blocks, peer) in results {
                     total_fetched += fetched_blocks.len();
-                    let peer_hostname = &context.committee.authority(peer).hostname;
-                    context.metrics.node_metrics.fetched_blocks.with_label_values(&[peer_hostname, "periodic"]).inc_by(fetched_blocks.len() as u64);
 
-                    if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, blocks_guard, core_dispatcher.clone(), block_verifier.clone(), context.clone(), commands_sender.clone()).await {
+                    if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, blocks_guard, core_dispatcher.clone(), block_verifier.clone(), context.clone(), commands_sender.clone(), "periodic").await {
                         warn!("Error occurred while processing fetched blocks from peer {peer}: {err}");
                     }
                 }

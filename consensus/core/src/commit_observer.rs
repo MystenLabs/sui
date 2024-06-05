@@ -171,6 +171,20 @@ impl CommitObserver {
                 .node_metrics
                 .last_committed_leader_round
                 .set(block.round() as i64);
+
+            let hostname = &self.context.committee.authority(block.author()).hostname;
+            self.context
+                .metrics
+                .node_metrics
+                .last_committed_authority_round
+                .with_label_values(&[hostname])
+                .set(block.round().into());
+            self.context
+                .metrics
+                .node_metrics
+                .committed_blocks
+                .with_label_values(&[hostname])
+                .inc();
         }
 
         self.context

@@ -74,13 +74,6 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             peer,
             last_received,
         )));
-        let peer_hostname = &self.context.committee.authority(peer).hostname;
-        self.context
-            .metrics
-            .node_metrics
-            .subscriber_connections
-            .with_label_values(&[peer_hostname])
-            .set(1);
     }
 
     pub(crate) fn stop(&self) {
@@ -96,7 +89,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             .metrics
             .node_metrics
             .subscriber_connections
-            .with_label_values(&[peer_hostname])
+            .with_label_values(&[peer_hostname, "outbound"])
             .set(0);
         if let Some(subscription) = subscription.take() {
             subscription.abort();
@@ -119,6 +112,13 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         let mut retries: i64 = 0;
         let mut delay = INITIAL_RETRY_INTERVAL;
         'subscription: loop {
+            context
+                .metrics
+                .node_metrics
+                .subscriber_connections
+                .with_label_values(&[peer_hostname, "outbound"])
+                .set(0);
+
             if retries > IMMEDIATE_RETRIES {
                 debug!(
                     "Delaying retry {} of peer {} subscription, in {} seconds",
@@ -164,6 +164,16 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                     continue 'subscription;
                 }
             };
+
+            // Now can consider the subscription successful
+            let peer_hostname = &context.committee.authority(peer).hostname;
+            context
+                .metrics
+                .node_metrics
+                .subscriber_connections
+                .with_label_values(&[peer_hostname, "outbound"])
+                .set(1);
+
             'stream: loop {
                 match blocks.next().await {
                     Some(block) => {

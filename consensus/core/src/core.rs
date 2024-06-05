@@ -193,6 +193,11 @@ impl Core {
             .scope_processing_time
             .with_label_values(&["Core::add_blocks"])
             .start_timer();
+        self.context
+            .metrics
+            .node_metrics
+            .core_add_blocks
+            .observe(blocks.len() as f64);
 
         // Try to accept them via the block manager
         let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);

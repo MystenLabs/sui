@@ -232,11 +232,18 @@ impl DagState {
         self.recent_blocks.insert(block_ref, block.clone());
         self.recent_refs[block_ref.author].insert(block_ref);
         self.highest_accepted_round = max(self.highest_accepted_round, block.round());
+
+        let highest_accepted_round_for_author = self.recent_refs[block_ref.author]
+            .last()
+            .map(|block_ref| block_ref.round)
+            .expect("There should be by now at least one block ref");
+        let hostname = &self.context.committee.authority(block.author()).hostname;
         self.context
             .metrics
             .node_metrics
             .highest_accepted_round
-            .set(self.highest_accepted_round as i64);
+            .with_label_values(&[hostname])
+            .set(highest_accepted_round_for_author as i64);
     }
 
     /// Accepts a blocks into DagState and keeps it in memory.
