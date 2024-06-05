@@ -27,8 +27,8 @@ mod test {
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{
-        clear_fail_point, nondeterministic, register_fail_point_async, register_fail_point_if,
-        register_fail_points, sim_test,
+        clear_fail_point, nondeterministic, register_fail_point_arg, register_fail_point_async,
+        register_fail_point_if, register_fail_points, sim_test,
     };
     use sui_protocol_config::{
         PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion, SupportedProtocolVersions,
@@ -37,6 +37,8 @@ mod test {
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
+    use sui_types::base_types::{ObjectID, SequenceNumber};
+    use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::transaction::{
@@ -65,6 +67,10 @@ mod test {
                 ),
             ],
         )
+    }
+
+    fn test_config_low_latency() -> SimConfig {
+        env_config(constant_latency_ms(1), [])
     }
 
     fn get_var<T: FromStr>(name: &str, default: T) -> T
@@ -484,6 +490,36 @@ mod test {
 
         let _checkpoint: CheckpointData =
             Blob::from_bytes(&bytes).expect("failed to load checkpoint");
+    }
+
+    // Tests the correctness of large consensus commit transaction due to large number
+    // of cancelled transactions. Note that we use a low latency configuration since
+    // simtest has low timeout tolerance and it is not designed to test performance.
+    #[sim_test(config = "test_config_low_latency()")]
+    async fn test_simulated_load_large_consensus_commit_prologue_size() {
+        let test_cluster = build_test_cluster(4, 5_000).await;
+
+        let mut additional_cancelled_txns = Vec::new();
+        let num_txns = thread_rng().gen_range(500..2000);
+        info!("Adding additional {num_txns} cancelled txns in consensus commit prologue.");
+
+        // Note that we need to construct the additional assigned object versions outside of
+        // fail point arg so that the same assigned object versions are used for all nodes in
+        // all consensus commit to preserve the determinism.
+        for _ in 0..num_txns {
+            let num_objs = thread_rng().gen_range(1..15);
+            let mut assigned_object_versions = Vec::new();
+            for _ in 0..num_objs {
+                assigned_object_versions.push((ObjectID::random(), SequenceNumber::CONGESTED));
+            }
+            additional_cancelled_txns.push((TransactionDigest::random(), assigned_object_versions));
+        }
+
+        register_fail_point_arg("additional_cancelled_txns_for_tests", move || {
+            Some(additional_cancelled_txns.clone())
+        });
+
+        test_simulated_load(test_cluster.clone(), 30).await;
     }
 
     // TODO add this back once flakiness is resolved

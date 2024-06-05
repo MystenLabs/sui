@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use clap::*;
 use ethers::providers::Middleware;
 use ethers::types::Address as EthAddress;
+use ethers::types::U256;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use fastcrypto::hash::{HashFunction, Keccak256};
@@ -494,6 +495,15 @@ impl LoadedBridgeCliConfig {
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum BridgeClientCommands {
+    #[clap(name = "deposit-native-ether-on-eth")]
+    DepositNativeEtherOnEth {
+        #[clap(long)]
+        ether_amount: u64,
+        #[clap(long)]
+        target_chain: u8,
+        #[clap(long)]
+        sui_recipient_address: SuiAddress,
+    },
     #[clap(name = "deposit-on-sui")]
     DepositOnSui {
         #[clap(long)]
@@ -519,6 +529,26 @@ impl BridgeClientCommands {
         sui_bridge_client: SuiBridgeClient,
     ) -> anyhow::Result<()> {
         match self {
+            BridgeClientCommands::DepositNativeEtherOnEth {
+                ether_amount,
+                target_chain,
+                sui_recipient_address,
+            } => {
+                let eth_sui_bridge = EthSuiBridge::new(
+                    config.eth_bridge_proxy_address,
+                    Arc::new(config.eth_signer().clone()),
+                );
+                let amount = U256::from(ether_amount) * U256::exp10(18);
+                let eth_tx = eth_sui_bridge
+                    .bridge_eth(sui_recipient_address.to_vec().into(), target_chain)
+                    .value(amount);
+                let pending_tx = eth_tx.send().await.unwrap();
+                let tx_receipt = pending_tx.await.unwrap().unwrap();
+                info!(
+                    "Deposited {ether_amount} Ethers to {:?} (target chain {target_chain}). Receipt: {:?}", sui_recipient_address, tx_receipt,
+                );
+                Ok(())
+            }
             BridgeClientCommands::ClaimOnEth { seq_num } => {
                 claim_on_eth(seq_num, config, sui_bridge_client)
                     .await

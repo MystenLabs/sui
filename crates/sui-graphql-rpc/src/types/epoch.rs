@@ -66,9 +66,9 @@ impl Epoch {
             .await?;
 
         let active_validators = convert_to_validators(
-            system_state.active_validators,
-            None,
+            system_state.clone(),
             self.checkpoint_viewed_at,
+            self.stored.epoch as u64,
         );
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),

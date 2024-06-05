@@ -11,6 +11,7 @@ diesel::table! {
         block_height -> Int8,
         timestamp_ms -> Int8,
         txn_hash -> Bytea,
+        txn_sender -> Bytea,
         gas_usage -> Int8,
         data_source -> Text,
     }
@@ -20,6 +21,9 @@ diesel::table! {
     token_transfer_data (chain_id, nonce) {
         chain_id -> Int4,
         nonce -> Int8,
+        block_height -> Int8,
+        timestamp_ms -> Int8,
+        txn_hash -> Bytea,
         sender_address -> Bytea,
         destination_chain -> Int4,
         recipient_address -> Bytea,
@@ -28,4 +32,4 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(token_transfer, token_transfer_data,);
+diesel::allow_tables_to_appear_in_same_query!(token_transfer, token_transfer_data);

@@ -905,6 +905,16 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "hash_to_input_internal",
             make_native!(vdf::hash_to_input_internal),
         ),
+        (
+            "ecdsa_k1",
+            "secp256k1_sign",
+            make_native!(ecdsa_k1::secp256k1_sign),
+        ),
+        (
+            "ecdsa_k1",
+            "secp256k1_keypair_from_seed",
+            make_native!(ecdsa_k1::secp256k1_keypair_from_seed),
+        ),
     ];
     let sui_framework_natives_iter =
         sui_framework_natives

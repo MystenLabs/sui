@@ -110,12 +110,17 @@ async fn start_client_components(
         client_config.key,
         client_config.sui_address,
         client_config.gas_object_ref.0,
-        metrics,
+        metrics.clone(),
     )
     .await;
 
-    let orchestrator =
-        BridgeOrchestrator::new(sui_client, sui_events_rx, eth_events_rx, store.clone());
+    let orchestrator = BridgeOrchestrator::new(
+        sui_client,
+        sui_events_rx,
+        eth_events_rx,
+        store.clone(),
+        metrics,
+    );
 
     all_handles.extend(orchestrator.run(bridge_action_executor).await);
     Ok(all_handles)

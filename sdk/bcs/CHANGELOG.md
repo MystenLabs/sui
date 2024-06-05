@@ -1,5 +1,17 @@
 # Change Log
 
+## 1.0.2
+
+### Patch Changes
+
+- 369b924343: Improve error messages when attempting to serialze non-array values that should be arrays
+
+## 1.0.1
+
+### Patch Changes
+
+- f1e828f557: Remove undefined from bcs.option output types
+
 ## 1.0.0
 
 ### Major Changes

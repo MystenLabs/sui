@@ -181,7 +181,7 @@ impl UnscoredSubdag {
 
         // Guaranteed to have a contiguous list of commit indices
         let commit_range = CommitRange::new(
-            subdags.first().unwrap().commit_ref.index..subdags.last().unwrap().commit_ref.index + 1,
+            subdags.first().unwrap().commit_ref.index..=subdags.last().unwrap().commit_ref.index,
         );
 
         assert!(
@@ -319,7 +319,7 @@ mod tests {
     #[tokio::test]
     async fn test_reputation_scores_authorities_by_score() {
         let context = Arc::new(Context::new_for_test(4).0);
-        let scores = ReputationScores::new((1..300).into(), vec![4, 1, 1, 3]);
+        let scores = ReputationScores::new((1..=300).into(), vec![4, 1, 1, 3]);
         let authorities = scores.authorities_by_score(context);
         assert_eq!(
             authorities,
@@ -335,7 +335,7 @@ mod tests {
     #[tokio::test]
     async fn test_reputation_scores_update_metrics() {
         let context = Arc::new(Context::new_for_test(4).0);
-        let scores = ReputationScores::new((1..300).into(), vec![1, 2, 4, 3]);
+        let scores = ReputationScores::new((1..=300).into(), vec![1, 2, 4, 3]);
         scores.update_metrics(context.clone());
         let metrics = context.metrics.node_metrics.reputation_scores.clone();
         assert_eq!(
@@ -413,7 +413,7 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     #[tokio::test]
@@ -503,6 +503,6 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 }

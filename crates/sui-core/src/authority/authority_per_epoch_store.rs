@@ -83,7 +83,7 @@ use prometheus::IntCounter;
 use std::str::FromStr;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::TransactionEffects;
 use sui_types::executable_transaction::{
@@ -657,6 +657,31 @@ impl AuthorityEpochTables {
         batch.write()?;
         Ok(())
     }
+
+    pub fn check_and_fix_consistency(&self) {
+        if let Some(randomness_highest_completed_round) = self
+            .randomness_highest_completed_round
+            .get(&crate::epoch::randomness::SINGLETON_KEY)
+            .expect("typed_store should not fail")
+        {
+            let old_randomness_rounds = self
+                .randomness_rounds_pending
+                .unbounded_iter()
+                .map(|(round, _)| round)
+                .take_while(|round| *round <= randomness_highest_completed_round)
+                .collect::<Vec<_>>();
+            // TODO: enable this debug_assert once race is fixed.
+            // debug_assert!(old_randomness_rounds.is_empty());
+            if !old_randomness_rounds.is_empty() {
+                error!("Found {} pending randomness rounds that are older than the highest completed round {randomness_highest_completed_round}. Removing them now.", old_randomness_rounds.len());
+            };
+            for round in old_randomness_rounds {
+                self.randomness_rounds_pending
+                    .remove(&round)
+                    .expect("typed_store should not fail");
+            }
+        }
+    }
 }
 
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
@@ -681,6 +706,8 @@ impl AuthorityPerEpochStore {
         let epoch_id = committee.epoch;
 
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
+        tables.check_and_fix_consistency();
+
         let end_of_publish =
             StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.unbounded_iter());
         let reconfig_state = tables
@@ -1617,45 +1644,28 @@ impl AuthorityPerEpochStore {
             ));
         }
 
-        // Defer transaction if it uses shared objects that are congested.
-        match self.protocol_config().per_object_congestion_control_mode() {
-            PerObjectCongestionControlMode::None => None,
-            PerObjectCongestionControlMode::TotalGasBudget => {
-                if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
-                    .should_defer_due_to_object_congestion(
-                        cert,
-                        self.protocol_config()
-                            .max_accumulated_txn_cost_per_object_in_checkpoint(),
-                        previously_deferred_tx_digests,
-                        commit_round,
-                    )
-                {
-                    Some((
-                        deferral_key,
-                        DeferralReason::SharedObjectCongestion(congested_objects),
-                    ))
-                } else {
-                    None
-                }
+        if let Some(max_accumulated_txn_cost_per_object_in_checkpoint) = self
+            .protocol_config()
+            .max_accumulated_txn_cost_per_object_in_checkpoint_as_option()
+        {
+            // Defer transaction if it uses shared objects that are congested.
+            if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
+                .should_defer_due_to_object_congestion(
+                    cert,
+                    max_accumulated_txn_cost_per_object_in_checkpoint,
+                    previously_deferred_tx_digests,
+                    commit_round,
+                )
+            {
+                Some((
+                    deferral_key,
+                    DeferralReason::SharedObjectCongestion(congested_objects),
+                ))
+            } else {
+                None
             }
-        }
-    }
-
-    // Update shared objects' execution cost used in `cert` using `cert`'s execution cost.
-    // This is called when `cert` is scheduled for execution.
-    fn update_object_execution_cost(
-        &self,
-        cert: &VerifiedExecutableTransaction,
-        shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
-    ) {
-        match self.protocol_config().per_object_congestion_control_mode() {
-            PerObjectCongestionControlMode::None => {}
-            PerObjectCongestionControlMode::TotalGasBudget => {
-                shared_object_congestion_tracker.bump_object_execution_cost(
-                    &cert.shared_input_objects().collect::<Vec<_>>(),
-                    cert.gas_budget(),
-                );
-            }
+        } else {
+            None
         }
     }
 
@@ -2657,6 +2667,7 @@ impl AuthorityPerEpochStore {
         transactions: &mut VecDeque<VerifiedExecutableTransaction>,
         consensus_commit_info: &ConsensusCommitInfo,
         roots: &mut BTreeSet<TransactionKey>,
+        cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> SuiResult {
         #[cfg(any(test, feature = "test-utils"))]
         {
@@ -2665,8 +2676,39 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        let transaction = consensus_commit_info
-            .create_consensus_commit_prologue_transaction(self.epoch(), self.protocol_config());
+        let mut version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)> =
+            Vec::new();
+
+        let mut shared_input_next_version = HashMap::new();
+        for txn in transactions.iter() {
+            if let Some(CancelConsensusCertificateReason::CongestionOnObjects(_)) =
+                cancelled_txns.get(txn.digest())
+            {
+                let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
+                    txn,
+                    &mut shared_input_next_version,
+                    cancelled_txns,
+                );
+
+                version_assignment.push((*txn.digest(), assigned_versions));
+            }
+        }
+
+        fail_point_arg!(
+            "additional_cancelled_txns_for_tests",
+            |additional_cancelled_txns: Vec<(
+                TransactionDigest,
+                Vec<(ObjectID, SequenceNumber)>
+            )>| {
+                version_assignment.extend(additional_cancelled_txns);
+            }
+        );
+
+        let transaction = consensus_commit_info.create_consensus_commit_prologue_transaction(
+            self.epoch(),
+            self.protocol_config(),
+            version_assignment,
+        );
         match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
                 roots.insert(processed_tx.key());
@@ -2820,10 +2862,13 @@ impl AuthorityPerEpochStore {
 
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
         // they will be in different checkpoints.
-        let mut shared_object_congestion_tracker: SharedObjectCongestionTracker =
-            Default::default();
-        let mut shared_object_using_randomness_congestion_tracker: SharedObjectCongestionTracker =
-            Default::default();
+        let mut shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
+            self.protocol_config().per_object_congestion_control_mode(),
+        );
+        let mut shared_object_using_randomness_congestion_tracker =
+            SharedObjectCongestionTracker::new(
+                self.protocol_config().per_object_congestion_control_mode(),
+            );
 
         fail_point_arg!(
             "initial_congestion_tracker",
@@ -2945,6 +2990,7 @@ impl AuthorityPerEpochStore {
             &mut verified_certificates,
             consensus_commit_info,
             roots,
+            &cancelled_txns,
         )?;
 
         let verified_certificates: Vec<_> = verified_certificates.into();
@@ -3199,10 +3245,7 @@ impl AuthorityPerEpochStore {
 
                 // This certificate will be scheduled. Update object execution cost.
                 if certificate.contains_shared_object() {
-                    self.update_object_execution_cost(
-                        &certificate,
-                        shared_object_congestion_tracker,
-                    );
+                    shared_object_congestion_tracker.bump_object_execution_cost(&certificate);
                 }
 
                 Ok(ConsensusCertificateResult::SuiTransaction(certificate))

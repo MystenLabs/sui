@@ -220,12 +220,14 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let epoch = self.epoch_state.epoch();
         let round = self.epoch_state.next_consensus_round();
         let timestamp_ms = self.store.get_clock().timestamp_ms() + duration.as_millis() as u64;
+
         let consensus_commit_prologue_transaction =
-            VerifiedTransaction::new_consensus_commit_prologue_v2(
+            VerifiedTransaction::new_consensus_commit_prologue_v3(
                 epoch,
                 round,
                 timestamp_ms,
                 ConsensusCommitDigest::default(),
+                Vec::new(),
             );
 
         self.execute_transaction(consensus_commit_prologue_transaction.into())

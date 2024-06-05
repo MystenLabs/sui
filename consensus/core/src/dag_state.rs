@@ -117,7 +117,7 @@ impl DagState {
 
         if let Some(last_commit) = last_commit.as_ref() {
             store
-                .scan_commits((commit_recovery_start_index..last_commit.index() + 1).into())
+                .scan_commits((commit_recovery_start_index..=last_commit.index()).into())
                 .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
                 .iter()
                 .for_each(|commit| {

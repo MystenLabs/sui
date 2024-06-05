@@ -4,7 +4,10 @@
 use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
-use mysten_metrics::{metered_channel, monitored_scope, spawn_logged_monitored_task};
+use mysten_metrics::{
+    monitored_mpsc::{channel, Receiver, Sender, WeakSender},
+    monitored_scope, spawn_logged_monitored_task,
+};
 use thiserror::Error;
 use tokio::sync::{oneshot, oneshot::error::RecvError};
 use tracing::warn;
@@ -49,7 +52,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
 }
 
 pub(crate) struct CoreThreadHandle {
-    sender: metered_channel::Sender<CoreThreadCommand>,
+    sender: Sender<CoreThreadCommand>,
     join_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -63,7 +66,7 @@ impl CoreThreadHandle {
 
 struct CoreThread {
     core: Core,
-    receiver: metered_channel::Receiver<CoreThreadCommand>,
+    receiver: Receiver<CoreThreadCommand>,
     context: Arc<Context>,
 }
 
@@ -95,17 +98,14 @@ impl CoreThread {
 
 #[derive(Clone)]
 pub(crate) struct ChannelCoreThreadDispatcher {
-    sender: metered_channel::WeakSender<CoreThreadCommand>,
+    sender: WeakSender<CoreThreadCommand>,
     context: Arc<Context>,
 }
 
 impl ChannelCoreThreadDispatcher {
     pub(crate) fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadHandle) {
-        let (sender, receiver) = metered_channel::channel_with_total(
-            CORE_THREAD_COMMANDS_CHANNEL_SIZE,
-            &context.metrics.channel_metrics.core_thread,
-            &context.metrics.channel_metrics.core_thread_total,
-        );
+        let (sender, receiver) =
+            channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
         let core_thread = CoreThread {
             core,
             receiver,
@@ -177,8 +177,8 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
 
 #[cfg(test)]
 mod test {
+    use mysten_metrics::monitored_mpsc::unbounded_channel;
     use parking_lot::RwLock;
-    use tokio::sync::mpsc::unbounded_channel;
 
     use super::*;
     use crate::{
@@ -210,7 +210,7 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),

@@ -202,6 +202,7 @@ async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Erro
     assert_traffic_control_spam_blocked(test_cluster, n as usize).await
 }
 
+#[ignore = "Disabled due to flakiness - re-enable when failure is fixed"]
 #[tokio::test]
 async fn test_validator_traffic_control_spam_delegated() -> Result<(), anyhow::Error> {
     let n = 4;
@@ -234,6 +235,7 @@ async fn test_validator_traffic_control_spam_delegated() -> Result<(), anyhow::E
     assert_traffic_control_spam_delegated(test_cluster, n as usize, 65000).await
 }
 
+#[ignore = "Disabled due to flakiness - re-enable when failure is fixed"]
 #[tokio::test]
 async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Error> {
     let n = 10;

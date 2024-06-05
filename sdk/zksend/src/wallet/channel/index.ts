@@ -77,7 +77,7 @@ export class StashedPopup {
 		this.#popup.close();
 	}
 
-	#listener(event: MessageEvent) {
+	#listener = (event: MessageEvent) => {
 		if (event.origin !== this.#origin) {
 			return;
 		}
@@ -91,7 +91,7 @@ export class StashedPopup {
 		} else if (output.payload.type === 'resolve') {
 			this.#resolve(output.payload.data);
 		}
-	}
+	};
 
 	#cleanup() {
 		if (this.#interval) {

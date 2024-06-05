@@ -1381,6 +1381,7 @@
                 "enable_poseidon": false,
                 "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
+                "fresh_vm_on_framework_upgrade": false,
                 "hardened_otw_check": false,
                 "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
@@ -1398,6 +1399,7 @@
                 "random_beacon": false,
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
+                "record_consensus_determined_version_assignments_in_prologue": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
@@ -5618,6 +5620,49 @@
       },
       "ConsensusCommitDigest": {
         "$ref": "#/components/schemas/Digest"
+      },
+      "ConsensusDeterminedVersionAssignments": {
+        "description": "Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "CancelledTransactions"
+            ],
+            "properties": {
+              "CancelledTransactions": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "$ref": "#/components/schemas/TransactionDigest"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": [
+                          {
+                            "$ref": "#/components/schemas/ObjectID"
+                          },
+                          {
+                            "$ref": "#/components/schemas/SequenceNumber"
+                          }
+                        ],
+                        "maxItems": 2,
+                        "minItems": 2
+                      }
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "Data": {
         "oneOf": [
@@ -10494,6 +10539,51 @@
               },
               "round": {
                 "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "commit_timestamp_ms",
+              "consensus_commit_digest",
+              "consensus_determined_version_assignments",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "commit_timestamp_ms": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "consensus_commit_digest": {
+                "$ref": "#/components/schemas/ConsensusCommitDigest"
+              },
+              "consensus_determined_version_assignments": {
+                "$ref": "#/components/schemas/ConsensusDeterminedVersionAssignments"
+              },
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologueV3"
+                ]
+              },
+              "round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "sub_dag_index": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/BigInt_for_uint64"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             }
           }

@@ -81,7 +81,7 @@ where
         mysten_metrics::metered_channel::channel(
             checkpoint_queue_size,
             &global_metrics
-                .channels
+                .channel_inflight
                 .with_label_values(&["checkpoint_indexing"]),
         );
 

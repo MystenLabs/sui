@@ -1,5 +1,21 @@
 # @mysten/sui.js
 
+## 1.0.5
+
+### Patch Changes
+
+- 369b924343: Fix serializing bcs<u8> inputs from pure strings in v1 json
+- Updated dependencies [369b924343]
+  - @mysten/bcs@1.0.2
+
+## 1.0.4
+
+### Patch Changes
+
+- f1e828f557: Export types needed for defining Transaction plugins
+- Updated dependencies [f1e828f557]
+  - @mysten/bcs@1.0.1
+
 ## 1.0.3
 
 ### Patch Changes

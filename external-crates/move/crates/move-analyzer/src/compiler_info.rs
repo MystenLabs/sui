@@ -44,6 +44,9 @@ impl CompilerInfo {
                         eprintln!("Repeated autocomplete info");
                     }
                 }
+                CI::IDEAnnotation::MissingMatchArms(_) => {
+                    // TODO: Not much to do with this yet.
+                }
             }
         }
     }

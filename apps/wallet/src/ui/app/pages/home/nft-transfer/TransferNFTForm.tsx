@@ -12,10 +12,11 @@ import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 import { useSigner } from '_src/ui/app/hooks/useSigner';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
-import { isSuiNSName, useGetKioskContents, useSuiNSEnabled } from '@mysten/core';
+import { useGetKioskContents, useSuiNSEnabled } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
 import { Transaction } from '@mysten/sui/transactions';
+import { isValidSuiNSName } from '@mysten/sui/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Field, Form, Formik } from 'formik';
 import { toast } from 'react-hot-toast';
@@ -50,7 +51,7 @@ export function TransferNFTForm({
 				throw new Error('Missing data');
 			}
 
-			if (suiNSEnabled && isSuiNSName(to)) {
+			if (suiNSEnabled && isValidSuiNSName(to)) {
 				const address = await rpc.resolveNameServiceAddress({
 					name: to,
 				});
