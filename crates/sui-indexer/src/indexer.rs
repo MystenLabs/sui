@@ -104,7 +104,7 @@ impl Indexer {
                     .with_label_values(&["object_change_buffering"]),
             );
 
-        // let objects_snapshot_buffer = Arc::new(Mutex::new(ObjectChangeBuffer::default()));
+        let backfill_cancel = CancellationToken::new();
 
         let objects_snapshot_processor = ObjectsSnapshotProcessor::new_with_config(
             rest_client.clone(),
@@ -112,6 +112,7 @@ impl Indexer {
             metrics.clone(),
             snapshot_config,
             cancel.clone(),
+            backfill_cancel.clone(),
         );
         spawn_monitored_task!(objects_snapshot_processor.start(object_change_receiver));
 
@@ -135,6 +136,7 @@ impl Indexer {
             metrics,
             watermark,
             cancel.clone(),
+            backfill_cancel,
         )
         .await?;
         let worker_pool = WorkerPool::new(worker, "workflow".to_string(), download_queue_size);

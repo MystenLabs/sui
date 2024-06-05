@@ -6,6 +6,7 @@ use futures::pin_mut;
 use futures::stream::{Peekable, ReadyChunks};
 use futures::StreamExt;
 use itertools::Itertools;
+use rayon::iter::plumbing::bridge_unindexed;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -34,6 +35,7 @@ pub struct ObjectsSnapshotProcessor<S> {
     metrics: IndexerMetrics,
     pub config: SnapshotLagConfig,
     cancel: CancellationToken,
+    backfill_cancel: CancellationToken,
 }
 
 pub struct CheckpointObjectChanges {
@@ -101,6 +103,7 @@ where
         metrics: IndexerMetrics,
         config: SnapshotLagConfig,
         cancel: CancellationToken,
+        backfill_cancel: CancellationToken,
     ) -> ObjectsSnapshotProcessor<S> {
         Self {
             client,
@@ -108,6 +111,7 @@ where
             metrics,
             config,
             cancel,
+            backfill_cancel,
         }
     }
 
@@ -183,6 +187,10 @@ where
                 _ = self.cancel.cancelled() => {
                     info!("Shutdown signal received, terminating object snapshot processor");
                     return Ok(());
+                }
+                _ = self.backfill_cancel.cancelled() => {
+                    info!("Backfill is done, exiting the loop and start regular syncing");
+                    break;
                 }
                 _ = tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration)) => {
                     let latest_cp = self

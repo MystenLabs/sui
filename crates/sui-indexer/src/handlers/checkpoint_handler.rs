@@ -70,6 +70,7 @@ pub async fn new_handlers<S, T>(
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
+    backfill_cancel: CancellationToken,
 ) -> Result<CheckpointHandler<S, T>, IndexerError>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
@@ -100,7 +101,8 @@ where
         indexed_checkpoint_receiver,
         tx,
         next_checkpoint_sequence_number,
-        cancel.clone()
+        cancel.clone(),
+        backfill_cancel,
     ));
     Ok(CheckpointHandler::new(
         state,
