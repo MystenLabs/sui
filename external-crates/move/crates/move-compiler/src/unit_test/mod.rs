@@ -6,8 +6,11 @@ use crate::{
     compiled_unit::NamedCompiledModule, diagnostics::FilesSourceText, shared::NumericalAddress,
 };
 use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
-    runtime_value::MoveValue, vm_status::StatusCode,
+    account_address::AccountAddress,
+    identifier::Identifier,
+    language_storage::{ModuleId, TypeTag},
+    runtime_value::MoveValue,
+    vm_status::StatusCode,
 };
 use std::{collections::BTreeMap, fmt};
 
@@ -32,8 +35,14 @@ pub struct ModuleTestPlan {
 #[derive(Debug, Clone)]
 pub struct TestCase {
     pub test_name: TestName,
-    pub arguments: Vec<MoveValue>,
+    pub arguments: Vec<TestArgument>,
     pub expected_failure: Option<ExpectedFailure>,
+}
+
+#[derive(Debug, Clone)]
+pub enum TestArgument {
+    Value(MoveValue),
+    Generate { generated_type: TypeTag },
 }
 
 #[derive(Debug, Clone)]

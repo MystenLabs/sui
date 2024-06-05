@@ -95,6 +95,19 @@ pub struct UnitTestingConfig {
     /// Verbose mode
     #[clap(short = 'v', long = "verbose")]
     pub verbose: bool,
+
+    /// Number of iterations to run each test if arguments are being generated
+    #[clap(long = "iters", default_value = "10")]
+    pub iters: u64,
+
+    /// Seed to use for generating arguments
+    #[clap(long = "seed")]
+    pub seed: Option<u64>,
+
+    // Deterministically generate the same arguments for #[rand_test]s between test runs.
+    // WARNING: You should only use this flag for debugging and meta-testing purposes!
+    #[clap(skip)]
+    pub deterministic_generation: bool,
 }
 
 fn format_module_id(module_id: &ModuleId) -> String {
@@ -119,6 +132,9 @@ impl UnitTestingConfig {
             verbose: false,
             list: false,
             named_address_values: vec![],
+            iters: 10,
+            seed: None,
+            deterministic_generation: false,
         }
     }
 
@@ -203,6 +219,9 @@ impl UnitTestingConfig {
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
             self.num_threads,
             self.report_stacktrace_on_abort,
+            self.seed,
+            self.iters,
+            self.deterministic_generation,
             test_plan,
             native_function_table,
             cost_table,

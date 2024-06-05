@@ -611,6 +611,7 @@ impl Attribute_ {
 impl Attributes {
     pub fn is_test_or_test_only(&self) -> bool {
         self.contains_key_(&known_attributes::TestingAttribute::TestOnly.into())
+            || self.contains_key_(&known_attributes::TestingAttribute::RandTest.into())
             || self.contains_key_(&known_attributes::TestingAttribute::Test.into())
     }
 }

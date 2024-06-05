@@ -66,6 +66,14 @@ pub struct Test {
     /// Collect coverage information for later use with the various `move coverage` subcommands. Currently supported only in debug builds.
     #[clap(long = "coverage")]
     pub compute_coverage: bool,
+
+    /// The seed to use for the randomness generator.
+    #[clap(name = "seed", long = "seed")]
+    pub seed: Option<u64>,
+
+    /// The number of iterations to run each test that uses generated values.
+    #[clap(name = "num-iters", long = "num-iters", default_value = "10")]
+    pub num_iters: u64,
 }
 
 impl Test {
@@ -104,6 +112,8 @@ impl Test {
             report_statistics,
             verbose_mode,
             compute_coverage: _,
+            seed,
+            num_iters,
         } = self;
         UnitTestingConfig {
             gas_limit,
@@ -112,6 +122,8 @@ impl Test {
             num_threads,
             report_statistics,
             verbose: verbose_mode,
+            seed,
+            iters: num_iters,
             ..UnitTestingConfig::default_with_bound(None)
         }
     }
