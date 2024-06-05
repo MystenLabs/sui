@@ -3489,7 +3489,7 @@ fn borrow_exp_dotted(
         match accessor {
             ExpDottedAccess::Field(name, ty) => {
                 // report autocomplete information for the IDE
-                ide_report_autocomplete(context, &name.loc(), &ty);
+                ide_report_autocomplete(context, &name.loc(), &exp.ty);
                 let e_ = TE::Borrow(mut_, exp, name);
                 let ty = sp(loc, Type_::Ref(mut_, Box::new(ty)));
                 exp = Box::new(T::exp(ty, sp(loc, e_)));
@@ -3695,8 +3695,16 @@ fn ide_report_autocomplete(context: &mut Context, at_loc: &Loc, in_ty: &Type) {
     if !context.env.ide_mode() {
         return;
     }
-    let ty = core::unfold_type(&context.subst, in_ty.clone());
-    let Some(tn) = type_to_type_name(context, &ty, *at_loc, "autocompletion".to_string()) else {
+    let mut outer_ty = in_ty.clone();
+    core::unfold_type_recur(&context.subst, &mut outer_ty);
+    let ty = sp(in_ty.loc, outer_ty.value.base_type_());
+    let Some(tn) = type_to_type_name_(
+        context,
+        &ty,
+        *at_loc,
+        "autocompletion".to_string(),
+        /* report_error */ false,
+    ) else {
         return;
     };
     let methods = context.find_all_methods(&tn);
@@ -3786,6 +3794,16 @@ fn type_to_type_name(
     loc: Loc,
     error_msg: String,
 ) -> Option<TypeName> {
+    type_to_type_name_(context, ty, loc, error_msg, /* report_error */ true)
+}
+
+fn type_to_type_name_(
+    context: &mut Context,
+    ty: &Type,
+    loc: Loc,
+    error_msg: String,
+    report_error: bool,
+) -> Option<TypeName> {
     use TypeName_ as TN;
     use Type_ as Ty;
     match &ty.value {
@@ -3815,14 +3833,22 @@ fn type_to_type_name(
                     assert!(context.env.has_errors());
                     return None;
                 }
-                Ty::Ref(_, _) | Ty::Var(_) => panic!("ICE unfolding failed"),
+                Ty::Ref(_, _) | Ty::Var(_) => {
+                    context.env.add_diag(ice!((
+                        loc,
+                        "Typing did not unfold type before resolving type name"
+                    )));
+                    return None;
+                }
                 Ty::Apply(_, _, _) => unreachable!(),
             };
-            context.env.add_diag(diag!(
-                TypeSafety::InvalidMethodCall,
-                (loc, format!("Invalid {error_msg}")),
-                (ty.loc, msg),
-            ));
+            if report_error {
+                context.env.add_diag(diag!(
+                    TypeSafety::InvalidMethodCall,
+                    (loc, format!("Invalid {error_msg}")),
+                    (ty.loc, msg),
+                ));
+            }
             None
         }
     }
