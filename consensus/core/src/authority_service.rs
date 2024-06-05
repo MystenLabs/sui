@@ -378,8 +378,8 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
         context
             .metrics
             .node_metrics
-            .subscriber_connections
-            .with_label_values(&[peer_hostname, "inbound"])
+            .subscribed_peers
+            .with_label_values(&[peer_hostname])
             .set(1);
         Self {
             context,
@@ -426,8 +426,8 @@ impl<T> Drop for BroadcastStream<T> {
         self.context
             .metrics
             .node_metrics
-            .subscriber_connections
-            .with_label_values(&[peer_hostname, "inbound"])
+            .subscribed_peers
+            .with_label_values(&[peer_hostname])
             .set(0);
     }
 }

@@ -60,7 +60,7 @@ pub(crate) struct BlockManager {
     missing_blocks: BTreeSet<BlockRef>,
     /// A vector that holds a tuple of (lowest_round, highest_round) of received blocks per authority.
     /// This is used for metrics reporting purposes and resets during restarts.
-    received_block_rounds: Vec<(Round, Round)>,
+    received_block_rounds: Vec<Option<(Round, Round)>>,
 }
 
 impl BlockManager {
@@ -69,14 +69,15 @@ impl BlockManager {
         dag_state: Arc<RwLock<DagState>>,
         block_verifier: Arc<dyn BlockVerifier>,
     ) -> Self {
+        let committee_size = context.committee.size();
         Self {
-            context: context.clone(),
+            context,
             dag_state,
             block_verifier,
             suspended_blocks: BTreeMap::new(),
             missing_ancestors: BTreeMap::new(),
             missing_blocks: BTreeSet::new(),
-            received_block_rounds: vec![(0, 0); context.committee.size()],
+            received_block_rounds: vec![None; committee_size],
         }
     }
 
@@ -99,7 +100,7 @@ impl BlockManager {
         let mut missing_blocks = BTreeSet::new();
 
         for block in blocks {
-            self.update_block_receive_metrics(&block);
+            self.update_block_received_metrics(&block);
 
             // Try to accept the input block.
             let block_ref = block.reference();
@@ -349,22 +350,26 @@ impl BlockManager {
         self.missing_blocks.clone()
     }
 
-    fn update_block_receive_metrics(&mut self, block: &VerifiedBlock) {
-        let (min_round, max_round) = self.received_block_rounds[block.author()];
-        self.received_block_rounds[block.author()] =
-            (min_round.min(block.round()), max_round.max(block.round()));
+    fn update_block_received_metrics(&mut self, block: &VerifiedBlock) {
+        let (min_round, max_round) =
+            if let Some((curr_min, curr_max)) = self.received_block_rounds[block.author()] {
+                (curr_min.min(block.round()), curr_max.max(block.round()))
+            } else {
+                (block.round(), block.round())
+            };
+        self.received_block_rounds[block.author()] = Some((min_round, max_round));
 
         let hostname = &self.context.committee.authority(block.author()).hostname;
         self.context
             .metrics
             .node_metrics
-            .block_lowest_received_round
+            .lowest_verified_authority_round
             .with_label_values(&[hostname])
             .set(min_round.into());
         self.context
             .metrics
             .node_metrics
-            .block_highest_received_round
+            .highest_verified_authority_round
             .with_label_values(&[hostname])
             .set(max_round.into());
     }

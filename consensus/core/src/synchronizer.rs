@@ -477,15 +477,18 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             }
         }
 
+        let metrics = &context.metrics.node_metrics;
+        let peer_hostname = &context.committee.authority(peer_index).hostname;
+        metrics
+            .synchronizer_fetched_blocks_by_peer
+            .with_label_values(&[peer_hostname, &sync_method])
+            .inc_by(blocks.len() as u64);
         for block in &blocks {
-            let peer_hostname = &context.committee.authority(peer_index).hostname;
             let block_hostname = &context.committee.authority(block.author()).hostname;
-            context
-                .metrics
-                .node_metrics
-                .fetched_blocks
-                .with_label_values(&[peer_hostname, &sync_method, block_hostname])
-                .inc_by(1u64);
+            metrics
+                .synchronizer_fetched_blocks_by_authority
+                .with_label_values(&[block_hostname, &sync_method])
+                .inc();
         }
 
         debug!(

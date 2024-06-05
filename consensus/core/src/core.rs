@@ -196,7 +196,7 @@ impl Core {
         self.context
             .metrics
             .node_metrics
-            .core_add_blocks
+            .core_add_blocks_batch_size
             .observe(blocks.len() as f64);
 
         // Try to accept them via the block manager
