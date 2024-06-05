@@ -49,7 +49,7 @@ To get started you need to install [pnpm](https://pnpm.io/), then run the follow
 # Install all dependencies
 $ pnpm install
 # Run the build for the TypeScript SDK
-$ pnpm sdk build
+$ pnpm run build
 ```
 
 > All `pnpm` commands below are intended to be run in the root of the Sui repo.
