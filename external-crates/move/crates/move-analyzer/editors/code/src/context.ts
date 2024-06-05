@@ -247,14 +247,16 @@ export class Context {
                 () => false,
             );
             if (serverPathExists) {
-                // Delete existing binary just in case
+                log.info(`deleting existing move-analyzer binary at '${this.configuration.defaultServerPath}'`);
                 await vscode.workspace.fs.delete(this.configuration.defaultServerPath);
             }
          } else {
+            log.info(`creating directory for move-analyzer binary at '${this.configuration.defaultServerDir}'`);
             await vscode.workspace.fs.createDirectory(this.configuration.defaultServerDir);
          }
 
-        await vscode.workspace.fs.copy(bundledServerPath, this.configuration.defaultServerPath);
+         log.info(`copying move-analyzer binary to '${this.configuration.defaultServerPath}'`);
+         await vscode.workspace.fs.copy(bundledServerPath, this.configuration.defaultServerPath);
     }
 
     /**
@@ -314,8 +316,8 @@ export class Context {
                 const items: vscode.MessageItem = { title: 'OK', isCloseAffordance: true };
                 await vscode.window.showInformationMessage(
                     `The move-analyzer binary at the user-specified path ('${this.configuration.serverPath}') ` +
-                    'is not working. Put the corrent binary in the path or reset user settings and ' +
-                    'reinstall the extension to use binary in the default location.',
+                    'is not working. See troubleshooting instructions in the README file accompanying ' +
+                    'Move VSCode extension by Mysten in the VSCode marketplace',
                     { modal: true },
                     items,
                 );
@@ -364,8 +366,8 @@ export class Context {
             const items: vscode.MessageItem = { title: 'OK', isCloseAffordance: true };
             await vscode.window.showErrorMessage(
                 'Pre-built move-analyzer binary is not available for this platform. ' +
-                'Follow the instructions in the move-analyzer Visual Studio Code extension ' +
-                'README to manually install the language server.',
+                'Follow the instructions to manually install the language server in the README ' +
+                'file accompanying Move VSCode extension by Mysten in the VSCode marketplace',
                 { modal: true },
                 items,
             );
