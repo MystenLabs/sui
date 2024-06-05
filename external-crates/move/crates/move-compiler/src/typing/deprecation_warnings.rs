@@ -4,10 +4,11 @@
 use crate::{
     diag,
     expansion::ast::{self as E, ModuleIdent},
-    naming::ast::{self as N, Type, Type_},
+    ice,
+    naming::ast as N,
     parser::ast::{ConstantName, DatatypeName, FunctionName},
     shared::{
-        known_attributes::{AttributePosition, KnownAttribute},
+        known_attributes::{AttributePosition, DeprecationAttribute, KnownAttribute},
         program_info::TypingProgramInfo,
         CompilationEnv, Identifier, Name,
     },
@@ -42,7 +43,7 @@ struct DeprecationWarningId {
     // The named context in which this deprecation warning occured (function, struct, constant, etc.).
     call_site: ModuleMember<Name>,
     // The deprecation information for the member.
-    deprecation: Deprecation,
+    deprecation: Box<Deprecation>,
 }
 
 type ModuleMember<T> = (ModuleIdent, T);
@@ -226,7 +227,7 @@ impl<'env> Deprecations<'env> {
             .expect("ICE: current named context should always be set when visiting deprecations");
         let deprecation_id = DeprecationWarningId {
             call_site: (mident, name),
-            deprecation,
+            deprecation: Box::new(deprecation),
         };
         let entry = self.deprecation_warnings.entry(deprecation_id).or_default();
         let member_deprecations = entry.entry(member_type).or_default();
@@ -307,15 +308,6 @@ impl<'env> Deprecations<'env> {
     }
 }
 
-// If `ty` is a qualified datatype name, return the module ident, datatype name, and location.
-// Otherwise, return None.
-fn qualified_datatype_name_of_type(ty: &Type) -> Option<(&ModuleIdent, &DatatypeName)> {
-    match &ty.value {
-        Type_::Apply(_, sp!(_, N::TypeName_::ModuleType(mident, name)), _) => Some((mident, name)),
-        _ => None,
-    }
-}
-
 // Process the deprecation attributes for a given member (module, constant, function, etc.) and
 // return `Optiong<Deprecation>` if there is a #[deprecated] attribute. If there are invalid
 // #[deprecated] attributes (malformed, or multiple on the member), add an error diagnostic to
@@ -336,11 +328,14 @@ fn deprecations(
         return None;
     }
 
-    assert!(
-        deprecations.len() == 1,
-        "ICE: verified that there is at at least one deprecation attribute above, \
-        and expansion should have failed if there were multiple deprecation attributes."
-    );
+    if deprecations.len() != 1 {
+        env.add_diag(ice!((
+            source_location,
+            "ICE: verified that there is at at least one deprecation attribute above, \
+            and expansion should have failed if there were multiple deprecation attributes."
+        )));
+        return None;
+    }
 
     let (loc, _, attr) = deprecations
         .last()
@@ -349,9 +344,15 @@ fn deprecations(
     let mut make_invalid_deprecation_diag = || {
         let mut diag = diag!(
             Attributes::InvalidUsage,
-            (*loc, "Invalid 'deprecated' attribute")
+            (
+                *loc,
+                format!("Invalid '{}' attribute", DeprecationAttribute.name())
+            )
         );
-        let note = "Deprecation attributes must be written as `#[deprecated]` or `#[deprecated(note = b\"message\")]`";
+        let note = format!(
+            "Deprecation attributes must be written as `#[{0}]` or `#[{0}(note = b\"message\")]`",
+            DeprecationAttribute.name()
+        );
         diag.add_note(note);
         env.add_diag(diag);
         None
@@ -468,8 +469,8 @@ impl TypingVisitorContext for Deprecations<'_> {
     }
 
     fn visit_type_custom(&mut self, ty: &mut N::Type) -> bool {
-        if let Some((mident, name)) = qualified_datatype_name_of_type(ty) {
-            if let Some(deprecation) = self.deprecated_type(mident, name) {
+        if let Some((mident, name)) = ty.value.type_name().and_then(|t| t.value.datatype_name()) {
+            if let Some(deprecation) = self.deprecated_type(&mident, &name) {
                 self.register_deprecation_warning(deprecation.clone(), name.loc());
             }
         }
