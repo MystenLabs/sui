@@ -172,6 +172,7 @@ pub struct IndexStoreTables {
     /// DEPRECATED. DO NOT USE
     #[allow(dead_code)]
     #[default_options_override_fn = "timestamps_table_default_config"]
+    #[deprecated]
     timestamps: DBMap<TransactionDigest, u64>,
 
     /// Ordering of all indexed transactions.
@@ -277,9 +278,19 @@ fn coin_index_table_default_config() -> DBOptions {
 }
 
 impl IndexStore {
-    pub fn new(path: PathBuf, registry: &Registry, max_type_length: Option<u64>) -> Self {
-        let tables =
-            IndexStoreTables::open_tables_read_write(path, MetricConf::new("index"), None, None);
+    pub fn new(
+        path: PathBuf,
+        registry: &Registry,
+        max_type_length: Option<u64>,
+        remove_deprecated_tables: bool,
+    ) -> Self {
+        let tables = IndexStoreTables::open_tables_read_write_with_deprecation_option(
+            path,
+            MetricConf::new("index"),
+            None,
+            None,
+            remove_deprecated_tables,
+        );
         let metrics = IndexStoreMetrics::new(registry);
         let caches = IndexStoreCaches {
             per_coin_type_balance: ShardedLruCache::new(1_000_000, 1000),
@@ -1606,7 +1617,7 @@ mod tests {
         // and verified from both db and cache.
         // This tests make sure we are invalidating entries in the cache and always reading latest
         // balance.
-        let index_store = IndexStore::new(temp_dir(), &Registry::default(), Some(128));
+        let index_store = IndexStore::new(temp_dir(), &Registry::default(), Some(128), false);
         let address: SuiAddress = AccountAddress::random().into();
         let mut written_objects = BTreeMap::new();
         let mut object_map = BTreeMap::new();

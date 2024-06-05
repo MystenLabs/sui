@@ -19,6 +19,8 @@ const DEFAULT_DB_OPTIONS_CUSTOM_FN: &str = "typed_store::rocks::default_db_optio
 const DB_OPTIONS_CUSTOM_FUNCTION: &str = "default_options_override_fn";
 // Use a different name for the column than the identifier
 const DB_OPTIONS_RENAME: &str = "rename";
+// Deprecate a column family
+const DB_OPTIONS_DEPRECATE: &str = "deprecated";
 
 /// Options can either be simplified form or
 enum GeneralTableOptions {
@@ -35,26 +37,23 @@ impl Default for GeneralTableOptions {
 fn extract_struct_info(
     input: ItemStruct,
     allowed_map_type_names: HashSet<String>,
-) -> (
-    Vec<Ident>,
-    Vec<Ident>,
-    Vec<AngleBracketedGenericArguments>,
-    Vec<GeneralTableOptions>,
-    String,
-) {
+) -> ExtractedStructInfo {
     // There must only be one map type used for all entries
     let allowed_strs: Vec<_> = allowed_map_type_names
         .iter()
         .map(|s| format!("{s}<K, V>"))
         .collect();
     let allowed_strs = allowed_strs.join(" or ");
+    let mut deprecated_cfs = vec![];
 
     let info = input.fields.iter().map(|f| {
         let attrs: BTreeMap<_, _> = f
             .attrs
             .iter()
             .filter(|a| {
-                a.path.is_ident(DB_OPTIONS_CUSTOM_FUNCTION) || a.path.is_ident(DB_OPTIONS_RENAME)
+                a.path.is_ident(DB_OPTIONS_CUSTOM_FUNCTION)
+                    || a.path.is_ident(DB_OPTIONS_RENAME)
+                    || a.path.is_ident(DB_OPTIONS_DEPRECATE)
             })
             .map(|a| (a.path.get_ident().unwrap().to_string(), a))
             .collect();
@@ -94,6 +93,9 @@ fn extract_struct_info(
                 } else {
                     field_name.clone()
                 };
+                if attrs.get(DB_OPTIONS_DEPRECATE).is_some() {
+                    deprecated_cfs.push(field_name.clone());
+                }
 
                 return ((field_name, cf_name, type_str), (inner_type, options));
             } else {
@@ -120,13 +122,14 @@ fn extract_struct_info(
 
     let (inner_types, options): (Vec<_>, Vec<_>) = inner_types_with_opts.into_iter().unzip();
 
-    (
+    ExtractedStructInfo {
         field_names,
         cf_names,
         inner_types,
-        options,
-        simple_field_type_names.first().unwrap().clone(),
-    )
+        derived_table_options: options,
+        simple_field_type_name_str: simple_field_type_names.first().unwrap().clone(),
+        deprecated_cfs,
+    }
 }
 
 /// Extracts the table options override function
@@ -302,6 +305,15 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// //     bad_field: u32,
 /// // #}
 
+struct ExtractedStructInfo {
+    field_names: Vec<Ident>,
+    cf_names: Vec<Ident>,
+    inner_types: Vec<AngleBracketedGenericArguments>,
+    derived_table_options: Vec<GeneralTableOptions>,
+    simple_field_type_name_str: String,
+    deprecated_cfs: Vec<Ident>,
+}
+
 #[proc_macro_derive(DBMapUtils, attributes(default_options_override_fn, rename))]
 pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -317,8 +329,14 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
         .collect();
 
     // TODO: use `parse_quote` over `parse()`
-    let (field_names, cf_names, inner_types, derived_table_options, simple_field_type_name_str) =
-        extract_struct_info(input.clone(), allowed_strs);
+    let ExtractedStructInfo {
+        field_names,
+        cf_names,
+        inner_types,
+        derived_table_options,
+        simple_field_type_name_str,
+        deprecated_cfs,
+    } = extract_struct_info(input.clone(), allowed_strs);
 
     let (key_names, value_names): (Vec<_>, Vec<_>) = inner_types
         .iter()
@@ -420,7 +438,8 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 is_transaction: bool,
                 metric_conf: typed_store::rocks::MetricConf,
                 global_db_options_override: Option<rocksdb::Options>,
-                tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
+                tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>,
+                remove_deprecated_tables: bool,
             ) -> Self {
                 let path = &path;
                 let (db, rwopt_cfs) = {
@@ -439,7 +458,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     // Safe to call unwrap because we will have at least one field_name entry in the struct
                     let rwopt_cfs: std::collections::HashMap<String, typed_store::rocks::ReadWriteOptions> = opt_cfs.iter().map(|q| (q.0.as_str().to_string(), q.1.rw_options.clone())).collect();
                     let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), q.1.options.clone())).collect();
-                    let db = match (as_secondary_with_path, is_transaction) {
+                    let db = match (as_secondary_with_path.clone(), is_transaction) {
                         (Some(p), _) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, metric_conf, &opt_cfs),
                         (_, true) => typed_store::rocks::open_cf_opts_transactional(path, global_db_options_override, metric_conf, &opt_cfs),
                         _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, metric_conf, &opt_cfs)
@@ -454,6 +473,11 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                         DBMap::#inner_types::reopen(&db, Some(stringify!(#cf_names)), rwopt_cfs.get(stringify!(#cf_names)).unwrap_or(&typed_store::rocks::ReadWriteOptions::default())).expect(&format!("Cannot open {} CF.", stringify!(#cf_names))[..])
                     ),*);
 
+                if as_secondary_with_path.is_none() && remove_deprecated_tables {
+                    #(
+                        db.drop_cf(stringify!(#deprecated_cfs)).expect("failed to drop a deprecated cf");
+                    )*
+                }
                 Self {
                     #(
                         #field_names,
@@ -481,7 +505,23 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 global_db_options_override: Option<rocksdb::Options>,
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
             ) -> Self {
-                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, false, metric_conf, global_db_options_override, tables_db_options_override);
+                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, false, metric_conf, global_db_options_override, tables_db_options_override, false);
+                Self {
+                    #(
+                        #field_names: #post_process_fn(inner.#field_names),
+                    )*
+                }
+            }
+
+            #[allow(unused_parens)]
+            pub fn open_tables_read_write_with_deprecation_option(
+                path: std::path::PathBuf,
+                metric_conf: typed_store::rocks::MetricConf,
+                global_db_options_override: Option<rocksdb::Options>,
+                tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>,
+                remove_deprecated_tables: bool,
+            ) -> Self {
+                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, false, metric_conf, global_db_options_override, tables_db_options_override, remove_deprecated_tables);
                 Self {
                     #(
                         #field_names: #post_process_fn(inner.#field_names),
@@ -500,7 +540,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 global_db_options_override: Option<rocksdb::Options>,
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
             ) -> Self {
-                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, true, metric_conf, global_db_options_override, tables_db_options_override);
+                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, true, metric_conf, global_db_options_override, tables_db_options_override, false);
                 Self {
                     #(
                         #field_names: #post_process_fn(inner.#field_names),
@@ -549,12 +589,12 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 global_db_options_override: Option<rocksdb::Options>,
             ) -> Self {
                 let inner = match with_secondary_path {
-                    Some(q) => #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(q), false, metric_conf, global_db_options_override, None),
+                    Some(q) => #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(q), false, metric_conf, global_db_options_override, None, false),
                     None => {
                         let p: std::path::PathBuf = tempfile::tempdir()
                         .expect("Failed to open temporary directory")
                         .into_path();
-                        #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(p), false, metric_conf, global_db_options_override, None)
+                        #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(p), false, metric_conf, global_db_options_override, None, false)
                     }
                 };
                 Self {
@@ -696,8 +736,13 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
 
     // TODO: use `parse_quote` over `parse()`
     // TODO: Eventually this should return a Vec<Vec<GeneralTableOptions>> to capture default table options for each column type i.e. RockDB, TestDB, etc
-    let (field_names, _path_names, inner_types, derived_table_options, simple_field_type_name_str) =
-        extract_struct_info(input.clone(), allowed_strs);
+    let ExtractedStructInfo {
+        field_names,
+        inner_types,
+        derived_table_options,
+        simple_field_type_name_str,
+        ..
+    } = extract_struct_info(input.clone(), allowed_strs);
 
     let (key_names, value_names): (Vec<_>, Vec<_>) = inner_types
         .iter()
