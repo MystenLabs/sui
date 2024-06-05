@@ -179,7 +179,7 @@ export class MultiSigPublicKey extends PublicKey {
 		return this.multisigPublicKey.threshold;
 	}
 
-	getSigner(...signers: [signer: Signer]) {
+	getSigner(...signers: Signer[]) {
 		return new MultiSigSigner(this, signers);
 	}
 
