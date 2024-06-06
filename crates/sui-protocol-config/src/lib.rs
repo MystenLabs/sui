@@ -136,6 +136,7 @@ const MAX_PROTOCOL_VERSION: u64 = 49;
 //             Use new VM when verifying framework packages.
 // Version 49: Enable Move enums on devnet.
 //             Enable VDF in devnet
+//             Enable consensus commit prologue V3 in devnet.
 //             Run Mysticeti consensus by default.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
