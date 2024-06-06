@@ -25,8 +25,7 @@ module sui::poseidon {
         let (mut i, mut b, l) = (0, vector[], data.length());
         assert!(l > 0, EEmptyInput);
         while (i < l) {
-            let field_element = &data[i];
-            assert!(*field_element < BN254_MAX, ENonCanonicalInput);
+            let field_element = &data[i] % BN254_MAX;
             b.push_back(bcs::to_bytes(&data[i]));
             i = i + 1;
         };
