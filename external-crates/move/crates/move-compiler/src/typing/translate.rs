@@ -4590,7 +4590,7 @@ fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T:
                 .attributes
                 .contains_key_(&TestingAttribute::RandTest.into())
         {
-            // functions with #[test] attribute are implicitly used
+            // functions with #[test] or R[random_test] attribute are implicitly used
             continue;
         }
         if is_sui_mode && *name == sui_mode::INIT_FUNCTION_NAME {

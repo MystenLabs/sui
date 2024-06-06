@@ -61,7 +61,7 @@ impl FilterContext for Context<'_> {
     }
 
     // A module member should be removed if:
-    // * It is annotated as a test function (test_only, test, rand_test, abort) and test mode is not set; or
+    // * It is annotated as a test function (test_only, test, random_test, abort) and test mode is not set; or
     // * If it is a library and is annotated as #[test]
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
         use known_attributes::TestingAttribute;

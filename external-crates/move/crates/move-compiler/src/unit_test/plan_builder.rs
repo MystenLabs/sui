@@ -132,11 +132,11 @@ fn build_test_info<'func>(
     const IN_THIS_TEST_MSG: &str = "Error found in this test";
 
     let test_attribute_opt = get_attrs(TestingAttribute::Test);
-    let rand_test_attribute_opt = get_attrs(TestingAttribute::RandTest);
+    let random_test_attribute_opt = get_attrs(TestingAttribute::RandTest);
     let abort_attribute_opt = get_attrs(TestingAttribute::ExpectedFailure);
     let test_only_attribute_opt = get_attrs(TestingAttribute::TestOnly);
 
-    let (test_attribute, is_rand_test) = match (test_attribute_opt, rand_test_attribute_opt) {
+    let (test_attribute, is_random_test) = match (test_attribute_opt, random_test_attribute_opt) {
         (None, None) => {
             // expected failures cannot be annotated on non-#[test] functions
             if let Some(abort_attribute) = abort_attribute_opt {
@@ -151,12 +151,12 @@ fn build_test_info<'func>(
             }
             return None;
         }
-        (Some(test_attribute), Some(rand_test_attribute)) => {
-            let msg = "Function annotated as both #[test] and #[rand_test]. You need to declare \
+        (Some(test_attribute), Some(random_test_attribute)) => {
+            let msg = "Function annotated as both #[test] and #[random_test]. You need to declare \
                        it as either one or the other";
             context.env.add_diag(diag!(
                 Attributes::InvalidUsage,
-                (rand_test_attribute.loc, msg),
+                (random_test_attribute.loc, msg),
                 (test_attribute.loc, PREVIOUSLY_ANNOTATED_MSG),
                 (fn_loc, IN_THIS_TEST_MSG),
             ));
@@ -168,7 +168,7 @@ fn build_test_info<'func>(
 
     // A #[test] function cannot also be annotated #[test_only]
     if let Some(test_only_attribute) = test_only_attribute_opt {
-        let msg = "Function annotated as both #[test(...)] and #[test_only]. You need to declare \
+        let msg = "Function annotated as both #[test] and #[test_only]. You need to declare \
                    it as either one or the other";
         context.env.add_diag(diag!(
             Attributes::InvalidUsage,
@@ -178,7 +178,7 @@ fn build_test_info<'func>(
         ))
     }
 
-    let test_annotation_params = parse_test_attribute(context, test_attribute, is_rand_test, 0);
+    let test_annotation_params = parse_test_attribute(context, test_attribute, 0);
     let mut arguments = Vec::new();
     for (_mut, var, s_type) in &function.signature.parameters {
         let sp!(vloc, var_) = var.0;
@@ -189,16 +189,23 @@ fn build_test_info<'func>(
         };
         match test_annotation_params.get(&var_) {
             Some(value) => arguments.push(TestArgument::Value(value.clone())),
-            None if is_rand_test => {
+            None if is_random_test => {
                 let generated_type = match convert_builtin_type_to_typetag(&s_type.value) {
                     Some(generated_type) => generated_type,
                     None => {
-                        let msg = "Unsupported type for generated input for test. Only built-in types are supported for generated test inputs";
-                        context.env.add_diag(diag!(
+                        let msg =
+                            "Unsupported type for generated input for test. Only built-in types \
+                            are supported for generated test inputs";
+                        let mut diag = diag!(
                             Attributes::InvalidTest,
                             (s_type.loc, msg),
                             (fn_loc, IN_THIS_TEST_MSG),
-                        ));
+                        );
+                        diag.add_note(
+                            "Supported builti-in types are: bool, u8, u16, u32, u64, \
+                            u128, u256, address, and vector<T> where T is a built-in type",
+                        );
+                        context.env.add_diag(diag);
                         return None;
                     }
                 };
@@ -217,9 +224,9 @@ fn build_test_info<'func>(
         }
     }
 
-    if is_rand_test && arguments.is_empty() {
-        let msg = "No parameters to generate for random test. A #[rand_test] function must have \
-                   at least one parameter to generate.";
+    if is_random_test && arguments.is_empty() {
+        let msg = "No parameters to generate for random test. A #[random_test] function must \
+                   have at least one parameter to generate.";
         context.env.add_diag(diag!(
             Attributes::InvalidTest,
             (test_attribute.loc, msg),
@@ -247,15 +254,14 @@ fn build_test_info<'func>(
 fn parse_test_attribute(
     context: &mut Context,
     sp!(aloc, test_attribute): &E::Attribute,
-    is_rand_test: bool,
     depth: usize,
 ) -> BTreeMap<Symbol, MoveValue> {
     use E::Attribute_ as EA;
 
     let check_attribute_name = |name: &str| {
-        let is_test = name == TestingAttribute::Test.name() && !is_rand_test;
-        let is_rand_test = name == TestingAttribute::RandTest.name() && is_rand_test;
-        depth == 0 && (is_test || is_rand_test)
+        let is_test = name == TestingAttribute::Test.name();
+        let is_random_test = name == TestingAttribute::RandTest.name();
+        depth == 0 && (is_test || is_random_test)
     };
 
     match test_attribute {
@@ -305,9 +311,7 @@ fn parse_test_attribute(
             );
             attributes
                 .iter()
-                .flat_map(|(_, _, attr)| {
-                    parse_test_attribute(context, attr, is_rand_test, depth + 1)
-                })
+                .flat_map(|(_, _, attr)| parse_test_attribute(context, attr, depth + 1))
                 .collect()
         }
     }

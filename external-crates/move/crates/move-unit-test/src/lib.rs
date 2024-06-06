@@ -9,6 +9,7 @@ pub mod test_runner;
 
 use crate::test_runner::TestRunner;
 use clap::*;
+use colored::Colorize;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     self,
@@ -97,14 +98,14 @@ pub struct UnitTestingConfig {
     pub verbose: bool,
 
     /// Number of iterations to run each test if arguments are being generated
-    #[clap(long = "iters", default_value = "10")]
-    pub iters: u64,
+    #[clap(long = "rand-num-iters", default_value = "10")]
+    pub rand_num_iters: u64,
 
     /// Seed to use for generating arguments
     #[clap(long = "seed")]
     pub seed: Option<u64>,
 
-    // Deterministically generate the same arguments for #[rand_test]s between test runs.
+    // Deterministically generate the same arguments for #[random_test]s between test runs.
     // WARNING: You should only use this flag for debugging and meta-testing purposes!
     #[clap(skip)]
     pub deterministic_generation: bool,
@@ -132,7 +133,7 @@ impl UnitTestingConfig {
             verbose: false,
             list: false,
             named_address_values: vec![],
-            iters: 10,
+            rand_num_iters: 10,
             seed: None,
             deterministic_generation: false,
         }
@@ -200,6 +201,17 @@ impl UnitTestingConfig {
     ) -> Result<(W, bool)> {
         let shared_writer = Mutex::new(writer);
 
+        if self.rand_num_iters == 0 {
+            writeln!(
+                shared_writer.lock().unwrap(),
+                "{}",
+                "WARNING: 'rand-num-iters' set to zero -- \
+                this means that no '#[random_test]'s will be run."
+                    .yellow()
+                    .bold()
+            )?;
+        }
+
         if self.list {
             for (module_id, test_plan) in &test_plan.module_tests {
                 for test_name in test_plan.tests.keys() {
@@ -220,7 +232,7 @@ impl UnitTestingConfig {
             self.num_threads,
             self.report_stacktrace_on_abort,
             self.seed,
-            self.iters,
+            self.rand_num_iters,
             self.deterministic_generation,
             test_plan,
             native_function_table,

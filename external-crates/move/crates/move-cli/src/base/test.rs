@@ -71,9 +71,9 @@ pub struct Test {
     #[clap(name = "seed", long = "seed")]
     pub seed: Option<u64>,
 
-    /// The number of iterations to run each test that uses generated values.
-    #[clap(name = "num-iters", long = "num-iters", default_value = "10")]
-    pub num_iters: u64,
+    /// The number of iterations to run each test that uses generated values (only used #[random_test]).
+    #[clap(name = "rand-num-iters", long = "rand-num-iters", default_value = "10")]
+    pub rand_num_iters: u64,
 }
 
 impl Test {
@@ -113,7 +113,7 @@ impl Test {
             verbose_mode,
             compute_coverage: _,
             seed,
-            num_iters,
+            rand_num_iters,
         } = self;
         UnitTestingConfig {
             gas_limit,
@@ -123,7 +123,7 @@ impl Test {
             report_statistics,
             verbose: verbose_mode,
             seed,
-            iters: num_iters,
+            rand_num_iters,
             ..UnitTestingConfig::default_with_bound(None)
         }
     }

@@ -380,11 +380,10 @@ fn calculate_run_statistics<'a, I: IntoIterator<Item = &'a TestRunInfo>>(
 ) -> (Duration, u64) {
     test_results.into_iter().fold(
         (Duration::new(0, 0), 0),
-        |(acc_time, acc_instrs), test_run_info| {
-            (
-                acc_time + test_run_info.elapsed_time,
-                acc_instrs + test_run_info.instructions_executed,
-            )
+        |(mut acc_time, mut acc_instrs), test_run_info| {
+            acc_time += test_run_info.elapsed_time;
+            acc_instrs += test_run_info.instructions_executed;
+            (acc_time, acc_instrs)
         },
     )
 }
@@ -451,7 +450,7 @@ impl TestResults {
             for (function_name, test_failure) in test_failures {
                 let qualified_function_name =
                     format!("{}::{}", format_module_id(module_id), function_name);
-                // If the test is a #[rand_test] some of the tests may have passed, and others
+                // If the test is a #[random_test] some of the tests may have passed, and others
                 // failed. We want to mark the any results in the statistics where there is both
                 // successful and failed runs as "failure run" to indicate that these stats are for
                 // the case where the test failed.
@@ -564,7 +563,7 @@ impl TestResults {
                             "│ {}",
                             format!(
                                 "This test uses randomly generated inputs. Rerun with `{}` to recreate this test failure.\n",
-                                format!(".. move test {} --seed {}", 
+                                format!("test {} --seed {}", 
                                     test_name,
                                     seed
                                 ).bright_red().bold()

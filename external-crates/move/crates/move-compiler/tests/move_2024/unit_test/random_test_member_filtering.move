@@ -1,5 +1,5 @@
 module 0x1::f {
-    #[rand_test]
+    #[random_test]
     public fun f(_: u64) { }
 }
 

@@ -135,7 +135,7 @@ impl KnownAttribute {
 
 impl TestingAttribute {
     pub const TEST: &'static str = "test";
-    pub const RAND_TEST: &'static str = "rand_test";
+    pub const RAND_TEST: &'static str = "random_test";
     pub const EXPECTED_FAILURE: &'static str = "expected_failure";
     pub const TEST_ONLY: &'static str = "test_only";
     pub const ABORT_CODE_NAME: &'static str = "abort_code";
