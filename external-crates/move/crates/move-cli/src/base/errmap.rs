@@ -4,7 +4,7 @@
 use super::reroot_path;
 use clap::*;
 use move_package::{BuildConfig, ModelConfig};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Generate error map for the package and its dependencies at `path` for use by the Move
 /// explanation tool.
@@ -21,7 +21,7 @@ pub struct Errmap {
 }
 
 impl Errmap {
-    pub fn execute(self, path: Option<PathBuf>, config: BuildConfig) -> anyhow::Result<()> {
+    pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
         let Self {
             error_prefix,

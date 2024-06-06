@@ -159,7 +159,7 @@ impl BuildConfig {
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
         build_from_resolution_graph(
-            path.clone(),
+            path,
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
@@ -259,7 +259,7 @@ pub fn build_from_resolution_graph(
         package,
         published_at,
         dependency_ids,
-        path,
+        path: path.to_owned(),
     })
 }
 

@@ -17,11 +17,8 @@ fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let mut pathbuf = path.to_path_buf();
     pathbuf.pop();
     pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(pathbuf);
-    let mut base_path = pathbuf.clone();
-    let mut upgraded_path = pathbuf.clone();
-
-    base_path.push("base");
-    upgraded_path.push("upgraded");
+    let base_path = pathbuf.join("base");
+    let upgraded_path = pathbuf.join("upgraded");
 
     let base = compile(base_path)?;
     let base_normalized = normalize(&base);
