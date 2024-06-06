@@ -131,6 +131,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) committed_leaders_total: IntCounterVec,
     pub(crate) last_committed_authority_round: IntGaugeVec,
     pub(crate) last_committed_leader_round: IntGauge,
+    pub(crate) last_commit_index: IntGauge,
     pub(crate) commit_round_advancement_interval: Histogram,
     pub(crate) last_decided_leader_round: IntGauge,
     pub(crate) leader_timeout_total: IntCounterVec,
@@ -344,6 +345,11 @@ impl NodeMetrics {
             last_committed_leader_round: register_int_gauge_with_registry!(
                 "last_committed_leader_round",
                 "The last round where a leader was committed to store and sent to commit consumer.",
+                registry,
+            ).unwrap(),
+            last_commit_index: register_int_gauge_with_registry!(
+                "last_commit_index",
+                "Index of the last commit.",
                 registry,
             ).unwrap(),
             commit_round_advancement_interval: register_histogram_with_registry!(
