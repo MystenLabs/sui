@@ -405,11 +405,15 @@ pub trait TypingVisitorContext {
         match uexp {
             E::ModuleCall(c) => {
                 if Self::VISIT_TYPES {
-                    c.type_arguments.iter_mut().for_each(|ty| self.visit_type(ty));
-                    c.parameter_types.iter_mut().for_each(|ty| self.visit_type(ty));
+                    c.type_arguments
+                        .iter_mut()
+                        .for_each(|ty| self.visit_type(ty));
+                    c.parameter_types
+                        .iter_mut()
+                        .for_each(|ty| self.visit_type(ty));
                 }
                 self.visit_exp(&mut c.arguments)
-            },
+            }
             E::Builtin(bf, e) => {
                 // visit the argument first to better match control flow
                 self.visit_exp(e);

@@ -188,7 +188,7 @@ pub enum GovernanceClientCommands {
         implementation_address: EthAddress,
         /// Function selector with params types, e.g. `foo(uint256,bool,string)`
         #[clap(name = "function-selector", long)]
-        function_selector: String,
+        function_selector: Option<String>,
         /// Params to be passed to the function, e.g. `420,false,hello`
         #[clap(name = "params", use_value_delimiter = true, long)]
         params: Vec<String>,
@@ -281,13 +281,19 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
             implementation_address,
             function_selector,
             params,
-        } => BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
-            nonce: *nonce,
-            chain_id,
-            proxy_address: *proxy_address,
-            new_impl_address: *implementation_address,
-            call_data: encode_call_data(function_selector, params),
-        }),
+        } => {
+            let call_data = match function_selector {
+                Some(function_selector) => encode_call_data(function_selector, params),
+                None => vec![],
+            };
+            BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+                nonce: *nonce,
+                chain_id,
+                proxy_address: *proxy_address,
+                new_impl_address: *implementation_address,
+                call_data,
+            })
+        }
     }
 }
 
@@ -498,7 +504,7 @@ pub enum BridgeClientCommands {
     #[clap(name = "deposit-native-ether-on-eth")]
     DepositNativeEtherOnEth {
         #[clap(long)]
-        ether_amount: u64,
+        ether_amount: f64,
         #[clap(long)]
         target_chain: u8,
         #[clap(long)]
@@ -538,7 +544,12 @@ impl BridgeClientCommands {
                     config.eth_bridge_proxy_address,
                     Arc::new(config.eth_signer().clone()),
                 );
-                let amount = U256::from(ether_amount) * U256::exp10(18);
+                // Note: even with f64 there may still be loss of precision even there are a lot of 0s
+                let int_part = ether_amount.trunc() as u64;
+                let frac_part = ether_amount.fract();
+                let int_wei = U256::from(int_part) * U256::exp10(18);
+                let frac_wei = U256::from((frac_part * 1_000_000_000_000_000_000f64) as u64);
+                let amount = int_wei + frac_wei;
                 let eth_tx = eth_sui_bridge
                     .bridge_eth(sui_recipient_address.to_vec().into(), target_chain)
                     .value(amount);
