@@ -2421,9 +2421,9 @@ pub fn default_db_options() -> DBOptions {
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
 
-    // Use 512 GB soft limit and 1 TB hard limit for pending compaction bytes.
-    opt.set_soft_pending_compaction_bytes_limit(512 << 30);
-    opt.set_hard_pending_compaction_bytes_limit(1024 << 30);
+    // Disable write stall and stop based on pending compaction bytes.
+    opt.set_soft_pending_compaction_bytes_limit(0);
+    opt.set_hard_pending_compaction_bytes_limit(0);
 
     opt.increase_parallelism(4);
     opt.set_enable_pipelined_write(true);
