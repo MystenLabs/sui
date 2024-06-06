@@ -247,6 +247,7 @@ impl OnDiskCompiledPackage {
             name: module_name,
             module,
             source_map,
+            address_name: None,
         };
         Ok(CompiledUnitWithSource { unit, source_path })
     }

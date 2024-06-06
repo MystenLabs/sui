@@ -802,6 +802,7 @@ fn decode_bytecode_file(
         name: module_name,
         module,
         source_map,
+        address_name: None,
     };
     Ok(CompiledUnitWithSource {
         unit,
