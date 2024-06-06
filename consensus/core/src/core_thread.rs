@@ -4,7 +4,10 @@
 use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
-use mysten_metrics::{metered_channel, monitored_scope, spawn_logged_monitored_task};
+use mysten_metrics::{
+    metered_channel::{self, WeakSender},
+    monitored_scope, spawn_logged_monitored_task,
+};
 use thiserror::Error;
 use tokio::sync::{oneshot, oneshot::error::RecvError};
 use tracing::warn;
@@ -28,6 +31,10 @@ enum CoreThreadCommand {
     NewBlock(Round, oneshot::Sender<()>, bool),
     /// Request missing blocks that need to be synced.
     GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
+    /// Informs the core whether consumer of produced blocks exists.
+    /// This is only used by core to decide if it should propose new blocks.
+    /// It is not a guarantee that produced blocks will be accepted by peers.
+    SetConsumerAvailability(bool),
 }
 
 #[derive(Error, Debug)]
@@ -46,6 +53,8 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError>;
 
     async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
+
+    async fn set_consumer_availability(&self, available: bool) -> Result<(), CoreError>;
 }
 
 pub(crate) struct CoreThreadHandle {
@@ -86,6 +95,9 @@ impl CoreThread {
                 CoreThreadCommand::GetMissing(sender) => {
                     sender.send(self.core.get_missing_blocks()).ok();
                 }
+                CoreThreadCommand::SetConsumerAvailability(available) => {
+                    self.core.set_consumer_availability(available);
+                }
             }
         }
 
@@ -95,8 +107,8 @@ impl CoreThread {
 
 #[derive(Clone)]
 pub(crate) struct ChannelCoreThreadDispatcher {
-    sender: metered_channel::WeakSender<CoreThreadCommand>,
     context: Arc<Context>,
+    sender: WeakSender<CoreThreadCommand>,
 }
 
 impl ChannelCoreThreadDispatcher {
@@ -126,8 +138,8 @@ impl ChannelCoreThreadDispatcher {
         // Explicitly using downgraded sender in order to allow sharing the CoreThreadDispatcher but
         // able to shutdown the CoreThread by dropping the original sender.
         let dispatcher = ChannelCoreThreadDispatcher {
-            sender: sender.downgrade(),
             context,
+            sender: sender.downgrade(),
         };
         let handle = CoreThreadHandle {
             join_handle,
@@ -172,6 +184,12 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::GetMissing(sender)).await;
         receiver.await.map_err(Shutdown)
+    }
+
+    async fn set_consumer_availability(&self, allow: bool) -> Result<(), CoreError> {
+        self.send(CoreThreadCommand::SetConsumerAvailability(allow))
+            .await;
+        Ok(())
     }
 }
 
@@ -231,6 +249,7 @@ mod test {
             leader_schedule,
             transaction_consumer,
             block_manager,
+            true,
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,

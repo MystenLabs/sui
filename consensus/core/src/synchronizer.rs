@@ -851,6 +851,10 @@ mod tests {
             lock.clear();
             Ok(result)
         }
+
+        async fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+            todo!()
+        }
     }
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);

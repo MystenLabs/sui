@@ -1,7 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{pin::Pin, sync::Arc, time::Duration};
+use std::{
+    pin::Pin,
+    sync::{
+        atomic::{AtomicI32, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -37,6 +44,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
     rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
+    subscription_counter: Arc<AtomicI32>,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
 }
@@ -59,6 +67,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             synchronizer,
             core_dispatcher,
             rx_block_broadcaster,
+            subscription_counter: Arc::new(AtomicI32::new(0)),
             dag_state,
             store,
         }
@@ -228,6 +237,18 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     ) -> ConsensusResult<BlockStream> {
         fail_point_async!("consensus-rpc-response");
 
+        let prev_subscriptions = self.subscription_counter.fetch_add(1, Ordering::Relaxed);
+        if prev_subscriptions == 0 {
+            self.core_dispatcher
+                .set_consumer_availability(true)
+                .await
+                .map_err(|_| ConsensusError::Shutdown)?;
+            self.core_dispatcher
+                .new_block(Round::MAX, true)
+                .await
+                .map_err(|_| ConsensusError::Shutdown)?;
+        }
+
         let dag_state = self.dag_state.read();
         // Find recent own blocks that have not been received by the peer.
         // If last_received is a valid and more blocks have been proposed since then, this call is
@@ -242,6 +263,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             self.context.clone(),
             peer,
             self.rx_block_broadcaster.resubscribe(),
+            self.subscription_counter.clone(),
         );
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
@@ -370,10 +392,17 @@ pub(crate) struct BroadcastStream<T> {
             broadcast::Receiver<T>,
         ),
     >,
+    // Counts total subscriptions / active BroadcastStreams.
+    subscription_counter: Arc<AtomicI32>,
 }
 
 impl<T: 'static + Clone + Send> BroadcastStream<T> {
-    pub fn new(context: Arc<Context>, peer: AuthorityIndex, rx: broadcast::Receiver<T>) -> Self {
+    pub fn new(
+        context: Arc<Context>,
+        peer: AuthorityIndex,
+        rx: broadcast::Receiver<T>,
+        subscription_counter: Arc<AtomicI32>,
+    ) -> Self {
         let peer_hostname = &context.committee.authority(peer).hostname;
         context
             .metrics
@@ -385,6 +414,7 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
             context,
             peer,
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
+            subscription_counter,
         }
     }
 }
@@ -429,6 +459,8 @@ impl<T> Drop for BroadcastStream<T> {
             .subscribed_peers
             .with_label_values(&[peer_hostname])
             .set(0);
+        // TODO: figure out a way to notify Core when the counter drops to 0.
+        self.subscription_counter.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
