@@ -12,7 +12,7 @@ use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{
     collections::BTreeMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
 use sui_move_build::decorate_warnings;
@@ -42,7 +42,7 @@ pub struct Test {
 impl Test {
     pub fn execute(
         self,
-        path: Option<PathBuf>,
+        path: Option<&Path>,
         build_config: BuildConfig,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;

@@ -2775,7 +2775,7 @@ mod tests {
     /// Build an in-memory package cache from locally compiled packages.  Assumes that all packages
     /// in `packages` are published (all modules have a non-zero package address and all packages
     /// have a 'published-at' address), and their transitive dependencies are also in `packages`.
-    fn package_cache(
+    fn package_cache<'a>(
         packages: impl IntoIterator<Item = (u64, CompiledPackage, TypeOriginTable)>,
     ) -> (
         Arc<RwLock<InnerStore>>,

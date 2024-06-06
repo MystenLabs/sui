@@ -16,14 +16,7 @@ use move_coverage::coverage_map::{output_map_to_file, CoverageMap};
 use move_package::{compilation::build_plan::BuildPlan, BuildConfig};
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::CostTable;
-use std::{
-    collections::HashMap,
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-    process::ExitStatus,
-    sync::Arc,
-};
+use std::{collections::HashMap, fs, io::Write, path::Path, process::ExitStatus, sync::Arc};
 // if windows
 #[cfg(target_family = "windows")]
 use std::os::windows::process::ExitStatusExt;
@@ -71,7 +64,7 @@ pub struct Test {
 impl Test {
     pub fn execute(
         self,
-        path: Option<PathBuf>,
+        path: Option<&Path>,
         config: BuildConfig,
         natives: Vec<NativeFunctionRecord>,
         cost_table: Option<CostTable>,
