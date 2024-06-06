@@ -9,7 +9,7 @@ use move_binary_format::errors::{ExecutionState, Location, VMError};
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     diagnostics::{self, Diagnostic, Diagnostics},
-    unit_test::{ModuleTestPlan, MoveErrorType, TestName, TestPlan},
+    unit_test::{ModuleTestPlan, MoveErrorType, TestPlan},
 };
 use move_core_types::{language_storage::ModuleId, vm_status::StatusType};
 use move_ir_types::location::Loc;
@@ -44,20 +44,21 @@ pub struct TestFailure {
     pub test_run_info: TestRunInfo,
     pub vm_error: Option<VMError>,
     pub failure_reason: FailureReason,
+    pub prng_seed: Option<u64>,
 }
 
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct TestRunInfo {
-    pub function_ident: String,
     pub elapsed_time: Duration,
     pub instructions_executed: u64,
 }
 
+type TestRuns<T> = BTreeMap<String, Vec<T>>;
+
 #[derive(Debug, Clone)]
 pub struct TestStatistics {
-    passed: BTreeMap<ModuleId, BTreeSet<TestRunInfo>>,
-    failed: BTreeMap<ModuleId, BTreeSet<TestFailure>>,
-    output: BTreeMap<ModuleId, BTreeMap<TestName, String>>,
+    passed: BTreeMap<ModuleId, TestRuns<TestRunInfo>>,
+    failed: BTreeMap<ModuleId, TestRuns<TestFailure>>,
 }
 
 #[derive(Debug, Clone)]
@@ -67,9 +68,8 @@ pub struct TestResults {
 }
 
 impl TestRunInfo {
-    pub fn new(function_ident: String, elapsed_time: Duration, instructions_executed: u64) -> Self {
+    pub fn new(elapsed_time: Duration, instructions_executed: u64) -> Self {
         Self {
-            function_ident,
             elapsed_time,
             instructions_executed,
         }
@@ -115,11 +115,13 @@ impl TestFailure {
         failure_reason: FailureReason,
         test_run_info: TestRunInfo,
         vm_error: Option<VMError>,
+        prng_seed: Option<u64>,
     ) -> Self {
         Self {
             test_run_info,
             vm_error,
             failure_reason,
+            prng_seed,
         }
     }
 
@@ -322,46 +324,68 @@ impl TestStatistics {
         Self {
             passed: BTreeMap::new(),
             failed: BTreeMap::new(),
-            output: BTreeMap::new(),
         }
     }
 
-    pub fn test_failure(&mut self, test_failure: TestFailure, test_plan: &ModuleTestPlan) {
+    pub fn test_failure(
+        &mut self,
+        test_name: String,
+        test_failure: TestFailure,
+        test_plan: &ModuleTestPlan,
+    ) -> bool {
         self.failed
             .entry(test_plan.module_id.clone())
             .or_default()
-            .insert(test_failure);
+            .entry(test_name)
+            .or_default()
+            .push(test_failure);
+        false
     }
 
-    pub fn test_success(&mut self, test_info: TestRunInfo, test_plan: &ModuleTestPlan) {
+    pub fn test_success(
+        &mut self,
+        test_name: String,
+        test_info: TestRunInfo,
+        test_plan: &ModuleTestPlan,
+    ) -> bool {
         self.passed
             .entry(test_plan.module_id.clone())
             .or_default()
-            .insert(test_info);
-    }
-
-    pub fn test_output(&mut self, test_name: TestName, test_plan: &ModuleTestPlan, output: String) {
-        self.output
-            .entry(test_plan.module_id.clone())
+            .entry(test_name)
             .or_default()
-            .insert(test_name, output);
+            .push(test_info);
+        true
     }
 
     pub fn combine(mut self, other: Self) -> Self {
         for (module_id, test_result) in other.passed {
             let entry = self.passed.entry(module_id).or_default();
-            entry.extend(test_result.into_iter());
+            for (function_ident, test_run_info) in test_result {
+                entry
+                    .entry(function_ident)
+                    .or_default()
+                    .extend(test_run_info);
+            }
         }
         for (module_id, test_result) in other.failed {
             let entry = self.failed.entry(module_id).or_default();
             entry.extend(test_result.into_iter());
         }
-        for (module_id, test_output) in other.output {
-            let entry = self.output.entry(module_id).or_default();
-            entry.extend(test_output.into_iter());
-        }
         self
     }
+}
+
+fn calculate_run_statistics<'a, I: IntoIterator<Item = &'a TestRunInfo>>(
+    test_results: I,
+) -> (Duration, u64) {
+    test_results.into_iter().fold(
+        (Duration::new(0, 0), 0),
+        |(mut acc_time, mut acc_instrs), test_run_info| {
+            acc_time += test_run_info.elapsed_time;
+            acc_instrs += test_run_info.instructions_executed;
+            (acc_time, acc_instrs)
+        },
+    )
 }
 
 impl TestResults {
@@ -370,21 +394,6 @@ impl TestResults {
             final_statistics,
             test_plan,
         }
-    }
-
-    pub fn report_goldens<W: Write>(&self, writer: &Mutex<W>) -> Result<()> {
-        for (module_name, test_outputs) in self.final_statistics.output.iter() {
-            for (test_name, write_set) in test_outputs.iter() {
-                writeln!(
-                    writer.lock().unwrap(),
-                    "{}::{}",
-                    format_module_id(module_name),
-                    test_name
-                )?;
-                writeln!(writer.lock().unwrap(), "Output: {}", write_set)?;
-            }
-        }
-        Ok(())
     }
 
     pub fn report_statistics<W: Write>(
@@ -396,18 +405,16 @@ impl TestResults {
             if report_type == "csv" {
                 writeln!(writer.lock().unwrap(), "name,nanos,gas")?;
                 for (module_id, test_results) in self.final_statistics.passed.iter() {
-                    for test_result in test_results {
-                        let qualified_function_name = format!(
-                            "{}::{}",
-                            format_module_id(module_id),
-                            test_result.function_ident
-                        );
+                    for (function_name, test_results) in test_results {
+                        let qualified_function_name =
+                            format!("{}::{}", format_module_id(module_id), function_name,);
+                        let (time, instrs_executed) = calculate_run_statistics(test_results);
                         writeln!(
                             writer.lock().unwrap(),
                             "{},{},{}",
                             qualified_function_name,
-                            test_result.elapsed_time.as_nanos(),
-                            test_result.instructions_executed
+                            time.as_nanos(),
+                            instrs_executed,
                         )?;
                     }
                 }
@@ -425,37 +432,40 @@ impl TestResults {
         let mut max_function_name_size = 0;
         let mut stats = Vec::new();
 
+        let mut passed_fns = BTreeSet::new();
+
         for (module_id, test_results) in self.final_statistics.passed.iter() {
-            for test_result in test_results {
-                let qualified_function_name = format!(
-                    "{}::{}",
-                    format_module_id(module_id),
-                    test_result.function_ident
-                );
+            for (function_name, test_results) in test_results {
+                let qualified_function_name =
+                    format!("{}::{}", format_module_id(module_id), function_name,);
+                passed_fns.insert(qualified_function_name.clone());
                 max_function_name_size =
                     std::cmp::max(max_function_name_size, qualified_function_name.len());
-                stats.push((
-                    qualified_function_name,
-                    test_result.elapsed_time.as_secs_f32(),
-                    test_result.instructions_executed,
-                ))
+                let (time, instrs_executed) = calculate_run_statistics(test_results);
+                stats.push((qualified_function_name, time.as_secs_f32(), instrs_executed))
             }
         }
 
         for (module_id, test_failures) in self.final_statistics.failed.iter() {
-            for test_failure in test_failures {
-                let qualified_function_name = format!(
-                    "{}::{}",
-                    format_module_id(module_id),
-                    test_failure.test_run_info.function_ident
-                );
+            for (function_name, test_failure) in test_failures {
+                let qualified_function_name =
+                    format!("{}::{}", format_module_id(module_id), function_name);
+                // If the test is a #[random_test] some of the tests may have passed, and others
+                // failed. We want to mark the any results in the statistics where there is both
+                // successful and failed runs as "failure run" to indicate that these stats are for
+                // the case where the test failed.
+                let also_passed_modifier = if passed_fns.contains(&qualified_function_name) {
+                    " (failure)"
+                } else {
+                    ""
+                };
+                let qualified_function_name =
+                    format!("{qualified_function_name}{also_passed_modifier}");
                 max_function_name_size =
                     std::cmp::max(max_function_name_size, qualified_function_name.len());
-                stats.push((
-                    qualified_function_name,
-                    test_failure.test_run_info.elapsed_time.as_secs_f32(),
-                    test_failure.test_run_info.instructions_executed,
-                ));
+                let (time, instrs_executed) =
+                    calculate_run_statistics(test_failure.iter().map(|f| &f.test_run_info));
+                stats.push((qualified_function_name, time.as_secs_f32(), instrs_executed));
             }
         }
 
@@ -529,20 +539,39 @@ impl TestResults {
                     "Failures in {}:",
                     format_module_id(module_id)
                 )?;
-                for test_failure in test_failures {
-                    writeln!(
-                        writer.lock().unwrap(),
-                        "\n┌── {} ──────",
-                        test_failure.test_run_info.function_ident.bold()
-                    )?;
-                    writeln!(
-                        writer.lock().unwrap(),
-                        "│ {}",
-                        test_failure
-                            .render_error(&self.test_plan)
-                            .replace('\n', "\n│ ")
-                    )?;
-                    writeln!(writer.lock().unwrap(), "└──────────────────\n")?;
+                for (test_name, test_failures) in test_failures {
+                    for test_failure in test_failures {
+                        writeln!(
+                            writer.lock().unwrap(),
+                            "\n┌── {} ──────{}",
+                            test_name.bold(),
+                            if let Some(seed) = test_failure.prng_seed {
+                                format!(" (seed = {seed})").red().bold().to_string()
+                            } else {
+                                "".to_string()
+                            }
+                        )?;
+                        writeln!(
+                            writer.lock().unwrap(),
+                            "│ {}",
+                            test_failure
+                                .render_error(&self.test_plan)
+                                .replace('\n', "\n│ ")
+                        )?;
+                        if let Some(seed) = test_failure.prng_seed {
+                            writeln!(writer.lock().unwrap(),
+                            "│ {}",
+                            format!(
+                                "This test uses randomly generated inputs. Rerun with `{}` to recreate this test failure.\n",
+                                format!("test {} --seed {}", 
+                                    test_name,
+                                    seed
+                                ).bright_red().bold()
+                            ).replace('\n', "\n│ ")
+                        )?;
+                        }
+                        writeln!(writer.lock().unwrap(), "└──────────────────\n")?;
+                    }
                 }
             }
         }

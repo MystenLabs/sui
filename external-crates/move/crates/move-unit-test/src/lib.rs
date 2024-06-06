@@ -8,6 +8,7 @@ pub mod test_reporter;
 pub mod test_runner;
 
 use crate::test_runner::TestRunner;
+use anyhow::{bail, Result};
 use clap::*;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
@@ -20,15 +21,13 @@ use move_compiler::{
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use move_vm_test_utils::gas_schedule::CostTable;
-use std::{
-    collections::BTreeMap,
-    io::{Result, Write},
-    marker::Send,
-    sync::Mutex,
-};
+use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex};
 
 /// The default value bounding the amount of gas consumed in a test.
 const DEFAULT_EXECUTION_BOUND: u64 = 1_000_000;
+
+/// The default number of iterations to run each random test for.
+const DEFAULT_RAND_ITERS: u64 = 10;
 
 #[derive(Debug, Parser, Clone)]
 #[clap(author, version, about)]
@@ -95,6 +94,19 @@ pub struct UnitTestingConfig {
     /// Verbose mode
     #[clap(short = 'v', long = "verbose")]
     pub verbose: bool,
+
+    /// Number of iterations to run each test if arguments are being generated
+    #[clap(long = "rand-num-iters")]
+    pub rand_num_iters: Option<u64>,
+
+    /// Seed to use for generating arguments
+    #[clap(long = "seed")]
+    pub seed: Option<u64>,
+
+    // Deterministically generate the same arguments for #[random_test]s between test runs.
+    // WARNING: You should only use this flag for debugging and meta-testing purposes!
+    #[clap(skip)]
+    pub deterministic_generation: bool,
 }
 
 fn format_module_id(module_id: &ModuleId) -> String {
@@ -119,6 +131,9 @@ impl UnitTestingConfig {
             verbose: false,
             list: false,
             named_address_values: vec![],
+            rand_num_iters: Some(10),
+            seed: None,
+            deterministic_generation: false,
         }
     }
 
@@ -184,6 +199,18 @@ impl UnitTestingConfig {
     ) -> Result<(W, bool)> {
         let shared_writer = Mutex::new(writer);
 
+        let rand_num_iters = match self.rand_num_iters {
+            Some(_) if self.seed.is_some() => {
+                bail!("Invalid arguments -- 'rand-num-iters' and 'seed' both set. You can only set one or the other at a time.")
+            }
+            Some(0) => {
+                bail!("Invalid argument -- 'rand-num-iters' set to zero. 'rand-num-iters' must set be a positive integer.")
+            }
+            Some(n) => n,
+            None if self.seed.is_some() => 1,
+            None => DEFAULT_RAND_ITERS,
+        };
+
         if self.list {
             for (module_id, test_plan) in &test_plan.module_tests {
                 for test_name in test_plan.tests.keys() {
@@ -203,6 +230,9 @@ impl UnitTestingConfig {
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
             self.num_threads,
             self.report_stacktrace_on_abort,
+            self.seed,
+            rand_num_iters,
+            self.deterministic_generation,
             test_plan,
             native_function_table,
             cost_table,
