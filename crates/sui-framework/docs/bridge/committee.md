@@ -95,7 +95,7 @@ title: Module `0xb::committee`
 
 </dd>
 <dt>
-<code>last_committee_update_epoch: u64</code>
+<code>last_committee_update_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -128,7 +128,7 @@ title: Module `0xb::committee`
 
 </dd>
 <dt>
-<code>stake_participation_percentage: u64</code>
+<code>stake_participation_percentage: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -167,7 +167,7 @@ title: Module `0xb::committee`
  The public key bytes of the bridge key
 </dd>
 <dt>
-<code><a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>: u64</code>
+<code><a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  Voting power, values are voting power in the scale of 10000.
@@ -239,7 +239,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_ENotSystemAddress">ENotSystemAddress</a>: u64 = 3;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_ENotSystemAddress">ENotSystemAddress</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -248,7 +248,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_EInvalidSignature">EInvalidSignature</a>: u64 = 2;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_EInvalidSignature">EInvalidSignature</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -257,7 +257,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_ECDSA_COMPRESSED_PUBKEY_LENGTH">ECDSA_COMPRESSED_PUBKEY_LENGTH</a>: u64 = 33;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_ECDSA_COMPRESSED_PUBKEY_LENGTH">ECDSA_COMPRESSED_PUBKEY_LENGTH</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 33;
 </code></pre>
 
 
@@ -266,7 +266,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>: u64 = 7;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 7;
 </code></pre>
 
 
@@ -275,7 +275,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_EDuplicatePubkey">EDuplicatePubkey</a>: u64 = 8;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_EDuplicatePubkey">EDuplicatePubkey</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 8;
 </code></pre>
 
 
@@ -284,7 +284,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_EDuplicatedSignature">EDuplicatedSignature</a>: u64 = 1;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_EDuplicatedSignature">EDuplicatedSignature</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -293,7 +293,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_EInvalidPubkeyLength">EInvalidPubkeyLength</a>: u64 = 6;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_EInvalidPubkeyLength">EInvalidPubkeyLength</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 6;
 </code></pre>
 
 
@@ -302,7 +302,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_ESenderNotActiveValidator">ESenderNotActiveValidator</a>: u64 = 5;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_ESenderNotActiveValidator">ESenderNotActiveValidator</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 5;
 </code></pre>
 
 
@@ -311,7 +311,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_ESignatureBelowThreshold">ESignatureBelowThreshold</a>: u64 = 0;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_ESignatureBelowThreshold">ESignatureBelowThreshold</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -320,7 +320,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_EValidatorBlocklistContainsUnknownKey">EValidatorBlocklistContainsUnknownKey</a>: u64 = 4;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_EValidatorBlocklistContainsUnknownKey">EValidatorBlocklistContainsUnknownKey</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
@@ -485,7 +485,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, active_validator_voting_power: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, u64&gt;, min_stake_participation_percentage: u64, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, active_validator_voting_power: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, min_stake_participation_percentage: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -496,8 +496,8 @@ title: Module `0xb::committee`
 
 <pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(
     self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>,
-    active_validator_voting_power: VecMap&lt;<b>address</b>, u64&gt;,
-    min_stake_participation_percentage: u64,
+    active_validator_voting_power: VecMap&lt;<b>address</b>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    min_stake_participation_percentage: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     ctx: &TxContext
 ) {
     <b>let</b> <b>mut</b> i = 0;
@@ -518,7 +518,7 @@ title: Module `0xb::committee`
             <b>let</b> member = <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a> {
                 sui_address: registration.sui_address,
                 bridge_pubkey_bytes: registration.bridge_pubkey_bytes,
-                <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>: (<a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a> <b>as</b> u64),
+                <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>: (<a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a> <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>),
                 http_rest_url: registration.http_rest_url,
                 blocklisted: <b>false</b>,
             };

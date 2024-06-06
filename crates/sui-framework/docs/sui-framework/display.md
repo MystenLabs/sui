@@ -187,7 +187,7 @@ Version of Display got updated -
 For when T does not belong to the package <code>Publisher</code>.
 
 
-<pre><code><b>const</b> <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>: u64 = 0;
+<pre><code><b>const</b> <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -198,7 +198,7 @@ For when vectors passed into one of the multiple insert functions
 don't match in their lengths.
 
 
-<pre><code><b>const</b> <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>: u64 = 1;
+<pre><code><b>const</b> <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 

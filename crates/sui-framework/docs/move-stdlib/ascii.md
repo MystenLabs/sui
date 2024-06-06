@@ -98,7 +98,7 @@ An ASCII character.
 An invalid ASCII character was encountered when creating an ASCII string.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/ascii.md#0x1_ascii_EINVALID_ASCII_CHARACTER">EINVALID_ASCII_CHARACTER</a>: u64 = 65536;
+<pre><code><b>const</b> <a href="../move-stdlib/ascii.md#0x1_ascii_EINVALID_ASCII_CHARACTER">EINVALID_ASCII_CHARACTER</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 65536;
 </code></pre>
 
 
@@ -278,7 +278,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -287,7 +287,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>().<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>()
 }
 </code></pre>

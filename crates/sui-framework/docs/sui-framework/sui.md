@@ -60,7 +60,7 @@ Name of the coin
 Sender is not @0x0 the system address.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_ENotSystemAddress">ENotSystemAddress</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_ENotSystemAddress">ENotSystemAddress</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -69,7 +69,7 @@ Sender is not @0x0 the system address.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_EAlreadyMinted">EAlreadyMinted</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_EAlreadyMinted">EAlreadyMinted</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -80,7 +80,7 @@ The amount of Mist per Sui token based on the fact that mist is
 10^-9 of a Sui token
 
 
-<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_MIST_PER_SUI">MIST_PER_SUI</a>: u64 = 1000000000;
+<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_MIST_PER_SUI">MIST_PER_SUI</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1000000000;
 </code></pre>
 
 
@@ -90,7 +90,7 @@ The amount of Mist per Sui token based on the fact that mist is
 The total supply of Sui denominated in Mist (10 Billion * 10^9)
 
 
-<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>: u64 = 10000000000000000000;
+<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 10000000000000000000;
 </code></pre>
 
 
@@ -100,7 +100,7 @@ The total supply of Sui denominated in Mist (10 Billion * 10^9)
 The total supply of Sui denominated in whole Sui tokens (10 Billion)
 
 
-<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_SUI">TOTAL_SUPPLY_SUI</a>: u64 = 10000000000;
+<pre><code><b>const</b> <a href="../sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_SUI">TOTAL_SUPPLY_SUI</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 10000000000;
 </code></pre>
 
 

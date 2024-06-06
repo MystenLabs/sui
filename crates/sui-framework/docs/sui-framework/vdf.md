@@ -24,7 +24,7 @@ title: Module `0x2::vdf`
 
 
 
-<pre><code><b>const</b> <a href="vdf.md#0x2_vdf_EInvalidInput">EInvalidInput</a>: u64 = 0;
+<pre><code><b>const</b> <a href="vdf.md#0x2_vdf_EInvalidInput">EInvalidInput</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -95,7 +95,7 @@ crate. The final selection of the discriminant for Mainnet will be computed and 
 process.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify">vdf_verify</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: u64): bool
+<pre><code><b>public</b> <b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify">vdf_verify</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): bool
 </code></pre>
 
 
@@ -104,7 +104,7 @@ process.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify">vdf_verify</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: u64): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify">vdf_verify</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): bool {
     <a href="vdf.md#0x2_vdf_vdf_verify_internal">vdf_verify_internal</a>(input, output, proof, iterations)
 }
 </code></pre>
@@ -120,7 +120,7 @@ process.
 The internal functions for <code>vdf_verify_internal</code>.
 
 
-<pre><code><b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify_internal">vdf_verify_internal</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: u64): bool
+<pre><code><b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify_internal">vdf_verify_internal</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): bool
 </code></pre>
 
 
@@ -129,7 +129,7 @@ The internal functions for <code>vdf_verify_internal</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify_internal">vdf_verify_internal</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: u64): bool;
+<pre><code><b>native</b> <b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify_internal">vdf_verify_internal</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): bool;
 </code></pre>
 
 

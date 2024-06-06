@@ -45,7 +45,7 @@ title: Module `0xb::limiter`
 
 <dl>
 <dt>
-<code>transfer_limits: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, u64&gt;</code>
+<code>transfer_limits: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;</code>
 </dt>
 <dd>
 
@@ -78,25 +78,25 @@ title: Module `0xb::limiter`
 
 <dl>
 <dt>
-<code>hour_head: u64</code>
+<code>hour_head: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>hour_tail: u64</code>
+<code>hour_tail: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>per_hour_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;</code>
+<code>per_hour_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>total_amount: u64</code>
+<code>total_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -135,7 +135,7 @@ title: Module `0xb::limiter`
 
 </dd>
 <dt>
-<code>new_limit: u64</code>
+<code>new_limit: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -154,7 +154,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>const</b> <a href="limiter.md#0xb_limiter_ELimitNotFoundForRoute">ELimitNotFoundForRoute</a>: u64 = 0;
+<pre><code><b>const</b> <a href="limiter.md#0xb_limiter_ELimitNotFoundForRoute">ELimitNotFoundForRoute</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -163,7 +163,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>const</b> <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>: u64 = 18446744073709551615;
+<pre><code><b>const</b> <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 18446744073709551615;
 </code></pre>
 
 
@@ -172,7 +172,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>const</b> <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>: u64 = 100000000;
+<pre><code><b>const</b> <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 100000000;
 </code></pre>
 
 
@@ -183,7 +183,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_route_limit">get_route_limit</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, route: &<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_route_limit">get_route_limit</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, route: &<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -192,7 +192,7 @@ title: Module `0xb::limiter`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_route_limit">get_route_limit</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, route: &BridgeRoute): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_route_limit">get_route_limit</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, route: &BridgeRoute): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     self.transfer_limits[route]
 }
 </code></pre>
@@ -235,7 +235,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, <a href="treasury.md#0xb_treasury">treasury</a>: &<a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, route: <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, amount: u64): bool
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, <a href="treasury.md#0xb_treasury">treasury</a>: &<a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, route: <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): bool
 </code></pre>
 
 
@@ -249,7 +249,7 @@ title: Module `0xb::limiter`
     <a href="treasury.md#0xb_treasury">treasury</a>: &BridgeTreasury,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     route: BridgeRoute,
-    amount: u64
+    amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 ): bool {
     // Create record for route <b>if</b> not exists
     <b>if</b> (!self.transfer_records.contains(&route)) {
@@ -270,17 +270,17 @@ title: Module `0xb::limiter`
     <b>assert</b>!(route_limit.is_some(), <a href="limiter.md#0xb_limiter_ELimitNotFoundForRoute">ELimitNotFoundForRoute</a>);
     <b>let</b> route_limit = route_limit.destroy_some();
     <b>let</b> route_limit_adjusted =
-        (route_limit <b>as</b> u128) * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
+        (route_limit <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>) * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
 
     // Compute notional amount
-    // Upcast <b>to</b> u128 <b>to</b> prevent overflow, <b>to</b> not miss out on small amounts.
-    <b>let</b> value = (<a href="treasury.md#0xb_treasury">treasury</a>.notional_value&lt;T&gt;() <b>as</b> u128);
-    <b>let</b> notional_amount_with_token_multiplier = value * (amount <b>as</b> u128);
+    // Upcast <b>to</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a> <b>to</b> prevent overflow, <b>to</b> not miss out on small amounts.
+    <b>let</b> value = (<a href="treasury.md#0xb_treasury">treasury</a>.notional_value&lt;T&gt;() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
+    <b>let</b> notional_amount_with_token_multiplier = value * (amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
 
     // Check <b>if</b> <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> amount exceed limit
     // Upscale them <b>to</b> the token's decimal.
-    <b>if</b> ((record.total_amount <b>as</b> u128)
-        * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128)
+    <b>if</b> ((record.total_amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>)
+        * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>)
         + notional_amount_with_token_multiplier &gt; route_limit_adjusted
     ) {
         <b>return</b> <b>false</b>
@@ -288,9 +288,9 @@ title: Module `0xb::limiter`
 
     // Now scale down <b>to</b> notional value
     <b>let</b> notional_amount = notional_amount_with_token_multiplier
-        / (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
-    // Should be safe <b>to</b> downcast <b>to</b> u64 after dividing by the decimals
-    <b>let</b> notional_amount = (notional_amount <b>as</b> u64);
+        / (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
+    // Should be safe <b>to</b> downcast <b>to</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a> after dividing by the decimals
+    <b>let</b> notional_amount = (notional_amount <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
 
     // Record <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> value
     <b>let</b> new_amount = record.per_hour_amounts.pop_back() + notional_amount;
@@ -310,7 +310,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="limiter.md#0xb_limiter_update_route_limit">update_route_limit</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, route: &<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, new_usd_limit: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="limiter.md#0xb_limiter_update_route_limit">update_route_limit</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, route: &<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, new_usd_limit: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -322,7 +322,7 @@ title: Module `0xb::limiter`
 <pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="limiter.md#0xb_limiter_update_route_limit">update_route_limit</a>(
     self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>,
     route: &BridgeRoute,
-    new_usd_limit: u64
+    new_usd_limit: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 ) {
     <b>let</b> receiving_chain = *route.destination();
 
@@ -350,7 +350,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_current_hour_since_epoch">current_hour_since_epoch</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>): u64
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_current_hour_since_epoch">current_hour_since_epoch</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -359,7 +359,7 @@ title: Module `0xb::limiter`
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_current_hour_since_epoch">current_hour_since_epoch</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock): u64 {
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_current_hour_since_epoch">current_hour_since_epoch</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="../sui-framework/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>) / 3600000
 }
 </code></pre>
@@ -374,7 +374,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_adjust_transfer_records">adjust_transfer_records</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferRecord">limiter::TransferRecord</a>, current_hour_since_epoch: u64)
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_adjust_transfer_records">adjust_transfer_records</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferRecord">limiter::TransferRecord</a>, current_hour_since_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -383,7 +383,7 @@ title: Module `0xb::limiter`
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_adjust_transfer_records">adjust_transfer_records</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferRecord">TransferRecord</a>, current_hour_since_epoch: u64) {
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_adjust_transfer_records">adjust_transfer_records</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferRecord">TransferRecord</a>, current_hour_since_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
     <b>if</b> (self.hour_head == current_hour_since_epoch) {
         <b>return</b> // nothing <b>to</b> backfill
     };
@@ -426,7 +426,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(): <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, u64&gt;
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(): <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -435,7 +435,7 @@ title: Module `0xb::limiter`
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(): VecMap&lt;BridgeRoute, u64&gt; {
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(): VecMap&lt;BridgeRoute, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
     <b>let</b> <b>mut</b> transfer_limits = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
     // 5M limit on Sui -&gt; Ethereum mainnet
     transfer_limits.insert(
