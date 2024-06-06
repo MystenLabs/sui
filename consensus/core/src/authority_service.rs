@@ -11,7 +11,7 @@ use parking_lot::RwLock;
 use sui_macros::fail_point_async;
 use tokio::{sync::broadcast, time::sleep};
 use tokio_util::sync::ReusableBoxFuture;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::{
     block::{BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
@@ -107,7 +107,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         }
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
 
-        debug!("Received block {verified_block} via send block.");
+        trace!("Received block {verified_block} via send block.");
 
         // Reject block with timestamp too far in the future.
         let now = self.context.clock.timestamp_utc_ms();
