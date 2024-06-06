@@ -457,10 +457,6 @@ struct FeatureFlags {
     // Enable VDF
     #[serde(skip_serializing_if = "is_false")]
     enable_vdf: bool,
-
-    // Enables version-specific data v1 in CheckpointSummary.
-    #[serde(skip_serializing_if = "is_false")]
-    checkpoint_summary_version_specific_data: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1105,6 +1101,9 @@ pub struct ProtocolConfig {
 
     /// Minimum interval of commit timestamps between consecutive checkpoints.
     min_checkpoint_interval_ms: Option<u64>,
+
+    /// Version number to use for version_specific_data in `CheckpointSummary`.
+    checkpoint_summary_version_specific_data: Option<u64>,
 }
 
 // feature flags
@@ -1370,10 +1369,6 @@ impl ProtocolConfig {
 
     pub fn enable_vdf(&self) -> bool {
         self.feature_flags.enable_vdf
-    }
-
-    pub fn checkpoint_summary_version_specific_data(&self) -> bool {
-        self.feature_flags.checkpoint_summary_version_specific_data
     }
 }
 
@@ -1829,6 +1824,8 @@ impl ProtocolConfig {
             max_deferral_rounds_for_congestion_control: None,
 
             min_checkpoint_interval_ms: None,
+
+            checkpoint_summary_version_specific_data: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2303,7 +2300,7 @@ impl ProtocolConfig {
                 50 => {
                     // Enable checkpoint batching in testnet.
                     if chain != Chain::Mainnet {
-                        cfg.feature_flags.checkpoint_summary_version_specific_data = true;
+                        cfg.checkpoint_summary_version_specific_data = Some(1);
                         cfg.min_checkpoint_interval_ms = Some(200);
                     }
                 }

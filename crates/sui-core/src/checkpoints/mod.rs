@@ -966,7 +966,7 @@ impl CheckpointBuilder {
                 if !can_build {
                     debug!(
                         checkpoint_commit_height = height,
-                        last_timestamp = ?last_timestamp,
+                        ?last_timestamp,
                         ?current_timestamp,
                         "waiting for more PendingCheckpoints: minimum interval not yet elapsed"
                     );
@@ -1231,8 +1231,6 @@ impl CheckpointBuilder {
                         // processed before we reach here.
                     }
                     TransactionKind::RandomnessStateUpdate(rsu) => {
-                        // RandomnessStateUpdate does not come via consensus, so no need to include
-                        // it in the call to `consensus_messages_processed_notify`.
                         randomness_rounds
                             .insert(*effects.transaction_digest(), rsu.randomness_round);
                     }
@@ -1350,23 +1348,27 @@ impl CheckpointBuilder {
                 None
             };
 
-            let version_specific_data = if self
+            let version_specific_data = match self
                 .epoch_store
                 .protocol_config()
-                .checkpoint_summary_version_specific_data()
+                .checkpoint_summary_version_specific_data_as_option()
             {
-                let matching_randomness_rounds: Vec<_> = effects
-                    .iter()
-                    .filter_map(|e| randomness_rounds.get(e.transaction_digest()))
-                    .copied()
-                    .collect();
-                Some(CheckpointVersionSpecificData::V1(
-                    CheckpointVersionSpecificDataV1 {
-                        randomness_rounds: matching_randomness_rounds,
-                    },
-                ))
-            } else {
-                None
+                None | Some(0) => None,
+                Some(1) => {
+                    let matching_randomness_rounds: Vec<_> = effects
+                        .iter()
+                        .filter_map(|e| randomness_rounds.get(e.transaction_digest()))
+                        .copied()
+                        .collect();
+                    Some(CheckpointVersionSpecificData::V1(
+                        CheckpointVersionSpecificDataV1 {
+                            randomness_rounds: matching_randomness_rounds,
+                        },
+                    ))
+                }
+                _ => unimplemented!(
+                    "unrecognized version_specific_data version for CheckpointSummary"
+                ),
             };
 
             let contents = CheckpointContents::new_with_digests_and_signatures(

@@ -32,6 +32,7 @@ use shared_crypto::intent::{Intent, IntentScope};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use sui_protocol_config::ProtocolConfig;
 use tap::TapFallible;
 use tracing::warn;
 
@@ -270,6 +271,24 @@ impl CheckpointSummary {
 
     pub fn is_last_checkpoint_of_epoch(&self) -> bool {
         self.end_of_epoch_data.is_some()
+    }
+
+    pub fn version_specific_data(
+        &self,
+        config: &ProtocolConfig,
+    ) -> Option<CheckpointVersionSpecificData> {
+        match config.checkpoint_summary_version_specific_data_as_option() {
+            None | Some(0) => None,
+            Some(1) => Some(
+                bcs::from_bytes(&self.version_specific_data).unwrap_or_else(|e| {
+                    panic!(
+                        "version_specific_data should deserialize for checkpoint {}: {e:?}",
+                        self.sequence_number(),
+                    )
+                }),
+            ),
+            _ => unimplemented!("unrecognized version_specific_data version in CheckpointSummary"),
+        }
     }
 }
 

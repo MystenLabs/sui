@@ -35,7 +35,6 @@ use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
-use sui_types::messages_checkpoint::CheckpointVersionSpecificData;
 use sui_types::transaction::TransactionKind;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
@@ -1040,22 +1039,14 @@ fn get_unexecuted_transactions(
         assert!(change_epoch_tx.data().intent_message().value.is_end_of_epoch_tx());
     });
 
-    let randomness_rounds = if epoch_store
-        .protocol_config()
-        .checkpoint_summary_version_specific_data()
+    let randomness_rounds = if let Some(version_specific_data) =
+        checkpoint.version_specific_data(epoch_store.protocol_config())
     {
         // With version-specific data, randomness rounds are stored in checkpoint summary.
-        let version_specific_data: CheckpointVersionSpecificData =
-            bcs::from_bytes(&checkpoint.version_specific_data).unwrap_or_else(|e| {
-                panic!(
-                    "version_specific_data should deserialize for checkpoint {}: {e:?}",
-                    checkpoint.sequence_number(),
-                )
-            }); //TODO-DNS is this safe?
         version_specific_data.into_v1().randomness_rounds
     } else {
         // Before version-specific data, checkpoint batching must be disabled. In this case,
-        // randomness state update tx must be first if it exists, because all otherk
+        // randomness state update tx must be first if it exists, because all other
         // transactions in a checkpoint that includes a randomness state update are causally
         // dependent on it.
         assert_eq!(

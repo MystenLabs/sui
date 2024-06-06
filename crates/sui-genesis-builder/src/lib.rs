@@ -846,14 +846,15 @@ fn create_genesis_checkpoint(
     };
     let contents =
         CheckpointContents::new_with_digests_and_signatures([execution_digests], vec![vec![]]);
-    let version_specific_data = if protocol_config.checkpoint_summary_version_specific_data() {
-        bcs::to_bytes(&CheckpointVersionSpecificData::V1(
-            CheckpointVersionSpecificDataV1::default(),
-        ))
-        .unwrap()
-    } else {
-        Vec::new()
-    };
+    let version_specific_data =
+        match protocol_config.checkpoint_summary_version_specific_data_as_option() {
+            None | Some(0) => Vec::new(),
+            Some(1) => bcs::to_bytes(&CheckpointVersionSpecificData::V1(
+                CheckpointVersionSpecificDataV1::default(),
+            ))
+            .unwrap(),
+            _ => unimplemented!("unrecognized version_specific_data version for CheckpointSummary"),
+        };
     let checkpoint = CheckpointSummary {
         epoch: 0,
         sequence_number: 0,
