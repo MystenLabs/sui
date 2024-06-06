@@ -5,6 +5,7 @@ use std::{sync::Arc, time::Duration};
 
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
+use tracing::info;
 
 use crate::{
     block::{BlockAPI, VerifiedBlock},
@@ -152,32 +153,37 @@ impl CommitObserver {
     }
 
     fn report_metrics(&self, committed: &[CommittedSubDag]) {
+        let metrics = &self.context.metrics.node_metrics;
         let utc_now = self.context.clock.timestamp_utc_ms();
-        let mut total = 0;
-        for block in committed.iter().flat_map(|dag| &dag.blocks) {
-            let latency_ms = utc_now
-                .checked_sub(block.timestamp_ms())
-                .unwrap_or_default();
 
-            total += 1;
+        for commit in committed {
+            info!(
+                "Consensus commit {} with leader {} has {} blocks",
+                commit.commit_ref,
+                commit.leader,
+                commit.blocks.len()
+            );
 
-            self.context
-                .metrics
-                .node_metrics
-                .block_commit_latency
-                .observe(Duration::from_millis(latency_ms).as_secs_f64());
-            self.context
-                .metrics
-                .node_metrics
+            metrics
                 .last_committed_leader_round
-                .set(block.round() as i64);
+                .set(commit.leader.round as i64);
+            metrics
+                .last_commit_index
+                .set(commit.commit_ref.index as i64);
+            metrics
+                .blocks_per_commit_count
+                .observe(commit.blocks.len() as f64);
+
+            for block in &commit.blocks {
+                let latency_ms = utc_now
+                    .checked_sub(block.timestamp_ms())
+                    .unwrap_or_default();
+                metrics
+                    .block_commit_latency
+                    .observe(Duration::from_millis(latency_ms).as_secs_f64());
+            }
         }
 
-        self.context
-            .metrics
-            .node_metrics
-            .blocks_per_commit_count
-            .observe(total as f64);
         self.context
             .metrics
             .node_metrics

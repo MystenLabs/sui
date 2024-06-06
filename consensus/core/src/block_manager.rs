@@ -18,6 +18,7 @@ use crate::{
     block_verifier::BlockVerifier,
     context::Context,
     dag_state::DagState,
+    Round,
 };
 
 struct SuspendedBlock {
@@ -57,6 +58,9 @@ pub(crate) struct BlockManager {
     /// Keeps all the blocks that we actually miss and haven't fetched them yet. That set will basically contain all the
     /// keys from the `missing_ancestors` minus any keys that exist in `suspended_blocks`.
     missing_blocks: BTreeSet<BlockRef>,
+    /// A vector that holds a tuple of (lowest_round, highest_round) of received blocks per authority.
+    /// This is used for metrics reporting purposes and resets during restarts.
+    received_block_rounds: Vec<Option<(Round, Round)>>,
 }
 
 impl BlockManager {
@@ -65,6 +69,7 @@ impl BlockManager {
         dag_state: Arc<RwLock<DagState>>,
         block_verifier: Arc<dyn BlockVerifier>,
     ) -> Self {
+        let committee_size = context.committee.size();
         Self {
             context,
             dag_state,
@@ -72,6 +77,7 @@ impl BlockManager {
             suspended_blocks: BTreeMap::new(),
             missing_ancestors: BTreeMap::new(),
             missing_blocks: BTreeSet::new(),
+            received_block_rounds: vec![None; committee_size],
         }
     }
 
@@ -94,10 +100,17 @@ impl BlockManager {
         let mut missing_blocks = BTreeSet::new();
 
         for block in blocks {
+            self.update_block_received_metrics(&block);
+
             // Try to accept the input block.
+            let block_ref = block.reference();
             let block = match self.try_accept_one_block(block) {
                 TryAcceptResult::Accepted(block) => block,
                 TryAcceptResult::Suspended(ancestors_to_fetch) => {
+                    debug!(
+                        "Missing ancestors for block {block_ref}: {}",
+                        ancestors_to_fetch.iter().map(|b| b.to_string()).join(",")
+                    );
                     missing_blocks.extend(ancestors_to_fetch);
                     continue;
                 }
@@ -335,6 +348,30 @@ impl BlockManager {
     /// blocks.
     pub(crate) fn missing_blocks(&self) -> BTreeSet<BlockRef> {
         self.missing_blocks.clone()
+    }
+
+    fn update_block_received_metrics(&mut self, block: &VerifiedBlock) {
+        let (min_round, max_round) =
+            if let Some((curr_min, curr_max)) = self.received_block_rounds[block.author()] {
+                (curr_min.min(block.round()), curr_max.max(block.round()))
+            } else {
+                (block.round(), block.round())
+            };
+        self.received_block_rounds[block.author()] = Some((min_round, max_round));
+
+        let hostname = &self.context.committee.authority(block.author()).hostname;
+        self.context
+            .metrics
+            .node_metrics
+            .lowest_verified_authority_round
+            .with_label_values(&[hostname])
+            .set(min_round.into());
+        self.context
+            .metrics
+            .node_metrics
+            .highest_verified_authority_round
+            .with_label_values(&[hostname])
+            .set(max_round.into());
     }
 
     /// Returns all the suspended blocks whose causal history we miss hence we can't accept them yet.
