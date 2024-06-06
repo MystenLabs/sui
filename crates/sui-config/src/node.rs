@@ -73,10 +73,6 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
 
-    // TODO: Remove this as it's no longer used.
-    #[serde(default)]
-    pub enable_event_processing: bool,
-
     #[serde(default = "default_enable_index_processing")]
     pub enable_index_processing: bool,
 
