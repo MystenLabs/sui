@@ -13665,7 +13665,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/sui-rust-sdk.git?rev=e9e013221c65b0ebe2c1a375719babeb8c546e56#e9e013221c65b0ebe2c1a375719babeb8c546e56"
+source = "git+https://github.com/mystenlabs/sui-rust-sdk.git?rev=ec4236befe57c15fba0dae9e6881c18231882151#ec4236befe57c15fba0dae9e6881c18231882151"
 dependencies = [
  "base64ct",
  "bcs",
