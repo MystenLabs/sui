@@ -90,8 +90,8 @@ expect(await keypair.getPublicKey().verifyTransaction(bytes, serializedSignature
 const client = new SuiClient({ url: getFullnodeUrl('testnet') });
 
 // execute transaction.
-let res = client.executeTransaction({
-	transaction: bytes,
+let res = client.executeTransactionBlock({
+	transactionBlock: bytes,
 	signature: serializedSignature,
 });
 console.log(res);
