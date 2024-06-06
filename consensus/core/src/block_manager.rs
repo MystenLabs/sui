@@ -11,7 +11,7 @@ use std::{
 use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use crate::{
     block::{BlockAPI, BlockRef, VerifiedBlock},
@@ -107,7 +107,7 @@ impl BlockManager {
             let block = match self.try_accept_one_block(block) {
                 TryAcceptResult::Accepted(block) => block,
                 TryAcceptResult::Suspended(ancestors_to_fetch) => {
-                    debug!(
+                    trace!(
                         "Missing ancestors for block {block_ref}: {}",
                         ancestors_to_fetch.iter().map(|b| b.to_string()).join(",")
                     );
