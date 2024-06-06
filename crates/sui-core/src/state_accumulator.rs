@@ -3,7 +3,6 @@
 
 use itertools::Itertools;
 use mysten_metrics::monitored_scope;
-use parking_lot::Mutex;
 use serde::Serialize;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber};
@@ -37,11 +36,6 @@ pub struct StateAccumulatorV1 {
 
 pub struct StateAccumulatorV2 {
     store: Arc<dyn AccumulatorStore>,
-    /// An in-memory, non-finalized running computation of the root state accumulator,
-    /// guaranteed to be updated in checkpoint sequence number order.
-    /// This should be equivalent to the root state accumulator for the epoch once all
-    /// checkpoints have been executed and accumulated.
-    running_root_accumulator: Mutex<Option<(CheckpointSequenceNumber, Accumulator)>>,
 }
 
 pub trait AccumulatorStore: ObjectStore + Send + Sync {
@@ -374,7 +368,7 @@ impl StateAccumulator {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Self {
         if epoch_store.state_accumulator_v2_enabled() {
-            StateAccumulator::V2(StateAccumulatorV2::new(store, epoch_store))
+            StateAccumulator::V2(StateAccumulatorV2::new(store))
         } else {
             StateAccumulator::V1(StateAccumulatorV1::new(store))
         }
@@ -620,32 +614,8 @@ impl StateAccumulatorV1 {
 }
 
 impl StateAccumulatorV2 {
-    pub fn new(
-        store: Arc<dyn AccumulatorStore>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Self {
-        let epoch = epoch_store.epoch();
-        let running_root = epoch_store
-            .get_highest_running_root_accumulator()
-            .expect("Failed to get running root accumulator from disk");
-        let running_root_data = match (epoch, running_root) {
-            // running from genesis - start from scratch
-            (0, None) => None,
-            // reconfig || snapshot restore - start from previous root state hash
-            (epoch, None) => {
-                let (highest_acc, running_root) = store
-                    .get_root_state_accumulator_for_epoch(epoch - 1)
-                    .expect("Failed to get root state accumulator for previous epoch")
-                    .expect("Expected root state accumulator for previous epoch to exist");
-                Some((highest_acc, running_root.clone()))
-            }
-            // Mid-epoch restart - load from disk
-            (_, Some((highest_acc, running_root))) => Some((highest_acc, running_root)),
-        };
-        Self {
-            store,
-            running_root_accumulator: Mutex::new(running_root_data),
-        }
+    pub fn new(store: Arc<dyn AccumulatorStore>) -> Self {
+        Self { store }
     }
 
     pub async fn accumulate_running_root(
@@ -654,77 +624,48 @@ impl StateAccumulatorV2 {
         checkpoint_seq_num: CheckpointSequenceNumber,
         checkpoint_acc: Option<Accumulator>,
     ) -> SuiResult {
-        let _scope = monitored_scope("AccumulateRunningRootV2");
-        // first check if we need to wait for other checkpoints to be accumulated. This can happen for the end
-        // of epoch checkpoint. Create a new scope to avoid deadlocking while we wait
-        let await_checkpoints = {
-            match self.running_root_accumulator.lock().as_ref() {
-                Some((highest_accumulated, _)) if *highest_accumulated < checkpoint_seq_num - 1 => {
-                    // TODO: take the checkpoint and check for EndOfEpochData to confirm we're at
-                    // the end of the epoch
-                    true
-                }
-                Some(_) => false,
-                None => false,
-            }
-        };
-        if await_checkpoints {
-            debug!(
-                "Awaiting accumulation up to checkpoint {} for epoch {} before adding to running root",
-                checkpoint_seq_num - 1,
-                epoch_store.epoch()
+        let _scope = monitored_scope("AccumulateRunningRoot");
+
+        let mut running_root = if checkpoint_seq_num == 0 {
+            // we're at genesis and need to start from scratch
+            Accumulator::default()
+        } else if epoch_store
+            .get_highest_running_root_accumulator()?
+            .is_none()
+        {
+            // we're at the beginning of a new epoch and need to
+            // bootstrap from the previous epoch's root state hash. Because this
+            // should only occur at beginning of epoch, we shouldn't have to worry
+            // about race conditions on reading the highest running root accumulator.
+            let (prev_epoch, (_, prev_acc)) = self
+                .store
+                .get_root_state_accumulator_for_highest_epoch()?
+                .expect("Expected root state hash for previous epoch to exist");
+            assert_eq!(
+                prev_epoch + 1,
+                epoch_store.epoch(),
+                "Expected highest existing root state hash to be for previous epoch",
             );
+            prev_acc
+        } else {
             epoch_store
                 .notify_read_running_root(checkpoint_seq_num - 1)
-                .await
-                .expect("Failed to notify read running root");
-        }
+                .await?
+        };
 
-        let mut guard = self.running_root_accumulator.lock();
-
-        if let Some((highest_accumulated, running_root)) = guard.as_mut() {
-            if checkpoint_seq_num == *highest_accumulated {
-                // Enforce idempotency
-                Ok(())
-            } else {
-                let checkpoint_acc = checkpoint_acc.unwrap_or_else(|| {
-                    epoch_store
-                        .get_state_hash_for_checkpoint(&checkpoint_seq_num)
-                        .expect("Failed to get checkpoint accumulator from disk")
-                        .expect("Expected checkpoint accumulator to exist")
-                });
-
-                running_root.union(&checkpoint_acc);
-                epoch_store.insert_running_root_accumulator(&checkpoint_seq_num, running_root)?;
-                *highest_accumulated = checkpoint_seq_num;
-                debug!(
-                    "Accumulated checkpoint {} to running root accumulator",
-                    checkpoint_seq_num,
-                );
-                Ok(())
-            }
-        } else {
-            // This can only be the case at genesis
-            assert_eq!(
-                checkpoint_seq_num,
-                0,
-                "Attempted to accumulate non-genesis checkpoint {} without a running root accumulator or previous epoch root state hash.",
-                checkpoint_seq_num,
-            );
-            let checkpoint_acc = checkpoint_acc.unwrap_or_else(|| {
-                epoch_store
-                    .get_state_hash_for_checkpoint(&checkpoint_seq_num)
-                    .expect("Failed to get checkpoint accumulator from disk")
-                    .expect("Expected checkpoint accumulator to exist")
-            });
-            epoch_store.insert_running_root_accumulator(&checkpoint_seq_num, &checkpoint_acc)?;
-            *guard = Some((checkpoint_seq_num, checkpoint_acc));
-            debug!(
-                "Accumulated checkpoint {} to running root accumulator",
-                checkpoint_seq_num,
-            );
-            Ok(())
-        }
+        let checkpoint_acc = checkpoint_acc.unwrap_or_else(|| {
+            epoch_store
+                .get_state_hash_for_checkpoint(&checkpoint_seq_num)
+                .expect("Failed to get checkpoint accumulator from disk")
+                .expect("Expected checkpoint accumulator to exist")
+        });
+        running_root.union(&checkpoint_acc);
+        epoch_store.insert_running_root_accumulator(&checkpoint_seq_num, &running_root)?;
+        debug!(
+            "Accumulated checkpoint {} to running root accumulator",
+            checkpoint_seq_num,
+        );
+        Ok(())
     }
 
     pub fn accumulate_epoch(
@@ -733,27 +674,20 @@ impl StateAccumulatorV2 {
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
     ) -> SuiResult<Accumulator> {
         let _scope = monitored_scope("AccumulateEpochV2");
-        let guard = self.running_root_accumulator.lock();
-        let (highest_accumulated, running_root) = guard
-            .as_ref()
-            .expect("Expected in memory running root accumulator to exist at end of epoch");
+        let running_root = epoch_store
+            .get_running_root_accumulator(&last_checkpoint_of_epoch)?
+            .expect("Expected running root accumulator to exist up to last checkpoint of epoch");
 
-        assert_eq!(
-            last_checkpoint_of_epoch,
-            *highest_accumulated,
-            "Epoch acucmulation must only be called after all previous checkpoints of epoch have already been accumulated",
-        );
         self.store.insert_state_accumulator_for_epoch(
             epoch_store.epoch(),
             &last_checkpoint_of_epoch,
-            running_root,
+            &running_root,
         )?;
         debug!(
             "Finalized root state hash for epoch {} (up to checkpoint {})",
             epoch_store.epoch(),
             last_checkpoint_of_epoch
         );
-
         Ok(running_root.clone())
     }
 
