@@ -60,7 +60,7 @@ impl Build {
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
         }
-        .build(rerooted_path.to_owned())?;
+        .build(rerooted_path)?;
         if dump_bytecode_as_base64 {
             check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
             if !with_unpublished_deps {
@@ -81,8 +81,7 @@ impl Build {
         if generate_struct_layouts {
             let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();
             // store under <package_path>/build/<package_name>/layouts/struct_layouts.yaml
-            let layout_filename = pkg
-                .path
+            let layout_filename = rerooted_path
                 .join("build")
                 .join(pkg.package.compiled_package_info.package_name.as_str())
                 .join(LAYOUTS_DIR)
