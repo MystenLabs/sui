@@ -308,25 +308,25 @@ impl SharedTestingConfig {
                 .iter()
                 .all(|arg| matches!(arg, TestArgument::Value(_)))
             {
-                vec![(
-                    None,
-                    test_info
-                        .arguments
-                        .iter()
-                        .map(|arg| match arg {
-                            TestArgument::Value(v) => v.clone(),
-                            _ => unreachable!(),
-                        })
-                        .collect::<Vec<_>>(),
-                )]
+                let test_arguments = test_info
+                    .arguments
+                    .iter()
+                    .map(|arg| match arg {
+                        TestArgument::Value(v) => v.clone(),
+                        _ => unreachable!(),
+                    })
+                    .collect::<Vec<_>>();
+                vec![(None, test_arguments)]
             } else {
                 let mut args = vec![];
                 for i in 0..self.num_iters {
                     let mut iter_args = vec![];
-                    let prng_seed = self.prng_seed.unwrap_or(if self.deterministic_generation {
-                        i
-                    } else {
-                        rand::random::<u64>()
+                    let prng_seed = self.prng_seed.unwrap_or_else(|| {
+                        if self.deterministic_generation {
+                            i
+                        } else {
+                            rand::random::<u64>()
+                        }
                     });
                     let mut rng = StdRng::seed_from_u64(prng_seed);
                     for arg in test_info.arguments.iter() {
@@ -378,10 +378,9 @@ impl SharedTestingConfig {
             TypeTag::U256 => MoveValue::U256(rng.gen::<U256>()),
             TypeTag::Vector(ty) => {
                 let len = rng.gen_range(0..1024);
-                let mut values = vec![];
-                for _ in 0..len {
-                    values.push(Self::generate_value_for_typetag(rng, ty));
-                }
+                let values = (0..len)
+                    .map(|_| Self::generate_value_for_typetag(rng, ty))
+                    .collect();
                 MoveValue::Vector(values)
             }
             TypeTag::Bool => MoveValue::Bool(rng.gen::<bool>()),
