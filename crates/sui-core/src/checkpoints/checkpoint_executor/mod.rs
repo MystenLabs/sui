@@ -354,7 +354,7 @@ impl CheckpointExecutor {
             .set(is_inconsistent_state as i64);
     }
 
-    async fn bump_highest_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
+    fn bump_highest_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
         // Ensure that we are not skipping checkpoints at any point
         let seq = *checkpoint.sequence_number();
         debug!("Bumping highest_executed_checkpoint watermark to {seq:?}");
@@ -434,7 +434,7 @@ impl CheckpointExecutor {
                 .accumulate_running_root(epoch_store, checkpoint.sequence_number, checkpoint_acc)
                 .await
                 .expect("Failed to accumulate running root");
-            self.bump_highest_executed_checkpoint(checkpoint).await;
+            self.bump_highest_executed_checkpoint(checkpoint);
         }
     }
 
@@ -689,7 +689,7 @@ impl CheckpointExecutor {
                         .await
                         .expect("Accumulating epoch cannot fail");
 
-                    self.bump_highest_executed_checkpoint(checkpoint).await;
+                    self.bump_highest_executed_checkpoint(checkpoint);
 
                     return true;
                 }
