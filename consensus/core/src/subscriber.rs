@@ -180,6 +180,12 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             'stream: loop {
                 match blocks.next().await {
                     Some(block) => {
+                        context
+                            .metrics
+                            .node_metrics
+                            .subscribed_blocks
+                            .with_label_values(&[&peer_hostname])
+                            .inc();
                         let result = authority_service
                             .handle_send_block(peer, block.clone())
                             .await;

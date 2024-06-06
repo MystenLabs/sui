@@ -127,6 +127,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
     pub(crate) rejected_future_blocks: IntCounterVec,
+    pub(crate) subscribed_blocks: IntCounterVec,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
     pub(crate) last_committed_authority_round: IntGaugeVec,
@@ -321,6 +322,12 @@ impl NodeMetrics {
             rejected_future_blocks: register_int_counter_vec_with_registry!(
                 "rejected_future_blocks",
                 "Number of blocks rejected because their timestamp is too far in the future",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            subscribed_blocks: register_int_counter_vec_with_registry!(
+                "subscribed_blocks",
+                "Number of blocks received from each peer before verification",
                 &["authority"],
                 registry,
             ).unwrap(),
