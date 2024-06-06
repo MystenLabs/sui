@@ -9,11 +9,12 @@ use prometheus::Registry;
 use rand::{thread_rng, Rng};
 use std::sync::Arc;
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSummary, CheckpointVersionSpecificData, SignedCheckpointSummary,
+    CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
 };
 use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::CertifiedTransaction;
@@ -52,6 +53,7 @@ fn gen_ckpts(
             SignedCheckpointSummary::new(
                 committee.epoch,
                 CheckpointSummary::new(
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
                     committee.epoch,
                     // insert different data for each checkpoint so that we can swap sigs later
                     // and get a failure. (otherwise every checkpoint is the same so the
@@ -63,7 +65,7 @@ fn gen_ckpts(
                     GasCostSummary::default(),
                     None,
                     0,
-                    Some(CheckpointVersionSpecificData::empty_for_tests()),
+                    Vec::new(),
                 ),
                 k,
                 name,

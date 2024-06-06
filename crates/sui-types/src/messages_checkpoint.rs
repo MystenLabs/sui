@@ -202,6 +202,7 @@ impl Message for CheckpointSummary {
 
 impl CheckpointSummary {
     pub fn new(
+        protocol_config: &ProtocolConfig,
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
         network_total_transactions: u64,
@@ -210,12 +211,20 @@ impl CheckpointSummary {
         epoch_rolling_gas_cost_summary: GasCostSummary,
         end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
-        version_specific_data: Option<CheckpointVersionSpecificData>,
+        randomness_rounds: Vec<RandomnessRound>,
     ) -> CheckpointSummary {
         let content_digest = *transactions.digest();
-        let version_specific_data = version_specific_data
-            .map(|v| bcs::to_bytes(&v).expect("version specific data should serialize"))
-            .unwrap_or_default();
+
+        let version_specific_data = match protocol_config
+            .checkpoint_summary_version_specific_data_as_option()
+        {
+            None | Some(0) => Vec::new(),
+            Some(1) => bcs::to_bytes(&CheckpointVersionSpecificData::V1(
+                CheckpointVersionSpecificDataV1 { randomness_rounds },
+            ))
+            .expect("version specific data should serialize"),
+            _ => unimplemented!("unrecognized version_specific_data version for CheckpointSummary"),
+        };
 
         Self {
             epoch,
@@ -802,6 +811,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     CheckpointSummary::new(
+                        &ProtocolConfig::get_for_max_version_UNSAFE(),
                         committee.epoch,
                         1,
                         0,
@@ -810,7 +820,7 @@ mod tests {
                         GasCostSummary::default(),
                         None,
                         0,
-                        Some(CheckpointVersionSpecificData::empty_for_tests()),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -837,6 +847,7 @@ mod tests {
         let set = CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]);
 
         let summary = CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             committee.epoch,
             1,
             0,
@@ -845,7 +856,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             0,
-            Some(CheckpointVersionSpecificData::empty_for_tests()),
+            Vec::new(),
         );
 
         let sign_infos: Vec<_> = keys
@@ -877,6 +888,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     CheckpointSummary::new(
+                        &ProtocolConfig::get_for_max_version_UNSAFE(),
                         committee.epoch,
                         1,
                         0,
@@ -885,7 +897,7 @@ mod tests {
                         GasCostSummary::default(),
                         None,
                         0,
-                        Some(CheckpointVersionSpecificData::empty_for_tests()),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -913,6 +925,7 @@ mod tests {
         digest: TransactionDigest,
     ) -> CheckpointSummary {
         CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             1,
             2,
             10,
@@ -924,7 +937,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             100,
-            Some(CheckpointVersionSpecificData::empty_for_tests()),
+            Vec::new(),
         )
     }
 

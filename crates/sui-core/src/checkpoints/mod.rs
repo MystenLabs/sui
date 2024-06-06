@@ -28,9 +28,7 @@ use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::messages_checkpoint::{
-    CheckpointCommitment, CheckpointVersionSpecificData, CheckpointVersionSpecificDataV1,
-};
+use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -1347,30 +1345,6 @@ impl CheckpointBuilder {
             } else {
                 None
             };
-
-            let version_specific_data = match self
-                .epoch_store
-                .protocol_config()
-                .checkpoint_summary_version_specific_data_as_option()
-            {
-                None | Some(0) => None,
-                Some(1) => {
-                    let matching_randomness_rounds: Vec<_> = effects
-                        .iter()
-                        .filter_map(|e| randomness_rounds.get(e.transaction_digest()))
-                        .copied()
-                        .collect();
-                    Some(CheckpointVersionSpecificData::V1(
-                        CheckpointVersionSpecificDataV1 {
-                            randomness_rounds: matching_randomness_rounds,
-                        },
-                    ))
-                }
-                _ => unimplemented!(
-                    "unrecognized version_specific_data version for CheckpointSummary"
-                ),
-            };
-
             let contents = CheckpointContents::new_with_digests_and_signatures(
                 effects.iter().map(TransactionEffects::execution_digests),
                 signatures,
@@ -1384,7 +1358,15 @@ impl CheckpointBuilder {
                 .unwrap_or(num_txns);
 
             let previous_digest = last_checkpoint.as_ref().map(|(_, c)| c.digest());
+
+            let matching_randomness_rounds: Vec<_> = effects
+                .iter()
+                .filter_map(|e| randomness_rounds.get(e.transaction_digest()))
+                .copied()
+                .collect();
+
             let summary = CheckpointSummary::new(
+                self.epoch_store.protocol_config(),
                 epoch,
                 sequence_number,
                 network_total_transactions,
@@ -1393,7 +1375,7 @@ impl CheckpointBuilder {
                 epoch_rolling_gas_cost_summary,
                 end_of_epoch_data,
                 timestamp_ms,
-                version_specific_data,
+                matching_randomness_rounds,
             );
             summary.report_checkpoint_age_ms(&self.metrics.last_created_checkpoint_age_ms);
             if last_checkpoint_of_epoch {
