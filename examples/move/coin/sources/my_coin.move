@@ -12,7 +12,10 @@ module examples::my_coin {
     // Module initializer is called once on module publish. A treasury
     // cap is sent to the publisher, who then controls minting and burning
     fun init(witness: MY_COIN, ctx: &mut TxContext) {
-        let (treasury, _metadata) = coin::create_currency(witness, 6, b"MY_COIN", b"", b"", option::none(), ctx);
+        let (treasury, metadata) = coin::create_currency(witness, 6, b"MY_COIN", b"", b"", option::none(), ctx);
+        // Share the metadata object so that it can be edited. You could instead 
+        // prevent updates to the icon_url and other metadata with public_freeze_object.
+        transfer::public_share_object(metadata);
         transfer::public_transfer(treasury, ctx.sender())
     }
 
