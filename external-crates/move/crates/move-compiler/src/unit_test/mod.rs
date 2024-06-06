@@ -171,7 +171,7 @@ impl<'a> fmt::Display for ExpectedMoveErrorDisplay<'a> {
         }
         match location {
             Location::Undefined => write!(f, " in an unknown location"),
-            Location::Module(id) => write!(f, " in the module {id}"),
+            Location::Module(id) => write!(f, " in the module {}", id.short_str_lossless()),
         }
     }
 }

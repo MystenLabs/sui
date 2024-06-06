@@ -29,6 +29,9 @@ const DEFAULT_EXECUTION_BOUND: u64 = 1_000_000;
 /// The default number of iterations to run each random test for.
 const DEFAULT_RAND_ITERS: u64 = 10;
 
+const RAND_NUM_ITERS_FLAG: &str = "rand-num-iters";
+const SEED_FLAG: &str = "seed";
+
 #[derive(Debug, Parser, Clone)]
 #[clap(author, version, about)]
 pub struct UnitTestingConfig {
@@ -96,11 +99,11 @@ pub struct UnitTestingConfig {
     pub verbose: bool,
 
     /// Number of iterations to run each test if arguments are being generated
-    #[clap(long = "rand-num-iters")]
+    #[clap(long = RAND_NUM_ITERS_FLAG)]
     pub rand_num_iters: Option<u64>,
 
     /// Seed to use for generating arguments
-    #[clap(long = "seed")]
+    #[clap(long = SEED_FLAG)]
     pub seed: Option<u64>,
 
     // Deterministically generate the same arguments for #[random_test]s between test runs.
@@ -131,7 +134,7 @@ impl UnitTestingConfig {
             verbose: false,
             list: false,
             named_address_values: vec![],
-            rand_num_iters: Some(10),
+            rand_num_iters: Some(DEFAULT_RAND_ITERS),
             seed: None,
             deterministic_generation: false,
         }
@@ -201,10 +204,16 @@ impl UnitTestingConfig {
 
         let rand_num_iters = match self.rand_num_iters {
             Some(_) if self.seed.is_some() => {
-                bail!("Invalid arguments -- 'rand-num-iters' and 'seed' both set. You can only set one or the other at a time.")
+                bail!(format!(
+                    "Invalid arguments -- '{RAND_NUM_ITERS_FLAG}' and '{SEED_FLAG}' both set. \
+                    You can only set one or the other at a time."
+                ))
             }
             Some(0) => {
-                bail!("Invalid argument -- 'rand-num-iters' set to zero. 'rand-num-iters' must set be a positive integer.")
+                bail!(format!(
+                    "Invalid argument -- '{RAND_NUM_ITERS_FLAG}' set to zero. \
+                    '{RAND_NUM_ITERS_FLAG}' must set be a positive integer."
+                ))
             }
             Some(n) => n,
             None if self.seed.is_some() => 1,
