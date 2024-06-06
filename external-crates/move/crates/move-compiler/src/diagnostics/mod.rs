@@ -290,7 +290,7 @@ pub fn report_warnings(files: &FilesSourceText, warnings: Diagnostics) {
     if warnings.is_empty() {
         return;
     }
-    debug_assert!(warnings.max_severity().unwrap() == Severity::Warning);
+    debug_assert!(warnings.max_severity_at_or_under_severity(Severity::Warning));
     report_diagnostics_impl(files, warnings, false)
 }
 
@@ -529,6 +529,23 @@ impl Diagnostics {
 
     pub fn set_format(&mut self, format: DiagnosticsFormat) {
         self.format = format;
+    }
+
+    /// Always false when no diagnostics are present.
+    pub fn max_severity_at_or_above_severity(&self, threshold: Severity) -> bool {
+        match self.max_severity() {
+            Some(max) if max >= threshold => true,
+            Some(_) | None => false,
+        }
+    }
+
+    /// Always true when no diagnostics are present.
+    pub fn max_severity_at_or_under_severity(&self, threshold: Severity) -> bool {
+        match self.max_severity() {
+            Some(max) if max <= threshold => true,
+            None => true,
+            Some(_) => false,
+        }
     }
 
     pub fn max_severity(&self) -> Option<Severity> {
