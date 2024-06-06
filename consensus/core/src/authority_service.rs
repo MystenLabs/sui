@@ -107,6 +107,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         }
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
 
+        debug!("Received block {verified_block} via send block.");
+
         // Reject block with timestamp too far in the future.
         let now = self.context.clock.timestamp_utc_ms();
         let forward_time_drift =
@@ -236,8 +238,11 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .into_iter()
                 .map(|block| block.serialized().clone()),
         );
-        let broadcasted_blocks =
-            BroadcastedBlockStream::new(peer, self.rx_block_broadcaster.resubscribe());
+        let broadcasted_blocks = BroadcastedBlockStream::new(
+            self.context.clone(),
+            peer,
+            self.rx_block_broadcaster.resubscribe(),
+        );
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         Ok(Box::pin(missed_blocks.chain(
@@ -355,6 +360,7 @@ pub(crate) type BroadcastedBlockStream = BroadcastStream<VerifiedBlock>;
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
 pub(crate) struct BroadcastStream<T> {
+    context: Arc<Context>,
     peer: AuthorityIndex,
     // Stores the receiver across poll_next() calls.
     inner: ReusableBoxFuture<
@@ -367,8 +373,16 @@ pub(crate) struct BroadcastStream<T> {
 }
 
 impl<T: 'static + Clone + Send> BroadcastStream<T> {
-    pub fn new(peer: AuthorityIndex, rx: broadcast::Receiver<T>) -> Self {
+    pub fn new(context: Arc<Context>, peer: AuthorityIndex, rx: broadcast::Receiver<T>) -> Self {
+        let peer_hostname = &context.committee.authority(peer).hostname;
+        context
+            .metrics
+            .node_metrics
+            .subscribed_peers
+            .with_label_values(&[peer_hostname])
+            .set(1);
         Self {
+            context,
             peer,
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
         }
@@ -403,6 +417,18 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
             }
         };
         task::Poll::Ready(maybe_item)
+    }
+}
+
+impl<T> Drop for BroadcastStream<T> {
+    fn drop(&mut self) {
+        let peer_hostname = &self.context.committee.authority(self.peer).hostname;
+        self.context
+            .metrics
+            .node_metrics
+            .subscribed_peers
+            .with_label_values(&[peer_hostname])
+            .set(0);
     }
 }
 
