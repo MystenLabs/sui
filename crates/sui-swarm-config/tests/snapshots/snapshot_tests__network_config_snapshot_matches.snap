@@ -44,9 +44,8 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-    enable-event-processing: false
     enable-index-processing: true
-    websocket-only: false
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -180,9 +179,8 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-    enable-event-processing: false
     enable-index-processing: true
-    websocket-only: false
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -316,9 +314,8 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-    enable-event-processing: false
     enable-index-processing: true
-    websocket-only: false
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -452,9 +449,8 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-    enable-event-processing: false
     enable-index-processing: true
-    websocket-only: false
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -588,9 +584,8 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-    enable-event-processing: false
     enable-index-processing: true
-    websocket-only: false
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -724,9 +719,8 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-    enable-event-processing: false
     enable-index-processing: true
-    websocket-only: false
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -860,9 +854,8 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-    enable-event-processing: false
     enable-index-processing: true
-    websocket-only: false
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
