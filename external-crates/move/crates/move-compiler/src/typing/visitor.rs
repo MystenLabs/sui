@@ -11,6 +11,7 @@ use crate::{
     typing::ast as T,
 };
 
+use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;
 
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
@@ -130,7 +131,7 @@ pub trait TypingVisitorContext {
             match &mut sdef.fields {
                 N::StructFields::Defined(_, fields) => {
                     for (_, _, (_, ty)) in fields {
-                        self.visit_type(ty)
+                        self.visit_type(None, ty)
                     }
                 }
                 N::StructFields::Native(_) => (),
@@ -189,7 +190,7 @@ pub trait TypingVisitorContext {
             match &mut vdef.fields {
                 N::VariantFields::Defined(_, fields) => {
                     for (_, _, (_, ty)) in fields {
-                        self.visit_type(ty)
+                        self.visit_type(None, ty)
                     }
                 }
                 N::VariantFields::Empty => (),
@@ -246,8 +247,8 @@ pub trait TypingVisitorContext {
                 .parameters
                 .iter_mut()
                 .map(|(_, _, ty)| ty)
-                .for_each(|ty| self.visit_type(ty));
-            self.visit_type(&mut fdef.signature.return_type);
+                .for_each(|ty| self.visit_type(None, ty));
+            self.visit_type(None, &mut fdef.signature.return_type);
         }
         if let T::FunctionBody_::Defined(seq) = &mut fdef.body.value {
             self.visit_seq(seq);
@@ -257,25 +258,27 @@ pub trait TypingVisitorContext {
 
     // -- TYPES --
 
-    fn visit_type_custom(&mut self, _ty: &mut N::Type) -> bool {
+    fn visit_type_custom(&mut self, _exp_loc: Option<Loc>, _ty: &mut N::Type) -> bool {
         false
     }
 
     /// Visit a type, including recursively. Note that this may be called manually even if
     /// `VISIT_TYPES` is set to `false`.
     #[growing_stack]
-    fn visit_type(&mut self, ty: &mut N::Type) {
-        if self.visit_type_custom(ty) {
+    fn visit_type(&mut self, exp_loc: Option<Loc>, ty: &mut N::Type) {
+        if self.visit_type_custom(exp_loc, ty) {
             return;
         }
         match &mut ty.value {
             N::Type_::Unit => (),
-            N::Type_::Ref(_, inner) => self.visit_type(inner),
+            N::Type_::Ref(_, inner) => self.visit_type(exp_loc, inner),
             N::Type_::Param(_) => (),
-            N::Type_::Apply(_, _, args) => args.iter_mut().for_each(|ty| self.visit_type(ty)),
+            N::Type_::Apply(_, _, args) => {
+                args.iter_mut().for_each(|ty| self.visit_type(exp_loc, ty))
+            }
             N::Type_::Fun(args, ret) => {
-                args.iter_mut().for_each(|ty| self.visit_type(ty));
-                self.visit_type(ret);
+                args.iter_mut().for_each(|ty| self.visit_type(exp_loc, ty));
+                self.visit_type(exp_loc, ret);
             }
             N::Type_::Var(_) => (),
             N::Type_::Anything => (),
@@ -332,7 +335,7 @@ pub trait TypingVisitorContext {
                     ty_ann
                         .iter_mut()
                         .flatten()
-                        .for_each(|ty| self.visit_type(ty));
+                        .for_each(|ty| self.visit_type(Some(ty.loc), ty));
                 }
             }
         }
@@ -367,7 +370,7 @@ pub trait TypingVisitorContext {
                 unused_binding: _,
             } => {
                 if Self::VISIT_TYPES {
-                    self.visit_type(ty);
+                    self.visit_type(Some(lvalue.loc), ty);
                 }
             }
             T::LValue_::UnpackVariant(_, _, _, tyargs, fields)
@@ -375,11 +378,13 @@ pub trait TypingVisitorContext {
             | T::LValue_::Unpack(_, _, tyargs, fields)
             | T::LValue_::BorrowUnpack(_, _, _, tyargs, fields) => {
                 if Self::VISIT_TYPES {
-                    tyargs.iter_mut().for_each(|ty| self.visit_type(ty));
+                    tyargs
+                        .iter_mut()
+                        .for_each(|ty| self.visit_type(Some(lvalue.loc), ty));
                 }
                 for (_, _, (_, (ty, lvalue))) in fields.iter_mut() {
                     if Self::VISIT_TYPES {
-                        self.visit_type(ty);
+                        self.visit_type(Some(lvalue.loc), ty);
                     }
                     self.visit_lvalue(kind, lvalue);
                 }
@@ -399,18 +404,19 @@ pub trait TypingVisitorContext {
             return;
         }
         if Self::VISIT_TYPES {
-            self.visit_type(&mut exp.ty);
+            self.visit_type(Some(exp.exp.loc), &mut exp.ty);
         }
-        let sp!(_, uexp) = &mut exp.exp;
+        let sp!(exp_loc, uexp) = &mut exp.exp;
+        let exp_loc = *exp_loc;
         match uexp {
             E::ModuleCall(c) => {
                 if Self::VISIT_TYPES {
                     c.type_arguments
                         .iter_mut()
-                        .for_each(|ty| self.visit_type(ty));
+                        .for_each(|ty| self.visit_type(Some(exp_loc), ty));
                     c.parameter_types
                         .iter_mut()
-                        .for_each(|ty| self.visit_type(ty));
+                        .for_each(|ty| self.visit_type(Some(exp_loc), ty));
                 }
                 self.visit_exp(&mut c.arguments)
             }
@@ -421,7 +427,7 @@ pub trait TypingVisitorContext {
                 match &mut bf.value {
                     BF::Freeze(t) => {
                         if Self::VISIT_TYPES {
-                            self.visit_type(t)
+                            self.visit_type(Some(exp_loc), t)
                         }
                     }
                     BF::Assert(_) => (),
@@ -429,7 +435,7 @@ pub trait TypingVisitorContext {
             }
             E::Vector(_, _, ty, e) => {
                 if Self::VISIT_TYPES {
-                    self.visit_type(ty);
+                    self.visit_type(Some(exp_loc), ty);
                 }
                 self.visit_exp(e);
             }
@@ -472,7 +478,7 @@ pub trait TypingVisitorContext {
                     ty_ann
                         .iter_mut()
                         .flatten()
-                        .for_each(|ty| self.visit_type(ty));
+                        .for_each(|ty| self.visit_type(Some(exp_loc), ty));
                 }
             }
             E::Mutate(e1, e2) => {
@@ -486,18 +492,20 @@ pub trait TypingVisitorContext {
             E::UnaryExp(_, e) => self.visit_exp(e),
             E::BinopExp(e1, _, ty, e2) => {
                 if Self::VISIT_TYPES {
-                    self.visit_type(ty);
+                    self.visit_type(Some(exp_loc), ty);
                 }
                 self.visit_exp(e1);
                 self.visit_exp(e2);
             }
             E::Pack(_, _, tyargs, fields) | E::PackVariant(_, _, _, tyargs, fields) => {
                 if Self::VISIT_TYPES {
-                    tyargs.iter_mut().for_each(|ty| self.visit_type(ty));
+                    tyargs
+                        .iter_mut()
+                        .for_each(|ty| self.visit_type(Some(exp_loc), ty));
                 }
                 fields.iter_mut().for_each(|(_, _, (_, (ty, e)))| {
                     if Self::VISIT_TYPES {
-                        self.visit_type(ty)
+                        self.visit_type(Some(exp_loc), ty)
                     }
                     self.visit_exp(e);
                 });
@@ -508,13 +516,14 @@ pub trait TypingVisitorContext {
                         T::ExpListItem::Single(e, ty) => {
                             self.visit_exp(e);
                             if Self::VISIT_TYPES {
-                                self.visit_type(ty)
+                                self.visit_type(Some(exp_loc), ty)
                             }
                         }
                         T::ExpListItem::Splat(_, e, tys) => {
                             self.visit_exp(e);
                             if Self::VISIT_TYPES {
-                                tys.iter_mut().for_each(|ty| self.visit_type(ty));
+                                tys.iter_mut()
+                                    .for_each(|ty| self.visit_type(Some(exp_loc), ty));
                             }
                         }
                     }
@@ -525,13 +534,13 @@ pub trait TypingVisitorContext {
             E::Cast(e, ty) => {
                 self.visit_exp(e);
                 if Self::VISIT_TYPES {
-                    self.visit_type(ty)
+                    self.visit_type(Some(exp_loc), ty)
                 }
             }
             E::Annotate(e, ty) => {
                 self.visit_exp(e);
                 if Self::VISIT_TYPES {
-                    self.visit_type(ty)
+                    self.visit_type(Some(exp_loc), ty)
                 }
             }
             E::Unit { .. }
