@@ -154,10 +154,8 @@ pub async fn verify_package(
     package_path: impl AsRef<Path>,
 ) -> anyhow::Result<(Network, AddressLookup)> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let mut config = resolve_lock_file_path(
-        MoveBuildConfig::default(),
-        Some(package_path.as_ref().to_path_buf()),
-    )?;
+    let mut config =
+        resolve_lock_file_path(MoveBuildConfig::default(), Some(package_path.as_ref()))?;
     config.lint_flag = LintFlag::LEVEL_NONE;
     config.silence_warnings = true;
     let build_config = BuildConfig {

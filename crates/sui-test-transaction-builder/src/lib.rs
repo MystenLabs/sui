@@ -25,8 +25,8 @@ use sui_types::transaction::{
 };
 use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
 
-pub struct TestTransactionBuilder<'a> {
-    test_data: TestTransactionData<'a>,
+pub struct TestTransactionBuilder {
+    test_data: TestTransactionData,
     sender: SuiAddress,
     gas_object: ObjectRef,
     gas_price: u64,
@@ -309,7 +309,7 @@ impl TestTransactionBuilder {
             TestTransactionData::Publish(data) => {
                 let (all_module_bytes, dependencies) = match data {
                     PublishData::Source(path, with_unpublished_deps) => {
-                        let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
+                        let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
                         let all_module_bytes =
                             compiled_package.get_package_bytes(with_unpublished_deps);
                         let dependencies = compiled_package.get_dependency_original_package_ids();
@@ -398,11 +398,11 @@ impl TestTransactionBuilder {
     }
 }
 
-enum TestTransactionData<'a> {
+enum TestTransactionData {
     Move(MoveData),
     Transfer(TransferData),
     TransferSui(TransferSuiData),
-    Publish(PublishData<'a>),
+    Publish(PublishData),
     Programmable(ProgrammableTransaction),
     Empty,
 }
@@ -415,12 +415,12 @@ struct MoveData {
     type_args: Vec<TypeTag>,
 }
 
-pub enum PublishData<'a> {
+pub enum PublishData {
     /// Path to source code directory and with_unpublished_deps.
     /// with_unpublished_deps indicates whether to publish unpublished dependencies in the same transaction or not.
     Source(PathBuf, bool),
     ModuleBytes(Vec<Vec<u8>>),
-    CompiledPackage(CompiledPackage<'a>),
+    CompiledPackage(CompiledPackage),
 }
 
 struct TransferData {
