@@ -72,7 +72,7 @@ pub struct Parameters {
 
 impl Parameters {
     pub(crate) fn default_leader_timeout() -> Duration {
-        Duration::from_millis(400)
+        Duration::from_millis(250)
     }
 
     pub(crate) fn default_min_round_delay() -> Duration {
@@ -82,7 +82,7 @@ impl Parameters {
             // and spending too much time in consensus can lead to starvation elsewhere.
             Duration::from_millis(400)
         } else {
-            Duration::from_millis(200)
+            Duration::from_millis(50)
         }
     }
 
@@ -211,7 +211,7 @@ impl TonicParameters {
     }
 
     fn default_message_size_limit() -> usize {
-        1 << 30
+        64 << 20
     }
 }
 

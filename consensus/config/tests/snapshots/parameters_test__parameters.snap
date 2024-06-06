@@ -5,10 +5,10 @@ expression: parameters
 db_path: ~
 leader_timeout:
   secs: 0
-  nanos: 400000000
+  nanos: 250000000
 min_round_delay:
   secs: 0
-  nanos: 200000000
+  nanos: 50000000
 max_forward_time_drift:
   secs: 0
   nanos: 500000000
@@ -25,4 +25,4 @@ tonic:
     nanos: 0
   connection_buffer_size: 33554432
   excessive_message_size: 16777216
-  message_size_limit: 1073741824
+  message_size_limit: 67108864
