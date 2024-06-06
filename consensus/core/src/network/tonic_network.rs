@@ -95,8 +95,8 @@ impl TonicClient {
             .get_channel(self.network_keypair.clone(), peer, timeout)
             .await?;
         Ok(ConsensusServiceClient::new(channel)
-            .max_encoding_message_size(config.max_message_size())
-            .max_decoding_message_size(config.max_message_size()))
+            .max_encoding_message_size(config.message_size_limit)
+            .max_decoding_message_size(config.message_size_limit))
     }
 }
 
@@ -336,7 +336,7 @@ impl ChannelPool {
         let channel = tower::ServiceBuilder::new()
             .layer(CallbackLayer::new(MetricsCallbackMaker::new(
                 self.context.metrics.network_metrics.outbound.clone(),
-                self.context.parameters.tonic.excessive_message_size(),
+                self.context.parameters.tonic.excessive_message_size,
             )))
             .layer(
                 TraceLayer::new_for_grpc()
@@ -572,13 +572,13 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             // tcp keepalive is unsupported by msim
             .add_service(
                 ConsensusServiceServer::new(service)
-                    .max_encoding_message_size(config.max_message_size())
-                    .max_decoding_message_size(config.max_message_size()),
+                    .max_encoding_message_size(config.message_size_limit)
+                    .max_decoding_message_size(config.message_size_limit),
             )
             .into_service();
 
         let inbound_metrics = self.context.metrics.network_metrics.inbound.clone();
-        let excessive_message_size = self.context.parameters.tonic.excessive_message_size();
+        let excessive_message_size = self.context.parameters.tonic.excessive_message_size;
 
         let mut http = Http::new();
         http.http2_only(true);
