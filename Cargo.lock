@@ -12917,6 +12917,7 @@ dependencies = [
  "serde_json",
  "shared-crypto",
  "signature 1.6.4",
+ "sui-config",
  "sui-core",
  "sui-json",
  "sui-json-rpc-api",
