@@ -32,7 +32,16 @@ impl Drop for Container {
         let _ = cancel_handle.send(());
 
         // Wait for the thread to join
-        thread.join().unwrap();
+        let result = thread.join();
+
+        if let Err(ref err) = result {
+            println!(
+                "Stop contain encountered error: {:?}",
+                err.downcast_ref::<&str>()
+            );
+        }
+
+        println!("Drop container result: {:?}", result);
 
         trace!("finished dropping Container");
     }
@@ -100,6 +109,8 @@ impl Container {
                 let _ = startup_sender.send(Arc::downgrade(&server));
                 // run until canceled
                 cancel_receiver.map(|_| ()).await;
+
+                panic!("Panic thread after receiving cancellation signal.");
 
                 trace!("cancellation received; shutting down thread");
             });

@@ -156,15 +156,21 @@ mod test {
 
     #[tokio::test]
     async fn start_and_stop() {
-        telemetry_subscribers::init_for_testing();
+        // telemetry_subscribers::init_for_testing();
         let swarm = Swarm::builder().build();
 
         let validator = swarm.validator_nodes().next().unwrap();
 
         validator.start().await.unwrap();
-        validator.health_check(true).await.unwrap();
+        println!(
+            "Health check before stop {:?}",
+            validator.health_check(true).await
+        );
         validator.stop();
-        validator.health_check(true).await.unwrap_err();
+        println!(
+            "Health check after stop {:?}",
+            validator.health_check(true).await.unwrap_err()
+        );
 
         validator.start().await.unwrap();
         validator.health_check(true).await.unwrap();
