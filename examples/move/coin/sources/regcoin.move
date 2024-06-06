@@ -1,13 +1,15 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //docs::#regulate
 module examples::regcoin {
-    use sui::coin;
+    use sui::coin::{Self, DenyCap};
+    use sui::deny_list::{DenyList};
 
     public struct REGCOIN has drop {}
 
     fun init(witness: REGCOIN, ctx: &mut TxContext) {
         let (treasury, deny_cap, metadata) = coin::create_regulated_currency(witness, 6, b"REGCOIN", b"", b"", option::none(), ctx);
-        // Freeze the metadata object so that it cannot be edited. You could instead 
-        // allow updates to the icon_url and other metadata with public_share_object.
         transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury, ctx.sender());
         transfer::public_transfer(deny_cap, ctx.sender())
@@ -16,10 +18,10 @@ module examples::regcoin {
     //docs::/#regulate}
 
     public fun add_addr_from_deny_list(denylist: &mut DenyList, denycap: &mut DenyCap<REGCOIN>, denyaddy: address, ctx: &mut TxContext) {
-        ctx.deny_list_add(denylist, denycap, denyaddy );
+        coin::deny_list_add(denylist, denycap, denyaddy, ctx);
     }
 
     public fun remove_addr_from_deny_list(denylist: &mut DenyList, denycap: &mut DenyCap<REGCOIN>, denyaddy: address, ctx: &mut TxContext){
-        ctx.deny_list_remove(denylist, denycap, denyaddy );
+        coin::deny_list_remove(denylist, denycap, denyaddy, ctx);
     }
 }

@@ -38,12 +38,13 @@ const removeTests = (text, options) => {
     element.toLowerCase().includes("notest"),
   );
   if (cont) {
-    return text
+    const processed = text
       .replace(
         /\s*#\[test.*?\n.*?(}(?!;)\n?|$)/gs,
         "\n{{plugin-removed-test}}\n",
       )
       .replace(/\{\{plugin-removed-test\}\}\s*/gm, "");
+    return processed;
   } else {
     return text;
   }

@@ -10,7 +10,9 @@ module examples::my_coin {
     public struct MY_COIN has drop {}
 
     // Module initializer is called once on module publish. A treasury
-    // cap is sent to the publisher, who then controls minting and burning
+    // cap is sent to the publisher, who then controls minting and burning.
+    // Use #[allow(lint(share_owned))] to create editable metadata.
+    #[allow(lint(share_owned))]
     fun init(witness: MY_COIN, ctx: &mut TxContext) {
         let (treasury, metadata) = coin::create_currency(witness, 6, b"MY_COIN", b"", b"", option::none(), ctx);
         // Share the metadata object so that it can be edited. You could instead 
