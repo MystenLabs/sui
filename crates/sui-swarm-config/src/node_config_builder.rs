@@ -41,11 +41,15 @@ pub struct ValidatorConfigBuilder {
     firewall_config: Option<RemoteFirewallConfig>,
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
+    state_accumulator_v2: bool,
 }
 
 impl ValidatorConfigBuilder {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            state_accumulator_v2: true,
+            ..Default::default()
+        }
     }
 
     pub fn with_config_directory(mut self, config_directory: PathBuf) -> Self {
@@ -103,6 +107,11 @@ impl ValidatorConfigBuilder {
         submit_delay_step_override_millis: u64,
     ) -> Self {
         self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
+        self
+    }
+
+    pub fn with_state_accumulator_v2_enabled(mut self, enabled: bool) -> Self {
+        self.state_accumulator_v2 = enabled;
         self
     }
 
@@ -228,6 +237,7 @@ impl ValidatorConfigBuilder {
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             execution_cache: ExecutionCacheConfig::default(),
+            state_accumulator_v2: self.state_accumulator_v2,
         }
     }
 
@@ -496,6 +506,7 @@ impl FullnodeConfigBuilder {
             policy_config: self.policy_config,
             firewall_config: self.fw_config,
             execution_cache: ExecutionCacheConfig::default(),
+            state_accumulator_v2: true,
         }
     }
 }

@@ -90,6 +90,29 @@ mod test {
         test_simulated_load(test_cluster, 60).await;
     }
 
+    // Ensure that with half the committee enabling v2 and half not,
+    // we still arrive at the same root state hash (we do not split brain
+    // fork).
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_with_accumulator_v2_partial_upgrade() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = init_test_cluster_builder(4, 1000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                // Disable system overload checks for the test - during tests with crashes,
+                // it is possible for overload protection to trigger due to validators
+                // having queued certs which are missing dependencies.
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_submit_delay_step_override_millis(3000)
+            .with_state_accumulator_v2_enabled_callback(Arc::new(|idx| idx % 2 == 0))
+            .build()
+            .await
+            .into();
+        test_simulated_load(test_cluster, 60).await;
+    }
+
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig_and_correlated_crashes() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
