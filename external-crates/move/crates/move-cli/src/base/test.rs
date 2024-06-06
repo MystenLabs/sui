@@ -72,8 +72,8 @@ pub struct Test {
     pub seed: Option<u64>,
 
     /// The number of iterations to run each test that uses generated values (only used #[random_test]).
-    #[clap(name = "rand-num-iters", long = "rand-num-iters", default_value = "10")]
-    pub rand_num_iters: u64,
+    #[clap(name = "rand-num-iters", long = "rand-num-iters")]
+    pub rand_num_iters: Option<u64>,
 }
 
 impl Test {
@@ -238,8 +238,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup
     // the trace files.
     if !unit_test_config
-        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)
-        .unwrap()
+        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)?
         .1
     {
         cleanup_trace();
