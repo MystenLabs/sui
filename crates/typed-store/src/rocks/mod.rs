@@ -2439,7 +2439,15 @@ pub fn default_db_options() -> DBOptions {
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
 
+    // Num threads for compaction and flush.
     opt.increase_parallelism(4);
+
+    // Disable write stalling and stopping based on pending compaction bytes.
+    // Throttling writes in Sui does not reduce the incoming data throughput most of the time,
+    // especially on the larger column families that do not get deleted per epoch.
+    opt.set_soft_pending_compaction_bytes_limit(0);
+    opt.set_hard_pending_compaction_bytes_limit(0);
+
     opt.set_enable_pipelined_write(true);
 
     opt.set_block_based_table_factory(&get_block_options(128));
