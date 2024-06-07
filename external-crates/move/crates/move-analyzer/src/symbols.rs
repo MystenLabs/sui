@@ -893,10 +893,16 @@ fn abilities_to_id_string(abilities: &AbilitySet) -> String {
 }
 
 fn variant_to_ide_string(variants: &[VariantInfo]) -> String {
-    variants
+    // how many variant lines (including optional ellipsis if there
+    // are too many of them) are printed
+    const NUM_PRINTED: usize = 7;
+    let mut vstrings = variants
         .iter()
-        .map(|info| {
-            if info.empty {
+        .enumerate()
+        .map(|(idx, info)| {
+            if idx >= NUM_PRINTED - 1 {
+                format!("\t/* ... */")
+            } else if info.empty {
                 format!("\t{}", info.name)
             } else if info.positional {
                 format!("\t{}( /* ... */ )", info.name)
@@ -904,8 +910,9 @@ fn variant_to_ide_string(variants: &[VariantInfo]) -> String {
                 format!("\t{}{{ /* ... */ }}", info.name)
             }
         })
-        .collect::<Vec<_>>()
-        .join(",\n")
+        .collect::<Vec<_>>();
+    vstrings.truncate(NUM_PRINTED);
+    vstrings.join(",\n")
 }
 
 impl SymbolicatorRunner {
