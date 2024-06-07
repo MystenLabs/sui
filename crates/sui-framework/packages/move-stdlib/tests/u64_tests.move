@@ -136,6 +136,11 @@ module std::u64_tests {
         assert_eq!(3u64.pow(27), slow_pow!(3u64, 27));
     }
 
+    #[test, expected_failure(arithmetic_error, location = std::u64)]
+    fun test_pow_overflow() {
+        255u64.pow(255);
+    }
+
     #[test]
     fun test_sqrt() {
         // logical bounds cases

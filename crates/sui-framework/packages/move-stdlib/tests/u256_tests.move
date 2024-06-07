@@ -136,4 +136,9 @@ module std::u256_tests {
         assert_eq!(2u256.pow(12), slow_pow!(2u256, 12));
         assert_eq!(3u256.pow(27), slow_pow!(3u256, 27));
     }
+
+    #[test, expected_failure(arithmetic_error, location = std::u256)]
+    fun test_pow_overflow() {
+        255u256.pow(255);
+    }
 }

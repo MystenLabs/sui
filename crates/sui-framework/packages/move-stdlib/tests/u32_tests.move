@@ -136,6 +136,12 @@ module std::u32_tests {
         assert_eq!(3u32.pow(20), slow_pow!(3u32, 20));
     }
 
+    #[test, expected_failure(arithmetic_error, location = std::u32)]
+    fun test_pow_overflow() {
+        255u32.pow(255);
+    }
+
+
     #[test]
     fun test_sqrt() {
         // logical bounds cases

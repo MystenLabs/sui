@@ -136,6 +136,11 @@ module std::u8_tests {
         assert_eq!(3u8.pow(5), slow_pow!(3u8, 5));
     }
 
+    #[test, expected_failure(arithmetic_error, location = std::u8)]
+    fun test_pow_overflow() {
+        255u8.pow(255);
+    }
+
     #[test]
     fun test_sqrt() {
         // logical bounds cases

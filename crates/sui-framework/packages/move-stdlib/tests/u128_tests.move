@@ -136,6 +136,11 @@ module std::u128_tests {
         assert_eq!(3u128.pow(27), slow_pow!(3u128, 27));
     }
 
+    #[test, expected_failure(arithmetic_error, location = std::u128)]
+    fun test_pow_overflow() {
+        255u128.pow(255);
+    }
+
     #[test]
     fun test_sqrt() {
         // logical bounds cases

@@ -136,6 +136,12 @@ module std::u16_tests {
         assert_eq!(3u16.pow(10), slow_pow!(3u16, 10));
     }
 
+    #[test, expected_failure(arithmetic_error, location = std::u16)]
+    fun test_pow_overflow() {
+        255u16.pow(255);
+    }
+
+
     #[test]
     fun test_sqrt() {
         // logical bounds cases
