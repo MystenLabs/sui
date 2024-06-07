@@ -285,17 +285,10 @@ impl CheckpointSummary {
     pub fn version_specific_data(
         &self,
         config: &ProtocolConfig,
-    ) -> Option<CheckpointVersionSpecificData> {
+    ) -> Result<Option<CheckpointVersionSpecificData>> {
         match config.checkpoint_summary_version_specific_data_as_option() {
-            None | Some(0) => None,
-            Some(1) => Some(
-                bcs::from_bytes(&self.version_specific_data).unwrap_or_else(|e| {
-                    panic!(
-                        "version_specific_data should deserialize for checkpoint {}: {e:?}",
-                        self.sequence_number(),
-                    )
-                }),
-            ),
+            None | Some(0) => Ok(None),
+            Some(1) => Ok(Some(bcs::from_bytes(&self.version_specific_data)?)),
             _ => unimplemented!("unrecognized version_specific_data version in CheckpointSummary"),
         }
     }
