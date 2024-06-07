@@ -35,7 +35,9 @@ use fastcrypto::{
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_bridge::sui_client::SuiClient as SuiBridgeClient;
-use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
+use sui_bridge::sui_transaction_builder::{
+    build_committee_register_transaction, build_committee_update_url_transaction,
+};
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -182,6 +184,18 @@ pub enum SuiValidatorCommand {
         #[clap(long)]
         validator_address: Option<SuiAddress>,
     },
+    /// Sui native bridge committee member registration
+    UpdateBridgeCommitteeNodeUrl {
+        #[clap(long)]
+        bridge_authority_url: String,
+        /// If true, only print the unsigned transaction and do not execute it.
+        /// This is useful for offline signing.
+        #[clap(name = "print-only", long, default_value = "false")]
+        print_unsigned_transaction_only: bool,
+        /// Must present if `print_unsigned_transaction_only` is true.
+        #[clap(long)]
+        validator_address: Option<SuiAddress>,
+    },
 }
 
 #[derive(Serialize)]
@@ -204,13 +218,17 @@ pub enum SuiValidatorCommandResponse {
         execution_response: Option<SuiTransactionBlockResponse>,
         serialized_unsigned_transaction: Option<String>,
     },
+    UpdateBridgeCommitteeURL {
+        execution_response: Option<SuiTransactionBlockResponse>,
+        serialized_unsigned_transaction: Option<String>,
+    },
 }
 
 fn make_key_files(
     file_name: PathBuf,
     is_protocol_key: bool,
     key: Option<SuiKeyPair>,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     if file_name.exists() {
         println!("Use existing {:?} key file.", file_name);
         return Ok(());
@@ -552,6 +570,79 @@ impl SuiValidatorCommand {
                         response.digest
                     );
                     SuiValidatorCommandResponse::RegisterBridgeCommittee {
+                        execution_response: Some(response),
+                        serialized_unsigned_transaction: None,
+                    }
+                }
+            }
+            SuiValidatorCommand::UpdateBridgeCommitteeNodeUrl {
+                bridge_authority_url,
+                print_unsigned_transaction_only,
+                validator_address,
+            } => {
+                // Read bridge keypair
+                let address = if !print_unsigned_transaction_only {
+                    let address = context.active_address()?;
+                    if let Some(validator_address) = validator_address {
+                        if validator_address != address {
+                            bail!(
+                                "`--validator-address` must be the same as the current active address: {}",
+                                address
+                            );
+                        }
+                    }
+                    address
+                } else {
+                    validator_address
+                        .ok_or_else(|| anyhow!("--validator-address must be provided when `print_unsigned_transaction_only` is true"))?
+                };
+                // Make sure the address is member of the committee
+                let sui_rpc_url = &context.config.get_active_env().unwrap().rpc;
+                let bridge_client = SuiBridgeClient::new(sui_rpc_url).await?;
+                let committee_members = bridge_client.get_bridge_summary().await?.committee.members
+                if !committee_members
+                    .into_iter()
+                    .any(|(_, m)| m.sui_address == address)
+                {
+                    bail!("Address {} is not in the committee", address);
+                }
+                println!(
+                    "Updating bridge committee node URL for Sui validator: {address}, url: {}",
+                    bridge_authority_url
+                );
+
+                let bridge = bridge_client
+                    .get_mutable_bridge_object_arg_must_succeed()
+                    .await;
+
+                let gas = context
+                    .get_one_gas_object_owned_by_address(address)
+                    .await?
+                    .unwrap_or_else(|| panic!("Cannot find gas object from address : {address}"));
+
+                let gas_price = context.get_reference_gas_price().await?;
+                let tx_data = build_committee_update_url_transaction(
+                    address,
+                    &gas,
+                    bridge,
+                    &bridge_authority_url,
+                    gas_price,
+                )
+                .map_err(|e| anyhow!("{e:?}"))?;
+                if print_unsigned_transaction_only {
+                    let serialized_data = Base64::encode(bcs::to_bytes(&tx_data)?);
+                    SuiValidatorCommandResponse::UpdateBridgeCommitteeURL {
+                        execution_response: None,
+                        serialized_unsigned_transaction: Some(serialized_data),
+                    }
+                } else {
+                    let tx = context.sign_transaction(&tx_data);
+                    let response = context.execute_transaction_must_succeed(tx).await;
+                    println!(
+                        "Update Bridge validator node URL successful. Transaction digest: {}",
+                        response.digest
+                    );
+                    SuiValidatorCommandResponse::UpdateBridgeCommitteeURL {
                         execution_response: Some(response),
                         serialized_unsigned_transaction: None,
                     }

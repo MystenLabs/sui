@@ -583,6 +583,35 @@ pub fn build_committee_register_transaction(
     Ok(data)
 }
 
+pub fn build_committee_update_url_transaction(
+    validator_address: SuiAddress,
+    gas_object_ref: &ObjectRef,
+    bridge_object_arg: ObjectArg,
+    bridge_url: &str,
+    ref_gas_price: u64,
+) -> BridgeResult<TransactionData> {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let bridge = builder.obj(bridge_object_arg).unwrap();
+    let url = builder
+        .input(CallArg::Pure(bcs::to_bytes(bridge_url.as_bytes()).unwrap()))
+        .unwrap();
+    builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        BRIDGE_MODULE_NAME.into(),
+        Identifier::from_str("update_node_url").unwrap(),
+        vec![],
+        vec![bridge, url],
+    );
+    let data = TransactionData::new_programmable(
+        validator_address,
+        vec![*gas_object_ref],
+        builder.finish(),
+        100_000_000,
+        ref_gas_price,
+    );
+    Ok(data)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::crypto::BridgeAuthorityKeyPair;
