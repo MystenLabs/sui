@@ -56,4 +56,24 @@ module std::u8 {
     public fun sqrt(x: u8): u8 {
         std::macros::num_sqrt!<u8, u16>(x, 8)
     }
+
+    /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)
+    public macro fun range_do($start: u8, $stop: u8, $f: |u8|) {
+        std::macros::range_do!($start, $stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `$start` to `$stop` (inclusive)
+    public macro fun range_do_eq($start: u8, $stop: u8, $f: |u8|) {
+        std::macros::range_do_eq!($start, $stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `0` to `$stop` (exclusive)
+    public macro fun do($stop: u8, $f: |u8|) {
+        std::macros::do!($stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `0` to `$stop` (inclusive)
+    public macro fun do_eq($stop: u8, $f: |u8|) {
+        std::macros::do_eq!($stop, $f)
+    }
 }
