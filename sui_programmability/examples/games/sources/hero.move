@@ -220,7 +220,7 @@ module games::hero {
         object::delete(id);
         let new_hp = hero.hp + potency;
         // cap hero's HP at MAX_HP to avoid int overflows
-        hero.hp = math::min(new_hp, MAX_HP)
+        hero.hp = new_hp.min(MAX_HP)
     }
 
     /// Add `new_sword` to the hero's inventory and return the old sword
@@ -257,7 +257,7 @@ module games::hero {
         let magic = (value - MIN_SWORD_COST) / MIN_SWORD_COST;
         Sword {
             id: object::new(ctx),
-            magic: math::min(magic, MAX_MAGIC),
+            magic: magic.min(MAX_MAGIC),
             strength: 1,
             game_id: id(game)
         }
