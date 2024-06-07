@@ -8,6 +8,7 @@ use crate::crypto::{
 use crate::digests::ZKLoginInputsDigest;
 use crate::error::SuiError;
 use crate::multisig_legacy::MultiSigLegacy;
+use crate::passkey_authenticator::PasskeyAuthenticator;
 use crate::signature_verification::VerifiedDigestCache;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
 use crate::{base_types::SuiAddress, crypto::Signature, error::SuiResult, multisig::MultiSig};
@@ -89,6 +90,7 @@ pub enum GenericSignature {
     MultiSigLegacy,
     Signature,
     ZkLoginAuthenticator,
+    PasskeyAuthenticator,
 }
 
 impl GenericSignature {
@@ -228,6 +230,10 @@ impl ToFromBytes for GenericSignature {
                     let zk_login = ZkLoginAuthenticator::from_bytes(bytes)?;
                     Ok(GenericSignature::ZkLoginAuthenticator(zk_login))
                 }
+                SignatureScheme::PasskeyAuthenticator => {
+                    let passkey = PasskeyAuthenticator::from_bytes(bytes)?;
+                    Ok(GenericSignature::PasskeyAuthenticator(passkey))
+                }
                 _ => Err(FastCryptoError::InvalidInput),
             },
             Err(_) => Err(FastCryptoError::InvalidInput),
@@ -243,6 +249,7 @@ impl AsRef<[u8]> for GenericSignature {
             GenericSignature::MultiSigLegacy(s) => s.as_ref(),
             GenericSignature::Signature(s) => s.as_ref(),
             GenericSignature::ZkLoginAuthenticator(s) => s.as_ref(),
+            GenericSignature::PasskeyAuthenticator(s) => s.as_ref(),
         }
     }
 }
