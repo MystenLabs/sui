@@ -63,6 +63,7 @@ use sui_types::{
     digests::TransactionDigest,
     dynamic_field::DynamicFieldInfo,
     error::SuiError,
+    gas::GasCostSummary,
     gas_coin::GasCoin,
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
@@ -2600,12 +2601,26 @@ pub async fn estimate_gas_budget(
         bail!("Could not automatically determine the gas budget. Please supply one using the --gas-budget flag.")
     };
 
-    let safe_overhead = GAS_SAFE_OVERHEAD * client.read_api().get_reference_gas_price().await?;
-    let computation_cost_with_overhead =
-        dry_run.effects.gas_cost_summary().computation_cost + safe_overhead;
+    let rgp = client.read_api().get_reference_gas_price().await?;
 
-    let gas_usage = dry_run.effects.gas_cost_summary().net_gas_usage() + safe_overhead as i64;
-    Ok(computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 }))
+    Ok(estimate_gas_budget_from_gas_cost(
+        dry_run.effects.gas_cost_summary(),
+        rgp,
+    ))
+}
+
+pub fn estimate_gas_budget_from_gas_cost(
+    gas_cost_summary: &GasCostSummary,
+    reference_gas_price: u64,
+) -> u64 {
+    let safe_overhead = GAS_SAFE_OVERHEAD * reference_gas_price;
+    let computation_cost_with_overhead = gas_cost_summary.computation_cost + safe_overhead;
+
+    let gas_usage = gas_cost_summary.net_gas_usage() + safe_overhead as i64;
+    let estimated_gas_budget =
+        computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 });
+    tracing::info!("Estimated gas budget: {}", estimated_gas_budget);
+    estimated_gas_budget
 }
 
 /// Queries the protocol config for the maximum gas allowed in a transaction.
