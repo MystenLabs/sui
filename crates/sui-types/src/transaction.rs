@@ -2351,6 +2351,40 @@ impl SenderSignedData {
     }
 }
 
+impl VersionedProtocolMessage for SenderSignedData {
+    fn message_version(&self) -> Option<u64> {
+        self.transaction_data().message_version()
+    }
+
+    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+        self.transaction_data()
+            .check_version_and_features_supported(protocol_config)?;
+
+        // This code does nothing right now. Its purpose is to cause a compiler error when a
+        // new signature type is added.
+        //
+        // When adding a new signature type, check if current_protocol_version
+        // predates support for the new type. If it does, return
+        // SuiError::WrongMessageVersion
+        for sig in &self.inner().tx_signatures {
+            match sig {
+                GenericSignature::MultiSig(_) => {
+                    if !protocol_config.supports_upgraded_multisig() {
+                        return Err(SuiError::UnsupportedFeatureError {
+                            error: "multisig format not enabled on this network".to_string(),
+                        });
+                    }
+                }
+                GenericSignature::Signature(_)
+                | GenericSignature::MultiSigLegacy(_)
+                | GenericSignature::ZkLoginAuthenticator(_)
+                | GenericSignature::PasskeyAuthenticator(_) => (),
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Message for SenderSignedData {
     type DigestType = TransactionDigest;
     const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
