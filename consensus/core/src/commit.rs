@@ -3,9 +3,9 @@
 
 use std::{
     cmp::Ordering,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::{Deref, RangeInclusive},
+    ops::{Deref, Range, RangeInclusive},
     sync::Arc,
 };
 
@@ -547,32 +547,37 @@ impl CommitInfo {
 
 /// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)
 /// and end (inclusive) commit indices and can be ordered for use as the key of a table.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct CommitRange(RangeInclusive<CommitIndex>);
+///
+/// NOTE: using Range<CommitIndex> for internal representation for backward compatibility.
+/// The external semantics of CommitRange is closer to RangeInclusive<CommitIndex>.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct CommitRange(Range<CommitIndex>);
 
 impl CommitRange {
     pub(crate) fn new(range: RangeInclusive<CommitIndex>) -> Self {
-        Self(range)
+        // When end is CommitIndex::MAX, the range can be considered as unbounded
+        // so it is ok to saturate at the end.
+        Self(*range.start()..(*range.end()).saturating_add(1))
     }
 
     // Inclusive
     pub(crate) fn start(&self) -> CommitIndex {
-        *self.0.start()
+        self.0.start
     }
 
-    // Exclusive
+    // Inclusive
     pub(crate) fn end(&self) -> CommitIndex {
-        *self.0.end()
+        self.0.end.saturating_sub(1)
     }
 
     /// Check whether the two ranges have the same size.
     pub(crate) fn is_equal_size(&self, other: &Self) -> bool {
-        self.0.size_hint() == other.0.size_hint()
+        self.0.end.wrapping_sub(self.0.start) == other.0.end.wrapping_sub(other.0.start)
     }
 
     /// Check if the provided range is sequentially after this range.
     pub(crate) fn is_next_range(&self, other: &Self) -> bool {
-        &self.end() + 1 == other.start()
+        self.0.end == other.0.start
     }
 }
 
@@ -592,13 +597,14 @@ impl PartialOrd for CommitRange {
 
 impl From<RangeInclusive<CommitIndex>> for CommitRange {
     fn from(range: RangeInclusive<CommitIndex>) -> Self {
-        Self(range)
+        Self::new(range)
     }
 }
 
-impl Default for CommitRange {
-    fn default() -> Self {
-        Self(CommitIndex::default()..=CommitIndex::default())
+/// Display CommitRange as an inclusive range.
+impl Debug for CommitRange {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "CommitRange({}..={})", self.start(), self.end())
     }
 }
 
