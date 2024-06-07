@@ -71,11 +71,11 @@ module std::macros {
     }
 
     public(package) macro fun do($stop: _, $f: |_|) {
-        range_do(0, $stop, $f)
+        range_do!(0, $stop, $f)
     }
 
     public(package) macro fun do_eq($stop: _, $f: |_|) {
-        range_do_eq(0, $stop, $f)
+        range_do_eq!(0, $stop, $f)
     }
 
     public(package) macro fun num_sqrt<$T, $U>($x: $T, $bitsize: u8): $T {
