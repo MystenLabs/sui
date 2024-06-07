@@ -1,0 +1,49 @@
+[package]
+name = "remora"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.28.1", features = ["full"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+git-version = "0.3.5"
+const-str = "0.5.3"
+futures = "0.3.23"
+bytes = "1.0.1"
+prometheus = "0.13"
+tracing = "0.1.36"
+dashmap = "5.4.0"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+sui-transaction-checks.workspace = true
+async-trait = "0.1.71"
+bincode = "1.3.3"
+tokio-util = "0.7.9"
+axum = "0.6.20"
+hyper = "0.14.27"
+reqwest = "0.11.22"
+sha3 = "0.10.8"
+better_any = "0.2.0"
+
+prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
+
+fail = "0.4.0"
+sui-config = { path = "../sui-config" }
+sui-types = { path = "../sui-types" }
+sui-core = { path = "../sui-core" }
+sui-node = { path = "../sui-node" }
+sui-single-node-benchmark = { path = "../sui-single-node-benchmark" }
+sui-protocol-config = { path = "../sui-protocol-config" }
+sui-adapter-latest = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
+network = { path = "network" }
+
+typed-store.workspace = true
+clap.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-bytecode-utils.workspace = true
+sui-archival.workspace = true

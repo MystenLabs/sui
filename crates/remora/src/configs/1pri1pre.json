@@ -1,0 +1,33 @@
+{
+    "0" : {
+        "kind" : "GEN",
+        "ip_addr" : "127.0.0.1", 
+        "port" : 5001,
+        "metrics_address": "0.0.0.0:9054",
+        "attrs" : {
+            "metrics-address": "0.0.0.0:9184",
+            "mode": "channel"
+        }
+    },
+    "1" : {
+        "kind" : "PRI",
+        "ip_addr" : "127.0.0.1", 
+        "port" : 5002,
+        "metrics_address": "0.0.0.0:9055",
+        "attrs" : {
+            "metrics-address": "0.0.0.0:9185",
+            "execute": "100",
+            "mode": "channel"
+        }
+    },    
+    "2" : {
+        "kind" : "PRE",
+        "ip_addr" : "127.0.0.1", 
+        "port" : 5003,
+        "metrics_address": "0.0.0.0:9056",
+        "attrs" : {
+            "metrics-address": "0.0.0.0:9186",
+            "execute": "100",
+            "mode": "channel"
+        }
+    }}
