@@ -2588,7 +2588,7 @@ dependencies = [
 
 [[package]]
 name = "consensus-config"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "fastcrypto",
  "insta",
@@ -2600,7 +2600,7 @@ dependencies = [
 
 [[package]]
 name = "consensus-core"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anemo",
  "anemo-build",
@@ -14361,7 +14361,7 @@ dependencies = [
 
 [[package]]
 name = "sui-verifier-v2"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "move-abstract-stack",
  "move-binary-format",
@@ -15500,7 +15500,7 @@ dependencies = [
 
 [[package]]
 name = "transaction-fuzzer"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "move-core-types",
  "once_cell",
