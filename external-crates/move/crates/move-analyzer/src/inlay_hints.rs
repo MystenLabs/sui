@@ -107,7 +107,7 @@ fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayH
         return None;
     };
 
-    let Some(struct_def_info) = symbols.def_info(&struct_def.name_start()) else {
+    let Some(struct_def_info) = symbols.def_info(&struct_def.name_loc) else {
         return None;
     };
 
