@@ -160,7 +160,7 @@ pub async fn verify_package(
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
         print_diags_to_stderr: false,
     };
-    let compiled_package = build_config.build(package_path.as_ref().to_path_buf())?;
+    let compiled_package = build_config.build(package_path.as_ref())?;
 
     let network_url = match network {
         Network::Mainnet => MAINNET_URL,

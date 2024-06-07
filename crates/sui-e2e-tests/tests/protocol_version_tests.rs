@@ -1048,6 +1048,6 @@ mod sim_only_tests {
 
         let mut config = BuildConfig::new_for_testing();
         config.run_bytecode_verifier = true;
-        config.build(package).unwrap()
+        config.build(&package).unwrap()
     }
 }
