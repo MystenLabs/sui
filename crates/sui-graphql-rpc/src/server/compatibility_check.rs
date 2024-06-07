@@ -4,8 +4,8 @@
 use crate::check_table;
 use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
-use diesel::QueryDsl;
-use diesel::SelectableHelper;
+use diesel::{sql_query, QueryDsl};
+use diesel::{RunQueryDsl, SelectableHelper};
 use sui_indexer::models::checkpoints::StoredCheckpoint;
 use sui_indexer::models::display::StoredDisplay;
 use sui_indexer::models::epoch::QueryableEpochInfo;
@@ -22,12 +22,15 @@ use sui_indexer::schema::{
     checkpoints, display, epochs, events, objects_history, objects_snapshot, packages,
     transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
 };
+
 pub(crate) async fn check_all_tables(db: &Db) -> Result<bool, Error> {
     let result: bool = db
         .execute(|conn| {
             let mut all_ok = true;
 
-            // List all tables to check here
+            // Allocate 60 seconds for the compatibility check
+            sql_query(format!("SET statement_timeout = {}", 60000)).execute(conn.conn())?;
+
             all_ok &= check_table!(conn, checkpoints::dsl::checkpoints, StoredCheckpoint);
             all_ok &= check_table!(conn, display::dsl::display, StoredDisplay);
             all_ok &= check_table!(conn, epochs::dsl::epochs, QueryableEpochInfo);
