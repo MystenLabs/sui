@@ -324,10 +324,10 @@ Aborts if given a primitive type.
     <b>let</b> <b>mut</b> i = <a href="../move-stdlib/address.md#0x1_address_length">address::length</a>() * 2 + 2;
     <b>let</b> str_bytes = self.name.as_bytes();
     <b>let</b> <b>mut</b> module_name = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-
+    <b>let</b> colon = <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_COLON">ASCII_COLON</a>;
     <b>loop</b> {
         <b>let</b> char = &str_bytes[i];
-        <b>if</b> (char != &<a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_COLON">ASCII_COLON</a>) {
+        <b>if</b> (char != &colon) {
             module_name.push_back(*char);
             i = i + 1;
         } <b>else</b> {

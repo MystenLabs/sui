@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(implicit_const_copy)]
 /// Functionality for converting Move types into values. Use with care!
 module std::type_name {
     use std::ascii::{Self, String};
@@ -106,10 +105,10 @@ module std::type_name {
         let mut i = address::length() * 2 + 2;
         let str_bytes = self.name.as_bytes();
         let mut module_name = vector[];
-
+        let colon = ASCII_COLON;
         loop {
             let char = &str_bytes[i];
-            if (char != &ASCII_COLON) {
+            if (char != &colon) {
                 module_name.push_back(*char);
                 i = i + 1;
             } else {
