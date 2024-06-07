@@ -242,7 +242,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .map(|block| block.serialized().clone()),
         );
 
-        self.subscription_counter.increment()?;
         let broadcasted_blocks = BroadcastedBlockStream::new(
             self.context.clone(),
             peer,
@@ -440,6 +439,8 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
             .subscribed_peers
             .with_label_values(&[peer_hostname])
             .set(1);
+        // Failure can only be due to core shutdown.
+        let _ = subscription_counter.increment();
         Self {
             context,
             peer,
@@ -489,6 +490,7 @@ impl<T> Drop for BroadcastStream<T> {
             .subscribed_peers
             .with_label_values(&[peer_hostname])
             .set(0);
+        // Failure can only be due to core shutdown.
         let _ = self.subscription_counter.decrement();
     }
 }
