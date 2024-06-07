@@ -4,8 +4,7 @@
 use crate::check_table;
 use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
-use diesel::{sql_query, QueryDsl};
-use diesel::{RunQueryDsl, SelectableHelper};
+use diesel::{sql_query, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 use sui_indexer::models::checkpoints::StoredCheckpoint;
 use sui_indexer::models::display::StoredDisplay;
 use sui_indexer::models::epoch::QueryableEpochInfo;
@@ -78,7 +77,9 @@ pub(crate) async fn check_all_tables(db: &Db) -> Result<bool, Error> {
 #[macro_export]
 macro_rules! check_table {
     ($conn:expr, $table:path, $type:ty) => {{
-        let result: Result<$type, _> = $conn.first(move || $table.select(<$type>::as_select()));
+        let result: Result<Option<$type>, _> = $conn
+            .first(move || $table.select(<$type>::as_select()))
+            .optional();
         match result {
             Ok(_) => true,
             Err(_) => false,
