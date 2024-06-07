@@ -217,7 +217,7 @@ u8, u16, u32, u64, u128, u256, bool, address, vector.
     bytes == &b"u16" ||
     bytes == &b"u32" ||
     bytes == &b"<a href="../move-stdlib/u64.md#0x1_u64">u64</a>" ||
-    bytes == &b"<a href="../move-stdlib/u128.md#0x1_u128">u128</a>" ||
+    bytes == &b"u128" ||
     bytes == &b"u256" ||
     bytes == &b"<b>address</b>" ||
     (bytes.length() &gt;= 6 &&

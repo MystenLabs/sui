@@ -6,7 +6,6 @@
 module games::hero {
     use sui::coin::Coin;
     use sui::event;
-    use sui::math;
     use sui::sui::SUI;
 
     /// Our hero!

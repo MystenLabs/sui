@@ -27,7 +27,7 @@ DEPRECATED, use the each integer type's individual module instead, e.g. <code>st
 DEPRECATED, use <code>std::u64::max</code> instead
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_max">max</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_max">max</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -36,8 +36,8 @@ DEPRECATED, use <code>std::u64::max</code> instead
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_max">max</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
-    x.<a href="../sui-framework/math.md#0x2_math_max">max</a>(y)
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_max">max</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+    x.<a href="math.md#0x2_math_max">max</a>(y)
 }
 </code></pre>
 
@@ -77,7 +77,7 @@ DEPRECATED, use <code>std::u64::min</code> instead
 DEPRECATED, use <code>std::u64::diff</code> instead
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_diff">diff</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_diff">diff</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -86,8 +86,8 @@ DEPRECATED, use <code>std::u64::diff</code> instead
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_diff">diff</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
-    x.<a href="../sui-framework/math.md#0x2_math_diff">diff</a>(y)
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_diff">diff</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+    x.<a href="math.md#0x2_math_diff">diff</a>(y)
 }
 </code></pre>
 
@@ -102,7 +102,7 @@ DEPRECATED, use <code>std::u64::diff</code> instead
 DEPRECATED, use <code>std::u64::pow</code> instead
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_pow">pow</a>(base: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, exponent: u8): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_pow">pow</a>(base: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, exponent: u8): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -111,8 +111,8 @@ DEPRECATED, use <code>std::u64::pow</code> instead
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_pow">pow</a>(base: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, exponent: u8): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
-    base.<a href="../sui-framework/math.md#0x2_math_pow">pow</a>(exponent)
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_pow">pow</a>(base: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, exponent: u8): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+    base.<a href="math.md#0x2_math_pow">pow</a>(exponent)
 }
 </code></pre>
 
@@ -127,7 +127,7 @@ DEPRECATED, use <code>std::u64::pow</code> instead
 DEPRECATED, use <code>std::u64::sqrt</code> instead
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt">sqrt</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt">sqrt</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -136,8 +136,8 @@ DEPRECATED, use <code>std::u64::sqrt</code> instead
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt">sqrt</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
-    x.<a href="../sui-framework/math.md#0x2_math_sqrt">sqrt</a>()
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt">sqrt</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+    x.<a href="math.md#0x2_math_sqrt">sqrt</a>()
 }
 </code></pre>
 
@@ -152,7 +152,7 @@ DEPRECATED, use <code>std::u64::sqrt</code> instead
 DEPRECATED, use <code>std::u128::sqrt</code> instead
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>): <a href="../move-stdlib/u128.md#0x1_u128">u128</a>
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>): <a href="../move-stdlib/u128.md#0x1_u128">u128</a>
 </code></pre>
 
 
@@ -161,8 +161,8 @@ DEPRECATED, use <code>std::u128::sqrt</code> instead
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>): <a href="../move-stdlib/u128.md#0x1_u128">u128</a> {
-   x.<a href="../sui-framework/math.md#0x2_math_sqrt">sqrt</a>()
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>): <a href="../move-stdlib/u128.md#0x1_u128">u128</a> {
+   x.<a href="math.md#0x2_math_sqrt">sqrt</a>()
 }
 </code></pre>
 
@@ -177,7 +177,7 @@ DEPRECATED, use <code>std::u128::sqrt</code> instead
 DEPRECATED, use <code>std::u64::divide_and_round_up</code> instead
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -186,8 +186,8 @@ DEPRECATED, use <code>std::u64::divide_and_round_up</code> instead
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
-    x.<a href="../sui-framework/math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(y)
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+    x.<a href="math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(y)
 }
 </code></pre>
 

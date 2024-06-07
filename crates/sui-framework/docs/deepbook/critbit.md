@@ -573,8 +573,8 @@ title: Module `0xdee9::critbit`
     <b>let</b> closest_key = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&tree.leaves, closest_leaf_index).key;
     <b>assert</b>!(closest_key != key, <a href="critbit.md#0xdee9_critbit_EKeyAlreadyExist">EKeyAlreadyExist</a>);
 
-    // Note that we reserve count_leading_zeros of form <a href="../move-stdlib/u128.md#0x1_u128">u128</a> for future <b>use</b>
-    <b>let</b> <a href="critbit.md#0xdee9_critbit">critbit</a> = 64 - (count_leading_zeros((closest_key ^ key) <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>) - 64);
+    // Note that we reserve count_leading_zeros of form u128 for future <b>use</b>
+    <b>let</b> <a href="critbit.md#0xdee9_critbit">critbit</a> = 64 - (count_leading_zeros((closest_key ^ key) <b>as</b> u128) - 64);
     <b>let</b> new_mask = 1u64 &lt;&lt; (<a href="critbit.md#0xdee9_critbit">critbit</a> - 1);
 
     <b>let</b> new_internal_node= <a href="critbit.md#0xdee9_critbit_InternalNode">InternalNode</a> {

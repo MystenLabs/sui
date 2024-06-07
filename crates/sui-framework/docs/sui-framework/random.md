@@ -589,7 +589,7 @@ Generate a u256.
 Generate a u128.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u128">generate_u128</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>): <a href="../move-stdlib/u128.md#0x1_u128">u128</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u128">generate_u128</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>): u128
 </code></pre>
 
 
@@ -598,8 +598,8 @@ Generate a u128.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u128">generate_u128</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>): <a href="../move-stdlib/u128.md#0x1_u128">u128</a> {
-    <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 16) <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u128">generate_u128</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>): u128 {
+    <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 16) <b>as</b> u128
 }
 </code></pre>
 
@@ -738,7 +738,7 @@ Generate a boolean.
 
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>, <b>min</b>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, max: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, num_of_bytes: u8): <a href="../move-stdlib/u128.md#0x1_u128">u128</a>
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>, <b>min</b>: u128, max: u128, num_of_bytes: u8): u128
 </code></pre>
 
 
@@ -747,7 +747,7 @@ Generate a boolean.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, max: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, num_of_bytes: u8): <a href="../move-stdlib/u128.md#0x1_u128">u128</a> {
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u128, max: u128, num_of_bytes: u8): u128 {
     <b>assert</b>!(<b>min</b> &lt;= max, <a href="../sui-framework/random.md#0x2_random_EInvalidRange">EInvalidRange</a>);
     <b>if</b> (<b>min</b> == max) {
         <b>return</b> <b>min</b>
@@ -757,7 +757,7 @@ Generate a boolean.
     // [<b>min</b>, max].
     <b>let</b> range_size = (max - <b>min</b>) <b>as</b> u256 + 1;
     <b>let</b> rand = <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, num_of_bytes);
-    <b>min</b> + (rand % range_size <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>)
+    <b>min</b> + (rand % range_size <b>as</b> u128)
 }
 </code></pre>
 
@@ -772,7 +772,7 @@ Generate a boolean.
 Generate a random u128 in [min, max] (with a bias of 2^{-64}).
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u128_in_range">generate_u128_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>, <b>min</b>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, max: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>): <a href="../move-stdlib/u128.md#0x1_u128">u128</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u128_in_range">generate_u128_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>, <b>min</b>: u128, max: u128): u128
 </code></pre>
 
 
@@ -781,7 +781,7 @@ Generate a random u128 in [min, max] (with a bias of 2^{-64}).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u128_in_range">generate_u128_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, max: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>): <a href="../move-stdlib/u128.md#0x1_u128">u128</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u128_in_range">generate_u128_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u128, max: u128): u128 {
     <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b>, max, 24)
 }
 </code></pre>
@@ -806,7 +806,7 @@ Generate a random u128 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64_in_range">generate_u64_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, max: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
-    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, max <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, 16) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> u128, max <b>as</b> u128, 16) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 }
 </code></pre>
 
@@ -831,7 +831,7 @@ Generate a random u32 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u32_in_range">generate_u32_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u32, max: u32): u32 {
-    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, max <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, 12) <b>as</b> u32
+    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> u128, max <b>as</b> u128, 12) <b>as</b> u32
 }
 </code></pre>
 
@@ -856,7 +856,7 @@ Generate a random u16 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u16_in_range">generate_u16_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u16, max: u16): u16 {
-    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, max <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, 10) <b>as</b> u16
+    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> u128, max <b>as</b> u128, 10) <b>as</b> u16
 }
 </code></pre>
 
@@ -881,7 +881,7 @@ Generate a random u8 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u8_in_range">generate_u8_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u8, max: u8): u8 {
-    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, max <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, 9) <b>as</b> u8
+    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> u128, max <b>as</b> u128, 9) <b>as</b> u8
 }
 </code></pre>
 

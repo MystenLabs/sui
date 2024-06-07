@@ -27,8 +27,8 @@ title: Module `0x2::authenticator_state`
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="../move-stdlib/string.md#0x1_string">0x1::string</a>;
+<b>use</b> <a href="../move-stdlib/u64.md#0x1_u64">0x1::u64</a>;
 <b>use</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
-<b>use</b> <a href="../sui-framework/math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -612,7 +612,7 @@ indicate that the JWK has been validated in the current epoch and should not be 
         // when they are equal, push only one, but <b>use</b> the max epoch of the two
         <b>if</b> (<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_active_jwk_equal">active_jwk_equal</a>(old_jwk, new_jwk)) {
             <b>let</b> <b>mut</b> jwk = *old_jwk;
-            jwk.epoch = <a href="../sui-framework/math.md#0x2_math_max">math::max</a>(old_jwk.epoch, new_jwk.epoch);
+            jwk.epoch = old_jwk.epoch.max(new_jwk.epoch);
             res.push_back(jwk);
             i = i + 1;
             j = j + 1;
@@ -733,7 +733,7 @@ indicate that the JWK has been validated in the current epoch and should not be 
             <b>if</b> (cur_iss == prev_issuer.borrow()) {
                 <b>let</b> back = issuer_max_epochs.length() - 1;
                 <b>let</b> prev_max_epoch = &<b>mut</b> issuer_max_epochs[back];
-                *prev_max_epoch = <a href="../sui-framework/math.md#0x2_math_max">math::max</a>(*prev_max_epoch, cur.epoch);
+                *prev_max_epoch = (*prev_max_epoch).max(cur.epoch);
             } <b>else</b> {
                 *prev_issuer.borrow_mut() = *cur_iss;
                 issuer_max_epochs.push_back(cur.epoch);

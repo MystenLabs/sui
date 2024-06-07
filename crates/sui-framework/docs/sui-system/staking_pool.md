@@ -44,9 +44,9 @@ title: Module `0x3::staking_pool`
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
+<b>use</b> <a href="../move-stdlib/u64.md#0x1_u64">0x1::u64</a>;
 <b>use</b> <a href="../sui-framework/bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="../sui-framework/balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="../sui-framework/math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../sui-framework/sui.md#0x2_sui">0x2::sui</a>;
 <b>use</b> <a href="../sui-framework/table.md#0x2_table">0x2::table</a>;
@@ -770,7 +770,7 @@ portion because the principal portion was already taken out of the staker's self
     // This may happen when we are withdrawing everything from the pool and
     // the rewards pool <a href="../sui-framework/balance.md#0x2_balance">balance</a> may be less than reward_withdraw_amount.
     // TODO: FIGURE OUT EXACTLY WHY THIS CAN HAPPEN.
-    reward_withdraw_amount = <a href="../sui-framework/math.md#0x2_math_min">math::min</a>(reward_withdraw_amount, pool.rewards_pool.value());
+    reward_withdraw_amount = reward_withdraw_amount.<b>min</b>(pool.rewards_pool.value());
     pool.rewards_pool.<a href="staking_pool.md#0x3_staking_pool_split">split</a>(reward_withdraw_amount)
 }
 </code></pre>
@@ -1128,7 +1128,7 @@ Returns true if all the staking parameters of the staked sui except the principa
         <b>return</b> <a href="staking_pool.md#0x3_staking_pool_initial_exchange_rate">initial_exchange_rate</a>()
     };
     <b>let</b> clamped_epoch = pool.deactivation_epoch.get_with_default(epoch);
-    <b>let</b> <b>mut</b> epoch = <a href="../sui-framework/math.md#0x2_math_min">math::min</a>(clamped_epoch, epoch);
+    <b>let</b> <b>mut</b> epoch = clamped_epoch.<b>min</b>(epoch);
     <b>let</b> activation_epoch = *pool.activation_epoch.borrow();
 
     // Find the latest epoch that's earlier than the given epoch <b>with</b> an entry in the <a href="../sui-framework/table.md#0x2_table">table</a>
@@ -1316,9 +1316,9 @@ Returns true if the provided staking pool is preactive at the provided epoch.
     <b>if</b> (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
         <b>return</b> token_amount
     };
-    <b>let</b> res = exchange_rate.sui_amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>
-            * (token_amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>)
-            / (exchange_rate.pool_token_amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
+    <b>let</b> res = exchange_rate.sui_amount <b>as</b> u128
+            * (token_amount <b>as</b> u128)
+            / (exchange_rate.pool_token_amount <b>as</b> u128);
     res <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 }
 </code></pre>
@@ -1348,9 +1348,9 @@ Returns true if the provided staking pool is preactive at the provided epoch.
     <b>if</b> (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
         <b>return</b> sui_amount
     };
-    <b>let</b> res = exchange_rate.pool_token_amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>
-            * (sui_amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>)
-            / (exchange_rate.sui_amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
+    <b>let</b> res = exchange_rate.pool_token_amount <b>as</b> u128
+            * (sui_amount <b>as</b> u128)
+            / (exchange_rate.sui_amount <b>as</b> u128);
     res <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 }
 </code></pre>

@@ -500,7 +500,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a> = 10000;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
 </code></pre>
 
 
@@ -2447,7 +2447,7 @@ as well as storage fund rewards.
         // Use the slashing rate <b>to</b> compute the amount of staking rewards slashed from this punished <a href="validator.md#0x3_validator">validator</a>.
         <b>let</b> unadjusted_staking_reward = unadjusted_staking_reward_amounts[validator_index];
         <b>let</b> staking_reward_adjustment_u128 =
-            unadjusted_staking_reward <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a> * (reward_slashing_rate <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>)
+            unadjusted_staking_reward <b>as</b> u128 * (reward_slashing_rate <b>as</b> u128)
             / <a href="validator_set.md#0x3_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
 
         // Insert into individual mapping and record into the total adjustment sum.
@@ -2457,7 +2457,7 @@ as well as storage fund rewards.
         // Do the same thing for storage fund rewards.
         <b>let</b> unadjusted_storage_fund_reward = unadjusted_storage_fund_reward_amounts[validator_index];
         <b>let</b> storage_fund_reward_adjustment_u128 =
-            unadjusted_storage_fund_reward <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a> * (reward_slashing_rate <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>)
+            unadjusted_storage_fund_reward <b>as</b> u128 * (reward_slashing_rate <b>as</b> u128)
             / <a href="validator_set.md#0x3_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
         individual_storage_fund_reward_adjustments.insert(validator_index, storage_fund_reward_adjustment_u128 <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
         total_storage_fund_reward_adjustment = total_storage_fund_reward_adjustment + (storage_fund_reward_adjustment_u128 <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
@@ -2551,9 +2551,9 @@ Returns the unadjusted amounts of staking reward and storage fund reward for eac
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = &validators[i];
         // Integer divisions will truncate the results. Because of this, we expect that at the end
         // there will be some reward remaining in `total_staking_reward`.
-        // Use <a href="../move-stdlib/u128.md#0x1_u128">u128</a> <b>to</b> avoid multiplication overflow.
-        <b>let</b> <a href="voting_power.md#0x3_voting_power">voting_power</a>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a> = <a href="validator.md#0x3_validator">validator</a>.<a href="voting_power.md#0x3_voting_power">voting_power</a>() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>;
-        <b>let</b> reward_amount = <a href="voting_power.md#0x3_voting_power">voting_power</a> * (total_staking_reward <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>) / (total_voting_power <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
+        // Use u128 <b>to</b> avoid multiplication overflow.
+        <b>let</b> <a href="voting_power.md#0x3_voting_power">voting_power</a>: u128 = <a href="validator.md#0x3_validator">validator</a>.<a href="voting_power.md#0x3_voting_power">voting_power</a>() <b>as</b> u128;
+        <b>let</b> reward_amount = <a href="voting_power.md#0x3_voting_power">voting_power</a> * (total_staking_reward <b>as</b> u128) / (total_voting_power <b>as</b> u128);
         staking_reward_amounts.push_back(reward_amount <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
         // Storage fund's share of the rewards are equally distributed among validators.
         storage_fund_reward_amounts.push_back(storage_fund_reward_per_validator);
@@ -2608,8 +2608,8 @@ The staking rewards are shared with the stakers while the storage fund ones are 
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = &validators[i];
         // Integer divisions will truncate the results. Because of this, we expect that at the end
         // there will be some reward remaining in `total_reward`.
-        // Use <a href="../move-stdlib/u128.md#0x1_u128">u128</a> <b>to</b> avoid multiplication overflow.
-        <b>let</b> <a href="voting_power.md#0x3_voting_power">voting_power</a> = <a href="validator.md#0x3_validator">validator</a>.<a href="voting_power.md#0x3_voting_power">voting_power</a>() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>;
+        // Use u128 <b>to</b> avoid multiplication overflow.
+        <b>let</b> <a href="voting_power.md#0x3_voting_power">voting_power</a> = <a href="validator.md#0x3_validator">validator</a>.<a href="voting_power.md#0x3_voting_power">voting_power</a>() <b>as</b> u128;
 
         // Compute adjusted staking reward.
         <b>let</b> unadjusted_staking_reward_amount = unadjusted_staking_reward_amounts[i];
@@ -2621,8 +2621,8 @@ The staking rewards are shared with the stakers while the storage fund ones are 
             } <b>else</b> {
                 // Otherwise the slashed rewards should be distributed among the unslashed
                 // validators so add the corresponding adjustment.
-                <b>let</b> adjustment = total_staking_reward_adjustment <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a> * <a href="voting_power.md#0x3_voting_power">voting_power</a>
-                               / (total_unslashed_validator_voting_power <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
+                <b>let</b> adjustment = total_staking_reward_adjustment <b>as</b> u128 * <a href="voting_power.md#0x3_voting_power">voting_power</a>
+                               / (total_unslashed_validator_voting_power <b>as</b> u128);
                 unadjusted_staking_reward_amount + (adjustment <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
             };
         adjusted_staking_reward_amounts.push_back(adjusted_staking_reward_amount);
@@ -2684,7 +2684,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
         <b>let</b> <b>mut</b> staker_reward = staking_rewards.split(staking_reward_amount);
 
         // Validator takes a cut of the rewards <b>as</b> commission.
-        <b>let</b> validator_commission_amount = (staking_reward_amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>) * (<a href="validator.md#0x3_validator">validator</a>.commission_rate() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>) / <a href="validator_set.md#0x3_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
+        <b>let</b> validator_commission_amount = (staking_reward_amount <b>as</b> u128) * (<a href="validator.md#0x3_validator">validator</a>.commission_rate() <b>as</b> u128) / <a href="validator_set.md#0x3_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
 
         // The <a href="validator.md#0x3_validator">validator</a> reward = storage_fund_reward + commission.
         <b>let</b> <b>mut</b> validator_reward = staker_reward.split(validator_commission_amount <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);

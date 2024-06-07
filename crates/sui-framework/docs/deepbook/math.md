@@ -47,7 +47,7 @@ scaling setting for float
 
 
 
-<pre><code><b>const</b> <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a> = 1000000000;
+<pre><code><b>const</b> <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>: u128 = 1000000000;
 </code></pre>
 
 
@@ -93,8 +93,8 @@ scaling setting for float
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
-    <b>let</b> x = x <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>;
-    <b>let</b> y = y <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>;
+    <b>let</b> x = x <b>as</b> u128;
+    <b>let</b> y = y <b>as</b> u128;
     <b>let</b> <b>mut</b> is_round_down = <b>true</b>;
     <b>if</b> ((x * y) % <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a> == 0) is_round_down = <b>false</b>;
     (is_round_down, (x * y / <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
@@ -198,11 +198,11 @@ scaling setting for float
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
-    <b>let</b> x = x <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>;
-    <b>let</b> y = y <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>;
+    <b>let</b> x = x <b>as</b> u128;
+    <b>let</b> y = y <b>as</b> u128;
     <b>let</b> <b>mut</b> is_round_down = <b>true</b>;
-    <b>if</b> ((x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>) % y) == 0) is_round_down = <b>false</b>;
-    (is_round_down, (x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>) / y) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
+    <b>if</b> ((x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) % y) == 0) is_round_down = <b>false</b>;
+    (is_round_down, (x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) / y) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 }
 </code></pre>
 
@@ -242,7 +242,7 @@ scaling setting for float
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_count_leading_zeros">count_leading_zeros</a>(x: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>): u8
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_count_leading_zeros">count_leading_zeros</a>(x: u128): u8
 </code></pre>
 
 
@@ -251,7 +251,7 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_count_leading_zeros">count_leading_zeros</a>(<b>mut</b> x: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>): u8 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_count_leading_zeros">count_leading_zeros</a>(<b>mut</b> x: u128): u8 {
     <b>if</b> (x == 0) {
         128
     } <b>else</b> {

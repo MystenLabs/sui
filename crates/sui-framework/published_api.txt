@@ -1228,27 +1228,6 @@ transfer_impl
 receive_impl
 	fun
 	0x2::transfer
-max
-	public fun
-	0x2::math
-min
-	public fun
-	0x2::math
-diff
-	public fun
-	0x2::math
-pow
-	public fun
-	0x2::math
-sqrt
-	public fun
-	0x2::math
-sqrt_u128
-	public fun
-	0x2::math
-divide_and_round_up
-	public fun
-	0x2::math
 Field
 	public struct
 	0x2::dynamic_field
@@ -2524,6 +2503,27 @@ destroy_empty
 drop
 	public fun
 	0x2::linked_table
+max
+	public fun
+	0x2::math
+min
+	public fun
+	0x2::math
+diff
+	public fun
+	0x2::math
+pow
+	public fun
+	0x2::math
+sqrt
+	public fun
+	0x2::math
+sqrt_u128
+	public fun
+	0x2::math
+divide_and_round_up
+	public fun
+	0x2::math
 ObjectBag
 	public struct
 	0x2::object_bag

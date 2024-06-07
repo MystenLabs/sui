@@ -26,12 +26,12 @@ title: Module `0xb::treasury`
 <pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
 <b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="../move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
+<b>use</b> <a href="../move-stdlib/u64.md#0x1_u64">0x1::u64</a>;
 <b>use</b> <a href="../sui-framework/address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="../sui-framework/bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="../sui-framework/coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="../sui-framework/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="../sui-framework/hex.md#0x2_hex">0x2::hex</a>;
-<b>use</b> <a href="../sui-framework/math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../sui-framework/object_bag.md#0x2_object_bag">0x2::object_bag</a>;
 <b>use</b> <a href="../sui-framework/package.md#0x2_package">0x2::package</a>;
@@ -491,7 +491,7 @@ title: Module `0xb::treasury`
             uc,
             decimal,
         } = self.waiting_room.remove&lt;String, <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>&gt;(token_name);
-        <b>let</b> decimal_multiplier = <a href="../sui-framework/math.md#0x2_math_pow">math::pow</a>(10, decimal);
+        <b>let</b> decimal_multiplier = 10u64.pow(decimal);
         self.supported_tokens.insert(
             <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
             <a href="treasury.md#0xb_treasury_BridgeTokenMetadata">BridgeTokenMetadata</a>{

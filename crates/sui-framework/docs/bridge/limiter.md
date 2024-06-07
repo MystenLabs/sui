@@ -270,17 +270,17 @@ title: Module `0xb::limiter`
     <b>assert</b>!(route_limit.is_some(), <a href="limiter.md#0xb_limiter_ELimitNotFoundForRoute">ELimitNotFoundForRoute</a>);
     <b>let</b> route_limit = route_limit.destroy_some();
     <b>let</b> route_limit_adjusted =
-        (route_limit <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>) * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
+        (route_limit <b>as</b> u128) * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
 
     // Compute notional amount
-    // Upcast <b>to</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a> <b>to</b> prevent overflow, <b>to</b> not miss out on small amounts.
-    <b>let</b> value = (<a href="treasury.md#0xb_treasury">treasury</a>.notional_value&lt;T&gt;() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
-    <b>let</b> notional_amount_with_token_multiplier = value * (amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
+    // Upcast <b>to</b> u128 <b>to</b> prevent overflow, <b>to</b> not miss out on small amounts.
+    <b>let</b> value = (<a href="treasury.md#0xb_treasury">treasury</a>.notional_value&lt;T&gt;() <b>as</b> u128);
+    <b>let</b> notional_amount_with_token_multiplier = value * (amount <b>as</b> u128);
 
     // Check <b>if</b> <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> amount exceed limit
     // Upscale them <b>to</b> the token's decimal.
-    <b>if</b> ((record.total_amount <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>)
-        * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>)
+    <b>if</b> ((record.total_amount <b>as</b> u128)
+        * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128)
         + notional_amount_with_token_multiplier &gt; route_limit_adjusted
     ) {
         <b>return</b> <b>false</b>
@@ -288,7 +288,7 @@ title: Module `0xb::limiter`
 
     // Now scale down <b>to</b> notional value
     <b>let</b> notional_amount = notional_amount_with_token_multiplier
-        / (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>);
+        / (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
     // Should be safe <b>to</b> downcast <b>to</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a> after dividing by the decimals
     <b>let</b> notional_amount = (notional_amount <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
 

@@ -649,7 +649,7 @@ the epoch advancement transaction.
 
 
 
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a> = 10000;
+<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
 </code></pre>
 
 
@@ -2133,13 +2133,13 @@ gas coins.
     <b>let</b> stake_subsidy_amount = <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>.value();
     computation_reward.join(<a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>);
 
-    <b>let</b> total_stake_u128 = total_stake <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>;
-    <b>let</b> computation_charge_u128 = computation_charge <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>;
+    <b>let</b> total_stake_u128 = total_stake <b>as</b> u128;
+    <b>let</b> computation_charge_u128 = computation_charge <b>as</b> u128;
 
-    <b>let</b> storage_fund_reward_amount = storage_fund_balance <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a> * computation_charge_u128 / total_stake_u128;
+    <b>let</b> storage_fund_reward_amount = storage_fund_balance <b>as</b> u128 * computation_charge_u128 / total_stake_u128;
     <b>let</b> <b>mut</b> storage_fund_reward = computation_reward.split(storage_fund_reward_amount <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
     <b>let</b> storage_fund_reinvestment_amount =
-        storage_fund_reward_amount * (storage_fund_reinvest_rate <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>) / <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
+        storage_fund_reward_amount * (storage_fund_reinvest_rate <b>as</b> u128) / <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
     <b>let</b> storage_fund_reinvestment = storage_fund_reward.split(
         storage_fund_reinvestment_amount <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     );
