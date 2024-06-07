@@ -150,7 +150,7 @@ impl NetworkClient for TonicClient {
         .boxed();
 
         let rate_limited_stream =
-            TokioStreamExt::throttle(stream, Duration::from_millis(125)).boxed();
+            TokioStreamExt::throttle(stream, self.context.parameters.min_round_delay / 2).boxed();
 
         Ok(rate_limited_stream)
     }
@@ -422,7 +422,7 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         .boxed();
 
         let rate_limited_stream =
-            TokioStreamExt::throttle(stream, Duration::from_millis(125)).boxed();
+            TokioStreamExt::throttle(stream, self.context.parameters.min_round_delay / 2).boxed();
 
         Ok(Response::new(rate_limited_stream))
     }
