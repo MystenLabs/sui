@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use sui_sdk2::types::{EpochId, ValidatorCommittee};
 use sui_sdk2::types::{Object, ObjectId, Version};
 use sui_types::storage::error::Result;
 use sui_types::storage::ObjectStore;
@@ -38,5 +39,11 @@ impl StateReader {
         self.inner
             .get_object_by_key(&object_id.into(), version.into())
             .map(|maybe| maybe.map(Into::into))
+    }
+
+    pub fn get_committee(&self, epoch: EpochId) -> Result<Option<ValidatorCommittee>> {
+        self.inner
+            .get_committee(epoch)
+            .map(|maybe| maybe.map(|committee| (*committee).clone().into()))
     }
 }

@@ -32,7 +32,6 @@ use sui_core::execution_cache::build_execution_cache;
 use sui_core::storage::RestReadStore;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
-use sui_json_rpc::ServerType;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
 use sui_rest_api::RestMetrics;
@@ -1898,11 +1897,8 @@ pub async fn build_http_server(
         ))?;
         server.register_module(MoveUtils::new(state.clone()))?;
 
-        let server_type = if config.websocket_only {
-            Some(ServerType::WebSocket)
-        } else {
-            None
-        };
+        let server_type = config.jsonrpc_server_type();
+
         server.to_router(server_type).await?
     };
 

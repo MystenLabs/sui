@@ -197,7 +197,6 @@ impl ValidatorConfigBuilder {
                 .to_socket_addr()
                 .unwrap(),
             consensus_config: Some(consensus_config),
-            enable_event_processing: false,
             enable_index_processing: default_enable_index_processing(),
             genesis: sui_config::node::Genesis::new(genesis),
             grpc_load_shed: None,
@@ -233,7 +232,7 @@ impl ValidatorConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: self.authority_overload_config.unwrap_or_default(),
             run_with_range: None,
-            websocket_only: false,
+            jsonrpc_server_type: None,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             execution_cache: ExecutionCacheConfig::default(),
@@ -465,7 +464,6 @@ impl FullnodeConfigBuilder {
                 .unwrap_or(local_ip_utils::get_available_port(&localhost)),
             json_rpc_address: self.json_rpc_address.unwrap_or(json_rpc_address),
             consensus_config: None,
-            enable_event_processing: true, // This is unused.
             enable_index_processing: default_enable_index_processing(),
             genesis: self.genesis.unwrap_or(sui_config::node::Genesis::new(
                 network_config.genesis.clone(),
@@ -502,7 +500,7 @@ impl FullnodeConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
-            websocket_only: false,
+            jsonrpc_server_type: None,
             policy_config: self.policy_config,
             firewall_config: self.fw_config,
             execution_cache: ExecutionCacheConfig::default(),
