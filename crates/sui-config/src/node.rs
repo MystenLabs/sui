@@ -183,7 +183,7 @@ pub struct NodeConfig {
     #[serde(default)]
     pub execution_cache: ExecutionCacheConfig,
 
-    #[serde(default = "bool_true")]
+    #[serde(default)]
     pub state_accumulator_v2: bool,
 }
 
