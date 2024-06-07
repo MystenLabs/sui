@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 49;
+const MAX_PROTOCOL_VERSION: u64 = 50;
 
 // Record history of protocol version allocations here:
 //
@@ -138,6 +138,7 @@ const MAX_PROTOCOL_VERSION: u64 = 49;
 //             Enable VDF in devnet
 //             Enable consensus commit prologue V3 in devnet.
 //             Run Mysticeti consensus by default.
+// Version 50: New Move stdlib integer modules
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2333,6 +2334,7 @@ impl ProtocolConfig {
                     // Run Move verification on framework upgrades in its own VM
                     cfg.feature_flags.fresh_vm_on_framework_upgrade = true;
                 }
+                50 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
