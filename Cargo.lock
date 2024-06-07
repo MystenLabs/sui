@@ -2588,7 +2588,7 @@ dependencies = [
 
 [[package]]
 name = "consensus-config"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "fastcrypto",
  "insta",
@@ -2600,7 +2600,7 @@ dependencies = [
 
 [[package]]
 name = "consensus-core"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anemo",
  "anemo-build",
@@ -7477,7 +7477,7 @@ dependencies = [
 
 [[package]]
 name = "mysten-common"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "futures",
  "parking_lot 0.12.1",
@@ -7562,7 +7562,7 @@ dependencies = [
 
 [[package]]
 name = "mysten-util-mem-derive"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "proc-macro2 1.0.78",
  "syn 1.0.107",
@@ -9451,7 +9451,7 @@ dependencies = [
 
 [[package]]
 name = "prometheus-closure-metric"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "prometheus",
@@ -11349,7 +11349,7 @@ dependencies = [
 
 [[package]]
 name = "simulacrum"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -11819,7 +11819,7 @@ dependencies = [
 
 [[package]]
 name = "sui-adapter-transactional-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
@@ -11972,7 +11972,7 @@ dependencies = [
 
 [[package]]
 name = "sui-archival"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -12005,7 +12005,7 @@ dependencies = [
 
 [[package]]
 name = "sui-authority-aggregation"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "futures",
  "mysten-metrics",
@@ -12098,7 +12098,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -12148,7 +12148,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge-cli"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -12172,7 +12172,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge-indexer"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12199,7 +12199,7 @@ dependencies = [
 
 [[package]]
 name = "sui-cluster-test"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12239,7 +12239,7 @@ dependencies = [
 
 [[package]]
 name = "sui-common"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "futures",
  "mysten-metrics",
@@ -12278,7 +12278,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -12387,7 +12387,7 @@ dependencies = [
 
 [[package]]
 name = "sui-cost"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -12409,7 +12409,7 @@ dependencies = [
 
 [[package]]
 name = "sui-data-ingestion"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12443,7 +12443,7 @@ dependencies = [
 
 [[package]]
 name = "sui-data-ingestion-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12470,7 +12470,7 @@ dependencies = [
 
 [[package]]
 name = "sui-e2e-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -12526,7 +12526,7 @@ dependencies = [
 
 [[package]]
 name = "sui-enum-compat-util"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "serde_yaml 0.8.26",
 ]
@@ -12621,7 +12621,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -12639,7 +12639,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework-snapshot"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -12654,7 +12654,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
@@ -12701,7 +12701,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-e2e-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "msim",
@@ -12789,7 +12789,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-rpc-client"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "async-graphql",
  "axum",
@@ -12802,7 +12802,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-rpc-headers"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "axum",
 ]
@@ -13238,7 +13238,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-natives-v2"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "bcs",
  "better_any",
@@ -13369,7 +13369,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc-macros"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "derive-syn-parse",
  "itertools 0.10.5",
@@ -13422,7 +13422,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-resolver"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13457,7 +13457,7 @@ dependencies = [
 
 [[package]]
 name = "sui-protocol-config"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "clap",
  "insta",
@@ -13471,7 +13471,7 @@ dependencies = [
 
 [[package]]
 name = "sui-protocol-config-macros"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
@@ -13523,7 +13523,7 @@ dependencies = [
 
 [[package]]
 name = "sui-replay"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13570,7 +13570,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rest-api"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13595,7 +13595,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rosetta"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13766,7 +13766,7 @@ dependencies = [
 
 [[package]]
 name = "sui-single-node-benchmark"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13800,7 +13800,7 @@ dependencies = [
 
 [[package]]
 name = "sui-snapshot"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13859,7 +13859,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation-service"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -13896,7 +13896,7 @@ dependencies = [
 
 [[package]]
 name = "sui-storage"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14033,7 +14033,7 @@ dependencies = [
 
 [[package]]
 name = "sui-telemetry"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "reqwest",
  "serde",
@@ -14043,7 +14043,7 @@ dependencies = [
 
 [[package]]
 name = "sui-test-transaction-builder"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "bcs",
  "move-core-types",
@@ -14159,7 +14159,7 @@ dependencies = [
 
 [[package]]
 name = "sui-transaction-checks"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "fastcrypto-zkp",
  "once_cell",
@@ -14173,7 +14173,7 @@ dependencies = [
 
 [[package]]
 name = "sui-transactional-test-runner"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14222,7 +14222,7 @@ dependencies = [
 
 [[package]]
 name = "sui-types"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -14294,7 +14294,7 @@ dependencies = [
 
 [[package]]
 name = "sui-upgrade-compatibility-transactional-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -14324,7 +14324,7 @@ dependencies = [
 
 [[package]]
 name = "sui-verifier-transactional-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
@@ -14361,7 +14361,7 @@ dependencies = [
 
 [[package]]
 name = "sui-verifier-v2"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "move-abstract-stack",
  "move-binary-format",
@@ -14376,7 +14376,7 @@ dependencies = [
 
 [[package]]
 name = "suins-indexer"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14714,7 +14714,7 @@ checksum = "95059e91184749cb66be6dc994f67f182b6d897cb3df74a5bf66b5e709295fd8"
 
 [[package]]
 name = "test-cluster"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -15500,7 +15500,7 @@ dependencies = [
 
 [[package]]
 name = "transaction-fuzzer"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "move-core-types",
  "once_cell",
@@ -16448,7 +16448,7 @@ dependencies = [
 
 [[package]]
 name = "x"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "camino",
