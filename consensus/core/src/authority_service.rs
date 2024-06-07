@@ -1,14 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    pin::Pin,
-    sync::{
-        atomic::{AtomicI32, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -44,7 +37,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
     rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
-    subscription_counter: Arc<AtomicI32>,
+    subscription_counter: Arc<SubscriptionCounter>,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
 }
@@ -60,6 +53,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
+        let subscription_counter = Arc::new(SubscriptionCounter::new(core_dispatcher.clone()));
         Self {
             context,
             block_verifier,
@@ -67,7 +61,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             synchronizer,
             core_dispatcher,
             rx_block_broadcaster,
-            subscription_counter: Arc::new(AtomicI32::new(0)),
+            subscription_counter,
             dag_state,
             store,
         }
@@ -237,18 +231,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     ) -> ConsensusResult<BlockStream> {
         fail_point_async!("consensus-rpc-response");
 
-        let prev_subscriptions = self.subscription_counter.fetch_add(1, Ordering::Relaxed);
-        if prev_subscriptions == 0 {
-            self.core_dispatcher
-                .set_consumer_availability(true)
-                .await
-                .map_err(|_| ConsensusError::Shutdown)?;
-            self.core_dispatcher
-                .new_block(Round::MAX, true)
-                .await
-                .map_err(|_| ConsensusError::Shutdown)?;
-        }
-
         let dag_state = self.dag_state.read();
         // Find recent own blocks that have not been received by the peer.
         // If last_received is a valid and more blocks have been proposed since then, this call is
@@ -259,6 +241,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .into_iter()
                 .map(|block| block.serialized().clone()),
         );
+
+        self.subscription_counter.increment()?;
         let broadcasted_blocks = BroadcastedBlockStream::new(
             self.context.clone(),
             peer,
@@ -375,13 +359,59 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     }
 }
 
+/// Atomically counts the number of active subscriptions to the block broadcast stream,
+/// and dispatch commands to core based on the changes.
+struct SubscriptionCounter {
+    counter: parking_lot::Mutex<usize>,
+    dispatcher: Arc<dyn CoreThreadDispatcher>,
+}
+
+impl SubscriptionCounter {
+    fn new(dispatcher: Arc<dyn CoreThreadDispatcher>) -> Self {
+        Self {
+            counter: parking_lot::Mutex::new(0),
+            dispatcher,
+        }
+    }
+
+    fn increment(&self) -> Result<(), ConsensusError> {
+        let prev_subscriptions;
+        {
+            let mut counter = self.counter.lock();
+            prev_subscriptions = *counter;
+            *counter += 1;
+        }
+        if prev_subscriptions == 0 {
+            self.dispatcher
+                .set_consumer_availability(true)
+                .map_err(|_| ConsensusError::Shutdown)?;
+        }
+        Ok(())
+    }
+
+    fn decrement(&self) -> Result<(), ConsensusError> {
+        let prev_subscriptions;
+        {
+            let mut counter = self.counter.lock();
+            prev_subscriptions = *counter;
+            *counter -= 1;
+        }
+        if prev_subscriptions == 1 {
+            self.dispatcher
+                .set_consumer_availability(false)
+                .map_err(|_| ConsensusError::Shutdown)?;
+        }
+        Ok(())
+    }
+}
+
 /// Each broadcasted block stream wraps a broadcast receiver for blocks.
 /// It yields blocks that are broadcasted after the stream is created.
-pub(crate) type BroadcastedBlockStream = BroadcastStream<VerifiedBlock>;
+type BroadcastedBlockStream = BroadcastStream<VerifiedBlock>;
 
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
-pub(crate) struct BroadcastStream<T> {
+struct BroadcastStream<T> {
     context: Arc<Context>,
     peer: AuthorityIndex,
     // Stores the receiver across poll_next() calls.
@@ -393,7 +423,7 @@ pub(crate) struct BroadcastStream<T> {
         ),
     >,
     // Counts total subscriptions / active BroadcastStreams.
-    subscription_counter: Arc<AtomicI32>,
+    subscription_counter: Arc<SubscriptionCounter>,
 }
 
 impl<T: 'static + Clone + Send> BroadcastStream<T> {
@@ -401,7 +431,7 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
         context: Arc<Context>,
         peer: AuthorityIndex,
         rx: broadcast::Receiver<T>,
-        subscription_counter: Arc<AtomicI32>,
+        subscription_counter: Arc<SubscriptionCounter>,
     ) -> Self {
         let peer_hostname = &context.committee.authority(peer).hostname;
         context
@@ -459,8 +489,7 @@ impl<T> Drop for BroadcastStream<T> {
             .subscribed_peers
             .with_label_values(&[peer_hostname])
             .set(0);
-        // TODO: figure out a way to notify Core when the counter drops to 0.
-        self.subscription_counter.fetch_sub(1, Ordering::Relaxed);
+        let _ = self.subscription_counter.decrement();
     }
 }
 

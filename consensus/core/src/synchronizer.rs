@@ -852,7 +852,7 @@ mod tests {
             Ok(result)
         }
 
-        async fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
             todo!()
         }
     }

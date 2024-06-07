@@ -408,7 +408,7 @@ mod tests {
             Ok(Default::default())
         }
 
-        async fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
             Ok(())
         }
     }
