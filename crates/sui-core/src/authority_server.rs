@@ -421,6 +421,7 @@ impl ValidatorService {
         _include_auxiliary_data: bool,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         wait_for_effects: bool,
+        is_soft_bundle: bool,
     ) -> Result<Option<Vec<HandleCertificateResponseV3>>, tonic::Status> {
         // Validate if cert can be executed
         // Fullnode does not serve handle_certificate call.
@@ -434,9 +435,8 @@ impl ValidatorService {
             SuiError::NoCertificateProvided.into()
         );
 
-        // See [SIP-19](https://github.com/sui-foundation/sips/blob/main/sips/sip-19.md) for more details.
-        let is_soft_bundle = certificates.len() > 1;
         if is_soft_bundle {
+            // See [SIP-19](https://github.com/sui-foundation/sips/blob/main/sips/sip-19.md) for more details.
             let protocol_config = epoch_store.protocol_config();
             // The request is a Soft Bundle, enforce these checks per SIP-19:
             // - All certs must access at least one shared object.
@@ -508,7 +508,7 @@ impl ValidatorService {
         // 1) Check if the certificate is already executed.
         //    This is only needed when we have only one certificate (not a soft bundle).
         if !is_soft_bundle {
-            assert!(certificates.len() == 1); // Guranateed by the above check.
+            assert!(certificates.len() == 1); // Guranateed by caller.
             let tx_digest = *certificates[0].digest();
 
             if let Some(signed_effects) = self
@@ -573,8 +573,24 @@ impl ValidatorService {
             // 3) All certificates are sent to consensus (at least by some authorities)
             // For shared objects this will wait until either timeout or we have heard back from consensus.
             // For owned objects this will return without waiting for certificate to be sequenced
-            // First do quick dirty non-async check
-            if !epoch_store.is_all_tx_certs_consensus_message_processed(&verified_certificates)? {
+            // First do quick dirty non-async check.
+            //
+            // For Soft Bundle, if at this point we know at least one certificate has already been processed,
+            // reject the entire bundle.  Otherwise, submit all certificates in one request.
+            let should_submit = if is_soft_bundle {
+                fp_ensure!(
+                    !epoch_store
+                        .is_any_tx_certs_consensus_message_processed(&verified_certificates)?,
+                    SuiError::UserInputError {
+                        error: UserInputError::CeritificateAlreadyProcessed
+                    }
+                    .into()
+                );
+                true
+            } else {
+                !epoch_store.is_tx_cert_consensus_message_processed(&verified_certificates[0])?
+            };
+            if should_submit {
                 let _metrics_guard = if shared_object_tx {
                     Some(self.metrics.consensus_latency.start_timer())
                 } else {
@@ -682,6 +698,7 @@ impl ValidatorService {
             false,
             &epoch_store,
             false,
+            false,
         )
         .instrument(span)
         .await
@@ -709,6 +726,7 @@ impl ValidatorService {
             false,
             &epoch_store,
             true,
+            false,
         )
         .instrument(span)
         .await
@@ -738,6 +756,7 @@ impl ValidatorService {
             request.include_auxiliary_data,
             &epoch_store,
             true,
+            false,
         )
         .instrument(span)
         .await
@@ -787,6 +806,7 @@ impl ValidatorService {
             request.include_auxiliary_data,
             &epoch_store,
             request.wait_for_effects,
+            true,
         )
         .instrument(span)
         .await

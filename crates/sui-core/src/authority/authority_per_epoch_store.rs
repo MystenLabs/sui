@@ -1822,9 +1822,9 @@ impl AuthorityPerEpochStore {
         ))
     }
 
-    /// Check whether certificates were processed by consensus.
+    /// Check whether any certificates were processed by consensus.
     /// This handles multiple certificates at once.
-    pub fn is_all_tx_certs_consensus_message_processed(
+    pub fn is_any_tx_certs_consensus_message_processed(
         &self,
         certificates: &[VerifiedCertificate],
     ) -> SuiResult<bool> {
@@ -1836,7 +1836,7 @@ impl AuthorityPerEpochStore {
         Ok(self
             .check_consensus_messages_processed(keys)?
             .into_iter()
-            .all(|processed| processed))
+            .any(|processed| processed))
     }
 
     pub fn is_consensus_message_processed(

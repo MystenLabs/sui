@@ -268,6 +268,8 @@ pub enum UserInputError {
     NoSharedObjectError { digest: TransactionDigest },
     #[error("Transaction {:?} in Soft Bundle has already been executed", digest)]
     AlreadyExecutedError { digest: TransactionDigest },
+    #[error("At least one certificate in Soft Bundlele has already been processed")]
+    CeritificateAlreadyProcessed,
     #[error(
         "Gas price for transaction {:?} mismatch: want {:?}, have {:?}",
         digest,
