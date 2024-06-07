@@ -11,7 +11,6 @@ module examples::my_coin {
 
     // Module initializer is called once on module publish. A treasury
     // cap is sent to the publisher, who then controls minting and burning.
-    // Use #[allow(lint(share_owned))] to create editable metadata.
     fun init(witness: MY_COIN, ctx: &mut TxContext) {
         let (treasury, metadata) = coin::create_currency(witness, 6, b"MY_COIN", b"", b"", option::none(), ctx);
         // Freezing this object makes the metadata immutable, including the title, name, and icon image. 
