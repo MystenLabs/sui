@@ -37,6 +37,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
     rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
+    subscription_counter: Arc<SubscriptionCounter>,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
 }
@@ -52,6 +53,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
+        let subscription_counter = Arc::new(SubscriptionCounter::new(core_dispatcher.clone()));
         Self {
             context,
             block_verifier,
@@ -59,6 +61,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             synchronizer,
             core_dispatcher,
             rx_block_broadcaster,
+            subscription_counter,
             dag_state,
             store,
         }
@@ -238,10 +241,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .into_iter()
                 .map(|block| block.serialized().clone()),
         );
+
         let broadcasted_blocks = BroadcastedBlockStream::new(
             self.context.clone(),
             peer,
             self.rx_block_broadcaster.resubscribe(),
+            self.subscription_counter.clone(),
         );
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
@@ -356,13 +361,51 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     }
 }
 
+/// Atomically counts the number of active subscriptions to the block broadcast stream,
+/// and dispatch commands to core based on the changes.
+struct SubscriptionCounter {
+    counter: parking_lot::Mutex<usize>,
+    dispatcher: Arc<dyn CoreThreadDispatcher>,
+}
+
+impl SubscriptionCounter {
+    fn new(dispatcher: Arc<dyn CoreThreadDispatcher>) -> Self {
+        Self {
+            counter: parking_lot::Mutex::new(0),
+            dispatcher,
+        }
+    }
+
+    fn increment(&self) -> Result<(), ConsensusError> {
+        let mut counter = self.counter.lock();
+        *counter += 1;
+        if *counter == 1 {
+            self.dispatcher
+                .set_consumer_availability(true)
+                .map_err(|_| ConsensusError::Shutdown)?;
+        }
+        Ok(())
+    }
+
+    fn decrement(&self) -> Result<(), ConsensusError> {
+        let mut counter = self.counter.lock();
+        *counter -= 1;
+        if *counter == 0 {
+            self.dispatcher
+                .set_consumer_availability(false)
+                .map_err(|_| ConsensusError::Shutdown)?;
+        }
+        Ok(())
+    }
+}
+
 /// Each broadcasted block stream wraps a broadcast receiver for blocks.
 /// It yields blocks that are broadcasted after the stream is created.
-pub(crate) type BroadcastedBlockStream = BroadcastStream<VerifiedBlock>;
+type BroadcastedBlockStream = BroadcastStream<VerifiedBlock>;
 
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
-pub(crate) struct BroadcastStream<T> {
+struct BroadcastStream<T> {
     context: Arc<Context>,
     peer: AuthorityIndex,
     // Stores the receiver across poll_next() calls.
@@ -373,10 +416,17 @@ pub(crate) struct BroadcastStream<T> {
             broadcast::Receiver<T>,
         ),
     >,
+    // Counts total subscriptions / active BroadcastStreams.
+    subscription_counter: Arc<SubscriptionCounter>,
 }
 
 impl<T: 'static + Clone + Send> BroadcastStream<T> {
-    pub fn new(context: Arc<Context>, peer: AuthorityIndex, rx: broadcast::Receiver<T>) -> Self {
+    pub fn new(
+        context: Arc<Context>,
+        peer: AuthorityIndex,
+        rx: broadcast::Receiver<T>,
+        subscription_counter: Arc<SubscriptionCounter>,
+    ) -> Self {
         let peer_hostname = &context.committee.authority(peer).hostname;
         context
             .metrics
@@ -384,10 +434,13 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
             .subscribed_peers
             .with_label_values(&[peer_hostname])
             .set(1);
+        // Failure can only be due to core shutdown.
+        let _ = subscription_counter.increment();
         Self {
             context,
             peer,
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
+            subscription_counter,
         }
     }
 }
@@ -432,6 +485,8 @@ impl<T> Drop for BroadcastStream<T> {
             .subscribed_peers
             .with_label_values(&[peer_hostname])
             .set(0);
+        // Failure can only be due to core shutdown.
+        let _ = self.subscription_counter.decrement();
     }
 }
 

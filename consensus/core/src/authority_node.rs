@@ -229,6 +229,9 @@ where
             leader_schedule,
             tx_consumer,
             block_manager,
+            // For streaming RPC, Core will be notified when consumer is available.
+            // For non-streaming RPC, there is no way to know so default to true.
+            !N::Client::SUPPORT_STREAMING,
             commit_observer,
             core_signals,
             protocol_keypair,
@@ -402,6 +405,10 @@ mod tests {
 
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             Ok(Default::default())
+        }
+
+        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+            Ok(())
         }
     }
 
