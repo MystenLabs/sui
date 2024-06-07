@@ -13,14 +13,7 @@ use thiserror::Error;
 use tokio::time::{sleep, timeout, Duration};
 use tracing::info;
 use types::{Transaction, TxResponse};
-use consensus::{ExternalTransaction, CommitedTransactions};
-use consensus::consensus_api_client::ConsensusApiClient;
-use tonic::{transport::Channel, Request, Response, Status, Streaming};
-use async_stream::stream;
-use tracing::{info, error};
-pub mod consensus{
-    include!("../consensus.rs")
-}
+
 #[cfg(msim)]
 mod static_client_cache {
     use super::*;
@@ -120,11 +113,12 @@ impl LazyNarwhalClient {
 #[derive(Clone)]
 pub struct LocalNarwhalClient {
     /// TODO: maybe use tx_batch_maker for load schedding.
-    tx_batch_maker: Sender<(Transaction, TxResponse)>,
+    tx_batch_maker: Sender<(Vec<Transaction>, TxResponse)>,
+    
 }
 
 impl LocalNarwhalClient {
-    pub fn new(tx_batch_maker: Sender<(Transaction, TxResponse)>) -> Arc<Self> {
+    pub fn new(tx_batch_maker: Sender<(Vec<Transaction>, TxResponse)>) -> Arc<Self> {
         Arc::new(Self { tx_batch_maker })
     }
 
@@ -153,44 +147,31 @@ impl LocalNarwhalClient {
     }
 
     /// Submits a transaction to the local Narwhal worker.
-    pub async fn submit_transaction(&self, transaction: Transaction) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if transaction.len() > MAX_ALLOWED_TRANSACTION_SIZE {
-            return Err(NarwhalError::TransactionTooLarge(
-                transaction.len(),
-                MAX_ALLOWED_TRANSACTION_SIZE,
-            ));
-        }
-        // Send the transaction to the batch maker.
-        // let (notifier, when_done) = tokio::sync::oneshot::channel();
-        // self.tx_batch_maker
-        //     .send((transaction, notifier))
-        //     .await
-        //     .map_err(|_| NarwhalError::ShuttingDown)?;
-
-        // let _digest = when_done
-        //     .await
-        //     .map_err(|_| NarwhalError::TransactionNotIncludedInHeader)?;
-        let url = format!("http://{}", socket_addr);
-        let mut client = ConsensusApiClient::connect(url).await?;
-        info!("Connected to the grpc consensus server at {:?}", &url);
-        let external_transaction = ExternalTransaction { chain_id: "sui".to_string(), tx_bytes: transaction};
-        
-        //pin_mut!(stream);
-        let stream = Box::pin(external_transaction);
-        let response = client.init_transaction(stream).await?;
-        let mut resp_stream = response.into_inner();
-
-        while let Some(received) = resp_stream.next().await {
-            match received {
-                Ok(CommitedTransactions { transactions }) => {
-                    info!("Received {:?} commited transactions.", transactions.len());
-                    
-                }
-                Err(err) => {
-                    return Err(Box::new(err));
-                }
+    pub async fn submit_transactions(
+        &self,
+        transactions: Vec<Transaction>,
+    ) -> Result<(), NarwhalError> {
+        for transaction in &transactions {
+            if transaction.len() > MAX_ALLOWED_TRANSACTION_SIZE {
+                return Err(NarwhalError::TransactionTooLarge(
+                    transaction.len(),
+                    MAX_ALLOWED_TRANSACTION_SIZE,
+                ));
             }
         }
+
+        // Send the transaction to the batch maker.
+        let (notifier, when_done) = tokio::sync::oneshot::channel();
+        self.tx_batch_maker
+            .send((transactions, notifier))
+            .await
+            .map_err(|_| NarwhalError::ShuttingDown)?;
+
+        let _digest = when_done
+            .await
+            .map_err(|_| NarwhalError::TransactionNotIncludedInHeader)?;
+        
+
         Ok(())
     }
 
