@@ -244,7 +244,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          scripts/simtest/cargo-simtest simtest
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
