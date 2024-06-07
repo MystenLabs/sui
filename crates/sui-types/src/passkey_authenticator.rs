@@ -28,12 +28,12 @@ use std::sync::Arc;
 #[path = "unit_tests/passkey_authenticator_test.rs"]
 mod passkey_authenticator_test;
 
-/// An zk login authenticator with all the necessary fields.
+/// An passkey authenticator with all the necessary fields.
 #[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyAuthenticator {
     authenticator_data: Vec<u8>, // should size limit be enforced?
-    client_data: Vec<u8>,        // should size limit be enforced?
+    client_data_json: Vec<u8>,   // should size limit be enforced?
     user_signature: Signature,
     #[serde(skip)]
     pub bytes: OnceCell<Vec<u8>>,
@@ -43,12 +43,12 @@ impl PasskeyAuthenticator {
     // test only
     pub fn new(
         authenticator_data: Vec<u8>,
-        client_data: Vec<u8>,
+        client_data_json: Vec<u8>,
         user_signature: Signature,
     ) -> Self {
         Self {
             authenticator_data,
-            client_data,
+            client_data_json,
             user_signature,
             bytes: OnceCell::new(),
         }
@@ -89,7 +89,7 @@ impl AuthenticatorTrait for PasskeyAuthenticator {
         Ok(())
     }
 
-    /// Verify an intent message of a transaction with an zk login authenticator.
+    /// Verify an intent message of a transaction with an passkey authenticator.
     fn verify_claims<T>(
         &self,
         intent_msg: &IntentMessage<T>,
@@ -100,9 +100,9 @@ impl AuthenticatorTrait for PasskeyAuthenticator {
     where
         T: Serialize,
     {
-        let client_data_json: CollectedClientData = serde_json::from_slice(&self.client_data)
+        let client_data_json: CollectedClientData = serde_json::from_slice(&self.client_data_json)
             .map_err(|_| SuiError::InvalidSignature {
-                error: "get client data".to_string(),
+                error: "Failed to parse client data".to_string(),
             })?;
         let parsed_challenge =
             Base64UrlUnpadded::decode_vec(&client_data_json.challenge).map_err(|e| {
@@ -114,16 +114,16 @@ impl AuthenticatorTrait for PasskeyAuthenticator {
         hasher.update(&bcs::to_bytes(&intent_msg).expect("Message serialization should not fail"));
         let digest = hasher.finalize().digest;
 
-        // check client_data.challenge == sha256(intent_msg(tx))
+        // check client_data_json.challenge == sha256(intent_msg(tx))
         if parsed_challenge != digest {
             return Err(SuiError::InvalidSignature {
                 error: "invalid challenge".to_string(),
             });
         };
 
-        // msg = authenticator_data || sha256(client_data)
+        // msg = authenticator_data || sha256(client_data_json)
         let mut message = self.authenticator_data.clone();
-        let client_data_hash = Sha256::digest(self.client_data.as_slice()).digest;
+        let client_data_hash = Sha256::digest(self.client_data_json.as_slice()).digest;
         message.extend_from_slice(&client_data_hash);
 
         match self.user_signature.scheme() {

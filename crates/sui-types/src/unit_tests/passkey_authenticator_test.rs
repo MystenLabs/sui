@@ -53,6 +53,7 @@ impl UserValidationMethod for MyUserValidationMethod {
     }
 }
 
+/// A helper struct for pk and sig bytes.
 pub struct PasskeyResponse<T> {
     pk_bytes: Vec<u8>,
     sig_bytes: Vec<u8>,
