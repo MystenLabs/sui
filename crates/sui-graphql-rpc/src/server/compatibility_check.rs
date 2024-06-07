@@ -22,58 +22,6 @@ use sui_indexer::schema::{
     transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
 };
 
-pub(crate) async fn check_all_tables(db: &Db) -> Result<bool, Error> {
-    let result: bool = db
-        .execute(|conn| {
-            let mut all_ok = true;
-
-            // Allocate 60 seconds for the compatibility check
-            sql_query(format!("SET statement_timeout = {}", 60000)).execute(conn.conn())?;
-
-            all_ok &= check_table!(conn, checkpoints::dsl::checkpoints, StoredCheckpoint);
-            all_ok &= check_table!(conn, display::dsl::display, StoredDisplay);
-            all_ok &= check_table!(conn, epochs::dsl::epochs, QueryableEpochInfo);
-            all_ok &= check_table!(conn, events::dsl::events, StoredEvent);
-            all_ok &= check_table!(
-                conn,
-                objects_history::dsl::objects_history,
-                StoredHistoryObject
-            );
-            all_ok &= check_table!(
-                conn,
-                objects_snapshot::dsl::objects_snapshot,
-                StoredObjectSnapshot
-            );
-            all_ok &= check_table!(conn, packages::dsl::packages, StoredPackage);
-            all_ok &= check_table!(conn, transactions::dsl::transactions, StoredTransaction);
-            all_ok &= check_table!(conn, tx_calls::dsl::tx_calls, StoredTxCalls);
-            all_ok &= check_table!(
-                conn,
-                tx_changed_objects::dsl::tx_changed_objects,
-                StoredTxChangedObject
-            );
-            all_ok &= check_table!(conn, tx_digests::dsl::tx_digests, StoredTxDigest);
-            all_ok &= check_table!(
-                conn,
-                tx_input_objects::dsl::tx_input_objects,
-                StoredTxInputObject
-            );
-            all_ok &= check_table!(conn, tx_recipients::dsl::tx_recipients, StoredTxRecipients);
-            all_ok &= check_table!(conn, tx_senders::dsl::tx_senders, StoredTxSenders);
-
-            Ok::<_, diesel::result::Error>(all_ok)
-        })
-        .await?;
-
-    if result {
-        Ok(true)
-    } else {
-        Err(Error::Internal(
-            "One or more tables are missing expected columns".into(),
-        ))
-    }
-}
-
 #[macro_export]
 macro_rules! check_table {
     ($conn:expr, $table:path, $type:ty) => {{
@@ -86,3 +34,50 @@ macro_rules! check_table {
         }
     }};
 }
+
+#[macro_export]
+macro_rules! generate_check_all_tables {
+    ($(($table:ident, $type:ty)),* $(,)?) => {
+        pub(crate) async fn check_all_tables(db: &Db) -> Result<bool, Error> {
+            let result: bool = db
+                .execute(|conn| {
+                    let mut all_ok = true;
+
+                    // Allocate 60 seconds for the compatibility check
+                    sql_query("SET statement_timeout = 60000").execute(conn.conn())?;
+
+                    $(
+                        all_ok &= check_table!(conn, $table::dsl::$table, $type);
+                    )*
+
+                    Ok::<_, diesel::result::Error>(all_ok)
+                })
+                .await?;
+
+            if result {
+                Ok(true)
+            } else {
+                Err(Error::Internal(
+                    "One or more tables are missing expected columns".into(),
+                ))
+            }
+        }
+    };
+}
+
+generate_check_all_tables!(
+    (checkpoints, StoredCheckpoint),
+    (display, StoredDisplay),
+    (epochs, QueryableEpochInfo),
+    (events, StoredEvent),
+    (objects_history, StoredHistoryObject),
+    (objects_snapshot, StoredObjectSnapshot),
+    (packages, StoredPackage),
+    (transactions, StoredTransaction),
+    (tx_calls, StoredTxCalls),
+    (tx_changed_objects, StoredTxChangedObject),
+    (tx_digests, StoredTxDigest),
+    (tx_input_objects, StoredTxInputObject),
+    (tx_recipients, StoredTxRecipients),
+    (tx_senders, StoredTxSenders),
+);
