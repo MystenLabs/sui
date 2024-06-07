@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
-use futures::{stream, Stream, StreamExt as FuturesStreamExt};
+use futures::{stream, Stream, StreamExt as _};
 use hyper::server::conn::Http;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_network::{
@@ -28,7 +28,7 @@ use tokio::{
     time::{timeout, Instant},
 };
 use tokio_rustls::TlsAcceptor;
-use tokio_stream::{iter, Iter, StreamExt as TokioStreamExt};
+use tokio_stream::{iter, Iter};
 use tonic::{transport::Server, Request, Response, Streaming};
 use tower_http::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
@@ -138,7 +138,7 @@ impl NetworkClient for TonicClient {
         let response = client.subscribe_blocks(request).await.map_err(|e| {
             ConsensusError::NetworkRequest(format!("subscribe_blocks failed: {e:?}"))
         })?;
-        let stream = FuturesStreamExt::filter_map(response.into_inner(), move |b| async move {
+        let stream = response.into_inner().filter_map(move |b| async move {
             match b {
                 Ok(response) => Some(response.block),
                 Err(e) => {
@@ -146,12 +146,10 @@ impl NetworkClient for TonicClient {
                     None
                 }
             }
-        })
-        .boxed();
-
+        });
         let rate_limited_stream =
-            TokioStreamExt::throttle(stream, self.context.parameters.min_round_delay / 2).boxed();
-
+            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
+                .boxed();
         Ok(rate_limited_stream)
     }
 
@@ -399,7 +397,7 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
         let mut request_stream = request.into_inner();
-        let first_request = match futures::StreamExt::next(&mut request_stream).await {
+        let first_request = match request_stream.next().await {
             Some(Ok(r)) => r,
             Some(Err(e)) => {
                 debug!(
@@ -412,18 +410,15 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
                 return Err(tonic::Status::invalid_argument("Missing request"));
             }
         };
-        let stream = FuturesStreamExt::map(
-            self.service
-                .handle_subscribe_blocks(peer_index, first_request.last_received_round)
-                .await
-                .map_err(|e| tonic::Status::internal(format!("{e:?}")))?,
-            |block| Ok(SubscribeBlocksResponse { block }),
-        )
-        .boxed();
-
+        let stream = self
+            .service
+            .handle_subscribe_blocks(peer_index, first_request.last_received_round)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
+            .map(|block| Ok(SubscribeBlocksResponse { block }));
         let rate_limited_stream =
-            TokioStreamExt::throttle(stream, self.context.parameters.min_round_delay / 2).boxed();
-
+            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
+                .boxed();
         Ok(Response::new(rate_limited_stream))
     }
 
