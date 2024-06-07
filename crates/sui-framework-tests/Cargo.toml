@@ -1,6 +1,6 @@
 [package]
 name = "sui-framework-tests"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Runs Move tests for sui-framework"

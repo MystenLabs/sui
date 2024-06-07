@@ -1,6 +1,6 @@
 [package]
 name = "prometheus-closure-metric"
-version = "0.1.0"
+version.workspace = true
 authors = ["Andrew Schran <aschran@mystenlabs.com>"]
 repository = "https://github.com/mystenlabs/mysten-infra"
 description = "Library for a Prometheus metric that computes its value by given closure at collection time"
