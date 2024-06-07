@@ -199,7 +199,7 @@ module bridge::committee_test {
     }
 
     #[test]
-    #[expected_failure(abort_code = bridge::committee::ESenderNotActiveValidator)]
+    #[expected_failure(abort_code = bridge::committee::ESenderIsNotInBridgeCommittee)]
     fun test_update_node_url_not_validator() {
         let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
@@ -232,9 +232,8 @@ module bridge::committee_test {
             &tx(@0xB, 0),
         );
 
-        test_utils::destroy(committee);
-        test_scenario::return_shared(system_state);
-        test_scenario::end(scenario);
+        // test should have failed, abort
+        abort 0
     }
 
     #[test]

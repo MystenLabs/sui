@@ -299,6 +299,15 @@ title: Module `0xb::committee`
 
 
 
+<a name="0xb_committee_ESenderIsNotInBridgeCommittee"></a>
+
+
+
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_ESenderIsNotInBridgeCommittee">ESenderIsNotInBridgeCommittee</a>: u64 = 9;
+</code></pre>
+
+
+
 <a name="0xb_committee_ESenderNotActiveValidator"></a>
 
 
@@ -658,7 +667,7 @@ title: Module `0xb::committee`
         };
         idx = idx + 1;
     };
-    <b>abort</b> <a href="committee.md#0xb_committee_ESenderNotActiveValidator">ESenderNotActiveValidator</a>
+    <b>abort</b> <a href="committee.md#0xb_committee_ESenderIsNotInBridgeCommittee">ESenderIsNotInBridgeCommittee</a>
 }
 </code></pre>
 

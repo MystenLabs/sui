@@ -21,6 +21,7 @@ module bridge::committee {
     const EInvalidPubkeyLength: u64 = 6;
     const ECommitteeAlreadyInitiated: u64 = 7;
     const EDuplicatePubkey: u64 = 8;
+    const ESenderIsNotInBridgeCommittee: u64 = 9;
 
     const SUI_MESSAGE_PREFIX: vector<u8> = b"SUI_BRIDGE_MESSAGE";
 
@@ -277,7 +278,7 @@ module bridge::committee {
             };
             idx = idx + 1;
         };
-        abort ESenderNotActiveValidator
+        abort ESenderIsNotInBridgeCommittee
     }
 
     // Assert if `bridge_pubkey_bytes` is duplicated in `member_registrations`.
