@@ -55,7 +55,7 @@ mod sim_only_tests {
                 // Manually initiating a pruning and compaction job to make sure that deleted objects are gong from object store.
                 state
                     .database_for_testing()
-                    .prune_objects_and_compact_for_testing(checkpoint_store)
+                    .prune_objects_and_compact_for_testing(checkpoint_store, None)
                     .await;
 
                 // Check that no object with `child_id` exists in object store.
@@ -111,7 +111,7 @@ mod sim_only_tests {
                 // Manually initiating a pruning and compaction job to make sure that deleted objects are gong from object store.
                 state
                     .database_for_testing()
-                    .prune_objects_and_compact_for_testing(checkpoit_store)
+                    .prune_objects_and_compact_for_testing(checkpoit_store, None)
                     .await;
 
                 // Check that both root and child objects are gone from object store.

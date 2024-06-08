@@ -55,7 +55,9 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use self::metrics::CheckpointExecutorMetrics;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityState;
-use crate::checkpoints::checkpoint_executor::data_ingestion_handler::store_checkpoint_locally;
+use crate::checkpoints::checkpoint_executor::data_ingestion_handler::{
+    load_checkpoint_data, store_checkpoint_locally,
+};
 use crate::state_accumulator::StateAccumulator;
 use crate::transaction_manager::TransactionManager;
 use crate::{
@@ -1305,15 +1307,24 @@ async fn finalize_checkpoint(
     let checkpoint_acc =
         accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
 
-    if let Some(path) = data_ingestion_dir {
-        store_checkpoint_locally(
-            path,
+    if data_ingestion_dir.is_some() || state.rest_index.is_some() {
+        let checkpoint_data = load_checkpoint_data(
             checkpoint,
             object_cache_reader,
             transaction_cache_reader,
             checkpoint_store,
-            tx_digests.to_vec(),
+            tx_digests,
         )?;
+
+        // TODO(bmwill) discuss with team a better location for this indexing so that it isn't on
+        // the critical path and the writes to the DB are done in checkpoint order
+        if let Some(rest_index) = &state.rest_index {
+            rest_index.index_checkpoint(&checkpoint_data)?;
+        }
+
+        if let Some(path) = data_ingestion_dir {
+            store_checkpoint_locally(path, &checkpoint_data)?;
+        }
     }
     Ok(checkpoint_acc)
 }
