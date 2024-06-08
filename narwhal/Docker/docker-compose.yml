@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # Setup for Validator 0. A primary node and a worker
   primary_0:

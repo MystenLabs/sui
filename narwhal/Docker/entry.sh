@@ -59,7 +59,7 @@ elif [[ "$NODE_TYPE" = "worker" ]]; then
   --workers $WORKERS_PATH \
   --store "${DATA_PATH}/validator-$VALIDATOR_ID/db-worker-$WORKER_ID" \
   --parameters $PARAMETERS_PATH \
-  worker --id $WORKER_ID
+  worker $WORKER_ID
 else
   echo "Unknown provided value for parameter: NODE_TYPE=$NODE_TYPE"
   exit 1

@@ -5,7 +5,7 @@
 # fast fail.
 set -e
 
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+DIR="$( cd "$( dirname $0 )" && pwd )"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 DOCKERFILE="$DIR/Dockerfile"
 GIT_REVISION="$(git describe --always --abbrev=12 --dirty --exclude '*')"
@@ -19,7 +19,7 @@ echo "build date: \t$BUILD_DATE"
 echo "git revision: \t$GIT_REVISION"
 echo
 
-docker build -f "$DOCKERFILE" "$REPO_ROOT" \
+docker build -t "narwhal-node" -f "$DOCKERFILE" "$REPO_ROOT" \
 	--build-arg GIT_REVISION="$GIT_REVISION" \
 	--build-arg BUILD_DATE="$BUILD_DATE" \
 	"$@"
