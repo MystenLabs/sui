@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::effects::{
-    IDOperation, ObjectIn, ObjectOut, TransactionEffects, TransactionEvents,
-};
+use crate::effects::{IDOperation, ObjectIn, ObjectOut, TransactionEffects, TransactionEvents};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
 use crate::transaction::Transaction;
@@ -105,6 +103,81 @@ impl CheckpointTransaction {
                 .iter()
                 .find(|o| &o.id() == id && &o.version() == version)
                 .expect("all removed objects should show up in input objects")
+        })
+    }
+
+    pub fn changed_objects(&self) -> impl Iterator<Item = (&Object, Option<&Object>)> {
+        // Iterator over ((ObjectId, new version), Option<old version>)
+        match &self.effects {
+            TransactionEffects::V1(v1) => Either::Left(
+                v1.created()
+                    .iter()
+                    .chain(v1.unwrapped())
+                    .map(|((id, version, _), _)| ((id, version), None))
+                    .chain(v1.mutated().iter().map(|((id, version, _), _)| {
+                        // lookup the old version for mutated objects
+                        let (_, old_version) = v1
+                            .modified_at_versions()
+                            .iter()
+                            .find(|(oid, _old_version)| oid == id)
+                            .expect("mutated object must have entry in modified_at_versions");
+
+                        ((id, version), Some(old_version))
+                    })),
+            ),
+            TransactionEffects::V2(v2) => {
+                Either::Right(v2.changed_objects().iter().filter_map(|(id, change)| {
+                    match (
+                        &change.input_state,
+                        &change.output_state,
+                        &change.id_operation,
+                    ) {
+                        // Created Objects
+                        (ObjectIn::NotExist, ObjectOut::ObjectWrite(_), IDOperation::Created) => {
+                            Some(((id, &v2.lamport_version), None))
+                        }
+                        (
+                            ObjectIn::NotExist,
+                            ObjectOut::PackageWrite((version, _)),
+                            IDOperation::Created,
+                        ) => Some(((id, &version), None)),
+
+                        // Unwrapped Objects
+                        (ObjectIn::NotExist, ObjectOut::ObjectWrite(_), IDOperation::None) => {
+                            Some(((id, &v2.lamport_version), None))
+                        }
+
+                        // Mutated Objects
+                        (ObjectIn::Exist(((old_version, _), _)), ObjectOut::ObjectWrite(_), _) => {
+                            Some(((id, &v2.lamport_version), Some(old_version)))
+                        }
+                        (
+                            ObjectIn::Exist(((old_version, _), _)),
+                            ObjectOut::PackageWrite((version, _)),
+                            _,
+                        ) => Some(((id, version), Some(old_version))),
+
+                        _ => None,
+                    }
+                }))
+            }
+        }
+        // Lookup Objects in output Objects as well as old versions for mutated objects
+        .map(|((id, version), old_version)| {
+            let object = self
+                .output_objects
+                .iter()
+                .find(|o| &o.id() == id && &o.version() == version)
+                .expect("changed objects should show up in output objects");
+
+            let old_object = old_version.map(|old_version| {
+                self.input_objects
+                    .iter()
+                    .find(|o| &o.id() == id && &o.version() == old_version)
+                    .expect("mutated objects should have a previous version in input objects")
+            });
+
+            (object, old_object)
         })
     }
 }
