@@ -47,6 +47,7 @@ use super::{
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
+    commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::{
@@ -94,8 +95,8 @@ impl TonicClient {
             .get_channel(self.network_keypair.clone(), peer, timeout)
             .await?;
         Ok(ConsensusServiceClient::new(channel)
-            .max_encoding_message_size(config.max_message_size())
-            .max_decoding_message_size(config.max_message_size()))
+            .max_encoding_message_size(config.message_size_limit)
+            .max_decoding_message_size(config.message_size_limit))
     }
 }
 
@@ -138,19 +139,19 @@ impl NetworkClient for TonicClient {
         let response = client.subscribe_blocks(request).await.map_err(|e| {
             ConsensusError::NetworkRequest(format!("subscribe_blocks failed: {e:?}"))
         })?;
-        let stream = response
-            .into_inner()
-            .filter_map(move |b| async move {
-                match b {
-                    Ok(response) => Some(response.block),
-                    Err(e) => {
-                        debug!("Network error received from {}: {e:?}", peer);
-                        None
-                    }
+        let stream = response.into_inner().filter_map(move |b| async move {
+            match b {
+                Ok(response) => Some(response.block),
+                Err(e) => {
+                    debug!("Network error received from {}: {e:?}", peer);
+                    None
                 }
-            })
-            .boxed();
-        Ok(stream)
+            }
+        });
+        let rate_limited_stream =
+            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
+                .boxed();
+        Ok(rate_limited_stream)
     }
 
     async fn fetch_blocks(
@@ -229,12 +230,14 @@ impl NetworkClient for TonicClient {
     async fn fetch_commits(
         &self,
         peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
         let mut client = self.get_client(peer, timeout).await?;
-        let mut request = Request::new(FetchCommitsRequest { start, end });
+        let mut request = Request::new(FetchCommitsRequest {
+            start: commit_range.start(),
+            end: commit_range.end(),
+        });
         request.set_timeout(timeout);
         let response = client
             .fetch_commits(request)
@@ -333,7 +336,7 @@ impl ChannelPool {
         let channel = tower::ServiceBuilder::new()
             .layer(CallbackLayer::new(MetricsCallbackMaker::new(
                 self.context.metrics.network_metrics.outbound.clone(),
-                self.context.parameters.tonic.excessive_message_size(),
+                self.context.parameters.tonic.excessive_message_size,
             )))
             .layer(
                 TraceLayer::new_for_grpc()
@@ -351,16 +354,13 @@ impl ChannelPool {
 
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
 struct TonicServiceProxy<S: NetworkService> {
-    _context: Arc<Context>,
+    context: Arc<Context>,
     service: Arc<S>,
 }
 
 impl<S: NetworkService> TonicServiceProxy<S> {
     fn new(context: Arc<Context>, service: Arc<S>) -> Self {
-        Self {
-            _context: context,
-            service,
-        }
+        Self { context, service }
     }
 }
 
@@ -399,8 +399,8 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         else {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
-        let mut reuqest_stream = request.into_inner();
-        let first_request = match reuqest_stream.next().await {
+        let mut request_stream = request.into_inner();
+        let first_request = match request_stream.next().await {
             Some(Ok(r)) => r,
             Some(Err(e)) => {
                 debug!(
@@ -418,9 +418,11 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             .handle_subscribe_blocks(peer_index, first_request.last_received_round)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
-            .map(|block| Ok(SubscribeBlocksResponse { block }))
-            .boxed();
-        Ok(Response::new(stream))
+            .map(|block| Ok(SubscribeBlocksResponse { block }));
+        let rate_limited_stream =
+            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
+                .boxed();
+        Ok(Response::new(rate_limited_stream))
     }
 
     type FetchBlocksStream = Iter<std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>>>;
@@ -478,7 +480,7 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         let request = request.into_inner();
         let (commits, certifier_blocks) = self
             .service
-            .handle_fetch_commits(peer_index, request.start, request.end)
+            .handle_fetch_commits(peer_index, (request.start..=request.end).into())
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
         let commits = commits
@@ -569,13 +571,13 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             // tcp keepalive is unsupported by msim
             .add_service(
                 ConsensusServiceServer::new(service)
-                    .max_encoding_message_size(config.max_message_size())
-                    .max_decoding_message_size(config.max_message_size()),
+                    .max_encoding_message_size(config.message_size_limit)
+                    .max_decoding_message_size(config.message_size_limit),
             )
             .into_service();
 
         let inbound_metrics = self.context.metrics.network_metrics.inbound.clone();
-        let excessive_message_size = self.context.parameters.tonic.excessive_message_size();
+        let excessive_message_size = self.context.parameters.tonic.excessive_message_size;
 
         let mut http = Http::new();
         http.http2_only(true);

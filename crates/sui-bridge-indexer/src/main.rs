@@ -10,9 +10,6 @@ use prometheus::Registry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
-use std::net::IpAddr;
-use std::net::Ipv4Addr;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -21,9 +18,9 @@ use sui_bridge::{
     eth_client::EthClient,
     eth_syncer::EthSyncer,
 };
-use sui_bridge_indexer::postgres_writer::get_connection_pool;
 use sui_bridge_indexer::{
-    config::load_config, worker::process_eth_transaction, worker::BridgeWorker,
+    config::load_config, metrics::BridgeIndexerMetrics, postgres_writer::get_connection_pool,
+    worker::process_eth_transaction, worker::BridgeWorker,
 };
 use sui_data_ingestion_core::{
     DataIngestionMetrics, FileProgressStore, IndexerExecutor, ReaderOptions, WorkerPool,
@@ -40,32 +37,48 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .init();
+
     let args = Args::parse();
 
     // load config
     let config_path = if let Some(path) = args.config_path {
         path.join("config.yaml")
     } else {
-        env::current_dir().unwrap().join("config.yaml")
+        env::current_dir()
+            .expect("Current directory is invalid.")
+            .join("config.yaml")
     };
-
     let config = load_config(&config_path).unwrap();
 
-    // start metrics server
     let (_exit_sender, exit_receiver) = oneshot::channel();
-    let metrics = DataIngestionMetrics::new(&Registry::new());
 
     // Init metrics server
-    let metrics_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 1000);
-    let registry_service = start_prometheus_server(metrics_address);
-    let prometheus_registry = registry_service.default_registry();
-    mysten_metrics::init_metrics(&prometheus_registry);
-    info!("Metrics server started at port {}", 1000);
+    let registry_service = start_prometheus_server(
+        format!("{}:{}", config.metric_url, config.metric_port,)
+            .parse()
+            .unwrap_or_else(|err| panic!("Failed to parse metric address: {}", err)),
+    );
+    let registry: Registry = registry_service.default_registry();
+    mysten_metrics::init_metrics(&registry);
+    info!(
+        "Metrics server started at {}::{}",
+        config.metric_url, config.metric_port
+    );
+    let metrics = DataIngestionMetrics::new(&registry);
+    let indexer_meterics = BridgeIndexerMetrics::new(&registry);
 
     // start eth client
     let provider = Arc::new(
         ethers::prelude::Provider::<ethers::providers::Http>::try_from(&config.eth_rpc_url)
-            .unwrap()
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Cannot create Ethereum HTTP provider, URL: {}",
+                    &config.eth_rpc_url
+                )
+            })
             .interval(std::time::Duration::from_millis(2000)),
     );
     let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
@@ -99,8 +112,14 @@ async fn main() -> Result<()> {
 
     let pg_pool = get_connection_pool(config.db_url.clone());
 
+    let indexer_metrics_cloned = indexer_meterics.clone();
     let _task_handle = spawn_logged_monitored_task!(
-        process_eth_transaction(eth_events_rx, provider.clone(), pg_pool),
+        process_eth_transaction(
+            eth_events_rx,
+            provider.clone(),
+            pg_pool,
+            indexer_metrics_cloned
+        ),
         "indexer handler"
     );
 
@@ -108,7 +127,7 @@ async fn main() -> Result<()> {
     let progress_store = FileProgressStore::new(config.progress_store_file.into());
     let mut executor = IndexerExecutor::new(progress_store, 1 /* workflow types */, metrics);
     let worker_pool = WorkerPool::new(
-        BridgeWorker::new(vec![], config.db_url.clone()),
+        BridgeWorker::new(vec![], config.db_url.clone(), indexer_meterics.clone()),
         "bridge worker".into(),
         config.concurrency as usize,
     );

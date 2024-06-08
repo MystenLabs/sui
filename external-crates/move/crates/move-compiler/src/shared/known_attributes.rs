@@ -37,6 +37,8 @@ pub enum TestingAttribute {
     Test,
     // This test is expected to fail
     ExpectedFailure,
+    // This is a test that uses randomly-generated arguments
+    RandTest,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -91,6 +93,7 @@ impl KnownAttribute {
             TestingAttribute::TEST => TestingAttribute::Test.into(),
             TestingAttribute::TEST_ONLY => TestingAttribute::TestOnly.into(),
             TestingAttribute::EXPECTED_FAILURE => TestingAttribute::ExpectedFailure.into(),
+            TestingAttribute::RAND_TEST => TestingAttribute::RandTest.into(),
             VerificationAttribute::VERIFY_ONLY => VerificationAttribute::VerifyOnly.into(),
             NativeAttribute::BYTECODE_INSTRUCTION => NativeAttribute::BytecodeInstruction.into(),
             DiagnosticAttribute::ALLOW => DiagnosticAttribute::Allow.into(),
@@ -132,6 +135,7 @@ impl KnownAttribute {
 
 impl TestingAttribute {
     pub const TEST: &'static str = "test";
+    pub const RAND_TEST: &'static str = "random_test";
     pub const EXPECTED_FAILURE: &'static str = "expected_failure";
     pub const TEST_ONLY: &'static str = "test_only";
     pub const ABORT_CODE_NAME: &'static str = "abort_code";
@@ -147,6 +151,7 @@ impl TestingAttribute {
             Self::Test => Self::TEST,
             Self::TestOnly => Self::TEST_ONLY,
             Self::ExpectedFailure => Self::EXPECTED_FAILURE,
+            Self::RandTest => Self::RAND_TEST,
         }
     }
 
@@ -169,7 +174,7 @@ impl TestingAttribute {
             Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
         match self {
             TestingAttribute::TestOnly => &TEST_ONLY_POSITIONS,
-            TestingAttribute::Test => &TEST_POSITIONS,
+            TestingAttribute::Test | TestingAttribute::RandTest => &TEST_POSITIONS,
             TestingAttribute::ExpectedFailure => &EXPECTED_FAILURE_POSITIONS,
         }
     }

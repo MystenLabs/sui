@@ -3,8 +3,9 @@
 
 use std::{sync::Arc, time::Duration};
 
+use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
-use tokio::sync::mpsc::UnboundedSender;
+use tracing::info;
 
 use crate::{
     block::{BlockAPI, VerifiedBlock},
@@ -114,7 +115,7 @@ impl CommitObserver {
         // We should not send the last processed commit again, so last_processed_commit_index+1
         let unsent_commits = self
             .store
-            .scan_commits(((last_processed_commit_index + 1)..CommitIndex::MAX).into())
+            .scan_commits(((last_processed_commit_index + 1)..=CommitIndex::MAX).into())
             .expect("Scanning commits should not fail");
 
         // Resend all the committed subdags to the consensus output channel
@@ -152,32 +153,37 @@ impl CommitObserver {
     }
 
     fn report_metrics(&self, committed: &[CommittedSubDag]) {
+        let metrics = &self.context.metrics.node_metrics;
         let utc_now = self.context.clock.timestamp_utc_ms();
-        let mut total = 0;
-        for block in committed.iter().flat_map(|dag| &dag.blocks) {
-            let latency_ms = utc_now
-                .checked_sub(block.timestamp_ms())
-                .unwrap_or_default();
 
-            total += 1;
+        for commit in committed {
+            info!(
+                "Consensus commit {} with leader {} has {} blocks",
+                commit.commit_ref,
+                commit.leader,
+                commit.blocks.len()
+            );
 
-            self.context
-                .metrics
-                .node_metrics
-                .block_commit_latency
-                .observe(Duration::from_millis(latency_ms).as_secs_f64());
-            self.context
-                .metrics
-                .node_metrics
+            metrics
                 .last_committed_leader_round
-                .set(block.round() as i64);
+                .set(commit.leader.round as i64);
+            metrics
+                .last_commit_index
+                .set(commit.commit_ref.index as i64);
+            metrics
+                .blocks_per_commit_count
+                .observe(commit.blocks.len() as f64);
+
+            for block in &commit.blocks {
+                let latency_ms = utc_now
+                    .checked_sub(block.timestamp_ms())
+                    .unwrap_or_default();
+                metrics
+                    .block_commit_latency
+                    .observe(Duration::from_millis(latency_ms).as_secs_f64());
+            }
         }
 
-        self.context
-            .metrics
-            .node_metrics
-            .blocks_per_commit_count
-            .observe(total as f64);
         self.context
             .metrics
             .node_metrics
@@ -188,8 +194,8 @@ impl CommitObserver {
 
 #[cfg(test)]
 mod tests {
+    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
     use parking_lot::RwLock;
-    use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
     use super::*;
     use crate::{
@@ -213,7 +219,7 @@ mod tests {
         )));
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel();
+        let (sender, mut receiver) = unbounded_channel("consensus_output");
 
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -298,7 +304,7 @@ mod tests {
             commits.last().unwrap().commit_ref.index
         );
         let all_stored_commits = mem_store
-            .scan_commits((0..CommitIndex::MAX).into())
+            .scan_commits((0..=CommitIndex::MAX).into())
             .unwrap();
         assert_eq!(all_stored_commits.len(), leaders.len());
         let blocks_existence = mem_store.contains_blocks(&expected_stored_refs).unwrap();
@@ -317,7 +323,7 @@ mod tests {
         )));
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel();
+        let (sender, mut receiver) = unbounded_channel("consensus_output");
 
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -465,7 +471,7 @@ mod tests {
         )));
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel();
+        let (sender, mut receiver) = unbounded_channel("consensus_output");
 
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),

@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import "@mysten/dapp-kit/dist/index.css";
 import "@radix-ui/themes/styles.css";
 
-import { getFullnodeUrl } from "@mysten/sui.js/client";
+import { getFullnodeUrl } from "@mysten/sui/client";
 import {
   SuiClientProvider,
   WalletProvider,
@@ -26,7 +26,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Theme appearance="dark">
       <QueryClientProvider client={queryClient}>
-        <SuiClientProvider networks={networkConfig} defaultNetwork="devnet">
+        <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
           <WalletProvider autoConnect>
             <App />
           </WalletProvider>

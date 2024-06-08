@@ -43,10 +43,10 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-ghcloud,
-            windows-ghcloud,
-            macos-latest-xl,
-            macos-arm64-self-hosted
+            ubuntu-ghcloud, # ubuntu-x86_64
+            windows-ghcloud, # windows-x86_64
+            macos-latest-xl, # macos-x86_64
+            macos-latest-xlarge # macos-arm64
           ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -124,11 +124,16 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Install jq (MacOS arm64)
-        if: ${{ matrix.os == 'macos-arm64-self-hosted' && env.s3_archive_exist == '' }}
+      - name: Install postgres (Mac arm64)
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
         shell: bash
+        env:
+          PQ_LIB_DIR: "$(brew --prefix libpq)/lib"
+          LIBRARY_PATH: "/opt/homebrew/lib:$LIBRARY_PATH"
+          PKG_CONFIG_PATH: "/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+          PATH: "/opt/homebrew/bin:$PATH"
         run: |
-          brew install jq        
+          brew install postgresql          
 
       - name: Check out ${{ env.sui_tag }}
         if: ${{ env.s3_archive_exist == '' }}
@@ -141,7 +146,6 @@ jobs:
         shell: bash
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --profile=dev --bin sui
-          cd external-crates/move && cargo build -p move-analyzer --release
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_archive_exist == '' }}
@@ -156,7 +160,6 @@ jobs:
           done
 
           mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
-          mv ./external-crates/move/target/release/move-analyzer${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/move-analyzer${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
           [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
 
@@ -254,7 +257,7 @@ jobs:
         run: |
           echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${{ env.sui_tag }}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
           echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${{ env.sui_tag }}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
-          echo "sha256_macos_arm_release=$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${{ env.sui_tag }}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
+          echo "sha256_macos_arm_release=$(sha256sum sui-binaries-macos-latest-xlarge/sui-${{ env.sui_tag }}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
 
       # Install Jinja2 for templating
       - name: Install Jinja2

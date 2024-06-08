@@ -9,6 +9,7 @@ use std::{
 };
 use sui_bridge::config::BridgeNodeConfig;
 use sui_bridge::node::run_bridge_node;
+use sui_bridge::server::BridgeNodePublicMetadata;
 use sui_config::Config;
 use tracing::info;
 
@@ -42,6 +43,8 @@ async fn main() -> anyhow::Result<()> {
         .with_env()
         .with_prom_registry(&prometheus_registry)
         .init();
-
-    Ok(run_bridge_node(config).await?.await?)
+    let metadata = BridgeNodePublicMetadata::new(VERSION.into());
+    Ok(run_bridge_node(config, metadata, prometheus_registry)
+        .await?
+        .await?)
 }

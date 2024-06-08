@@ -43,7 +43,7 @@ async fn basic_checkpoints_integration_test() {
 }
 
 #[sim_test]
-async fn checkpoint_split_brain_test() {
+async fn test_checkpoint_split_brain() {
     #[cfg(msim)]
     {
         // this test intentionally halts the network by causing a fork, so we cannot panic on

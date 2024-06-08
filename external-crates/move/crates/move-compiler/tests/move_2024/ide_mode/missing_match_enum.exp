@@ -1,0 +1,24 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:9:16
+  │
+9 │         match (e) {
+  │                ^ Pattern '_' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:14:16
+   │
+14 │         match (e) {
+   │                ^ Pattern 'E::One' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:20:16
+   │
+20 │         match (e) {
+   │                ^ Pattern 'E::Three { x: _ }' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:27:16
+   │
+27 │         match (e) {
+   │                ^ Pattern 'E::One' not covered
+

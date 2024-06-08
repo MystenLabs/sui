@@ -1,6 +1,6 @@
 error[E03010]: unbound field
-   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:16:21
+   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:13:21
    │
-16 │         let _tmp2 = _s.b.x;
+13 │         let _tmp2 = _s.b.x;
    │                     ^^^^ Unbound field 'b' in 'a::m::B'
 

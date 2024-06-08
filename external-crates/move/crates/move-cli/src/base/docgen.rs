@@ -5,7 +5,10 @@ use super::reroot_path;
 use clap::*;
 use move_docgen::DocgenOptions;
 use move_package::{BuildConfig, ModelConfig};
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 /// Generate javadoc style documentation for Move packages
 #[derive(Parser)]
@@ -57,7 +60,7 @@ pub struct Docgen {
 
 impl Docgen {
     /// Calling the Docgen
-    pub fn execute(self, path: Option<PathBuf>, config: BuildConfig) -> anyhow::Result<()> {
+    pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
         let model = config.move_model_for_package(
             &reroot_path(path).unwrap(),
             ModelConfig {

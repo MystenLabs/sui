@@ -7,8 +7,8 @@
 		"isolatedModules": true,
 		"rootDir": "src",
 		"paths": {
-			"@mysten/sui.js/client": ["../../typescrupt/src/client"],
-			"@mysten/sui.js/transactions": ["../../typescript/src/transactions"]
+			"@mysten/sui/client": ["../../typescrupt/src/client"],
+			"@mysten/sui/transactions": ["../../typescript/src/transactions"]
 		}
 	},
 	"references": [{ "path": "../wallet-standard" }, { "path": "../typescript" }]

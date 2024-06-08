@@ -5,11 +5,12 @@ description: Using the Sui TypeScript SDK, you can create programmable transacti
 
 This guide explores creating a programmable transaction block (PTB) on Sui using the TypeScript SDK. For an overview of what a PTB is, see [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx) in the Concepts section. If you don't already have the Sui TypeScript SDK, follow the [install instructions](https://sdk.mystenlabs.com/typescript/install) on the Sui TypeScript SDK site.
 
-This example starts by constructing a PTB to send Sui. If you are familiar with the legacy Sui transaction types, this is similar to a `paySui` transaction. To construct transactions, import the `TransactionBlock` class, and construct it:
+This example starts by constructing a PTB to send Sui. If you are familiar with the legacy Sui transaction types, this is similar to a `paySui` transaction. To construct transactions, import the `Transaction` class, and construct it:
 
 ```ts
-import { TransactionBlock } from "@mysten/sui.js";
-const txb = new TransactionBlock();
+import { Transaction } from '@mysten/sui/transactions';
+
+const txb = new Transaction();
 ```
 
 Using this, you can then add transactions to this PTB.
@@ -20,38 +21,38 @@ Using this, you can then add transactions to this PTB.
 const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
 
 // Transfer the split coin to a specific address.
-txb.transferObjects([coin], txb.pure("0xSomeSuiAddress"));
+txb.transferObjects([coin], txb.pure('0xSomeSuiAddress'));
 ```
 
 You can attach multiple transaction commands of the same type to a PTB as well. For example, to get a list of transfers, and iterate over them to transfer coins to each of them:
 
 ```ts
 interface Transfer {
-  to: string;
-  amount: number;
+	to: string;
+	amount: number;
 }
 
 // Procure a list of some Sui transfers to make:
 const transfers: Transfer[] = getTransfers();
 
-const txb = new TransactionBlock();
+const txb = new Transaction();
 
 // First, split the gas coin into multiple coins:
 const coins = txb.splitCoins(
-  txb.gas,
-  transfers.map((transfer) => txb.pure(transfer.amount))
+	txb.gas,
+	transfers.map((transfer) => txb.pure(transfer.amount)),
 );
 
 // Next, create a transfer transaction for each coin:
 transfers.forEach((transfer, index) => {
-  txb.transferObjects([coins[index]], txb.pure(transfer.to));
+	txb.transferObjects([coins[index]], txb.pure(transfer.to));
 });
 ```
 
-After you have the PTB defined, you can directly execute it with a `signer` using `signAndExecuteTransactionBlock`.
+After you have the PTB defined, you can directly execute it with a `signer` using `signAndExecuteTransaction`.
 
 ```ts
-signer.signAndExecuteTransactionBlock({ transactionBlock: txb });
+signer.signAndExecuteTransaction({ transaction: txb });
 ```
 
 ## Constructing inputs
@@ -62,23 +63,23 @@ There are currently two ways to define inputs:
 
 - For objects: the `txb.object(objectId)` function is used to construct an input that contains an object reference.
 - For pure values: the `txb.pure(value, type?)` function is used to construct an input for a non-object input.
-    - If value is a `Uint8Array`, then the value is assumed to be raw bytes and is used directly.
-    - If type is provided, it's used to generate the BCS serialization layout for the value. If not provided, the type is automatically determined based on the value.
+  - If value is a `Uint8Array`, then the value is assumed to be raw bytes and is used directly.
+  - If type is provided, it's used to generate the BCS serialization layout for the value. If not provided, the type is automatically determined based on the value.
 
 ## Available transactions
 
 Sui supports following transaction commands:
 
 - `txb.splitCoins(coin, amounts)`: Creates new coins with the defined amounts, split from the provided coin. Returns the coins so that it can be used in subsequent transactions.
-    - Example: `txb.splitCoins(txb.gas, [txb.pure(100), txb.pure(200)])`
+  - Example: `txb.splitCoins(txb.gas, [txb.pure(100), txb.pure(200)])`
 - `txb.mergeCoins(destinationCoin, sourceCoins)`: Merges the sourceCoins into the destinationCoin.
-    - Example: `txb.mergeCoins(txb.object(coin1), [txb.object(coin2), txb.object(coin3)])`
+  - Example: `txb.mergeCoins(txb.object(coin1), [txb.object(coin2), txb.object(coin3)])`
 - `txb.transferObjects(objects, address)`: Transfers a list of objects to the specified address.
-    - Example: `txb.transferObjects([txb.object(thing1), txb.object(thing2)], txb.pure(myAddress))`
+  - Example: `txb.transferObjects([txb.object(thing1), txb.object(thing2)], txb.pure(myAddress))`
 - `txb.moveCall({ target, arguments, typeArguments })`: Executes a Move call. Returns whatever the Sui Move call returns.
-    - Example: `txb.moveCall({ target: '0x2::devnet_nft::mint', arguments: [txb.pure(name), txb.pure(description), txb.pure(image)] })`
-- `txb.makeMoveVec({ type, objects })`: Constructs a vector of objects that can be passed into a moveCall. This is required as there's no other way to define a vector as an input.
-    - Example: `txb.makeMoveVec({ objects: [txb.object(id1), txb.object(id2)] })`
+  - Example: `txb.moveCall({ target: '0x2::devnet_nft::mint', arguments: [txb.pure(name), txb.pure(description), txb.pure(image)] })`
+- `txb.makeMoveVec({ type, elements })`: Constructs a vector of objects that can be passed into a moveCall. This is required as there's no other way to define a vector as an input.
+  - Example: `txb.makeMoveVec({ elements: [txb.object(id1), txb.object(id2)] })`
 - `txb.publish(modules, dependencies)`: Publishes a Move package. Returns the upgrade capability object.
 
 ## Passing transaction results as arguments
@@ -96,11 +97,11 @@ When a transaction command returns multiple results, you can access the result a
 
 ```ts
 // Destructuring (preferred, as it gives you logical local names):
-const [nft1, nft2] = txb.moveCall({ target: "0x2::nft::mint_many" });
+const [nft1, nft2] = txb.moveCall({ target: '0x2::nft::mint_many' });
 txb.transferObjects([nft1, nft2], txb.pure(address));
 
 // Array indexes:
-const mintMany = txb.moveCall({ target: "0x2::nft::mint_many" });
+const mintMany = txb.moveCall({ target: '0x2::nft::mint_many' });
 txb.transferObjects([mintMany[0], mintMany[1]], txb.pure(address));
 ```
 
@@ -121,7 +122,7 @@ You might need to explicitly call `setSender()` on the PTB to ensure that the `s
 :::
 
 ```ts
-const txb = new TransactionBlock();
+const txb = new Transaction();
 
 // ... add some transactions...
 
@@ -130,11 +131,11 @@ await txb.build({ provider });
 
 In most cases, building requires your JSON RPC provider to fully resolve input values.
 
-If you have PTB bytes, you can also convert them back into a `TransactionBlock` class:
+If you have PTB bytes, you can also convert them back into a `Transaction` class:
 
 ```ts
-const bytes = getTransactionBlockBytesFromSomewhere();
-const txb = TransactionBlock.from(bytes);
+const bytes = getTransactionBytesFromSomewhere();
+const txb = Transaction.from(bytes);
 ```
 
 ## Building offline
@@ -142,7 +143,7 @@ const txb = TransactionBlock.from(bytes);
 In the event that you want to build a PTB offline (as in with no `provider` required), you need to fully define all of your input values, and gas configuration (see the following example). For pure values, you can provide a `Uint8Array` which is used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
 
 ```ts
-import { Inputs } from "@mysten/sui.js";
+import { Inputs } from '@mysten/sui/transactions';
 
 // For pure values:
 txb.pure(pureValueAsBytes);
@@ -196,9 +197,9 @@ txb.setGasPayment([coin1, coin2]);
 
 ### dApp / Wallet integration
 
-The Wallet Standard interface has been updated to support the `TransactionBlock` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from dApps into wallets is expected to provide a `TransactionBlock` class. This PTB class can then be serialized and sent to your wallet for execution.
+The Wallet Standard interface has been updated to support the `Transaction` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from dApps into wallets is expected to provide a `Transaction` class. This PTB class can then be serialized and sent to your wallet for execution.
 
-To serialize a PTB for sending to a wallet, Sui recommends using the `txb.serialize()` function, which returns an opaque string representation of the PTB that can be passed from the wallet standard dApp context to your wallet. This can then be converted back into a `TransactionBlock` using `TransactionBlock.from()`.
+To serialize a PTB for sending to a wallet, Sui recommends using the `txb.serialize()` function, which returns an opaque string representation of the PTB that can be passed from the wallet standard dApp context to your wallet. This can then be converted back into a `Transaction` using `Transaction.from()`.
 
 :::tip
 
@@ -208,17 +209,17 @@ You should not build the PTB from bytes in the dApp code. Using `serialize` inst
 
 ```ts
 // Within a dApp
-const tx = new TransactionBlock();
-wallet.signTransactionBlock({ transactionBlock: tx });
+const tx = new Transaction();
+wallet.signTransaction({ transaction: tx });
 
 // Your wallet standard code:
-function handleSignTransactionBlock(input) {
-  sendToWalletContext({ transactionBlock: input.transactionBlock.serialize() });
+function handleSignTransaction(input) {
+	sendToWalletContext({ transaction: input.transaction.serialize() });
 }
 
 // Within your wallet context:
 function handleSignRequest(input) {
-  const userTx = TransactionBlock.from(input.transaction);
+	const userTx = Transaction.from(input.transaction);
 }
 ```
 
@@ -227,13 +228,13 @@ function handleSignRequest(input) {
 The PTB builder can support sponsored PTBs by using the `onlyTransactionKind` flag when building the PTB.
 
 ```ts
-const txb = new TransactionBlock();
+const txb = new Transaction();
 // ... add some transactions...
 
 const kindBytes = await txb.build({ provider, onlyTransactionKind: true });
 
 // Construct a sponsored transaction from the kind bytes:
-const sponsoredTxb = TransactionBlock.fromKind(kindBytes);
+const sponsoredTxb = Transaction.fromKind(kindBytes);
 
 // You can now set the sponsored transaction data that is required:
 sponsoredTxb.setSender(sender);

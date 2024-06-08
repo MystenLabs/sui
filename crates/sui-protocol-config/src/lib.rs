@@ -133,8 +133,11 @@ const MAX_PROTOCOL_VERSION: u64 = 50;
 // Version 48: Use tonic networking for Mysticeti.
 //             Resolve Move abort locations to the package id instead of the runtime module ID.
 //             Enable random beacon in testnet.
+//             Use new VM when verifying framework packages.
 // Version 49: Enable Move enums on devnet.
 //             Enable VDF in devnet
+//             Enable consensus commit prologue V3 in devnet.
+//             Run Mysticeti consensus by default.
 // Version 50: Enable checkpoint batching in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -235,6 +238,16 @@ pub enum Chain {
 impl Default for Chain {
     fn default() -> Self {
         Self::Unknown
+    }
+}
+
+impl Chain {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Chain::Mainnet => "mainnet",
+            Chain::Testnet => "testnet",
+            Chain::Unknown => "unknown",
+        }
     }
 }
 
@@ -457,6 +470,16 @@ struct FeatureFlags {
     // Enable VDF
     #[serde(skip_serializing_if = "is_false")]
     enable_vdf: bool,
+
+    // Controls whether consensus handler should record consensus determined shared object version
+    // assignments in consensus commit prologue transaction.
+    // The purpose of doing this is to enable replaying transaction without transaction effects.
+    #[serde(skip_serializing_if = "is_false")]
+    record_consensus_determined_version_assignments_in_prologue: bool,
+
+    // Run verification of framework upgrades using a new/fresh VM.
+    #[serde(skip_serializing_if = "is_false")]
+    fresh_vm_on_framework_upgrade: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -489,6 +512,7 @@ pub enum PerObjectCongestionControlMode {
     #[default]
     None, // No congestion control.
     TotalGasBudget, // Use txn gas budget as execution cost.
+    TotalTxCount,   // Use total txn count as execution cost.
 }
 
 impl PerObjectCongestionControlMode {
@@ -1315,6 +1339,11 @@ impl ProtocolConfig {
         self.feature_flags.include_consensus_digest_in_prologue
     }
 
+    pub fn record_consensus_determined_version_assignments_in_prologue(&self) -> bool {
+        self.feature_flags
+            .record_consensus_determined_version_assignments_in_prologue
+    }
+
     pub fn hardened_otw_check(&self) -> bool {
         self.feature_flags.hardened_otw_check
     }
@@ -1369,6 +1398,10 @@ impl ProtocolConfig {
 
     pub fn enable_vdf(&self) -> bool {
         self.feature_flags.enable_vdf
+    }
+
+    pub fn fresh_vm_on_framework_upgrade(&self) -> bool {
+        self.feature_flags.fresh_vm_on_framework_upgrade
     }
 }
 
@@ -2296,6 +2329,20 @@ impl ProtocolConfig {
                         cfg.vdf_verify_vdf_cost = Some(1500);
                         cfg.vdf_hash_to_input_cost = Some(100);
                     }
+
+                    // Only enable consensus commit prologue V3 in devnet.
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .record_consensus_determined_version_assignments_in_prologue = true;
+                    }
+
+                    // Run Mysticeti consensus in testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
+                    }
+
+                    // Run Move verification on framework upgrades in its own VM
+                    cfg.feature_flags.fresh_vm_on_framework_upgrade = true;
                 }
                 50 => {
                     // Enable checkpoint batching in testnet.

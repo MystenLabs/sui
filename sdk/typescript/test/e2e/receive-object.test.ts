@@ -5,7 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { OwnedObjectRef, SuiClient } from '../../src/client';
 import type { Keypair } from '../../src/cryptography';
-import { TransactionBlock } from '../../src/transactions';
+import { Transaction } from '../../src/transactions';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 function getOwnerAddress(o: OwnedObjectRef): string | undefined {
@@ -31,7 +31,7 @@ describe('Transfer to Object', () => {
 
 	beforeEach(async () => {
 		toolbox = await setup();
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::tto::start`,
 			typeArguments: [],
@@ -50,7 +50,7 @@ describe('Transfer to Object', () => {
 	});
 
 	it('Basic Receive: receive and then transfer', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::tto::receiver`,
 			typeArguments: [],
@@ -63,7 +63,7 @@ describe('Transfer to Object', () => {
 	});
 
 	it('Basic Receive: receive and then delete', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::tto::deleter`,
 			typeArguments: [],
@@ -76,7 +76,7 @@ describe('Transfer to Object', () => {
 	});
 
 	it('receive + return, then delete', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		const b = tx.moveCall({
 			target: `${packageId}::tto::return_`,
 			typeArguments: [],
@@ -94,7 +94,7 @@ describe('Transfer to Object', () => {
 	});
 
 	it('Basic Receive: &Receiving arg type', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::tto::invalid_call_immut_ref`,
 			typeArguments: [],
@@ -107,7 +107,7 @@ describe('Transfer to Object', () => {
 	});
 
 	it('Basic Receive: &mut Receiving arg type', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::tto::invalid_call_mut_ref`,
 			typeArguments: [],
@@ -120,7 +120,7 @@ describe('Transfer to Object', () => {
 	});
 
 	it.fails('Trying to pass shared object as receiving argument', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::tto::receiver`,
 			typeArguments: [],
@@ -130,12 +130,12 @@ describe('Transfer to Object', () => {
 	});
 });
 
-async function validateTransaction(client: SuiClient, signer: Keypair, tx: TransactionBlock) {
+async function validateTransaction(client: SuiClient, signer: Keypair, tx: Transaction) {
 	tx.setSenderIfNotSet(signer.getPublicKey().toSuiAddress());
 	const localDigest = await tx.getDigest({ client });
-	const result = await client.signAndExecuteTransactionBlock({
+	const result = await client.signAndExecuteTransaction({
 		signer,
-		transactionBlock: tx,
+		transaction: tx,
 		options: {
 			showEffects: true,
 		},
@@ -143,6 +143,6 @@ async function validateTransaction(client: SuiClient, signer: Keypair, tx: Trans
 	expect(localDigest).toEqual(result.digest);
 	expect(result.effects?.status.status).toEqual('success');
 
-	await client.waitForTransactionBlock({ digest: result.digest });
+	await client.waitForTransaction({ digest: result.digest });
 	return result;
 }

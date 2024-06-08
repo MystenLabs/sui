@@ -2,7 +2,7 @@ error[E03003]: unbound module member
    ┌─ tests/move_check/typing/module_call_missing_function.move:13:9
    │
 13 │         Self::fooo();
-   │         ^^^^^^^^^^ Invalid module access. Unbound function 'fooo' in module '0x2::M'
+   │         ^^^^^^^^^^ Unbound function 'fooo' in current scope
 
 error[E03005]: unbound unscoped name
    ┌─ tests/move_check/typing/module_call_missing_function.move:14:9

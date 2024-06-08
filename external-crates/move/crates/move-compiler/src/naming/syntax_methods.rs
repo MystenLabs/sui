@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use crate::{
     diag,
     editions::FeatureGate,
-    expansion::ast::{self as E, Attribute, Attribute_, ModuleIdent},
+    expansion::ast::{Attribute, Attribute_, ModuleIdent},
     naming::{
         ast::{
             self as N, SyntaxMethod, SyntaxMethodKind, SyntaxMethodKind_, SyntaxMethods, TypeName,
@@ -76,20 +76,6 @@ pub(super) fn resolve_syntax_attributes(
         return None;
     }
 
-    let public_visibility = match function.visibility {
-        E::Visibility::Public(loc) => loc,
-        E::Visibility::Friend(_) | E::Visibility::Package(_) | E::Visibility::Internal => {
-            let msg = "Syntax attributes may only appear on public functions";
-            let fn_msg = "This function is not public";
-            context.env.add_diag(diag!(
-                Declarations::InvalidVisibilityModifier,
-                (attr_loc, msg),
-                (function_name.0.loc, fn_msg)
-            ));
-            return None;
-        }
-    };
-
     let method_entry = syntax_methods.entry(type_name.clone()).or_default();
 
     for prekind in syntax_method_prekinds {
@@ -108,7 +94,7 @@ pub(super) fn resolve_syntax_attributes(
         } else {
             let new_syntax_method = SyntaxMethod {
                 loc: function_name.0.loc,
-                public_visibility,
+                visibility: function.visibility,
                 kind,
                 tname: type_name.clone(),
                 target_function: (*module_name, *function_name),

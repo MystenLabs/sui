@@ -25,7 +25,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x422dcb0d08d7ed2498c1633492f1cf53cebb74217f34412926614b60fa3ef540",
+            "id": "0x3a52109e235a2b2b1e09b617e300547148e6a60068ac23248b2c96f43a690336",
             "value": "0"
           }
         }
@@ -50,7 +50,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x422dcb0d08d7ed2498c1633492f1cf53cebb74217f34412926614b60fa3ef540",
+            "id": "0x3a52109e235a2b2b1e09b617e300547148e6a60068ac23248b2c96f43a690336",
             "value": "1"
           }
         }
@@ -62,7 +62,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x422dcb0d08d7ed2498c1633492f1cf53cebb74217f34412926614b60fa3ef540",
+            "id": "0x3a52109e235a2b2b1e09b617e300547148e6a60068ac23248b2c96f43a690336",
             "value": "0"
           }
         }
@@ -94,7 +94,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x422dcb0d08d7ed2498c1633492f1cf53cebb74217f34412926614b60fa3ef540",
+            "id": "0x3a52109e235a2b2b1e09b617e300547148e6a60068ac23248b2c96f43a690336",
             "value": "1"
           }
         }
@@ -121,7 +121,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x422dcb0d08d7ed2498c1633492f1cf53cebb74217f34412926614b60fa3ef540",
+            "id": "0x3a52109e235a2b2b1e09b617e300547148e6a60068ac23248b2c96f43a690336",
             "value": "1"
           }
         }
@@ -138,7 +138,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x422dcb0d08d7ed2498c1633492f1cf53cebb74217f34412926614b60fa3ef540",
+            "id": "0x3a52109e235a2b2b1e09b617e300547148e6a60068ac23248b2c96f43a690336",
             "value": "0"
           }
         }
@@ -186,7 +186,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x422dcb0d08d7ed2498c1633492f1cf53cebb74217f34412926614b60fa3ef540",
+            "id": "0x3a52109e235a2b2b1e09b617e300547148e6a60068ac23248b2c96f43a690336",
             "value": "1"
           }
         }
@@ -203,7 +203,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x422dcb0d08d7ed2498c1633492f1cf53cebb74217f34412926614b60fa3ef540",
+            "id": "0x3a52109e235a2b2b1e09b617e300547148e6a60068ac23248b2c96f43a690336",
             "value": "0"
           }
         }

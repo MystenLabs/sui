@@ -32,7 +32,7 @@ use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sui_move::build::resolve_lock_file_path;
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
@@ -892,7 +892,7 @@ impl SuiClientCommands {
                 .await?;
 
                 if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                    let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                     if let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Upgrade,
@@ -966,7 +966,7 @@ impl SuiClientCommands {
                 .await?;
 
                 if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                    let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                     if let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Publish,
@@ -1555,8 +1555,7 @@ impl SuiClientCommands {
                     ));
                 }
 
-                let build_config =
-                    resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+                let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let compiled_package = BuildConfig {
                     config: build_config,
                     run_bytecode_verifier: true,
@@ -1601,7 +1600,7 @@ fn compile_package_simple(
     package_path: PathBuf,
 ) -> Result<CompiledPackage, anyhow::Error> {
     let config = BuildConfig {
-        config: resolve_lock_file_path(build_config, Some(package_path.clone()))?,
+        config: resolve_lock_file_path(build_config, Some(&package_path))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
     };
@@ -1691,7 +1690,7 @@ pub(crate) async fn compile_package(
     ),
     anyhow::Error,
 > {
-    let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+    let config = resolve_lock_file_path(build_config, Some(&package_path))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
     let config = BuildConfig {

@@ -53,7 +53,7 @@ error[E10004]: invalid usage of known attribute
 31 │     #[test(_a=@0x1)]
    │       ------------- Previously annotated here
 32 │     #[test_only]
-   │       ^^^^^^^^^ Function annotated as both #[test(...)] and #[test_only]. You need to declare it as either one or the other
+   │       ^^^^^^^^^ Function annotated as both #[test] and #[test_only]. You need to declare it as either one or the other
 33 │     public fun e(_a: signer, _b: signer) { }
    │                - Error found in this test
 

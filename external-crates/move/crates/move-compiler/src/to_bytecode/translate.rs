@@ -7,6 +7,7 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
+    diagnostics::PositionInfo,
     expansion::ast::{
         AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability, TargetKind,
     },
@@ -134,7 +135,10 @@ pub fn program(
     let mut units = vec![];
 
     let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
-    let G::Program { modules: gmodules } = prog;
+    let G::Program {
+        modules: gmodules,
+        info: _,
+    } = prog;
 
     let mut source_modules = gmodules
         .into_iter()
@@ -1059,8 +1063,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             let line_no = context
                 .env
                 .file_mapping()
-                .location(line_number_loc)
-                .start
+                .start_position(&line_number_loc)
                 .line;
 
             // Clamp line number to u16::MAX -- so if the line number exceeds u16::MAX, we don't

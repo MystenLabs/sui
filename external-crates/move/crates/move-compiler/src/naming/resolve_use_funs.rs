@@ -358,7 +358,6 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             from_macro_argument: _,
             seq,
         }) => sequence(context, seq),
-        N::Exp_::IDEAnnotation(_, e) => exp(context, e),
         N::Exp_::FieldMutate(ed, e) => {
             exp_dotted(context, ed);
             exp(context, e)

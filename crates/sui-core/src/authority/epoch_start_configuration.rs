@@ -47,19 +47,23 @@ pub enum EpochFlag {
     PerEpochFinalizedTransactions,
     ObjectLockSplitTables,
     WritebackCacheEnabled,
+    StateAccumulatorV2Enabled,
 }
 
 impl EpochFlag {
     pub fn default_flags_for_new_epoch(config: &NodeConfig) -> Vec<Self> {
-        Self::default_flags_impl(&config.execution_cache)
+        Self::default_flags_impl(&config.execution_cache, config.state_accumulator_v2)
     }
 
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
     pub fn default_for_no_config() -> Vec<Self> {
-        Self::default_flags_impl(&Default::default())
+        Self::default_flags_impl(&Default::default(), true)
     }
 
-    fn default_flags_impl(cache_config: &ExecutionCacheConfig) -> Vec<Self> {
+    fn default_flags_impl(
+        cache_config: &ExecutionCacheConfig,
+        enable_state_accumulator_v2: bool,
+    ) -> Vec<Self> {
         let mut new_flags = vec![
             EpochFlag::InMemoryCheckpointRoots,
             EpochFlag::PerEpochFinalizedTransactions,
@@ -71,6 +75,10 @@ impl EpochFlag {
             ExecutionCacheConfigType::WritebackCache
         ) {
             new_flags.push(EpochFlag::WritebackCacheEnabled);
+        }
+
+        if enable_state_accumulator_v2 {
+            new_flags.push(EpochFlag::StateAccumulatorV2Enabled);
         }
 
         new_flags
@@ -85,6 +93,7 @@ impl fmt::Display for EpochFlag {
             EpochFlag::PerEpochFinalizedTransactions => write!(f, "PerEpochFinalizedTransactions"),
             EpochFlag::ObjectLockSplitTables => write!(f, "ObjectLockSplitTables"),
             EpochFlag::WritebackCacheEnabled => write!(f, "WritebackCacheEnabled"),
+            EpochFlag::StateAccumulatorV2Enabled => write!(f, "StateAccumulatorV2Enabled"),
         }
     }
 }

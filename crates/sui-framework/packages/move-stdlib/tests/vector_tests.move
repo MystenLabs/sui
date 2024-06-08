@@ -5,8 +5,6 @@
 
 #[test_only]
 module std::vector_tests {
-    use std::vector;
-
     public struct R has store { }
     public struct Droppable has drop {}
     public struct NotDroppable {}

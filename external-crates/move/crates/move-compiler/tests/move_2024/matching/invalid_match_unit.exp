@@ -1,10 +1,17 @@
-error[E01018]: invalid 'match'
-  ┌─ tests/move_2024/matching/invalid_match_unit.move:6:9
-  │  
-6 │ ╭         match (x()) {
-7 │ │             () => ()
-8 │ │         }
-  │ ╰─────────^ Invalid 'match' form. 'match' must have at least one arm
+error[E04005]: expected a single type
+  ┌─ tests/move_2024/matching/invalid_match_unit.move:6:16
+  │
+3 │     fun x() { }
+  │         - Expected a single type, but found expression list type: '()'
+  ·
+6 │         match (x()) {
+  │                ^^^ Invalid 'match' subject
+
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/invalid_match_unit.move:6:16
+  │
+6 │         match (x()) {
+  │                ^^^ Pattern '_' not covered
 
 error[E01002]: unexpected token
   ┌─ tests/move_2024/matching/invalid_match_unit.move:7:14

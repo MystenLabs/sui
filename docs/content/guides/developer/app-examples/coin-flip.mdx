@@ -62,7 +62,7 @@ Next, add some more code to this module:
         max_stake: u64,
         min_stake: u64,
         fees: Balance<SUI>,
-        base_fee_in_bp: u16 
+        base_fee_in_bp: u16
     }
 
     /// A one-time use capability to initialize the house data; created and sent
@@ -340,7 +340,7 @@ module satoshi_flip::single_player_satoshi {
         player: address,
         vrf_input: vector<u8>,
         guess: String,
-        user_stake: u64, 
+        user_stake: u64,
         fee_bp: u16
     }
 
@@ -727,8 +727,8 @@ Okay, that’s a good start to have an overview of the project. Time to move to 
   onSubmit={(e) => {
     e.preventDefault();
 
-    // Create new transaction block
-    const txb = new TransactionBlock();
+    // Create new transaction
+    const txb = new Transaction();
     // Split gas coin into house stake coin
     // SDK will take care for us abstracting away of up-front coin selections
     const [houseStakeCoin] = txb.splitCoins(txb.gas, [
@@ -752,7 +752,7 @@ Okay, that’s a good start to have an overview of the project. Time to move to 
 
     execInitializeHouse(
       {
-        transactionBlock: txb,
+        transaction: txb,
         options: {
           showObjectChanges: true,
         },
@@ -784,7 +784,7 @@ Okay, that’s a good start to have an overview of the project. Time to move to 
   }}
 ```
 
-To use a [programmable transaction block](/concepts/transactions/prog-txn-blocks.mdx) (PTB) in Sui, create a `TransactionBlock`. To initiate a Move call, you must know the global identifier of a public function in your smart contract. The global identifier usually takes the following form:
+To use a [programmable transaction block](/concepts/transactions/prog-txn-blocks.mdx) (PTB) in Sui, create a `Transaction`. To initiate a Move call, you must know the global identifier of a public function in your smart contract. The global identifier usually takes the following form:
 
 ```
 ${PACKAGE_ID}::${MODULE_NAME}::${FUNCTION_NAME}
@@ -799,10 +799,10 @@ ${PACKAGE_ID}::house_data::initialize_house_data
 There are a few parameters that you need to pass into `initialize_house_data()` Move function: the `HouseCap` ID, the House stake, and the House BLS public key:
 
 - Import the `HouseCap` ID from `constants.ts`, which you set up in the previous section.
-- Use `TransactionBlock::splitCoin` for the House stake to create a new coin with a defined amount split from the Gas Coin `txb.gas`. Think of the gas coin as one singular coin available for gas payment from your account (which might cover the entire remaining balance of your account). This is useful for Sui payments - instead of manually selecting the coins for gas payment or manually splitting/merging to have the coin with correct amount for your Move call, the gas coin is the single entry point for this, with all the heavy lifting delegated to the SDK behind the scenes.
-- Pass the BLS public key as bytes `vector<u8>`. When providing inputs that are not on-chain objects, serialize them as BCS using a combination of `txb.pure` and `bcs` imported from `@mysten/sui.js/bcs`.
+- Use `Transaction::splitCoin` for the House stake to create a new coin with a defined amount split from the Gas Coin `txb.gas`. Think of the gas coin as one singular coin available for gas payment from your account (which might cover the entire remaining balance of your account). This is useful for Sui payments - instead of manually selecting the coins for gas payment or manually splitting/merging to have the coin with correct amount for your Move call, the gas coin is the single entry point for this, with all the heavy lifting delegated to the SDK behind the scenes.
+- Pass the BLS public key as bytes `vector<u8>`. When providing inputs that are not on-chain objects, serialize them as BCS using a combination of `txb.pure` and `bcs` imported from `@mysten/sui/bcs`.
 
-Now sign and execute the transaction block. dApp Kit provides a React hook `useSignAndExecuteTransactionBlock()` to streamline this process. This hook, when executed, prompts the UI for you to approve, sign, and execute the transaction block. You can configure the hook with the `showObjectChanges` option to return the newly-created `HouseData` shared object as the result of the transaction block. This `HouseData` object is important as you use it as input for later Move calls, so save its ID somewhere.
+Now sign and execute the transaction block. dApp Kit provides a React hook `useSignAndExecuteTransaction()` to streamline this process. This hook, when executed, prompts the UI for you to approve, sign, and execute the transaction block. You can configure the hook with the `showObjectChanges` option to return the newly-created `HouseData` shared object as the result of the transaction block. This `HouseData` object is important as you use it as input for later Move calls, so save its ID somewhere.
 
 Great, now you know how to initialize the `HouseData` shared object. Move to the next function call.
 
@@ -871,7 +871,7 @@ That’s it, now put the hook into the UI component `PlayerListCounterNft.tsx` a
 ```typescript title='containers/Player/PlayerListCounterNft.tsx'
 export function PlayerListCounterNft() {
 	const { data, isLoading, error, refetch } = useFetchCounterNft();
-	const { mutate: execCreateCounterNFT } = useSignAndExecuteTransactionBlock();
+	const { mutate: execCreateCounterNFT } = useSignAndExecuteTransaction();
 
 	return (
 		<Container mb={'4'}>
@@ -908,10 +908,10 @@ export function PlayerListCounterNft() {
 
 For the case when there is no existing `Counter` object, mint a new `Counter` for the connected wallet. Also add the minting logic into `PlayerListCounterNft.tsx` when the user clicks the button. You already know how to build and execute a Move call with `TransactionBlock` and `initialize_house_data()`, you can implement a similar call here.
 
-As you might recall with `TransactionBlock`, outputs from the transaction can be inputs for the next transaction. Call `counter_nft::mint()`, which returns the newly created `Counter` object, and use it as input for `counter_nft::transfer_to_sender()` to transfer the `Counter` object to the caller wallet:
+As you might recall with `Transaction`, outputs from the transaction can be inputs for the next transaction. Call `counter_nft::mint()`, which returns the newly created `Counter` object, and use it as input for `counter_nft::transfer_to_sender()` to transfer the `Counter` object to the caller wallet:
 
 ```typescript title='containers/Player/PlayerListCounterNft.tsx'
-const txb = new TransactionBlock();
+const txb = new Transaction();
 const [counterNft] = txb.moveCall({
 	target: `${PACKAGE_ID}::counter_nft::mint`,
 });
@@ -922,7 +922,7 @@ txb.moveCall({
 
 execCreateCounterNFT(
 	{
-		transactionBlock: txb,
+		transaction: txb,
 	},
 	{
 		onError: (err) => {
@@ -939,8 +939,8 @@ execCreateCounterNFT(
 Great, now you can create the game with the created `Counter` object. Isolate the game creation logic into `PlayerCreateGame.tsx`. There is one more thing to keep in mind - to flag an input as an on-chain object, you should use `txb.object()` with the corresponding object ID.
 
 ```typescript title='containers/Player/PlayerCreateGame.tsx'
-// Create new transaction block
-const txb = new TransactionBlock();
+// Create new transaction
+const txb = new Transaction();
 
 // Player stake
 const [stakeCoin] = txb.splitCoins(txb.gas, [MIST_PER_SUI * BigInt(stake)]);
@@ -958,7 +958,7 @@ txb.moveCall({
 
 execCreateGame(
 	{
-		transactionBlock: txb,
+		transaction: txb,
 	},
 	{
 		onError: (err) => {
@@ -1011,7 +1011,7 @@ export function HouseFinishGame() {
 					);
 
 					// Finish the game immediately after new game started
-					const txb = new TransactionBlock();
+					const txb = new Transaction();
 					txb.moveCall({
 						target: `${PACKAGE_ID}::single_player_satoshi::finish_game`,
 						arguments: [
@@ -1022,7 +1022,7 @@ export function HouseFinishGame() {
 					});
 					execFinishGame(
 						{
-							transactionBlock: txb,
+							transaction: txb,
 						},
 						{
 							onError: (err) => {

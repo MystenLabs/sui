@@ -25,9 +25,9 @@ error[E03006]: unexpected name in this position
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/parser/long_path.move:11:9
    │
+ 2 │     public struct X<T> { t: T }
+   │                   - But 'X' is an struct
+   ·
 11 │         0x42::m::X<u64>::X { t: abort 0 }
-   │         ^^^^^^^^^^
-   │         │        │
-   │         │        But 'X' is a struct
-   │         Invalid construction. Expected an enum
+   │         ^^^^^^^^^^ Invalid construction. Expected an enum
 

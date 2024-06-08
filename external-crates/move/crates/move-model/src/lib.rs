@@ -219,14 +219,10 @@ pub fn run_model_builder_with_options_and_compilation_flags<
 
     // Extract the module/script closure
     let mut visited_modules = BTreeSet::new();
-    for (_, mident, mdef) in &typing_ast.inner.modules {
+    for (_, mident, mdef) in &typing_ast.modules {
         let src_file_hash = mdef.loc.file_hash();
         if !dep_files.contains(&src_file_hash) {
-            collect_related_modules_recursive(
-                mident,
-                &typing_ast.inner.modules,
-                &mut visited_modules,
-            );
+            collect_related_modules_recursive(mident, &typing_ast.modules, &mut visited_modules);
         }
     }
 
@@ -244,8 +240,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         E::Program { modules }
     };
     let typing_ast = {
-        let T::Program { info, inner } = typing_ast;
-        let T::Program_ { modules } = inner;
+        let T::Program { info, modules } = typing_ast;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
                 mdef.target_kind = TargetKind::Source {
@@ -254,8 +249,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
                 mdef
             })
         });
-        let inner = T::Program_ { modules };
-        T::Program { info, inner }
+        T::Program { info, modules }
     };
 
     // Run the compiler fully to the compiled units

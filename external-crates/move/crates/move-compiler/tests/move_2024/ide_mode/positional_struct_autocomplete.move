@@ -4,7 +4,7 @@ module a::m {
 
     public struct B(A) has copy, drop;
 
-    fun foo() {
+    public fun foo() {
         let _s = B(A(0));
         let _tmp1 = _s.;
         let _tmp2 = _s.0.;

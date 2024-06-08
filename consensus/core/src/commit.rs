@@ -3,9 +3,9 @@
 
 use std::{
     cmp::Ordering,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::{Deref, Range},
+    ops::{Deref, Range, RangeInclusive},
     sync::Arc,
 };
 
@@ -13,8 +13,8 @@ use bytes::Bytes;
 use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction as _};
+use mysten_metrics::monitored_mpsc::UnboundedSender;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
@@ -546,14 +546,18 @@ impl CommitInfo {
 }
 
 /// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)
-/// and end (exclusive) commit indices and can be ordered for use as the key of a table.
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// and end (inclusive) commit indices and can be ordered for use as the key of a table.
+///
+/// NOTE: using Range<CommitIndex> for internal representation for backward compatibility.
+/// The external semantics of CommitRange is closer to RangeInclusive<CommitIndex>.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct CommitRange(Range<CommitIndex>);
 
-#[allow(unused)]
 impl CommitRange {
-    pub(crate) fn new(range: Range<CommitIndex>) -> Self {
-        Self(range)
+    pub(crate) fn new(range: RangeInclusive<CommitIndex>) -> Self {
+        // When end is CommitIndex::MAX, the range can be considered as unbounded
+        // so it is ok to saturate at the end.
+        Self(*range.start()..(*range.end()).saturating_add(1))
     }
 
     // Inclusive
@@ -561,15 +565,19 @@ impl CommitRange {
         self.0.start
     }
 
-    // Exclusive
+    // Inclusive
     pub(crate) fn end(&self) -> CommitIndex {
-        self.0.end
+        self.0.end.saturating_sub(1)
     }
 
-    /// Check if the provided range is sequentially after this range with the same
-    /// range length.
+    /// Check whether the two ranges have the same size.
+    pub(crate) fn is_equal_size(&self, other: &Self) -> bool {
+        self.0.end.wrapping_sub(self.0.start) == other.0.end.wrapping_sub(other.0.start)
+    }
+
+    /// Check if the provided range is sequentially after this range.
     pub(crate) fn is_next_range(&self, other: &Self) -> bool {
-        self.0.len() == other.0.len() && self.end() == other.start()
+        self.0.end == other.0.start
     }
 }
 
@@ -587,9 +595,16 @@ impl PartialOrd for CommitRange {
     }
 }
 
-impl From<Range<CommitIndex>> for CommitRange {
-    fn from(range: Range<CommitIndex>) -> Self {
-        Self(range)
+impl From<RangeInclusive<CommitIndex>> for CommitRange {
+    fn from(range: RangeInclusive<CommitIndex>) -> Self {
+        Self::new(range)
+    }
+}
+
+/// Display CommitRange as an inclusive range.
+impl Debug for CommitRange {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "CommitRange({}..={})", self.start(), self.end())
     }
 }
 
@@ -680,20 +695,27 @@ mod tests {
 
     #[tokio::test]
     async fn test_commit_range() {
-        let range1 = CommitRange::new(1..6);
-        let range2 = CommitRange::new(2..6);
-        let range3 = CommitRange::new(5..10);
-        let range4 = CommitRange::new(6..11);
-        let range5 = CommitRange::new(6..9);
+        telemetry_subscribers::init_for_testing();
+        let range1 = CommitRange::new(1..=5);
+        let range2 = CommitRange::new(2..=6);
+        let range3 = CommitRange::new(5..=10);
+        let range4 = CommitRange::new(6..=10);
+        let range5 = CommitRange::new(6..=9);
 
         assert_eq!(range1.start(), 1);
-        assert_eq!(range1.end(), 6);
+        assert_eq!(range1.end(), 5);
 
         // Test next range check
         assert!(!range1.is_next_range(&range2));
         assert!(!range1.is_next_range(&range3));
         assert!(range1.is_next_range(&range4));
-        assert!(!range1.is_next_range(&range5));
+        assert!(range1.is_next_range(&range5));
+
+        // Test equal size range check
+        assert!(range1.is_equal_size(&range2));
+        assert!(!range1.is_equal_size(&range3));
+        assert!(range1.is_equal_size(&range4));
+        assert!(!range1.is_equal_size(&range5));
 
         // Test range ordering
         assert!(range1 < range2);

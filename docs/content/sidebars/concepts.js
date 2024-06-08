@@ -149,6 +149,7 @@ const concepts = [
 		},
 		items: [
 			'concepts/sui-architecture/high-level',
+			'concepts/sui-architecture/sui-storage',
 			'concepts/sui-architecture/sui-security',
 			'concepts/sui-architecture/transaction-lifecycle',
 			'concepts/sui-architecture/consensus',

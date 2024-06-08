@@ -1,0 +1,562 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"definitions": {
+		"Argument": {
+			"anyOf": [
+				{
+					"properties": {
+						"GasCoin": {
+							"const": true,
+							"type": "boolean"
+						}
+					},
+					"required": ["GasCoin"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"Input": {
+							"type": "number"
+						}
+					},
+					"required": ["Input"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"Result": {
+							"type": "number"
+						}
+					},
+					"required": ["Result"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"NestedResult": {
+							"items": [
+								{
+									"type": "number"
+								},
+								{
+									"type": "number"
+								}
+							],
+							"maxItems": 2,
+							"minItems": 2,
+							"type": "array"
+						}
+					},
+					"required": ["NestedResult"],
+					"type": "object"
+				}
+			]
+		},
+		"CallArg": {
+			"anyOf": [
+				{
+					"properties": {
+						"Object": {
+							"$ref": "#/definitions/ObjectArg"
+						}
+					},
+					"required": ["Object"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"Pure": {
+							"$ref": "#/definitions/PureArg"
+						}
+					},
+					"required": ["Pure"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"UnresolvedPure": {
+							"$ref": "#/definitions/UnresolvedPureArg"
+						}
+					},
+					"required": ["UnresolvedPure"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"UnresolvedObject": {
+							"$ref": "#/definitions/UnresolvedObjectArg"
+						}
+					},
+					"required": ["UnresolvedObject"],
+					"type": "object"
+				}
+			],
+			"description": "Represents an input to a Transaction, either as a fully resolved Object or Pure input\nor as an unresolved partial reference which needs to be resolved before the transaction\ncan be serialized to bcs and executed."
+		},
+		"Command": {
+			"anyOf": [
+				{
+					"properties": {
+						"MoveCall": {
+							"properties": {
+								"arguments": {
+									"items": {
+										"$ref": "#/definitions/Argument"
+									},
+									"type": "array"
+								},
+								"function": {
+									"type": "string"
+								},
+								"module": {
+									"type": "string"
+								},
+								"package": {
+									"type": "string"
+								},
+								"typeArguments": {
+									"items": {
+										"type": "string"
+									},
+									"type": "array"
+								}
+							},
+							"required": ["arguments", "function", "module", "package", "typeArguments"],
+							"type": "object"
+						}
+					},
+					"required": ["MoveCall"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"TransferObjects": {
+							"properties": {
+								"address": {
+									"$ref": "#/definitions/Argument"
+								},
+								"objects": {
+									"items": {
+										"$ref": "#/definitions/Argument"
+									},
+									"type": "array"
+								}
+							},
+							"required": ["address", "objects"],
+							"type": "object"
+						}
+					},
+					"required": ["TransferObjects"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"SplitCoins": {
+							"properties": {
+								"amounts": {
+									"items": {
+										"$ref": "#/definitions/Argument"
+									},
+									"type": "array"
+								},
+								"coin": {
+									"$ref": "#/definitions/Argument"
+								}
+							},
+							"required": ["amounts", "coin"],
+							"type": "object"
+						}
+					},
+					"required": ["SplitCoins"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"MergeCoins": {
+							"properties": {
+								"destination": {
+									"$ref": "#/definitions/Argument"
+								},
+								"sources": {
+									"items": {
+										"$ref": "#/definitions/Argument"
+									},
+									"type": "array"
+								}
+							},
+							"required": ["destination", "sources"],
+							"type": "object"
+						}
+					},
+					"required": ["MergeCoins"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"Publish": {
+							"properties": {
+								"dependencies": {
+									"items": {
+										"type": "string"
+									},
+									"type": "array"
+								},
+								"modules": {
+									"items": {
+										"type": "string"
+									},
+									"type": "array"
+								}
+							},
+							"required": ["dependencies", "modules"],
+							"type": "object"
+						}
+					},
+					"required": ["Publish"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"MakeMoveVec": {
+							"properties": {
+								"elements": {
+									"items": {
+										"$ref": "#/definitions/Argument"
+									},
+									"type": "array"
+								},
+								"type": {
+									"type": ["null", "string"]
+								}
+							},
+							"required": ["elements", "type"],
+							"type": "object"
+						}
+					},
+					"required": ["MakeMoveVec"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"Upgrade": {
+							"properties": {
+								"dependencies": {
+									"items": {
+										"type": "string"
+									},
+									"type": "array"
+								},
+								"modules": {
+									"items": {
+										"type": "string"
+									},
+									"type": "array"
+								},
+								"package": {
+									"type": "string"
+								},
+								"ticket": {
+									"$ref": "#/definitions/Argument"
+								}
+							},
+							"required": ["dependencies", "modules", "package", "ticket"],
+							"type": "object"
+						}
+					},
+					"required": ["Upgrade"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"$Intent": {
+							"properties": {
+								"data": {
+									"additionalProperties": {},
+									"type": "object"
+								},
+								"inputs": {
+									"additionalProperties": {
+										"anyOf": [
+											{
+												"properties": {
+													"GasCoin": {
+														"const": true,
+														"type": "boolean"
+													}
+												},
+												"required": ["GasCoin"],
+												"type": "object"
+											},
+											{
+												"properties": {
+													"Input": {
+														"type": "number"
+													}
+												},
+												"required": ["Input"],
+												"type": "object"
+											},
+											{
+												"properties": {
+													"Result": {
+														"type": "number"
+													}
+												},
+												"required": ["Result"],
+												"type": "object"
+											},
+											{
+												"properties": {
+													"NestedResult": {
+														"items": [
+															{
+																"type": "number"
+															},
+															{
+																"type": "number"
+															}
+														],
+														"maxItems": 2,
+														"minItems": 2,
+														"type": "array"
+													}
+												},
+												"required": ["NestedResult"],
+												"type": "object"
+											},
+											{
+												"items": {
+													"$ref": "#/definitions/Argument"
+												},
+												"type": "array"
+											}
+										]
+									},
+									"type": "object"
+								},
+								"name": {
+									"type": "string"
+								}
+							},
+							"required": ["data", "inputs", "name"],
+							"type": "object"
+						}
+					},
+					"required": ["$Intent"],
+					"type": "object"
+				}
+			]
+		},
+		"GasData": {
+			"description": "Contains data related to the gas payment for a Transaction",
+			"properties": {
+				"budget": {
+					"description": "The budget set for this transaction",
+					"type": ["null", "string", "number"]
+				},
+				"owner": {
+					"description": "The owner of the gas coins used to fund the transactions, this is either the sender or the gas sponsor",
+					"type": ["null", "string"]
+				},
+				"payment": {
+					"anyOf": [
+						{
+							"items": {
+								"properties": {
+									"digest": {
+										"type": "string"
+									},
+									"objectId": {
+										"type": "string"
+									},
+									"version": {
+										"type": "string"
+									}
+								},
+								"required": ["digest", "objectId", "version"],
+								"type": "object"
+							},
+							"type": "array"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "The list of SUI coins to fund the transaction"
+				},
+				"price": {
+					"description": "The gas price used for this transaction",
+					"type": ["null", "string", "number"]
+				}
+			},
+			"required": ["budget", "owner", "payment", "price"],
+			"type": "object"
+		},
+		"ObjectArg": {
+			"anyOf": [
+				{
+					"properties": {
+						"ImmOrOwnedObject": {
+							"properties": {
+								"digest": {
+									"type": "string"
+								},
+								"objectId": {
+									"type": "string"
+								},
+								"version": {
+									"type": ["string", "number"]
+								}
+							},
+							"required": ["digest", "objectId", "version"],
+							"type": "object"
+						}
+					},
+					"required": ["ImmOrOwnedObject"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"SharedObject": {
+							"properties": {
+								"initialSharedVersion": {
+									"type": "string"
+								},
+								"mutable": {
+									"type": "boolean"
+								},
+								"objectId": {
+									"type": "string"
+								}
+							},
+							"required": ["initialSharedVersion", "mutable", "objectId"],
+							"type": "object"
+						}
+					},
+					"required": ["SharedObject"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"Receiving": {
+							"properties": {
+								"digest": {
+									"type": "string"
+								},
+								"objectId": {
+									"type": "string"
+								},
+								"version": {
+									"type": ["string", "number"]
+								}
+							},
+							"required": ["digest", "objectId", "version"],
+							"type": "object"
+						}
+					},
+					"required": ["Receiving"],
+					"type": "object"
+				}
+			]
+		},
+		"PureArg": {
+			"properties": {
+				"bytes": {
+					"type": "string"
+				}
+			},
+			"required": ["bytes"],
+			"type": "object"
+		},
+		"UnresolvedObjectArg": {
+			"description": "Represents an unresolved object reference.  This allows objects to be referenced by only their ID.\nversion and digest details may also be added to unresolved object references.\nTo fully resolve a reference, the correct ObjectArg type needs to be determined based on the type of object,\nand how it used in the transaction (eg, is it used mutably if it's shared, and is it a receiving object if it's not shared)",
+			"properties": {
+				"digest": {
+					"type": ["null", "string"]
+				},
+				"initialSharedVersion": {
+					"type": ["null", "string"]
+				},
+				"objectId": {
+					"type": "string"
+				},
+				"version": {
+					"type": ["null", "string"]
+				}
+			},
+			"required": ["objectId"],
+			"type": "object"
+		},
+		"UnresolvedPureArg": {
+			"description": "Represents an un-serialized pure value.\nThe correct bcs schema will need to be determined before this value can be serialized to bcs",
+			"properties": {
+				"value": {}
+			},
+			"required": ["value"],
+			"type": "object"
+		}
+	},
+	"description": "Represent the serialized state of a partially built Transaction\nThis format is designed to support transactions that have not been fully build\nallowing most properties to be omitted or set to null.  It also supports\nunresolved object references, unresolved pure values, and Transaction Intents.",
+	"properties": {
+		"commands": {
+			"description": "The commands to execute",
+			"items": {
+				"$ref": "#/definitions/Command"
+			},
+			"type": "array"
+		},
+		"expiration": {
+			"anyOf": [
+				{
+					"properties": {
+						"Epoch": {
+							"type": "number"
+						}
+					},
+					"required": ["Epoch"],
+					"type": "object"
+				},
+				{
+					"properties": {
+						"None": {
+							"const": true,
+							"type": "boolean"
+						}
+					},
+					"required": ["None"],
+					"type": "object"
+				},
+				{
+					"type": "null"
+				}
+			],
+			"description": "The expiration of the transaction"
+		},
+		"extensions": {
+			"additionalProperties": {},
+			"description": "Extra metadata for implementation specific use-cases",
+			"type": "object"
+		},
+		"gasData": {
+			"$ref": "#/definitions/GasData",
+			"description": "The gas data"
+		},
+		"inputs": {
+			"description": "The inputs to the transaction",
+			"items": {
+				"$ref": "#/definitions/CallArg"
+			},
+			"type": "array"
+		},
+		"sender": {
+			"description": "The sender of the transaction",
+			"type": ["null", "string"]
+		},
+		"version": {
+			"const": 2,
+			"type": "number"
+		}
+	},
+	"required": ["commands", "expiration", "gasData", "inputs", "sender", "version"],
+	"type": "object"
+}

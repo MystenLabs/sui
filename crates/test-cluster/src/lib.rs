@@ -48,7 +48,8 @@ use sui_swarm_config::genesis_config::{
 };
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
-    ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+    ProtocolVersionsConfig, StateAccumulatorV2EnabledCallback, StateAccumulatorV2EnabledConfig,
+    SupportedProtocolVersionsCallback,
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -892,6 +893,7 @@ pub struct TestClusterBuilder {
 
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
+    validator_state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig,
 }
 
 impl TestClusterBuilder {
@@ -918,6 +920,9 @@ impl TestClusterBuilder {
             fullnode_fw_config: None,
             max_submit_position: None,
             submit_delay_step_override_millis: None,
+            validator_state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig::Global(
+                true,
+            ),
         }
     }
 
@@ -1040,6 +1045,15 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_state_accumulator_v2_enabled_callback(
+        mut self,
+        func: StateAccumulatorV2EnabledCallback,
+    ) -> Self {
+        self.validator_state_accumulator_v2_enabled_config =
+            StateAccumulatorV2EnabledConfig::PerValidator(func);
+        self
+    }
+
     pub fn with_validator_candidates(
         mut self,
         addresses: impl IntoIterator<Item = SuiAddress>,
@@ -1146,7 +1160,7 @@ impl TestClusterBuilder {
         wallet_conf.envs.push(SuiEnv {
             alias: "localnet".to_string(),
             rpc: fullnode_handle.rpc_url.clone(),
-            ws: Some(fullnode_handle.ws_url.clone()),
+            ws: None,
             basic_auth: None,
         });
         wallet_conf.active_env = Some("localnet".to_string());
@@ -1353,6 +1367,9 @@ impl TestClusterBuilder {
             .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
             .with_supported_protocol_versions_config(
                 self.validator_supported_protocol_versions_config.clone(),
+            )
+            .with_state_accumulator_v2_enabled_config(
+                self.validator_state_accumulator_v2_enabled_config.clone(),
             )
             .with_fullnode_count(1)
             .with_fullnode_supported_protocol_versions_config(
