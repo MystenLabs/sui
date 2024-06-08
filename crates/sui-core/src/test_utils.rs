@@ -80,7 +80,8 @@ pub async fn send_and_confirm_transaction(
     //
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection
-    let state_acc = StateAccumulator::new(authority.get_accumulator_store().clone(), &epoch_store);
+    let chain = authority.get_chain_identifier().chain();
+    let state_acc = StateAccumulator::new(authority.get_accumulator_store().clone(), &epoch_store, chain);
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()

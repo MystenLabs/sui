@@ -694,9 +694,11 @@ impl SuiNode {
         )
         .await?;
 
+        let chain = state.get_chain_identifier().chain();
         let accumulator = Arc::new(StateAccumulator::new(
             cache_traits.accumulator_store.clone(),
             &epoch_store,
+            chain,
         ));
 
         let authority_names_to_peer_ids = epoch_store

@@ -392,7 +392,8 @@ async fn init_executor_test(
         broadcast::channel(buffer_size);
     let epoch_store = state.epoch_store_for_testing();
 
-    let accumulator = StateAccumulator::new(state.get_accumulator_store().clone(), &epoch_store);
+    let chain = state.get_chain_identifier().chain();
+    let accumulator = StateAccumulator::new(state.get_accumulator_store().clone(), &epoch_store, state);
     let accumulator = Arc::new(accumulator);
 
     let executor = CheckpointExecutor::new_for_tests(
