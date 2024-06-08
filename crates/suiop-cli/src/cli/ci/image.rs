@@ -220,7 +220,7 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
         }
         ImageAction::Query { repo_name, limit } => {
             let req = client.get(full_url);
-            let limit = limit.clone().unwrap_or(10);
+            let limit = (*limit).unwrap_or(10);
             let query = QueryBuildsRequest {
                 repo_name: repo_name.clone(),
                 limit,
