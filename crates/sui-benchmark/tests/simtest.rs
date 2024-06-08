@@ -249,7 +249,7 @@ mod test {
         }
         state
             .database_for_testing()
-            .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
+            .prune_objects_and_compact_for_testing(state.get_checkpoint_store(), None)
             .await;
     }
 
