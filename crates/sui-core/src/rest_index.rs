@@ -9,8 +9,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
 use sui_rest_api::CheckpointData;
+use sui_types::base_types::MoveObjectType;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
+use sui_types::object::Owner;
 use sui_types::storage::error::Error as StorageError;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
@@ -18,6 +23,34 @@ use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::TypedStoreError;
 use typed_store_derive::DBMapUtils;
+
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
+struct OwnerIndexKey {
+    owner: SuiAddress,
+    object_id: ObjectID,
+}
+
+impl OwnerIndexKey {
+    fn new(owner: SuiAddress, object_id: ObjectID) -> Self {
+        Self { owner, object_id }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OwnerIndexInfo {
+    // object_id of the object is a part of the Key
+    pub version: SequenceNumber,
+    pub type_: MoveObjectType,
+}
+
+impl OwnerIndexInfo {
+    pub fn new(object: &Object) -> Self {
+        Self {
+            version: object.version(),
+            type_: object.type_().expect("packages cannot be owned").to_owned(),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct TransactionInfo {
@@ -35,6 +68,12 @@ struct IndexStoreTables {
     ///
     /// Only contains entries for transactions which have yet to be pruned from the main database.
     transactions: DBMap<TransactionDigest, TransactionInfo>,
+
+    /// An index of object ownership.
+    ///
+    /// Allows an efficient iterator to list all objects currently owned by a specific user
+    /// account.
+    owner: DBMap<OwnerIndexKey, OwnerIndexInfo>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
     // - are prune-able and have corresponding logic in the `prune` function
@@ -88,7 +127,19 @@ impl IndexStoreTables {
             .iter_live_object_set(false)
             .filter_map(LiveObject::to_normal)
         {
-            //TODO
+            let Owner::AddressOwner(owner) = object.owner else {
+                continue;
+            };
+
+            let mut batch = self.owner.batch();
+
+            // Owner Index
+            let owner_key = OwnerIndexKey::new(owner, object.id());
+            let owner_info = OwnerIndexInfo::new(&object);
+
+            batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
+
+            batch.write()?;
         }
 
         info!("Finished initializing REST indexes");
@@ -136,13 +187,54 @@ impl IndexStoreTables {
             )?;
         }
 
+        // owner index
+        {
+            for tx in &checkpoint.transactions {
+                // determine changes from removed objects
+                for removed_object in tx.removed_objects() {
+                    match removed_object.owner() {
+                        Owner::AddressOwner(address) => {
+                            let owner_key = OwnerIndexKey::new(*address, removed_object.id());
+                            batch.delete_batch(&self.owner, [owner_key])?;
+                        }
+                        Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => {}
+                    }
+                }
+
+                // determine changes from changed objects
+                for (object, old_object) in tx.changed_objects() {
+                    if let Some(old_object) = old_object {
+                        if old_object.owner() != object.owner() {
+                            match old_object.owner() {
+                                Owner::AddressOwner(address) => {
+                                    let owner_key = OwnerIndexKey::new(*address, old_object.id());
+                                    batch.delete_batch(&self.owner, [owner_key])?;
+                                }
+
+                                Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => {
+                                }
+                            }
+                        }
+                    }
+
+                    match object.owner() {
+                        Owner::AddressOwner(owner) => {
+                            let owner_key = OwnerIndexKey::new(*owner, object.id());
+                            let owner_info = OwnerIndexInfo::new(object);
+                            batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
+                        }
+                        Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => {}
+                    }
+                }
+            }
+        }
+
         batch.write()?;
 
         debug!(
             checkpoint = checkpoint.checkpoint_summary.sequence_number,
             "finished indexing checkpoint"
         );
-
         Ok(())
     }
 }
