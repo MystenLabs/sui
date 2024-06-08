@@ -499,6 +499,17 @@ impl ObjectInfo {
             previous_transaction: o.previous_transaction,
         }
     }
+
+    pub fn from_object(object: &Object) -> Self {
+        Self {
+            object_id: object.id(),
+            version: object.version(),
+            digest: object.digest(),
+            type_: object.into(),
+            owner: object.owner,
+            previous_transaction: object.previous_transaction,
+        }
+    }
 }
 const PACKAGE: &str = "package";
 impl ObjectType {
