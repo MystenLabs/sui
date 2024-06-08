@@ -598,6 +598,10 @@ impl Object {
         &self.0
     }
 
+    pub fn owner(&self) -> &Owner {
+        &self.0.owner
+    }
+
     pub fn new_from_genesis(
         data: Data,
         owner: Owner,
