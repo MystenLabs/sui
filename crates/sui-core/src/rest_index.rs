@@ -5,8 +5,11 @@ use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::state_accumulator::AccumulatorStore;
+use serde::Deserialize;
+use serde::Serialize;
 use std::path::PathBuf;
 use sui_rest_api::CheckpointData;
+use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::storage::error::Error as StorageError;
 use tracing::{debug, info};
@@ -16,6 +19,11 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::TypedStoreError;
 use typed_store_derive::DBMapUtils;
 
+#[derive(Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Debug)]
+pub struct TransactionInfo {
+    checkpoint: u64,
+}
+
 /// RocksDB tables for the RestIndexStore
 ///
 /// NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
@@ -23,8 +31,10 @@ use typed_store_derive::DBMapUtils;
 /// - are prune-able and have corresponding logic in the `prune` function
 #[derive(DBMapUtils)]
 struct IndexStoreTables {
-    empty: DBMap<(), ()>,
-
+    /// An index of extra metadata for Transactions.
+    ///
+    /// Only contains entries for transactions which have yet to be pruned from the main database.
+    transactions: DBMap<TransactionDigest, TransactionInfo>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
     // - are prune-able and have corresponding logic in the `prune` function
@@ -32,7 +42,7 @@ struct IndexStoreTables {
 
 impl IndexStoreTables {
     fn is_empty(&self) -> bool {
-        true
+        self.transactions.is_empty()
     }
 
     fn init(
@@ -42,7 +52,7 @@ impl IndexStoreTables {
     ) -> Result<(), StorageError> {
         info!("Initializing REST indexes");
 
-        // Iterate through available, executed checkpoints that have yet to be pruned 
+        // Iterate through available, executed checkpoints that have yet to be pruned
         // to initialize checkpoint and transaction based indexes.
         if let Some(highest_executed_checkpint) =
             checkpoint_store.get_highest_executed_checkpoint_seq_number()?
@@ -50,9 +60,27 @@ impl IndexStoreTables {
             let lowest_available_checkpoint =
                 checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
 
+            let mut batch = self.transactions.batch();
+
             for seq in lowest_available_checkpoint..=highest_executed_checkpint {
-                //TODO
+                let checkpoint = checkpoint_store
+                    .get_checkpoint_by_sequence_number(seq)?
+                    .ok_or_else(|| StorageError::missing(format!("missing checkpoint {seq}")))?;
+                let contents = checkpoint_store
+                    .get_checkpoint_contents(&checkpoint.content_digest)?
+                    .ok_or_else(|| StorageError::missing(format!("missing checkpoint {seq}")))?;
+
+                let info = TransactionInfo {
+                    checkpoint: checkpoint.sequence_number,
+                };
+
+                batch.insert_batch(
+                    &self.transactions,
+                    contents.iter().map(|digests| (digests.transaction, info)),
+                )?;
             }
+
+            batch.write()?;
         }
 
         // Iterate through live object set to initialize object-based indexes
@@ -73,7 +101,15 @@ impl IndexStoreTables {
         &self,
         checkpoint_contents_to_prune: &[CheckpointContents],
     ) -> Result<(), TypedStoreError> {
-        Ok(())
+        let mut batch = self.transactions.batch();
+
+        let transactions_to_prune = checkpoint_contents_to_prune
+            .iter()
+            .flat_map(|contents| contents.iter().map(|digests| digests.transaction));
+
+        batch.delete_batch(&self.transactions, transactions_to_prune)?;
+
+        batch.write()
     }
 
     /// Index a Checkpoint
@@ -83,7 +119,24 @@ impl IndexStoreTables {
             "indexing checkpoint"
         );
 
-        //TODO
+        let mut batch = self.transactions.batch();
+
+        // transactions index
+        {
+            let info = TransactionInfo {
+                checkpoint: checkpoint.checkpoint_summary.sequence_number,
+            };
+
+            batch.insert_batch(
+                &self.transactions,
+                checkpoint
+                    .checkpoint_contents
+                    .iter()
+                    .map(|digests| (digests.transaction, info)),
+            )?;
+        }
+
+        batch.write()?;
 
         debug!(
             checkpoint = checkpoint.checkpoint_summary.sequence_number,
