@@ -35,6 +35,7 @@ use sui_types::accumulator::Accumulator;
 use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::message_envelope::Message;
 use sui_types::transaction::TransactionKind;
 use sui_types::{
@@ -669,7 +670,7 @@ impl CheckpointExecutor {
                         self.transaction_cache_reader.as_ref(),
                         self.checkpoint_store.clone(),
                         &all_tx_digests,
-                        epoch_store.clone(),
+                        &epoch_store,
                         checkpoint.clone(),
                         self.accumulator.clone(),
                         effects,
@@ -891,7 +892,7 @@ async fn handle_execution_effects(
                             transaction_cache_reader,
                             checkpoint_store.clone(),
                             &all_tx_digests,
-                            epoch_store.clone(),
+                            &epoch_store,
                             checkpoint.clone(),
                             accumulator.clone(),
                             effects,
@@ -1285,7 +1286,7 @@ async fn finalize_checkpoint(
     transaction_cache_reader: &dyn TransactionCacheRead,
     checkpoint_store: Arc<CheckpointStore>,
     tx_digests: &[TransactionDigest],
-    epoch_store: Arc<AuthorityPerEpochStore>,
+    epoch_store: &Arc<AuthorityPerEpochStore>,
     checkpoint: VerifiedCheckpoint,
     accumulator: Arc<StateAccumulator>,
     effects: Vec<TransactionEffects>,
@@ -1319,7 +1320,11 @@ async fn finalize_checkpoint(
         // TODO(bmwill) discuss with team a better location for this indexing so that it isn't on
         // the critical path and the writes to the DB are done in checkpoint order
         if let Some(rest_index) = &state.rest_index {
-            rest_index.index_checkpoint(&checkpoint_data)?;
+            let mut layout_resolver = epoch_store.executor().type_layout_resolver(Box::new(
+                PackageStoreWithFallback::new(state.get_backing_package_store(), &checkpoint_data),
+            ));
+
+            rest_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut())?;
         }
 
         if let Some(path) = data_ingestion_dir {

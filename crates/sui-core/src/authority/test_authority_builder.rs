@@ -282,12 +282,18 @@ impl<'a> TestAuthorityBuilder<'a> {
         let rest_index = if self.disable_indexer {
             None
         } else {
+            let mut resolver = epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(&cache_traits.backing_package_store));
+
             Some(Arc::new(RestIndexStore::new(
                 path.join("rest_index"),
                 &authority_store,
                 &checkpoint_store,
+                resolver.as_mut(),
             )))
         };
+
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let authority_overload_config = self.authority_overload_config.unwrap_or_default();

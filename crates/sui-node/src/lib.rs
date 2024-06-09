@@ -547,10 +547,15 @@ impl SuiNode {
             && config.enable_experimental_rest_api
             && config.enable_index_processing
         {
+            let mut resolver = epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(&cache_traits.backing_package_store));
+
             Some(Arc::new(RestIndexStore::new(
                 config.db_path().join("rest_index"),
                 &store,
                 &checkpoint_store,
+                resolver.as_mut(),
             )))
         } else {
             None
