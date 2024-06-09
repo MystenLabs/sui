@@ -4,9 +4,11 @@
 use crate::effects::{IDOperation, ObjectIn, ObjectOut, TransactionEffects, TransactionEvents};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
+use crate::storage::BackingPackageStore;
 use crate::transaction::Transaction;
 use itertools::Either;
 use serde::{Deserialize, Serialize};
+use tap::Pipe;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointData {
@@ -179,5 +181,20 @@ impl CheckpointTransaction {
 
             (object, old_object)
         })
+    }
+}
+
+impl BackingPackageStore for CheckpointData {
+    fn get_package_object(
+        &self,
+        package_id: &crate::base_types::ObjectID,
+    ) -> crate::error::SuiResult<Option<crate::storage::PackageObject>> {
+        self.transactions
+            .iter()
+            .flat_map(|transaction| transaction.output_objects.iter())
+            .find(|object| object.is_package() && &object.id() == package_id)
+            .cloned()
+            .map(crate::storage::PackageObject::new)
+            .pipe(Ok)
     }
 }
