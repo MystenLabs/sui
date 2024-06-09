@@ -43,8 +43,8 @@ As with all smart contracts on Sui, Move provides the logic that powers asset to
 
 :::info
 
-This reference implementation uses the Kiosk primitive to ensure that TAs created operate within their creator's defined policy. We recommend you use the implementation as it is in order to have marketable TAs that support Rules (e.g: royalties, commissions etc).
-If operating within the Kiosk primitive is not a requirement, then the unlock module & some of the proxy's methods related to Transfer Policies can be excluded.
+This reference implementation uses the [Kiosk standard](../../../standards/kiosk.mdx) to ensure that tokenized assets operate within their defined policy. Use the implementation as presented to have marketable tokenized assets that support rules like royalties, commissions, and so on.
+If using Kiosk is not a requirement, then you can exclude the unlock module and some of the proxy's methods related to transfer policies.
 
 :::
 
