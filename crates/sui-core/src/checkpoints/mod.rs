@@ -947,19 +947,28 @@ impl CheckpointBuilder {
                 .min_checkpoint_interval_ms_as_option()
                 .unwrap_or_default();
             let mut grouped_pending_checkpoints = Vec::new();
-            for (height, pending) in self
+            let mut checkpoints_iter = self
                 .epoch_store
                 .get_pending_checkpoints(last_height)
                 .expect("unexpected epoch store error")
-            {
-                // Group PendingCheckpoints until minimum interval has elapsed.
+                .into_iter()
+                .peekable();
+            while let Some((height, pending)) = checkpoints_iter.next() {
+                // Group PendingCheckpoints until:
+                // - minimum interval has elapsed ...
                 let current_timestamp = pending.details().timestamp_ms;
                 let can_build = match last_timestamp {
                     Some(last_timestamp) => {
                         current_timestamp >= last_timestamp + min_checkpoint_interval_ms
                     }
                     None => true,
-                } || pending.details().last_of_epoch; // TODO-DNS should I be proactively preventing coalescing other pendingcheckpoints into the last-of-epoch checkpoint?
+                // - or, next PendingCheckpoint is last-of-epoch (since the last-of-epoch checkpoint
+                //   should be written separately) ...
+                } || checkpoints_iter
+                    .peek()
+                    .is_some_and(|(_, next_pending)| next_pending.details().last_of_epoch)
+                // - or, we have reached end of epoch.
+                    || pending.details().last_of_epoch;
                 grouped_pending_checkpoints.push(pending);
                 if !can_build {
                     debug!(
