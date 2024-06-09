@@ -10,7 +10,7 @@ use prometheus::{
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 
-use crate::network::metrics::{NetworkMetrics, QuinnConnectionMetrics};
+use crate::network::metrics::NetworkMetrics;
 
 // starts from 1μs, 50μs, 100μs...
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -79,18 +79,15 @@ const SIZE_BUCKETS: &[f64] = &[
 pub(crate) struct Metrics {
     pub(crate) node_metrics: NodeMetrics,
     pub(crate) network_metrics: NetworkMetrics,
-    pub(crate) quinn_connection_metrics: QuinnConnectionMetrics,
 }
 
 pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     let node_metrics = NodeMetrics::new(&registry);
     let network_metrics = NetworkMetrics::new(&registry);
-    let quinn_connection_metrics = QuinnConnectionMetrics::new(&registry);
 
     Arc::new(Metrics {
         node_metrics,
         network_metrics,
-        quinn_connection_metrics,
     })
 }
 
