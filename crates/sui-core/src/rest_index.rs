@@ -5,6 +5,7 @@ use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::state_accumulator::AccumulatorStore;
+use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -14,9 +15,12 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::messages_checkpoint::CheckpointContents;
+use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::storage::error::Error as StorageError;
+use sui_types::type_resolver::LayoutResolver;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::Map;
@@ -52,6 +56,37 @@ impl OwnerIndexInfo {
     }
 }
 
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
+struct DynamicFieldKey {
+    parent: ObjectID,
+    field_id: ObjectID,
+}
+
+impl DynamicFieldKey {
+    fn new<P: Into<ObjectID>>(parent: P, field_id: ObjectID) -> Self {
+        Self {
+            parent: parent.into(),
+            field_id,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub struct DynamicFieldIndexInfo {
+    // field_id of this dynamic field is a part of the Key
+    pub dynamic_field_type: DynamicFieldType,
+    pub name_type: TypeTag,
+    pub name_value: Vec<u8>,
+    // TODO do we want to also store the type of the value? We can get this for free for
+    // DynamicFields, but for DynamicObjects it would require a lookup in the DB on init, or
+    // scanning the transaction's output objects for the coorisponding Object to retreive its type
+    // information.
+    //
+    // pub value_type: TypeTag,
+    /// ObjectId of the child object when `dynamic_field_type == DynamicFieldType::DynamicObject`
+    pub dynamic_object_id: Option<ObjectID>,
+}
+
 #[derive(Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct TransactionInfo {
     checkpoint: u64,
@@ -74,6 +109,12 @@ struct IndexStoreTables {
     /// Allows an efficient iterator to list all objects currently owned by a specific user
     /// account.
     owner: DBMap<OwnerIndexKey, OwnerIndexInfo>,
+
+    /// An index of dynamic fields (children objects).
+    ///
+    /// Allows an efficient iterator to list all of the dynamic fields owned by a particular
+    /// ObjectID.
+    dynamic_field: DBMap<DynamicFieldKey, DynamicFieldIndexInfo>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
     // - are prune-able and have corresponding logic in the `prune` function
@@ -88,6 +129,7 @@ impl IndexStoreTables {
         &mut self,
         authority_store: &AuthorityStore,
         checkpoint_store: &CheckpointStore,
+        resolver: &mut dyn LayoutResolver,
     ) -> Result<(), StorageError> {
         info!("Initializing REST indexes");
 
@@ -127,17 +169,27 @@ impl IndexStoreTables {
             .iter_live_object_set(false)
             .filter_map(LiveObject::to_normal)
         {
-            let Owner::AddressOwner(owner) = object.owner else {
-                continue;
-            };
-
             let mut batch = self.owner.batch();
 
-            // Owner Index
-            let owner_key = OwnerIndexKey::new(owner, object.id());
-            let owner_info = OwnerIndexInfo::new(&object);
+            match object.owner {
+                // Owner Index
+                Owner::AddressOwner(owner) => {
+                    let owner_key = OwnerIndexKey::new(owner, object.id());
+                    let owner_info = OwnerIndexInfo::new(&object);
+                    batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
+                }
 
-            batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
+                // Dynamic Field Index
+                Owner::ObjectOwner(parent) => {
+                    if let Some(field_info) = try_create_dynamic_field_info(&object, resolver)? {
+                        let field_key = DynamicFieldKey::new(parent, object.id());
+
+                        batch.insert_batch(&self.dynamic_field, [(field_key, field_info)])?;
+                    }
+                }
+
+                Owner::Shared { .. } | Owner::Immutable => continue,
+            }
 
             batch.write()?;
         }
@@ -164,7 +216,11 @@ impl IndexStoreTables {
     }
 
     /// Index a Checkpoint
-    fn index_checkpoint(&self, checkpoint: &CheckpointData) -> Result<(), TypedStoreError> {
+    fn index_checkpoint(
+        &self,
+        checkpoint: &CheckpointData,
+        resolver: &mut dyn LayoutResolver,
+    ) -> Result<(), StorageError> {
         debug!(
             checkpoint = checkpoint.checkpoint_summary.sequence_number,
             "indexing checkpoint"
@@ -197,7 +253,13 @@ impl IndexStoreTables {
                             let owner_key = OwnerIndexKey::new(*address, removed_object.id());
                             batch.delete_batch(&self.owner, [owner_key])?;
                         }
-                        Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => {}
+                        Owner::ObjectOwner(object_id) => {
+                            batch.delete_batch(
+                                &self.dynamic_field,
+                                [DynamicFieldKey::new(*object_id, removed_object.id())],
+                            )?;
+                        }
+                        Owner::Shared { .. } | Owner::Immutable => {}
                     }
                 }
 
@@ -211,8 +273,14 @@ impl IndexStoreTables {
                                     batch.delete_batch(&self.owner, [owner_key])?;
                                 }
 
-                                Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => {
+                                Owner::ObjectOwner(object_id) => {
+                                    batch.delete_batch(
+                                        &self.dynamic_field,
+                                        [DynamicFieldKey::new(*object_id, old_object.id())],
+                                    )?;
                                 }
+
+                                Owner::Shared { .. } | Owner::Immutable => {}
                             }
                         }
                     }
@@ -223,7 +291,17 @@ impl IndexStoreTables {
                             let owner_info = OwnerIndexInfo::new(object);
                             batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
                         }
-                        Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => {}
+                        Owner::ObjectOwner(parent) => {
+                            if let Some(field_info) =
+                                try_create_dynamic_field_info(object, resolver)?
+                            {
+                                let field_key = DynamicFieldKey::new(*parent, object.id());
+
+                                batch
+                                    .insert_batch(&self.dynamic_field, [(field_key, field_info)])?;
+                            }
+                        }
+                        Owner::Shared { .. } | Owner::Immutable => {}
                     }
                 }
             }
@@ -248,6 +326,7 @@ impl RestIndexStore {
         path: PathBuf,
         authority_store: &AuthorityStore,
         checkpoint_store: &CheckpointStore,
+        resolver: &mut dyn LayoutResolver,
     ) -> Self {
         let mut tables = IndexStoreTables::open_tables_read_write(
             path,
@@ -258,7 +337,9 @@ impl RestIndexStore {
 
         // If the index tables are empty then we need to populate them
         if tables.is_empty() {
-            tables.init(authority_store, checkpoint_store).unwrap();
+            tables
+                .init(authority_store, checkpoint_store, resolver)
+                .unwrap();
         }
 
         Self { tables }
@@ -286,7 +367,72 @@ impl RestIndexStore {
         self.tables.prune(checkpoint_contents_to_prune)
     }
 
-    pub fn index_checkpoint(&self, checkpoint: &CheckpointData) -> Result<(), TypedStoreError> {
-        self.tables.index_checkpoint(checkpoint)
+    pub fn index_checkpoint(
+        &self,
+        checkpoint: &CheckpointData,
+        resolver: &mut dyn LayoutResolver,
+    ) -> Result<(), StorageError> {
+        self.tables.index_checkpoint(checkpoint, resolver)
     }
+}
+
+fn try_create_dynamic_field_info(
+    object: &Object,
+    resolver: &mut dyn LayoutResolver,
+) -> Result<Option<DynamicFieldIndexInfo>, StorageError> {
+    // Skip if not a move object
+    let Some(move_object) = object.data.try_as_move() else {
+        return Ok(None);
+    };
+
+    // Skip any objects that aren't of type `Field<Name, Value>`
+    //
+    // All dynamic fields are of type:
+    //   - Field<Name, Value> for dynamic fields
+    //   - Field<Wrapper<Name, ID>> for dynamic field objects where the ID is the id of the pointed
+    //   to object
+    //
+    if !move_object.type_().is_dynamic_field() {
+        return Ok(None);
+    }
+
+    let (name_value, dynamic_field_type, object_id) = {
+        let layout = sui_types::type_resolver::into_struct_layout(
+            resolver
+                .get_annotated_layout(&move_object.type_().clone().into())
+                .map_err(StorageError::custom)?,
+        )
+        .map_err(StorageError::custom)?;
+
+        let move_struct = move_object
+            .to_move_struct(&layout)
+            .map_err(StorageError::serialization)?;
+
+        // SAFETY: move struct has already been validated to be of type DynamicField
+        DynamicFieldInfo::parse_move_object(&move_struct).unwrap()
+    };
+
+    let name_type = move_object
+        .type_()
+        .try_extract_field_name(&dynamic_field_type)
+        .expect("object is of type Field");
+
+    let name_value = name_value
+        .undecorate()
+        .simple_serialize()
+        .expect("serialization cannot fail");
+
+    let dynamic_object_id = match dynamic_field_type {
+        DynamicFieldType::DynamicObject => Some(object_id),
+        DynamicFieldType::DynamicField => None,
+    };
+
+    let field_info = DynamicFieldIndexInfo {
+        name_type,
+        name_value,
+        dynamic_field_type,
+        dynamic_object_id,
+    };
+
+    Ok(Some(field_info))
 }

@@ -1269,7 +1269,7 @@ impl CheckpointBuilder {
                 let acc = self.accumulator.accumulate_checkpoint(
                     effects.clone(),
                     sequence_number,
-                    self.epoch_store.clone(),
+                    &self.epoch_store,
                 )?;
                 self.accumulator
                     .accumulate_running_root(&self.epoch_store, sequence_number, Some(acc))
