@@ -23,6 +23,7 @@ use sui_types::transaction::{
     CertifiedTransaction, SignedTransaction, Transaction, VerifiedTransaction,
 };
 use tracing::info;
+use tokio::sync::mpsc::Sender;
 
 pub struct BenchmarkContext {
     validator: SingleValidator,
@@ -32,7 +33,7 @@ pub struct BenchmarkContext {
 }
 
 impl BenchmarkContext {
-    pub(crate) async fn new(
+    pub async fn new(
         workload: Workload,
         benchmark_component: Component,
         print_sample_tx: bool,
@@ -66,7 +67,7 @@ impl BenchmarkContext {
         }
     }
 
-    pub(crate) fn validator(&self) -> SingleValidator {
+    pub fn validator(&self) -> SingleValidator {
         self.validator.clone()
     }
 
@@ -197,7 +198,7 @@ impl BenchmarkContext {
         shared_objects
     }
 
-    pub(crate) async fn generate_transactions(
+    pub async fn generate_transactions(
         &self,
         tx_generator: Arc<dyn TxGenerator>,
     ) -> Vec<Transaction> {
@@ -334,6 +335,17 @@ impl BenchmarkContext {
             tx_count as f64 / elapsed,
             in_memory_store.get_num_object_reads() as f64 / tx_count as f64
         );
+    }
+
+    pub async fn benchmark_transaction_execution_with_channel(
+        &self,
+        transactions: Vec<CertifiedTransaction>,
+        out_channel: Sender<CertifiedTransaction>,
+    ) {
+        println!("Sending transactions to channel");
+        for tx in transactions {
+            out_channel.send(tx).await.unwrap();
+        }
     }
 
     /// Print out a sample transaction and its effects so that we can get a rough idea

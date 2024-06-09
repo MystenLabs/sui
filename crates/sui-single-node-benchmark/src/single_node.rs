@@ -180,7 +180,7 @@ impl SingleValidator {
                     .into_inner();
                 response.signed_effects.into_data()
             }
-            Component::TxnSigning | Component::CheckpointExecutor | Component::ExecutionOnly => {
+            Component::TxnSigning | Component::CheckpointExecutor | Component::ExecutionOnly | Component::PipeTxsToChannel => {
                 unreachable!()
             }
         };
@@ -285,7 +285,7 @@ impl SingleValidator {
         (checkpoint_executor, ckpt_sender)
     }
 
-    pub(crate) fn create_in_memory_store(&self) -> InMemoryObjectStore {
+    pub fn create_in_memory_store(&self) -> InMemoryObjectStore {
         let objects: HashMap<_, _> = self
             .get_validator()
             .get_accumulator_store()

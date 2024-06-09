@@ -5,14 +5,17 @@ use crate::benchmark_context::BenchmarkContext;
 use crate::command::Component;
 use crate::workload::Workload;
 
-pub(crate) mod benchmark_context;
+pub mod benchmark_context;
 pub mod command;
-pub(crate) mod mock_account;
+pub mod mock_account;
 pub(crate) mod mock_consensus;
-pub(crate) mod mock_storage;
+pub mod mock_storage;
 pub(crate) mod single_node;
 pub(crate) mod tx_generator;
 pub mod workload;
+
+use sui_types::transaction::CertifiedTransaction;
+use tokio::sync::mpsc::Sender;
 
 /// Benchmark a given workload on a specified component.
 /// The different kinds of workloads and components can be found in command.rs.
@@ -24,6 +27,7 @@ pub async fn run_benchmark(
     checkpoint_size: usize,
     print_sample_tx: bool,
     skip_signing: bool,
+    out_channel: Option<Sender<CertifiedTransaction>>,
 ) {
     let mut ctx = BenchmarkContext::new(workload.clone(), component, print_sample_tx).await;
     let tx_generator = workload.create_tx_generator(&mut ctx).await;
@@ -45,6 +49,10 @@ pub async fn run_benchmark(
         }
         Component::ExecutionOnly => {
             ctx.benchmark_transaction_execution_in_memory(transactions, print_sample_tx)
+                .await;
+        }
+        Component::PipeTxsToChannel => {
+            ctx.benchmark_transaction_execution_with_channel(transactions, out_channel.unwrap())
                 .await;
         }
         _ => {

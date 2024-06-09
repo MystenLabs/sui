@@ -20,7 +20,7 @@ use sui_types::storage::{
 use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult, TransactionKey};
 
 #[derive(Clone)]
-pub(crate) struct InMemoryObjectStore {
+pub struct InMemoryObjectStore {
     objects: Arc<RwLock<HashMap<ObjectID, Object>>>,
     package_cache: Arc<PackageObjectCache>,
     num_object_reads: Arc<AtomicU64>,
@@ -42,7 +42,7 @@ impl InMemoryObjectStore {
     // TODO: This function is out-of-sync with read_objects_for_execution from transaction_input_loader.rs.
     // For instance, it does not support the use of deleted shared objects.
     // We will need a trait to unify the these functions. (similarly the one in simulacrum)
-    pub(crate) fn read_objects_for_execution(
+    pub fn read_objects_for_execution(
         &self,
         shared_locks: &dyn GetSharedLocks,
         tx_key: &TransactionKey,
@@ -80,7 +80,7 @@ impl InMemoryObjectStore {
         Ok(input_objects.into())
     }
 
-    pub(crate) fn commit_objects(&self, inner_temp_store: InnerTemporaryStore) {
+    pub fn commit_objects(&self, inner_temp_store: InnerTemporaryStore) {
         let mut objects = self.objects.write().unwrap();
         for (object_id, _) in inner_temp_store.mutable_inputs {
             if !inner_temp_store.written.contains_key(&object_id) {

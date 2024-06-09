@@ -69,10 +69,13 @@ pub enum Component {
     /// Benchmark the checkpoint executor by constructing a full epoch of checkpoints, execute
     /// all transactions in them and measure time.
     CheckpointExecutor,
+    /// Send transactions to a channel instead of executing them.
+    PipeTxsToChannel,
 }
 
 #[derive(Subcommand, Clone)]
 pub enum WorkloadKind {
+    NoMove,
     PTB {
         #[arg(
             long,
@@ -150,6 +153,7 @@ impl WorkloadKind {
     pub(crate) fn gas_object_num_per_account(&self) -> u64 {
         match self {
             // Each transaction will always have 1 gas object, plus the number of owned objects that will be transferred.
+            WorkloadKind::NoMove => 1,
             WorkloadKind::PTB { num_transfers, .. } => *num_transfers + 1,
             WorkloadKind::Publish { .. } => 1,
         }

@@ -19,42 +19,42 @@ use super::{IDOperation, ObjectChange};
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionEffectsV1 {
     /// The status of the execution
-    status: ExecutionStatus,
+    pub status: ExecutionStatus,
     /// The epoch when this transaction was executed.
-    executed_epoch: EpochId,
-    gas_used: GasCostSummary,
+    pub executed_epoch: EpochId,
+    pub gas_used: GasCostSummary,
     /// The version that every modified (mutated or deleted) object had before it was modified by
     /// this transaction.
-    modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
+    pub modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
     /// The object references of the shared objects used in this transaction. Empty if no shared objects were used.
-    shared_objects: Vec<ObjectRef>,
+    pub shared_objects: Vec<ObjectRef>,
     /// The transaction digest
-    transaction_digest: TransactionDigest,
+    pub transaction_digest: TransactionDigest,
 
     // TODO: All the SequenceNumbers in the ObjectRefs below equal the same value (the lamport
     // timestamp of the transaction).  Consider factoring this out into one place in the effects.
     /// ObjectRef and owner of new objects created.
-    created: Vec<(ObjectRef, Owner)>,
+    pub created: Vec<(ObjectRef, Owner)>,
     /// ObjectRef and owner of mutated objects, including gas object.
-    mutated: Vec<(ObjectRef, Owner)>,
+    pub mutated: Vec<(ObjectRef, Owner)>,
     /// ObjectRef and owner of objects that are unwrapped in this transaction.
     /// Unwrapped objects are objects that were wrapped into other objects in the past,
     /// and just got extracted out.
-    unwrapped: Vec<(ObjectRef, Owner)>,
+    pub unwrapped: Vec<(ObjectRef, Owner)>,
     /// Object Refs of objects now deleted (the new refs).
-    deleted: Vec<ObjectRef>,
+    pub deleted: Vec<ObjectRef>,
     /// Object refs of objects previously wrapped in other objects but now deleted.
-    unwrapped_then_deleted: Vec<ObjectRef>,
+    pub unwrapped_then_deleted: Vec<ObjectRef>,
     /// Object refs of objects now wrapped in other objects.
-    wrapped: Vec<ObjectRef>,
+    pub wrapped: Vec<ObjectRef>,
     /// The updated gas object reference. Have a dedicated field for convenient access.
     /// It's also included in mutated.
-    gas_object: (ObjectRef, Owner),
+    pub gas_object: (ObjectRef, Owner),
     /// The digest of the events emitted during execution,
     /// can be None if the transaction does not emit any event.
-    events_digest: Option<TransactionEventsDigest>,
+    pub events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
-    dependencies: Vec<TransactionDigest>,
+    pub dependencies: Vec<TransactionDigest>,
 }
 
 impl TransactionEffectsV1 {

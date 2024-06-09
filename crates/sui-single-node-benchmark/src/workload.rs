@@ -3,7 +3,7 @@
 
 use crate::benchmark_context::BenchmarkContext;
 use crate::command::WorkloadKind;
-use crate::tx_generator::{MoveTxGenerator, PackagePublishTxGenerator, TxGenerator};
+use crate::tx_generator::{MoveTxGenerator, PackagePublishTxGenerator, TxGenerator, NonMoveTxGenerator};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_test_transaction_builder::PublishData;
@@ -22,7 +22,7 @@ impl Workload {
         }
     }
 
-    pub(crate) fn num_accounts(&self) -> u64 {
+    pub fn num_accounts(&self) -> u64 {
         self.tx_count
     }
 
@@ -30,11 +30,12 @@ impl Workload {
         self.workload_kind.gas_object_num_per_account()
     }
 
-    pub(crate) async fn create_tx_generator(
+    pub async fn create_tx_generator(
         &self,
         ctx: &mut BenchmarkContext,
     ) -> Arc<dyn TxGenerator> {
         match &self.workload_kind {
+            WorkloadKind::NoMove => { Arc::new(NonMoveTxGenerator::new()) }
             WorkloadKind::PTB {
                 num_transfers,
                 use_native_transfer,

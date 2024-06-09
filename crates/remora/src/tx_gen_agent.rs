@@ -7,7 +7,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::future;
-use tokio::{sync::mpsc, task::JoinHandle, time::sleep};
+use tokio::{
+    sync::{mpsc, watch},
+    time::{MissedTickBehavior, sleep},
+    task::JoinHandle,
+};
 use std::sync::Arc;
 
 use sui_single_node_benchmark::{
@@ -73,6 +77,58 @@ pub struct TxnGenAgent {
     attrs: GlobalConfig,
 }
 
+impl TxnGenAgent {
+    pub async fn run_inner
+    (
+        out_to_network: &mpsc::Sender<NetworkMessage>,
+        tx_count: u64,
+        duration: Duration,) 
+    {
+        let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
+        let (_, transactions) = generate_benchmark_txs(workload, ctx).await;
+
+        const PRECISION: u64 = 20;
+        let burst_duration = 1000 / PRECISION;
+        let chunks_size = (tx_count / PRECISION) as usize;
+        let mut counter = 0;
+        let mut interval = tokio::time::interval(Duration::from_millis(burst_duration));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Burst);
+
+        // Ugly - wait for EWs to finish generating genesis objects.
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        // Send transactions.
+        println!("Starting benchmark");
+        for chunk in transactions.chunks(chunks_size) {
+            if counter % 1000 == 0 && counter != 0 {
+                tracing::debug!("Submitted {} txs", counter * chunks_size);
+            }
+            for tx in chunk {
+                let now = Metrics::now().as_secs_f64();
+                let full_tx = TransactionWithEffects {
+                    tx: tx.clone(),
+                    ground_truth_effects: None,
+                    child_inputs: None,
+                    checkpoint_seq: None,
+                    timestamp: now,
+                };
+
+                out_to_network
+                    .send(NetworkMessage {
+                        src: 0,
+                        dst: vec![1,2],//get_ews_for_tx(&full_tx, &ew_ids).into_iter().collect(),
+                        payload: RemoraMessage::ProposeExec(full_tx.clone()),
+                    })
+                    .await
+                    .expect("sending failed");
+            }
+            counter += 1;
+            interval.tick().await;
+        }
+        println!("[SW] Benchmark terminated");
+    }
+}
+
 #[async_trait]
 impl Agent<RemoraMessage> for TxnGenAgent {
     fn new(
@@ -89,7 +145,37 @@ impl Agent<RemoraMessage> for TxnGenAgent {
         }
     }
 
-    async fn run(&mut self) {
+    async fn run(&mut self)
+    {
         println!("Starting TxnGen agent {}", self.id);
+
+        // Periodically print metrics
+        let configs = self.attrs.clone();
+        let workload = "default".to_string();
+        let print_period = Duration::from_secs(10);
+        // let _handle = Self::periodically_print_metrics(configs, workload, print_period);
+
+        // Run Sequence Worker asynchronously
+        let my_attrs = &self.attrs.get(&self.id).unwrap().attrs;
+        let tx_count = my_attrs["tx_count"].parse::<u64>().unwrap();
+        let duration_secs = my_attrs["duration"].parse::<u64>().unwrap();
+        let duration = Duration::from_secs(duration_secs);
+        // let working_dir = my_attrs
+        //     .get("working_dir")
+        //     .map_or("", String::as_str)
+        //     .parse::<PathBuf>()
+        //     .unwrap();
+        TxnGenAgent::run_inner(
+            &self.out_channel,
+            tx_count,
+            duration,
+        )
+        .await;
+        println!("Txn Gen finished");
+
+        loop {
+            sleep(Duration::from_millis(1_000)).await;
+        }
     }
+  
 }

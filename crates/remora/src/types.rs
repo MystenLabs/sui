@@ -55,7 +55,7 @@ impl GlobalConfig {
             let metrics_port = benchmark_port_offset + network_port;
             let kind = match i {
                 0 => "GEN",
-                1 => "PRI",
+                //1 => "PRI", // FIXME
                 _ => "PRE",
             }.to_string();
             let metrics_address = SocketAddr::new(ip, metrics_port);

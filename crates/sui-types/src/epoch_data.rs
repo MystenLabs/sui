@@ -4,9 +4,10 @@
 use crate::base_types::EpochId;
 use crate::message_envelope::Message;
 use crate::messages_checkpoint::{CheckpointDigest, CheckpointSummary, CheckpointTimestamp};
+use serde::{Serialize, Deserialize};
 
 /// The static epoch information that is accessible to move smart contracts
-#[derive(Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct EpochData {
     epoch_id: EpochId,
     epoch_start_timestamp: CheckpointTimestamp,
