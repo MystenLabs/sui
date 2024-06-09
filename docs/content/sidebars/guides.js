@@ -92,7 +92,7 @@ const guides = [
 					type: 'doc',
 					id: 'guides/developer/nft',
 				},
-				items: ['guides/developer/nft/nft-rental'],
+				items: ['guides/developer/nft/nft-rental', 'guides/developer/nft/asset-tokenization'],
 			},
 			{
 				type: 'category',
@@ -140,7 +140,6 @@ const guides = [
 					},*/
 					'guides/developer/advanced/graphql-migration',
 					'guides/developer/advanced/move-2024-migration',
-					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/custom-indexer',
 					'guides/developer/advanced/randomness-onchain',
 				],
@@ -171,7 +170,7 @@ const guides = [
 					},
 					'guides/developer/app-examples/plinko',
 					'guides/developer/app-examples/recaptcha',
-          'guides/developer/app-examples/reviews-rating',
+					'guides/developer/app-examples/reviews-rating',
 					'guides/developer/app-examples/tic-tac-toe',
 					{
 						type: 'category',
