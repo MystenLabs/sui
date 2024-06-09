@@ -53,7 +53,7 @@ pub(crate) struct Object {
     pub kind: ObjectKind,
     /// The checkpoint sequence number at which this was viewed at.
     pub checkpoint_viewed_at: u64,
-    /// Optional root parent object version if this is a dynamic field.
+    /// Optional root parent object version.
     ///
     /// This enables consistent dynamic field reads in the case of chained dynamic object fields,
     /// e.g., `Parent -> DOF1 -> DOF2`. In such cases, the object versions may end up like
@@ -64,7 +64,13 @@ pub(crate) struct Object {
     /// provided as inputs to a transaction as well as any mutated dynamic child objects. However,
     /// any dynamic child objects that were loaded but not actually mutated don't end up having
     /// their versions updated.
-    root_version: Option<u64>,
+    root_version_: Option<u64>,
+    /// Whether a specific version of this object was queried.
+    ///
+    /// If so, dynamic field queries from this object will fail if `root_version` isn't set.
+    /// If not, dynamic field queries will use `checkpoint_viewed_at` as a bound **if**
+    /// `root_version` isn't set.
+    at_version: bool,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
@@ -474,7 +480,7 @@ impl Object {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_field(ctx, name, self.root_version())
+            .dynamic_field(ctx, name, self.root_version()?)
             .await
     }
 
@@ -491,7 +497,7 @@ impl Object {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_object_field(ctx, name, self.root_version())
+            .dynamic_object_field(ctx, name, self.root_version()?)
             .await
     }
 
@@ -508,7 +514,7 @@ impl Object {
         before: Option<Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_fields(ctx, first, after, last, before, self.root_version())
+            .dynamic_fields(ctx, first, after, last, before, self.root_version()?)
             .await
     }
 
@@ -699,7 +705,8 @@ impl Object {
             address,
             kind: ObjectKind::NotIndexed(native),
             checkpoint_viewed_at,
-            root_version,
+            root_version_: root_version,
+            at_version: false,
         }
     }
 
@@ -721,12 +728,19 @@ impl Object {
         }
     }
 
-    /// Optional root parent object version if this is a dynamic field.
+    /// Root parent object version for dynamic field queries.
     ///
-    /// It may be `None` if the GQL query is rooted in this object and it is a child object /
-    /// dynamic field. Check [`Object::root_version`] for details.
-    pub(crate) fn root_version(&self) -> Option<u64> {
-        self.root_version
+    /// If [`Object::at_version`] is `true`, then [`Object::root_version_`] can't be None.
+    /// Otherwise, we don't know exactly the point in time to capture this object's state, since
+    /// only the root parent object's version is guaranteed to change with changes to this object's
+    /// dynamic field tree.
+    ///
+    /// Check [`Object::root_version_`] for details.
+    pub(crate) fn root_version(&self) -> Result<Option<u64>, Error> {
+        if self.at_version && self.root_version_.is_none() {
+            return Err(Error::MissingRootVersion);
+        }
+        Ok(self.root_version_)
     }
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.
@@ -919,7 +933,8 @@ impl Object {
                     address,
                     kind: ObjectKind::Indexed(native_object, history_object),
                     checkpoint_viewed_at,
-                    root_version,
+                    root_version_: root_version,
+                    at_version: false,
                 })
             }
             NativeObjectStatus::WrappedOrDeleted => Ok(Self {
@@ -931,7 +946,8 @@ impl Object {
                     checkpoint_sequence_number: history_object.checkpoint_sequence_number,
                 }),
                 checkpoint_viewed_at,
-                root_version: None,
+                root_version_: None,
+                at_version: false,
             }),
         }
     }
@@ -1212,7 +1228,7 @@ impl Loader<HistoricalKey> for Db {
                 continue;
             }
 
-            let object = Object::try_from_stored_history_object(
+            let mut object = Object::try_from_stored_history_object(
                 stored.clone(),
                 key.checkpoint_viewed_at,
                 // This conversion will use the object's own version as the `Object::root_version`
@@ -1220,6 +1236,7 @@ impl Loader<HistoricalKey> for Db {
                 // not have any information on the `root_version` of the fetched dynamic object.
                 None,
             )?;
+            object.at_version = true;
             result.insert(*key, object);
         }
 
