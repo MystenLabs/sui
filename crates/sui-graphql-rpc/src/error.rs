@@ -71,13 +71,6 @@ pub enum Error {
     CursorNoFirstLast,
     #[error("Connection's page size of {0} exceeds max of {1}")]
     PageTooLarge(u64, u64),
-    #[error(
-        "To get the dynamic field(s) of an IObject, the query must be rooted in a non-child object,\
-        i.e, a shared or an owned object, so that its version can be used to bound the DFs' \
-        versions. To get the dynamic fields of an address at the latest checkpoint, use the \
-        Query.owner field instead."
-    )]
-    MissingRootObject,
     // Catch-all for client-fault errors
     #[error("{0}")]
     Client(String),
@@ -92,7 +85,6 @@ impl ErrorExtensions for Error {
             | Error::CursorNoFirstLast
             | Error::PageTooLarge(_, _)
             | Error::ProtocolVersionUnsupported(_, _)
-            | Error::MissingRootObject
             | Error::Client(_) => {
                 e.set("code", code::BAD_USER_INPUT);
             }
