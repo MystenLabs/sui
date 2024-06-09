@@ -19,45 +19,45 @@ Usage example:
 /// This function reads u8 and u64 value from the input
 /// and returns the rest of the bytes.
 fun deserialize(bytes: vector<u8>): (u8, u64, vector<u8>) {
-use sui::bcs::{Self, BCS};
+    use sui::bcs::{Self, BCS};
 
-let prepared: BCS = bcs::new(bytes);
-let (u8_value, u64_value) = (
-prepared.peel_u8(),
-prepared.peel_u64()
-);
+    let prepared: BCS = bcs::new(bytes);
+    let (u8_value, u64_value) = (
+        prepared.peel_u8(),
+        prepared.peel_u64()
+    );
 
-// unpack bcs struct
-let leftovers = prepared.into_remainder_bytes();
+    // unpack bcs struct
+    let leftovers = prepared.into_remainder_bytes();
 
-(u8_value, u64_value, leftovers)
+    (u8_value, u64_value, leftovers)
 }
 ```
 
 
--  [Struct `BCS`](#0x2_bcs_BCS)
--  [Constants](#@Constants_0)
--  [Function `to_bytes`](#0x2_bcs_to_bytes)
--  [Function `new`](#0x2_bcs_new)
--  [Function `into_remainder_bytes`](#0x2_bcs_into_remainder_bytes)
--  [Function `peel_address`](#0x2_bcs_peel_address)
--  [Function `peel_bool`](#0x2_bcs_peel_bool)
--  [Function `peel_u8`](#0x2_bcs_peel_u8)
--  [Function `peel_u64`](#0x2_bcs_peel_u64)
--  [Function `peel_u128`](#0x2_bcs_peel_u128)
--  [Function `peel_u256`](#0x2_bcs_peel_u256)
--  [Function `peel_vec_length`](#0x2_bcs_peel_vec_length)
--  [Function `peel_vec_address`](#0x2_bcs_peel_vec_address)
--  [Function `peel_vec_bool`](#0x2_bcs_peel_vec_bool)
--  [Function `peel_vec_u8`](#0x2_bcs_peel_vec_u8)
--  [Function `peel_vec_vec_u8`](#0x2_bcs_peel_vec_vec_u8)
--  [Function `peel_vec_u64`](#0x2_bcs_peel_vec_u64)
--  [Function `peel_vec_u128`](#0x2_bcs_peel_vec_u128)
--  [Function `peel_option_address`](#0x2_bcs_peel_option_address)
--  [Function `peel_option_bool`](#0x2_bcs_peel_option_bool)
--  [Function `peel_option_u8`](#0x2_bcs_peel_option_u8)
--  [Function `peel_option_u64`](#0x2_bcs_peel_option_u64)
--  [Function `peel_option_u128`](#0x2_bcs_peel_option_u128)
+- [Struct `BCS`](#struct-bcs)
+- [Constants](#constants)
+- [Function `to_bytes`](#function-to_bytes)
+- [Function `new`](#function-new)
+- [Function `into_remainder_bytes`](#function-into_remainder_bytes)
+- [Function `peel_address`](#function-peel_address)
+- [Function `peel_bool`](#function-peel_bool)
+- [Function `peel_u8`](#function-peel_u8)
+- [Function `peel_u64`](#function-peel_u64)
+- [Function `peel_u128`](#function-peel_u128)
+- [Function `peel_u256`](#function-peel_u256)
+- [Function `peel_vec_length`](#function-peel_vec_length)
+- [Function `peel_vec_address`](#function-peel_vec_address)
+- [Function `peel_vec_bool`](#function-peel_vec_bool)
+- [Function `peel_vec_u8`](#function-peel_vec_u8)
+- [Function `peel_vec_vec_u8`](#function-peel_vec_vec_u8)
+- [Function `peel_vec_u64`](#function-peel_vec_u64)
+- [Function `peel_vec_u128`](#function-peel_vec_u128)
+- [Function `peel_option_address`](#function-peel_option_address)
+- [Function `peel_option_bool`](#function-peel_option_bool)
+- [Function `peel_option_u8`](#function-peel_option_u8)
+- [Function `peel_option_u64`](#function-peel_option_u64)
+- [Function `peel_option_u128`](#function-peel_option_u128)
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/bcs.md#0x1_bcs">0x1::bcs</a>;
