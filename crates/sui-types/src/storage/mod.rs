@@ -236,7 +236,13 @@ pub trait BackingPackageStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>>;
 }
 
-impl<S: BackingPackageStore> BackingPackageStore for Arc<S> {
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for Box<S> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        BackingPackageStore::get_package_object(self.as_ref(), package_id)
+    }
+}
+
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for Arc<S> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(self.as_ref(), package_id)
     }
