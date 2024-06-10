@@ -44,7 +44,7 @@ module sui_system::voting_power {
         // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
         // have 100%. So we bound the threshold_pct to be always enough to find a solution.
         let threshold = TOTAL_VOTING_POWER.min(
-            MAX_VOTING_POWER.max(TOTAL_VOTING_POWER.divide_and_round_up( validators.length())),
+            MAX_VOTING_POWER.max(TOTAL_VOTING_POWER.divide_and_round_up(validators.length())),
         );
         let (mut info_list, remaining_power) = init_voting_power_info(validators, threshold);
         adjust_voting_power(&mut info_list, threshold, remaining_power);

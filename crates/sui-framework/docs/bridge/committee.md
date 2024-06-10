@@ -303,7 +303,7 @@ title: Module `0xb::committee`
 
 
 
-<pre><code><b>const</b> <a href="committee.md#0xb_committee_ESenderIsNotInBridgeCommittee">ESenderIsNotInBridgeCommittee</a>: u64 = 9;
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_ESenderIsNotInBridgeCommittee">ESenderIsNotInBridgeCommittee</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 9;
 </code></pre>
 
 

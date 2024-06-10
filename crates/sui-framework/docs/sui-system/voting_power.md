@@ -195,7 +195,7 @@ at <code><a href="voting_power.md#0x3_voting_power_MAX_VOTING_POWER">MAX_VOTING_
     // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
     // have 100%. So we bound the threshold_pct <b>to</b> be always enough <b>to</b> find a solution.
     <b>let</b> threshold = <a href="voting_power.md#0x3_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>.<b>min</b>(
-        <a href="voting_power.md#0x3_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a>.max(<a href="voting_power.md#0x3_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>.divide_and_round_up( validators.length())),
+        <a href="voting_power.md#0x3_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a>.max(<a href="voting_power.md#0x3_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>.divide_and_round_up(validators.length())),
     );
     <b>let</b> (<b>mut</b> info_list, remaining_power) = <a href="voting_power.md#0x3_voting_power_init_voting_power_info">init_voting_power_info</a>(validators, threshold);
     <a href="voting_power.md#0x3_voting_power_adjust_voting_power">adjust_voting_power</a>(&<b>mut</b> info_list, threshold, remaining_power);
