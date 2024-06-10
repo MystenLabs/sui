@@ -15,8 +15,6 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::collections::BTreeMap;
-use sui_types::execution::DynamicallyLoadedObjectMetadata;
 use tokio::sync::OwnedMutexGuard;
 use typed_store::TypedStoreError;
 
@@ -152,11 +150,11 @@ pub struct IndexStoreTables {
     transactions_to_addr: DBMap<(SuiAddress, TxSequenceNumber), TransactionDigest>,
 
     /// Index from object id to transactions that used that object id as input.
-    #[default_options_override_fn = "transactions_by_input_object_id_table_default_config"]
+    #[deprecated]
     transactions_by_input_object_id: DBMap<(ObjectID, TxSequenceNumber), TransactionDigest>,
 
     /// Index from object id to transactions that modified/created that object id.
-    #[default_options_override_fn = "transactions_by_mutated_object_id_table_default_config"]
+    #[deprecated]
     transactions_by_mutated_object_id: DBMap<(ObjectID, TxSequenceNumber), TransactionDigest>,
 
     /// Index from package id, module and function identifier to transactions that used that moce function call as input.
@@ -201,6 +199,7 @@ pub struct IndexStoreTables {
     dynamic_field_index: DBMap<DynamicFieldKey, DynamicFieldInfo>,
 
     /// This is an index of all the versions of loaded child objects
+    #[deprecated]
     loaded_child_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
 
     #[default_options_override_fn = "index_table_default_config"]
@@ -233,6 +232,7 @@ pub struct IndexStore {
     caches: IndexStoreCaches,
     metrics: Arc<IndexStoreMetrics>,
     max_type_length: u64,
+    remove_deprecated_tables: bool,
 }
 
 // These functions are used to initialize the DB tables
@@ -246,12 +246,6 @@ fn transactions_from_addr_table_default_config() -> DBOptions {
     default_db_options()
 }
 fn transactions_to_addr_table_default_config() -> DBOptions {
-    default_db_options()
-}
-fn transactions_by_input_object_id_table_default_config() -> DBOptions {
-    default_db_options()
-}
-fn transactions_by_mutated_object_id_table_default_config() -> DBOptions {
     default_db_options()
 }
 fn transactions_by_move_function_table_default_config() -> DBOptions {
@@ -312,6 +306,7 @@ impl IndexStore {
             caches,
             metrics: Arc::new(metrics),
             max_type_length: max_type_length.unwrap_or(128),
+            remove_deprecated_tables,
         }
     }
 
@@ -472,7 +467,6 @@ impl IndexStore {
         digest: &TransactionDigest,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
-        loaded_child_objects: &BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
         let mut batch = self.tables.transactions_from_addr.batch();
@@ -492,17 +486,20 @@ impl IndexStore {
             std::iter::once(((sender, sequence), *digest)),
         )?;
 
-        batch.insert_batch(
-            &self.tables.transactions_by_input_object_id,
-            active_inputs.map(|id| ((id, sequence), *digest)),
-        )?;
+        #[allow(deprecated)]
+        if !self.remove_deprecated_tables {
+            batch.insert_batch(
+                &self.tables.transactions_by_input_object_id,
+                active_inputs.map(|id| ((id, sequence), *digest)),
+            )?;
 
-        batch.insert_batch(
-            &self.tables.transactions_by_mutated_object_id,
-            mutated_objects
-                .clone()
-                .map(|(obj_ref, _)| ((obj_ref.0, sequence), *digest)),
-        )?;
+            batch.insert_batch(
+                &self.tables.transactions_by_mutated_object_id,
+                mutated_objects
+                    .clone()
+                    .map(|(obj_ref, _)| ((obj_ref.0, sequence), *digest)),
+            )?;
+        }
 
         batch.insert_batch(
             &self.tables.transactions_by_move_function,
@@ -615,16 +612,6 @@ impl IndexStore {
             }),
         )?;
 
-        // Loaded child objects table
-        let loaded_child_objects: Vec<_> = loaded_child_objects
-            .iter()
-            .map(|(oid, meta)| (*oid, meta.version))
-            .collect();
-        batch.insert_batch(
-            &self.tables.loaded_child_object_versions,
-            std::iter::once((*digest, loaded_child_objects)),
-        )?;
-
         let invalidate_caches =
             read_size_from_env(ENV_VAR_INVALIDATE_INSTEAD_OF_UPDATE).unwrap_or(0) > 0;
 
@@ -732,17 +719,6 @@ impl IndexStore {
         }
     }
 
-    /// Return loaded child objects table for a tx
-    pub fn loaded_child_object_versions(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
-        self.tables
-            .loaded_child_object_versions
-            .get(transaction_digest)
-            .map_err(|err| err.into())
-    }
-
     fn get_transactions_from_index<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
         index: &DBMap<(KeyT, TxSequenceNumber), TransactionDigest>,
         key: KeyT,
@@ -787,6 +763,10 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
+        if self.remove_deprecated_tables {
+            return Ok(vec![]);
+        }
+        #[allow(deprecated)]
         Self::get_transactions_from_index(
             &self.tables.transactions_by_input_object_id,
             input_object,
@@ -803,6 +783,10 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
+        if self.remove_deprecated_tables {
+            return Ok(vec![]);
+        }
+        #[allow(deprecated)]
         Self::get_transactions_from_index(
             &self.tables.transactions_by_mutated_object_id,
             mutated_object,
@@ -1658,7 +1642,6 @@ mod tests {
                 &TransactionDigest::random(),
                 1234,
                 Some(tx_coins),
-                &BTreeMap::new(),
             )
             .await?;
 
@@ -1703,7 +1686,6 @@ mod tests {
                 &TransactionDigest::random(),
                 1234,
                 Some(tx_coins),
-                &BTreeMap::new(),
             )
             .await?;
         let balance_from_db = IndexStore::get_balance_from_db(

@@ -2322,40 +2322,6 @@ pub enum SuiObjectArg {
     },
 }
 
-#[serde_as]
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "LoadedChildObject", rename_all = "camelCase")]
-pub struct SuiLoadedChildObject {
-    object_id: ObjectID,
-    #[schemars(with = "AsSequenceNumber")]
-    #[serde_as(as = "AsSequenceNumber")]
-    sequence_number: SequenceNumber,
-}
-
-impl SuiLoadedChildObject {
-    pub fn new(object_id: ObjectID, sequence_number: SequenceNumber) -> Self {
-        Self {
-            object_id,
-            sequence_number,
-        }
-    }
-
-    pub fn object_id(&self) -> ObjectID {
-        self.object_id
-    }
-
-    pub fn sequence_number(&self) -> SequenceNumber {
-        self.sequence_number
-    }
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
-#[serde(rename_all = "camelCase", rename = "LoadedChildObjectsResponse")]
-pub struct SuiLoadedChildObjectsResponse {
-    pub loaded_child_objects: Vec<SuiLoadedChildObject>,
-}
-
 #[derive(Clone)]
 pub struct EffectsWithInput {
     pub effects: SuiTransactionBlockEffects,
