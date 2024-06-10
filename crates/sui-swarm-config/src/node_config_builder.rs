@@ -197,6 +197,7 @@ impl ValidatorConfigBuilder {
                 .to_socket_addr()
                 .unwrap(),
             consensus_config: Some(consensus_config),
+            remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
             genesis: sui_config::node::Genesis::new(genesis),
             grpc_load_shed: None,
@@ -464,6 +465,7 @@ impl FullnodeConfigBuilder {
                 .unwrap_or(local_ip_utils::get_available_port(&localhost)),
             json_rpc_address: self.json_rpc_address.unwrap_or(json_rpc_address),
             consensus_config: None,
+            remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
             genesis: self.genesis.unwrap_or(sui_config::node::Genesis::new(
                 network_config.genesis.clone(),

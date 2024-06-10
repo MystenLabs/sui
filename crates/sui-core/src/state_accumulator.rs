@@ -4,7 +4,7 @@
 use itertools::Itertools;
 use mysten_metrics::monitored_scope;
 use serde::Serialize;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -367,7 +367,8 @@ impl StateAccumulator {
         store: Arc<dyn AccumulatorStore>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Self {
-        if epoch_store.state_accumulator_v2_enabled() {
+        let chain = epoch_store.get_chain_identifier().chain();
+        if epoch_store.state_accumulator_v2_enabled() && chain != Chain::Mainnet {
             StateAccumulator::V2(StateAccumulatorV2::new(store))
         } else {
             StateAccumulator::V1(StateAccumulatorV1::new(store))
@@ -637,16 +638,22 @@ impl StateAccumulatorV2 {
             // bootstrap from the previous epoch's root state hash. Because this
             // should only occur at beginning of epoch, we shouldn't have to worry
             // about race conditions on reading the highest running root accumulator.
-            let (prev_epoch, (_, prev_acc)) = self
+            let (prev_epoch, (last_checkpoint_prev_epoch, prev_acc)) = self
                 .store
                 .get_root_state_accumulator_for_highest_epoch()?
                 .expect("Expected root state hash for previous epoch to exist");
-            assert_eq!(
-                prev_epoch + 1,
-                epoch_store.epoch(),
-                "Expected highest existing root state hash to be for previous epoch",
-            );
-            prev_acc
+            if last_checkpoint_prev_epoch != checkpoint_seq_num - 1 {
+                epoch_store
+                    .notify_read_running_root(checkpoint_seq_num - 1)
+                    .await?
+            } else {
+                assert_eq!(
+                    prev_epoch + 1,
+                    epoch_store.epoch(),
+                    "Expected highest existing root state hash to be for previous epoch",
+                );
+                prev_acc
+            }
         } else {
             epoch_store
                 .notify_read_running_root(checkpoint_seq_num - 1)

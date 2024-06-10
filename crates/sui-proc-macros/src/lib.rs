@@ -63,7 +63,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
 
                     build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());
                     let _all_module_bytes = build_config
-                        .build(path)
+                        .build(&path)
                         .unwrap()
                         .get_package_bytes(/* with_unpublished_deps */ false);
                 }

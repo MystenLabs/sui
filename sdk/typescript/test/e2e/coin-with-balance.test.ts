@@ -145,13 +145,14 @@ describe('coinWithBalance', () => {
 			version: 2,
 		});
 
-		const result = await toolbox.client.signAndExecuteTransaction({
+		const { digest } = await toolbox.client.signAndExecuteTransaction({
 			transaction: tx,
 			signer: publishToolbox.keypair,
-			options: {
-				showEffects: true,
-				showBalanceChanges: true,
-			},
+		});
+
+		const result = await toolbox.client.waitForTransaction({
+			digest,
+			options: { showEffects: true, showBalanceChanges: true },
 		});
 
 		expect(result.effects?.status.status).toBe('success');
@@ -293,13 +294,14 @@ describe('coinWithBalance', () => {
 			version: 2,
 		});
 
-		const result = await toolbox.client.signAndExecuteTransaction({
+		const { digest } = await toolbox.client.signAndExecuteTransaction({
 			transaction: tx,
 			signer: publishToolbox.keypair,
-			options: {
-				showEffects: true,
-				showBalanceChanges: true,
-			},
+		});
+
+		const result = await toolbox.client.waitForTransaction({
+			digest,
+			options: { showEffects: true, showBalanceChanges: true },
 		});
 
 		expect(result.effects?.status.status).toBe('success');
@@ -537,13 +539,14 @@ describe('coinWithBalance', () => {
 			version: 2,
 		});
 
-		const result = await toolbox.client.signAndExecuteTransaction({
+		const { digest } = await toolbox.client.signAndExecuteTransaction({
 			transaction: tx,
 			signer: publishToolbox.keypair,
-			options: {
-				showEffects: true,
-				showBalanceChanges: true,
-			},
+		});
+
+		const result = await toolbox.client.waitForTransaction({
+			digest,
+			options: { showEffects: true, showBalanceChanges: true },
 		});
 
 		expect(result.effects?.status.status).toBe('success');

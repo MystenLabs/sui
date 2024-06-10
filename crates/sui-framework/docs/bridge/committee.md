@@ -16,6 +16,7 @@ title: Module `0xb::committee`
 -  [Function `try_create_next_committee`](#0xb_committee_try_create_next_committee)
 -  [Function `execute_blocklist`](#0xb_committee_execute_blocklist)
 -  [Function `committee_members`](#0xb_committee_committee_members)
+-  [Function `update_node_url`](#0xb_committee_update_node_url)
 -  [Function `check_uniqueness_bridge_keys`](#0xb_committee_check_uniqueness_bridge_keys)
 
 
@@ -294,6 +295,15 @@ title: Module `0xb::committee`
 
 
 <pre><code><b>const</b> <a href="committee.md#0xb_committee_EInvalidPubkeyLength">EInvalidPubkeyLength</a>: u64 = 6;
+</code></pre>
+
+
+
+<a name="0xb_committee_ESenderIsNotInBridgeCommittee"></a>
+
+
+
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_ESenderIsNotInBridgeCommittee">ESenderIsNotInBridgeCommittee</a>: u64 = 9;
 </code></pre>
 
 
@@ -625,6 +635,39 @@ title: Module `0xb::committee`
     self: &<a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>,
 ): &VecMap&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a>&gt; {
     &self.members
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_committee_update_node_url"></a>
+
+## Function `update_node_url`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_update_node_url">update_node_url</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, new_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="committee.md#0xb_committee_update_node_url">update_node_url</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>, new_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &TxContext) {
+    <b>let</b> <b>mut</b> idx = 0;
+    <b>while</b> (idx &lt; self.members.size()) {
+        <b>let</b> (_, member) = self.members.get_entry_by_idx_mut(idx);
+        <b>if</b> (member.sui_address == ctx.sender()) {
+            member.http_rest_url = new_url;
+            <b>return</b>
+        };
+        idx = idx + 1;
+    };
+    <b>abort</b> <a href="committee.md#0xb_committee_ESenderIsNotInBridgeCommittee">ESenderIsNotInBridgeCommittee</a>
 }
 </code></pre>
 

@@ -567,9 +567,6 @@ mod tests {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let temp_dirs = (0..4).map(|_| TempDir::new().unwrap()).collect::<Vec<_>>();
 
-        let mut output_receivers = vec![];
-        let mut authorities = vec![];
-
         let make_authority = |index: AuthorityIndex| {
             let committee = committee.clone();
             let registry = Registry::new();
@@ -607,6 +604,9 @@ mod tests {
                 (authority, receiver)
             }
         };
+
+        let mut output_receivers = Vec::with_capacity(committee.size());
+        let mut authorities = Vec::with_capacity(committee.size());
 
         for (index, _authority_info) in committee.authorities() {
             let (authority, receiver) = make_authority(index).await;

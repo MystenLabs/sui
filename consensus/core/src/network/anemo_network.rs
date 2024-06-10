@@ -409,7 +409,12 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
         let epoch_string: String = self.context.committee.epoch().to_string();
         let inbound_network_metrics = self.context.metrics.network_metrics.inbound.clone();
         let outbound_network_metrics = self.context.metrics.network_metrics.outbound.clone();
-        let quinn_connection_metrics = self.context.metrics.quinn_connection_metrics.clone();
+        let quinn_connection_metrics = self
+            .context
+            .metrics
+            .network_metrics
+            .quinn_connection_metrics
+            .clone();
         let all_peer_ids = self
             .context
             .committee
