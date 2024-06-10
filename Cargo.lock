@@ -7477,7 +7477,7 @@ dependencies = [
 
 [[package]]
 name = "mysten-common"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "futures",
  "parking_lot 0.12.1",
@@ -11349,7 +11349,7 @@ dependencies = [
 
 [[package]]
 name = "simulacrum"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12239,7 +12239,7 @@ dependencies = [
 
 [[package]]
 name = "sui-common"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "futures",
  "mysten-metrics",
@@ -12278,7 +12278,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -12387,7 +12387,7 @@ dependencies = [
 
 [[package]]
 name = "sui-cost"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -12443,7 +12443,7 @@ dependencies = [
 
 [[package]]
 name = "sui-data-ingestion-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12802,7 +12802,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-rpc-headers"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "axum",
 ]
@@ -13369,7 +13369,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc-macros"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "derive-syn-parse",
  "itertools 0.10.5",
@@ -13457,7 +13457,7 @@ dependencies = [
 
 [[package]]
 name = "sui-protocol-config"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "clap",
  "insta",
@@ -13471,7 +13471,7 @@ dependencies = [
 
 [[package]]
 name = "sui-protocol-config-macros"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
@@ -13766,7 +13766,7 @@ dependencies = [
 
 [[package]]
 name = "sui-single-node-benchmark"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13859,7 +13859,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation-service"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -13896,7 +13896,7 @@ dependencies = [
 
 [[package]]
 name = "sui-storage"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14043,7 +14043,7 @@ dependencies = [
 
 [[package]]
 name = "sui-test-transaction-builder"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "bcs",
  "move-core-types",
