@@ -574,5 +574,6 @@ module defi::pool_tests {
 
     // utilities
     fun scenario(): Scenario { test::begin(@0x1) }
+
     fun people(): (address, address) { (@0xBEEF, @0x1337) }
 }
