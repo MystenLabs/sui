@@ -41,7 +41,8 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 -  [Function `deny_list_v2_remove`](#0x2_coin_deny_list_v2_remove)
 -  [Function `deny_list_v2_contains`](#0x2_coin_deny_list_v2_contains)
 -  [Function `deny_list_v2_enable_kill_switch`](#0x2_coin_deny_list_v2_enable_kill_switch)
--  [Function `deny_list_v2_disable_kill_switch`](#0x2_coin_deny_list_v2_disable_kill_switch)
+-  [Function `deny_list_v2_disable_global_pause`](#0x2_coin_deny_list_v2_disable_global_pause)
+-  [Function `deny_list_v2_enable_global_pause`](#0x2_coin_deny_list_v2_enable_global_pause)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
 -  [Function `update_name`](#0x2_coin_update_name)
 -  [Function `update_symbol`](#0x2_coin_update_symbol)
@@ -399,7 +400,7 @@ The index into the deny list vector for the <code>sui::coin::Coin</code> type.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/coin.md#0x2_coin_DL_V2_ADDRESSES">DL_V2_ADDRESSES</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; = [58, 58, 97, 100, 100, 114, 101, 115, 115, 101, 115];
+<pre><code><b>const</b> <a href="../sui-framework/coin.md#0x2_coin_DL_V2_ADDRESSES">DL_V2_ADDRESSES</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; = [58, 58, 97, 100, 100, 114, 101, 115, 115, 58, 58];
 </code></pre>
 
 
@@ -1218,13 +1219,13 @@ accordingly.
 
 </details>
 
-<a name="0x2_coin_deny_list_v2_disable_kill_switch"></a>
+<a name="0x2_coin_deny_list_v2_disable_global_pause"></a>
 
-## Function `deny_list_v2_disable_kill_switch`
+## Function `deny_list_v2_disable_global_pause`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_kill_switch">deny_list_v2_disable_kill_switch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">coin::DenyListV2WriteCap</a>&gt;, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_global_pause">deny_list_v2_disable_global_pause</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">coin::DenyListV2WriteCap</a>&gt;, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1233,7 +1234,7 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_kill_switch">deny_list_v2_disable_kill_switch</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_global_pause">deny_list_v2_disable_global_pause</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> Config&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a>&gt;,
     deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;,
     ctx: &<b>mut</b> TxContext,
@@ -1248,6 +1249,43 @@ accordingly.
         |_prev, next| *next = <b>false</b>,
         ctx,
     )
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_v2_enable_global_pause"></a>
+
+## Function `deny_list_v2_enable_global_pause`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_enable_global_pause">deny_list_v2_enable_global_pause</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">coin::DenyListV2WriteCap</a>&gt;, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_enable_global_pause">deny_list_v2_enable_global_pause</a>&lt;T&gt;(
+   <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> Config&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a>&gt;,
+   deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;,
+   ctx: &<b>mut</b> TxContext,
+) {
+   <b>assert</b>!(deny_cap.allow_kill_switch, <a href="../sui-framework/coin.md#0x2_coin_EKillSwitchNotAllowed">EKillSwitchNotAllowed</a>);
+   <a href="../sui-framework/coin.md#0x2_coin_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>, ctx);
+   <b>let</b> setting_name = <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_kill_switch_setting_name">deny_list_v2_kill_switch_setting_name</a>&lt;T&gt;();
+   <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<b>update</b>!&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(
+       &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a> {},
+       setting_name,
+       |_deny_list, _cap, _ctx| <b>true</b>,
+       |_prev, next| *next = <b>true</b>,
+       ctx,
+   )
 }
 </code></pre>
 
