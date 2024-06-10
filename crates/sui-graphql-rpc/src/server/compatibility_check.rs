@@ -4,7 +4,7 @@
 use crate::check_table;
 use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
-use diesel::{sql_query, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use sui_indexer::models::checkpoints::StoredCheckpoint;
 use sui_indexer::models::display::StoredDisplay;
 use sui_indexer::models::epoch::QueryableEpochInfo;
@@ -28,10 +28,7 @@ macro_rules! check_table {
         let result: Result<Option<$type>, _> = $conn
             .first(move || $table.select(<$type>::as_select()))
             .optional();
-        match result {
-            Ok(_) => true,
-            Err(_) => false,
-        }
+        result.is_ok()
     }};
 }
 
@@ -39,22 +36,18 @@ macro_rules! check_table {
 macro_rules! generate_check_all_tables {
     ($(($table:ident, $type:ty)),* $(,)?) => {
         pub(crate) async fn check_all_tables(db: &Db) -> Result<bool, Error> {
-            let result: bool = db
-                .execute(|conn| {
-                    let mut all_ok = true;
+            use futures::future::join_all;
 
-                    // Allocate 60 seconds for the compatibility check
-                    sql_query("SET statement_timeout = 60000").execute(conn.conn())?;
+            let futures = vec![
+                $(
+                    db.execute(|conn| {
+                        Ok::<_, diesel::result::Error>(check_table!(conn, $table::dsl::$table, $type))
+                    })
+                ),*
+            ];
 
-                    $(
-                        all_ok &= check_table!(conn, $table::dsl::$table, $type);
-                    )*
-
-                    Ok::<_, diesel::result::Error>(all_ok)
-                })
-                .await?;
-
-            if result {
+            let results = join_all(futures).await;
+            if results.into_iter().all(|res| res.unwrap_or(false)) {
                 Ok(true)
             } else {
                 Err(Error::Internal(
