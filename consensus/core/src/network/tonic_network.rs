@@ -582,7 +582,7 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         let mut authorities = vec![];
         for authority in inner.authorities.into_iter() {
             let Some(authority) = self
-                ._context
+                .context
                 .committee
                 .to_authority_index(authority as usize)
             else {

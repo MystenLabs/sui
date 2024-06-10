@@ -548,6 +548,7 @@ async fn make_recv_future<T: Clone>(
 
 #[cfg(test)]
 mod tests {
+    use crate::commit::CommitRange;
     use crate::test_dag_builder::DagBuilder;
     use crate::{
         authority_service::AuthorityService,
@@ -572,8 +573,6 @@ mod tests {
     use std::time::Duration;
     use tokio::sync::broadcast;
     use tokio::time::sleep;
-    use crate::commit::CommitRange;
-    use crate::test_dag_builder::DagBuilder;
 
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
@@ -610,7 +609,7 @@ mod tests {
             Ok(Default::default())
         }
 
-        fn set_consumer_availability(&self, available: bool) -> Result<(), CoreError> {
+        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
             todo!()
         }
         async fn set_min_propose_round(&self, _round: Round) -> Result<(), CoreError> {

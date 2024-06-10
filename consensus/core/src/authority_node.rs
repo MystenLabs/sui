@@ -348,13 +348,12 @@ mod tests {
     use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
     use consensus_config::{local_committee_and_keys, Parameters};
-    use mysten_metrics::monitored_mpsc::unbounded_channel;
+    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
     use prometheus::Registry;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
-    use tokio::sync::mpsc::UnboundedReceiver;
-    use tokio::{sync::mpsc::unbounded_channel, time::sleep};
+    use tokio::time::sleep;
     use typed_store::DBMetrics;
 
     use super::*;

@@ -22,10 +22,7 @@ use sui_macros::fail_point_async;
 #[cfg(test)]
 use tokio::task::JoinError;
 use tokio::{
-    sync::{
-        mpsc::{error::TrySendError},
-        oneshot,
-    },
+    sync::{mpsc::error::TrySendError, oneshot},
     task::JoinSet,
     time::{sleep, sleep_until, timeout, Instant},
 };
@@ -969,10 +966,6 @@ mod tests {
     use bytes::Bytes;
     use consensus_config::{AuthorityIndex, Parameters};
     use parking_lot::RwLock;
-    use tokio::time::sleep;
-    use std::collections::{BTreeMap, BTreeSet};
-    use std::sync::Arc;
-    use std::time::Duration;
     use tokio::{sync::Mutex, time::sleep};
 
     use crate::{

@@ -108,6 +108,11 @@ impl CoreThread {
                             let _scope = monitored_scope("CoreThread::loop::get_missing");
                             sender.send(self.core.get_missing_blocks()).ok();
                         }
+                        CoreThreadCommand::SetMinProposeRound(round, sender) => {
+                            let _scope = monitored_scope("CoreThread::loop::set_min_propose_round");
+                            self.core.set_min_propose_round(round);
+                            sender.send(()).ok();
+                        }
                     }
                 }
                 _ = self.rx_consumer_availability.changed() => {
@@ -119,10 +124,6 @@ impl CoreThread {
                         // because block proposal could have been skipped.
                         self.core.new_block(Round::MAX, true)?;
                     }
-                }
-                CoreThreadCommand::SetMinProposeRound(round, sender) => {
-                    self.core.set_min_propose_round(round);
-                    sender.send(()).ok();
                 }
             }
         }

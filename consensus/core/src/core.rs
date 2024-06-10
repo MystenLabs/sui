@@ -615,8 +615,9 @@ impl Core {
 
     /// Whether the core should propose new blocks.
     fn should_propose(&self) -> bool {
+        let clock_round = self.threshold_clock.get_round();
         let skip_proposing = if let Some(min_propose_round) = self.min_propose_round {
-            if self.threshold_clock.get_round() <= min_propose_round {
+            if clock_round <= min_propose_round {
                 debug!("Skip proposing for round {clock_round} as min propose round is {min_propose_round}");
                 true
             } else {
@@ -1390,7 +1391,7 @@ mod test {
         );
 
         // Trying to explicitly propose a block will not produce anything
-        assert!(core.try_new_block(true).is_none());
+        assert!(core.try_propose(true).unwrap().is_none());
 
         // Create blocks for the whole network - even "our" node in order to replicate an "amnesia" recovery.
         let mut builder = DagBuilder::new(context.clone());
@@ -1402,13 +1403,13 @@ mod test {
         assert!(core.add_blocks(blocks).unwrap().is_empty());
 
         // Try to propose - no block should be produced.
-        assert!(core.try_new_block(true).is_none());
+        assert!(core.try_propose(true).unwrap().is_none());
 
         // Now set the min propose round which is the highest round for which the network informed
         // us that we do have proposed a block about.
         core.set_min_propose_round(10);
 
-        let block = core.try_new_block(true).unwrap();
+        let block = core.try_propose(true).expect("No error").unwrap();
         assert_eq!(block.round(), 11);
         assert_eq!(block.ancestors().len(), 4);
 
