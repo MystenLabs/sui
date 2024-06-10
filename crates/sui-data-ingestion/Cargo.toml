@@ -4,7 +4,7 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
-version = "0.1.0"
+version.workspace = true
 
 [dependencies]
 anyhow.workspace = true

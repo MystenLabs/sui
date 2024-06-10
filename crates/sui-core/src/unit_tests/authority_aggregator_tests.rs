@@ -350,7 +350,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     path.extend(["src", "unit_tests", "data", "object_basics"]);
     let client_ip = make_socket_addr();
     let modules: Vec<_> = build_config
-        .build(path)
+        .build(&path)
         .unwrap()
         .get_modules()
         .cloned()

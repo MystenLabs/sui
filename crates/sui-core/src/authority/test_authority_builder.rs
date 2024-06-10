@@ -275,6 +275,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 epoch_store
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
+                false,
             )))
         };
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();

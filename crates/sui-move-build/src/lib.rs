@@ -6,7 +6,7 @@ extern crate move_ir_types;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
-    path::{Path, PathBuf},
+    path::Path,
     str::FromStr,
 };
 
@@ -63,8 +63,6 @@ pub struct CompiledPackage {
     pub published_at: Result<ObjectID, PublishedAtError>,
     /// The dependency IDs of this package
     pub dependency_ids: PackageDependencies,
-    /// Path to the Move package (i.e., where the Move.toml file is)
-    pub path: PathBuf,
 }
 
 /// Wrapper around the core Move `BuildConfig` with some Sui-specific info
@@ -154,12 +152,11 @@ impl BuildConfig {
 
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
-    pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
+    pub fn build(self, path: &Path) -> SuiResult<CompiledPackage> {
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
-        let resolution_graph = self.resolution_graph(&path)?;
+        let resolution_graph = self.resolution_graph(path)?;
         build_from_resolution_graph(
-            path,
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
@@ -218,7 +215,6 @@ pub fn set_sui_flavor(build_config: &mut MoveBuildConfig) -> Option<String> {
 }
 
 pub fn build_from_resolution_graph(
-    path: PathBuf,
     resolution_graph: ResolvedGraph,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
@@ -259,7 +255,6 @@ pub fn build_from_resolution_graph(
         package,
         published_at,
         dependency_ids,
-        path: path.to_owned(),
     })
 }
 

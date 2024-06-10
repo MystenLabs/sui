@@ -15,7 +15,7 @@ fn generate_struct_layouts() {
         .join("sui-framework")
         .join("packages")
         .join("sui-framework");
-    let pkg = BuildConfig::new_for_testing().build(path).unwrap();
+    let pkg = BuildConfig::new_for_testing().build(&path).unwrap();
     let registry = pkg.generate_struct_layouts();
     // check for a couple of types that aren't likely to go away
     assert!(registry.contains_key(
@@ -37,5 +37,5 @@ fn development_mode_not_allowed() {
         .join("unit_tests")
         .join("data")
         .join("no_development_mode");
-    assert!(BuildConfig::new_for_testing().build(path).is_err());
+    assert!(BuildConfig::new_for_testing().build(&path).is_err());
 }

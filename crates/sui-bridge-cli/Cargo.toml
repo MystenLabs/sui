@@ -1,6 +1,6 @@
 [package]
 name = "sui-bridge-cli"
-version = "0.1.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -25,3 +25,5 @@ serde.workspace = true
 serde_with.workspace = true
 serde_json.workspace = true
 telemetry-subscribers.workspace = true
+reqwest.workspace = true
+futures.workspace = true

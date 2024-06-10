@@ -158,35 +158,35 @@ fn build_packages_with_move_config(
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
     }
-    .build(stdlib_path.to_owned())
+    .build(stdlib_path)
     .unwrap();
     let framework_pkg = BuildConfig {
         config: config.clone(),
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
     }
-    .build(sui_framework_path.to_owned())
+    .build(sui_framework_path)
     .unwrap();
     let system_pkg = BuildConfig {
         config: config.clone(),
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
     }
-    .build(sui_system_path.to_owned())
+    .build(sui_system_path)
     .unwrap();
     let deepbook_pkg = BuildConfig {
         config: config.clone(),
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
     }
-    .build(deepbook_path.to_owned())
+    .build(deepbook_path)
     .unwrap();
     let bridge_pkg = BuildConfig {
         config,
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
     }
-    .build(bridge_path.to_owned())
+    .build(bridge_path)
     .unwrap();
 
     let move_stdlib = stdlib_pkg.get_stdlib_modules();

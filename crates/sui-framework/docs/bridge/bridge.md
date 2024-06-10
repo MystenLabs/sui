@@ -18,6 +18,7 @@ title: Module `0xb::bridge`
 -  [Function `create`](#0xb_bridge_create)
 -  [Function `init_bridge_committee`](#0xb_bridge_init_bridge_committee)
 -  [Function `committee_registration`](#0xb_bridge_committee_registration)
+-  [Function `update_node_url`](#0xb_bridge_update_node_url)
 -  [Function `register_foreign_token`](#0xb_bridge_register_foreign_token)
 -  [Function `send_token`](#0xb_bridge_send_token)
 -  [Function `approve_token_transfer`](#0xb_bridge_approve_token_transfer)
@@ -775,6 +776,30 @@ title: Module `0xb::bridge`
     <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(<a href="bridge.md#0xb_bridge">bridge</a>)
         .<a href="committee.md#0xb_committee">committee</a>
         .register(system_state, bridge_pubkey_bytes, http_rest_url, ctx);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_update_node_url"></a>
+
+## Function `update_node_url`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_update_node_url">update_node_url</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, new_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_update_node_url">update_node_url</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>, new_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &TxContext) {
+    <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(<a href="bridge.md#0xb_bridge">bridge</a>).<a href="committee.md#0xb_committee">committee</a>.<a href="bridge.md#0xb_bridge_update_node_url">update_node_url</a>(new_url, ctx);
 }
 </code></pre>
 

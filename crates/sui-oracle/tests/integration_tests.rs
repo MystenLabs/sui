@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::str::FromStr;
 
 use shared_crypto::intent::Intent;
@@ -27,7 +27,7 @@ async fn test_publish_primitive() {
     // publish package if not exists
     let package = option_env!("package_id")
         .map(|s| ObjectID::from_str(s).unwrap())
-        .unwrap_or(publish_package(sender, &keystore, &client, PathBuf::from("move/oracle")).await);
+        .unwrap_or(publish_package(sender, &keystore, &client, Path::new("move/oracle")).await);
     let module = Identifier::from_str("simple_oracle").unwrap();
 
     // create simple oracle if not exists
@@ -118,7 +118,7 @@ async fn test_publish_complex_value() {
     // publish package if not exists
     let package = option_env!("package_id")
         .map(|s| ObjectID::from_str(s).unwrap())
-        .unwrap_or(publish_package(sender, &keystore, &client, PathBuf::from("move/oracle")).await);
+        .unwrap_or(publish_package(sender, &keystore, &client, Path::new("move/oracle")).await);
     let module = Identifier::from_str("simple_oracle").unwrap();
 
     // create simple oracle if not exists
@@ -317,7 +317,7 @@ async fn test_consume_oracle_data() {
 
     // publish test package
     let test_package =
-        publish_package(sender, &keystore, &client, PathBuf::from("tests/data/Test")).await;
+        publish_package(sender, &keystore, &client, Path::new("tests/data/Test")).await;
     // get data
     let mut builder = ProgrammableTransactionBuilder::new();
     let simple_oracle = builder
@@ -462,7 +462,7 @@ async fn publish_package(
     sender: SuiAddress,
     keystore: &Keystore,
     client: &SuiClient,
-    path: PathBuf,
+    path: &Path,
 ) -> ObjectID {
     let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
     let all_module_bytes = compiled_package.get_package_bytes(false);

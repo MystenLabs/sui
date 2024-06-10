@@ -3907,6 +3907,9 @@ execute_blocklist
 committee_members
 	public(package) fun
 	0xb::committee
+update_node_url
+	public(package) fun
+	0xb::committee
 check_uniqueness_bridge_keys
 	fun
 	0xb::committee
@@ -3947,6 +3950,9 @@ init_bridge_committee
 	fun
 	0xb::bridge
 committee_registration
+	public fun
+	0xb::bridge
+update_node_url
 	public fun
 	0xb::bridge
 register_foreign_token

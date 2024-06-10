@@ -152,6 +152,91 @@ module bridge::committee_test {
     }
 
     #[test]
+    fun test_update_node_url() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        committee.register(
+            &mut system_state,
+            hex::decode(VALIDATOR1_PUBKEY),
+            b"test url 1",
+            &tx(@0xA, 0),
+        );
+
+        let ctx = test_scenario::ctx(&mut scenario);
+        let voting_powers = system_state.validator_voting_powers_for_testing();
+        committee.try_create_next_committee(voting_powers, 6000, ctx);
+
+        let members = committee.members();
+        assert!(members.size() == 1);
+        let (_, member) = members.get_entry_by_idx(0);
+        assert_eq(member.http_rest_url(), b"test url 1");
+
+        // Update URL
+        committee.update_node_url(
+            b"test url 2",
+            &tx(@0xA, 0),
+        );
+
+        let members = committee.members();
+        let (_, member) = members.get_entry_by_idx(0);
+        assert_eq(member.http_rest_url(), b"test url 2");
+
+        test_utils::destroy(committee);
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = bridge::committee::ESenderIsNotInBridgeCommittee)]
+    fun test_update_node_url_not_validator() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        committee.register(
+            &mut system_state,
+            hex::decode(VALIDATOR1_PUBKEY),
+            b"test url 1",
+            &tx(@0xA, 0),
+        );
+
+        let ctx = test_scenario::ctx(&mut scenario);
+        let voting_powers = system_state.validator_voting_powers_for_testing();
+        committee.try_create_next_committee(voting_powers, 6000, ctx);
+
+        // Update URL should fail for validator @0xB
+        committee.update_node_url(
+            b"test url",
+            &tx(@0xB, 0),
+        );
+
+        // test should have failed, abort
+        abort 0
+    }
+
+    #[test]
     #[expected_failure(abort_code = bridge::committee::ENotSystemAddress)]
     fun test_init_non_system_sender() {
         let mut scenario = test_scenario::begin(@0x1);

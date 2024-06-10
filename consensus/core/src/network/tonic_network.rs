@@ -604,21 +604,28 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                         }
                     }
                 } else {
-                    // Create TcpListener via TCP socket, for more fine grained configurations.
-                    let socket = if own_address.is_ipv4() {
-                        tokio::net::TcpSocket::new_v4()
-                    } else if own_address.is_ipv6() {
-                        tokio::net::TcpSocket::new_v6()
-                    } else {
-                        panic!("Invalid own address: {own_address:?}");
+                    let tcp_connection_metrics = &self.context.metrics.network_metrics.tcp_connection_metrics;
+
+                    // Try creating an ephemeral port to test the highest allowed send and recv buffer sizes.
+                    // Buffer sizes are not set explicitly on the socket used for real traffic,
+                    // to allow the OS to set appropriate values.
+                    {
+                        let ephemeral_addr = SocketAddr::new(own_address.ip(), 0);
+                        let ephemeral_socket = create_socket(&ephemeral_addr);
+                        if let Err(e) = ephemeral_socket.set_send_buffer_size(32 << 20) {
+                            info!("Failed to set send buffer size: {e:?}");
+                        }
+                        if let Err(e) = ephemeral_socket.set_recv_buffer_size(32 << 20) {
+                            info!("Failed to set recv buffer size: {e:?}");
+                        }
+                        if ephemeral_socket.bind(ephemeral_addr).is_ok() {
+                            tcp_connection_metrics.socket_send_buffer_max_size.set(ephemeral_socket.send_buffer_size().unwrap_or(0) as i64);
+                            tcp_connection_metrics.socket_recv_buffer_max_size.set(ephemeral_socket.recv_buffer_size().unwrap_or(0) as i64);
+                        };
                     }
-                    .unwrap_or_else(|e| panic!("Cannot create TCP socket: {e:?}"));
-                    if let Err(e) = socket.set_nodelay(true) {
-                        info!("Failed to set TCP_NODELAY: {e:?}");
-                    }
-                    if let Err(e) = socket.set_reuseaddr(true) {
-                        info!("Failed to set SO_REUSEADDR: {e:?}");
-                    }
+
+                    // Create TcpListener via TCP socket.
+                    let socket = create_socket(&own_address);
                     match socket.bind(own_address) {
                         Ok(_) => {}
                         Err(e) => {
@@ -627,6 +634,10 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                             continue;
                         }
                     };
+
+                    tcp_connection_metrics.socket_send_buffer_size.set(socket.send_buffer_size().unwrap_or(0) as i64);
+                    tcp_connection_metrics.socket_recv_buffer_size.set(socket.recv_buffer_size().unwrap_or(0) as i64);
+
                     match socket.listen(MAX_CONNECTIONS_BACKLOG) {
                         Ok(listener) => break listener,
                         Err(e) => {
@@ -835,6 +846,25 @@ fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
             Err("invalid address")
         }
     }
+}
+
+#[cfg(not(msim))]
+fn create_socket(address: &SocketAddr) -> tokio::net::TcpSocket {
+    let socket = if address.is_ipv4() {
+        tokio::net::TcpSocket::new_v4()
+    } else if address.is_ipv6() {
+        tokio::net::TcpSocket::new_v6()
+    } else {
+        panic!("Invalid own address: {address:?}");
+    }
+    .unwrap_or_else(|e| panic!("Cannot create TCP socket: {e:?}"));
+    if let Err(e) = socket.set_nodelay(true) {
+        info!("Failed to set TCP_NODELAY: {e:?}");
+    }
+    if let Err(e) = socket.set_reuseaddr(true) {
+        info!("Failed to set SO_REUSEADDR: {e:?}");
+    }
+    socket
 }
 
 /// Looks up authority index by authority public key.

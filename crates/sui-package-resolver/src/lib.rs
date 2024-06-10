@@ -2883,7 +2883,7 @@ mod tests {
     fn build_package(dir: &str) -> CompiledPackage {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.extend(["tests", "packages", dir]);
-        BuildConfig::new_for_testing().build(path).unwrap()
+        BuildConfig::new_for_testing().build(&path).unwrap()
     }
 
     fn addr(a: &str) -> AccountAddress {
