@@ -48,6 +48,7 @@ use vfs::{VfsError, VfsPath};
 pub mod ast_debug;
 pub mod ide;
 pub mod known_attributes;
+pub mod matching;
 pub mod program_info;
 pub mod remembering_unique_map;
 pub mod string_utils;
