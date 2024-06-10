@@ -29,9 +29,9 @@ use typed_store::TypedStoreError;
 use typed_store_derive::DBMapUtils;
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct OwnerIndexKey {
-    owner: SuiAddress,
-    object_id: ObjectID,
+pub struct OwnerIndexKey {
+    pub owner: SuiAddress,
+    pub object_id: ObjectID,
 }
 
 impl OwnerIndexKey {
@@ -57,9 +57,9 @@ impl OwnerIndexInfo {
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct DynamicFieldKey {
-    parent: ObjectID,
-    field_id: ObjectID,
+pub struct DynamicFieldKey {
+    pub parent: ObjectID,
+    pub field_id: ObjectID,
 }
 
 impl DynamicFieldKey {
@@ -315,6 +315,50 @@ impl IndexStoreTables {
         );
         Ok(())
     }
+
+    fn get_transaction_info(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<TransactionInfo>, TypedStoreError> {
+        self.transactions.get(digest)
+    }
+
+    fn owner_iter(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+    ) -> Result<impl Iterator<Item = (OwnerIndexKey, OwnerIndexInfo)> + '_, TypedStoreError> {
+        let lower_bound = OwnerIndexKey::new(owner, ObjectID::ZERO);
+        let upper_bound = OwnerIndexKey::new(owner, ObjectID::MAX);
+        let mut iter = self
+            .owner
+            .iter_with_bounds(Some(lower_bound), Some(upper_bound));
+
+        if let Some(cursor) = cursor {
+            iter = iter.skip_to(&OwnerIndexKey::new(owner, cursor))?;
+        }
+
+        Ok(iter)
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        parent: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> Result<impl Iterator<Item = (DynamicFieldKey, DynamicFieldIndexInfo)> + '_, TypedStoreError>
+    {
+        let lower_bound = DynamicFieldKey::new(parent, ObjectID::ZERO);
+        let upper_bound = DynamicFieldKey::new(parent, ObjectID::MAX);
+        let mut iter = self
+            .dynamic_field
+            .iter_with_bounds(Some(lower_bound), Some(upper_bound));
+
+        if let Some(cursor) = cursor {
+            iter = iter.skip_to(&DynamicFieldKey::new(parent, cursor))?;
+        }
+
+        Ok(iter)
+    }
 }
 
 pub struct RestIndexStore {
@@ -373,6 +417,30 @@ impl RestIndexStore {
         resolver: &mut dyn LayoutResolver,
     ) -> Result<(), StorageError> {
         self.tables.index_checkpoint(checkpoint, resolver)
+    }
+
+    pub fn get_transaction_info(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<TransactionInfo>, TypedStoreError> {
+        self.tables.get_transaction_info(digest)
+    }
+
+    pub fn owner_iter(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+    ) -> Result<impl Iterator<Item = (OwnerIndexKey, OwnerIndexInfo)> + '_, TypedStoreError> {
+        self.tables.owner_iter(owner, cursor)
+    }
+
+    pub fn dynamic_field_iter(
+        &self,
+        parent: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> Result<impl Iterator<Item = (DynamicFieldKey, DynamicFieldIndexInfo)> + '_, TypedStoreError>
+    {
+        self.tables.dynamic_field_iter(parent, cursor)
     }
 }
 
