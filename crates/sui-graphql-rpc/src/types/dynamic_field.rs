@@ -240,6 +240,59 @@ impl DynamicField {
         super_.map(Self::try_from).transpose()
     }
 
+    /// Due to recent performance degradations, the existing `DynamicField::query` method is now
+    /// consistently timing out. This impacts features like `verify_zklogin_signature`, which
+    /// depends on resolving a dynamic field of 0x7 authenticator state. This method is a temporary
+    /// fix by fetching the data from the live `objects` table, and should only be used by
+    /// `verify_zklogin_signature`. Once we have fixed `objects_snapshot` table lag and backfilled
+    /// the `objects_version` table, this will no longer be needed.
+    pub(crate) async fn query_latest_dynamic_field(
+        db: &Db,
+        parent: SuiAddress,
+        name: DynamicFieldName,
+        kind: DynamicFieldType,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Option<DynamicField>, Error> {
+        let type_ = match kind {
+            DynamicFieldType::DynamicField => name.type_.0,
+            DynamicFieldType::DynamicObject => {
+                DynamicFieldInfo::dynamic_object_field_wrapper(name.type_.0).into()
+            }
+        };
+
+        let field_id = derive_dynamic_field_id(parent, &type_, &name.bcs.0)
+            .map_err(|e| Error::Internal(format!("Failed to derive dynamic field id: {e}")))?;
+
+        let object_id = SuiAddress::from(field_id);
+
+        let Some(stored_obj): Option<StoredObject> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    objects::dsl::objects.filter(objects::dsl::object_id.eq(object_id.into_vec()))
+                })
+                .optional()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch dynamic field: {e}")))?
+        else {
+            return Ok(None);
+        };
+
+        let history_object = StoredHistoryObject::from(stored_obj);
+        let gql_object =
+            Object::try_from_stored_history_object(history_object, checkpoint_viewed_at)?;
+
+        let super_ = match MoveObject::try_from(&gql_object) {
+            Ok(object) => Some(object),
+            Err(MoveObjectDowncastError::WrappedOrDeleted) => None,
+            Err(MoveObjectDowncastError::NotAMoveObject) => {
+                return Err(Error::Internal(format!("{object_id} is not a Move object")));
+            }
+        };
+
+        super_.map(Self::try_from).transpose()
+    }
+
     /// Query the `db` for a `page` of dynamic fields attached to object with ID `parent`. The
     /// returned dynamic fields are bound by the `parent_version` if provided - each field will be
     /// the latest version at or before the provided version. If `parent_version` is not provided,

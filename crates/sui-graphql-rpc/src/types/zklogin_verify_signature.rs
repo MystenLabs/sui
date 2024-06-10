@@ -75,7 +75,7 @@ pub(crate) async fn verify_zklogin_signature(
         ));
     };
 
-    // Fetch on-chain JWKs from dynamic field of system object. Due to recent performance
+    // fetch on-chain JWKs from dynamic field of system object. Due to recent performance
     // degradations, the existing `DynamicField::query` method is now consistently timing out. As a
     // workaround, we are using the `query_latest_dynamic_field` method, which fetches object data
     // from the live `objects` table. This can be reverted once the `objects_snapshot` lag issue is
