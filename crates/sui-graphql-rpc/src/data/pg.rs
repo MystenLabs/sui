@@ -118,12 +118,6 @@ impl<'c> super::DbConnection for PgConnection<'c> {
     }
 }
 
-impl PgConnection<'_> {
-    pub(crate) fn conn(&mut self) -> &mut diesel::PgConnection {
-        self.conn
-    }
-}
-
 /// Support for calculating estimated query cost using EXPLAIN and then logging it.
 mod query_cost {
     use super::*;
