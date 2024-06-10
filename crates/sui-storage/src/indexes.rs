@@ -237,31 +237,33 @@ pub struct IndexStore {
 
 // These functions are used to initialize the DB tables
 fn transactions_order_table_default_config() -> DBOptions {
-    default_db_options()
+    default_db_options().disable_write_throttling()
 }
 fn transactions_seq_table_default_config() -> DBOptions {
-    default_db_options()
+    default_db_options().disable_write_throttling()
 }
 fn transactions_from_addr_table_default_config() -> DBOptions {
-    default_db_options()
+    default_db_options().disable_write_throttling()
 }
 fn transactions_to_addr_table_default_config() -> DBOptions {
-    default_db_options()
+    default_db_options().disable_write_throttling()
 }
 fn transactions_by_move_function_table_default_config() -> DBOptions {
-    default_db_options()
+    default_db_options().disable_write_throttling()
 }
 fn timestamps_table_default_config() -> DBOptions {
-    default_db_options().optimize_for_point_lookup(64)
+    default_db_options()
+        .optimize_for_point_lookup(64)
+        .disable_write_throttling()
 }
 fn owner_index_table_default_config() -> DBOptions {
-    default_db_options()
+    default_db_options().disable_write_throttling()
 }
 fn dynamic_field_index_table_default_config() -> DBOptions {
-    default_db_options()
+    default_db_options().disable_write_throttling()
 }
 fn index_table_default_config() -> DBOptions {
-    default_db_options()
+    default_db_options().disable_write_throttling()
 }
 fn coin_index_table_default_config() -> DBOptions {
     default_db_options()
@@ -269,6 +271,7 @@ fn coin_index_table_default_config() -> DBOptions {
         .optimize_for_read(
             read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
         )
+        .disable_write_throttling()
 }
 
 impl IndexStore {

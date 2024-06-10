@@ -2385,10 +2385,10 @@ impl DBOptions {
         self
     }
 
-    // Optimize tables receiving significant deletions.
-    // TODO: revisit when intra-epoch pruning is enabled.
-    pub fn optimize_for_pruning(mut self) -> DBOptions {
-        self.options.set_min_write_buffer_number_to_merge(2);
+    // Disables write stalling and stopping based on pending compaction bytes.
+    pub fn disable_write_throttling(mut self) -> DBOptions {
+        self.options.set_soft_pending_compaction_bytes_limit(0);
+        self.options.set_hard_pending_compaction_bytes_limit(0);
         self
     }
 }
@@ -2441,12 +2441,6 @@ pub fn default_db_options() -> DBOptions {
 
     // Num threads for compaction and flush.
     opt.increase_parallelism(4);
-
-    // Disable write stalling and stopping based on pending compaction bytes.
-    // Throttling writes in Sui does not reduce the incoming data throughput most of the time,
-    // especially on the larger column families that do not get deleted per epoch.
-    opt.set_soft_pending_compaction_bytes_limit(0);
-    opt.set_hard_pending_compaction_bytes_limit(0);
 
     opt.set_enable_pipelined_write(true);
 
