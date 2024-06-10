@@ -1,6 +1,6 @@
 [package]
 name = "sui-framework"
-version.workspace = true
+version = "0.1.0"
 edition = "2021"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Move framework for sui platform"

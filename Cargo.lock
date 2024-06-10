@@ -9451,7 +9451,7 @@ dependencies = [
 
 [[package]]
 name = "prometheus-closure-metric"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "prometheus",
@@ -12005,7 +12005,7 @@ dependencies = [
 
 [[package]]
 name = "sui-authority-aggregation"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "futures",
  "mysten-metrics",
@@ -12621,7 +12621,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13046,7 +13046,7 @@ dependencies = [
 
 [[package]]
 name = "sui-light-client"
-version = "0.0.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13080,7 +13080,7 @@ dependencies = [
 
 [[package]]
 name = "sui-metric-checker"
-version = "0.0.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -13766,7 +13766,7 @@ dependencies = [
 
 [[package]]
 name = "sui-single-node-benchmark"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -14056,7 +14056,7 @@ dependencies = [
 
 [[package]]
 name = "sui-test-validator"
-version = "0.0.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -14159,7 +14159,7 @@ dependencies = [
 
 [[package]]
 name = "sui-transaction-checks"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "fastcrypto-zkp",
  "once_cell",
@@ -14173,7 +14173,7 @@ dependencies = [
 
 [[package]]
 name = "sui-transactional-test-runner"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14222,7 +14222,7 @@ dependencies = [
 
 [[package]]
 name = "sui-types"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anemo",
  "anyhow",
