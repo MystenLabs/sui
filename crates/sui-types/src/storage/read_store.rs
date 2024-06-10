@@ -156,7 +156,7 @@ pub trait ReadStore: ObjectStore {
         use super::ObjectKey;
         use crate::effects::TransactionEffectsAPI;
         use crate::full_checkpoint_content::CheckpointTransaction;
-        use std::collections::{HashMap, HashSet};
+        use std::collections::HashMap;
 
         let transaction_digests = checkpoint_contents
             .iter()
@@ -199,29 +199,11 @@ pub trait ReadStore: ObjectStore {
                     .cloned()
                     .expect("event was already checked to be present")
             });
-            // Note unwrapped_then_deleted contains **updated** versions.
-            let unwrapped_then_deleted_obj_ids = fx
-                .unwrapped_then_deleted()
-                .into_iter()
-                .map(|k| k.0)
-                .collect::<HashSet<_>>();
 
             let input_object_keys = fx
-                .input_shared_objects()
+                .modified_at_versions()
                 .into_iter()
-                .map(|kind| {
-                    let (id, version) = kind.id_and_version();
-                    ObjectKey(id, version)
-                })
-                .chain(
-                    fx.modified_at_versions()
-                        .into_iter()
-                        .map(|(object_id, version)| ObjectKey(object_id, version)),
-                )
-                .collect::<HashSet<_>>()
-                .into_iter()
-                // Unwrapped-then-deleted objects are not stored in state before the tx, so we have nothing to fetch.
-                .filter(|key| !unwrapped_then_deleted_obj_ids.contains(&key.0))
+                .map(|(object_id, version)| ObjectKey(object_id, version))
                 .collect::<Vec<_>>();
 
             let input_objects = self
