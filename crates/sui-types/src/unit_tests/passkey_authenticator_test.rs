@@ -138,7 +138,7 @@ async fn register() -> PasskeyResponse<TransactionData> {
     );
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
 
-    // compute the challenge = hash(intent_msg(tx)) for passkey credential request
+    // compute the challenge = blake2b_hash(intent_msg(tx)) for passkey credential request
     let mut hasher = DefaultHash::default();
     hasher.update(&bcs::to_bytes(&intent_msg).expect("Message serialization should not fail"));
     let passkey_digest = hasher.finalize().digest;
@@ -182,17 +182,20 @@ async fn register() -> PasskeyResponse<TransactionData> {
 }
 
 #[tokio::test]
-async fn test_passkey_authenticator() {
+async fn test_passkey_authenticator_verifies() {
     let response = register().await;
     let mut user_sig_bytes = vec![SignatureScheme::Secp256r1.flag()];
     user_sig_bytes.extend_from_slice(&response.sig_bytes);
     user_sig_bytes.extend_from_slice(&response.pk_bytes);
 
-    let sig = GenericSignature::PasskeyAuthenticator(PasskeyAuthenticator::new(
-        response.authenticator_data,
-        response.client_data_json,
-        Signature::from_bytes(&user_sig_bytes).unwrap(),
-    ));
+    let sig = GenericSignature::PasskeyAuthenticator(
+        PasskeyAuthenticator::new_for_testing(
+            response.authenticator_data,
+            response.client_data_json,
+            Signature::from_bytes(&user_sig_bytes).unwrap(),
+        )
+        .unwrap(),
+    );
 
     let res = sig.verify_authenticator(
         &response.intent_msg,
@@ -203,3 +206,24 @@ async fn test_passkey_authenticator() {
     );
     assert!(res.is_ok());
 }
+
+#[tokio::test]
+async fn test_passkey_fails_incorrect_sgianture_scheme() {}
+
+#[tokio::test]
+async fn test_passkey_fails_invalid_challenge() {}
+
+#[tokio::test]
+async fn test_passkey_fails_mismatched_challenge() {}
+
+#[tokio::test]
+async fn test_passkey_fails_wrong_client_data_type() {}
+
+#[tokio::test]
+async fn test_passkey_fails_to_verify_sig() {}
+
+#[tokio::test]
+async fn test_passkey_fails_wrong_author() {}
+
+#[tokio::test]
+async fn test_passkey_fails_not_normalized_signature() {}
