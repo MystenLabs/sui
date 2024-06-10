@@ -580,7 +580,7 @@ impl SuiValidatorCommand {
                 print_unsigned_transaction_only,
                 validator_address,
             } => {
-                // Read bridge keypair
+                // Make sure the address is member of the committee
                 let address = if !print_unsigned_transaction_only {
                     let address = context.active_address()?;
                     if let Some(validator_address) = validator_address {
@@ -596,10 +596,14 @@ impl SuiValidatorCommand {
                     validator_address
                         .ok_or_else(|| anyhow!("--validator-address must be provided when `print_unsigned_transaction_only` is true"))?
                 };
-                // Make sure the address is member of the committee
                 let sui_rpc_url = &context.config.get_active_env().unwrap().rpc;
                 let bridge_client = SuiBridgeClient::new(sui_rpc_url).await?;
-                let committee_members = bridge_client.get_bridge_summary().await?.committee.members
+                let committee_members = bridge_client
+                    .get_bridge_summary()
+                    .await
+                    .map_err(|e| anyhow!("{e:?}"))?
+                    .committee
+                    .members;
                 if !committee_members
                     .into_iter()
                     .any(|(_, m)| m.sui_address == address)
@@ -886,13 +890,17 @@ impl Display for SuiValidatorCommandResponse {
             SuiValidatorCommandResponse::RegisterBridgeCommittee {
                 execution_response,
                 serialized_unsigned_transaction,
+            }
+            | SuiValidatorCommandResponse::UpdateBridgeCommitteeURL {
+                execution_response,
+                serialized_unsigned_transaction,
             } => {
                 if let Some(response) = execution_response {
                     write!(writer, "{}", write_transaction_response(response)?)?;
                 } else {
                     write!(
                         writer,
-                        "Serializecd transaction for signing: {:?}",
+                        "Serialized transaction for signing: {:?}",
                         serialized_unsigned_transaction
                     )?;
                 }
