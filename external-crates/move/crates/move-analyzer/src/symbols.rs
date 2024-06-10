@@ -378,9 +378,15 @@ pub struct Symbols {
     /// A mapping from file hashes to file names
     file_name_mapping: BTreeMap<FileHash, PathBuf>,
     /// A mapping from filePath to ModuleDefs
-    file_mods: BTreeMap<PathBuf, BTreeSet<ModuleDefs>>,
+    pub file_mods: BTreeMap<PathBuf, BTreeSet<ModuleDefs>>,
     /// Additional information about definitions
     def_info: BTreeMap<DefLoc, DefInfo>,
+    /// A mapping from file names to file content (used to obtain source file locations)
+    pub files: SimpleFiles<Symbol, String>,
+    /// A mapping from file hashes to file IDs (used to obtain source file locations)
+    pub file_id_mapping: HashMap<FileHash, usize>,
+    /// IDE Annotation Information from the Compiler
+    pub compiler_info: CompilerInfo,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -754,7 +760,7 @@ fn ast_value_to_ide_string(sp!(_, val): &Value) -> String {
     }
 }
 
-fn mod_ident_to_ide_string(mod_ident: &E::ModuleIdent_) -> String {
+pub fn mod_ident_to_ide_string(mod_ident: &E::ModuleIdent_) -> String {
     use E::Address as A;
     match mod_ident.address {
         A::Numerical {
@@ -1076,10 +1082,6 @@ impl Symbols {
         self.def_info.extend(other.def_info);
     }
 
-    pub fn file_mods(&self) -> &BTreeMap<PathBuf, BTreeSet<ModuleDefs>> {
-        &self.file_mods
-    }
-
     pub fn line_uses(&self, use_fpath: &Path, use_line: u32) -> BTreeSet<UseDef> {
         let Some(file_symbols) = self.file_use_defs.get(use_fpath) else {
             return BTreeSet::new();
@@ -1099,6 +1101,13 @@ impl Symbols {
             return None;
         };
         mod_defs.iter().find(|d| d.ident == mod_ident)
+    }
+
+    pub fn file_hash(&self, path: &Path) -> Option<FileHash> {
+        let Some(mod_defs) = self.file_mods.get(path) else {
+            return None;
+        };
+        Some(mod_defs.first().unwrap().fhash)
     }
 }
 
@@ -1388,6 +1397,7 @@ pub fn get_symbols(
         );
     }
 
+    let mut compiler_info = compiler_info.unwrap();
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
         mod_outer_defs: &mod_outer_defs,
         files: &files,
@@ -1397,7 +1407,7 @@ pub fn get_symbols(
         use_defs: UseDefMap::new(),
         alias_lengths: &BTreeMap::new(),
         traverse_only: false,
-        compiler_info: compiler_info.unwrap(),
+        compiler_info: &mut compiler_info,
         type_params: BTreeMap::new(),
         expression_scope: OrdMap::new(),
     };
@@ -1433,6 +1443,9 @@ pub fn get_symbols(
         file_name_mapping,
         file_mods,
         def_info,
+        files,
+        file_id_mapping,
+        compiler_info,
     };
 
     eprintln!("get_symbols load complete");
@@ -1612,6 +1625,9 @@ pub fn empty_symbols() -> Symbols {
         file_name_mapping: BTreeMap::new(),
         file_mods: BTreeMap::new(),
         def_info: BTreeMap::new(),
+        files: SimpleFiles::new(),
+        file_id_mapping: HashMap::new(),
+        compiler_info: CompilerInfo::new(),
     }
 }
 

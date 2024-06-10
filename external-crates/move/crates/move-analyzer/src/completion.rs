@@ -4,7 +4,11 @@
 
 use crate::{
     context::Context,
-    symbols::{self, DefInfo, DefLoc, PrecompiledPkgDeps, SymbolicatorRunner, Symbols},
+    symbols::{
+        self, mod_ident_to_ide_string, DefInfo, DefLoc, PrecompiledPkgDeps, SymbolicatorRunner,
+        Symbols,
+    },
+    utils,
 };
 use lsp_server::Request;
 use lsp_types::{
@@ -22,7 +26,9 @@ use move_compiler::{
     },
     shared::Identifier,
 };
+use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
+
 use std::{
     collections::{BTreeMap, HashSet},
     path::{Path, PathBuf},
@@ -111,7 +117,7 @@ fn identifiers(buffer: &str, symbols: &Symbols, path: &Path) -> Vec<CompletionIt
         }
     }
 
-    let mods_opt = symbols.file_mods().get(path);
+    let mods_opt = symbols.file_mods.get(path);
 
     // The completion item kind "text" indicates that the item is based on simple textual matching,
     // not any deeper semantic analysis.
@@ -173,7 +179,7 @@ fn context_specific_lbrace(
     // and do auto-completion if `key` ability is present
     for u in symbols.line_uses(use_fpath, position.line) {
         let def_loc = u.def_loc();
-        let Some(use_file_mod_definition) = symbols.file_mods().get(use_fpath) else {
+        let Some(use_file_mod_definition) = symbols.file_mods.get(use_fpath) else {
             continue;
         };
         let Some(use_file_mod_def) = use_file_mod_definition.first() else {
@@ -212,6 +218,44 @@ fn context_specific_lbrace(
     completions
 }
 
+/// Handle dot auto-completion at a given position.
+fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<CompletionItem> {
+    let mut completions = vec![];
+    let Some(fhash) = symbols.file_hash(use_fpath) else {
+        return completions;
+    };
+    let Some(byte_idx) =
+        utils::get_byte_idx(*position, fhash, &symbols.files, &symbols.file_id_mapping)
+    else {
+        return completions;
+    };
+    let loc = Loc::new(fhash, byte_idx, byte_idx);
+    let Some(info) = symbols.compiler_info.get_autocomplete_info(fhash, &loc) else {
+        return completions;
+    };
+    for (mident, name) in &info.methods {
+        let init_completion = CompletionItem {
+            label: format!("{}::{}", mod_ident_to_ide_string(&mident.value), name),
+            kind: Some(CompletionItemKind::METHOD),
+            insert_text: Some(name.to_string()),
+            insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+            ..Default::default()
+        };
+        completions.push(init_completion);
+    }
+    for name in &info.fields {
+        let init_completion = CompletionItem {
+            label: name.to_string(),
+            kind: Some(CompletionItemKind::FIELD),
+            insert_text: Some(name.to_string()),
+            insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+            ..Default::default()
+        };
+        completions.push(init_completion);
+    }
+    completions
+}
+
 /// Handle context-specific auto-completion requests with no trigger character.
 fn context_specific_no_trigger(
     symbols: &Symbols,
@@ -219,8 +263,14 @@ fn context_specific_no_trigger(
     buffer: &str,
     position: &Position,
 ) -> (Vec<CompletionItem>, bool) {
+    let mut completions = dot(symbols, use_fpath, position);
+    if !completions.is_empty() {
+        // found dot completions - do not look for any other
+        return (completions, true);
+    }
+
     let mut only_custom_items = false;
-    let mut completions = vec![];
+
     let strings = preceding_strings(buffer, position);
 
     if strings.is_empty() {
@@ -234,7 +284,7 @@ fn context_specific_no_trigger(
     for u in symbols.line_uses(use_fpath, position.line) {
         if *use_col >= u.col_start() && *use_col <= u.col_end() {
             let def_loc = u.def_loc();
-            let Some(use_file_mod_definition) = symbols.file_mods().get(use_fpath) else {
+            let Some(use_file_mod_definition) = symbols.file_mods.get(use_fpath) else {
                 break;
             };
             let Some(use_file_mod_def) = use_file_mod_definition.first() else {
@@ -383,23 +433,11 @@ pub fn on_completion_request(
                 &pkg_path,
                 LintLevel::None,
             ) {
-                Ok((Some(symbols), _)) => {
-                    completion_items(parameters, &path, &symbols, &ide_files_root)
-                }
-                _ => completion_items(
-                    parameters,
-                    &path,
-                    &context.symbols.lock().unwrap(),
-                    &ide_files_root,
-                ),
+                Ok((Some(symbols), _)) => completion_items(parameters, &path, &symbols),
+                _ => completion_items(parameters, &path, &context.symbols.lock().unwrap()),
             }
         }
-        None => completion_items(
-            parameters,
-            &path,
-            &context.symbols.lock().unwrap(),
-            &ide_files_root,
-        ),
+        None => completion_items(parameters, &path, &context.symbols.lock().unwrap()),
     };
 
     let result = serde_json::to_value(items).expect("could not serialize completion response");
@@ -419,22 +457,20 @@ fn completion_items(
     parameters: CompletionParams,
     path: &Path,
     symbols: &Symbols,
-    ide_files_root: &VfsPath,
 ) -> Vec<CompletionItem> {
     let mut items = vec![];
-    let mut buffer = String::new();
-    if let Ok(mut f) = ide_files_root
-        .join(path.to_string_lossy())
-        .unwrap()
-        .open_file()
-    {
-        if f.read_to_string(&mut buffer).is_err() {
-            eprintln!(
-                "Could not read '{:?}' when handling completion request",
-                path
-            );
-        }
-    }
+
+    let Some(fhash) = symbols.file_hash(path) else {
+        return items;
+    };
+    let Some(file_id) = symbols.file_id_mapping.get(&fhash) else {
+        return items;
+    };
+    let Ok(file) = symbols.files.get(*file_id) else {
+        return items;
+    };
+
+    let buffer = file.source().clone();
     if !buffer.is_empty() {
         let mut only_custom_items = false;
         let cursor = get_cursor_token(buffer.as_str(), &parameters.text_document_position.position);
@@ -442,7 +478,15 @@ fn completion_items(
             Some(Tok::Colon) => {
                 items.extend_from_slice(&primitive_types());
             }
-            Some(Tok::Period) | Some(Tok::ColonColon) => {
+            Some(Tok::Period) => {
+                items = dot(symbols, path, &parameters.text_document_position.position);
+                if !items.is_empty() {
+                    // found dot completions - do not look for any other
+                    only_custom_items = true;
+                }
+            }
+
+            Some(Tok::ColonColon) => {
                 // `.` or `::` must be followed by identifiers, which are added to the completion items
                 // below.
             }

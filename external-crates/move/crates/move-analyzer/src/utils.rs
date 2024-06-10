@@ -31,6 +31,22 @@ pub fn get_loc(
     }
 }
 
+/// Converts a position (line/column) to byte index in the file.
+pub fn get_byte_idx(
+    pos: Position,
+    fhash: FileHash,
+    files: &SimpleFiles<Symbol, String>,
+    file_id_mapping: &HashMap<FileHash, usize>,
+) -> Option<ByteIndex> {
+    let Some(file_id) = file_id_mapping.get(&fhash) else {
+        return None;
+    };
+    let Ok(line_range) = files.line_range(*file_id, pos.line as usize) else {
+        return None;
+    };
+    Some(line_range.start as u32 + pos.character)
+}
+
 /// Convert a move_compiler Position into an lsp_types position
 pub fn to_lsp_position(pos: move_compiler::diagnostics::Position) -> Position {
     Position {
