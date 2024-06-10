@@ -136,7 +136,7 @@ module sui::config {
         $update_for_next_epoch(old_value_opt, config.borrow_mut(cap, name, ctx));
     }
 
-    public fun read_setting<Name: copy + drop + store, Value: copy + drop + store>(
+    public(package) fun read_setting<Name: copy + drop + store, Value: copy + drop + store>(
         config: ID,
         name: Name,
         ctx: &TxContext,

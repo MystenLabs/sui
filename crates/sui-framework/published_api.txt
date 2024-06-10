@@ -1951,7 +1951,10 @@ deny_list_v2_contains
 deny_list_v2_enable_kill_switch
 	public fun
 	0x2::coin
-deny_list_v2_disable_kill_switch
+deny_list_v2_disable_global_pause
+	public fun
+	0x2::coin
+deny_list_v2_enable_global_pause
 	public fun
 	0x2::coin
 mint_and_transfer
