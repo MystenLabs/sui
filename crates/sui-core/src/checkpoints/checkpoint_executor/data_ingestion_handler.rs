@@ -3,7 +3,7 @@
 
 use crate::checkpoints::CheckpointStore;
 use crate::execution_cache::{ObjectCacheRead, TransactionCacheRead};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_storage::blob::{Blob, BlobEncoding};
@@ -60,29 +60,11 @@ pub(crate) fn load_checkpoint_data(
                 .cloned()
                 .expect("event was already checked to be present")
         });
-        // Note unwrapped_then_deleted contains **updated** versions.
-        let unwrapped_then_deleted_obj_ids = fx
-            .unwrapped_then_deleted()
-            .into_iter()
-            .map(|k| k.0)
-            .collect::<HashSet<_>>();
 
         let input_object_keys = fx
-            .input_shared_objects()
+            .modified_at_versions()
             .into_iter()
-            .map(|kind| {
-                let (id, version) = kind.id_and_version();
-                ObjectKey(id, version)
-            })
-            .chain(
-                fx.modified_at_versions()
-                    .into_iter()
-                    .map(|(object_id, version)| ObjectKey(object_id, version)),
-            )
-            .collect::<HashSet<_>>()
-            .into_iter()
-            // Unwrapped-then-deleted objects are not stored in state before the tx, so we have nothing to fetch.
-            .filter(|key| !unwrapped_then_deleted_obj_ids.contains(&key.0))
+            .map(|(object_id, version)| ObjectKey(object_id, version))
             .collect::<Vec<_>>();
 
         let input_objects = object_cache_reader
