@@ -6767,7 +6767,6 @@ dependencies = [
  "move-coverage",
  "move-disassembler",
  "move-docgen",
- "move-errmapgen",
  "move-ir-types",
  "move-package",
  "move-prover",
@@ -6913,17 +6912,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-errmapgen"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "move-command-line-common",
- "move-core-types",
- "move-model",
- "serde",
-]
-
-[[package]]
 name = "move-ir-compiler"
 version = "0.1.0"
 dependencies = [
@@ -7057,7 +7045,6 @@ dependencies = [
  "move-command-line-common",
  "move-compiler",
  "move-docgen",
- "move-errmapgen",
  "move-model",
  "move-stackless-bytecode",
  "once_cell",
@@ -7097,7 +7084,6 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-errmapgen",
  "move-prover",
  "move-stdlib-natives",
  "move-vm-runtime",
