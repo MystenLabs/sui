@@ -187,6 +187,17 @@ impl<T: R2D2Connection + 'static> ReadApiServer for ReadApi<T> {
         .into())
     }
 
+    async fn try_get_object_before_version(
+        &self,
+        _: ObjectID,
+        _: SequenceNumber,
+    ) -> RpcResult<SuiPastObjectResponse> {
+        Err(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
+        )
+        .into())
+    }
+
     async fn try_multi_get_past_objects(
         &self,
         _past_objects: Vec<SuiGetPastObjectRequest>,
