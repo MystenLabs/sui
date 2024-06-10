@@ -156,6 +156,7 @@ impl WorkloadConfiguration {
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Option<WorkloadBuilderInfo>> {
         let total_weight = shared_counter_weight
+            + shared_deletion_weight
             + transfer_object_weight
             + delegation_weight
             + batch_payment_weight
