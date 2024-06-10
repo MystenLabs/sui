@@ -32,9 +32,9 @@ module sui::coin {
     /// Trying to split a coin more times than its balance allows.
     const ENotEnough: u64 = 2;
     // #[error]
-    // const EKIllSwitchNotAllowed: vector<u8> =
+    // const EGlobalPauseNotAllowed: vector<u8> =
     //    b"Kill switch was not allowed at the creation of the DenyCapV2";
-    const EKillSwitchNotAllowed: u64 = 3;
+    const EGlobalPauseNotAllowed: u64 = 3;
 
     /// A coin of type `T` worth `value`. Transferable and storable
     public struct Coin<phantom T> has key, store {
@@ -80,7 +80,7 @@ module sui::coin {
 
     public struct DenyCapV2<phantom T> has key, store {
         id: UID,
-        allow_kill_switch: bool,
+        allow_global_pause: bool,
     }
 
     public struct DenyListV2WriteCap has drop {}
@@ -246,7 +246,7 @@ module sui::coin {
         name: vector<u8>,
         description: vector<u8>,
         icon_url: Option<Url>,
-        allow_kill_switch: bool,
+        allow_global_pause: bool,
         ctx: &mut TxContext
     ): (TreasuryCap<T>, DenyCapV2<T>, CoinMetadata<T>) {
         let (treasury_cap, metadata) = create_currency(
@@ -260,7 +260,7 @@ module sui::coin {
         );
         let deny_cap = DenyCapV2 {
             id: object::new(ctx),
-            allow_kill_switch,
+            allow_global_pause,
         };
         transfer::freeze_object(RegulatedCoinMetadata<T> {
             id: object::new(ctx),
@@ -343,14 +343,14 @@ module sui::coin {
         denied.is_some() && denied.destroy_some()
     }
 
-    public fun deny_list_v2_enable_kill_switch<T>(
+    public fun deny_list_v2_enable_global_pause<T>(
         deny_list: &mut Config<DenyListV2WriteCap>,
         deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
     ) {
-        assert!(deny_cap.allow_kill_switch, EKillSwitchNotAllowed);
+        assert!(deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
         maybe_create_deny_list_v2_marker<T>(deny_list, ctx);
-        let setting_name = deny_list_v2_kill_switch_setting_name<T>();
+        let setting_name = deny_list_v2_global_pause_setting_name<T>();
         deny_list.update!<_, vector<u8>, bool>(
             &mut DenyListV2WriteCap {},
             setting_name,
@@ -360,14 +360,14 @@ module sui::coin {
         )
     }
 
-    public fun deny_list_v2_disable_kill_switch<T>(
+    public fun deny_list_v2_disable_global_pause<T>(
         deny_list: &mut Config<DenyListV2WriteCap>,
         deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
     ) {
-        assert!(deny_cap.allow_kill_switch, EKillSwitchNotAllowed);
+        assert!(deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
         maybe_create_deny_list_v2_marker<T>(deny_list, ctx);
-        let setting_name = deny_list_v2_kill_switch_setting_name<T>();
+        let setting_name = deny_list_v2_global_pause_setting_name<T>();
         deny_list.update!<_, vector<u8>, bool>(
             &mut DenyListV2WriteCap {},
             setting_name,
@@ -375,6 +375,16 @@ module sui::coin {
             |_prev, next| *next = false,
             ctx,
         )
+    }
+
+    public fun deny_list_v2_is_global_pause_enabled<T>(
+        deny_list: &Config<DenyListV2WriteCap>,
+        ctx: &TxContext,
+    ): bool {
+        let setting_name = deny_list_v2_global_pause_setting_name<T>();
+        let paused =
+            config::read_setting<_, bool>(object::id(deny_list), setting_name, ctx);
+        paused.is_some() && denied.destroy_some()
     }
 
     // === Entrypoints ===
@@ -442,7 +452,7 @@ module sui::coin {
 
     const DL_V2_MARKER: vector<u8> = b"::marker";
     const DL_V2_ADDRESSES: vector<u8> = b"::address::";
-    const DL_V2_KILL_SWITCH: vector<u8> = b"::kill_switch";
+    const DL_V2_global_pause: vector<u8> = b"::global_pause";
 
     // b"{type}::marker"
     fun deny_list_v2_marker_setting_name<T>(): vector<u8> {
@@ -461,11 +471,11 @@ module sui::coin {
         setting_name
     }
 
-    // b"{type}::kill_switch"
-    fun deny_list_v2_kill_switch_setting_name<T>(): vector<u8> {
+    // b"{type}::global_pause"
+    fun deny_list_v2_global_pause_setting_name<T>(): vector<u8> {
         let mut setting_name =
             type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
-        setting_name.append(DL_V2_KILL_SWITCH);
+        setting_name.append(DL_V2_global_pause);
         setting_name
     }
 
