@@ -23,10 +23,20 @@ use sui_single_node_benchmark::{
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     object::Object,
-    transaction::Transaction,
+    transaction::{Transaction, CertifiedTransaction},
 };
 
-pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
+pub const WORKLOAD: WorkloadKind = WorkloadKind::PTB{
+    num_transfers: 0, 
+    num_dynamic_fields: 0,
+    use_batch_mint: false,
+    computation: 0,
+    use_native_transfer: false,
+    num_mints: 0,
+    num_shared_objects: 0,
+    nft_size: 32,
+};
+// pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
 pub const COMPONENT: Component = Component::PipeTxsToChannel;
 
 pub async fn generate_benchmark_ctx_workload(
@@ -56,6 +66,9 @@ pub async fn generate_benchmark_txs(
     let start_time = std::time::Instant::now();
     let tx_generator = workload.create_tx_generator(&mut ctx).await;
     let transactions = ctx.generate_transactions(tx_generator).await;
+    // let skip_signing = false;
+    // let transactions = ctx.certify_transactions(transactions, skip_signing).await;
+
     let elapsed = start_time.elapsed().as_millis() as f64;
     println!(
         "{} txs generated in {}ms at a rate of {} TPS",
@@ -86,7 +99,7 @@ impl TxnGenAgent {
     {
         let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
         let (_, transactions) = generate_benchmark_txs(workload, ctx).await;
-
+        
         const PRECISION: u64 = 20;
         let burst_duration = 1000 / PRECISION;
         let chunks_size = (tx_count / PRECISION) as usize;

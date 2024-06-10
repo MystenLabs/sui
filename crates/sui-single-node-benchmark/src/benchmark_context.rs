@@ -220,7 +220,7 @@ impl BenchmarkContext {
         results.into_iter().map(|r| r.unwrap()).collect()
     }
 
-    pub(crate) async fn certify_transactions(
+    pub async fn certify_transactions(
         &self,
         transactions: Vec<Transaction>,
         skip_signing: bool,

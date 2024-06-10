@@ -50,18 +50,7 @@ use crate::{metrics::Metrics, types::WritableObjectStore};
  *                                    PreExec Worker                                   *
  *****************************************************************************************/
 
-pub struct PreExecWorkerState//<
-    // S: ObjectStore
-    //     + WritableObjectStore
-    //     + BackingPackageStore
-    //     + ParentSync
-    //     + ChildObjectResolver
-    //     // + GetModule<Error = SuiError, Item = CompiledModule>
-    //     + Send
-    //     + Sync
-    //     + 'static,
-//> 
-    {
+pub struct PreExecWorkerState {
     pub memory_store: Arc<InMemoryObjectStore>,
     pub context: Arc<BenchmarkContext>,
     pub ready_txs: DashMap<TransactionDigest, ()>,
@@ -95,46 +84,55 @@ impl PreExecWorkerState
         ctx: Arc<BenchmarkContext>,
     ) -> TransactionEffects {
         let tx = full_tx.tx.clone();
-        let input_objects = tx.transaction_data().input_objects().unwrap();
-        // FIXME: ugly deref
-        let objects = memstore
-            .read_objects_for_execution(&**(ctx.validator().get_epoch_store()), &tx.key(), &input_objects)
-            .unwrap();
 
-        let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
-            VerifiedTransaction::new_unchecked(tx),
-            0
-        );
+        ctx.validator().execute_raw_transaction(tx).await
+        
+        //ctx.validator().execute_dry_run(tx).await
+        
+        // let input_objects = tx.transaction_data().input_objects().unwrap();
+        // // FIXME: ugly deref
+        // let objects = memstore
+        //     .read_objects_for_execution(&**(ctx.validator().get_epoch_store()), &tx.key(), &input_objects)
+        //     .unwrap();
+
+        // let executable = VerifiedExecutableTransaction::new_from_certificate(
+        //     VerifiedCertificate::new_unchecked(tx),
+        // );
        
-        let validator = ctx.validator();
-        let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
-            &executable,
-            objects,
-            protocol_config,
-            reference_gas_price,
-        )
-        .unwrap();
-        let (kind, signer, gas) = executable.transaction_data().execution_parts();
-        let (inner_temp_store, _, effects, _) =
-            ctx.validator().get_epoch_store().executor().execute_transaction_to_effects(
-                &memstore,
-                protocol_config,
-                ctx.validator().get_validator().metrics.limits_metrics.clone(),
-                false,
-                &HashSet::new(),
-                &ctx.validator().get_epoch_store().epoch(),
-                0,
-                input_objects,
-                gas,
-                gas_status,
-                kind,
-                signer,
-                *executable.digest(),
-            );
-        assert!(effects.status().is_ok());
-        memstore.commit_objects(inner_temp_store);
-        println!("finish exec a txn");
-        effects
+        // ctx.validator().get_validator()
+        //     .try_execute_immediately(&executable, None, ctx.validator().get_epoch_store())
+        //     .await
+        //     .unwrap()
+        //     .0
+        // let validator = ctx.validator();
+        // let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
+        //     &executable,
+        //     objects,
+        //     protocol_config,
+        //     reference_gas_price,
+        // )
+        // .unwrap();
+        // let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        // let (inner_temp_store, _, effects, _) =
+        //     ctx.validator().get_epoch_store().executor().execute_transaction_to_effects(
+        //         &memstore,
+        //         protocol_config,
+        //         ctx.validator().get_validator().metrics.limits_metrics.clone(),
+        //         false,
+        //         &HashSet::new(),
+        //         &ctx.validator().get_epoch_store().epoch(),
+        //         0,
+        //         input_objects,
+        //         gas,
+        //         gas_status,
+        //         kind,
+        //         signer,
+        //         *executable.digest(),
+        //     );
+        // assert!(effects.status().is_ok());
+        // memstore.commit_objects(inner_temp_store);
+        // println!("finish exec a txn");
+        // effects
     }
 
     pub async fn run(&mut self,

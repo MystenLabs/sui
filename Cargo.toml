@@ -50,7 +50,6 @@ exclude = [
   "external-crates/move/crates/move-vm-config",
   "external-crates/move/crates/move-vm-integration-tests",
   "external-crates/move/crates/move-vm-profiler",
-  "external-crates/move/crates/move-vm-runtime",
   "external-crates/move/crates/move-vm-test-utils",
   "external-crates/move/crates/move-vm-transactional-tests",
   "external-crates/move/crates/move-vm-types",
@@ -81,6 +80,7 @@ members = [
   "crates/mysten-util-mem",
   "crates/mysten-util-mem-derive",
   "crates/prometheus-closure-metric",
+  "crates/remora",
   "crates/shared-crypto",
   "crates/simulacrum",
   "crates/sui",
@@ -490,6 +490,7 @@ toml_edit = { version = "0.19.10" }
 # NOTE: do not enable the `tls` feature on tonic. It will break custom TLS handling
 # for self signed certificates. Unit tests under consensus/core and other integration
 # tests will fail.
+fail = "0.4.0"
 tonic = { version = "0.11", features = ["transport"] }
 tonic-build = { version = "0.11", features = ["prost", "transport"] }
 tonic-health = "0.11"
@@ -559,6 +560,7 @@ move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
 move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
+move-ir-compiler = { path = "external-crates/move/crates/move-ir-compiler" }
 move-prover = { path = "external-crates/move/crates/move-prover" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }

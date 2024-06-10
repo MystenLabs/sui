@@ -51,7 +51,7 @@ struct Args {
     pub tx_count: u64,
 
     /// The minimum duration of the benchmark in seconds.
-    #[clap(long, value_parser = parse_duration, default_value = "300", global = true)]
+    #[clap(long, value_parser = parse_duration, default_value = "10", global = true)]
     duration: Duration,
 
     /// The working directory where the files will be generated.

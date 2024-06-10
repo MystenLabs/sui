@@ -6,7 +6,7 @@ use std::{
 use std::{fmt::Debug, path::Path};
 use std::{fs, net::IpAddr};
 use sui_protocol_config::ProtocolVersion;
-use sui_types::transaction::Transaction;
+use sui_types::transaction::{Transaction, CertifiedTransaction};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::TransactionDigest,

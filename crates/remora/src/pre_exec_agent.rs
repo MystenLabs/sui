@@ -4,7 +4,7 @@ use super::agents::*;
 use crate::{
     metrics::{Measurement, Metrics},
     pre_exec_worker::{self},
-    tx_gen_agent::{COMPONENT, WORKLOAD},
+    tx_gen_agent::WORKLOAD,
     types::*,
 };
 use async_trait::async_trait;
@@ -37,6 +37,8 @@ pub struct PreExecAgent {
     // metrics: Arc<Metrics>,
 }
 
+pub const COMPONENT: Component = Component::Baseline;
+
 #[async_trait]
 impl Agent<RemoraMessage> for PreExecAgent {
     fn new(
@@ -66,14 +68,11 @@ impl Agent<RemoraMessage> for PreExecAgent {
         
         let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
         let context: Arc<BenchmarkContext> = {
-            // self.process_genesis_objects(in_channel).await;
             let ctx = BenchmarkContext::new(workload.clone(), COMPONENT, true).await;
             Arc::new(ctx)
         };
 
-        // FIXME: check store type
         let store = context.validator().create_in_memory_store();
-        // let store = DashMemoryBackedStore::new();
 
         let mut pre_exec_state =
             pre_exec_worker::PreExecWorkerState::new(store, CheckpointDigest::random(), context.clone());
