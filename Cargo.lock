@@ -13963,6 +13963,7 @@ dependencies = [
  "futures",
  "indexmap 2.1.0",
  "move-binary-format",
+ "move-compiler",
  "move-core-types",
  "move-package",
  "prometheus",
