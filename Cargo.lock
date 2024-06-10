@@ -7562,7 +7562,7 @@ dependencies = [
 
 [[package]]
 name = "mysten-util-mem-derive"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "proc-macro2 1.0.78",
  "syn 1.0.107",
@@ -11819,7 +11819,7 @@ dependencies = [
 
 [[package]]
 name = "sui-adapter-transactional-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
@@ -12172,7 +12172,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge-indexer"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12526,7 +12526,7 @@ dependencies = [
 
 [[package]]
 name = "sui-enum-compat-util"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "serde_yaml 0.8.26",
 ]
@@ -12654,7 +12654,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
@@ -12701,7 +12701,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-e2e-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "msim",
@@ -12789,7 +12789,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-rpc-client"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "async-graphql",
  "axum",
@@ -13422,7 +13422,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-resolver"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13523,7 +13523,7 @@ dependencies = [
 
 [[package]]
 name = "sui-replay"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13570,7 +13570,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rest-api"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13800,7 +13800,7 @@ dependencies = [
 
 [[package]]
 name = "sui-snapshot"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14033,7 +14033,7 @@ dependencies = [
 
 [[package]]
 name = "sui-telemetry"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "reqwest",
  "serde",
@@ -14294,7 +14294,7 @@ dependencies = [
 
 [[package]]
 name = "sui-upgrade-compatibility-transactional-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -14324,7 +14324,7 @@ dependencies = [
 
 [[package]]
 name = "sui-verifier-transactional-tests"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
@@ -14714,7 +14714,7 @@ checksum = "95059e91184749cb66be6dc994f67f182b6d897cb3df74a5bf66b5e709295fd8"
 
 [[package]]
 name = "test-cluster"
-version = "1.28.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",

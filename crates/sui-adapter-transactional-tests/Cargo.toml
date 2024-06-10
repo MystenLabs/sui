@@ -1,6 +1,6 @@
 [package]
 name = "sui-adapter-transactional-tests"
-version.workspace = true
+version = "0.1.0"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Transactional tests for Sui Adapter"
 license = "Apache-2.0"

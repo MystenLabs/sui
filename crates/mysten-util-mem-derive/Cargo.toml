@@ -1,6 +1,6 @@
 [package]
 name = "mysten-util-mem-derive"
-version.workspace = true
+version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 license = "MIT OR Apache-2.0"
 description = "Crate for memory reporting"
