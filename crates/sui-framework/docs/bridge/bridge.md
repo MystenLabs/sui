@@ -1351,13 +1351,13 @@ title: Module `0xb::bridge`
     <b>let</b> amount = token_payload.token_amount();
     // Make sure <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> is within limit.
     <b>if</b> (!inner
-        .<a href="limiter.md#0xb_limiter">limiter</a>
-        .check_and_record_sending_transfer&lt;T&gt;(
-        &inner.<a href="treasury.md#0xb_treasury">treasury</a>,
-        <a href="../sui-framework/clock.md#0x2_clock">clock</a>,
-        route,
-        amount,
-    )
+            .<a href="limiter.md#0xb_limiter">limiter</a>
+            .check_and_record_sending_transfer&lt;T&gt;(
+                &inner.<a href="treasury.md#0xb_treasury">treasury</a>,
+                <a href="../sui-framework/clock.md#0x2_clock">clock</a>,
+                route,
+                amount,
+            )
     ) {
         emit(<a href="bridge.md#0xb_bridge_TokenTransferLimitExceed">TokenTransferLimitExceed</a> { message_key: key });
         <b>return</b> (<a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(), owner)
