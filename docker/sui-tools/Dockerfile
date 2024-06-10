@@ -18,6 +18,7 @@ COPY external-crates external-crates
 
 RUN cargo build --profile ${PROFILE} \
     --bin sui-node \
+    --bin stress \
     --bin sui-bridge \
     --bin sui-bridge-cli \
     --bin sui-analytics-indexer \
@@ -35,6 +36,7 @@ WORKDIR "$WORKDIR/sui"
 RUN apt-get update && apt-get install -y libpq5 libpq-dev
 
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
+COPY --from=builder /sui/target/release/stress /usr/local/bin
 COPY --from=builder /sui/target/release/sui-bridge /usr/local/bin
 COPY --from=builder /sui/target/release/sui-bridge-cli /usr/local/bin
 COPY --from=builder /sui/target/release/sui-analytics-indexer /usr/local/bin
