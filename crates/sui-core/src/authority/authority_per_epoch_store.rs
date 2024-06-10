@@ -1028,7 +1028,8 @@ impl AuthorityPerEpochStore {
             .tables()?
             .running_root_accumulators
             .unbounded_iter()
-            .last())
+            .skip_to_last()
+            .next())
     }
 
     pub fn insert_running_root_accumulator(
