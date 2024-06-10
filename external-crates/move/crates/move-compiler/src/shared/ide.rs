@@ -49,11 +49,11 @@ pub struct MacroCallInfo {
 
 #[derive(Debug, Clone)]
 pub struct AutocompleteInfo {
-    /// Methods that are valid autocompletes
-    pub methods: BTreeSet<(E::ModuleIdent, P::FunctionName)>,
-    /// Fields that are valid autocompletes (e.g., for a struct)
-    /// TODO: possibly extend this with type information?
-    pub fields: BTreeSet<Symbol>,
+    /// Methods that are valid autocompletes (FunctionName represents target function and Symbol
+    /// represents method name)
+    pub methods: BTreeSet<((E::ModuleIdent, P::FunctionName), Symbol)>,
+    /// Fields that are valid autocompletes (e.g., for a struct) along with containing datatype info
+    pub fields: Option<(E::ModuleIdent, Symbol, BTreeSet<Symbol>)>,
 }
 
 #[derive(Debug, Clone)]
@@ -176,8 +176,14 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                 let AutocompleteInfo { methods, fields } = *info;
                 let names = methods
                     .into_iter()
-                    .map(|(m, f)| format!("{m}::{f}"))
-                    .chain(fields.into_iter().map(|n| format!("{n}")))
+                    .map(|((mident, _), mname)| format!("{mident}::{mname}"))
+                    .chain(
+                        fields
+                            .map(|(_, _, fnames)| fnames)
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|n| format!("{n}")),
+                    )
                     .collect::<Vec<_>>();
                 let msg = format!(
                     "Autocompletes to: {}",

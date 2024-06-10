@@ -905,7 +905,7 @@ impl<'env> Context<'env> {
     pub fn find_all_methods(
         &mut self,
         tn: &TypeName,
-    ) -> BTreeSet<(Spanned<ModuleIdent_>, FunctionName)> {
+    ) -> BTreeSet<((Spanned<ModuleIdent_>, FunctionName), Symbol)> {
         debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
         if !self
             .env
@@ -923,7 +923,12 @@ impl<'env> Context<'env> {
             if let Some(names) = scope.use_funs.get(tn) {
                 let mut new_names = names
                     .iter()
-                    .map(|(_, _, use_fun)| use_fun.target_function)
+                    .flat_map(|(_, method_name, use_fun)| {
+                        vec![
+                            (use_fun.target_function, *method_name),
+                            (use_fun.target_function, use_fun.target_function.1.value()),
+                        ]
+                    })
                     .collect();
                 result.append(&mut new_names);
             }
@@ -933,29 +938,33 @@ impl<'env> Context<'env> {
     }
 
     /// Find all valid fields in scope for a given `TypeName`. This is used for autocomplete.
-    pub fn find_all_fields(&mut self, tn: &TypeName) -> BTreeSet<Symbol> {
+    pub fn find_all_fields(
+        &mut self,
+        tn: &TypeName,
+    ) -> Option<(ModuleIdent, Symbol, BTreeSet<Symbol>)> {
         debug_print!(self.debug.autocomplete_resolution, (msg "fields"), ("name" => tn));
-        let fields = match &tn.value {
-            TypeName_::Multiple(_) => BTreeSet::new(),
-            // TODO(cswords): are there any valid builtin fielsd?
-            TypeName_::Builtin(_) => BTreeSet::new(),
-            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => BTreeSet::new(),
+        let fields_info = match &tn.value {
+            TypeName_::Multiple(_) => None,
+            // TODO(cswords): are there any valid builtin fields?
+            TypeName_::Builtin(_) => None,
+            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => None,
             TypeName_::ModuleType(m, n) => match self.datatype_kind(m, n) {
-                DatatypeKind::Enum => BTreeSet::new(),
+                DatatypeKind::Enum => None,
                 DatatypeKind::Struct => match &self.struct_definition(m, n).fields {
-                    N::StructFields::Native(_) => BTreeSet::new(),
+                    N::StructFields::Native(_) => None,
                     N::StructFields::Defined(is_positional, fields) => {
-                        if *is_positional {
+                        let found_fields = if *is_positional {
                             (0..fields.len()).map(|n| format!("{}", n).into()).collect()
                         } else {
                             fields.key_cloned_iter().map(|(k, _)| k.value()).collect()
-                        }
+                        };
+                        Some((m.clone(), n.value(), found_fields))
                     }
                 },
             },
         };
-        debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields; dbg));
-        fields
+        debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields_info; dbg));
+        fields_info
     }
 
     pub fn add_ide_info(&mut self, loc: Loc, info: IDEAnnotation) {

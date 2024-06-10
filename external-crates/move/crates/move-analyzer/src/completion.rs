@@ -233,25 +233,27 @@ fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<Completi
     let Some(info) = symbols.compiler_info.get_autocomplete_info(fhash, &loc) else {
         return completions;
     };
-    for (mident, name) in &info.methods {
+    for ((mident, fname), mname) in &info.methods {
         let init_completion = CompletionItem {
-            label: format!("{}::{}", mod_ident_to_ide_string(&mident.value), name),
+            label: format!("{}::{}", mod_ident_to_ide_string(&mident.value), mname),
             kind: Some(CompletionItemKind::METHOD),
-            insert_text: Some(name.to_string()),
+            insert_text: Some(fname.to_string()),
             insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
             ..Default::default()
         };
         completions.push(init_completion);
     }
-    for name in &info.fields {
-        let init_completion = CompletionItem {
-            label: name.to_string(),
-            kind: Some(CompletionItemKind::FIELD),
-            insert_text: Some(name.to_string()),
-            insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
-            ..Default::default()
-        };
-        completions.push(init_completion);
+    if let Some((_, _, fields)) = &info.fields {
+        for name in fields {
+            let init_completion = CompletionItem {
+                label: name.to_string(),
+                kind: Some(CompletionItemKind::FIELD),
+                insert_text: Some(name.to_string()),
+                insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                ..Default::default()
+            };
+            completions.push(init_completion);
+        }
     }
     completions
 }
