@@ -1,5 +1,13 @@
 # @mysten/enoki
 
+## 0.3.6
+
+### Patch Changes
+
+- Updated dependencies [bae8f9683c]
+  - @mysten/sui@1.1.0
+  - @mysten/zklogin@0.7.6
+
 ## 0.3.5
 
 ### Patch Changes
