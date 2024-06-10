@@ -14,7 +14,7 @@ module examples::my_coin {
     fun init(witness: MY_COIN, ctx: &mut TxContext) {
         let (treasury, metadata) = coin::create_currency(witness, 6, b"MY_COIN", b"", b"", option::none(), ctx);
         // Freezing this object makes the metadata immutable, including the title, name, and icon image. 
-        // If you want to allow mutability, you can share it with public_share_object instead.
+        // If you want to allow mutability, share it with public_share_object instead.
         transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury, ctx.sender())
     }
