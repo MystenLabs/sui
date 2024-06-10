@@ -27,7 +27,6 @@ tracing.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 telemetry-subscribers.workspace = true
-move-compiler.workspace = true
 
 [dev-dependencies]
 prometheus.workspace = true

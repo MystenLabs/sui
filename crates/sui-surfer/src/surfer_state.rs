@@ -4,7 +4,6 @@
 use indexmap::IndexSet;
 use move_binary_format::file_format::Visibility;
 use move_binary_format::normalized::Type;
-use move_compiler::linters::LintLevel;
 use move_core_types::language_storage::StructTag;
 use rand::rngs::StdRng;
 use std::collections::{HashMap, HashSet};
@@ -319,10 +318,7 @@ impl SurferState {
     #[tracing::instrument(skip_all, fields(surfer_id = self.id))]
     pub async fn publish_package(&mut self, path: &Path) {
         let rgp = self.cluster.get_reference_gas_price().await;
-        let mut config = BuildConfig::default();
-        config.config.lint_flag.set(LintLevel::None);
-        config.config.silence_warnings = true;
-        let package = config.build(path).unwrap();
+        let package = BuildConfig::new_for_testing().build(path).unwrap();
         let modules = package.get_package_bytes(false);
         let tx_data = TransactionData::new_module(
             self.address,
