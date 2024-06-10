@@ -11972,7 +11972,7 @@ dependencies = [
 
 [[package]]
 name = "sui-archival"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -12098,7 +12098,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -12148,7 +12148,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge-cli"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -12199,7 +12199,7 @@ dependencies = [
 
 [[package]]
 name = "sui-cluster-test"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12409,7 +12409,7 @@ dependencies = [
 
 [[package]]
 name = "sui-data-ingestion"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12470,7 +12470,7 @@ dependencies = [
 
 [[package]]
 name = "sui-e2e-tests"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -12639,7 +12639,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework-snapshot"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13045,7 +13045,7 @@ dependencies = [
 
 [[package]]
 name = "sui-light-client"
-version = "0.0.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13079,7 +13079,7 @@ dependencies = [
 
 [[package]]
 name = "sui-metric-checker"
-version = "0.0.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -13594,7 +13594,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rosetta"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13765,7 +13765,7 @@ dependencies = [
 
 [[package]]
 name = "sui-single-node-benchmark"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -14055,7 +14055,7 @@ dependencies = [
 
 [[package]]
 name = "sui-test-validator"
-version = "0.0.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -14375,7 +14375,7 @@ dependencies = [
 
 [[package]]
 name = "suins-indexer"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -16447,7 +16447,7 @@ dependencies = [
 
 [[package]]
 name = "x"
-version = "0.1.0"
+version = "1.28.0"
 dependencies = [
  "anyhow",
  "camino",
