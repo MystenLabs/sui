@@ -525,13 +525,13 @@ module bridge::bridge {
         let amount = token_payload.token_amount();
         // Make sure transfer is within limit.
         if (!inner
-            .limiter
-            .check_and_record_sending_transfer<T>(
-            &inner.treasury,
-            clock,
-            route,
-            amount,
-        )
+                .limiter
+                .check_and_record_sending_transfer<T>(
+                    &inner.treasury,
+                    clock,
+                    route,
+                    amount,
+                )
         ) {
             emit(TokenTransferLimitExceed { message_key: key });
             return (option::none(), owner)
