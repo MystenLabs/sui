@@ -97,6 +97,7 @@ module bridge::bridge {
     const EInvalidBridgeRoute: u64 = 16;
     const EMustBeTokenMessage: u64 = 17;
     const EInvalidEvmAddress: u64 = 18;
+    const ETokenValueIsZero: u64 = 19;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -208,6 +209,7 @@ module bridge::bridge {
         assert!(!inner.paused, EBridgeUnavailable);
         assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
         assert!(target_address.length() == EVM_ADDRESS_LENGTH, EInvalidEvmAddress);
+        assert!(token.balance().value() > 0, ETokenValueIsZero);
 
         let amount = token.balance().value();
 
@@ -523,13 +525,13 @@ module bridge::bridge {
         let amount = token_payload.token_amount();
         // Make sure transfer is within limit.
         if (!inner
-                .limiter
-                .check_and_record_sending_transfer<T>(
-                    &inner.treasury,
-                    clock,
-                    route,
-                    amount,
-                )
+            .limiter
+            .check_and_record_sending_transfer<T>(
+            &inner.treasury,
+            clock,
+            route,
+            amount,
+        )
         ) {
             emit(TokenTransferLimitExceed { message_key: key });
             return (option::none(), owner)
