@@ -291,52 +291,6 @@ impl TestCluster {
             .unwrap()
     }
 
-    /// To detect whether the network has reached such state, we use the fullnode as the
-    /// source of truth, since a fullnode only does epoch transition when the network has
-    /// done so.
-    /// If target_epoch is specified, wait until the cluster reaches that epoch.
-    /// If target_epoch is None, wait until the cluster reaches the next epoch.
-    /// Note that this function does not guarantee that every node is at the target epoch.
-    pub async fn wait_for_epoch(&self, target_epoch: Option<EpochId>) -> SuiSystemState {
-        self.wait_for_epoch_with_timeout(target_epoch, Duration::from_secs(60))
-            .await
-    }
-
-    pub async fn wait_for_epoch_with_timeout(
-        &self,
-        target_epoch: Option<EpochId>,
-        timeout_dur: Duration,
-    ) -> SuiSystemState {
-        let mut epoch_rx = self
-            .fullnode_handle
-            .sui_node
-            .with(|node| node.subscribe_to_epoch_change());
-        let mut state = Option::None;
-        timeout(timeout_dur, async {
-            while let Ok(system_state) = epoch_rx.recv().await {
-                info!("received epoch {}", system_state.epoch());
-                state = Some(system_state.clone());
-                match target_epoch {
-                    Some(target_epoch) if system_state.epoch() >= target_epoch => {
-                        return system_state;
-                    }
-                    None => {
-                        return system_state;
-                    }
-                    _ => (),
-                }
-            }
-            unreachable!("Broken reconfig channel");
-        })
-        .await
-        .unwrap_or_else(|_| {
-            if let Some(state) = state {
-                panic!("Timed out waiting for cluster to reach epoch {target_epoch:?}. Current epoch: {}", state.epoch());
-            }
-            panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
-        })
-    }
-
     pub async fn wait_for_run_with_range_shutdown_signal(&self) -> Option<RunWithRange> {
         self.wait_for_run_with_range_shutdown_signal_with_timeout(Duration::from_secs(60))
             .await
@@ -428,6 +382,65 @@ impl TestCluster {
         self.wait_for_epoch_all_nodes(cur_committee.epoch + 1).await;
 
         info!("reconfiguration complete after {:?}", start.elapsed());
+    }
+
+    /// To detect whether the network has reached such state, we use the fullnode as the
+    /// source of truth, since a fullnode only does epoch transition when the network has
+    /// done so.
+    /// If target_epoch is specified, wait until the cluster reaches that epoch.
+    /// If target_epoch is None, wait until the cluster reaches the next epoch.
+    /// Note that this function does not guarantee that every node is at the target epoch.
+    pub async fn wait_for_epoch(&self, target_epoch: Option<EpochId>) -> SuiSystemState {
+        self.wait_for_epoch_with_timeout(target_epoch, Duration::from_secs(60))
+            .await
+    }
+
+    pub async fn wait_for_epoch_on_node(
+        &self,
+        handle: &SuiNodeHandle,
+        target_epoch: Option<EpochId>,
+        timeout_dur: Duration,
+    ) -> SuiSystemState {
+        let mut epoch_rx = handle.with(|node| node.subscribe_to_epoch_change());
+
+        let mut state = None;
+        timeout(timeout_dur, async {
+            let epoch = handle.with(|node| node.state().epoch_store_for_testing().epoch());
+            if Some(epoch) == target_epoch {
+                return handle.with(|node| node.state().get_sui_system_state_object_for_testing().unwrap());
+            }
+            while let Ok(system_state) = epoch_rx.recv().await {
+                info!("received epoch {}", system_state.epoch());
+                state = Some(system_state.clone());
+                match target_epoch {
+                    Some(target_epoch) if system_state.epoch() >= target_epoch => {
+                        return system_state;
+                    }
+                    None => {
+                        return system_state;
+                    }
+                    _ => (),
+                }
+            }
+            unreachable!("Broken reconfig channel");
+        })
+        .await
+        .unwrap_or_else(|_| {
+            error!("Timed out waiting for cluster to reach epoch {target_epoch:?}");
+            if let Some(state) = state {
+                panic!("Timed out waiting for cluster to reach epoch {target_epoch:?}. Current epoch: {}", state.epoch());
+            }
+            panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
+        })
+    }
+
+    pub async fn wait_for_epoch_with_timeout(
+        &self,
+        target_epoch: Option<EpochId>,
+        timeout_dur: Duration,
+    ) -> SuiSystemState {
+        self.wait_for_epoch_on_node(&self.fullnode_handle.sui_node, target_epoch, timeout_dur)
+            .await
     }
 
     pub async fn wait_for_epoch_all_nodes(&self, target_epoch: EpochId) {

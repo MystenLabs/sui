@@ -677,6 +677,8 @@ async fn do_test_reconfig_with_committee_change_stress() {
         .build()
         .await;
 
+    let mut cur_epoch = 0;
+
     while let Some(v1) = candidates.pop() {
         let v2 = candidates.pop().unwrap();
         execute_add_validator_transactions(&test_cluster, &v1).await;
@@ -703,11 +705,18 @@ async fn do_test_reconfig_with_committee_change_stress() {
         }
         let handle1 = test_cluster.spawn_new_validator(v1).await;
         let handle2 = test_cluster.spawn_new_validator(v2).await;
+
+        tokio::join!(
+            test_cluster.wait_for_epoch_on_node(&handle1, Some(cur_epoch), Duration::from_secs(60)),
+            test_cluster.wait_for_epoch_on_node(&handle2, Some(cur_epoch), Duration::from_secs(60))
+        );
+
         test_cluster.trigger_reconfiguration().await;
         let committee = test_cluster
             .fullnode_handle
             .sui_node
             .with(|node| node.state().epoch_store_for_testing().committee().clone());
+        cur_epoch = committee.epoch();
         assert_eq!(committee.num_members(), 7);
         assert!(committee.authority_exists(&handle1.state().name));
         assert!(committee.authority_exists(&handle2.state().name));
