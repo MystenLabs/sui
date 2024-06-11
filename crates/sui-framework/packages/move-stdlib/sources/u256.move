@@ -27,4 +27,24 @@ module std::u256 {
     public fun pow(base: u256, exponent: u8): u256 {
         std::macros::num_pow!(base, exponent)
     }
+
+    /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)
+    public macro fun range_do($start: u256, $stop: u256, $f: |u256|) {
+        std::macros::range_do!($start, $stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `$start` to `$stop` (inclusive)
+    public macro fun range_do_eq($start: u256, $stop: u256, $f: |u256|) {
+        std::macros::range_do_eq!($start, $stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `0` to `$stop` (exclusive)
+    public macro fun do($stop: u256, $f: |u256|) {
+        std::macros::do!($stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `0` to `$stop` (inclusive)
+    public macro fun do_eq($stop: u256, $f: |u256|) {
+        std::macros::do_eq!($stop, $f)
+    }
 }

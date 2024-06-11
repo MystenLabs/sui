@@ -158,7 +158,62 @@ module std::integer_tests {
                 i = i + 1;
             }
         }
+    }
 
+    public(package) macro fun sum_range<$T>($n: $T): $T {
+        let n = $n;
+        (n * (n + 1)) / 2
+    }
+
+    public(package) macro fun test_dos_case<$T>($case: $T) {
+        let case = $case;
+        let mut sum: $T = 0;
+        case.do!(|i| sum = sum + i);
+        assert_eq!(sum, sum_range!(case - 1));
+
+        sum = 0;
+        case.do_eq!(|i| sum = sum + i);
+        assert_eq!(sum, sum_range!(case));
+
+        let half = case / 2;
+
+        sum = 0;
+        half.range_do!(case, |i| sum = sum + i);
+        assert_eq!(sum, sum_range!(case - 1) - sum_range!(half - 1));
+
+        sum = 0;
+        half.range_do_eq!(case, |i| sum = sum + i);
+        assert_eq!(sum, sum_range!(case) - sum_range!(half - 1));
+    }
+
+    public(package) macro fun test_dos<$T>($max: $T, $cases: vector<$T>) {
+        let max = $max;
+        let cases = $cases;
+        // test bounds/invalid ranges
+        (0: $T).do!(|_| assert!(false));
+        cases!(max, cases, |case_pred, case, case_succ| {
+            if (case == 0) return;
+            case.range_do!(0, |_| assert!(false));
+            case.range_do_eq!(0, |_| assert!(false));
+
+            if (case == max) return;
+            case.range_do!(case_pred, |_| assert!(false));
+            case_succ.range_do!(case, |_| assert!(false));
+            case.range_do_eq!(case_pred, |_| assert!(false));
+            case_succ.range_do_eq!(case, |_| assert!(false));
+        });
+
+        // test upper bound being max
+        let max_pred = max - 1;
+        max_pred.range_do_eq!(max, |_| ());
+
+        // test iteration numbers
+        let cases: vector<$T> = vector[3, 5, 8, 11, 14];
+        cases!(max, cases, |case_pred, case, case_succ| {
+            test_dos_case!(case_pred);
+            test_dos_case!(case);
+            test_dos_case!(case_succ);
+        });
     }
 
 

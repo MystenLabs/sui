@@ -56,4 +56,24 @@ module std::u32 {
     public fun sqrt(x: u32): u32 {
         std::macros::num_sqrt!<u32, u64>(x, 32)
     }
+
+    /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)
+    public macro fun range_do($start: u32, $stop: u32, $f: |u32|) {
+        std::macros::range_do!($start, $stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `$start` to `$stop` (inclusive)
+    public macro fun range_do_eq($start: u32, $stop: u32, $f: |u32|) {
+        std::macros::range_do_eq!($start, $stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `0` to `$stop` (exclusive)
+    public macro fun do($stop: u32, $f: |u32|) {
+        std::macros::do!($stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `0` to `$stop` (inclusive)
+    public macro fun do_eq($stop: u32, $f: |u32|) {
+        std::macros::do_eq!($stop, $f)
+    }
 }
