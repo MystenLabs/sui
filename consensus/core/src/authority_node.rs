@@ -344,7 +344,6 @@ where
 mod tests {
     #![allow(non_snake_case)]
 
-    use std::sync::Mutex;
     use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
     use consensus_config::{local_committee_and_keys, Parameters};
@@ -490,160 +489,6 @@ mod tests {
         }
     }
 
-    #[rstest]
-    #[tokio::test(flavor = "current_thread")]
-    async fn test_amnesia_success(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
-    ) {
-        telemetry_subscribers::init_for_testing();
-        let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
-
-        let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
-        let mut output_receivers = vec![];
-        let mut authorities = vec![];
-
-        for (index, _authority_info) in committee.authorities() {
-            let (authority, receiver) = make_authority(
-                index,
-                &TempDir::new().unwrap(),
-                committee.clone(),
-                keypairs.clone(),
-                network_type,
-            )
-            .await;
-            output_receivers.push(receiver);
-            authorities.push(authority);
-        }
-
-        const NUM_TRANSACTIONS: u8 = 15;
-        let mut submitted_transactions = BTreeSet::<Vec<u8>>::new();
-        for i in 0..NUM_TRANSACTIONS {
-            let txn = vec![i; 16];
-            submitted_transactions.insert(txn.clone());
-            authorities[i as usize % authorities.len()]
-                .transaction_client()
-                .submit(vec![txn])
-                .await
-                .unwrap();
-        }
-
-        for receiver in &mut output_receivers {
-            let mut expected_transactions = submitted_transactions.clone();
-            loop {
-                let committed_subdag =
-                    tokio::time::timeout(Duration::from_secs(1), receiver.recv())
-                        .await
-                        .unwrap()
-                        .unwrap();
-                for b in committed_subdag.blocks {
-                    for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
-                        assert!(
-                            expected_transactions.remove(&txn),
-                            "Transaction not submitted or already seen: {:?}",
-                            txn
-                        );
-                    }
-                }
-                assert_eq!(committed_subdag.reputation_scores_desc, vec![]);
-                if expected_transactions.is_empty() {
-                    break;
-                }
-            }
-        }
-
-        // Stop authority 1.
-        let index = committee.to_authority_index(1).unwrap();
-        authorities.remove(index.value()).stop().await;
-        sleep(Duration::from_secs(5)).await;
-
-        // now create a new directory to simulate amnesia. The node will start having participated previously
-        // to consensus but now will attempt to synchronize the last own block and recover from there.
-        let (authority, receiver) = make_authority(
-            index,
-            &TempDir::new().unwrap(),
-            committee.clone(),
-            keypairs,
-            network_type,
-        )
-        .await;
-        output_receivers[index] = receiver;
-        authorities.insert(index.value(), authority);
-        sleep(Duration::from_secs(5)).await;
-
-        // Stop all authorities and exit.
-        for authority in authorities {
-            authority.stop().await;
-        }
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_amnesia_failure(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
-    ) {
-        telemetry_subscribers::init_for_testing();
-
-        let occurred_panic = Arc::new(Mutex::new(None));
-        let occurred_panic_cloned = occurred_panic.clone();
-
-        let default_panic_handler = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |panic| {
-            let mut l = occurred_panic_cloned.lock().unwrap();
-            *l = Some(panic.to_string());
-            default_panic_handler(panic);
-        }));
-
-        let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
-
-        let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
-        let mut output_receivers = vec![];
-        let mut authorities = vec![];
-
-        for (index, _authority_info) in committee.authorities() {
-            let (authority, receiver) = make_authority(
-                index,
-                &TempDir::new().unwrap(),
-                committee.clone(),
-                keypairs.clone(),
-                network_type,
-            )
-            .await;
-            output_receivers.push(receiver);
-            authorities.push(authority);
-        }
-
-        // Let the network run for a few seconds
-        sleep(Duration::from_secs(5)).await;
-
-        // Stop all authorities
-        while let Some(authority) = authorities.pop() {
-            authority.stop().await;
-        }
-
-        sleep(Duration::from_secs(2)).await;
-
-        let index = AuthorityIndex::new_for_test(0);
-        let (_authority, _receiver) = make_authority(
-            index,
-            &TempDir::new().unwrap(),
-            committee,
-            keypairs,
-            network_type,
-        )
-        .await;
-        sleep(Duration::from_secs(5)).await;
-
-        // Now reset the panic hook
-        let _default_panic_handler = std::panic::take_hook();
-
-        let panic_info = occurred_panic.lock().unwrap().take().unwrap();
-        assert!(panic_info.contains(
-            "No peer has returned any acceptable result, can not safely update min round"
-        ));
-    }
-
     async fn make_authority(
         index: AuthorityIndex,
         db_dir: &TempDir,
@@ -659,7 +504,6 @@ mod tests {
             dag_state_cached_rounds: 5,
             commit_sync_parallel_fetches: 3,
             commit_sync_batch_size: 3,
-            sync_last_proposed_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
         };
         let txn_verifier = NoopTransactionVerifier {};

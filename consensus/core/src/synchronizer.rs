@@ -19,8 +19,6 @@ use parking_lot::{Mutex, RwLock};
 #[cfg(not(test))]
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 use sui_macros::fail_point_async;
-#[cfg(test)]
-use tokio::task::JoinError;
 use tokio::{
     sync::{mpsc::error::TrySendError, oneshot},
     task::JoinSet,
@@ -161,13 +159,12 @@ enum Command {
         peer_index: AuthorityIndex,
         result: oneshot::Sender<Result<(), ConsensusError>>,
     },
-    FetchOwnLastBlock,
     KickOffScheduler,
 }
 
 pub(crate) struct SynchronizerHandle {
     commands_sender: Sender<Command>,
-    tasks: tokio::sync::Mutex<JoinSet<()>>,
+    tasks: Mutex<JoinSet<()>>,
 }
 
 impl SynchronizerHandle {
@@ -191,18 +188,8 @@ impl SynchronizerHandle {
     }
 
     pub(crate) async fn stop(&self) {
-        let mut tasks = self.tasks.lock().await;
+        let mut tasks = self.tasks.lock();
         tasks.abort_all();
-    }
-
-    #[cfg(test)]
-    async fn stop_and_wait_on(&self) -> Result<(), JoinError> {
-        let mut tasks = self.tasks.lock().await;
-        tasks.abort_all();
-        while let Some(result) = tasks.join_next().await {
-            result?
-        }
-        Ok(())
     }
 }
 
@@ -223,10 +210,6 @@ impl SynchronizerHandle {
 ///    missing blocks that were not ancestors of a received block via the "block send" path.
 ///    The scheduler operates on either a fixed periodic basis or is triggered immediately
 ///    after explicit fetches described in (1), ensuring continued block retrieval if gaps persist.
-///
-/// Additionally to the above, the synchronizer can synchronize and fetch the last own proposed block
-/// from the network peers as best effort approach to recover node from amnesia and avoid making the
-/// node equivocate.
 pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
@@ -234,7 +217,6 @@ pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThread
     core_dispatcher: Arc<D>,
     dag_state: Arc<RwLock<DagState>>,
     fetch_blocks_scheduler_task: JoinSet<()>,
-    fetch_own_last_block_task: JoinSet<()>,
     network_client: Arc<C>,
     block_verifier: Arc<V>,
     inflight_blocks_map: Arc<InflightBlocksMap>,
@@ -277,12 +259,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         let commands_sender_clone = commands_sender.clone();
 
-        if context.parameters.is_sync_last_proposed_block_enabled() {
-            commands_sender
-                .try_send(Command::FetchOwnLastBlock)
-                .expect("Failed to sync our last block");
-        }
-
         // Spawn the task to listen to the requests & periodic runs
         tasks.spawn(async {
             let mut s = Self {
@@ -291,7 +267,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 fetch_block_senders,
                 core_dispatcher,
                 fetch_blocks_scheduler_task: JoinSet::new(),
-                fetch_own_last_block_task: JoinSet::new(),
                 network_client,
                 block_verifier,
                 inflight_blocks_map,
@@ -303,7 +278,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         Arc::new(SynchronizerHandle {
             commands_sender,
-            tasks: tokio::sync::Mutex::new(tasks),
+            tasks: Mutex::new(tasks),
         })
     }
 
@@ -353,12 +328,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 });
 
                             result.send(r).ok();
-                        }
-                        Command::FetchOwnLastBlock => {
-                            if self.fetch_own_last_block_task.is_empty() {
-                                self.start_fetch_own_last_block_task();
-                            }
-                        }
+                        },
                         Command::KickOffScheduler => {
                             // just reset the scheduler timeout timer to run immediately if not already running.
                             // If the scheduler is already running then just reduce the remaining time to run.
@@ -374,19 +344,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             }
                         }
                     }
-                },
-                Some(result) = self.fetch_own_last_block_task.join_next(), if !self.fetch_own_last_block_task.is_empty() => {
-                    match result {
-                        Ok(()) => {},
-                        Err(e) => {
-                            if e.is_cancelled() {
-                            } else if e.is_panic() {
-                                std::panic::resume_unwind(e.into_panic());
-                            } else {
-                                panic!("fetch our last block task failed: {e}");
-                            }
-                        },
-                    };
                 },
                 Some(result) = self.fetch_blocks_scheduler_task.join_next(), if !self.fetch_blocks_scheduler_task.is_empty() => {
                     match result {
@@ -685,111 +642,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         (resp, blocks_guard, retries, peer, highest_rounds)
     }
 
-    fn start_fetch_own_last_block_task(&mut self) {
-        const FETCH_OWN_BLOCK_RETRY_DELAY: Duration = Duration::from_millis(1_000);
-
-        let context = self.context.clone();
-        let network_client = self.network_client.clone();
-        let block_verifier = self.block_verifier.clone();
-        let core_dispatcher = self.core_dispatcher.clone();
-
-        self.fetch_own_last_block_task
-            .spawn(monitored_future!(async move {
-                let _scope = monitored_scope("FetchOwnLastBlockTask");
-
-                // Ask all the other peers about our last block
-                let mut results = FuturesUnordered::new();
-
-                let fetch_own_block = |authority_index: AuthorityIndex, fetch_own_block_delay: Duration| {
-                    let network_client_cloned = network_client.clone();
-                    let context_cloned = context.clone();
-                    async move {
-                        sleep(fetch_own_block_delay).await;
-                        let r = network_client_cloned.fetch_latest_blocks(authority_index, vec![context_cloned.own_index], FETCH_REQUEST_TIMEOUT).await;
-                        (r, authority_index)
-                    }
-                };
-
-                for (authority_index, _authority) in context.committee.authorities() {
-                    if authority_index != context.own_index {
-                        results.push(fetch_own_block(authority_index, Duration::from_millis(0)));
-                    }
-                }
-
-                // Gather the results but wait to timeout as well
-                let timer = sleep_until(Instant::now() + context.parameters.sync_last_proposed_block_timeout);
-
-                tokio::pin!(timer);
-
-                // Get the highest of all the results
-                let mut total_stake = 0;
-                let mut highest_round = 0;
-                'main_loop: loop {
-                    tokio::select! {
-                        Some((result, authority_index)) = results.next() => {
-                            match result {
-                                Ok(result) => {
-                                    let mut blocks = Vec::new();
-                                    for serialized_block in result {
-                                        let Ok(signed_block) = bcs::from_bytes(&serialized_block) else {
-                                            warn!("Malformed block received from peer {authority_index} while fetching own last block, skipping.");
-                                            continue 'main_loop;
-                                        };
-
-                                        if let Err(e) = block_verifier.verify(&signed_block) {
-                                            context
-                                                .metrics
-                                                .node_metrics
-                                                .invalid_blocks
-                                                .with_label_values(&[&signed_block.author().to_string(), "synchronizer_own_block"])
-                                                .inc();
-                                            warn!("Invalid block received from {}: {}", authority_index, e);
-                                            continue 'main_loop;
-                                        }
-
-                                        let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
-                                        if verified_block.author() != context.own_index {
-                                            continue 'main_loop;
-                                        }
-                                        blocks.push(verified_block);
-                                    }
-
-                                    let max_round = blocks.into_iter().map(|b|b.round()).max().unwrap_or(0);
-                                    highest_round = highest_round.max(max_round);
-
-                                    total_stake += context.committee.stake(authority_index);
-
-                                    if results.is_empty() {
-                                        break;
-                                    }
-                                },
-                                Err(err) => {
-                                    warn!("Error {err} while fetching our own block from peer {authority_index}. Will retry.");
-                                    results.push(fetch_own_block(authority_index, FETCH_OWN_BLOCK_RETRY_DELAY));
-                                }
-                            }
-                        },
-                        () = &mut timer => {
-                            info!("Timeout while trying to sync our own last block from peers");
-                            break;
-                        }
-                    }
-                }
-
-                // Update the Core with the highest detected round
-                if total_stake == 0 {
-                    panic!("No peer has returned any acceptable result, can not safely update min round");
-                }
-
-                context.metrics.node_metrics.last_own_block_round.set(highest_round as i64);
-
-                info!("{} out of {} total stake returned acceptable results for our own last block with highest round {}", total_stake, context.committee.total_stake(), highest_round);
-                if let Err(err) = core_dispatcher.set_min_propose_round(highest_round).await {
-                    warn!("Error received while calling dispatcher, probably dispatcher is shutting down, will now exit: {err:?}");
-                }
-            }));
-    }
-
     async fn start_fetch_missing_blocks_task(&mut self) -> ConsensusResult<()> {
         let missing_blocks = self
             .core_dispatcher
@@ -959,9 +811,9 @@ mod tests {
 
     use async_trait::async_trait;
     use bytes::Bytes;
-    use consensus_config::{AuthorityIndex, Parameters};
+    use consensus_config::AuthorityIndex;
     use parking_lot::RwLock;
-    use tokio::{sync::Mutex, time::sleep};
+    use tokio::time::sleep;
 
     use crate::{
         block::{BlockDigest, BlockRef, Round, TestBlock, VerifiedBlock},
@@ -981,9 +833,8 @@ mod tests {
     // TODO: create a complete Mock for thread dispatcher to be used from several tests
     #[derive(Default)]
     struct MockCoreThreadDispatcher {
-        add_blocks: Mutex<Vec<VerifiedBlock>>,
-        missing_blocks: Mutex<BTreeSet<BlockRef>>,
-        min_proposed_round_calls: Mutex<Vec<Round>>,
+        add_blocks: tokio::sync::Mutex<Vec<VerifiedBlock>>,
+        missing_blocks: tokio::sync::Mutex<BTreeSet<BlockRef>>,
     }
 
     impl MockCoreThreadDispatcher {
@@ -995,11 +846,6 @@ mod tests {
         async fn stub_missing_blocks(&self, block_refs: BTreeSet<BlockRef>) {
             let mut lock = self.missing_blocks.lock().await;
             lock.extend(block_refs);
-        }
-
-        async fn get_min_propose_round_calls(&self) -> Vec<Round> {
-            let lock = self.min_proposed_round_calls.lock().await;
-            lock.clone()
         }
     }
 
@@ -1015,7 +861,7 @@ mod tests {
         }
 
         async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
-            Ok(())
+            todo!()
         }
 
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
@@ -1029,23 +875,17 @@ mod tests {
             todo!()
         }
 
-        async fn set_min_propose_round(&self, round: Round) -> Result<(), CoreError> {
-            let mut lock = self.min_proposed_round_calls.lock().await;
-            lock.push(round);
-            Ok(())
+        async fn set_min_propose_round(&self, _round: Round) -> Result<(), CoreError> {
+            todo!()
         }
     }
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
     type FetchRequestResponse = (Vec<VerifiedBlock>, Option<Duration>);
-    type FetchLatestBlockKey = (AuthorityIndex, Vec<AuthorityIndex>);
-    type FetchLatestBlockResponse = (Vec<VerifiedBlock>, Option<Duration>);
 
     #[derive(Default)]
     struct MockNetworkClient {
-        fetch_blocks_requests: Mutex<BTreeMap<FetchRequestKey, FetchRequestResponse>>,
-        fetch_latest_blocks_requests:
-            Mutex<BTreeMap<FetchLatestBlockKey, FetchLatestBlockResponse>>,
+        fetch_blocks_requests: tokio::sync::Mutex<BTreeMap<FetchRequestKey, FetchRequestResponse>>,
     }
 
     impl MockNetworkClient {
@@ -1061,17 +901,6 @@ mod tests {
                 .map(|block| block.reference())
                 .collect::<Vec<_>>();
             lock.insert((block_refs, peer), (blocks, latency));
-        }
-
-        async fn stub_fetch_latest_blocks(
-            &self,
-            blocks: Vec<VerifiedBlock>,
-            peer: AuthorityIndex,
-            authorities: Vec<AuthorityIndex>,
-            latency: Option<Duration>,
-        ) {
-            let mut lock = self.fetch_latest_blocks_requests.lock().await;
-            lock.insert((peer, authorities), (blocks, latency));
         }
     }
 
@@ -1135,28 +964,11 @@ mod tests {
 
         async fn fetch_latest_blocks(
             &self,
-            peer: AuthorityIndex,
-            authorities: Vec<AuthorityIndex>,
+            _peer: AuthorityIndex,
+            _authorities: Vec<AuthorityIndex>,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
-            let mut lock = self.fetch_latest_blocks_requests.lock().await;
-            let response = lock
-                .remove(&(peer, authorities))
-                .expect("Unexpected fetch blocks request made");
-
-            let serialised = response
-                .0
-                .into_iter()
-                .map(|block| block.serialized().clone())
-                .collect::<Vec<_>>();
-
-            if let Some(latency) = response.1 {
-                sleep(latency).await;
-            }
-
-            drop(lock);
-
-            Ok(serialised)
+            todo!()
         }
     }
 
@@ -1393,82 +1205,5 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
-    }
-
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn synchronizer_fetch_own_last_block() {
-        // GIVEN
-        let (context, _) = Context::new_for_test(4);
-        let context = Arc::new(context.with_parameters(Parameters {
-            sync_last_proposed_block_timeout: Duration::from_millis(2_000),
-            ..Default::default()
-        }));
-        let block_verifier = Arc::new(NoopBlockVerifier {});
-        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
-        let network_client = Arc::new(MockNetworkClient::default());
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let our_index = AuthorityIndex::new_for_test(0);
-
-        // Create some test blocks
-        let mut expected_blocks = (9..=10)
-            .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()))
-            .collect::<Vec<_>>();
-
-        // Now set different latest blocks for the peers
-        // For peer 1 we give the block of round 10 (highest)
-        network_client
-            .stub_fetch_latest_blocks(
-                vec![expected_blocks.pop().unwrap()],
-                AuthorityIndex::new_for_test(1),
-                vec![our_index],
-                None,
-            )
-            .await;
-
-        // For peer 2 we give the block of round 9
-        network_client
-            .stub_fetch_latest_blocks(
-                vec![expected_blocks.pop().unwrap()],
-                AuthorityIndex::new_for_test(2),
-                vec![our_index],
-                None,
-            )
-            .await;
-
-        // For peer 3 we don't give any block - and it should return an empty vector
-        network_client
-            .stub_fetch_latest_blocks(
-                vec![],
-                AuthorityIndex::new_for_test(3),
-                vec![our_index],
-                None,
-            )
-            .await;
-
-        // WHEN start the synchronizer and wait for a couple of seconds
-        let handle = Synchronizer::start(
-            network_client.clone(),
-            context.clone(),
-            core_dispatcher.clone(),
-            block_verifier,
-            dag_state,
-        );
-
-        // Wait at least for the timeout time
-        sleep(context.parameters.sync_last_proposed_block_timeout * 2).await;
-
-        // Assert that core has been called to set the min propose round
-        assert_eq!(
-            core_dispatcher.get_min_propose_round_calls().await,
-            vec![10]
-        );
-
-        // Ensure that no panic occurred
-        if let Err(err) = handle.stop_and_wait_on().await {
-            if err.is_panic() {
-                std::panic::resume_unwind(err.into_panic());
-            }
-        }
     }
 }
