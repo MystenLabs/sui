@@ -55,7 +55,8 @@ function ChangedBalance({ change }: { change: BalanceChange }) {
 						<span className={`${Number(amount()) > 0.0 ? 'text-green-300' : 'text-red-700'}`}>
 							{amount()}{' '}
 						</span>{' '}
-						{coinMetadata.symbol} ({change.coinType})
+						{coinMetadata.symbol}
+						<span className="block text-sm">{change.coinType}</span>
 					</p>
 				</>
 			</PreviewCard.Body>
