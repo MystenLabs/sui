@@ -485,7 +485,7 @@ struct FeatureFlags {
 
     // Controls whether consensus handler should prepose consensus commit prologue in checkpoints.
     #[serde(skip_serializing_if = "is_false")]
-    prepose_consensus_commit_prologue_in_checkpoints: bool,
+    prepose_prologue_tx_in_consensus_commit_in_checkpoints: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1350,9 +1350,9 @@ impl ProtocolConfig {
             .record_consensus_determined_version_assignments_in_prologue
     }
 
-    pub fn prepose_consensus_commit_prologue_in_checkpoints(&self) -> bool {
+    pub fn prepose_prologue_tx_in_consensus_commit_in_checkpoints(&self) -> bool {
         self.feature_flags
-            .prepose_consensus_commit_prologue_in_checkpoints
+            .prepose_prologue_tx_in_consensus_commit_in_checkpoints
     }
 
     pub fn hardened_otw_check(&self) -> bool {
@@ -2345,8 +2345,6 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags
                             .record_consensus_determined_version_assignments_in_prologue = true;
-                        cfg.feature_flags
-                            .prepose_consensus_commit_prologue_in_checkpoints = true;
                     }
 
                     // Run Mysticeti consensus in testnet.
@@ -2362,6 +2360,12 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.checkpoint_summary_version_specific_data = Some(1);
                         cfg.min_checkpoint_interval_ms = Some(200);
+                    }
+
+                    // Only enable prepose consensus commit prologue in checkpoints in devnet.
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .prepose_prologue_tx_in_consensus_commit_in_checkpoints = true;
                     }
                 }
                 // Use this template when making changes:

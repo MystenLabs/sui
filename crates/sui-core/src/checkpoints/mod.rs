@@ -1016,18 +1016,19 @@ impl CheckpointBuilder {
     async fn make_checkpoint(&self, pendings: Vec<PendingCheckpointV2>) -> anyhow::Result<()> {
         let last_details = pendings.last().unwrap().details().clone();
         let mut effects_in_current_checkpoint = BTreeSet::new();
-        let sorted_tx_effects_included_in_checkpoint;
+        let mut sorted_tx_effects_included_in_checkpoint = Vec::new();
         for pending_checkpoint in pendings.into_iter() {
             let pending = pending_checkpoint.into_v2();
-            let sorted_tx_effects_included_in_checkpoint = self
+            let txn_in_checkpoint = self
                 .resolve_checkpoint_transactions(pending.roots, &mut effects_in_current_checkpoint)
                 .await?;
-            txn_in_checkpoint.extend(sorted_tx_effects_included_in_checkpoint);
+            sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
         }
         let new_checkpoint = self
-            .create_checkpoints(sorted_tx_effects_included_in_checkpoint, pending.details)
+            .create_checkpoints(sorted_tx_effects_included_in_checkpoint, &last_details)
             .await?;
-        self.write_checkpoints(height, new_checkpoint).await?;
+        self.write_checkpoints(last_details.checkpoint_height, new_checkpoint)
+            .await?;
         Ok(())
     }
 
@@ -1061,7 +1062,7 @@ impl CheckpointBuilder {
         let consensus_commit_prologue = if self
             .epoch_store
             .protocol_config()
-            .prepose_consensus_commit_prologue_in_checkpoints()
+            .prepose_prologue_tx_in_consensus_commit_in_checkpoints()
         {
             // If the roots contains consensus commit prologue transaction, we want to extract it,
             // and put it to the front of the checkpoint.
@@ -1080,8 +1081,6 @@ impl CheckpointBuilder {
 
                 // No other dependencies of this consensus commit prologue that haven't been included
                 // in any previous checkpoint.
-                assert_eq!(effects_in_current_checkpoint.len(), 1);
-                assert_eq!(effects_in_current_checkpoint.first(), Some(ccp_digest));
                 assert_eq!(unsorted_ccp.len(), 1);
                 assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
             }
@@ -1116,7 +1115,7 @@ impl CheckpointBuilder {
 
     // This function is used to extract the consensus commit prologue digest and effects from the root
     // transactions.
-    // This function can only be used when prepose_consensus_commit_prologue_in_checkpoints is enabled.
+    // This function can only be used when prepose_prologue_tx_in_consensus_commit_in_checkpoints is enabled.
     // The consensus commit prologue is expected to be the first transaction in the roots.
     async fn extract_consensus_commit_prologue(
         &self,
@@ -1130,7 +1129,7 @@ impl CheckpointBuilder {
 
         // Reads the first transaction in the roots, and checks whether it is a consensus commit prologue
         // transaction.
-        // When prepose_consensus_commit_prologue_in_checkpoints is enabled, the consensus commit prologue
+        // When prepose_prologue_tx_in_consensus_commit_in_checkpoints is enabled, the consensus commit prologue
         // transaction should be the first transaction in the roots written by the consensus handler.
         Ok(self
             .state
@@ -1648,7 +1647,7 @@ impl CheckpointBuilder {
         if !self
             .epoch_store
             .protocol_config()
-            .prepose_consensus_commit_prologue_in_checkpoints()
+            .prepose_prologue_tx_in_consensus_commit_in_checkpoints()
         {
             return;
         }
