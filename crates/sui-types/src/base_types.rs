@@ -368,6 +368,14 @@ impl MoveObjectType {
         }
     }
 
+    pub fn other(&self) -> Option<&StructTag> {
+        if let MoveObjectType_::Other(s) = &self.0 {
+            Some(s)
+        } else {
+            None
+        }
+    }
+
     /// Returns the string representation of this object's type using the canonical display.
     pub fn to_canonical_string(&self, with_prefix: bool) -> String {
         StructTag::from(self.clone()).to_canonical_string(with_prefix)
