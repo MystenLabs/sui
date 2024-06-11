@@ -873,13 +873,11 @@ title: Module `0xb::bridge`
     <b>assert</b>!(!inner.paused, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
     <b>assert</b>!(<a href="chain_ids.md#0xb_chain_ids_is_valid_route">chain_ids::is_valid_route</a>(inner.chain_id, target_chain), <a href="bridge.md#0xb_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
     <b>assert</b>!(target_address.length() == <a href="bridge.md#0xb_bridge_EVM_ADDRESS_LENGTH">EVM_ADDRESS_LENGTH</a>, <a href="bridge.md#0xb_bridge_EInvalidEvmAddress">EInvalidEvmAddress</a>);
-    <b>assert</b>!(token.<a href="../sui-framework/balance.md#0x2_balance">balance</a>().value() &gt; 0, <a href="bridge.md#0xb_bridge_ETokenValueIsZero">ETokenValueIsZero</a>);
-
-    <b>let</b> amount = token.<a href="../sui-framework/balance.md#0x2_balance">balance</a>().value();
 
     <b>let</b> bridge_seq_num = inner.<a href="bridge.md#0xb_bridge_get_current_seq_num_and_increment">get_current_seq_num_and_increment</a>(<a href="message_types.md#0xb_message_types_token">message_types::token</a>());
     <b>let</b> token_id = inner.<a href="treasury.md#0xb_treasury">treasury</a>.token_id&lt;T&gt;();
     <b>let</b> token_amount = token.<a href="../sui-framework/balance.md#0x2_balance">balance</a>().value();
+    <b>assert</b>!(token_amount &gt; 0, <a href="bridge.md#0xb_bridge_ETokenValueIsZero">ETokenValueIsZero</a>);
 
     // create <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
     <b>let</b> <a href="message.md#0xb_message">message</a> = <a href="message.md#0xb_message_create_token_bridge_message">message::create_token_bridge_message</a>(
@@ -889,7 +887,7 @@ title: Module `0xb::bridge`
         target_chain,
         target_address,
         token_id,
-        amount,
+        token_amount,
     );
 
     // burn / escrow token, unsupported coins will fail in this step
@@ -1351,13 +1349,13 @@ title: Module `0xb::bridge`
     <b>let</b> amount = token_payload.token_amount();
     // Make sure <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> is within limit.
     <b>if</b> (!inner
-            .<a href="limiter.md#0xb_limiter">limiter</a>
-            .check_and_record_sending_transfer&lt;T&gt;(
-                &inner.<a href="treasury.md#0xb_treasury">treasury</a>,
-                <a href="../sui-framework/clock.md#0x2_clock">clock</a>,
-                route,
-                amount,
-            )
+        .<a href="limiter.md#0xb_limiter">limiter</a>
+        .check_and_record_sending_transfer&lt;T&gt;(
+        &inner.<a href="treasury.md#0xb_treasury">treasury</a>,
+        <a href="../sui-framework/clock.md#0x2_clock">clock</a>,
+        route,
+        amount,
+    )
     ) {
         emit(<a href="bridge.md#0xb_bridge_TokenTransferLimitExceed">TokenTransferLimitExceed</a> { message_key: key });
         <b>return</b> (<a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(), owner)
