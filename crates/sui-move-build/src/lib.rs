@@ -87,6 +87,7 @@ impl BuildConfig {
             .config
             .lint_flag
             .set(move_compiler::linters::LintLevel::None);
+        build_config.config.silence_warnings = true;
         build_config
     }
 
