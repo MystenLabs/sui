@@ -64,7 +64,7 @@ pub struct Test {
     #[clap(name = "seed", long = "seed")]
     pub seed: Option<u64>,
 
-    /// The number of iterations to run each test that uses generated values (only used #[random_test]).
+    /// The number of iterations to run each test that uses generated values (only used with #[random_test]).
     #[clap(name = "rand-num-iters", long = "rand-num-iters")]
     pub rand_num_iters: Option<u64>,
 }

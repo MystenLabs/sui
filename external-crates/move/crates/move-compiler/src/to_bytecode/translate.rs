@@ -239,6 +239,7 @@ fn module(
     let function_infos = module_function_infos(&module, &source_map, &collected_function_infos);
     let module = NamedCompiledModule {
         package_name: mdef.package_name,
+        address_name: addr_name,
         address: addr_bytes,
         name: module_name.value(),
         module,
@@ -247,7 +248,6 @@ fn module(
     Some(AnnotatedCompiledModule {
         loc: ident_loc,
         attributes,
-        address_name: addr_name,
         module_name_loc: module_name.loc(),
         named_module: module,
         function_infos,

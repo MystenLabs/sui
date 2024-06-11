@@ -195,6 +195,7 @@ impl TestRunner {
 struct TestOutput<'a, 'b, W> {
     test_plan: &'a ModuleTestPlan,
     writer: &'b Mutex<W>,
+    test_info: &'a BTreeMap<ModuleId, NamedCompiledModule>,
 }
 
 impl<'a, 'b, W: Write> TestOutput<'a, 'b, W> {
@@ -203,7 +204,7 @@ impl<'a, 'b, W: Write> TestOutput<'a, 'b, W> {
             self.writer.lock().unwrap(),
             "[ {}    ] {}::{}",
             "PASS".bold().bright_green(),
-            format_module_id(&self.test_plan.module_id),
+            format_module_id(self.test_info, &self.test_plan.module_id),
             fn_name
         )
         .unwrap()
@@ -214,7 +215,7 @@ impl<'a, 'b, W: Write> TestOutput<'a, 'b, W> {
             self.writer.lock().unwrap(),
             "[ {}    ] {}::{}",
             "FAIL".bold().bright_red(),
-            format_module_id(&self.test_plan.module_id),
+            format_module_id(self.test_info, &self.test_plan.module_id),
             fn_name,
         )
         .unwrap()
@@ -225,7 +226,7 @@ impl<'a, 'b, W: Write> TestOutput<'a, 'b, W> {
             self.writer.lock().unwrap(),
             "[ {} ] {}::{}",
             "TIMEOUT".bold().bright_yellow(),
-            format_module_id(&self.test_plan.module_id),
+            format_module_id(self.test_info, &self.test_plan.module_id),
             fn_name,
         )
         .unwrap();
@@ -525,7 +526,11 @@ impl SharedTestingConfig {
         test_info: &BTreeMap<ModuleId, NamedCompiledModule>,
         writer: &Mutex<impl Write>,
     ) -> TestStatistics {
-        let output = TestOutput { test_plan, writer };
+        let output = TestOutput {
+            test_plan,
+            writer,
+            test_info,
+        };
 
         self.exec_module_tests_with_move_vm(test_plan, test_info, &output)
     }

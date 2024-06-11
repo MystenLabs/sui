@@ -16,7 +16,7 @@ Failures in 0x1::random_test:
 │ 3 │     fun should_fail_test_div_mod_10(x: u64) {
 │   │         --------------------------- In this function in 0x1::random_test
 │ 4 │         x / (x % 10);
-│   │           ^ Test was not expected to error, but it gave an arithmetic error originating in the module 0000000000000000000000000000000000000000000000000000000000000001::random_test rooted here
+│   │           ^ Test was not expected to error, but it gave an arithmetic error originating in the module 0x1::random_test rooted here
 │ 
 │ 
 │ This test uses randomly generated inputs. Rerun with `test should_fail_test_div_mod_10 --seed 8` to recreate this test failure.
@@ -31,7 +31,7 @@ Failures in 0x1::random_test:
 │ 8 │     fun should_fail_test_div_mod_10_2_vec(x: vector<vector<u64>>) {
 │   │         --------------------------------- In this function in 0x1::random_test
 │ 9 │         std::vector::length(&x) / (std::vector::length(&x) % 10);
-│   │                                 ^ Test was not expected to error, but it gave an arithmetic error originating in the module 0000000000000000000000000000000000000000000000000000000000000001::random_test rooted here
+│   │                                 ^ Test was not expected to error, but it gave an arithmetic error originating in the module 0x1::random_test rooted here
 │ 
 │ 
 │ This test uses randomly generated inputs. Rerun with `test should_fail_test_div_mod_10_2_vec --seed 5` to recreate this test failure.
