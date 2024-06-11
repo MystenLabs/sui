@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use bytes::Bytes;
+use std::{mem, sync::Arc, time::Duration};
 
 use consensus_config::AuthorityIndex;
 use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
+use tokio::time::{sleep_until, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{debug, error, info};
 
@@ -177,38 +179,85 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 .with_label_values(&[peer_hostname])
                 .set(1);
 
+            const BATCH_TIMEOUT: Duration = Duration::from_millis(50);
+            const BATCH_MAX_SIZE: usize = 10;
+            let timer_start = Instant::now();
+            let batch_timeout = sleep_until(timer_start + BATCH_TIMEOUT);
+            let mut buffered_blocks = Vec::new();
+
+            async fn process_blocks<S: NetworkService>(
+                to_process: Vec<Bytes>,
+                authority_service: Arc<S>,
+                peer: AuthorityIndex,
+            ) {
+                if let Err(e) = authority_service.handle_send_blocks(peer, to_process).await {
+                    match e {
+                        ConsensusError::BlockRejected { block_ref, reason } => {
+                            debug!(
+                                "Failed to process block from peer {} for block {:?}: {}",
+                                peer, block_ref, reason
+                            );
+                        }
+                        _ => {
+                            info!("Invalid block received from peer {}: {}", peer, e);
+                        }
+                    }
+                }
+            }
+
+            tokio::pin!(batch_timeout);
+
             'stream: loop {
-                match blocks.next().await {
-                    Some(block) => {
-                        context
-                            .metrics
-                            .node_metrics
-                            .subscribed_blocks
-                            .with_label_values(&[&peer_hostname])
-                            .inc();
-                        let result = authority_service
-                            .handle_send_blocks(peer, vec![block.clone()])
-                            .await;
-                        if let Err(e) = result {
-                            match e {
-                                ConsensusError::BlockRejected { block_ref, reason } => {
-                                    debug!(
-                                        "Failed to process block from peer {} for block {:?}: {}",
-                                        peer, block_ref, reason
-                                    );
+                tokio::select! {
+                    result = blocks.next() => {
+                        match result {
+                            Some(block) => {
+                                context
+                                    .metrics
+                                    .node_metrics
+                                    .subscribed_blocks
+                                    .with_label_values(&[&peer_hostname])
+                                    .inc();
+
+                                buffered_blocks.push(block);
+
+                                // We have maxed out number of blocks to be processed
+                                if buffered_blocks.len() >= BATCH_MAX_SIZE {
+                                    let now = Instant::now();
+                                    batch_timeout
+                                    .as_mut()
+                                    .reset(now + BATCH_TIMEOUT);
+
+                                    let mut to_process = Vec::new();
+                                    mem::swap(&mut to_process, &mut buffered_blocks);
+
+                                    process_blocks(to_process, authority_service.clone(), peer).await;
                                 }
-                                _ => {
-                                    info!("Invalid block received from peer {}: {}", peer, e,);
-                                }
+
+                                // Reset retries when a block is received.
+                                retries = 0;
+                            }
+                            None => {
+                                debug!("Subscription to blocks from peer {} ended", peer);
+                                retries += 1;
+                                break 'stream;
                             }
                         }
-                        // Reset retries when a block is received.
-                        retries = 0;
                     }
-                    None => {
-                        debug!("Subscription to blocks from peer {} ended", peer);
-                        retries += 1;
-                        break 'stream;
+                    () = &mut batch_timeout => {
+                        let now = Instant::now();
+                        batch_timeout
+                        .as_mut()
+                        .reset(now + BATCH_TIMEOUT);
+
+                        if buffered_blocks.is_empty() {
+                            continue 'stream;
+                        }
+
+                        let mut to_process = Vec::new();
+                        mem::swap(&mut to_process, &mut buffered_blocks);
+
+                        process_blocks(to_process, authority_service.clone(), peer).await;
                     }
                 }
             }
