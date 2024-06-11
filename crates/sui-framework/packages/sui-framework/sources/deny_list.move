@@ -43,13 +43,16 @@ module sui::deny_list {
         @0xDEE9,
     ];
 
-
     /// A shared object that stores the addresses that are blocked for a given core type.
     public struct DenyList has key {
         id: UID,
         /// The individual deny lists.
         lists: Bag,
     }
+
+
+
+    /// V1
 
     /// Stores the addresses that are denied for a given core type.
     public struct PerTypeList has key, store {
@@ -67,7 +70,7 @@ module sui::deny_list {
     /// from interacting with instances of that type as an input to a transaction. For coins,
     /// the type specified is the type of the coin, not the coin type itself. For example,
     /// "00...0123::my_coin::MY_COIN" would be the type, not "00...02::coin::Coin".
-    public(package) fun add(
+    public(package) fun v1_add(
         deny_list: &mut DenyList,
         per_type_index: u64,
         `type`: vector<u8>,
@@ -76,10 +79,10 @@ module sui::deny_list {
         let reserved = RESERVED;
         assert!(!reserved.contains(&addr), EInvalidAddress);
         let bag_entry: &mut PerTypeList = &mut deny_list.lists[per_type_index];
-        bag_entry.per_type_list_add(`type`, addr)
+        bag_entry.v1_per_type_list_add(`type`, addr)
     }
 
-    fun per_type_list_add(
+    fun v1_per_type_list_add(
         list: &mut PerTypeList,
         `type`: vector<u8>,
         addr: address,
@@ -101,7 +104,7 @@ module sui::deny_list {
 
     /// Removes a previously denied address from the list.
     /// Aborts with `ENotDenied` if the address is not on the list.
-    public(package) fun remove(
+    public(package) fun v1_remove(
         deny_list: &mut DenyList,
         per_type_index: u64,
         `type`: vector<u8>,
@@ -109,10 +112,11 @@ module sui::deny_list {
     ) {
         let reserved = RESERVED;
         assert!(!reserved.contains(&addr), EInvalidAddress);
-        per_type_list_remove(&mut deny_list.lists[per_type_index], `type`, addr)
+        let bag_entry: &mut PerTypeList = &mut deny_list.lists[per_type_index];
+        bag_entry.v1_per_type_list_remove(`type`, addr)
     }
 
-    fun per_type_list_remove(
+    fun v1_per_type_list_remove(
         list: &mut PerTypeList,
         `type`: vector<u8>,
         addr: address,
@@ -128,7 +132,7 @@ module sui::deny_list {
     }
 
     /// Returns true iff the given address is denied for the given type.
-    public(package) fun contains(
+    public(package) fun v1_contains(
         deny_list: &DenyList,
         per_type_index: u64,
         `type`: vector<u8>,
@@ -136,10 +140,11 @@ module sui::deny_list {
     ): bool {
         let reserved = RESERVED;
         if (reserved.contains(&addr)) return false;
-        per_type_list_contains(&deny_list.lists[per_type_index], `type`, addr)
+        let bag_entry: &PerTypeList = &deny_list.lists[per_type_index];
+        bag_entry.v1_per_type_list_contains(`type`, addr)
     }
 
-    fun per_type_list_contains(
+    fun v1_per_type_list_contains(
         list: &PerTypeList,
         `type`: vector<u8>,
         addr: address,
