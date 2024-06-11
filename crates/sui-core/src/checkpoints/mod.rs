@@ -1114,9 +1114,10 @@ impl CheckpointBuilder {
         }
         sorted.extend(CausalOrder::causal_sort(unsorted));
 
-        fail_point_if!("assert-prologue-first-in-checkpoint", || {
+        if cfg!(msim) {
+            // Check consensus commit prologue invariants in sim test.
             self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
-        });
+        }
 
         Ok(sorted)
     }
@@ -1142,7 +1143,8 @@ impl CheckpointBuilder {
         Ok(self
             .state
             .get_transaction_cache_reader()
-            .get_transaction_block(&root_digests[0])?
+            .get_transaction_block(&root_digests[0])
+            .expect("Transaction block must exist")
             .filter(|tx| {
                 matches!(
                     tx.transaction_data().kind(),
