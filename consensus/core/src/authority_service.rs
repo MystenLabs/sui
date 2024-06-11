@@ -70,12 +70,13 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
 
 #[async_trait]
 impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
-    async fn handle_send_block(
+    async fn handle_send_blocks(
         &self,
         peer: AuthorityIndex,
-        serialized_block: Bytes,
+        serialized_blocks: Vec<Bytes>,
     ) -> ConsensusResult<()> {
         fail_point_async!("consensus-rpc-response");
+        let serialized_block = serialized_blocks.first().unwrap().clone();
 
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 

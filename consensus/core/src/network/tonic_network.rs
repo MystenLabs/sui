@@ -379,7 +379,7 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         };
         let block = request.into_inner().block;
         self.service
-            .handle_send_block(peer_index, block)
+            .handle_send_blocks(peer_index, vec![block])
             .await
             .map_err(|e| tonic::Status::invalid_argument(format!("{e:?}")))?;
         Ok(Response::new(SendBlockResponse {}))

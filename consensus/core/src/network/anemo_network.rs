@@ -252,7 +252,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
         })?;
         let block = request.into_body().block;
         self.service
-            .handle_send_block(*index, block)
+            .handle_send_blocks(*index, vec![block])
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(

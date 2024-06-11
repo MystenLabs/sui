@@ -187,7 +187,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                             .with_label_values(&[&peer_hostname])
                             .inc();
                         let result = authority_service
-                            .handle_send_block(peer, block.clone())
+                            .handle_send_blocks(peer, vec![block.clone()])
                             .await;
                         if let Err(e) = result {
                             match e {
@@ -319,7 +319,7 @@ mod test {
         assert!(service.handle_send_block.len() >= 100);
         for (p, block) in service.handle_send_block.iter() {
             assert_eq!(*p, peer);
-            assert_eq!(*block, Bytes::from(vec![1u8; 8]));
+            assert_eq!(*block[0], Bytes::from(vec![1u8; 8]));
         }
     }
 }

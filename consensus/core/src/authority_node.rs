@@ -541,7 +541,10 @@ mod tests {
         let serialized = input_block.serialized().clone();
         tokio::spawn(async move {
             service
-                .handle_send_block(context.committee.to_authority_index(0).unwrap(), serialized)
+                .handle_send_blocks(
+                    context.committee.to_authority_index(0).unwrap(),
+                    vec![serialized],
+                )
                 .await
                 .unwrap();
         });

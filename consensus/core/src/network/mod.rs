@@ -111,10 +111,14 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
 /// of `anemo_gen::ConsensusRpc`, which itself is annotated with `async_trait`.
 #[async_trait]
 pub(crate) trait NetworkService: Send + Sync + 'static {
-    /// Handles the block sent from the peer via either unicast RPC or subscription stream.
+    /// Handles the blocks sent from the peer via either unicast RPC or subscription stream.
     /// Peer value can be trusted to be a valid authority index.
     /// But serialized_block must be verified before its contents are trusted.
-    async fn handle_send_block(&self, peer: AuthorityIndex, block: Bytes) -> ConsensusResult<()>;
+    async fn handle_send_blocks(
+        &self,
+        peer: AuthorityIndex,
+        blocks: Vec<Bytes>,
+    ) -> ConsensusResult<()>;
 
     /// Handles the subscription request from the peer.
     /// A stream of newly proposed blocks is returned to the peer.

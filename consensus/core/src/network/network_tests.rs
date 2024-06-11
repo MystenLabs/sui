@@ -116,13 +116,13 @@ async fn send_and_receive_blocks_with_auth(
     assert_eq!(service_0.lock().handle_send_block.len(), 1);
     assert_eq!(service_0.lock().handle_send_block[0].0.value(), 1);
     assert_eq!(
-        service_0.lock().handle_send_block[0].1,
+        service_0.lock().handle_send_block[0].1[0],
         test_block_1.serialized(),
     );
     assert_eq!(service_1.lock().handle_send_block.len(), 1);
     assert_eq!(service_1.lock().handle_send_block[0].0.value(), 0);
     assert_eq!(
-        service_1.lock().handle_send_block[0].1,
+        service_1.lock().handle_send_block[0].1[0],
         test_block_0.serialized(),
     );
 
