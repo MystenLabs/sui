@@ -16,8 +16,8 @@ module basics::clock {
 module basics::clock_tests {
     #[test]
     fun creating_a_clock_and_incrementing_it() {
-        let ctx = tx_context::dummy();
-        let clock = sui::clock::create_for_testing(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut clock = sui::clock::create_for_testing(&mut ctx);
 
         clock.increment_for_testing(42);
         assert!(clock.timestamp_ms() == 42, 1);
