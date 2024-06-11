@@ -561,7 +561,7 @@ title: Module `0xb::bridge`
 
 
 
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_ETokenValueIsZero">ETokenValueIsZero</a>: u64 = 19;
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_ETokenValueIsZero">ETokenValueIsZero</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 19;
 </code></pre>
 
 
