@@ -141,6 +141,7 @@ const MAX_PROTOCOL_VERSION: u64 = 50;
 // Version 50: Add update_node_url to native bridge,
 //             New Move stdlib integer modules
 //             Enable checkpoint batching in testnet.
+//             Prepose consensus commit prologue in checkpoints.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -483,7 +484,13 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     fresh_vm_on_framework_upgrade: bool,
 
-    // Controls whether consensus handler should prepose consensus commit prologue in checkpoints.
+    // When set to true, the consensus commit prologue transaction will be placed first
+    // in a consensus commit in checkpoints.
+    // If a checkpoint contains multiple consensus commit, say [cm1][cm2]. The each commit's
+    // consensus commit prologue will be the first transaction in each segment:
+    //     [ccp1, rest cm1][ccp2, rest cm2]
+    // The reason to prepose the prologue transaction is to provide information for transaction
+    // cancellation.
     #[serde(skip_serializing_if = "is_false")]
     prepose_prologue_tx_in_consensus_commit_in_checkpoints: bool,
 }

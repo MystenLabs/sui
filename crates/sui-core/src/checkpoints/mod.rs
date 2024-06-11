@@ -1015,7 +1015,15 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
     async fn make_checkpoint(&self, pendings: Vec<PendingCheckpointV2>) -> anyhow::Result<()> {
         let last_details = pendings.last().unwrap().details().clone();
+
+        // Keeps track of the effects that are already included in the current checkpoint.
+        // This is used when there are multiple pending checkpoints to create a single checkpoint
+        // because in such scenarios, dependencies of a transaction may in earlier created checkpoints,
+        // or in earlier pending checkpoints.
         let mut effects_in_current_checkpoint = BTreeSet::new();
+
+        // Stores the transactions that should be included in the checkpoint. Transactions will be recorded in the checkpoint
+        // in this order.
         let mut sorted_tx_effects_included_in_checkpoint = Vec::new();
         for pending_checkpoint in pendings.into_iter() {
             let pending = pending_checkpoint.into_v2();
@@ -1032,7 +1040,7 @@ impl CheckpointBuilder {
         Ok(())
     }
 
-    // Given the root transactions of a checkpoint, resolve the transactions should be included in
+    // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
     // the checkpoint, and return them in the order they should be included in the checkpoint.
     // `effects_in_current_checkpoint` tracks the transactions that already exist in the current
     // checkpoint.
@@ -1560,6 +1568,8 @@ impl CheckpointBuilder {
     /// This list includes the roots and all their dependencies, which are not part of checkpoint already.
     /// Note that this function may be called multiple times to construct the checkpoint.
     /// `existing_tx_digests_in_checkpoint` is used to track the transactions that are already included in the checkpoint.
+    /// Txs in `roots` that need to be included in the checkpoint will be added to `existing_tx_digests_in_checkpoint`
+    /// after the call of this function.
     #[instrument(level = "debug", skip_all)]
     fn complete_checkpoint_effects(
         &self,
