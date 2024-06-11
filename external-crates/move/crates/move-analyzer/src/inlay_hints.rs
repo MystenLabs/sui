@@ -41,7 +41,7 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
                             command: None,
                         };
                         let type_label = InlayHintLabelPart {
-                            value: type_to_ide_string(t),
+                            value: type_to_ide_string(t, /* verbose */ true),
                             tooltip: None,
                             location: None,
                             command: None,

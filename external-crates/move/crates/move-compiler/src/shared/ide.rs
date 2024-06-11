@@ -47,13 +47,24 @@ pub struct MacroCallInfo {
     pub by_value_args: Vec<T::SequenceItem>,
 }
 
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct AutocompleteMethod {
+    pub method_name: Symbol,
+    pub target_function: (E::ModuleIdent, P::FunctionName),
+}
+
+#[derive(Debug, Clone)]
+pub struct AutocompleteFields {
+    pub enclosing_type: N::Type,
+    pub names: BTreeSet<Symbol>,
+}
+
 #[derive(Debug, Clone)]
 pub struct AutocompleteInfo {
-    /// Methods that are valid autocompletes (FunctionName represents target function and Symbol
-    /// represents method name)
-    pub methods: BTreeSet<((E::ModuleIdent, P::FunctionName), Symbol)>,
-    /// Fields that are valid autocompletes (e.g., for a struct) along with containing datatype info
-    pub fields: Option<(E::ModuleIdent, Symbol, BTreeSet<Symbol>)>,
+    /// Methods that are valid auto-completes
+    pub methods: BTreeSet<AutocompleteMethod>,
+    /// Fields that are valid auto-completes (e.g., for a struct) along with their types
+    pub fields: Vec<(Symbol, N::Type)>,
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +118,15 @@ pub enum PatternSuggestion {
 //*************************************************************************************************
 // Impls
 //*************************************************************************************************
+
+impl AutocompleteMethod {
+    pub fn new(method_name: Symbol, target_function: (E::ModuleIdent, P::FunctionName)) -> Self {
+        Self {
+            method_name,
+            target_function,
+        }
+    }
+}
 
 impl IDEInfo {
     pub fn new() -> Self {
@@ -176,14 +196,13 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                 let AutocompleteInfo { methods, fields } = *info;
                 let names = methods
                     .into_iter()
-                    .map(|((mident, _), mname)| format!("{mident}::{mname}"))
-                    .chain(
-                        fields
-                            .map(|(_, _, fnames)| fnames)
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|n| format!("{n}")),
+                    .map(
+                        |AutocompleteMethod {
+                             method_name,
+                             target_function: (mident, _),
+                         }| format!("{mident}::{method_name}"),
                     )
+                    .chain(fields.into_iter().map(|(n, _)| format!("{n}")))
                     .collect::<Vec<_>>();
                 let msg = format!(
                     "Autocompletes to: {}",

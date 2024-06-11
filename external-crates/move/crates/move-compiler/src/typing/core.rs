@@ -21,7 +21,7 @@ use crate::{
         Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
     },
     shared::{
-        ide::{IDEAnnotation, IDEInfo},
+        ide::{AutocompleteMethod, IDEAnnotation, IDEInfo},
         known_attributes::TestingAttribute,
         program_info::*,
         string_utils::debug_print,
@@ -902,10 +902,7 @@ impl<'env> Context<'env> {
     //********************************************
 
     /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
-    pub fn find_all_methods(
-        &mut self,
-        tn: &TypeName,
-    ) -> BTreeSet<((Spanned<ModuleIdent_>, FunctionName), Symbol)> {
+    pub fn find_all_methods(&mut self, tn: &TypeName) -> BTreeSet<AutocompleteMethod> {
         debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
         if !self
             .env
@@ -925,8 +922,11 @@ impl<'env> Context<'env> {
                     .iter()
                     .flat_map(|(_, method_name, use_fun)| {
                         vec![
-                            (use_fun.target_function, *method_name),
-                            (use_fun.target_function, use_fun.target_function.1.value()),
+                            AutocompleteMethod::new(*method_name, use_fun.target_function),
+                            AutocompleteMethod::new(
+                                use_fun.target_function.1.value(),
+                                use_fun.target_function,
+                            ),
                         ]
                     })
                     .collect();
@@ -938,27 +938,30 @@ impl<'env> Context<'env> {
     }
 
     /// Find all valid fields in scope for a given `TypeName`. This is used for autocomplete.
-    pub fn find_all_fields(
-        &mut self,
-        tn: &TypeName,
-    ) -> Option<(ModuleIdent, Symbol, BTreeSet<Symbol>)> {
+    pub fn find_all_fields(&mut self, tn: &TypeName) -> Vec<(Symbol, N::Type)> {
         debug_print!(self.debug.autocomplete_resolution, (msg "fields"), ("name" => tn));
         let fields_info = match &tn.value {
-            TypeName_::Multiple(_) => None,
+            TypeName_::Multiple(_) => vec![],
             // TODO(cswords): are there any valid builtin fields?
-            TypeName_::Builtin(_) => None,
-            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => None,
+            TypeName_::Builtin(_) => vec![],
+            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => vec![],
             TypeName_::ModuleType(m, n) => match self.datatype_kind(m, n) {
-                DatatypeKind::Enum => None,
+                DatatypeKind::Enum => vec![],
                 DatatypeKind::Struct => match &self.struct_definition(m, n).fields {
-                    N::StructFields::Native(_) => None,
+                    N::StructFields::Native(_) => vec![],
                     N::StructFields::Defined(is_positional, fields) => {
-                        let found_fields = if *is_positional {
-                            (0..fields.len()).map(|n| format!("{}", n).into()).collect()
+                        if *is_positional {
+                            fields
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, (_, _, (_, t)))| (format!("{}", idx).into(), t.clone()))
+                                .collect::<Vec<_>>()
                         } else {
-                            fields.key_cloned_iter().map(|(k, _)| k.value()).collect()
-                        };
-                        Some((m.clone(), n.value(), found_fields))
+                            fields
+                                .key_cloned_iter()
+                                .map(|(k, (_, t))| (k.value(), t.clone()))
+                                .collect::<Vec<_>>()
+                        }
                     }
                 },
             },

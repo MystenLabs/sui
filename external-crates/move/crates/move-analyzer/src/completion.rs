@@ -5,26 +5,29 @@
 use crate::{
     context::Context,
     symbols::{
-        self, mod_ident_to_ide_string, DefInfo, DefLoc, PrecompiledPkgDeps, SymbolicatorRunner,
-        Symbols,
+        self, mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
+        type_list_to_ide_string, type_to_ide_string, DefInfo, DefLoc, PrecompiledPkgDeps,
+        SymbolicatorRunner, Symbols,
     },
     utils,
 };
 use lsp_server::Request;
 use lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionParams, Documentation, InsertTextFormat, Position,
+    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
+    Documentation, InsertTextFormat, Position,
 };
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     editions::Edition,
-    expansion::ast::Visibility,
+    expansion::ast::{ModuleIdent_, Visibility},
     linters::LintLevel,
+    naming::ast::Type,
     parser::{
         ast::Ability_,
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
     },
-    shared::Identifier,
+    shared::{ide::AutocompleteMethod, Identifier},
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
@@ -98,7 +101,6 @@ fn identifiers(buffer: &str, symbols: &Symbols, path: &Path) -> Vec<CompletionIt
     if lexer.advance().is_err() {
         return vec![];
     }
-
     let mut ids = HashSet::new();
     while lexer.peek() != Tok::EOF {
         // Some tokens, such as "phantom", are contextual keywords that are only reserved in
@@ -218,6 +220,64 @@ fn context_specific_lbrace(
     completions
 }
 
+fn fun_def_info(
+    symbols: &Symbols,
+    fhash: FileHash,
+    mod_ident: ModuleIdent_,
+    name: Symbol,
+) -> Option<&DefInfo> {
+    let Some(mdef) = symbols.mod_defs(&fhash, mod_ident) else {
+        return None;
+    };
+    let Some(fdef) = mdef.functions.get(&name) else {
+        return None;
+    };
+    let def_loc = DefLoc::new(fhash, fdef.start);
+    symbols.def_info(&def_loc)
+}
+
+fn fun_completion_item(
+    mod_ident: &ModuleIdent_,
+    method_name: &Symbol,
+    function_name: &Symbol,
+    type_args: &[Type],
+    arg_names: &[Symbol],
+    arg_types: &[Type],
+    ret_type: &Type,
+) -> CompletionItem {
+    let sig_string = format!(
+        "fun {}({}){}",
+        type_args_to_ide_string(type_args, /* verbose */ false),
+        type_list_to_ide_string(arg_types, /* verbose */ false),
+        ret_type_to_ide_str(ret_type, /* verbose */ false)
+    );
+    // we omit the first argument which is guaranteed to be there
+    // as this is a method and needs a receiver
+    let arg_snippet = arg_names[1..]
+        .iter()
+        .enumerate()
+        .map(|(idx, name)| format!("${{{}:{}}}", idx + 1, name))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let label_details = Some(CompletionItemLabelDetails {
+        detail: Some(format!(
+            " ({}::{})",
+            mod_ident_to_ide_string(mod_ident),
+            function_name
+        )),
+        description: Some(sig_string),
+    });
+
+    CompletionItem {
+        label: format!("{}()", method_name,),
+        label_details,
+        kind: Some(CompletionItemKind::SNIPPET),
+        insert_text: Some(format!("{}({})", method_name, arg_snippet)),
+        insert_text_format: Some(InsertTextFormat::SNIPPET),
+        ..Default::default()
+    }
+}
+
 /// Handle dot auto-completion at a given position.
 fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<CompletionItem> {
     let mut completions = vec![];
@@ -233,27 +293,52 @@ fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<Completi
     let Some(info) = symbols.compiler_info.get_autocomplete_info(fhash, &loc) else {
         return completions;
     };
-    for ((mident, fname), mname) in &info.methods {
+    for AutocompleteMethod {
+        method_name,
+        target_function: (mod_ident, function_name),
+    } in &info.methods
+    {
+        let init_completion =
+            if let Some(DefInfo::Function(.., type_args, arg_names, arg_types, ret_type, _)) =
+                fun_def_info(symbols, fhash, mod_ident.value, function_name.value())
+            {
+                fun_completion_item(
+                    &mod_ident.value,
+                    method_name,
+                    &function_name.value(),
+                    type_args,
+                    arg_names,
+                    arg_types,
+                    ret_type,
+                )
+            } else {
+                // this shouldn't really happen as we should be able to get
+                // `DefInfo` for a function but if for some reason we cannot,
+                // let's generate simpler autotompletion value
+                CompletionItem {
+                    label: format!("{method_name}()"),
+                    kind: Some(CompletionItemKind::METHOD),
+                    insert_text: Some(method_name.to_string()),
+                    insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                    ..Default::default()
+                }
+            };
+        completions.push(init_completion);
+    }
+    for (n, t) in &info.fields {
+        let label_details = Some(CompletionItemLabelDetails {
+            detail: None,
+            description: Some(type_to_ide_string(t, /* verbose */ false)),
+        });
         let init_completion = CompletionItem {
-            label: format!("{}::{}", mod_ident_to_ide_string(&mident.value), mname),
-            kind: Some(CompletionItemKind::METHOD),
-            insert_text: Some(fname.to_string()),
+            label: n.to_string(),
+            label_details,
+            kind: Some(CompletionItemKind::FIELD),
+            insert_text: Some(n.to_string()),
             insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
             ..Default::default()
         };
         completions.push(init_completion);
-    }
-    if let Some((_, _, fields)) = &info.fields {
-        for name in fields {
-            let init_completion = CompletionItem {
-                label: name.to_string(),
-                kind: Some(CompletionItemKind::FIELD),
-                insert_text: Some(name.to_string()),
-                insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
-                ..Default::default()
-            };
-            completions.push(init_completion);
-        }
     }
     completions
 }
@@ -319,11 +404,11 @@ fn context_specific_no_trigger(
             }
 
             // get module info containing the init function
-            let Some(def_mdef) = symbols.mod_defs(&u.def_loc().fhash(), *mod_ident) else {
+            let Some(mdef) = symbols.mod_defs(&u.def_loc().fhash(), *mod_ident) else {
                 break;
             };
 
-            if def_mdef.functions().contains_key(&(INIT_FN_NAME.into())) {
+            if mdef.functions().contains_key(&(INIT_FN_NAME.into())) {
                 // already has init function
                 break;
             }
@@ -333,7 +418,7 @@ fn context_specific_no_trigger(
             // decide on the list of parameters depending on whether a module containing
             // the init function has a struct thats an one-time-witness candidate struct
             let otw_candidate = Symbol::from(mod_ident.module.value().to_uppercase());
-            let init_snippet = if def_mdef.structs().contains_key(&otw_candidate) {
+            let init_snippet = if mdef.structs().contains_key(&otw_candidate) {
                 format!("{INIT_FN_NAME}(${{1:witness}}: {otw_candidate}, {sui_ctx_arg}) {{\n\t${{2:}}\n}}\n")
             } else {
                 format!("{INIT_FN_NAME}({sui_ctx_arg}) {{\n\t${{1:}}\n}}\n")

@@ -434,7 +434,7 @@ impl fmt::Display for DefInfo {
                 //
                 // It also seems like a reasonable idea to be able to tune user experience in the
                 // IDE independently on how compiler error messages are generated.
-                write!(f, "{}", type_to_ide_string(t))
+                write!(f, "{}", type_to_ide_string(t, /* verbose */ true))
             }
             Self::Function(
                 mod_ident,
@@ -444,14 +444,11 @@ impl fmt::Display for DefInfo {
                 type_args,
                 arg_names,
                 arg_types,
-                ret,
+                ret_type,
                 _,
             ) => {
-                let type_args_str = type_args_to_ide_string(type_args);
-                let ret_str = match ret {
-                    sp!(_, Type_::Unit) => "".to_string(),
-                    _ => format!(": {}", type_to_ide_string(ret)),
-                };
+                let type_args_str = type_args_to_ide_string(type_args, /* verbose */ true);
+                let ret_type_str = ret_type_to_ide_str(ret_type, /* verbose */ true);
                 write!(
                     f,
                     "{}{}fun {}::{}{}({}){}",
@@ -460,8 +457,11 @@ impl fmt::Display for DefInfo {
                     mod_ident_to_ide_string(mod_ident),
                     name,
                     type_args_str,
-                    typed_id_list_to_ide_string(arg_names, arg_types, false),
-                    ret_str,
+                    typed_id_list_to_ide_string(
+                        arg_names, arg_types, /* separate_lines */ false,
+                        /* verbose */ true
+                    ),
+                    ret_type_str,
                 )
             }
             Self::Struct(
@@ -474,7 +474,8 @@ impl fmt::Display for DefInfo {
                 field_types,
                 _,
             ) => {
-                let type_args_str = struct_type_args_to_ide_string(type_args);
+                let type_args_str =
+                    struct_type_args_to_ide_string(type_args, /* verbose */ true);
                 let abilities_str = if abilities.is_empty() {
                     "".to_string()
                 } else {
@@ -508,7 +509,12 @@ impl fmt::Display for DefInfo {
                         name,
                         type_args_str,
                         abilities_str,
-                        typed_id_list_to_ide_string(field_names, field_types, true),
+                        typed_id_list_to_ide_string(
+                            field_names,
+                            field_types,
+                            /* separate_lines */ true,
+                            /* verbose */ true
+                        ),
                     )
                 }
             }
@@ -519,15 +525,27 @@ impl fmt::Display for DefInfo {
                     mod_ident,
                     struct_name,
                     name,
-                    type_to_ide_string(t)
+                    type_to_ide_string(t, /* verbose */ true)
                 )
             }
             Self::Local(name, t, is_decl, is_mut) => {
                 let mut_str = if *is_mut { "mut " } else { "" };
                 if *is_decl {
-                    write!(f, "let {}{}: {}", mut_str, name, type_to_ide_string(t))
+                    write!(
+                        f,
+                        "let {}{}: {}",
+                        mut_str,
+                        name,
+                        type_to_ide_string(t, /* verbose */ true)
+                    )
                 } else {
-                    write!(f, "{}{}: {}", mut_str, name, type_to_ide_string(t))
+                    write!(
+                        f,
+                        "{}{}: {}",
+                        mut_str,
+                        name,
+                        type_to_ide_string(t, /* verbose */ true)
+                    )
                 }
             }
             Self::Const(mod_ident, name, t, value, _) => {
@@ -537,7 +555,7 @@ impl fmt::Display for DefInfo {
                         "const {}::{}: {} = {}",
                         mod_ident,
                         name,
-                        type_to_ide_string(t),
+                        type_to_ide_string(t, /* verbose */ true),
                         v
                     )
                 } else {
@@ -546,7 +564,7 @@ impl fmt::Display for DefInfo {
                         "const {}::{}: {}",
                         mod_ident,
                         name,
-                        type_to_ide_string(t)
+                        type_to_ide_string(t, /* verbose */ true)
                     )
                 }
             }
@@ -564,77 +582,86 @@ fn visibility_to_ide_string(visibility: &Visibility) -> String {
     visibility_str
 }
 
-fn type_args_to_ide_string(type_args: &Vec<Type>) -> String {
+pub fn type_args_to_ide_string(type_args: &[Type], verbose: bool) -> String {
     let mut type_args_str = "".to_string();
     if !type_args.is_empty() {
         type_args_str.push('<');
-        type_args_str.push_str(&type_list_to_ide_string(type_args));
+        type_args_str.push_str(&type_list_to_ide_string(type_args, verbose));
         type_args_str.push('>');
     }
     type_args_str
 }
 
-fn struct_type_args_to_ide_string(type_args: &Vec<(Type, bool)>) -> String {
+fn struct_type_args_to_ide_string(type_args: &[(Type, bool)], verbose: bool) -> String {
     let mut type_args_str = "".to_string();
     if !type_args.is_empty() {
         type_args_str.push('<');
-        type_args_str.push_str(&struct_type_list_to_ide_string(type_args));
+        type_args_str.push_str(&struct_type_list_to_ide_string(type_args, verbose));
         type_args_str.push('>');
     }
     type_args_str
 }
 
-fn typed_id_list_to_ide_string(names: &[Symbol], types: &[Type], separate_lines: bool) -> String {
+fn typed_id_list_to_ide_string(
+    names: &[Symbol],
+    types: &[Type],
+    separate_lines: bool,
+    verbose: bool,
+) -> String {
     names
         .iter()
         .zip(types.iter())
         .map(|(n, t)| {
             if separate_lines {
-                format!("\t{}: {}", n, type_to_ide_string(t))
+                format!("\t{}: {}", n, type_to_ide_string(t, verbose))
             } else {
-                format!("{}: {}", n, type_to_ide_string(t))
+                format!("{}: {}", n, type_to_ide_string(t, verbose))
             }
         })
         .collect::<Vec<_>>()
         .join(if separate_lines { ",\n" } else { ", " })
 }
 
-pub fn type_to_ide_string(sp!(_, t): &Type) -> String {
+pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
     match t {
         Type_::Unit => "()".to_string(),
-        Type_::Ref(m, r) => format!("&{}{}", if *m { "mut " } else { "" }, type_to_ide_string(r)),
+        Type_::Ref(m, r) => format!(
+            "&{}{}",
+            if *m { "mut " } else { "" },
+            type_to_ide_string(r, verbose)
+        ),
         Type_::Param(tp) => {
             format!("{}", tp.user_specified_name)
         }
         Type_::Apply(_, sp!(_, type_name), ss) => match type_name {
             TypeName_::Multiple(_) => {
-                format!("({})", type_list_to_ide_string(ss))
+                format!("({})", type_list_to_ide_string(ss, verbose))
             }
             TypeName_::Builtin(name) => {
                 if ss.is_empty() {
                     format!("{}", name)
                 } else {
-                    format!("{}<{}>", name, type_list_to_ide_string(ss))
+                    format!("{}<{}>", name, type_list_to_ide_string(ss, verbose))
                 }
             }
             TypeName_::ModuleType(sp!(_, module_ident), struct_name) => {
-                format!(
-                    "{}::{}{}",
-                    module_ident,
-                    struct_name,
-                    if ss.is_empty() {
-                        "".to_string()
-                    } else {
-                        format!("<{}>", type_list_to_ide_string(ss))
-                    }
-                )
+                let type_args = if ss.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("<{}>", type_list_to_ide_string(ss, verbose))
+                };
+                if verbose {
+                    format!("{}::{}{}", module_ident, struct_name, type_args,)
+                } else {
+                    struct_name.to_string()
+                }
             }
         },
         Type_::Fun(args, ret) => {
             format!(
                 "|{}| -> {}",
-                type_list_to_ide_string(args),
-                type_to_ide_string(ret)
+                type_list_to_ide_string(args, verbose),
+                type_to_ide_string(ret, verbose)
             )
         }
         Type_::Anything => "_".to_string(),
@@ -643,28 +670,34 @@ pub fn type_to_ide_string(sp!(_, t): &Type) -> String {
     }
 }
 
-fn type_list_to_ide_string(types: &[Type]) -> String {
+pub fn type_list_to_ide_string(types: &[Type], verbose: bool) -> String {
     types
         .iter()
-        .map(type_to_ide_string)
+        .map(|t| type_to_ide_string(t, verbose))
         .collect::<Vec<_>>()
         .join(", ")
 }
 
-fn struct_type_list_to_ide_string(types: &[(Type, bool)]) -> String {
+fn struct_type_list_to_ide_string(types: &[(Type, bool)], verbose: bool) -> String {
     types
         .iter()
         .map(|(t, phantom)| {
             if *phantom {
-                format!("phantom {}", type_to_ide_string(t))
+                format!("phantom {}", type_to_ide_string(t, verbose))
             } else {
-                type_to_ide_string(t)
+                type_to_ide_string(t, verbose)
             }
         })
         .collect::<Vec<_>>()
         .join(", ")
 }
 
+pub fn ret_type_to_ide_str(ret_type: &Type, verbose: bool) -> String {
+    match ret_type {
+        sp!(_, Type_::Unit) => "".to_string(),
+        _ => format!(": {}", type_to_ide_string(ret_type, verbose)),
+    }
+}
 /// Conversions of constant values to strings is currently best-effort which is why this function
 /// returns an Option (in the worst case we will display constant name and type but no value).
 fn const_val_to_ide_string(exp: &Exp) -> Option<String> {
