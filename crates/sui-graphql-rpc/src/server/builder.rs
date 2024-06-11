@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::compatibility_check::check_all_tables;
+use super::exchange_rates_task::TriggerExchangeRatesTask;
 use super::system_package_task::SystemPackageTask;
 use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
@@ -65,6 +67,7 @@ pub(crate) struct Server {
     watermark_task: WatermarkTask,
     system_package_task: SystemPackageTask,
     state: AppState,
+    db_reader: Db,
 }
 
 impl Server {
@@ -72,6 +75,16 @@ impl Server {
     /// signal is received, the method waits for all tasks to complete before returning.
     pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
+
+        // Compatibility check
+        info!("Starting compatibility check");
+        let result = check_all_tables(&self.db_reader).await?;
+
+        if !result {
+            return Err(Error::Internal("Compatibility check failed".to_string()));
+        }
+
+        info!("Compatibility check passed");
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
@@ -327,6 +340,7 @@ impl ServerBuilder {
             watermark_task,
             system_package_task,
             state,
+            db_reader,
         })
     }
 

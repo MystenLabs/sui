@@ -21,7 +21,7 @@ pub struct TxDigest {
     pub transaction_digest: Vec<u8>,
 }
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = tx_senders)]
 pub struct StoredTxSenders {
     pub cp_sequence_number: i64,
@@ -29,7 +29,7 @@ pub struct StoredTxSenders {
     pub sender: Vec<u8>,
 }
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = tx_recipients)]
 pub struct StoredTxRecipients {
     pub cp_sequence_number: i64,
@@ -37,7 +37,7 @@ pub struct StoredTxRecipients {
     pub recipient: Vec<u8>,
 }
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = tx_input_objects)]
 pub struct StoredTxInputObject {
     pub cp_sequence_number: i64,
@@ -45,7 +45,7 @@ pub struct StoredTxInputObject {
     pub object_id: Vec<u8>,
 }
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = tx_changed_objects)]
 pub struct StoredTxChangedObject {
     pub cp_sequence_number: i64,
@@ -53,7 +53,7 @@ pub struct StoredTxChangedObject {
     pub object_id: Vec<u8>,
 }
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = tx_calls)]
 pub struct StoredTxCalls {
     pub cp_sequence_number: i64,
@@ -63,7 +63,7 @@ pub struct StoredTxCalls {
     pub func: String,
 }
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = tx_digests)]
 pub struct StoredTxDigest {
     pub tx_digest: Vec<u8>,
