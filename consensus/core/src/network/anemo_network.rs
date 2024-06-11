@@ -8,9 +8,11 @@ use std::{
     time::Duration,
 };
 
-use anemo::rpc::Status;
-use anemo::types::response::StatusCode;
-use anemo::{types::PeerInfo, PeerId, Response};
+use anemo::{
+    rpc::Status,
+    types::{response::StatusCode, PeerInfo},
+    PeerId, Response,
+};
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
@@ -38,6 +40,7 @@ use super::{
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
+    commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
     CommitIndex, Round,
@@ -192,12 +195,14 @@ impl NetworkClient for AnemoClient {
     async fn fetch_commits(
         &self,
         peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
         let mut client = self.get_client(peer, timeout).await?;
-        let request = FetchCommitsRequest { start, end };
+        let request = FetchCommitsRequest {
+            start: commit_range.start(),
+            end: commit_range.end(),
+        };
         let response = client
             .fetch_commits(anemo::Request::new(request).with_timeout(timeout))
             .await
@@ -321,7 +326,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
         let request = request.into_body();
         let (commits, certifier_blocks) = self
             .service
-            .handle_fetch_commits(*index, request.start, request.end)
+            .handle_fetch_commits(*index, (request.start..=request.end).into())
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(
@@ -404,7 +409,12 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
         let epoch_string: String = self.context.committee.epoch().to_string();
         let inbound_network_metrics = self.context.metrics.network_metrics.inbound.clone();
         let outbound_network_metrics = self.context.metrics.network_metrics.outbound.clone();
-        let quinn_connection_metrics = self.context.metrics.quinn_connection_metrics.clone();
+        let quinn_connection_metrics = self
+            .context
+            .metrics
+            .network_metrics
+            .quinn_connection_metrics
+            .clone();
         let all_peer_ids = self
             .context
             .committee

@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.27.0"
+    "version": "1.28.0"
   },
   "methods": [
     {
@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "49",
+              "maxSupportedProtocolVersion": "50",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1381,6 +1381,7 @@
                 "enable_poseidon": false,
                 "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
+                "fresh_vm_on_framework_upgrade": false,
                 "hardened_otw_check": false,
                 "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
@@ -1469,6 +1470,7 @@
                 },
                 "check_zklogin_id_cost_base": null,
                 "check_zklogin_issuer_cost_base": null,
+                "checkpoint_summary_version_specific_data": null,
                 "consensus_bad_nodes_stake_threshold": null,
                 "consensus_max_transaction_size_bytes": null,
                 "consensus_max_transactions_in_block_bytes": null,
@@ -1860,6 +1862,7 @@
                 "max_verifier_meter_ticks_per_function": {
                   "u64": "6000000"
                 },
+                "min_checkpoint_interval_ms": null,
                 "min_move_binary_format_version": null,
                 "move_binary_format_version": {
                   "u32": "6"

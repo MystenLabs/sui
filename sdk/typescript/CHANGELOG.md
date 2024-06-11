@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.1.0
+
+### Minor Changes
+
+- bae8f9683c: Remove address from parseSerializedSignature
+
 ## 1.0.5
 
 ### Patch Changes

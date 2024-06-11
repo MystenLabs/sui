@@ -14,6 +14,7 @@ use crate::crypto::BridgeAuthoritySignInfo;
 use crate::error::BridgeError;
 use crate::error::BridgeResult;
 use crate::metrics::BridgeMetrics;
+use crate::server::BridgeNodePublicMetadata;
 use crate::types::SignedBridgeAction;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
@@ -136,6 +137,7 @@ pub fn run_mock_server(
         make_router(
             Arc::new(mock_handler),
             Arc::new(BridgeMetrics::new_for_testing()),
+            Arc::new(BridgeNodePublicMetadata::empty_for_testing()),
         )
         .into_make_service(),
     );

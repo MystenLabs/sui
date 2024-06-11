@@ -180,6 +180,10 @@ module bridge::bridge {
             .register(system_state, bridge_pubkey_bytes, http_rest_url, ctx);
     }
 
+    public fun update_node_url(bridge: &mut Bridge, new_url: vector<u8>, ctx: &TxContext) {
+        load_inner_mut(bridge).committee.update_node_url(new_url, ctx);
+    }
+
     public fun register_foreign_token<T>(
         bridge: &mut Bridge,
         tc: TreasuryCap<T>,
@@ -714,7 +718,7 @@ module bridge::bridge {
     ): u8 {
         bridge.get_token_transfer_action_status(source_chain, bridge_seq_num)
     }
-        
+
     #[test_only]
     public fun test_get_token_transfer_action_signatures(
         bridge: &mut Bridge,

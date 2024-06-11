@@ -24,7 +24,7 @@ use move_core_types::{
     account_address::AccountAddress, annotated_value::MoveTypeLayout, ident_str,
 };
 use move_package::BuildConfig;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
 use sui_sdk::apis::ReadApi;
@@ -929,7 +929,7 @@ impl<'a> PTBBuilder<'a> {
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     self.reader,
                     BuildConfig::default(),
-                    PathBuf::from(package_path),
+                    Path::new(&package_path),
                     false, /* with_unpublished_dependencies */
                     false, /* skip_dependency_verification */
                 )
@@ -970,7 +970,7 @@ impl<'a> PTBBuilder<'a> {
                     upgrade_package(
                         self.reader,
                         BuildConfig::default(),
-                        PathBuf::from(package_path),
+                        Path::new(&package_path),
                         ObjectID::from_address(upgrade_cap_id.into_inner()),
                         false, /* with_unpublished_dependencies */
                         false, /* skip_dependency_verification */

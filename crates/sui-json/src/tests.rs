@@ -420,7 +420,7 @@ fn test_basic_args_linter_top_level() {
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/nfts");
     let compiled_modules = BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .into_modules();
     let example_package = Object::new_package_for_testing(
@@ -532,7 +532,7 @@ fn test_basic_args_linter_top_level() {
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/basics");
     let compiled_modules = BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .into_modules();
     let example_package = Object::new_package_for_testing(
@@ -619,7 +619,7 @@ fn test_basic_args_linter_top_level() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../sui-core/src/unit_tests/data/entry_point_vector");
     let compiled_modules = BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .into_modules();
     let example_package = Object::new_package_for_testing(

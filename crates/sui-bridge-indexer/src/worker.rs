@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::postgres_writer::{get_connection_pool, write, PgPool};
-use crate::{BridgeDataSource, TokenTransfer, TokenTransferData, TokenTransferStatus};
+use crate::{
+    metrics::BridgeIndexerMetrics,
+    postgres_writer::{get_connection_pool, write, PgPool},
+    BridgeDataSource, TokenTransfer, TokenTransferData, TokenTransferStatus,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use ethers::providers::Provider;
@@ -25,21 +28,27 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionKind},
     BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID,
 };
-use tracing::{debug, info};
+use tracing::info;
 
 pub struct BridgeWorker {
     bridge_object_ids: BTreeSet<ObjectID>,
     pg_pool: PgPool,
+    metrics: BridgeIndexerMetrics,
 }
 
 impl BridgeWorker {
-    pub fn new(bridge_object_ids: Vec<ObjectID>, db_url: String) -> Self {
+    pub fn new(
+        bridge_object_ids: Vec<ObjectID>,
+        db_url: String,
+        metrics: BridgeIndexerMetrics,
+    ) -> Self {
         let mut bridge_object_ids = bridge_object_ids.into_iter().collect::<BTreeSet<_>>();
         bridge_object_ids.insert(SUI_BRIDGE_OBJECT_ID);
         let pg_pool = get_connection_pool(db_url);
         Self {
             bridge_object_ids,
             pg_pool,
+            metrics,
         }
     }
 
@@ -64,16 +73,19 @@ impl BridgeWorker {
         checkpoint: u64,
         timestamp_ms: u64,
     ) -> Result<Vec<TokenTransfer>> {
+        self.metrics.total_sui_bridge_transactions.inc();
         if let Some(events) = &tx.events {
             let token_transfers = events.data.iter().try_fold(vec![], |mut result, ev| {
-                if let Some(data) = Self::process_sui_event(ev, tx, checkpoint, timestamp_ms)? {
+                if let Some(data) =
+                    Self::process_sui_event(ev, tx, checkpoint, timestamp_ms, &self.metrics)?
+                {
                     result.push(data);
                 }
                 Ok::<_, anyhow::Error>(result)
             })?;
 
             if !token_transfers.is_empty() {
-                debug!(
+                info!(
                     "SUI: Extracted {} bridge token transfer data entries for tx {}.",
                     token_transfers.len(),
                     tx.transaction.digest()
@@ -90,11 +102,13 @@ impl BridgeWorker {
         tx: &CheckpointTransaction,
         checkpoint: u64,
         timestamp_ms: u64,
+        metrics: &BridgeIndexerMetrics,
     ) -> Result<Option<TokenTransfer>> {
         Ok(if ev.type_.address == BRIDGE_ADDRESS {
             match ev.type_.name.as_str() {
                 "TokenDepositedEvent" => {
-                    debug!("Observed Sui Deposit {:?}", ev);
+                    info!("Observed Sui Deposit {:?}", ev);
+                    metrics.total_sui_token_deposited.inc();
                     let move_event: MoveTokenDepositedEvent = bcs::from_bytes(&ev.contents)?;
                     Some(TokenTransfer {
                         chain_id: move_event.source_chain,
@@ -116,7 +130,8 @@ impl BridgeWorker {
                     })
                 }
                 "TokenTransferApproved" => {
-                    debug!("Observed Sui Approval {:?}", ev);
+                    info!("Observed Sui Approval {:?}", ev);
+                    metrics.total_sui_token_transfer_approved.inc();
                     let event: MoveTokenTransferApproved = bcs::from_bytes(&ev.contents)?;
                     Some(TokenTransfer {
                         chain_id: event.message_key.source_chain,
@@ -132,7 +147,8 @@ impl BridgeWorker {
                     })
                 }
                 "TokenTransferClaimed" => {
-                    debug!("Observed Sui Claim {:?}", ev);
+                    info!("Observed Sui Claim {:?}", ev);
+                    metrics.total_sui_token_transfer_claimed.inc();
                     let event: MoveTokenTransferClaimed = bcs::from_bytes(&ev.contents)?;
                     Some(TokenTransfer {
                         chain_id: event.message_key.source_chain,
@@ -147,7 +163,10 @@ impl BridgeWorker {
                         data: None,
                     })
                 }
-                _ => None,
+                _ => {
+                    metrics.total_sui_bridge_txn_other.inc();
+                    None
+                }
             }
         } else {
             None
@@ -159,6 +178,7 @@ pub async fn process_eth_transaction(
     mut eth_events_rx: Receiver<(EthAddress, u64, Vec<EthLog>)>,
     provider: Arc<Provider<Http>>,
     pool: PgPool,
+    metrics: BridgeIndexerMetrics,
 ) {
     while let Some((_, _, logs)) = eth_events_rx.recv().await {
         let mut data = vec![];
@@ -177,9 +197,15 @@ pub async fn process_eth_transaction(
             let gas = transaction.gas;
             let tx_hash = log.tx_hash;
             info!("Observed Eth bridge event: {:?}", bridge_event);
-            if let Some(token_transfer) =
-                process_eth_event(bridge_event, block_number, timestamp, tx_hash, gas.as_u64())
-            {
+            metrics.total_eth_bridge_transactions.inc();
+            if let Some(token_transfer) = process_eth_event(
+                bridge_event,
+                block_number,
+                timestamp,
+                tx_hash,
+                gas.as_u64(),
+                &metrics,
+            ) {
                 data.push(token_transfer)
             }
         }
@@ -195,11 +221,13 @@ fn process_eth_event(
     timestamp_ms: u64,
     tx_hash: H256,
     gas: u64,
+    metrics: &BridgeIndexerMetrics,
 ) -> Option<TokenTransfer> {
     match bridge_event {
         EthBridgeEvent::EthSuiBridgeEvents(bridge_event) => match bridge_event {
             EthSuiBridgeEvents::TokensDepositedFilter(bridge_event) => {
                 info!("Observed Eth Deposit {:?}", bridge_event);
+                metrics.total_eth_token_deposited.inc();
                 Some(TokenTransfer {
                     chain_id: bridge_event.source_chain_id,
                     nonce: bridge_event.nonce,
@@ -221,6 +249,7 @@ fn process_eth_event(
             }
             EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
                 info!("Observed Eth Claim {:?}", bridge_event);
+                metrics.total_eth_token_transfer_claimed.inc();
                 Some(TokenTransfer {
                     chain_id: bridge_event.source_chain_id,
                     nonce: bridge_event.nonce,
@@ -237,12 +266,18 @@ fn process_eth_event(
             EthSuiBridgeEvents::PausedFilter(_)
             | EthSuiBridgeEvents::UnpausedFilter(_)
             | EthSuiBridgeEvents::UpgradedFilter(_)
-            | EthSuiBridgeEvents::InitializedFilter(_) => None,
+            | EthSuiBridgeEvents::InitializedFilter(_) => {
+                metrics.total_eth_bridge_txn_other.inc();
+                None
+            }
         },
         EthBridgeEvent::EthBridgeCommitteeEvents(_)
         | EthBridgeEvent::EthBridgeLimiterEvents(_)
         | EthBridgeEvent::EthBridgeConfigEvents(_)
-        | EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => None,
+        | EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => {
+            metrics.total_eth_bridge_txn_other.inc();
+            None
+        }
     }
 }
 

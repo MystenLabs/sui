@@ -150,7 +150,6 @@ move-core-types = { path = "crates/move-core-types" }
 move-coverage = { path = "crates/move-coverage" }
 move-disassembler = { path = "crates/move-disassembler" }
 move-docgen = { path = "crates/move-docgen" }
-move-errmapgen = { path = "crates/move-errmapgen" }
 move-ir-compiler = { path = "crates/move-ir-compiler" }
 move-ir-to-bytecode = { path = "crates/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "crates/move-ir-to-bytecode-syntax" }

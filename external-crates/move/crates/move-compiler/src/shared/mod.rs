@@ -453,10 +453,7 @@ impl CompilationEnv {
     }
 
     pub fn has_diags_at_or_above_severity(&self, threshold: Severity) -> bool {
-        match self.diags.max_severity() {
-            Some(max) if max >= threshold => true,
-            Some(_) | None => false,
-        }
+        self.diags.max_severity_at_or_above_severity(threshold)
     }
 
     pub fn check_diags_at_or_above_severity(
@@ -478,10 +475,7 @@ impl CompilationEnv {
     /// Should only be called after compilation is finished
     pub fn take_final_warning_diags(&mut self) -> Diagnostics {
         let final_diags = self.take_final_diags();
-        debug_assert!(final_diags
-            .max_severity()
-            .map(|s| s == Severity::Warning)
-            .unwrap_or(true));
+        debug_assert!(final_diags.max_severity_at_or_under_severity(Severity::Warning));
         final_diags
     }
 

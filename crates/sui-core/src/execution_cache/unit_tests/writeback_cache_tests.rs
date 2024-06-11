@@ -180,7 +180,7 @@ impl Scenario {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("src/unit_tests/data/object_basics");
         let modules: Vec<_> = BuildConfig::new_for_testing()
-            .build(path)
+            .build(&path)
             .unwrap()
             .get_modules()
             .cloned()

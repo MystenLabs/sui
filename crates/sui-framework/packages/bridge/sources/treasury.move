@@ -13,7 +13,6 @@ module bridge::treasury {
     use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};
     use sui::event::emit;
     use sui::hex;
-    use sui::math;
     use sui::object_bag::{Self, ObjectBag};
     use sui::package;
     use sui::package::UpgradeCap;
@@ -139,7 +138,7 @@ module bridge::treasury {
                 uc,
                 decimal,
             } = self.waiting_room.remove<String, ForeignTokenRegistration>(token_name);
-            let decimal_multiplier = math::pow(10, decimal);
+            let decimal_multiplier = 10u64.pow(decimal);
             self.supported_tokens.insert(
                 type_name,
                 BridgeTokenMetadata{

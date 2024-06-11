@@ -16,14 +16,7 @@ use move_coverage::coverage_map::{output_map_to_file, CoverageMap};
 use move_package::{compilation::build_plan::BuildPlan, BuildConfig};
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::CostTable;
-use std::{
-    collections::HashMap,
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-    process::ExitStatus,
-    sync::Arc,
-};
+use std::{collections::HashMap, fs, io::Write, path::Path, process::ExitStatus, sync::Arc};
 // if windows
 #[cfg(target_family = "windows")]
 use std::os::windows::process::ExitStatusExt;
@@ -66,12 +59,20 @@ pub struct Test {
     /// Collect coverage information for later use with the various `move coverage` subcommands. Currently supported only in debug builds.
     #[clap(long = "coverage")]
     pub compute_coverage: bool,
+
+    /// The seed to use for the randomness generator.
+    #[clap(name = "seed", long = "seed")]
+    pub seed: Option<u64>,
+
+    /// The number of iterations to run each test that uses generated values (only used with #[random_test]).
+    #[clap(name = "rand-num-iters", long = "rand-num-iters")]
+    pub rand_num_iters: Option<u64>,
 }
 
 impl Test {
     pub fn execute(
         self,
-        path: Option<PathBuf>,
+        path: Option<&Path>,
         config: BuildConfig,
         natives: Vec<NativeFunctionRecord>,
         cost_table: Option<CostTable>,
@@ -104,6 +105,8 @@ impl Test {
             report_statistics,
             verbose_mode,
             compute_coverage: _,
+            seed,
+            rand_num_iters,
         } = self;
         UnitTestingConfig {
             gas_limit,
@@ -112,6 +115,8 @@ impl Test {
             num_threads,
             report_statistics,
             verbose: verbose_mode,
+            seed,
+            rand_num_iters,
             ..UnitTestingConfig::default_with_bound(None)
         }
     }
@@ -226,8 +231,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup
     // the trace files.
     if !unit_test_config
-        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)
-        .unwrap()
+        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)?
         .1
     {
         cleanup_trace();

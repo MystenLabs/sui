@@ -1,5 +1,12 @@
 # @mysten/kiosk
 
+## 0.9.6
+
+### Patch Changes
+
+- Updated dependencies [bae8f9683c]
+  - @mysten/sui@1.1.0
+
 ## 0.9.5
 
 ### Patch Changes

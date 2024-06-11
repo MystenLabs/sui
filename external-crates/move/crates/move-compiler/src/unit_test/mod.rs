@@ -6,8 +6,11 @@ use crate::{
     compiled_unit::NamedCompiledModule, diagnostics::FilesSourceText, shared::NumericalAddress,
 };
 use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
-    runtime_value::MoveValue, vm_status::StatusCode,
+    account_address::AccountAddress,
+    identifier::Identifier,
+    language_storage::{ModuleId, TypeTag},
+    runtime_value::MoveValue,
+    vm_status::StatusCode,
 };
 use std::{collections::BTreeMap, fmt};
 
@@ -32,8 +35,14 @@ pub struct ModuleTestPlan {
 #[derive(Debug, Clone)]
 pub struct TestCase {
     pub test_name: TestName,
-    pub arguments: Vec<MoveValue>,
+    pub arguments: Vec<TestArgument>,
     pub expected_failure: Option<ExpectedFailure>,
+}
+
+#[derive(Debug, Clone)]
+pub enum TestArgument {
+    Value(MoveValue),
+    Generate { generated_type: TypeTag },
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +70,7 @@ pub struct ExpectedMoveError(
 
 pub struct ExpectedMoveErrorDisplay<'a> {
     error: &'a ExpectedMoveError,
+    context: &'a BTreeMap<ModuleId, NamedCompiledModule>,
     is_past_tense: bool,
 }
 
@@ -101,12 +111,28 @@ impl TestPlan {
     }
 }
 
-impl ExpectedMoveError {
-    pub fn verbiage(&self, is_past_tense: bool) -> ExpectedMoveErrorDisplay {
+impl<'a> ExpectedMoveError {
+    pub fn with_context(
+        &'a self,
+        context: &'a BTreeMap<ModuleId, NamedCompiledModule>,
+    ) -> ExpectedMoveErrorDisplay<'a> {
         ExpectedMoveErrorDisplay {
             error: self,
-            is_past_tense,
+            context,
+            is_past_tense: false,
         }
+    }
+}
+
+impl<'a> ExpectedMoveErrorDisplay<'a> {
+    pub fn past_tense(mut self) -> Self {
+        self.is_past_tense = true;
+        self
+    }
+
+    pub fn present_tense(mut self) -> Self {
+        self.is_past_tense = false;
+        self
     }
 }
 
@@ -124,6 +150,7 @@ impl<'a> fmt::Display for ExpectedMoveErrorDisplay<'a> {
         use move_binary_format::errors::Location;
         let Self {
             error: ExpectedMoveError(status, sub_status, location),
+            context,
             is_past_tense,
         } = self;
         let status_val: u64 = (*status).into();
@@ -162,7 +189,15 @@ impl<'a> fmt::Display for ExpectedMoveErrorDisplay<'a> {
         }
         match location {
             Location::Undefined => write!(f, " in an unknown location"),
-            Location::Module(id) => write!(f, " in the module {id}"),
+            Location::Module(id) => {
+                let module_id =
+                    if let Some(address_name) = context.get(id).and_then(|m| m.address_name()) {
+                        format!("{}::{}", address_name, id.name())
+                    } else {
+                        id.short_str_lossless()
+                    };
+                write!(f, " in the module {}", module_id)
+            }
         }
     }
 }

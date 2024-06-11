@@ -5,6 +5,7 @@ use crate::abi::EthBridgeCommittee;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::*;
+use crate::server::BridgeNodePublicMetadata;
 use crate::types::BridgeAction;
 use crate::utils::get_eth_signer_client;
 use crate::utils::EthSigner;
@@ -720,9 +721,13 @@ pub(crate) async fn start_bridge_cluster(
         // Spawn bridge node in memory
         let config_clone = config.clone();
         handles.push(
-            run_bridge_node(config_clone, Registry::new())
-                .await
-                .unwrap(),
+            run_bridge_node(
+                config_clone,
+                BridgeNodePublicMetadata::empty_for_testing(),
+                Registry::new(),
+            )
+            .await
+            .unwrap(),
         );
     }
     handles

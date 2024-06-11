@@ -273,6 +273,9 @@ pub struct AuthorityPerEpochStore {
     pub(crate) signature_verifier: SignatureVerifier,
 
     pub(crate) checkpoint_state_notify_read: NotifyRead<CheckpointSequenceNumber, Accumulator>,
+
+    running_root_notify_read: NotifyRead<CheckpointSequenceNumber, Accumulator>,
+
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
     /// This is used to notify all epoch specific tasks that epoch has ended.
@@ -456,6 +459,12 @@ pub struct AuthorityEpochTables {
     // only for the checkpoint that the key references. Append-only, i.e.,
     // the accumulator is complete wrt the checkpoint
     pub state_hash_by_checkpoint: DBMap<CheckpointSequenceNumber, Accumulator>,
+
+    /// Maps checkpoint sequence number to the running (non-finalized) root state
+    /// accumulator up th that checkpoint. This should be equivalent to the root
+    /// state hash at end of epoch. Guaranteed to be written to in checkpoint
+    /// sequence number order.
+    pub running_root_accumulators: DBMap<CheckpointSequenceNumber, Accumulator>,
 
     /// Record of the capabilities advertised by each authority.
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilities>,
@@ -794,6 +803,7 @@ impl AuthorityPerEpochStore {
             consensus_notify_read: NotifyRead::new(),
             signature_verifier,
             checkpoint_state_notify_read: NotifyRead::new(),
+            running_root_notify_read: NotifyRead::new(),
             executed_digests_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
@@ -899,6 +909,12 @@ impl AuthorityPerEpochStore {
         self.parent_path.clone()
     }
 
+    pub fn state_accumulator_v2_enabled(&self) -> bool {
+        self.epoch_start_configuration
+            .flags()
+            .contains(&EpochFlag::StateAccumulatorV2Enabled)
+    }
+
     /// Returns `&Arc<EpochStartConfiguration>`
     /// User can treat this `Arc` as `&EpochStartConfiguration`, or clone the Arc to pass as owned object
     pub fn epoch_start_config(&self) -> &Arc<EpochStartConfiguration> {
@@ -970,6 +986,37 @@ impl AuthorityPerEpochStore {
             .tables()?
             .state_hash_by_checkpoint
             .insert(checkpoint, accumulator)?)
+    }
+
+    pub fn get_running_root_accumulator(
+        &self,
+        checkpoint: &CheckpointSequenceNumber,
+    ) -> SuiResult<Option<Accumulator>> {
+        Ok(self.tables()?.running_root_accumulators.get(checkpoint)?)
+    }
+
+    pub fn get_highest_running_root_accumulator(
+        &self,
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, Accumulator)>> {
+        Ok(self
+            .tables()?
+            .running_root_accumulators
+            .unbounded_iter()
+            .skip_to_last()
+            .next())
+    }
+
+    pub fn insert_running_root_accumulator(
+        &self,
+        checkpoint: &CheckpointSequenceNumber,
+        acc: &Accumulator,
+    ) -> SuiResult {
+        self.tables()?
+            .running_root_accumulators
+            .insert(checkpoint, acc)?;
+        self.running_root_notify_read.notify(checkpoint, acc);
+
+        Ok(())
     }
 
     pub fn reference_gas_price(&self) -> u64 {
@@ -1204,7 +1251,8 @@ impl AuthorityPerEpochStore {
     }
 
     /// Returns future containing the state digest for the given epoch
-    /// once available
+    /// once available.
+    /// TODO: remove once StateAccumulatorV1 is removed
     pub async fn notify_read_checkpoint_state_digests(
         &self,
         checkpoints: Vec<CheckpointSequenceNumber>,
@@ -1230,6 +1278,22 @@ impl AuthorityPerEpochStore {
                 });
 
         Ok(join_all(results).await)
+    }
+
+    pub async fn notify_read_running_root(
+        &self,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult<Accumulator> {
+        let registration = self.running_root_notify_read.register_one(&checkpoint);
+        let acc = self.tables()?.running_root_accumulators.get(&checkpoint)?;
+
+        let result = match acc {
+            Some(ready) => Either::Left(futures::future::ready(ready)),
+            None => Either::Right(registration),
+        }
+        .await;
+
+        Ok(result)
     }
 
     /// `pending_certificates` table related methods. Should only be used from TransactionManager.
@@ -3521,14 +3585,16 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn last_built_checkpoint_commit_height(&self) -> SuiResult<Option<CheckpointHeight>> {
+    pub fn last_built_checkpoint_builder_summary(
+        &self,
+    ) -> SuiResult<Option<BuilderCheckpointSummary>> {
         Ok(self
             .tables()?
             .builder_checkpoint_summary_v2
             .unbounded_iter()
             .skip_to_last()
             .next()
-            .and_then(|(_, b)| b.checkpoint_height))
+            .map(|(_, s)| s))
     }
 
     pub fn last_built_checkpoint_summary(

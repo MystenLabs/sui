@@ -89,7 +89,7 @@ if __name__ == "__main__":
 
     for i in range(1, args.num_seeds + 1):
         next_seed = args.seed_start + i
-        commands.append(("%s %s" % (binary, args.test), {
+        commands.append(("%s --exact %s" % (binary, args.test), {
           "MSIM_TEST_SEED": "%d" % next_seed,
           "RUST_LOG": "off",
         }))

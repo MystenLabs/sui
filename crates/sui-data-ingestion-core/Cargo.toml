@@ -26,6 +26,7 @@ sui-types.workspace = true
 url.workspace = true
 tempfile.workspace = true
 tap.workspace = true
+sui-protocol-config.workspace = true
 sui-rest-api.workspace = true
 
 [dev-dependencies]

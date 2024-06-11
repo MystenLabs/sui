@@ -23,7 +23,6 @@ mod ingestion_tests {
     use sui_types::base_types::SuiAddress;
     use sui_types::effects::TransactionEffectsAPI;
     use sui_types::gas_coin::GasCoin;
-    use sui_types::storage::ReadStore;
     use sui_types::{
         Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
     };
@@ -58,14 +57,7 @@ mod ingestion_tests {
             .unwrap();
 
         let server_handle = tokio::spawn(async move {
-            let chain_id = (*sim
-                .get_checkpoint_by_sequence_number(0)
-                .unwrap()
-                .unwrap()
-                .digest())
-            .into();
-
-            sui_rest_api::RestService::new_without_version(sim, chain_id)
+            sui_rest_api::RestService::new_without_version(sim)
                 .start_service(server_url, Some("/rest".to_owned()))
                 .await;
         });

@@ -229,6 +229,9 @@ where
             leader_schedule,
             tx_consumer,
             block_manager,
+            // For streaming RPC, Core will be notified when consumer is available.
+            // For non-streaming RPC, there is no way to know so default to true.
+            !N::Client::SUPPORT_STREAMING,
             commit_observer,
             core_signals,
             protocol_keypair,
@@ -360,6 +363,7 @@ mod tests {
         authority_node::AuthorityService,
         block::{BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
+        commit::CommitRange,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         error::ConsensusResult,
@@ -402,6 +406,10 @@ mod tests {
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             Ok(Default::default())
         }
+
+        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+            Ok(())
+        }
     }
 
     #[derive(Default)]
@@ -442,8 +450,7 @@ mod tests {
         async fn fetch_commits(
             &self,
             _peer: AuthorityIndex,
-            _start: Round,
-            _end: Round,
+            _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
@@ -560,9 +567,6 @@ mod tests {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let temp_dirs = (0..4).map(|_| TempDir::new().unwrap()).collect::<Vec<_>>();
 
-        let mut output_receivers = vec![];
-        let mut authorities = vec![];
-
         let make_authority = |index: AuthorityIndex| {
             let committee = committee.clone();
             let registry = Registry::new();
@@ -600,6 +604,9 @@ mod tests {
                 (authority, receiver)
             }
         };
+
+        let mut output_receivers = Vec::with_capacity(committee.size());
+        let mut authorities = Vec::with_capacity(committee.size());
 
         for (index, _authority_info) in committee.authorities() {
             let (authority, receiver) = make_authority(index).await;

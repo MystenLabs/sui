@@ -455,7 +455,7 @@ impl TypingAnalysisContext<'_> {
         self.add_fun_use_def(module, &fun_name, &fun_use.value, &fun_use.loc);
         // handle type parameters
         for t in tyargs.iter_mut() {
-            self.visit_type(t);
+            self.visit_type(None, t);
         }
         if let Some(args) = args {
             self.visit_exp(args);
@@ -512,7 +512,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         }
         if let N::StructFields::Defined(positional, fields) = &mut sdef.fields {
             for (fpos, fname, (_, ty)) in fields {
-                self.visit_type(ty);
+                self.visit_type(None, ty);
                 if !*positional {
                     // Enter self-definition for field name (unwrap safe - done when inserting def),
                     // but only if the fields are named. Positional fields, introduced in Move 2024
@@ -632,7 +632,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         }
 
         for (mutability, pname, ptype) in &mut fdef.signature.parameters {
-            self.visit_type(ptype);
+            self.visit_type(None, ptype);
 
             // add definition of the parameter
             self.add_local_def(
@@ -651,7 +651,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
             T::FunctionBody_::Macro | T::FunctionBody_::Native => (),
         }
         // process return types
-        self.visit_type(&mut fdef.signature.return_type);
+        self.visit_type(None, &mut fdef.signature.return_type);
 
         // clear type params from the scope
         self.type_params.clear();
@@ -724,7 +724,8 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         use T::UnannotatedExp_ as TE;
 
         fn visit_exp_inner(visitor: &mut TypingAnalysisContext<'_>, exp: &mut T::Exp) -> bool {
-            visitor.visit_type(&mut exp.ty);
+            let exp_loc = exp.exp.loc;
+            visitor.visit_type(Some(exp_loc), &mut exp.ty);
             match &mut exp.exp.value {
                 TE::Move { from_user: _, var }
                 | TE::Copy { from_user: _, var }
@@ -759,7 +760,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     }
                     // add type params
                     for t in tyargs.iter_mut() {
-                        visitor.visit_type(t);
+                        visitor.visit_type(Some(exp_loc), t);
                     }
                     true
                 }
@@ -834,7 +835,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         }
     }
 
-    fn visit_type_custom(&mut self, ty: &mut N::Type) -> bool {
+    fn visit_type_custom(&mut self, exp_loc: Option<Loc>, ty: &mut N::Type) -> bool {
         if self.traverse_only {
             return true;
         }
@@ -875,7 +876,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     self.add_datatype_use_def(mod_ident, struct_name, &struct_name.loc());
                 } // otherwise nothing to be done for other type names
                 for t in tyargs.iter_mut() {
-                    self.visit_type(t);
+                    self.visit_type(exp_loc, t);
                 }
                 true
             }

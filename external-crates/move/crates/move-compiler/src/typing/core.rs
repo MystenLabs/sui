@@ -1538,6 +1538,8 @@ pub fn make_method_call_type(
     Some((target_m, target_f, function_ty))
 }
 
+/// Make a new resolved function type for the provided function and type arguments.
+/// This also checks call visibility, including recording new friends for `public(package)`.
 pub fn make_function_type(
     context: &mut Context,
     loc: Loc,
@@ -1545,10 +1547,30 @@ pub fn make_function_type(
     f: &FunctionName,
     ty_args_opt: Option<Vec<Type>>,
 ) -> ResolvedFunctionType {
-    let in_current_module = match &context.current_module {
-        Some(current) => m == current,
-        None => false,
-    };
+    let return_ty = make_function_type_no_visibility_check(context, loc, m, f, ty_args_opt);
+    let finfo = context.function_info(m, f);
+    let defined_loc = finfo.defined_loc;
+    check_function_visibility(
+        context,
+        defined_loc,
+        loc,
+        m,
+        f,
+        finfo.entry,
+        finfo.visibility,
+    );
+    return_ty
+}
+
+/// Make a new resolved function type for the provided function and type arguments.
+/// THIS DOES NOT CHECK CALL VISIBILITY, AND SHOULD BE USED CAREFULLY.
+pub fn make_function_type_no_visibility_check(
+    context: &mut Context,
+    loc: Loc,
+    m: &ModuleIdent,
+    f: &FunctionName,
+    ty_args_opt: Option<Vec<Type>>,
+) -> ResolvedFunctionType {
     let finfo = context.function_info(m, f);
     let macro_ = finfo.macro_;
     let constraints: Vec<_> = finfo
@@ -1596,13 +1618,35 @@ pub fn make_function_type(
     let return_ty = subst_tparams(tparam_subst, finfo.signature.return_type.clone());
 
     let defined_loc = finfo.defined_loc;
+    ResolvedFunctionType {
+        declared: defined_loc,
+        macro_,
+        ty_args,
+        params,
+        return_: return_ty,
+    }
+}
+
+fn check_function_visibility(
+    context: &mut Context,
+    defined_loc: Loc,
+    usage_loc: Loc,
+    m: &ModuleIdent,
+    f: &FunctionName,
+    entry_opt: Option<Loc>,
+    visibility: Visibility,
+) {
+    let in_current_module = match &context.current_module {
+        Some(current) => m == current,
+        None => false,
+    };
     let public_for_testing =
-        public_testing_visibility(context.env, context.current_package, f, finfo.entry);
+        public_testing_visibility(context.env, context.current_package, f, entry_opt);
     let is_testing_context = context.is_testing_context();
     let supports_public_package = context
         .env
         .supports_feature(context.current_package, FeatureGate::PublicPackage);
-    match finfo.visibility {
+    match visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
@@ -1617,10 +1661,13 @@ pub fn make_function_type(
                 Visibility::PUBLIC,
                 friend_or_package,
             );
-            visibility_error(
+            report_visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to internal function '{m}::{f}'")),
+                (
+                    usage_loc,
+                    format!("Invalid call to internal function '{m}::{f}'"),
+                ),
                 (defined_loc, internal_msg),
             );
         }
@@ -1656,10 +1703,10 @@ pub fn make_function_type(
                     .map(|pkg_name| format!("{}", pkg_name))
                     .unwrap_or("<unknown package>".to_string())
             );
-            visibility_error(
+            report_visibility_error(
                 context,
                 public_for_testing,
-                (loc, msg),
+                (usage_loc, msg),
                 (vis_loc, internal_msg),
             );
         }
@@ -1671,21 +1718,14 @@ pub fn make_function_type(
             );
             let internal_msg =
                 format!("This function can only be called from a 'friend' of module '{m}'",);
-            visibility_error(
+            report_visibility_error(
                 context,
                 public_for_testing,
-                (loc, msg),
+                (usage_loc, msg),
                 (vis_loc, internal_msg),
             );
         }
         Visibility::Public(_) => (),
-    };
-    ResolvedFunctionType {
-        declared: defined_loc,
-        macro_,
-        ty_args,
-        params,
-        return_: return_ty,
     }
 }
 
@@ -1715,7 +1755,7 @@ pub fn public_testing_visibility(
     callee_entry.map(PublicForTesting::Entry)
 }
 
-fn visibility_error(
+fn report_visibility_error(
     context: &mut Context,
     public_for_testing: Option<PublicForTesting>,
     (call_loc, call_msg): (Loc, impl ToString),
@@ -1743,7 +1783,7 @@ fn visibility_error(
             diag.add_secondary_label((test_loc, test_msg))
         }
     }
-    context.env.add_diag(diag)
+    context.env.add_diag(diag);
 }
 
 pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
@@ -2028,6 +2068,30 @@ pub fn unfold_type(subst: &Subst, sp!(loc, t_): Type) -> Type {
             }
         }
         x => sp(loc, x),
+    }
+}
+
+pub fn unfold_type_recur(subst: &Subst, sp!(_loc, t_): &mut Type) {
+    match t_ {
+        Type_::Var(i) => {
+            let last_tvar = forward_tvar(subst, *i);
+            match subst.get(last_tvar) {
+                Some(sp!(_, Type_::Var(_))) => unreachable!(),
+                None => {
+                    *t_ = Type_::Anything;
+                }
+                Some(inner) => {
+                    *t_ = inner.value.clone();
+                }
+            }
+        }
+        Type_::Unit | Type_::Param(_) | Type_::Anything | Type_::UnresolvedError => (),
+        Type_::Ref(_, inner) => unfold_type_recur(subst, inner),
+        Type_::Apply(_, _, args) => args.iter_mut().for_each(|ty| unfold_type_recur(subst, ty)),
+        Type_::Fun(args, ret) => {
+            args.iter_mut().for_each(|ty| unfold_type_recur(subst, ty));
+            unfold_type_recur(subst, ret);
+        }
     }
 }
 

@@ -100,7 +100,7 @@ const signer = multiSigPublicKey.getSigner(kp1);
 
 const message = new TextEncoder().encode('hello world');
 const { signature } = await signer.signPersonalMessage(message);
-const isValid = await multiSigPublicKey.verifyPersonalMessage(message, combinedSignature);
+const isValid = await multiSigPublicKey.verifyPersonalMessage(message, signature);
 ```
 
 ## Multisig with zkLogin

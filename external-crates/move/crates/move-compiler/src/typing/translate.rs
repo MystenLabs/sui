@@ -3028,7 +3028,9 @@ fn resolve_index_funs_and_type(
             .add_diag(diag!(Declarations::MissingSyntaxMethod, (loc, msg()),));
         return (None, context.error_type(loc));
     };
-    let fty = core::make_function_type(context, loc, &m, &f, None);
+    // NOTE: We don't do a visibility check here because we _just_ care about computing the return
+    // type. The visibility check will happen later in `exp_to_borrow_`.
+    let fty = core::make_function_type_no_visibility_check(context, loc, &m, &f, None);
     let mut arg_types = args
         .iter()
         .map(|e| core::ready_tvars(&context.subst, e.ty.clone()))
@@ -3489,7 +3491,7 @@ fn borrow_exp_dotted(
         match accessor {
             ExpDottedAccess::Field(name, ty) => {
                 // report autocomplete information for the IDE
-                ide_report_autocomplete(context, &name.loc(), &ty);
+                ide_report_autocomplete(context, &name.loc(), &exp.ty);
                 let e_ = TE::Borrow(mut_, exp, name);
                 let ty = sp(loc, Type_::Ref(mut_, Box::new(ty)));
                 exp = Box::new(T::exp(ty, sp(loc, e_)));
@@ -3695,8 +3697,16 @@ fn ide_report_autocomplete(context: &mut Context, at_loc: &Loc, in_ty: &Type) {
     if !context.env.ide_mode() {
         return;
     }
-    let ty = core::unfold_type(&context.subst, in_ty.clone());
-    let Some(tn) = type_to_type_name(context, &ty, *at_loc, "autocompletion".to_string()) else {
+    let mut outer_ty = in_ty.clone();
+    core::unfold_type_recur(&context.subst, &mut outer_ty);
+    let ty = sp(in_ty.loc, outer_ty.value.base_type_());
+    let Some(tn) = type_to_type_name_(
+        context,
+        &ty,
+        *at_loc,
+        "autocompletion".to_string(),
+        /* report_error */ false,
+    ) else {
         return;
     };
     let methods = context.find_all_methods(&tn);
@@ -3786,6 +3796,16 @@ fn type_to_type_name(
     loc: Loc,
     error_msg: String,
 ) -> Option<TypeName> {
+    type_to_type_name_(context, ty, loc, error_msg, /* report_error */ true)
+}
+
+fn type_to_type_name_(
+    context: &mut Context,
+    ty: &Type,
+    loc: Loc,
+    error_msg: String,
+    report_error: bool,
+) -> Option<TypeName> {
     use TypeName_ as TN;
     use Type_ as Ty;
     match &ty.value {
@@ -3815,14 +3835,22 @@ fn type_to_type_name(
                     assert!(context.env.has_errors());
                     return None;
                 }
-                Ty::Ref(_, _) | Ty::Var(_) => panic!("ICE unfolding failed"),
+                Ty::Ref(_, _) | Ty::Var(_) => {
+                    context.env.add_diag(ice!((
+                        loc,
+                        "Typing did not unfold type before resolving type name"
+                    )));
+                    return None;
+                }
                 Ty::Apply(_, _, _) => unreachable!(),
             };
-            context.env.add_diag(diag!(
-                TypeSafety::InvalidMethodCall,
-                (loc, format!("Invalid {error_msg}")),
-                (ty.loc, msg),
-            ));
+            if report_error {
+                context.env.add_diag(diag!(
+                    TypeSafety::InvalidMethodCall,
+                    (loc, format!("Invalid {error_msg}")),
+                    (ty.loc, msg),
+                ));
+            }
             None
         }
     }
@@ -4559,8 +4587,12 @@ fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T:
     }
 
     for (loc, name, fun) in &mdef.functions {
-        if fun.attributes.contains_key_(&TestingAttribute::Test.into()) {
-            // functions with #[test] attribute are implicitly used
+        if fun.attributes.contains_key_(&TestingAttribute::Test.into())
+            || fun
+                .attributes
+                .contains_key_(&TestingAttribute::RandTest.into())
+        {
+            // functions with #[test] or R[random_test] attribute are implicitly used
             continue;
         }
         if is_sui_mode && *name == sui_mode::INIT_FUNCTION_NAME {

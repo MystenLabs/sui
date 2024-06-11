@@ -7,7 +7,6 @@ module bridge::committee {
     use sui::event::emit;
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set;
-    use sui_system::sui_system;
     use sui_system::sui_system::SuiSystemState;
 
     use bridge::crypto;
@@ -22,6 +21,7 @@ module bridge::committee {
     const EInvalidPubkeyLength: u64 = 6;
     const ECommitteeAlreadyInitiated: u64 = 7;
     const EDuplicatePubkey: u64 = 8;
+    const ESenderIsNotInBridgeCommittee: u64 = 9;
 
     const SUI_MESSAGE_PREFIX: vector<u8> = b"SUI_BRIDGE_MESSAGE";
 
@@ -268,6 +268,19 @@ module bridge::committee {
         &self.members
     }
 
+    public(package) fun update_node_url(self: &mut BridgeCommittee, new_url: vector<u8>, ctx: &TxContext) {
+        let mut idx = 0;
+        while (idx < self.members.size()) {
+            let (_, member) = self.members.get_entry_by_idx_mut(idx);
+            if (member.sui_address == ctx.sender()) {
+                member.http_rest_url = new_url;
+                return
+            };
+            idx = idx + 1;
+        };
+        abort ESenderIsNotInBridgeCommittee
+    }
+
     // Assert if `bridge_pubkey_bytes` is duplicated in `member_registrations`.
     // Dupicate keys would cause `try_create_next_committee` to fail and,
     // in consequence, an end of epoch transaction to fail (safe mode run).
@@ -298,6 +311,11 @@ module bridge::committee {
     #[test_only]
     public(package) fun voting_power(member: &CommitteeMember): u64 {
         member.voting_power
+    }
+
+    #[test_only]
+    public(package) fun http_rest_url(member: &CommitteeMember): vector<u8> {
+        member.http_rest_url
     }
 
     #[test_only]

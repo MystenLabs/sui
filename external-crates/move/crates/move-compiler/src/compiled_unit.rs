@@ -40,6 +40,7 @@ pub struct NamedCompiledModule {
     // package name metadata from compiler arguments
     pub package_name: Option<Symbol>,
     pub address: NumericalAddress,
+    pub address_name: Option<Name>,
     pub name: Symbol,
     pub module: F::CompiledModule,
     pub source_map: SourceMap,
@@ -50,7 +51,6 @@ pub struct AnnotatedCompiledModule {
     pub loc: Loc,
     pub attributes: Attributes,
     pub module_name_loc: Loc,
-    pub address_name: Option<Name>,
     pub named_module: NamedCompiledModule,
     pub function_infos: UniqueMap<FunctionName, FunctionInfo>,
 }
@@ -66,7 +66,7 @@ impl AnnotatedCompiledModule {
     pub fn module_ident(&self) -> ModuleIdent {
         use crate::expansion::ast::Address;
         let address = Address::Numerical {
-            name: self.address_name,
+            name: self.named_module.address_name,
             value: sp(self.loc, self.named_module.address),
             name_conflict: false,
         };
@@ -84,7 +84,7 @@ impl AnnotatedCompiledModule {
             AccountAddress::new(self.named_module.address.into_bytes()),
             MoveCoreIdentifier::new(self.named_module.name.to_string()).unwrap(),
         );
-        (self.address_name, id)
+        (self.named_module.address_name, id)
     }
 
     pub fn verify(&self) -> Diagnostics {
@@ -118,6 +118,10 @@ impl NamedCompiledModule {
 
     pub fn package_name(&self) -> Option<Symbol> {
         self.package_name
+    }
+
+    pub fn address_name(&self) -> Option<Name> {
+        self.address_name
     }
 
     pub fn source_map(&self) -> &SourceMap {

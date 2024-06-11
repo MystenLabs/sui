@@ -36,7 +36,7 @@ Response: {
                 "edges": [
                   {
                     "node": {
-                      "amount": "5000"
+                      "amount": "3000"
                     },
                     "cursor": "eyJpIjowLCJjIjoyfQ"
                   },
@@ -48,19 +48,19 @@ Response: {
                   },
                   {
                     "node": {
-                      "amount": "2000"
+                      "amount": "1000"
                     },
                     "cursor": "eyJpIjoyLCJjIjoyfQ"
                   },
                   {
                     "node": {
-                      "amount": "1000"
+                      "amount": "2000"
                     },
                     "cursor": "eyJpIjozLCJjIjoyfQ"
                   },
                   {
                     "node": {
-                      "amount": "3000"
+                      "amount": "5000"
                     },
                     "cursor": "eyJpIjo0LCJjIjoyfQ"
                   },
@@ -98,13 +98,13 @@ Response: {
                 "edges": [
                   {
                     "node": {
-                      "amount": "1000"
+                      "amount": "2000"
                     },
                     "cursor": "eyJpIjozLCJjIjoxfQ"
                   },
                   {
                     "node": {
-                      "amount": "3000"
+                      "amount": "5000"
                     },
                     "cursor": "eyJpIjo0LCJjIjoxfQ"
                   }
@@ -136,7 +136,7 @@ Response: {
                 "edges": [
                   {
                     "node": {
-                      "amount": "5000"
+                      "amount": "3000"
                     },
                     "cursor": "eyJpIjowLCJjIjoxfQ"
                   },
@@ -148,7 +148,7 @@ Response: {
                   },
                   {
                     "node": {
-                      "amount": "2000"
+                      "amount": "1000"
                     },
                     "cursor": "eyJpIjoyLCJjIjoxfQ"
                   }

@@ -109,7 +109,7 @@ pub type SyntaxMethodKind = Spanned<SyntaxMethodKind_>;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SyntaxMethod {
     pub loc: Loc,
-    pub public_visibility: Loc,
+    pub visibility: Visibility,
     pub tname: TypeName,
     pub target_function: (ModuleIdent, FunctionName),
     pub kind: SyntaxMethodKind,
@@ -1154,7 +1154,7 @@ impl AstDebug for SyntaxMethod {
             loc: _,
             tname,
             target_function: (target_m, target_f),
-            public_visibility: _,
+            visibility: _,
             kind,
         } = self;
         let kind_str = format!("{:?}", kind.value);
