@@ -64,8 +64,14 @@ module std::macros {
         let start = $start;
         let stop = $stop;
         let mut i = start;
-        while (i <= stop) {
+        // we check `i >= stop` inside the loop instead of `i <= stop` as `while` consition to avoid
+        // incrementing `i` past the MAX integer value.
+        // Because of this, we need to check if `start > stop` and return early, instead
+        // of letting the loop bound handle it, like in the `range_do` macro.
+        if (start > stop) return;
+        loop {
             $f(i);
+            if (i >= stop) break;
             i = i + 1;
         }
     }

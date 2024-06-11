@@ -203,6 +203,10 @@ module std::integer_tests {
             case_succ.range_do_eq!(case, |_| assert!(false));
         });
 
+        // test upper bound being max
+        let max_pred = max - 1;
+        max_pred.range_do_eq!(max, |_| ());
+
         // test iteration numbers
         let cases: vector<$T> = vector[3, 5, 8, 11, 14];
         cases!(max, cases, |case_pred, case, case_succ| {

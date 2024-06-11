@@ -4,6 +4,7 @@
 #[test_only]
 module std::u8_tests {
     use std::integer_tests;
+    use std::unit_test::assert_eq;
 
     const BIT_SIZE: u8 = 8;
     const MAX: u8 = 0xFF;
@@ -68,6 +69,9 @@ module std::u8_tests {
 
     #[test]
     fun test_dos() {
+        let mut sum = 0u16;
+        255u8.do_eq!(|i| sum = sum + (i as u16));
+        assert_eq!(sum, 32640);
         integer_tests::test_dos!(MAX, CASES);
     }
 }
