@@ -4,9 +4,8 @@ init:
 A: object(0,0)
 
 task 1 'publish'. lines 6-17:
-created: object(1,0), object(1,1)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 0, non_refundable_storage_fee: 0
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: UNKNOWN_VERSION, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
 
 task 2 'create-checkpoint'. lines 19-19:
 Checkpoint created: 1
@@ -22,72 +21,7 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x20d4ae41f45917f504712e66bb2550605987d87bb133ea87be563fdebfd89738",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0x722440b490def248e698a26c1fcc589ca49160b17ed93dced730caf664fd4972",
-                    "asMovePackage": {
-                      "module": {
-                        "enum": {
-                          "name": "S",
-                          "abilities": [
-                            "COPY",
-                            "DROP"
-                          ],
-                          "typeParameters": [],
-                          "variants": [
-                            {
-                              "name": "V1",
-                              "fields": [
-                                {
-                                  "name": "pos0",
-                                  "type": {
-                                    "repr": "u64",
-                                    "signature": {
-                                      "ref": null,
-                                      "body": "u64"
-                                    }
-                                  }
-                                }
-                              ]
-                            },
-                            {
-                              "name": "V2",
-                              "fields": [
-                                {
-                                  "name": "x",
-                                  "type": {
-                                    "repr": "bool",
-                                    "signature": {
-                                      "ref": null,
-                                      "body": "bool"
-                                    }
-                                  }
-                                },
-                                {
-                                  "name": "y",
-                                  "type": {
-                                    "repr": "u64",
-                                    "signature": {
-                                      "ref": null,
-                                      "body": "u64"
-                                    }
-                                  }
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0x837d89e410e5250f431238b893ea8812c4368e5ad8f4fc959a7838c035b030b9",
+                    "address": "0x53b63659f4910b0563575a85dca3254f1eb41bd6f8235cf2508ee6c18f4293ab",
                     "asMovePackage": null
                   }
                 }
@@ -101,9 +35,7 @@ Response: {
 }
 
 task 4 'upgrade'. lines 68-81:
-created: object(4,0)
-mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+Error: INVALID TEST. Unknown object, object(1,1)
 
 task 5 'create-checkpoint'. lines 83-83:
 Checkpoint created: 2
@@ -119,157 +51,8 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x20d4ae41f45917f504712e66bb2550605987d87bb133ea87be563fdebfd89738",
+                    "address": "0x53b63659f4910b0563575a85dca3254f1eb41bd6f8235cf2508ee6c18f4293ab",
                     "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0x837d89e410e5250f431238b893ea8812c4368e5ad8f4fc959a7838c035b030b9",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0x83ae13987b53789f322e755ab8ceb9eb7a0df7fe01fcffda844b8a5bbdd2cc79",
-                    "asMovePackage": {
-                      "module": {
-                        "s": {
-                          "module": {
-                            "package": {
-                              "address": "0x722440b490def248e698a26c1fcc589ca49160b17ed93dced730caf664fd4972"
-                            }
-                          },
-                          "name": "S",
-                          "abilities": [
-                            "COPY",
-                            "DROP"
-                          ],
-                          "typeParameters": [],
-                          "variants": [
-                            {
-                              "name": "V1",
-                              "fields": [
-                                {
-                                  "name": "pos0",
-                                  "type": {
-                                    "repr": "u64",
-                                    "signature": {
-                                      "ref": null,
-                                      "body": "u64"
-                                    }
-                                  }
-                                }
-                              ]
-                            },
-                            {
-                              "name": "V2",
-                              "fields": [
-                                {
-                                  "name": "x",
-                                  "type": {
-                                    "repr": "bool",
-                                    "signature": {
-                                      "ref": null,
-                                      "body": "bool"
-                                    }
-                                  }
-                                },
-                                {
-                                  "name": "y",
-                                  "type": {
-                                    "repr": "u64",
-                                    "signature": {
-                                      "ref": null,
-                                      "body": "u64"
-                                    }
-                                  }
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        "t": {
-                          "module": {
-                            "package": {
-                              "address": "0x83ae13987b53789f322e755ab8ceb9eb7a0df7fe01fcffda844b8a5bbdd2cc79"
-                            }
-                          },
-                          "name": "T",
-                          "abilities": [],
-                          "typeParameters": [
-                            {
-                              "constraints": [
-                                "DROP"
-                              ],
-                              "isPhantom": false
-                            }
-                          ],
-                          "variants": [
-                            {
-                              "name": "VV",
-                              "fields": [
-                                {
-                                  "name": "y",
-                                  "type": {
-                                    "repr": "u64",
-                                    "signature": {
-                                      "ref": null,
-                                      "body": "u64"
-                                    }
-                                  }
-                                },
-                                {
-                                  "name": "s",
-                                  "type": {
-                                    "repr": "0x722440b490def248e698a26c1fcc589ca49160b17ed93dced730caf664fd4972::m::S",
-                                    "signature": {
-                                      "ref": null,
-                                      "body": {
-                                        "datatype": {
-                                          "package": "0x722440b490def248e698a26c1fcc589ca49160b17ed93dced730caf664fd4972",
-                                          "module": "m",
-                                          "type": "S",
-                                          "typeParameters": []
-                                        }
-                                      }
-                                    }
-                                  }
-                                },
-                                {
-                                  "name": "u",
-                                  "type": {
-                                    "repr": "$0",
-                                    "signature": {
-                                      "ref": null,
-                                      "body": {
-                                        "typeParameter": 0
-                                      }
-                                    }
-                                  }
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        "v": {
-                          "name": "V",
-                          "variants": [
-                            {
-                              "name": "V",
-                              "fields": [
-                                {
-                                  "name": "t",
-                                  "type": {
-                                    "repr": "0x722440b490def248e698a26c1fcc589ca49160b17ed93dced730caf664fd4972::m::T<0x722440b490def248e698a26c1fcc589ca49160b17ed93dced730caf664fd4972::m::S>"
-                                  }
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      }
-                    }
                   }
                 }
               ]
@@ -293,31 +76,6 @@ Response: {
                 {
                   "outputState": {
                     "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": {
-                      "module": {
-                        "s": {
-                          "module": {
-                            "enum": null
-                          }
-                        },
-                        "t": {
-                          "module": {
-                            "enum": {
-                              "name": "T"
-                            }
-                          }
-                        }
-                      }
-                    }
                   }
                 }
               ]
