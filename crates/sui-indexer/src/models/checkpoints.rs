@@ -12,7 +12,7 @@ use crate::errors::IndexerError;
 use crate::schema::checkpoints;
 use crate::types::IndexedCheckpoint;
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = checkpoints)]
 pub struct StoredCheckpoint {
     pub sequence_number: i64,

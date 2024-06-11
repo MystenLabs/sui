@@ -68,7 +68,7 @@ pub struct StoredObject {
     pub df_object_id: Option<Vec<u8>>,
 }
 
-#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[derive(Queryable, Insertable, Selectable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects_snapshot, primary_key(object_id))]
 pub struct StoredObjectSnapshot {
     pub object_id: Vec<u8>,
@@ -79,6 +79,9 @@ pub struct StoredObjectSnapshot {
     pub owner_type: Option<i16>,
     pub owner_id: Option<Vec<u8>>,
     pub object_type: Option<String>,
+    pub object_type_package: Option<Vec<u8>>,
+    pub object_type_module: Option<String>,
+    pub object_type_name: Option<String>,
     pub serialized_object: Option<Vec<u8>>,
     pub coin_type: Option<String>,
     pub coin_balance: Option<i64>,
@@ -97,6 +100,9 @@ impl From<StoredObject> for StoredObjectSnapshot {
             object_digest: Some(o.object_digest),
             checkpoint_sequence_number: o.checkpoint_sequence_number,
             owner_type: Some(o.owner_type),
+            object_type_package: o.object_type_package,
+            object_type_module: o.object_type_module,
+            object_type_name: o.object_type_name,
             owner_id: o.owner_id,
             object_type: o.object_type,
             serialized_object: Some(o.serialized_object),
@@ -121,6 +127,9 @@ impl From<StoredDeletedObject> for StoredObjectSnapshot {
             owner_type: None,
             owner_id: None,
             object_type: None,
+            object_type_package: None,
+            object_type_module: None,
+            object_type_name: None,
             serialized_object: None,
             coin_type: None,
             coin_balance: None,
@@ -132,7 +141,7 @@ impl From<StoredDeletedObject> for StoredObjectSnapshot {
     }
 }
 
-#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[derive(Queryable, Insertable, Selectable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects_history, primary_key(object_id, object_version, checkpoint_sequence_number))]
 pub struct StoredHistoryObject {
     pub object_id: Vec<u8>,
