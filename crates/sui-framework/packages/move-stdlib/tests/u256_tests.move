@@ -65,52 +65,8 @@ module std::u256_tests {
         255u256.pow(255);
     }
 
-    fun sum_range(n: u256): u256 {
-        (n * (n + 1)) / 2
-    }
-
-    fun test_dos_case(case: u256) {
-        let mut sum = 0;
-        case.do!(|i| sum = sum + i);
-        assert_eq!(sum, sum_range(case - 1));
-
-        sum = 0;
-        case.do_eq!(|i| sum = sum + i);
-        assert_eq!(sum, sum_range(case));
-
-        let half = case / 2;
-
-        sum = 0;
-        half.range_do!(case, |i| sum = sum + i);
-        assert_eq!(sum, sum_range(case - 1) - sum_range(half - 1));
-
-        sum = 0;
-        half.range_do_eq!(case, |i| sum = sum + i);
-        assert_eq!(sum, sum_range(case) - sum_range(half - 1));
-    }
-
     #[test]
     fun test_dos() {
-        // test bounds/invalid ranges
-        0u256.do!(|_| assert!(false));
-        cases!(|case_pred, case, case_succ| {
-            if (case == 0) return;
-            case.range_do!(0, |_| assert!(false));
-            case.range_do_eq!(0, |_| assert!(false));
-
-            if (case == MAX) return;
-            case.range_do!(case_pred, |_| assert!(false));
-            case_succ.range_do!(case, |_| assert!(false));
-            case.range_do_eq!(case_pred, |_| assert!(false));
-            case_succ.range_do_eq!(case, |_| assert!(false));
-        });
-
-        // test iteration numbers
-        let cases: vector<u256> = vector[4, 42, 112, 255];
-        custom_cases!(cases, |case_pred, case, case_succ| {
-            test_dos_case(case_pred);
-            test_dos_case(case);
-            test_dos_case(case_succ);
-        });
+        integer_tests::test_dos!(MAX, CASES);
     }
 }
