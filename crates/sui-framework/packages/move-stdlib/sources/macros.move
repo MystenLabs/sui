@@ -83,8 +83,8 @@ module std::macros {
         let stop = $stop;
         // we check `i >= stop` inside the loop instead of `i <= stop` as `while` condition to avoid
         // incrementing `i` past the MAX integer value.
-        // Because of this, we need to check if `i > stop` and return early, instead
-        // of letting the loop bound handle it, like in the `range_do` macro.
+        // Because of this, we need to check if `i > stop` and return early--instead of letting the
+        // loop bound handle it, like in the `range_do` macro.
         if (i > stop) return;
         loop {
             $f(i);
