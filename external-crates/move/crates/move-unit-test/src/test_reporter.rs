@@ -132,8 +132,10 @@ impl TestFailure {
             FailureReason::WrongError(message, expected, actual) => {
                 let base_message = format!(
                     "{message}. Expected test {} but instead it {} rooted here",
-                    expected.verbiage(/* is_past_tense */ false),
-                    actual.verbiage(/* is_past_tense */ true),
+                    expected
+                        .with_context(&test_plan.module_info)
+                        .present_tense(),
+                    actual.with_context(&test_plan.module_info).past_tense(),
                 );
                 Self::report_error_with_location(test_plan, base_message, &self.vm_error)
             }
@@ -143,7 +145,7 @@ impl TestFailure {
                     Expected test to abort with code {}, but instead it {} rooted here",
                     message,
                     expected_code,
-                    actual.verbiage(/* is_past_tense */ true),
+                    actual.with_context(&test_plan.module_info).past_tense(),
                 );
                 Self::report_error_with_location(test_plan, base_message, &self.vm_error)
             }
@@ -167,7 +169,7 @@ impl TestFailure {
                     "{}{}, but it {} rooted here",
                     prefix,
                     message,
-                    error.verbiage(/* is_past_tense */ true)
+                    error.with_context(&test_plan.module_info).past_tense(),
                 );
                 Self::report_error_with_location(test_plan, base_message, &self.vm_error)
             }
@@ -278,7 +280,10 @@ impl TestFailure {
                         .get_function_source_map(*fdef_idx)
                         .ok()?;
                     let loc = function_source_map.get_code_location(*offset).unwrap();
-                    let msg = format!("In this function in {}", format_module_id(module_id));
+                    let msg = format!(
+                        "In this function in {}",
+                        format_module_id(&test_plan.module_info, module_id)
+                    );
                     // TODO(tzakian) maybe migrate off of move-langs diagnostics?
                     Some(Diagnostic::new(
                         diagnostics::codes::Tests::TestFailed,
@@ -406,8 +411,11 @@ impl TestResults {
                 writeln!(writer.lock().unwrap(), "name,nanos,gas")?;
                 for (module_id, test_results) in self.final_statistics.passed.iter() {
                     for (function_name, test_results) in test_results {
-                        let qualified_function_name =
-                            format!("{}::{}", format_module_id(module_id), function_name,);
+                        let qualified_function_name = format!(
+                            "{}::{}",
+                            format_module_id(&self.test_plan.module_info, module_id),
+                            function_name,
+                        );
                         let (time, instrs_executed) = calculate_run_statistics(test_results);
                         writeln!(
                             writer.lock().unwrap(),
@@ -436,8 +444,11 @@ impl TestResults {
 
         for (module_id, test_results) in self.final_statistics.passed.iter() {
             for (function_name, test_results) in test_results {
-                let qualified_function_name =
-                    format!("{}::{}", format_module_id(module_id), function_name,);
+                let qualified_function_name = format!(
+                    "{}::{}",
+                    format_module_id(&self.test_plan.module_info, module_id),
+                    function_name,
+                );
                 passed_fns.insert(qualified_function_name.clone());
                 max_function_name_size =
                     std::cmp::max(max_function_name_size, qualified_function_name.len());
@@ -448,8 +459,11 @@ impl TestResults {
 
         for (module_id, test_failures) in self.final_statistics.failed.iter() {
             for (function_name, test_failure) in test_failures {
-                let qualified_function_name =
-                    format!("{}::{}", format_module_id(module_id), function_name);
+                let qualified_function_name = format!(
+                    "{}::{}",
+                    format_module_id(&self.test_plan.module_info, module_id),
+                    function_name
+                );
                 // If the test is a #[random_test] some of the tests may have passed, and others
                 // failed. We want to mark the any results in the statistics where there is both
                 // successful and failed runs as "failure run" to indicate that these stats are for
@@ -537,7 +551,7 @@ impl TestResults {
                 writeln!(
                     writer.lock().unwrap(),
                     "Failures in {}:",
-                    format_module_id(module_id)
+                    format_module_id(&self.test_plan.module_info, module_id)
                 )?;
                 for (test_name, test_failures) in test_failures {
                     for test_failure in test_failures {

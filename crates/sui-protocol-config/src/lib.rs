@@ -140,6 +140,7 @@ const MAX_PROTOCOL_VERSION: u64 = 50;
 //             Run Mysticeti consensus by default.
 // Version 50: Add update_node_url to native bridge,
 //             New Move stdlib integer modules
+//             Enable checkpoint batching in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1123,6 +1124,12 @@ pub struct ProtocolConfig {
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
+
+    /// Minimum interval of commit timestamps between consecutive checkpoints.
+    min_checkpoint_interval_ms: Option<u64>,
+
+    /// Version number to use for version_specific_data in `CheckpointSummary`.
+    checkpoint_summary_version_specific_data: Option<u64>,
 }
 
 // feature flags
@@ -1850,6 +1857,10 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_checkpoint: None,
 
             max_deferral_rounds_for_congestion_control: None,
+
+            min_checkpoint_interval_ms: None,
+
+            checkpoint_summary_version_specific_data: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2335,7 +2346,13 @@ impl ProtocolConfig {
                     // Run Move verification on framework upgrades in its own VM
                     cfg.feature_flags.fresh_vm_on_framework_upgrade = true;
                 }
-                50 => {}
+                50 => {
+                    // Enable checkpoint batching in testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.checkpoint_summary_version_specific_data = Some(1);
+                        cfg.min_checkpoint_interval_ms = Some(200);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2504,6 +2521,9 @@ impl ProtocolConfig {
 
     pub fn set_mysticeti_leader_scoring_and_schedule(&mut self, val: bool) {
         self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
+    }
+    pub fn set_min_checkpoint_interval_ms(&mut self, val: u64) {
+        self.min_checkpoint_interval_ms = Some(val);
     }
 }
 

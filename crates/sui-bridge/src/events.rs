@@ -266,6 +266,13 @@ impl TryFrom<MoveTokenDepositedEvent> for EmittedSuiToEthTokenBridgeV1 {
     type Error = BridgeError;
 
     fn try_from(event: MoveTokenDepositedEvent) -> BridgeResult<Self> {
+        if event.amount_sui_adjusted == 0 {
+            return Err(BridgeError::Generic(format!(
+                "Failed to convert MoveTokenDepositedEvent to EmittedSuiToEthTokenBridgeV1. Manual intervention is required. 0 value transfer should not be allowed in Move: {:?}",
+                event,
+            )));
+        }
+
         let token_id = event.token_type;
         let sui_chain_id = BridgeChainId::try_from(event.source_chain).map_err(|_e| {
             BridgeError::Generic(format!(
@@ -495,5 +502,24 @@ pub mod tests {
         assert_eq!(mask, 0xF);
 
         // TODO: trigger other events and make sure they are converted correctly
+    }
+
+    #[test]
+    fn test_0_sui_amount_conversion_for_sui_event() {
+        let emitted_event = MoveTokenDepositedEvent {
+            seq_num: 1,
+            source_chain: BridgeChainId::SuiTestnet as u8,
+            sender_address: SuiAddress::random_for_testing_only().to_vec(),
+            target_chain: BridgeChainId::EthSepolia as u8,
+            target_address: EthAddress::random().as_bytes().to_vec(),
+            token_type: TOKEN_ID_SUI,
+            amount_sui_adjusted: 0,
+        };
+        match EmittedSuiToEthTokenBridgeV1::try_from(emitted_event).unwrap_err() {
+            BridgeError::Generic(err) => {
+                assert!(err.contains("0 value transfer should not be allowed in Move"));
+            }
+            other => panic!("Expected Generic error, got: {:?}", other),
+        }
     }
 }

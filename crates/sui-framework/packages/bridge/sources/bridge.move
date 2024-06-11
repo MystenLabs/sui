@@ -97,6 +97,7 @@ module bridge::bridge {
     const EInvalidBridgeRoute: u64 = 16;
     const EMustBeTokenMessage: u64 = 17;
     const EInvalidEvmAddress: u64 = 18;
+    const ETokenValueIsZero: u64 = 19;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -209,11 +210,10 @@ module bridge::bridge {
         assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
         assert!(target_address.length() == EVM_ADDRESS_LENGTH, EInvalidEvmAddress);
 
-        let amount = token.balance().value();
-
         let bridge_seq_num = inner.get_current_seq_num_and_increment(message_types::token());
         let token_id = inner.treasury.token_id<T>();
         let token_amount = token.balance().value();
+        assert!(token_amount > 0, ETokenValueIsZero);
 
         // create bridge message
         let message = message::create_token_bridge_message(
@@ -223,7 +223,7 @@ module bridge::bridge {
             target_chain,
             target_address,
             token_id,
-            amount,
+            token_amount,
         );
 
         // burn / escrow token, unsupported coins will fail in this step
@@ -523,13 +523,13 @@ module bridge::bridge {
         let amount = token_payload.token_amount();
         // Make sure transfer is within limit.
         if (!inner
-                .limiter
-                .check_and_record_sending_transfer<T>(
-                    &inner.treasury,
-                    clock,
-                    route,
-                    amount,
-                )
+            .limiter
+            .check_and_record_sending_transfer<T>(
+            &inner.treasury,
+            clock,
+            route,
+            amount,
+        )
         ) {
             emit(TokenTransferLimitExceed { message_key: key });
             return (option::none(), owner)

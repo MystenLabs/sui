@@ -5,12 +5,12 @@ Command `test --coverage --threads 1`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING PackageBasics
 Running Move unit tests
-[ PASS    ] 0x1::AModule::double_three
-[ PASS    ] 0x1::AModule::double_two
-[ PASS    ] 0x1::AModuleTests::double_one_one
-[ PASS    ] 0x1::AModuleTests::double_three
-[ PASS    ] 0x1::AModuleTests::double_zero_zero
-[ PASS    ] 0x1::AModuleTests::double_zero_zero_wrong
+[ PASS    ] std::AModule::double_three
+[ PASS    ] std::AModule::double_two
+[ PASS    ] std::AModuleTests::double_one_one
+[ PASS    ] std::AModuleTests::double_three
+[ PASS    ] std::AModuleTests::double_zero_zero
+[ PASS    ] std::AModuleTests::double_zero_zero_wrong
 Test result: OK. Total tests: 6; passed: 6; failed: 0
 Command `coverage summary --summarize-functions`:
 +-------------------------+
@@ -104,11 +104,11 @@ Command `test double_two`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING PackageBasics
 Running Move unit tests
-[ PASS    ] 0x1::AModule::double_two
+[ PASS    ] std::AModule::double_two
 Test result: OK. Total tests: 1; passed: 1; failed: 0
 Command `test one_one`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING PackageBasics
 Running Move unit tests
-[ PASS    ] 0x1::AModuleTests::double_one_one
+[ PASS    ] std::AModuleTests::double_one_one
 Test result: OK. Total tests: 1; passed: 1; failed: 0
