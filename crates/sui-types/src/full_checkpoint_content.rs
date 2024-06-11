@@ -182,6 +182,45 @@ impl CheckpointTransaction {
             (object, old_object)
         })
     }
+
+    pub fn created_objects(&self) -> impl Iterator<Item = &Object> {
+        // Iterator over (ObjectId, version) for created objects
+        match &self.effects {
+            TransactionEffects::V1(v1) => Either::Left(
+                v1.created()
+                    .iter()
+                    .map(|((id, version, _), _)| (id, version)),
+            ),
+            TransactionEffects::V2(v2) => {
+                Either::Right(v2.changed_objects().iter().filter_map(|(id, change)| {
+                    match (
+                        &change.input_state,
+                        &change.output_state,
+                        &change.id_operation,
+                    ) {
+                        // Created Objects
+                        (ObjectIn::NotExist, ObjectOut::ObjectWrite(_), IDOperation::Created) => {
+                            Some((id, &v2.lamport_version))
+                        }
+                        (
+                            ObjectIn::NotExist,
+                            ObjectOut::PackageWrite((version, _)),
+                            IDOperation::Created,
+                        ) => Some((id, &version)),
+
+                        _ => None,
+                    }
+                }))
+            }
+        }
+        // Lookup Objects in output Objects as well as old versions for mutated objects
+        .map(|(id, version)| {
+            self.output_objects
+                .iter()
+                .find(|o| &o.id() == id && &o.version() == version)
+                .expect("created objects should show up in output objects")
+        })
+    }
 }
 
 impl BackingPackageStore for CheckpointData {
