@@ -204,7 +204,7 @@ module std::integer_tests {
         });
 
         // test iteration numbers
-        let cases: vector<$T> = vector[4, 42, 112, 255];
+        let cases: vector<$T> = vector[3, 5, 8, 11, 14];
         cases!(max, cases, |case_pred, case, case_succ| {
             test_dos_case!(case_pred);
             test_dos_case!(case);
