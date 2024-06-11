@@ -184,8 +184,9 @@ pub enum SuiValidatorCommand {
         #[clap(long)]
         validator_address: Option<SuiAddress>,
     },
-    /// Sui native bridge committee member registration
+    /// Update sui native bridge committee node url
     UpdateBridgeCommitteeNodeUrl {
+        /// New node url to be registered in the on chain bridge object.
         #[clap(long)]
         bridge_authority_url: String,
         /// If true, only print the unsigned transaction and do not execute it.
