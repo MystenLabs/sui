@@ -138,7 +138,8 @@ const MAX_PROTOCOL_VERSION: u64 = 50;
 //             Enable VDF in devnet
 //             Enable consensus commit prologue V3 in devnet.
 //             Run Mysticeti consensus by default.
-// Version 50: Add update_node_url to native bridge
+// Version 50: Add update_node_url to native bridge,
+//             New Move stdlib integer modules
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
