@@ -2350,7 +2350,7 @@ impl ProtocolConfig {
                     // Enable checkpoint batching in testnet.
                     if chain != Chain::Mainnet {
                         cfg.checkpoint_summary_version_specific_data = Some(1);
-                        cfg.min_checkpoint_interval_ms = Some(200);
+                        cfg.min_checkpoint_interval_ms = Some(0);
                     }
                 }
                 // Use this template when making changes:
