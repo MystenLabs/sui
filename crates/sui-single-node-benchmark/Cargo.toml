@@ -18,6 +18,7 @@ sui-transaction-checks.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 sui-storage.workspace = true
 
+rand.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true

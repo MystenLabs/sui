@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::stream::FuturesUnordered;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH};
-use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+use sui_types::crypto::{get_account_key_pair, AccountKeyPair, get_key_pair_from_bytes, get_key_pair_from_rng};
 use sui_types::object::Object;
 
 #[derive(Clone)]
@@ -25,7 +27,10 @@ pub async fn batch_create_account_and_gas(
         .map(|idx| {
             let starting_id = idx * gas_object_num_per_account;
             tokio::spawn(async move {
-                let (sender, keypair) = get_account_key_pair();
+                // let (sender, keypair) = get_account_key_pair();
+                // Deterministic run with seeded randomness
+                let mut rng = StdRng::from_seed([idx as u8; 32]);
+                let (sender, keypair) = get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng);
                 let objects = (0..gas_object_num_per_account)
                     .map(|i| new_gas_object(starting_id + i, sender))
                     .collect::<Vec<_>>();
