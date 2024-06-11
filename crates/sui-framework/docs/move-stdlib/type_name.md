@@ -47,7 +47,7 @@ Functionality for converting Move types into values. Use with care!
  "u8", "u64", "bool", "address", "vector", and so on for primitive types.
  Struct types are represented as fully qualified type names; e.g.
  <code>00000000000000000000000000000001::string::String</code> or
- <code>0000000000000000000000000000000a::module_name1::type_name1&lt;0000000000000000000000000000000a::module_name2::type_name2&lt;u64&gt;&gt;</code>
+ <code>0000000000000000000000000000000a::module_name1::type_name1&lt;0000000000000000000000000000000a::module_name2::type_name2&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;&gt;</code>
  Addresses are hex-encoded lowercase values of length ADDRESS_LENGTH (16, 20, or 32 depending on the Move platform)
 </dd>
 </dl>
@@ -135,7 +135,7 @@ ASCII Character code for the <code>v</code> (lowercase v) symbol.
 The type is not from a package/module. It is a primitive type.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/type_name.md#0x1_type_name_ENonModuleType">ENonModuleType</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../move-stdlib/type_name.md#0x1_type_name_ENonModuleType">ENonModuleType</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -216,7 +216,7 @@ u8, u16, u32, u64, u128, u256, bool, address, vector.
     bytes == &b"u8" ||
     bytes == &b"u16" ||
     bytes == &b"u32" ||
-    bytes == &b"u64" ||
+    bytes == &b"<a href="../move-stdlib/u64.md#0x1_u64">u64</a>" ||
     bytes == &b"u128" ||
     bytes == &b"u256" ||
     bytes == &b"<b>address</b>" ||
@@ -324,10 +324,10 @@ Aborts if given a primitive type.
     <b>let</b> <b>mut</b> i = <a href="../move-stdlib/address.md#0x1_address_length">address::length</a>() * 2 + 2;
     <b>let</b> str_bytes = self.name.as_bytes();
     <b>let</b> <b>mut</b> module_name = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-
+    <b>let</b> colon = <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_COLON">ASCII_COLON</a>;
     <b>loop</b> {
         <b>let</b> char = &str_bytes[i];
-        <b>if</b> (char != &<a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_COLON">ASCII_COLON</a>) {
+        <b>if</b> (char != &colon) {
             module_name.push_back(*char);
             i = i + 1;
         } <b>else</b> {

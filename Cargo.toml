@@ -29,8 +29,6 @@ exclude = [
   "external-crates/move/crates/move-coverage",
   "external-crates/move/crates/move-disassembler",
   "external-crates/move/crates/move-docgen",
-  "external-crates/move/crates/move-errmapgen",
-  "external-crates/move/crates/move-explain",
   "external-crates/move/crates/move-ir-compiler",
   "external-crates/move/crates/move-ir-compiler-transactional-tests",
   "external-crates/move/crates/move-ir-to-bytecode",
@@ -377,8 +375,8 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "077b735b484cf33e79f9d621db1d0c3a5827b81e", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "077b735b484cf33e79f9d621db1d0c3a5827b81e", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "3a490f1f1035cc6b7845f6a82d697ce47b067fd9", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "3a490f1f1035cc6b7845f6a82d697ce47b067fd9", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
@@ -566,10 +564,10 @@ move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291", features = ["experimental"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8435ec2f308cb6c345e2737ae929d170589d9508" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8435ec2f308cb6c345e2737ae929d170589d9508" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8435ec2f308cb6c345e2737ae929d170589d9508", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8435ec2f308cb6c345e2737ae929d170589d9508", features = ["experimental"] }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }

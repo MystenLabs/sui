@@ -17,7 +17,6 @@ const MODULES_DIR: &str = "sources";
 const NURSERY_DIR: &str = "nursery";
 const DOCS_DIR: &str = "docs";
 const NURSERY_DOCS_DIR: &str = "nursery/docs";
-const ERRMAP_FILE: &str = "error_description.errmap";
 
 const REFERENCES_TEMPLATE: &str = "doc_templates/references.md";
 const OVERVIEW_TEMPLATE: &str = "doc_templates/overview.md";
@@ -48,10 +47,6 @@ pub fn move_stdlib_docs_full_path() -> String {
 
 pub fn move_nursery_docs_full_path() -> String {
     format!("{}/{}", env!("CARGO_MANIFEST_DIR"), NURSERY_DOCS_DIR)
-}
-
-pub fn move_stdlib_errmap_full_path() -> String {
-    format!("{}/{}", env!("CARGO_MANIFEST_DIR"), ERRMAP_FILE)
 }
 
 pub fn move_stdlib_files() -> Vec<String> {
@@ -133,29 +128,4 @@ pub fn build_nursery_doc(output_path: &str) {
         false,
         move_stdlib_named_addresses(),
     )
-}
-
-pub fn build_error_code_map(output_path: &str) {
-    let options = move_prover::cli::Options {
-        move_sources: crate::move_stdlib_files(),
-        move_deps: vec![],
-        verbosity_level: LevelFilter::Warn,
-        run_errmapgen: true,
-        move_named_address_values: move_prover::cli::named_addresses_for_options(
-            &move_stdlib_named_addresses(),
-        ),
-        errmapgen: move_errmapgen::ErrmapOptions {
-            output_file: output_path.to_string(),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    options.setup_logging_for_test();
-    move_prover::run_move_prover_errors_to_stderr(options).unwrap();
-}
-
-const ERROR_DESCRIPTIONS: &[u8] = include_bytes!("../error_description.errmap");
-
-pub fn error_descriptions() -> &'static [u8] {
-    ERROR_DESCRIPTIONS
 }

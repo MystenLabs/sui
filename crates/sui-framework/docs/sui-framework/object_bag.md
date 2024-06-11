@@ -54,7 +54,7 @@ The difference is otherwise not observable from within Move.
  the ID of this bag
 </dd>
 <dt>
-<code>size: u64</code>
+<code>size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  the number of key-value pairs in the bag
@@ -73,7 +73,7 @@ The difference is otherwise not observable from within Move.
 
 
 
-<pre><code><b>const</b> <a href="object_bag.md#0x2_object_bag_EBagNotEmpty">EBagNotEmpty</a>: u64 = 0;
+<pre><code><b>const</b> <a href="object_bag.md#0x2_object_bag_EBagNotEmpty">EBagNotEmpty</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -281,7 +281,7 @@ with an assigned value of type <code>V</code>
 Returns the size of the bag, the number of key-value pairs
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_length">length</a>(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">object_bag::ObjectBag</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_length">length</a>(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">object_bag::ObjectBag</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -290,7 +290,7 @@ Returns the size of the bag, the number of key-value pairs
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_length">length</a>(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_length">length</a>(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="bag.md#0x2_bag">bag</a>.size
 }
 </code></pre>

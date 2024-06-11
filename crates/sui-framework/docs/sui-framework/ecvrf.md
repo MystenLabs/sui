@@ -21,7 +21,7 @@ title: Module `0x2::ecvrf`
 
 
 
-<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidHashLength">EInvalidHashLength</a>: u64 = 1;
+<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidHashLength">EInvalidHashLength</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -30,7 +30,7 @@ title: Module `0x2::ecvrf`
 
 
 
-<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidProofEncoding">EInvalidProofEncoding</a>: u64 = 3;
+<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidProofEncoding">EInvalidProofEncoding</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -39,7 +39,7 @@ title: Module `0x2::ecvrf`
 
 
 
-<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidPublicKeyEncoding">EInvalidPublicKeyEncoding</a>: u64 = 2;
+<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidPublicKeyEncoding">EInvalidPublicKeyEncoding</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 

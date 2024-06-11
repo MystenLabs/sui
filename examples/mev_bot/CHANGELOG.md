@@ -1,5 +1,12 @@
 # mev-bot
 
+## 1.0.7
+
+### Patch Changes
+
+- Updated dependencies [bae8f9683c]
+  - @mysten/sui@1.1.0
+
 ## 1.0.6
 
 ### Patch Changes

@@ -12,8 +12,7 @@ use crate::{
 use anyhow::Result;
 use clap::Parser;
 use move_core_types::{
-    errmap::ErrorMapping, language_storage::TypeTag, parser,
-    transaction_argument::TransactionArgument,
+    language_storage::TypeTag, parser, transaction_argument::TransactionArgument,
 };
 use move_package::compilation::package_layout::CompiledPackageLayout;
 use move_vm_test_utils::gas_schedule::CostTable;
@@ -188,7 +187,6 @@ impl SandboxCommand {
         &self,
         natives: Vec<NativeFunctionRecord>,
         cost_table: &CostTable,
-        error_descriptions: &ErrorMapping,
         move_args: &Move,
         storage_dir: &Path,
     ) -> Result<()> {
@@ -229,7 +227,6 @@ impl SandboxCommand {
                 sandbox::commands::run(
                     natives,
                     cost_table,
-                    error_descriptions,
                     &state,
                     context.package(),
                     module_file,
