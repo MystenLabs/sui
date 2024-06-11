@@ -9,13 +9,12 @@ import { AlertCircle, Terminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { ConnectWallet } from '@/components/connect';
+import { DryRunProvider, type Network } from '@/components/preview-effects/DryRunContext';
 import { EffectsPreview } from '@/components/preview-effects/EffectsPreview';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-
-type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
 
 export default function OfflineSigner() {
 	const currentAccount = useCurrentAccount();
@@ -57,12 +56,11 @@ export default function OfflineSigner() {
 		isPending: dryRunLoading,
 		error,
 	} = useMutation({
-		mutationKey: ['dry-run'],
+		mutationKey: [dryRunNetwork, 'dry-run'],
 		mutationFn: async () => {
 			const dryRunClient = new SuiClient({
 				url: getFullnodeUrl(dryRunNetwork),
 			});
-
 			const transaction = Transaction.from(bytes);
 			return await dryRunClient.dryRunTransactionBlock({
 				transactionBlock: await transaction.build({
@@ -126,7 +124,7 @@ export default function OfflineSigner() {
 								<div className="grid max-md:w-full gap-1.5">
 									<select
 										id="dry-run-network"
-										className="bg-background border  px-6 rounded-sm p-3 text-white"
+										className="bg-background border px-6 rounded-sm p-3 text-white"
 										value={dryRunNetwork}
 										onChange={(e) =>
 											setDryRunNetwork(
@@ -143,9 +141,9 @@ export default function OfflineSigner() {
 							</div>
 						</div>
 						{dryRunData && (
-							<>
-								<EffectsPreview output={dryRunData} />
-							</>
+							<DryRunProvider network={dryRunNetwork}>
+								<EffectsPreview output={dryRunData} network={dryRunNetwork} />
+							</DryRunProvider>
 						)}
 					</div>
 				</TabsContent>
