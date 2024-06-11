@@ -26,6 +26,7 @@ git-version.workspace = true
 hex.workspace = true
 http.workspace = true
 hyper.workspace = true
+itertools.workspace = true
 lru.workspace = true
 move-binary-format.workspace = true
 move-disassembler.workspace = true

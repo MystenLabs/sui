@@ -2,9 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::consistency::ConsistentIndexCursor;
-use crate::context_data::db_data_provider::PgManager;
+use crate::data::apys::calculate_apy;
+use crate::data::{DataLoader, Db};
 use crate::types::cursor::{JsonCursor, Page};
 use async_graphql::connection::{Connection, CursorType, Edge};
+use async_graphql::dataloader::Loader;
+use std::collections::{BTreeMap, HashMap};
+use sui_indexer::apis::GovernanceReadApi;
+use sui_types::committee::EpochId;
+use sui_types::sui_system_state::PoolTokenExchangeRate;
+
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
@@ -13,9 +21,10 @@ use super::owner::Owner;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
+use crate::error::Error;
 use async_graphql::*;
+use sui_indexer::apis::governance_api::exchange_rates;
 use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary as NativeSuiValidatorSummary;
-
 #[derive(Clone, Debug)]
 pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
@@ -23,6 +32,93 @@ pub(crate) struct Validator {
     pub report_records: Option<Vec<Address>>,
     /// The checkpoint sequence number at which this was viewed at.
     pub checkpoint_viewed_at: u64,
+    /// The epoch at which this validator's information was requested to be viewed at.
+    pub requested_for_epoch: u64,
+}
+
+type EpochStakeSubsidyStarted = u64;
+
+/// Loads the exchange rates from the cache and return a tuple (epoch stake subsidy started, and
+/// a BTreeMap holiding the exchange rates for each epoch for each validator.
+///
+/// It automatically filters the exchange rate table to only include data for the epochs that are
+/// less than or equal to the requested epoch.
+#[async_trait::async_trait]
+impl Loader<u64> for Db {
+    type Value = (
+        EpochStakeSubsidyStarted,
+        BTreeMap<NativeSuiAddress, Vec<(EpochId, PoolTokenExchangeRate)>>,
+    );
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[u64],
+    ) -> Result<
+        HashMap<
+            u64,
+            (
+                EpochStakeSubsidyStarted,
+                BTreeMap<NativeSuiAddress, Vec<(EpochId, PoolTokenExchangeRate)>>,
+            ),
+        >,
+        Error,
+    > {
+        let latest_sui_system_state = self
+            .inner
+            .spawn_blocking(move |this| this.get_latest_sui_system_state())
+            .await
+            .map_err(|_| Error::Internal("Failed to fetch latest Sui system state".to_string()))?;
+        let governance_api = GovernanceReadApi::new(self.inner.clone());
+        let exchange_rates = exchange_rates(&governance_api, &latest_sui_system_state)
+            .await
+            .map_err(|e| Error::Internal(format!("Error fetching exchange rates. {e}")))?;
+        let mut results = BTreeMap::new();
+
+        // The requested epoch is the epoch for which we want to compute the APY. For the current
+        // ongoing epoch we cannot compute an APY, so we compute it for epoch - 1.
+        // First need to check if that requested epoch is not the current running one. If it is,
+        // then subtract one as the APY cannot be computed for a running epoch.
+        // If no epoch is passed in the key, then we default to the latest epoch - 1
+        // for the same reasons as above.
+        let epoch_to_filter_out = if let Some(epoch) = keys.first() {
+            if epoch == &latest_sui_system_state.epoch {
+                *epoch - 1
+            } else {
+                *epoch
+            }
+        } else {
+            latest_sui_system_state.epoch - 1
+        };
+
+        // filter the exchange rates to only include data for the epochs that are less than or
+        // equal to the requested epoch. This enables us to get historical exchange rates
+        // accurately and pass this to the APY calculation function
+        // TODO we might even filter here by the epoch at which the stake subsidy started
+        // to avoid passing that to the `calculate_apy` function and doing another filter there
+        for er in exchange_rates {
+            results.insert(
+                er.address,
+                er.rates
+                    .into_iter()
+                    .filter(|(epoch, _)| epoch <= &epoch_to_filter_out)
+                    .collect(),
+            );
+        }
+
+        let requested_epoch = match keys.first() {
+            Some(x) => *x,
+            None => latest_sui_system_state.epoch,
+        };
+
+        let mut r = HashMap::new();
+        r.insert(
+            requested_epoch,
+            (latest_sui_system_state.stake_subsidy_start_epoch, results),
+        );
+
+        Ok(r)
+    }
 }
 
 type CAddr = JsonCursor<ConsistentIndexCursor>;
@@ -266,11 +362,23 @@ impl Validator {
     /// The APY of this validator in basis points.
     /// To get the APY in percentage, divide by 100.
     async fn apy(&self, ctx: &Context<'_>) -> Result<Option<u64>, Error> {
-        Ok(ctx
-            .data_unchecked::<PgManager>()
-            .fetch_validator_apys(&self.validator_summary.sui_address)
+        let DataLoader(loader) = ctx.data_unchecked();
+        let (stake_subsidy_start_epoch, exchange_rates) = loader
+            .load_one(self.requested_for_epoch)
             .await?
-            .map(|x| (x * 10000.0) as u64))
+            .ok_or_else(|| Error::Internal("DataLoading exchange rates failed".to_string()))?;
+        let rates = exchange_rates
+            .get(&self.validator_summary.sui_address)
+            .ok_or_else(|| {
+                Error::Internal(format!(
+                    "Failed to get the exchange rate for this validator address {} for requested epoch {}",
+                    self.validator_summary.sui_address, self.requested_for_epoch
+                ))
+            })?;
+
+        let avg_apy = Some(calculate_apy(stake_subsidy_start_epoch, rates));
+
+        Ok(avg_apy.map(|x| (x * 10000.0) as u64))
     }
 }
 
