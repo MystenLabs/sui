@@ -202,6 +202,44 @@ impl CoinReadApiServer for CoinReadApi {
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         with_tracing!(async move {
             let coin_struct = parse_to_struct_tag(&coin_type)?;
+            // 0x7fd9..8b92, 0xd4e8..afeb, 0xa09f..1e0a are 0x85ae..58fc are four bridge token packages
+            // on testnet. Because of the way get_coin_metadata is implemented, today there is no way
+            // to correctly get answers on a pruned fullnode, without relying on a remote kv store.
+            // This ia a very hacky way that takes least friction to carry us over to the RPC 2.0 era
+            // when this will be an non-issue.
+            // Safety wise, since the coin metadata object ids are hardcoded too, these requests can
+            // only respond on testnet but not any other networks.
+            match coin_type.as_str() {
+                "0x7fd9268baa20a130e52f85935a928d9fc715365a85251eaec0a223524a258b92::btc::BTC" => {
+                    // the object id is safe to unwrap
+                    let object = self.internal.get_object(&ObjectID::from_hex_literal("0x37cbdd198b6f0bad2a875543715f91bf68ae137a82345281802f0337c9b6878a").unwrap()).await?;
+                    if let Some(object) = object {
+                        return Ok(object.try_into().ok())
+                    }
+                }
+                "0xd4e8b2874af2ccd2f067dc208ffc25a420b0c7a91d8f71c249f730d2e158afeb::eth::ETH" => {
+                    // the object id is safe to unwrap
+                    let object = self.internal.get_object(&ObjectID::from_hex_literal("0xe3d8c6a6b65b3adaf89a407b8a397e4ab3f341aeccb384d0dac58008bb7c8567").unwrap()).await?;
+                    if let Some(object) = object {
+                        return Ok(object.try_into().ok())
+                    }
+                }
+                "0xa09fd1f4c7cfafcafdec341cd971c28621b451c8a60b950a92685d64cf1f1e0a::usdc::USDC" => {
+                    // the object id is safe to unwrap
+                    let object = self.internal.get_object(&ObjectID::from_hex_literal("0x38b178769d05226724a4ee39a9e805393f12af3e374e68f5fb633e299a1d5719").unwrap()).await?;
+                    if let Some(object) = object {
+                        return Ok(object.try_into().ok())
+                    }
+                }
+                "0x85ae32e1c848dd9759917abdb0f2e19114f9b1ee47a2d6d2429af9b9ab0458fc::usdt::USDT" => {
+                    // the object id is safe to unwrap
+                    let object = self.internal.get_object(&ObjectID::from_hex_literal("0x5b0315d0eb5882f73e569ede4bf2d4343f008e537d69a110b74bb218eb8b8acd").unwrap()).await?;
+                    if let Some(object) = object {
+                        return Ok(object.try_into().ok())
+                    }
+                }
+                _ => (),
+            }
             let metadata_object = self
                 .internal
                 .find_package_object(
