@@ -2665,7 +2665,7 @@ impl AuthorityPerEpochStore {
             if let Some(consensus_commit_prologue_root) = consensus_commit_prologue_root {
                 if self
                     .protocol_config()
-                    .prepose_prologue_tx_in_consensus_commit_in_checkpoints()
+                    .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
                 {
                     // Put consensus commit prologue root at the beginning of the checkpoint roots.
                     checkpoint_roots.push(consensus_commit_prologue_root);

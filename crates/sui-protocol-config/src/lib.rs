@@ -492,7 +492,7 @@ struct FeatureFlags {
     // The reason to prepose the prologue transaction is to provide information for transaction
     // cancellation.
     #[serde(skip_serializing_if = "is_false")]
-    prepose_prologue_tx_in_consensus_commit_in_checkpoints: bool,
+    prepend_prologue_tx_in_consensus_commit_in_checkpoints: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1357,9 +1357,9 @@ impl ProtocolConfig {
             .record_consensus_determined_version_assignments_in_prologue
     }
 
-    pub fn prepose_prologue_tx_in_consensus_commit_in_checkpoints(&self) -> bool {
+    pub fn prepend_prologue_tx_in_consensus_commit_in_checkpoints(&self) -> bool {
         self.feature_flags
-            .prepose_prologue_tx_in_consensus_commit_in_checkpoints
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints
     }
 
     pub fn hardened_otw_check(&self) -> bool {
@@ -2372,7 +2372,7 @@ impl ProtocolConfig {
                     // Only enable prepose consensus commit prologue in checkpoints in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags
-                            .prepose_prologue_tx_in_consensus_commit_in_checkpoints = true;
+                            .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
                     }
                 }
                 // Use this template when making changes:

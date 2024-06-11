@@ -24,7 +24,7 @@ use itertools::Itertools;
 use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use sui_macros::{fail_point, fail_point_if};
+use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -1070,7 +1070,7 @@ impl CheckpointBuilder {
         let consensus_commit_prologue = if self
             .epoch_store
             .protocol_config()
-            .prepose_prologue_tx_in_consensus_commit_in_checkpoints()
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
         {
             // If the roots contains consensus commit prologue transaction, we want to extract it,
             // and put it to the front of the checkpoint.
@@ -1114,7 +1114,8 @@ impl CheckpointBuilder {
         }
         sorted.extend(CausalOrder::causal_sort(unsorted));
 
-        if cfg!(msim) {
+        #[cfg(msim)]
+        {
             // Check consensus commit prologue invariants in sim test.
             self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
         }
@@ -1124,7 +1125,7 @@ impl CheckpointBuilder {
 
     // This function is used to extract the consensus commit prologue digest and effects from the root
     // transactions.
-    // This function can only be used when prepose_prologue_tx_in_consensus_commit_in_checkpoints is enabled.
+    // This function can only be used when prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled.
     // The consensus commit prologue is expected to be the first transaction in the roots.
     async fn extract_consensus_commit_prologue(
         &self,
@@ -1138,25 +1139,23 @@ impl CheckpointBuilder {
 
         // Reads the first transaction in the roots, and checks whether it is a consensus commit prologue
         // transaction.
-        // When prepose_prologue_tx_in_consensus_commit_in_checkpoints is enabled, the consensus commit prologue
+        // When prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled, the consensus commit prologue
         // transaction should be the first transaction in the roots written by the consensus handler.
-        Ok(self
+        let first_tx = self
             .state
             .get_transaction_cache_reader()
-            .get_transaction_block(&root_digests[0])
-            .expect("Transaction block must exist")
-            .filter(|tx| {
-                matches!(
-                    tx.transaction_data().kind(),
-                    TransactionKind::ConsensusCommitPrologue(_)
-                        | TransactionKind::ConsensusCommitPrologueV2(_)
-                        | TransactionKind::ConsensusCommitPrologueV3(_)
-                )
-            })
-            .map(|tx| {
-                assert_eq!(tx.digest(), root_effects[0].transaction_digest());
-                (*tx.digest(), root_effects[0].clone())
-            }))
+            .get_transaction_block(&root_digests[0])?
+            .expect("Transaction block must exist");
+
+        Ok(match first_tx.transaction_data().kind() {
+            TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::ConsensusCommitPrologueV2(_)
+            | TransactionKind::ConsensusCommitPrologueV3(_) => {
+                assert_eq!(first_tx.digest(), root_effects[0].transaction_digest());
+                Some((*first_tx.digest(), root_effects[0].clone()))
+            }
+            _ => None,
+        })
     }
 
     #[instrument(level = "debug", skip_all)]
@@ -1659,7 +1658,7 @@ impl CheckpointBuilder {
         if !self
             .epoch_store
             .protocol_config()
-            .prepose_prologue_tx_in_consensus_commit_in_checkpoints()
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
         {
             return;
         }
