@@ -67,11 +67,6 @@ fn unspecified_chain() -> Chain {
     Chain::Unknown
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct DiagInfo {
-    pub loaded_child_objects: Vec<(ObjectID, VersionNumber)>,
-}
-
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Error, Clone)]
 pub enum ReplayEngineError {
