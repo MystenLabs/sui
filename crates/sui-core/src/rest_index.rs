@@ -28,6 +28,14 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::TypedStoreError;
 use typed_store_derive::DBMapUtils;
 
+const CURRENT_DB_VERSION: u64 = 0;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct MetadataInfo {
+    /// Version of the Database
+    version: u64,
+}
+
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct OwnerIndexKey {
     pub owner: SuiAddress,
@@ -94,11 +102,23 @@ pub struct TransactionInfo {
 
 /// RocksDB tables for the RestIndexStore
 ///
+/// Anytime a new table is added, or and existing one has it's schema changed, make sure to also
+/// update the value of `CURRENT_DB_VERSION`.
+///
 /// NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
 /// - bounded in size by the live object set
 /// - are prune-able and have corresponding logic in the `prune` function
 #[derive(DBMapUtils)]
 struct IndexStoreTables {
+    /// A singleton that store metadata information on the DB.
+    ///
+    /// A few uses for this singleton:
+    /// - determining if the DB has been initialized (as some tables will still be empty post
+    /// initializatio)
+    /// - version of the DB. Everytime a new table or schema is changed the version number needs to
+    /// be incremented.
+    meta: DBMap<(), MetadataInfo>,
+
     /// An index of extra metadata for Transactions.
     ///
     /// Only contains entries for transactions which have yet to be pruned from the main database.
@@ -121,8 +141,29 @@ struct IndexStoreTables {
 }
 
 impl IndexStoreTables {
-    fn is_empty(&self) -> bool {
-        self.transactions.is_empty()
+    fn open<P: Into<PathBuf>>(path: P) -> Self {
+        IndexStoreTables::open_tables_read_write(
+            path.into(),
+            MetricConf::new("rest-index"),
+            None,
+            None,
+        )
+    }
+
+    fn needs_to_do_initialization(&self) -> bool {
+        match self.meta.get(&()) {
+            Ok(Some(metadata)) => metadata.version != CURRENT_DB_VERSION,
+            Ok(None) => true,
+            Err(_) => true,
+        }
+    }
+
+    fn needs_to_delete_old_db(&self) -> bool {
+        match self.meta.get(&()) {
+            Ok(Some(metadata)) => metadata.version != CURRENT_DB_VERSION,
+            Ok(None) => false,
+            Err(_) => true,
+        }
     }
 
     fn init(
@@ -193,6 +234,13 @@ impl IndexStoreTables {
 
             batch.write()?;
         }
+
+        self.meta.insert(
+            &(),
+            &MetadataInfo {
+                version: CURRENT_DB_VERSION,
+            },
+        )?;
 
         info!("Finished initializing REST indexes");
 
@@ -372,36 +420,37 @@ impl RestIndexStore {
         checkpoint_store: &CheckpointStore,
         resolver: &mut dyn LayoutResolver,
     ) -> Self {
-        let mut tables = IndexStoreTables::open_tables_read_write(
-            path,
-            MetricConf::new("rest-index"),
-            None,
-            None,
-        );
+        let tables = {
+            let tables = IndexStoreTables::open(&path);
 
-        // If the index tables are empty then we need to populate them
-        if tables.is_empty() {
-            tables
-                .init(authority_store, checkpoint_store, resolver)
-                .unwrap();
-        }
+            // If the index tables are uninitialized or on an older version then we need to
+            // populate them
+            if tables.needs_to_do_initialization() {
+                let mut tables = if tables.needs_to_delete_old_db() {
+                    drop(tables);
+                    typed_store::rocks::safe_drop_db(path.clone())
+                        .expect("unable to destroy old rest-index db");
+                    IndexStoreTables::open(path)
+                } else {
+                    tables
+                };
+
+                tables
+                    .init(authority_store, checkpoint_store, resolver)
+                    .expect("unable to initialize rest index from live object set");
+                tables
+            } else {
+                tables
+            }
+        };
 
         Self { tables }
     }
 
     pub fn new_without_init(path: PathBuf) -> Self {
-        let tables = IndexStoreTables::open_tables_read_write(
-            path,
-            MetricConf::new("rest-index"),
-            None,
-            None,
-        );
+        let tables = IndexStoreTables::open(path);
 
         Self { tables }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.tables.is_empty()
     }
 
     pub fn prune(
