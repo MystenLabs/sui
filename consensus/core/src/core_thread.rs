@@ -33,7 +33,8 @@ enum CoreThreadCommand {
     GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
     /// Sets the minimum propose round for the proposer. This is primarily used when the node
     /// is recovering and trying to figure out from the network its last proposed block/round and
-    /// set it accordingly to `[Core]`.
+    /// set it accordingly to `[Core]`. It will also a force creating a new block for the `round + 1`
+    /// to ensure liveness.
     SetMinProposeRound(Round, oneshot::Sender<()>),
 }
 
@@ -111,6 +112,7 @@ impl CoreThread {
                         CoreThreadCommand::SetMinProposeRound(round, sender) => {
                             let _scope = monitored_scope("CoreThread::loop::set_min_propose_round");
                             self.core.set_min_propose_round(round);
+                            self.core.new_block(round + 1, true)?;
                             sender.send(()).ok();
                         }
                     }

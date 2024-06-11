@@ -787,11 +787,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 if let Err(err) = core_dispatcher.set_min_propose_round(highest_round).await {
                     warn!("Error received while calling dispatcher, probably dispatcher is shutting down, will now exit: {err:?}");
                 }
-
-                // We need to attempt and trigger a new block to ensure liveness.
-                if let Err(err) = core_dispatcher.new_block(highest_round + 1, true).await {
-                    warn!("Error received while calling dispatcher, probably dispatcher is shutting down, will now exit: {err:?}");
-                }
             }));
     }
 
@@ -989,7 +984,6 @@ mod tests {
         add_blocks: Mutex<Vec<VerifiedBlock>>,
         missing_blocks: Mutex<BTreeSet<BlockRef>>,
         min_proposed_round_calls: Mutex<Vec<Round>>,
-        new_block_calls: Mutex<Vec<(Round, bool)>>,
     }
 
     impl MockCoreThreadDispatcher {
@@ -1007,11 +1001,6 @@ mod tests {
             let lock = self.min_proposed_round_calls.lock().await;
             lock.clone()
         }
-
-        async fn get_new_block_calls(&self) -> Vec<(Round, bool)> {
-            let lock = self.new_block_calls.lock().await;
-            lock.clone()
-        }
     }
 
     #[async_trait]
@@ -1025,9 +1014,7 @@ mod tests {
             Ok(BTreeSet::new())
         }
 
-        async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
-            let mut lock = self.new_block_calls.lock().await;
-            lock.push((round, force));
+        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
             Ok(())
         }
 
@@ -1475,12 +1462,6 @@ mod tests {
         assert_eq!(
             core_dispatcher.get_min_propose_round_calls().await,
             vec![10]
-        );
-
-        // Assert that a new block call has been made to trigger a new block for the min propose round + 1
-        assert_eq!(
-            core_dispatcher.get_new_block_calls().await,
-            vec![(11, true)]
         );
 
         // Ensure that no panic occurred
