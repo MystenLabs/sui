@@ -203,10 +203,12 @@ where
                 let bridge_event = opt_bridge_event.unwrap();
                 info!("Observed Eth bridge event: {:?}", bridge_event);
 
-                if let Some(action) =
-                    bridge_event.try_into_bridge_action(log.tx_hash, log.log_index_in_tx)
-                {
-                    actions.push(action);
+                match bridge_event.try_into_bridge_action(log.tx_hash, log.log_index_in_tx) {
+                    Ok(Some(action)) => actions.push(action),
+                    Ok(None) => {}
+                    Err(e) => {
+                        error!(eth_tx_hash=?log.tx_hash, eth_event_index=?log.log_index_in_tx, "Error converting EthBridgeEvent to BridgeAction: {:?}", e);
+                    }
                 }
                 // TODO: handle non Action events
             }
