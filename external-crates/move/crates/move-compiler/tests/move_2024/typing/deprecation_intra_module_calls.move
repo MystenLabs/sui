@@ -5,6 +5,8 @@ module 0x7::l {
     #[deprecated(note = b"Use the other struct instead.")]
     public struct Y() has drop;
 
+    public struct Z(Y) has drop;
+
     public fun foo() { }
 
     public fun bar(_: &X) { }

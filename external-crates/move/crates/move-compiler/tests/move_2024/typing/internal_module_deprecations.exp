@@ -2,71 +2,101 @@ warning[W04037]: deprecated usage
   ┌─ tests/move_2024/typing/internal_module_deprecations.move:3:13
   │
 3 │         Bad(A),
-  │             ^ This struct is deprecated: Use the B struct instead.
+  │             ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:26:9
    │
 26 │         foo();
-   │         ^^^ This function is deprecated
+   │         ^^^ The function '0x42::m::foo' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:27:9
+   │
 27 │         foo();
-   │         --- Deprecated function also used here
+   │         ^^^ The function '0x42::m::foo' is deprecated
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:28:9
    │
 28 │         bar_dep();
-   │         ^^^^^^^ This function is deprecated: Use the baz function instead.
+   │         ^^^^^^^ The function '0x42::m::bar_dep' is deprecated: Use the baz function instead.
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:31:23
    │
 31 │     public fun qux(_: A) { }
-   │                       ^ This struct is deprecated: Use the B struct instead.
+   │                       ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:33:30
    │
 33 │     public fun return_dep(): A {
-   │                              ^ This struct is deprecated: Use the B struct instead.
+   │                              ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:34:9
+   │
 34 │         A()
-   │         - Deprecated struct also used here
+   │         ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:38:9
    │
 38 │         H
-   │         ^ This constant is deprecated: Use the L constant instead.
+   │         ^ The constant '0x42::m::H' is deprecated: Use the L constant instead.
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:42:15
    │
 42 │         abort OldError
-   │               ^^^^^^^^ This constant is deprecated: Use `NewError` instead.
+   │               ^^^^^^^^ The constant '0x42::m::OldError' is deprecated: Use `NewError` instead.
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:46:18
    │
 46 │         let y = (A(): A);
-   │                  ^    - Deprecated struct also used here
-   │                  │     
-   │                  This struct is deprecated: Use the B struct instead.
-47 │         match (y) {
+   │                  ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:46:23
+   │
+46 │         let y = (A(): A);
+   │                       ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:48:13
+   │
 48 │             A() => (),
-   │             - Deprecated struct also used here
-49 │         };
+   │             ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:50:9
+   │
 50 │         A() = A();
-   │         -     - Deprecated struct also used here
-   │         │      
-   │         Deprecated struct also used here
+   │         ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:50:15
+   │
+50 │         A() = A();
+   │               ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:51:13
+   │
 51 │         let A() = A();
-   │             -     - Deprecated struct also used here
-   │             │      
-   │             Deprecated struct also used here
+   │             ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/internal_module_deprecations.move:51:19
+   │
+51 │         let A() = A();
+   │                   ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/internal_module_deprecations.move:55:24
    │
 55 │         let _ = R::Bad(A());
-   │                        ^ This struct is deprecated: Use the B struct instead.
+   │                        ^ The struct '0x42::m::A' is deprecated: Use the B struct instead.
 

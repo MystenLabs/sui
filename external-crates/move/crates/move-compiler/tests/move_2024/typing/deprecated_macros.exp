@@ -2,57 +2,89 @@ warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_macros.move:10:37
    │
 10 │     macro fun call_with_x($f: || -> X): X {
-   │                                     ^   - Deprecated struct also used here
-   │                                     │    
-   │                                     This struct is deprecated
-   ·
-27 │         call_with_x!(|| X());
-   │                         - Deprecated struct also used here
+   │                                     ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:10:41
+   │
+10 │     macro fun call_with_x($f: || -> X): X {
+   │                                         ^ The struct '0x42::m::X' is deprecated
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_macros.move:11:9
    │
 11 │         f();
-   │         ^ This function is deprecated
-   ·
-26 │         f();
-   │         - Deprecated function also used here
+   │         ^ The function '0x42::m::f' is deprecated
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_macros.move:16:9
    │
 16 │         f();
-   │         ^ This function is deprecated
-   ·
-31 │         f();
-   │         - Deprecated function also used here
+   │         ^ The function '0x42::m::f' is deprecated
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_macros.move:21:9
    │
 21 │         f();
-   │         ^ This function is deprecated
-   ·
-38 │         f();
-   │         - Deprecated function also used here
+   │         ^ The function '0x42::m::f' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:26:9
+   │
+26 │         f();
+   │         ^ The function '0x42::m::f' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:27:25
+   │
+27 │         call_with_x!(|| X());
+   │                         ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:31:9
+   │
+31 │         f();
+   │         ^ The function '0x42::m::f' is deprecated
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_macros.move:32:18
    │
 32 │         call!(|| X());
-   │                  ^ This struct is deprecated
+   │                  ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:33:20
+   │
 33 │         call!(|| Y<X>());
-   │                    - Deprecated struct also used here
+   │                    ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:34:22
+   │
 34 │         call!(|| Y<Y<X>>());
-   │                      - Deprecated struct also used here
+   │                      ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:38:9
+   │
+38 │         f();
+   │         ^ The function '0x42::m::f' is deprecated
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_macros.move:39:25
    │
 39 │         call_unders!(|| X());
-   │                         ^ This struct is deprecated
+   │                         ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:40:27
+   │
 40 │         call_unders!(|| Y<X>());
-   │                           - Deprecated struct also used here
+   │                           ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_macros.move:41:29
+   │
 41 │         call_unders!(|| Y<Y<X>>());
-   │                             - Deprecated struct also used here
+   │                             ^ The struct '0x42::m::X' is deprecated
 

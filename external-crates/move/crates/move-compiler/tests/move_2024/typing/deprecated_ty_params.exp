@@ -1,20 +1,36 @@
 warning[W04037]: deprecated usage
-   ┌─ tests/move_2024/typing/deprecated_ty_params.move:9:19
+  ┌─ tests/move_2024/typing/deprecated_ty_params.move:9:19
+  │
+9 │         let _ = Y<X>();
+  │                   ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_ty_params.move:10:15
    │
- 9 │         let _ = Y<X>();
-   │                   ^ This struct is deprecated
 10 │         let Y<X>() = Y<X>();
-   │               -        - Deprecated struct also used here
-   │               │         
-   │               Deprecated struct also used here
+   │               ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_ty_params.move:10:24
+   │
+10 │         let Y<X>() = Y<X>();
+   │                        ^ The struct '0x42::m::X' is deprecated
 
 warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_ty_params.move:16:11
    │
 16 │         g<X>();
-   │           ^ This struct is deprecated
+   │           ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_ty_params.move:17:13
+   │
 17 │         g<Y<X>>();
-   │             - Deprecated struct also used here
+   │             ^ The struct '0x42::m::X' is deprecated
+
+warning[W04037]: deprecated usage
+   ┌─ tests/move_2024/typing/deprecated_ty_params.move:18:19
+   │
 18 │         g<Y<Y<Y<Y<X>>>>>();
-   │                   - Deprecated struct also used here
+   │                   ^ The struct '0x42::m::X' is deprecated
 
