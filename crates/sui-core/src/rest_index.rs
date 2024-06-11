@@ -5,9 +5,11 @@ use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::state_accumulator::AccumulatorStore;
+use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use sui_rest_api::CheckpointData;
 use sui_types::base_types::MoveObjectType;
@@ -97,7 +99,29 @@ pub struct DynamicFieldIndexInfo {
 
 #[derive(Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct TransactionInfo {
-    checkpoint: u64,
+    pub checkpoint: u64,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct CoinIndexKey {
+    coin_type: StructTag,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub struct CoinIndexInfo {
+    pub coin_metadata_object_id: Option<ObjectID>,
+    pub treasury_object_id: Option<ObjectID>,
+}
+
+impl CoinIndexInfo {
+    fn merge(self, other: Self) -> Self {
+        Self {
+            coin_metadata_object_id: self
+                .coin_metadata_object_id
+                .or(other.coin_metadata_object_id),
+            treasury_object_id: self.treasury_object_id.or(other.treasury_object_id),
+        }
+    }
 }
 
 /// RocksDB tables for the RestIndexStore
@@ -135,6 +159,12 @@ struct IndexStoreTables {
     /// Allows an efficient iterator to list all of the dynamic fields owned by a particular
     /// ObjectID.
     dynamic_field: DBMap<DynamicFieldKey, DynamicFieldIndexInfo>,
+
+    /// An index of Coin Types
+    ///
+    /// Allows looking up information related to published Coins, like the ObjectID of its
+    /// coorisponding CoinMetadata.
+    coin: DBMap<CoinIndexKey, CoinIndexInfo>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
     // - are prune-able and have corresponding logic in the `prune` function
@@ -205,13 +235,15 @@ impl IndexStoreTables {
             batch.write()?;
         }
 
+        let mut batch = self.owner.batch();
+
+        let mut coin_index = HashMap::new();
+
         // Iterate through live object set to initialize object-based indexes
         for object in authority_store
             .iter_live_object_set(false)
             .filter_map(LiveObject::to_normal)
         {
-            let mut batch = self.owner.batch();
-
             match object.owner {
                 // Owner Index
                 Owner::AddressOwner(owner) => {
@@ -229,11 +261,36 @@ impl IndexStoreTables {
                     }
                 }
 
-                Owner::Shared { .. } | Owner::Immutable => continue,
+                Owner::Shared { .. } | Owner::Immutable => {}
             }
 
-            batch.write()?;
+            // Look for CoinMetadata<T> and TreasuryCap<T> objects
+            if let Some((key, value)) = try_create_coin_index_info(&object) {
+                use std::collections::hash_map::Entry;
+
+                match coin_index.entry(key) {
+                    Entry::Occupied(o) => {
+                        let (key, v) = o.remove_entry();
+                        let value = value.merge(v);
+                        batch.insert_batch(&self.coin, [(key, value)])?;
+                    }
+                    Entry::Vacant(v) => {
+                        v.insert(value);
+                    }
+                }
+            }
+
+            // If the batch size grows to greater that 256MB then write out to the DB so that the
+            // data we need to hold in memory doesn't grown unbounded.
+            if batch.size_in_bytes() >= 1 << 28 {
+                batch.write()?;
+                batch = self.owner.batch();
+            }
         }
+
+        batch.write()?;
+
+        self.coin.multi_insert(coin_index)?;
 
         self.meta.insert(
             &(),
@@ -291,8 +348,10 @@ impl IndexStoreTables {
             )?;
         }
 
-        // owner index
+        // object indexes
         {
+            let mut coin_index = HashMap::new();
+
             for tx in &checkpoint.transactions {
                 // determine changes from removed objects
                 for removed_object in tx.removed_objects() {
@@ -352,7 +411,29 @@ impl IndexStoreTables {
                         Owner::Shared { .. } | Owner::Immutable => {}
                     }
                 }
+
+                // coin indexing
+                //
+                // coin indexing relys on the fact that CoinMetadata and TreasuryCap are created in
+                // the same transaction so we don't need to worry about overriding any older value
+                // that may exist in the database (because there necessarily cannot be).
+                for (key, value) in tx.created_objects().flat_map(try_create_coin_index_info) {
+                    use std::collections::hash_map::Entry;
+
+                    match coin_index.entry(key) {
+                        Entry::Occupied(o) => {
+                            let (key, v) = o.remove_entry();
+                            let value = value.merge(v);
+                            batch.insert_batch(&self.coin, [(key, value)])?;
+                        }
+                        Entry::Vacant(v) => {
+                            v.insert(value);
+                        }
+                    }
+                }
             }
+
+            batch.insert_batch(&self.coin, coin_index)?;
         }
 
         batch.write()?;
@@ -406,6 +487,16 @@ impl IndexStoreTables {
         }
 
         Ok(iter)
+    }
+
+    fn get_coin_info(
+        &self,
+        coin_type: &StructTag,
+    ) -> Result<Option<CoinIndexInfo>, TypedStoreError> {
+        let key = CoinIndexKey {
+            coin_type: coin_type.to_owned(),
+        };
+        self.coin.get(&key)
     }
 }
 
@@ -491,6 +582,13 @@ impl RestIndexStore {
     {
         self.tables.dynamic_field_iter(parent, cursor)
     }
+
+    pub fn get_coin_info(
+        &self,
+        coin_type: &StructTag,
+    ) -> Result<Option<CoinIndexInfo>, TypedStoreError> {
+        self.tables.get_coin_info(coin_type)
+    }
 }
 
 fn try_create_dynamic_field_info(
@@ -552,4 +650,39 @@ fn try_create_dynamic_field_info(
     };
 
     Ok(Some(field_info))
+}
+
+fn try_create_coin_index_info(object: &Object) -> Option<(CoinIndexKey, CoinIndexInfo)> {
+    use sui_types::coin::CoinMetadata;
+    use sui_types::coin::TreasuryCap;
+
+    object
+        .type_()
+        .and_then(MoveObjectType::other)
+        .and_then(|object_type| {
+            CoinMetadata::is_coin_metadata_with_coin_type(object_type)
+                .cloned()
+                .map(|coin_type| {
+                    (
+                        CoinIndexKey { coin_type },
+                        CoinIndexInfo {
+                            coin_metadata_object_id: Some(object.id()),
+                            treasury_object_id: None,
+                        },
+                    )
+                })
+                .or_else(|| {
+                    TreasuryCap::is_treasury_with_coin_type(object_type)
+                        .cloned()
+                        .map(|coin_type| {
+                            (
+                                CoinIndexKey { coin_type },
+                                CoinIndexInfo {
+                                    coin_metadata_object_id: None,
+                                    treasury_object_id: Some(object.id()),
+                                },
+                            )
+                        })
+                })
+        })
 }
