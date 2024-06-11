@@ -381,6 +381,7 @@ codes!(
         MacroCallInfo: { msg: "IDE macro call info", severity: Note },
         ExpandedLambda: { msg: "IDE expanded lambda", severity: Note },
         MissingMatchArms: { msg: "IDE missing match arms", severity: Note },
+        EllipsisExpansion: { msg: "IDE ellipsis expansion", severity: Note },
     ],
 );
 

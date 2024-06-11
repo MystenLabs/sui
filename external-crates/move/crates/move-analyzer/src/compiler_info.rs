@@ -47,6 +47,9 @@ impl CompilerInfo {
                 CI::IDEAnnotation::MissingMatchArms(_) => {
                     // TODO: Not much to do with this yet.
                 }
+                CI::IDEAnnotation::EllipsisMatchEntries(_) => {
+                    // TODO: Not much to do with this yet.
+                }
             }
         }
     }
