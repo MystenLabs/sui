@@ -1470,6 +1470,7 @@
                 },
                 "check_zklogin_id_cost_base": null,
                 "check_zklogin_issuer_cost_base": null,
+                "checkpoint_summary_version_specific_data": null,
                 "consensus_bad_nodes_stake_threshold": null,
                 "consensus_max_transaction_size_bytes": null,
                 "consensus_max_transactions_in_block_bytes": null,
@@ -1861,6 +1862,7 @@
                 "max_verifier_meter_ticks_per_function": {
                   "u64": "6000000"
                 },
+                "min_checkpoint_interval_ms": null,
                 "min_move_binary_format_version": null,
                 "move_binary_format_version": {
                   "u32": "6"

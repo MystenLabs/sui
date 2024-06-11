@@ -724,7 +724,7 @@ async fn execute_checkpoint(
     //   get_unexecuted_transactions()
     // - Second, we execute all remaining transactions.
 
-    let (execution_digests, all_tx_digests, executable_txns, randomness_round) =
+    let (execution_digests, all_tx_digests, executable_txns, randomness_rounds) =
         get_unexecuted_transactions(
             checkpoint.clone(),
             transaction_cache_reader,
@@ -757,9 +757,9 @@ async fn execute_checkpoint(
 
     // Once execution is complete, we know that any randomness contained in this checkpoint has
     // been successfully included in a checkpoint certified by quorum of validators.
-    if let Some(round) = randomness_round {
-        // RandomnessManager is only present on validators.
-        if let Some(randomness_reporter) = epoch_store.randomness_reporter() {
+    // (RandomnessManager/RandomnessReporter is only present on validators.)
+    if let Some(randomness_reporter) = epoch_store.randomness_reporter() {
+        for round in randomness_rounds {
             debug!(
                 ?round,
                 "notifying RandomnessReporter that randomness update was executed in checkpoint"
@@ -990,7 +990,7 @@ fn extract_end_of_epoch_tx(
 }
 
 // Given a checkpoint, filter out any already executed transactions, then return the remaining
-// execution digests, transaction digests, transactions to be executed, and randomness round
+// execution digests, transaction digests, transactions to be executed, and randomness rounds
 // (if any) included in the checkpoint.
 #[allow(clippy::type_complexity)]
 fn get_unexecuted_transactions(
@@ -1002,7 +1002,7 @@ fn get_unexecuted_transactions(
     Vec<ExecutionDigests>,
     Vec<TransactionDigest>,
     Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
-    Option<RandomnessRound>,
+    Vec<RandomnessRound>,
 ) {
     let checkpoint_sequence = checkpoint.sequence_number();
     let full_contents = checkpoint_store
@@ -1049,11 +1049,26 @@ fn get_unexecuted_transactions(
         assert!(change_epoch_tx.data().intent_message().value.is_end_of_epoch_tx());
     });
 
-    // Look for a randomness state update tx. It must be first if it exists, because all other
-    // transactions in a checkpoint that includes a randomness state update are causally
-    // dependent on it.
-    let randomness_round = if let Some(first_digest) = execution_digests.first() {
-        let maybe_randomness_tx = cache_reader.get_transaction_block(&first_digest.transaction)
+    let randomness_rounds = if let Some(version_specific_data) = checkpoint
+        .version_specific_data(epoch_store.protocol_config())
+        .expect("unable to get verison_specific_data")
+    {
+        // With version-specific data, randomness rounds are stored in checkpoint summary.
+        version_specific_data.into_v1().randomness_rounds
+    } else {
+        // Before version-specific data, checkpoint batching must be disabled. In this case,
+        // randomness state update tx must be first if it exists, because all other
+        // transactions in a checkpoint that includes a randomness state update are causally
+        // dependent on it.
+        assert_eq!(
+            0,
+            epoch_store
+                .protocol_config()
+                .min_checkpoint_interval_ms_as_option()
+                .unwrap_or_default(),
+        );
+        if let Some(first_digest) = execution_digests.first() {
+            let maybe_randomness_tx = cache_reader.get_transaction_block(&first_digest.transaction)
             .expect("read cannot fail")
             .unwrap_or_else(||
                 panic!(
@@ -1061,15 +1076,16 @@ fn get_unexecuted_transactions(
                     checkpoint.sequence_number()
                 )
             );
-        if let TransactionKind::RandomnessStateUpdate(rsu) =
-            maybe_randomness_tx.data().transaction_data().kind()
-        {
-            Some(rsu.randomness_round)
+            if let TransactionKind::RandomnessStateUpdate(rsu) =
+                maybe_randomness_tx.data().transaction_data().kind()
+            {
+                vec![rsu.randomness_round]
+            } else {
+                Vec::new()
+            }
         } else {
-            None
+            Vec::new()
         }
-    } else {
-        None
     };
 
     let all_tx_digests: Vec<TransactionDigest> =
@@ -1151,7 +1167,7 @@ fn get_unexecuted_transactions(
         execution_digests,
         all_tx_digests,
         executable_txns,
-        randomness_round,
+        randomness_rounds,
     )
 }
 

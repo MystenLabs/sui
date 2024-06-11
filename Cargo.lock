@@ -12445,6 +12445,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "sui-protocol-config",
  "sui-rest-api",
  "sui-storage",
  "sui-types",
@@ -13998,6 +13999,7 @@ version = "0.0.0"
 dependencies = [
  "anemo",
  "anyhow",
+ "bcs",
  "fastcrypto",
  "insta",
  "move-bytecode-utils",
