@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::compatibility_check::check_all_tables;
-use super::exchange_rates_task::TriggerExchangeRatesTask;
 use super::system_package_task::SystemPackageTask;
 use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
