@@ -384,7 +384,7 @@ module sui::coin {
         let setting_name = deny_list_v2_global_pause_setting_name<T>();
         let paused =
             config::read_setting<_, bool>(object::id(deny_list), setting_name, ctx);
-        paused.is_some() && denied.destroy_some()
+        paused.is_some() && paused.destroy_some()
     }
 
     // === Entrypoints ===
