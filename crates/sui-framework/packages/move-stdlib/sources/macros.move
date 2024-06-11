@@ -51,9 +51,8 @@ module std::macros {
     }
 
     public(package) macro fun range_do($start: _, $stop: _, $f: |_|) {
-        let start = $start;
+        let mut i = $start;
         let stop = $stop;
-        let mut i = start;
         while (i < stop) {
             $f(i);
             i = i + 1;
@@ -61,14 +60,13 @@ module std::macros {
     }
 
     public(package) macro fun range_do_eq($start: _, $stop: _, $f: |_|) {
-        let start = $start;
+        let mut i = $start;
         let stop = $stop;
-        let mut i = start;
-        // we check `i >= stop` inside the loop instead of `i <= stop` as `while` consition to avoid
+        // we check `i >= stop` inside the loop instead of `i <= stop` as `while` condition to avoid
         // incrementing `i` past the MAX integer value.
-        // Because of this, we need to check if `start > stop` and return early, instead
+        // Because of this, we need to check if `i > stop` and return early, instead
         // of letting the loop bound handle it, like in the `range_do` macro.
-        if (start > stop) return;
+        if (i > stop) return;
         loop {
             $f(i);
             if (i >= stop) break;
