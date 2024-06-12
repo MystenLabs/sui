@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    cell::RefCell,
+    collections::BTreeSet,
+    sync::atomic::{AtomicBool, Ordering},
+};
+
 use clap::*;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::cell::RefCell;
-use std::collections::BTreeSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
 use tracing::{info, warn};
 
@@ -142,6 +145,7 @@ const MAX_PROTOCOL_VERSION: u64 = 50;
 //             New Move stdlib integer modules
 //             Enable checkpoint batching in testnet.
 //             Prepose consensus commit prologue in checkpoints.
+//             Disable multi-leader per round in Mysticeti universal committer.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -493,6 +497,10 @@ struct FeatureFlags {
     // cancellation.
     #[serde(skip_serializing_if = "is_false")]
     prepend_prologue_tx_in_consensus_commit_in_checkpoints: bool,
+
+    // Disable multi-leader per round in Mysticeti universal committer.
+    #[serde(skip_serializing_if = "is_false")]
+    mysticeti_disable_multi_leader_per_round_in_committer: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1420,6 +1428,11 @@ impl ProtocolConfig {
 
     pub fn fresh_vm_on_framework_upgrade(&self) -> bool {
         self.feature_flags.fresh_vm_on_framework_upgrade
+    }
+
+    pub fn mysticeti_disable_multi_leader_per_round_in_committer(&self) -> bool {
+        self.feature_flags
+            .mysticeti_disable_multi_leader_per_round_in_committer
     }
 }
 
@@ -2374,6 +2387,9 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
                     }
+
+                    cfg.feature_flags
+                        .mysticeti_disable_multi_leader_per_round_in_committer = true;
                 }
                 // Use this template when making changes:
                 //
@@ -2639,8 +2655,9 @@ macro_rules! check_limit_by_meter {
 
 #[cfg(all(test, not(msim)))]
 mod test {
-    use super::*;
     use insta::assert_yaml_snapshot;
+
+    use super::*;
 
     #[test]
     fn snapshot_tests() {

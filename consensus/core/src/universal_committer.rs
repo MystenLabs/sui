@@ -43,11 +43,26 @@ impl UniversalCommitter {
 
         // Try to decide as many leaders as possible, starting with the highest round.
         let mut leaders = VecDeque::new();
+
+        let last_round = if self
+            .context
+            .protocol_config
+            .mysticeti_disable_multi_leader_per_round_in_committer()
+        {
+            // Ensure that we don't commit any leaders from the same round as last_decided
+            // until we have full support for multi-leader per round.
+            // This can happen when we are on a leader schedule boundary and the leader
+            // elected for the round changes with the new schedule.
+            last_decided.round + 1
+        } else {
+            last_decided.round
+        };
+
         // try to commit a leader up to the highest_accepted_round - 2. There is no
         // reason to try and iterate on higher rounds as in order to make a direct
         // decision for a leader at round R we need blocks from round R+2 to figure
         // out that enough certificates and support exist to commit a leader.
-        'outer: for round in (last_decided.round..=highest_accepted_round.saturating_sub(2)).rev() {
+        'outer: for round in (last_round..=highest_accepted_round.saturating_sub(2)).rev() {
             for committer in self.committers.iter().rev() {
                 // Skip committers that don't have a leader for this round.
                 let Some(slot) = committer.elect_leader(round) else {

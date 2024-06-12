@@ -429,7 +429,7 @@ impl Core {
         self.last_proposed_block = verified_block.clone();
 
         // Now acknowledge the transactions for their inclusion to block
-        ack_transactions();
+        ack_transactions(verified_block.reference());
 
         info!("Created block {:?}", verified_block);
 

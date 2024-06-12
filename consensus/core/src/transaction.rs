@@ -10,8 +10,10 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{error, warn};
 
-use crate::block::Transaction;
-use crate::context::Context;
+use crate::{
+    block::{BlockRef, Transaction},
+    context::Context,
+};
 
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
@@ -27,7 +29,7 @@ pub(crate) struct TransactionsGuard {
     // A TransactionsGuard may be partially consumed by `TransactionConsumer`, in which case, this holds the remaining transactions.
     transactions: Vec<Transaction>,
 
-    included_in_block_ack: oneshot::Sender<()>,
+    included_in_block_ack: oneshot::Sender<BlockRef>,
 }
 
 /// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
@@ -62,7 +64,7 @@ impl TransactionConsumer {
     // This returns one or more transactions to be included in the block and a callback to acknowledge the inclusion of those transactions.
     // Note that a TransactionsGuard may be partially consumed and the rest saved for the next pull, in which case its `included_in_block_ack`
     // will not be signalled in the callback.
-    pub(crate) fn next(&mut self) -> (Vec<Transaction>, Box<dyn FnOnce()>) {
+    pub(crate) fn next(&mut self) -> (Vec<Transaction>, Box<dyn FnOnce(BlockRef)>) {
         let mut transactions = Vec::new();
         let mut acks = Vec::new();
         let mut total_size: usize = 0;
@@ -119,9 +121,9 @@ impl TransactionConsumer {
 
         (
             transactions,
-            Box::new(move || {
+            Box::new(move |block_ref: BlockRef| {
                 for ack in acks {
-                    let _ = ack.send(());
+                    let _ = ack.send(block_ref);
                 }
             }),
         )
@@ -172,7 +174,7 @@ impl TransactionClient {
 
     /// Submits a list of transactions to be sequenced. The method returns when all the transactions have been successfully included
     /// to next proposed blocks.
-    pub async fn submit(&self, transactions: Vec<Vec<u8>>) -> Result<(), ClientError> {
+    pub async fn submit(&self, transactions: Vec<Vec<u8>>) -> Result<BlockRef, ClientError> {
         let included_in_block = self.submit_no_wait(transactions).await?;
         included_in_block
             .await
@@ -190,7 +192,7 @@ impl TransactionClient {
     pub(crate) async fn submit_no_wait(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<oneshot::Receiver<()>, ClientError> {
+    ) -> Result<oneshot::Receiver<BlockRef>, ClientError> {
         let (included_in_block_ack_send, included_in_block_ack_receive) = oneshot::channel();
         for transaction in &transactions {
             if transaction.len() as u64 > self.max_transaction_size {
@@ -246,14 +248,17 @@ impl TransactionVerifier for NoopTransactionVerifier {
 
 #[cfg(test)]
 mod tests {
-    use crate::context::Context;
-    use crate::transaction::{TransactionClient, TransactionConsumer};
-    use futures::stream::FuturesUnordered;
-    use futures::StreamExt;
-    use std::sync::Arc;
-    use std::time::Duration;
+    use std::{sync::Arc, time::Duration};
+
+    use futures::{stream::FuturesUnordered, StreamExt};
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::timeout;
+
+    use crate::{
+        block::BlockRef,
+        context::Context,
+        transaction::{TransactionClient, TransactionConsumer},
+    };
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn basic_submit_and_consume() {
@@ -296,7 +301,7 @@ mod tests {
         );
 
         // Now acknowledge the inclusion of transactions
-        ack_transactions();
+        ack_transactions(BlockRef::MIN);
 
         // Now make sure that all the waiters have returned
         while let Some(result) = included_in_block_waiters.next().await {
@@ -428,7 +433,7 @@ mod tests {
         // now pull the transactions from the consumer.
         // we expect all transactions are fetched in order, not missing any, and not exceeding the size limit.
         let mut all_transactions = Vec::new();
-        let mut all_acks: Vec<Box<dyn FnOnce()>> = Vec::new();
+        let mut all_acks: Vec<Box<dyn FnOnce(BlockRef)>> = Vec::new();
         while !consumer.is_empty() {
             let (transactions, ack_transactions) = consumer.next();
 
@@ -457,7 +462,7 @@ mod tests {
 
         // now acknowledge the inclusion of all transactions.
         for ack in all_acks {
-            ack();
+            ack(BlockRef::MIN);
         }
 
         // expect all receivers to be resolved.

@@ -41,7 +41,7 @@ def run_command(command, env_vars):
         else:
           print("-- seed passed %s" % env_vars["MSIM_TEST_SEED"])
 
-        return 0
+        return exit_code
     except subprocess.CalledProcessError as e:
         print(f"Command '{e.cmd}' failed with exit code {e.returncode} for seed: " + env_vars["MSIM_TEST_SEED"])
         return e.returncode
@@ -55,12 +55,17 @@ def main(commands):
             future = executor.submit(run_command, cmd, env_vars)
             future_to_command[future] = cmd
 
+        all_passed = True
         for future in concurrent.futures.as_completed(future_to_command):
             cmd = future_to_command[future]
             exit_code = future.result()
             if exit_code != 0:
+                all_passed = False
                 print(f"Command '{cmd}' failed with exit code {exit_code}")
                 sys.exit(1)
+
+        if all_passed:
+            print("\033[92mAll tests passed successfully!\033[0m")
 
 if __name__ == "__main__":
     repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decode("utf-8").strip()
