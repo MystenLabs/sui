@@ -29,7 +29,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -80,7 +80,7 @@ use sui_storage::IndexStore;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
-use sui_types::deny_list::DenyList;
+use sui_types::deny_list_v1::check_coin_deny_list_v1;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
@@ -860,8 +860,13 @@ impl AuthorityState {
             &self.metrics.bytecode_verifier_metrics,
         )?;
 
-        if epoch_store.coin_deny_list_state_enabled() {
-            self.check_coin_deny(tx_data.sender(), &checked_input_objects, &receiving_objects)?;
+        if epoch_store.coin_deny_list_v1_enabled() {
+            check_coin_deny_list_v1(
+                tx_data.sender(),
+                &checked_input_objects,
+                &receiving_objects,
+                &self.get_object_store(),
+            )?;
         }
 
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
@@ -4460,7 +4465,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Option<EndOfEpochTransactionKind> {
-        if !epoch_store.protocol_config().enable_coin_deny_list() {
+        if !epoch_store.protocol_config().enable_coin_deny_list_v1() {
             return None;
         }
 
@@ -4692,30 +4697,6 @@ impl AuthorityState {
             self.get_reconfig_api().revert_state_update(&digest)?;
         }
         info!("All uncommitted local transactions reverted");
-        Ok(())
-    }
-
-    fn check_coin_deny(
-        &self,
-        sender: SuiAddress,
-        input_objects: &CheckedInputObjects,
-        receiving_objects: &ReceivingObjects,
-    ) -> SuiResult {
-        let all_objects = input_objects
-            .inner()
-            .iter_objects()
-            .chain(receiving_objects.iter_objects());
-        let coin_types = all_objects
-            .filter_map(|obj| {
-                if obj.is_gas_coin() {
-                    None
-                } else {
-                    obj.coin_type_maybe()
-                        .map(|type_tag| type_tag.to_canonical_string(false))
-                }
-            })
-            .collect::<BTreeSet<_>>();
-        DenyList::check_coin_deny_list(sender, coin_types, &self.get_object_store())?;
         Ok(())
     }
 

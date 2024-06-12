@@ -4,12 +4,12 @@
 use std::path::PathBuf;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
-use sui_types::deny_list::CoinDenyCap;
-use sui_types::deny_list::RegulatedCoinMetadata;
+use sui_types::deny_list_v1::CoinDenyCap;
+use sui_types::deny_list_v1::RegulatedCoinMetadata;
 use test_cluster::TestClusterBuilder;
 
 #[sim_test]
-async fn test_regulated_coin_creation() {
+async fn test_regulated_coin_v1_creation() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests/move_test_code");
