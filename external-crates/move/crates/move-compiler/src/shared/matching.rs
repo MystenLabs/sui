@@ -942,7 +942,7 @@ pub const MATCH_TEMP_PREFIX: &str = "__match_tmp%";
 // macro-expanded names.
 /// Create a new name for match variable usage.
 pub fn new_match_var_name(name: &str, id: usize) -> Symbol {
-    format!("{MATCH_TEMP_PREFIX}{NEW_NAME_DELIM}{name}{NEW_NAME_DELIM}{id}",).into()
+    format!("{MATCH_TEMP_PREFIX}{NEW_NAME_DELIM}{name}{NEW_NAME_DELIM}{id}").into()
 }
 
 // Since these are guards, we need to borrow the constant
