@@ -3,6 +3,7 @@
 
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
+    config::ConfigReadSettingImplCostParams,
     crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
     crypto::{
         bls12381::{Bls12381Bls12381MinPkVerifyCostParams, Bls12381Bls12381MinSigVerifyCostParams},
@@ -62,6 +63,7 @@ use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use transfer::TransferReceiveObjectInternalCostParams;
 
 mod address;
+mod config;
 mod crypto;
 mod dynamic_field;
 mod event;
@@ -81,6 +83,9 @@ pub struct NativesCostTable {
     pub address_from_bytes_cost_params: AddressFromBytesCostParams,
     pub address_to_u256_cost_params: AddressToU256CostParams,
     pub address_from_u256_cost_params: AddressFromU256CostParams,
+
+    // Config
+    pub config_read_setting_impl_cost_params: ConfigReadSettingImplCostParams,
 
     // Dynamic field natives
     pub dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams,
@@ -636,6 +641,10 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(dynamic_field::hash_type_and_key),
         ),
         (
+            "config",
+            "read_setting_impl",
+            make_native!(config::read_setting_impl),
+        )(
             "dynamic_field",
             "add_child_object",
             make_native!(dynamic_field::add_child_object),

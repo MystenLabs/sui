@@ -194,27 +194,35 @@ module sui::config {
     ): Option<Value> {
         let config_id = config.to_address();
         let setting_df = field::hash_type_and_key(config_id, name);
-        read_setting_<Name, Value>(config_id, setting_df, ctx.epoch())
+        read_setting_impl<
+            Name,
+            Setting<Value>,
+            SettingData<Value>,
+            Value,
+        >(config_id, setting_df, ctx.epoch())
     }
 
     /*
     This is kept native to keep gas costing consistent.
     */
-    native fun read_setting_<Name: copy + drop + store, Value: copy + drop + store>(
+    native fun read_setting_impl<
+        Name: copy + drop + store,
+        SettingValue: key + store,
+        SettingDataValue: store,
+        Value: copy + drop + store,
+    >(
         config: address,
         name: address,
         current_epoch: u64,
     ): Option<Value>;
         /*
     // but the code is essentially
-        assert!(field::exists_with_type<Name, Value>(&config.id, setting), EReadSettingFailed);
+        if (!field::exists_with_type<Name, Value>(&config.id, setting)) return option::none()
         let sobj: &Setting<Value> = field::borrow(&config.id, setting);
         let data = sobj.data.borrow();
-        if (current_epoch > data.newer_value_epoch) data.newer_value
-        else {
-            assert!(data.older_value_opt.is_some(), EReadSettingFailed); // internal invariant
-            *data.older_value_opt.borrow()
-        }
+        if (current_epoch > data.newer_value_epoch) option::some(data.newer_value)
+        else data.older_value_opt
+
     }
     */
 

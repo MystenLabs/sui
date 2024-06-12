@@ -10,6 +10,10 @@ list.
 -  [Resource `DenyList`](#0x2_deny_list_DenyList)
 -  [Struct `ConfigWriteCap`](#0x2_deny_list_ConfigWriteCap)
 -  [Struct `ConfigKey`](#0x2_deny_list_ConfigKey)
+-  [Struct `MarkerKey`](#0x2_deny_list_MarkerKey)
+-  [Struct `AddressKey`](#0x2_deny_list_AddressKey)
+-  [Struct `GlobalPauseKey`](#0x2_deny_list_GlobalPauseKey)
+-  [Struct `PerTypeConfigCreated`](#0x2_deny_list_PerTypeConfigCreated)
 -  [Resource `PerTypeList`](#0x2_deny_list_PerTypeList)
 -  [Constants](#@Constants_0)
 -  [Function `v2_add`](#0x2_deny_list_v2_add)
@@ -19,12 +23,10 @@ list.
 -  [Function `v2_disable_global_pause`](#0x2_deny_list_v2_disable_global_pause)
 -  [Function `v2_most_recent_is_global_pause_enabled`](#0x2_deny_list_v2_most_recent_is_global_pause_enabled)
 -  [Function `maybe_create_deny_list_v2_marker`](#0x2_deny_list_maybe_create_deny_list_v2_marker)
--  [Function `deny_list_v2_marker_setting_name`](#0x2_deny_list_deny_list_v2_marker_setting_name)
--  [Function `deny_list_v2_address_setting_name`](#0x2_deny_list_deny_list_v2_address_setting_name)
--  [Function `deny_list_v2_global_pause_setting_name`](#0x2_deny_list_deny_list_v2_global_pause_setting_name)
 -  [Function `add_per_type_config`](#0x2_deny_list_add_per_type_config)
--  [Function `borrow_per_type_config`](#0x2_deny_list_borrow_per_type_config)
 -  [Function `borrow_per_type_config_mut`](#0x2_deny_list_borrow_per_type_config_mut)
+-  [Function `borrow_per_type_config`](#0x2_deny_list_borrow_per_type_config)
+-  [Function `per_type_exists`](#0x2_deny_list_per_type_exists)
 -  [Function `v1_add`](#0x2_deny_list_v1_add)
 -  [Function `v1_per_type_list_add`](#0x2_deny_list_v1_per_type_list_add)
 -  [Function `v1_remove`](#0x2_deny_list_v1_remove)
@@ -37,11 +39,10 @@ list.
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="../move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
-<b>use</b> <a href="../sui-framework/address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="../sui-framework/bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="../sui-framework/config.md#0x2_config">0x2::config</a>;
 <b>use</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
-<b>use</b> <a href="../sui-framework/hex.md#0x2_hex">0x2::hex</a>;
+<b>use</b> <a href="../sui-framework/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../sui-framework/table.md#0x2_table">0x2::table</a>;
 <b>use</b> <a href="../sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
@@ -134,6 +135,132 @@ A shared object that stores the addresses that are blocked for a given core type
 <dd>
 
 </dd>
+<dt>
+<code>per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_deny_list_MarkerKey"></a>
+
+## Struct `MarkerKey`
+
+
+
+<pre><code><b>struct</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_MarkerKey">MarkerKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>dummy_field: bool</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_deny_list_AddressKey"></a>
+
+## Struct `AddressKey`
+
+
+
+<pre><code><b>struct</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>pos0: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_deny_list_GlobalPauseKey"></a>
+
+## Struct `GlobalPauseKey`
+
+
+
+<pre><code><b>struct</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>dummy_field: bool</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_deny_list_PerTypeConfigCreated"></a>
+
+## Struct `PerTypeConfigCreated`
+
+
+
+<pre><code><b>struct</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeConfigCreated">PerTypeConfigCreated</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>per_type_index: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>config_id: <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
 </dl>
 
 
@@ -207,33 +334,6 @@ The index into the deny list vector for the <code>sui::coin::Coin</code> type.
 
 
 
-<a name="0x2_deny_list_DL_V2_ADDRESSES"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DL_V2_ADDRESSES">DL_V2_ADDRESSES</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; = [58, 58, 97, 100, 100, 114, 101, 115, 115, 58, 58];
-</code></pre>
-
-
-
-<a name="0x2_deny_list_DL_V2_GLOBAL_PAUSE"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DL_V2_GLOBAL_PAUSE">DL_V2_GLOBAL_PAUSE</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; = [58, 58, 103, 108, 111, 98, 97, 108, 95, 112, 97, 117, 115, 101];
-</code></pre>
-
-
-
-<a name="0x2_deny_list_DL_V2_MARKER"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DL_V2_MARKER">DL_V2_MARKER</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; = [58, 58, 109, 97, 114, 107, 101, 114];
-</code></pre>
-
-
-
 <a name="0x2_deny_list_EInvalidAddress"></a>
 
 The specified address cannot be added to the deny list.
@@ -272,7 +372,7 @@ meaningless to add them to the deny list.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_add">v2_add</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_add">v2_add</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -284,14 +384,14 @@ meaningless to add them to the deny list.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_add">v2_add</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config_mut">borrow_per_type_config_mut</a>(per_type_index);
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(per_type_config, ty, ctx);
-    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_address_setting_name">deny_list_v2_address_setting_name</a>(ty, addr);
-    <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(
+    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.per_type_config_entry!(per_type_index, per_type_key, ctx);
+    <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(per_type_config, ctx);
+    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
+    <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_,<a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>, bool&gt;(
         &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(),
         setting_name,
         |_deny_list, _cap, _ctx| <b>true</b>,
@@ -311,7 +411,7 @@ meaningless to add them to the deny list.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_remove">v2_remove</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_remove">v2_remove</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -323,14 +423,14 @@ meaningless to add them to the deny list.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_remove">v2_remove</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config_mut">borrow_per_type_config_mut</a>(per_type_index);
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(per_type_config, ty, ctx);
-    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_address_setting_name">deny_list_v2_address_setting_name</a>(ty, addr);
-    <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(
+    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.per_type_config_entry!(per_type_index, per_type_key, ctx);
+    <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(per_type_config, ctx);
+    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
+    <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_, <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>, bool&gt;(
         &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(),
         setting_name,
         |_deny_list, _cap, _ctx| <b>false</b>,
@@ -350,7 +450,7 @@ meaningless to add them to the deny list.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_most_recent_contains">v2_most_recent_contains</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>, _ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_most_recent_contains">v2_most_recent_contains</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>, _ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -362,12 +462,12 @@ meaningless to add them to the deny list.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_most_recent_contains">v2_most_recent_contains</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
     _ctx: &TxContext,
 ): bool {
-    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index);
-    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_address_setting_name">deny_list_v2_address_setting_name</a>(ty, addr);
+    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
+    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
     <b>if</b> (!per_type_config.exists_with_type&lt;_, _, bool&gt;(setting_name)) <b>return</b> <b>false</b>;
     *per_type_config.borrow_most_recent(setting_name)
 }
@@ -383,7 +483,7 @@ meaningless to add them to the deny list.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_enable_global_pause">v2_enable_global_pause</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_enable_global_pause">v2_enable_global_pause</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -395,13 +495,13 @@ meaningless to add them to the deny list.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_enable_global_pause">v2_enable_global_pause</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config_mut">borrow_per_type_config_mut</a>(per_type_index);
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(per_type_config, ty, ctx);
-    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_global_pause_setting_name">deny_list_v2_global_pause_setting_name</a>(ty);
-    <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(
+    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.per_type_config_entry!(per_type_index, per_type_key, ctx);
+    <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(per_type_config, ctx);
+    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a>();
+    <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_, <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a>, bool&gt;(
         &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(),
         setting_name,
         |_deny_list, _cap, _ctx| <b>true</b>,
@@ -421,7 +521,7 @@ meaningless to add them to the deny list.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_disable_global_pause">v2_disable_global_pause</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_disable_global_pause">v2_disable_global_pause</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -433,13 +533,13 @@ meaningless to add them to the deny list.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_disable_global_pause">v2_disable_global_pause</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config_mut">borrow_per_type_config_mut</a>(per_type_index);
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(per_type_config, ty, ctx);
-    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_global_pause_setting_name">deny_list_v2_global_pause_setting_name</a>(ty);
-    <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(
+    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.per_type_config_entry!(per_type_index, per_type_key, ctx);
+    <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(per_type_config, ctx);
+    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a>();
+    <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_, <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a>, bool&gt;(
         &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(),
         setting_name,
         |_deny_list, _cap, _ctx| <b>false</b>,
@@ -459,7 +559,7 @@ meaningless to add them to the deny list.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_most_recent_is_global_pause_enabled">v2_most_recent_is_global_pause_enabled</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, _ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_most_recent_is_global_pause_enabled">v2_most_recent_is_global_pause_enabled</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, _ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -471,11 +571,11 @@ meaningless to add them to the deny list.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v2_most_recent_is_global_pause_enabled">v2_most_recent_is_global_pause_enabled</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     _ctx: &TxContext,
 ): bool {
-    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index);
-    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_global_pause_setting_name">deny_list_v2_global_pause_setting_name</a>(ty);
+    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
+    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a>();
     <b>if</b> (!per_type_config.exists_with_type&lt;_, _, bool&gt;(setting_name)) <b>return</b> <b>false</b>;
     *per_type_config.borrow_most_recent(setting_name)
 }
@@ -491,7 +591,7 @@ meaningless to add them to the deny list.
 
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(per_type_config: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">deny_list::ConfigWriteCap</a>&gt;, ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(per_type_config: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">deny_list::ConfigWriteCap</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -502,92 +602,12 @@ meaningless to add them to the deny list.
 
 <pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>(
     per_type_config: &<b>mut</b> Config&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>&gt;,
-    ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_marker_setting_name">deny_list_v2_marker_setting_name</a>(ty);
-    <b>if</b> (per_type_config.exists_with_type&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(setting_name)) <b>return</b>;
+    <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_MarkerKey">MarkerKey</a>();
+    <b>if</b> (per_type_config.exists_with_type&lt;_, <a href="../sui-framework/deny_list.md#0x2_deny_list_MarkerKey">MarkerKey</a>, bool&gt;(setting_name)) <b>return</b>;
     <b>let</b> cap = &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>();
-    per_type_config.new_for_epoch&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(cap, setting_name, <b>true</b>, ctx);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_deny_list_deny_list_v2_marker_setting_name"></a>
-
-## Function `deny_list_v2_marker_setting_name`
-
-
-
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_marker_setting_name">deny_list_v2_marker_setting_name</a>(ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_marker_setting_name">deny_list_v2_marker_setting_name</a>(ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
-    <b>let</b> <b>mut</b> setting_name = ty;
-    setting_name.append(<a href="../sui-framework/deny_list.md#0x2_deny_list_DL_V2_MARKER">DL_V2_MARKER</a>);
-    setting_name
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_deny_list_deny_list_v2_address_setting_name"></a>
-
-## Function `deny_list_v2_address_setting_name`
-
-
-
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_address_setting_name">deny_list_v2_address_setting_name</a>(ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_address_setting_name">deny_list_v2_address_setting_name</a>(ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
-    <b>let</b> <b>mut</b> setting_name = ty;
-    setting_name.append(<a href="../sui-framework/deny_list.md#0x2_deny_list_DL_V2_ADDRESSES">DL_V2_ADDRESSES</a>);
-    setting_name.append(sui::hex::encode(sui::address::to_bytes(addr)));
-    setting_name
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_deny_list_deny_list_v2_global_pause_setting_name"></a>
-
-## Function `deny_list_v2_global_pause_setting_name`
-
-
-
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_global_pause_setting_name">deny_list_v2_global_pause_setting_name</a>(ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_deny_list_v2_global_pause_setting_name">deny_list_v2_global_pause_setting_name</a>(ty: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
-    <b>let</b> <b>mut</b> setting_name = ty;
-    setting_name.append(<a href="../sui-framework/deny_list.md#0x2_deny_list_DL_V2_GLOBAL_PAUSE">DL_V2_GLOBAL_PAUSE</a>);
-    setting_name
+    per_type_config.new_for_epoch&lt;_, <a href="../sui-framework/deny_list.md#0x2_deny_list_MarkerKey">MarkerKey</a>, bool&gt;(cap, setting_name, <b>true</b>, ctx);
 }
 </code></pre>
 
@@ -601,7 +621,7 @@ meaningless to add them to the deny list.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_add_per_type_config">add_per_type_config</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_add_per_type_config">add_per_type_config</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -613,43 +633,20 @@ meaningless to add them to the deny list.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_add_per_type_config">add_per_type_config</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> <a href="../sui-framework/config.md#0x2_config">config</a> = <a href="../sui-framework/config.md#0x2_config_new">config::new</a>(&<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(), ctx);
-    <b>let</b> key = <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a> { per_type_index };
-    <b>let</b> id = <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&<a href="../sui-framework/config.md#0x2_config">config</a>);
-    field::add(&<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.id, key, id);
+    <b>let</b> key = <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a> { per_type_index, per_type_key };
+    <b>let</b> config_id = <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&<a href="../sui-framework/config.md#0x2_config">config</a>);
+    field::add(&<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.id, key, config_id);
     <b>let</b> (field, _) = field::field_info&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a>&gt;(&<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.id, key);
     field::add_child_object(field.to_address(), <a href="../sui-framework/config.md#0x2_config">config</a>);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_deny_list_borrow_per_type_config"></a>
-
-## Function `borrow_per_type_config`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64): &<a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">deny_list::ConfigWriteCap</a>&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
-    per_type_index: u64,
-): &Config&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>&gt; {
-    <b>let</b> key = <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a> { per_type_index };
-    <b>let</b> (field, value_id) = field::field_info&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a>&gt;(&<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.id, key);
-    field::borrow_child_object&lt;Config&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>&gt;&gt;(field, value_id)
+    sui::event::emit(<a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeConfigCreated">PerTypeConfigCreated</a> {
+        per_type_index,
+        per_type_key,
+        config_id,
+    });
 }
 </code></pre>
 
@@ -663,7 +660,7 @@ meaningless to add them to the deny list.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config_mut">borrow_per_type_config_mut</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64): &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">deny_list::ConfigWriteCap</a>&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config_mut">borrow_per_type_config_mut</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">deny_list::ConfigWriteCap</a>&gt;
 </code></pre>
 
 
@@ -675,10 +672,70 @@ meaningless to add them to the deny list.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config_mut">borrow_per_type_config_mut</a>(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
 ): &<b>mut</b> Config&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>&gt; {
-    <b>let</b> key = <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a> { per_type_index };
+    <b>let</b> key = <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a> { per_type_index, per_type_key };
     <b>let</b> (field, value_id) = field::field_info_mut&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a>&gt;(&<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.id, key);
     field::borrow_child_object_mut&lt;Config&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>&gt;&gt;(field, value_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_deny_list_borrow_per_type_config"></a>
+
+## Function `borrow_per_type_config`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): &<a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">deny_list::ConfigWriteCap</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
+    per_type_index: u64,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+): &Config&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>&gt; {
+    <b>let</b> key = <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a> { per_type_index, per_type_key };
+    <b>let</b> (field, value_id) = field::field_info&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a>&gt;(&<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.id, key);
+    field::borrow_child_object&lt;Config&lt;<a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>&gt;&gt;(field, value_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_deny_list_per_type_exists"></a>
+
+## Function `per_type_exists`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
+    per_type_index: u64,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+): bool {
+    <b>let</b> key = <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a> { per_type_index, per_type_key };
+    field::exists_(&<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.id, key)
 }
 </code></pre>
 
