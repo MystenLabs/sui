@@ -10,25 +10,25 @@ module sui::deny_list_tests {
     public struct X()
 
     #[test, expected_failure(abort_code = sui::deny_list::EInvalidAddress)]
-    fun add_zero() {
+    fun v1_add_zero() {
         let mut ctx = tx_context::dummy();
         let mut dl = deny_list::new_for_testing(&mut ctx);
         let ty = type_name::into_string(type_name::get_with_original_ids<X>()).into_bytes();
-        dl.add(1, ty, deny_list::reserved_addresses()[0]); // should error
+        dl.v1_add(1, ty, deny_list::reserved_addresses()[0]); // should error
         abort 0 // should not be reached
     }
 
     #[test, expected_failure(abort_code = sui::deny_list::EInvalidAddress)]
-    fun remove_zero() {
+    fun v1_remove_zero() {
         let mut ctx = tx_context::dummy();
         let mut dl = deny_list::new_for_testing(&mut ctx);
         let ty = type_name::into_string(type_name::get_with_original_ids<X>()).into_bytes();
-        dl.add(1, ty, deny_list::reserved_addresses()[1]); // should error
+        dl.v1_add(1, ty, deny_list::reserved_addresses()[1]); // should error
         abort 0 // should not be reached
     }
 
     #[test]
-    fun contains_zero () {
+    fun v1_contains_zero () {
         let mut scenario = test_scenario::begin(@0);
         deny_list::create_for_test(scenario.ctx());
         scenario.next_tx(@0);
@@ -38,7 +38,7 @@ module sui::deny_list_tests {
         let mut i = 0;
         let n = reserved.length();
         while (i < n) {
-            assert!(!dl.contains(1, ty, reserved[i]), 0);
+            assert!(!dl.v1_contains(1, ty, reserved[i]), 0);
             i = i + 1;
         };
         test_scenario::return_shared(dl);

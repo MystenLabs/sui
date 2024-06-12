@@ -1795,36 +1795,6 @@ destroy_empty
 drop
 	public fun
 	0x2::table
-DenyList
-	public struct
-	0x2::deny_list
-PerTypeList
-	public struct
-	0x2::deny_list
-add
-	public(package) fun
-	0x2::deny_list
-per_type_list_add
-	fun
-	0x2::deny_list
-remove
-	public(package) fun
-	0x2::deny_list
-per_type_list_remove
-	fun
-	0x2::deny_list
-contains
-	public(package) fun
-	0x2::deny_list
-per_type_list_contains
-	fun
-	0x2::deny_list
-create
-	fun
-	0x2::deny_list
-per_type_list
-	fun
-	0x2::deny_list
 Config
 	public struct
 	0x2::config
@@ -1834,24 +1804,108 @@ Setting
 SettingData
 	public struct
 	0x2::config
-create_config
+new
+	public(package) fun
+	0x2::config
+create
 	public(package) fun
 	0x2::config
 new_for_epoch
 	public(package) fun
 	0x2::config
-has_for_epoch
+exists_with_type
 	public(package) fun
 	0x2::config
-borrow_mut
+exists_with_type_for_epoch
+	public(package) fun
+	0x2::config
+borrow_for_epoch_mut
+	public(package) fun
+	0x2::config
+borrow_most_recent
 	public(package) fun
 	0x2::config
 read_setting
-	public fun
+	public(package) fun
 	0x2::config
 read_setting_
 	fun
 	0x2::config
+DenyList
+	public struct
+	0x2::deny_list
+ConfigWriteCap
+	public struct
+	0x2::deny_list
+ConfigKey
+	public struct
+	0x2::deny_list
+PerTypeList
+	public struct
+	0x2::deny_list
+v2_add
+	public(package) fun
+	0x2::deny_list
+v2_remove
+	public(package) fun
+	0x2::deny_list
+v2_most_recent_contains
+	public(package) fun
+	0x2::deny_list
+v2_enable_global_pause
+	public(package) fun
+	0x2::deny_list
+v2_disable_global_pause
+	public(package) fun
+	0x2::deny_list
+v2_most_recent_is_global_pause_enabled
+	public(package) fun
+	0x2::deny_list
+maybe_create_deny_list_v2_marker
+	fun
+	0x2::deny_list
+deny_list_v2_marker_setting_name
+	fun
+	0x2::deny_list
+deny_list_v2_address_setting_name
+	fun
+	0x2::deny_list
+deny_list_v2_global_pause_setting_name
+	fun
+	0x2::deny_list
+add_per_type_config
+	public(package) fun
+	0x2::deny_list
+borrow_per_type_config
+	public(package) fun
+	0x2::deny_list
+borrow_per_type_config_mut
+	public(package) fun
+	0x2::deny_list
+v1_add
+	public(package) fun
+	0x2::deny_list
+v1_per_type_list_add
+	fun
+	0x2::deny_list
+v1_remove
+	public(package) fun
+	0x2::deny_list
+v1_per_type_list_remove
+	fun
+	0x2::deny_list
+v1_contains
+	public(package) fun
+	0x2::deny_list
+v1_per_type_list_contains
+	fun
+	0x2::deny_list
+create
+	fun
+	0x2::deny_list
+per_type_list
+	fun
+	0x2::deny_list
 Coin
 	public struct
 	0x2::coin
@@ -1865,9 +1919,6 @@ TreasuryCap
 	public struct
 	0x2::coin
 DenyCapV2
-	public struct
-	0x2::coin
-DenyListV2WriteCap
 	public struct
 	0x2::coin
 CurrencyCreated
@@ -1928,7 +1979,7 @@ create_currency
 	public fun
 	0x2::coin
 create_regulated_currency_v2
-	public fun
+	public(package) fun
 	0x2::coin
 mint
 	public fun
@@ -1940,22 +1991,22 @@ burn
 	public entry fun
 	0x2::coin
 deny_list_v2_add
-	public fun
+	public(package) fun
 	0x2::coin
 deny_list_v2_remove
-	public fun
+	public(package) fun
 	0x2::coin
-deny_list_v2_contains
-	public fun
-	0x2::coin
-deny_list_v2_enable_kill_switch
-	public fun
-	0x2::coin
-deny_list_v2_disable_global_pause
-	public fun
+deny_list_v2_most_recent_contains
+	public(package) fun
 	0x2::coin
 deny_list_v2_enable_global_pause
-	public fun
+	public(package) fun
+	0x2::coin
+deny_list_v2_disable_global_pause
+	public(package) fun
+	0x2::coin
+deny_list_v2_most_recent_is_global_pause_enabled
+	public(package) fun
 	0x2::coin
 mint_and_transfer
 	public entry fun
@@ -1986,18 +2037,6 @@ get_description
 	0x2::coin
 get_icon_url
 	public fun
-	0x2::coin
-deny_list_v2_marker_setting_name
-	fun
-	0x2::coin
-deny_list_v2_address_setting_name
-	fun
-	0x2::coin
-deny_list_v2_kill_switch_setting_name
-	fun
-	0x2::coin
-maybe_create_deny_list_v2_marker
-	fun
 	0x2::coin
 supply
 	public fun

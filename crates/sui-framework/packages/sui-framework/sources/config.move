@@ -27,16 +27,19 @@ module sui::config {
         data: Option<SettingData<Value>>,
     }
 
-
     public struct SettingData<Value: copy + drop + store> has store {
         newer_value_epoch: u64,
         newer_value: Value,
         older_value_opt: Option<Value>,
     }
 
-    public(package) fun create_config<WriteCap>(_cap: &mut WriteCap, ctx: &mut TxContext) {
-        let config = Config<WriteCap> { id: object::new(ctx) };
-        transfer::share_object(config)
+    public(package) fun new<WriteCap>(_cap: &mut WriteCap, ctx: &mut TxContext): Config<WriteCap> {
+        Config<WriteCap> { id: object::new(ctx) }
+    }
+
+    #[allow(lint(share_owned))]
+    public(package) fun create<WriteCap>(cap: &mut WriteCap, ctx: &mut TxContext) {
+        transfer::share_object(new<WriteCap>(cap, ctx))
     }
 
     public(package) fun new_for_epoch<
@@ -79,18 +82,28 @@ module sui::config {
         }
     }
 
-    #[allow(unused_mut_parameter)]
-    public(package) fun has_for_epoch<
+    public(package) fun exists_with_type<
         WriteCap,
         Name: copy + drop + store,
         Value: copy + drop + store,
     >(
-        config: &mut Config<WriteCap>,
-        _cap: &mut WriteCap,
+        config: &Config<WriteCap>,
         name: Name,
-        ctx: &mut TxContext,
     ): bool {
-        field::exists_(&config.id, name) && {
+        field::exists_with_type<_, Value>(&config.id, name)
+    }
+
+    #[allow(unused_mut_parameter)]
+    public(package) fun exists_with_type_for_epoch<
+        WriteCap,
+        Name: copy + drop + store,
+        Value: copy + drop + store,
+    >(
+        config: & Config<WriteCap>,
+        name: Name,
+        ctx: &TxContext,
+    ): bool {
+        field::exists_with_type<_, Value>(&config.id, name) && {
             let epoch = ctx.epoch();
             let sobj: &Setting<Value> = field::borrow(&config.id, name);
             epoch == sobj.data.borrow().newer_value_epoch
@@ -98,7 +111,11 @@ module sui::config {
     }
 
     #[allow(unused_mut_parameter)]
-    public(package) fun borrow_mut<WriteCap, Name: copy + drop + store, Value: copy + drop + store>(
+    public(package) fun borrow_for_epoch_mut<
+        WriteCap,
+        Name: copy + drop + store,
+        Value: copy + drop + store,
+    >(
         config: &mut Config<WriteCap>,
         _cap: &mut WriteCap,
         name: Name,
@@ -109,6 +126,40 @@ module sui::config {
         let data = sobj.data.borrow_mut();
         assert!(data.newer_value_epoch == epoch, ENotSetForEpoch);
         &mut data.newer_value
+    }
+
+    public(package) fun borrow_most_recent<
+        WriteCap,
+        Name: copy + drop + store,
+        Value: copy + drop + store,
+    >(
+        config: &Config<WriteCap>,
+        name: Name,
+    ): &Value {
+        let sobj: &Setting<Value> = field::borrow(&config.id, name);
+        &sobj.data.borrow().newer_value
+    }
+
+    public(package) macro fun entry<
+        $WriteCap,
+        $Name: copy + drop + store,
+        $Value: copy + drop + store,
+    >(
+        $config: &mut Config<$WriteCap>,
+        $cap: &mut $WriteCap,
+        $name: $Name,
+        $initial_for_next_epoch: |&mut Config<$WriteCap>, &mut $WriteCap, &mut TxContext| -> $Value,
+        $ctx: &mut TxContext,
+    ): &mut $Value {
+        let config = $config;
+        let cap = $cap;
+        let name = $name;
+        let ctx = $ctx;
+        if (!config.exists_with_type_for_epoch<_, _, $Value>(name, ctx)) {
+            let initial = $initial_for_next_epoch(config, cap, ctx);
+            config.new_for_epoch(cap, name, initial, ctx);
+        };
+        config.borrow_for_epoch_mut(cap, name, ctx)
     }
 
     public(package) macro fun update<
@@ -127,13 +178,13 @@ module sui::config {
         let cap = $cap;
         let name = $name;
         let ctx = $ctx;
-        let old_value_opt = if (config.has_for_epoch<_, _, $Value>(cap, name, ctx)) {
+        let old_value_opt = if (!config.exists_with_type_for_epoch<_, _, $Value>(name, ctx)) {
             let initial = $initial_for_next_epoch(config, cap, ctx);
             config.new_for_epoch(cap, name, initial, ctx)
         } else {
             option::none()
         };
-        $update_for_next_epoch(old_value_opt, config.borrow_mut(cap, name, ctx));
+        $update_for_next_epoch(old_value_opt, config.borrow_for_epoch_mut(cap, name, ctx));
     }
 
     public(package) fun read_setting<Name: copy + drop + store, Value: copy + drop + store>(
