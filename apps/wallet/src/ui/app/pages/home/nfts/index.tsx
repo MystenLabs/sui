@@ -48,10 +48,8 @@ function NftsPage() {
 	};
 	const { filterType } = useParams();
 	const filteredNFTs = useMemo(() => {
-		let filteredData;
-		if (!filterType) {
-			filteredData = ownedAssets?.visual;
-		} else {
+		let filteredData = ownedAssets?.visual;
+		if (filterType) {
 			filteredData = ownedAssets?.[filterType as AssetFilterTypes] ?? [];
 		}
 		return filteredData?.filter((ownedAsset) => {
