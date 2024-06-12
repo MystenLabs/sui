@@ -59,23 +59,32 @@ module sui::deny_list {
 
     public struct ConfigKey has copy, drop, store {
         per_type_index: u64,
+        per_type_key: vector<u8>,
     }
 
-    const DL_V2_MARKER: vector<u8> = b"::marker";
-    const DL_V2_ADDRESSES: vector<u8> = b"::address::";
-    const DL_V2_GLOBAL_PAUSE: vector<u8> = b"::global_pause";
+    public struct MarkerKey() has copy, drop, store;
+
+    public struct AddressKey(address) has copy, drop, store;
+
+    public struct GlobalPauseKey() has copy, drop, store;
+
+    public struct PerTypeConfigCreated has copy, drop, store {
+        per_type_index: u64,
+        per_type_key: vector<u8>,
+        config_id: ID,
+    }
 
     public(package) fun v2_add(
         deny_list: &mut DenyList,
         per_type_index: u64,
-        ty: vector<u8>,
+        per_type_key: vector<u8>,
         addr: address,
         ctx: &mut TxContext,
     ) {
-        let per_type_config = deny_list.borrow_per_type_config_mut(per_type_index);
-        maybe_create_deny_list_v2_marker(per_type_config, ty, ctx);
-        let setting_name = deny_list_v2_address_setting_name(ty, addr);
-        let next_epoch_entry = per_type_config.entry!<_, vector<u8>, bool>(
+        let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
+        maybe_create_deny_list_v2_marker(per_type_config, ctx);
+        let setting_name = AddressKey(addr);
+        let next_epoch_entry = per_type_config.entry!<_,AddressKey, bool>(
             &mut ConfigWriteCap(),
             setting_name,
             |_deny_list, _cap, _ctx| true,
@@ -87,14 +96,14 @@ module sui::deny_list {
     public(package) fun v2_remove(
         deny_list: &mut DenyList,
         per_type_index: u64,
-        ty: vector<u8>,
+        per_type_key: vector<u8>,
         addr: address,
         ctx: &mut TxContext,
     ) {
-        let per_type_config = deny_list.borrow_per_type_config_mut(per_type_index);
-        maybe_create_deny_list_v2_marker(per_type_config, ty, ctx);
-        let setting_name = deny_list_v2_address_setting_name(ty, addr);
-        let next_epoch_entry = per_type_config.entry!<_, vector<u8>, bool>(
+        let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
+        maybe_create_deny_list_v2_marker(per_type_config, ctx);
+        let setting_name = AddressKey(addr);
+        let next_epoch_entry = per_type_config.entry!<_, AddressKey, bool>(
             &mut ConfigWriteCap(),
             setting_name,
             |_deny_list, _cap, _ctx| false,
@@ -106,19 +115,18 @@ module sui::deny_list {
     public(package) fun v2_most_recent_contains(
         deny_list: &DenyList,
         per_type_index: u64,
-        ty: vector<u8>,
+        per_type_key: vector<u8>,
         addr: address,
         _ctx: &TxContext,
     ): bool {
-        let per_type_config = deny_list.borrow_per_type_config(per_type_index);
-        let setting_name = deny_list_v2_address_setting_name(ty, addr);
+        let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
+        let setting_name = AddressKey(addr);
         if (!per_type_config.exists_with_type<_, _, bool>(setting_name)) return false;
         *per_type_config.borrow_most_recent(setting_name)
     }
 
     // public(package) fun v2_per_type_contains(
-    //     per_type_index: u64,
-    //     ty: vector<u8>,
+    //     per_type_config: ID,
     //     addr: address,
     // ): bool {
     //    // TODO can read from the config directly once the ID is set
@@ -127,13 +135,13 @@ module sui::deny_list {
     public(package) fun v2_enable_global_pause(
         deny_list: &mut DenyList,
         per_type_index: u64,
-        ty: vector<u8>,
+        per_type_key: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        let per_type_config = deny_list.borrow_per_type_config_mut(per_type_index);
-        maybe_create_deny_list_v2_marker(per_type_config, ty, ctx);
-        let setting_name = deny_list_v2_global_pause_setting_name(ty);
-        let next_epoch_entry = per_type_config.entry!<_, vector<u8>, bool>(
+        let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
+        maybe_create_deny_list_v2_marker(per_type_config, ctx);
+        let setting_name = GlobalPauseKey();
+        let next_epoch_entry = per_type_config.entry!<_, GlobalPauseKey, bool>(
             &mut ConfigWriteCap(),
             setting_name,
             |_deny_list, _cap, _ctx| true,
@@ -145,13 +153,13 @@ module sui::deny_list {
     public(package) fun v2_disable_global_pause(
         deny_list: &mut DenyList,
         per_type_index: u64,
-        ty: vector<u8>,
+        per_type_key: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        let per_type_config = deny_list.borrow_per_type_config_mut(per_type_index);
-        maybe_create_deny_list_v2_marker(per_type_config, ty, ctx);
-        let setting_name = deny_list_v2_global_pause_setting_name(ty);
-        let next_epoch_entry = per_type_config.entry!<_, vector<u8>, bool>(
+        let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
+        maybe_create_deny_list_v2_marker(per_type_config, ctx);
+        let setting_name = GlobalPauseKey();
+        let next_epoch_entry = per_type_config.entry!<_, GlobalPauseKey, bool>(
             &mut ConfigWriteCap(),
             setting_name,
             |_deny_list, _cap, _ctx| false,
@@ -163,85 +171,94 @@ module sui::deny_list {
     public(package) fun v2_most_recent_is_global_pause_enabled(
         deny_list: &DenyList,
         per_type_index: u64,
-        ty: vector<u8>,
+        per_type_key: vector<u8>,
         _ctx: &TxContext,
     ): bool {
-        let per_type_config = deny_list.borrow_per_type_config(per_type_index);
-        let setting_name = deny_list_v2_global_pause_setting_name(ty);
+        let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
+        let setting_name = GlobalPauseKey();
         if (!per_type_config.exists_with_type<_, _, bool>(setting_name)) return false;
         *per_type_config.borrow_most_recent(setting_name)
     }
 
     // public(package) fun v2_per_type_is_global_pause_enabled(
-    //     per_type_index: u64,
-    //     ty: vector<u8>,
+    //     per_type_config: ID,
     // ): bool {
     //    // TODO can read from the config directly once the ID is set
     // }
 
     fun maybe_create_deny_list_v2_marker(
         per_type_config: &mut Config<ConfigWriteCap>,
-        ty: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        let setting_name = deny_list_v2_marker_setting_name(ty);
-        if (per_type_config.exists_with_type<_, vector<u8>, bool>(setting_name)) return;
+        let setting_name = MarkerKey();
+        if (per_type_config.exists_with_type<_, MarkerKey, bool>(setting_name)) return;
         let cap = &mut ConfigWriteCap();
-        per_type_config.new_for_epoch<_, vector<u8>, bool>(cap, setting_name, true, ctx);
+        per_type_config.new_for_epoch<_, MarkerKey, bool>(cap, setting_name, true, ctx);
     }
 
-    // b"{type}::marker"
-    fun deny_list_v2_marker_setting_name(ty: vector<u8>): vector<u8> {
-        let mut setting_name = ty;
-        setting_name.append(DL_V2_MARKER);
-        setting_name
-    }
-
-    // b"{type}::address::{bcs_bytes(index)}"
-    fun deny_list_v2_address_setting_name(ty: vector<u8>, addr: address): vector<u8> {
-        let mut setting_name = ty;
-        setting_name.append(DL_V2_ADDRESSES);
-        setting_name.append(sui::hex::encode(sui::address::to_bytes(addr)));
-        setting_name
-    }
-
-
-    // b"{type}::global_pause"
-    fun deny_list_v2_global_pause_setting_name(ty: vector<u8>): vector<u8> {
-        let mut setting_name = ty;
-        setting_name.append(DL_V2_GLOBAL_PAUSE);
-        setting_name
-    }
 
     public(package) fun add_per_type_config(
         deny_list: &mut DenyList,
         per_type_index: u64,
+        per_type_key: vector<u8>,
         ctx: &mut TxContext,
     ) {
         let config = config::new(&mut ConfigWriteCap(), ctx);
-        let key = ConfigKey { per_type_index };
-        let id = object::id(&config);
-        field::add(&mut deny_list.id, key, id);
+        let key = ConfigKey { per_type_index, per_type_key };
+        let config_id = object::id(&config);
+        field::add(&mut deny_list.id, key, config_id);
         let (field, _) = field::field_info<ConfigKey>(&deny_list.id, key);
         field::add_child_object(field.to_address(), config);
-    }
-
-    public(package) fun borrow_per_type_config(
-        deny_list: &DenyList,
-        per_type_index: u64,
-    ): &Config<ConfigWriteCap> {
-        let key = ConfigKey { per_type_index };
-        let (field, value_id) = field::field_info<ConfigKey>(&deny_list.id, key);
-        field::borrow_child_object<Config<ConfigWriteCap>>(field, value_id)
+        sui::event::emit(PerTypeConfigCreated {
+            per_type_index,
+            per_type_key,
+            config_id,
+        });
     }
 
     public(package) fun borrow_per_type_config_mut(
         deny_list: &mut DenyList,
         per_type_index: u64,
+        per_type_key: vector<u8>,
     ): &mut Config<ConfigWriteCap> {
-        let key = ConfigKey { per_type_index };
+        let key = ConfigKey { per_type_index, per_type_key };
         let (field, value_id) = field::field_info_mut<ConfigKey>(&mut deny_list.id, key);
         field::borrow_child_object_mut<Config<ConfigWriteCap>>(field, value_id)
+    }
+
+    public(package) fun borrow_per_type_config(
+        deny_list: &DenyList,
+        per_type_index: u64,
+        per_type_key: vector<u8>,
+    ): &Config<ConfigWriteCap> {
+        let key = ConfigKey { per_type_index, per_type_key };
+        let (field, value_id) = field::field_info<ConfigKey>(&deny_list.id, key);
+        field::borrow_child_object<Config<ConfigWriteCap>>(field, value_id)
+    }
+
+    public(package) fun per_type_exists(
+        deny_list: &DenyList,
+        per_type_index: u64,
+        per_type_key: vector<u8>,
+    ): bool {
+        let key = ConfigKey { per_type_index, per_type_key };
+        field::exists_(&deny_list.id, key)
+    }
+
+    public(package) macro fun per_type_config_entry(
+        $deny_list: &mut DenyList,
+        $per_type_index: u64,
+        $per_type_key: vector<u8>,
+        $ctx: &mut TxContext,
+    ): &mut Config<ConfigWriteCap> {
+        let deny_list = $deny_list;
+        let per_type_index = $per_type_index;
+        let per_type_key = $per_type_key;
+        let ctx = $ctx;
+        if (!deny_list.per_type_exists(per_type_index, per_type_key)) {
+            deny_list.add_per_type_config(per_type_index, per_type_key, ctx);
+        };
+        deny_list.borrow_per_type_config_mut(per_type_index, per_type_key)
     }
 
     // === V1 ===
