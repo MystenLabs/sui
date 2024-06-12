@@ -16,7 +16,7 @@ title: Module `0x2::config`
 -  [Function `borrow_for_epoch_mut`](#0x2_config_borrow_for_epoch_mut)
 -  [Function `borrow_most_recent`](#0x2_config_borrow_most_recent)
 -  [Function `read_setting`](#0x2_config_read_setting)
--  [Function `read_setting_`](#0x2_config_read_setting_)
+-  [Function `read_setting_impl`](#0x2_config_read_setting_impl)
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -425,7 +425,12 @@ title: Module `0x2::config`
 ): Option&lt;Value&gt; {
     <b>let</b> config_id = <a href="../sui-framework/config.md#0x2_config">config</a>.to_address();
     <b>let</b> setting_df = field::hash_type_and_key(config_id, name);
-    <a href="../sui-framework/config.md#0x2_config_read_setting_">read_setting_</a>&lt;Name, Value&gt;(config_id, setting_df, ctx.epoch())
+    <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;
+        Name,
+        <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;,
+        <a href="../sui-framework/config.md#0x2_config_SettingData">SettingData</a>&lt;Value&gt;,
+        Value,
+    &gt;(config_id, setting_df, ctx.epoch())
 }
 </code></pre>
 
@@ -433,13 +438,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_read_setting_"></a>
+<a name="0x2_config_read_setting_impl"></a>
 
-## Function `read_setting_`
+## Function `read_setting_impl`
 
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_">read_setting_</a>&lt;Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: u64): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;Name: <b>copy</b>, drop, store, SettingValue: store, key, SettingDataValue: store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: u64): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -448,7 +453,12 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_">read_setting_</a>&lt;Name: <b>copy</b> + drop + store, Value: <b>copy</b> + drop + store&gt;(
+<pre><code><b>native</b> <b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;
+    Name: <b>copy</b> + drop + store,
+    SettingValue: key + store,
+    SettingDataValue: store,
+    Value: <b>copy</b> + drop + store,
+&gt;(
     <a href="../sui-framework/config.md#0x2_config">config</a>: <b>address</b>,
     name: <b>address</b>,
     current_epoch: u64,
