@@ -36,7 +36,7 @@ use crate::consensus_handler::SequencedConsensusTransactionKey;
 use chrono::Utc;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -1015,10 +1015,41 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
     async fn make_checkpoint(&self, pendings: Vec<PendingCheckpointV2>) -> anyhow::Result<()> {
         let last_details = pendings.last().unwrap().details().clone();
-        let roots = pendings
-            .into_iter()
-            .flat_map(|pending| pending.into_v2().roots)
-            .collect::<Vec<_>>();
+
+        // Keeps track of the effects that are already included in the current checkpoint.
+        // This is used when there are multiple pending checkpoints to create a single checkpoint
+        // because in such scenarios, dependencies of a transaction may in earlier created checkpoints,
+        // or in earlier pending checkpoints.
+        let mut effects_in_current_checkpoint = BTreeSet::new();
+
+        // Stores the transactions that should be included in the checkpoint. Transactions will be recorded in the checkpoint
+        // in this order.
+        let mut sorted_tx_effects_included_in_checkpoint = Vec::new();
+        for pending_checkpoint in pendings.into_iter() {
+            let pending = pending_checkpoint.into_v2();
+            let txn_in_checkpoint = self
+                .resolve_checkpoint_transactions(pending.roots, &mut effects_in_current_checkpoint)
+                .await?;
+            sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
+        }
+        let new_checkpoint = self
+            .create_checkpoints(sorted_tx_effects_included_in_checkpoint, &last_details)
+            .await?;
+        self.write_checkpoints(last_details.checkpoint_height, new_checkpoint)
+            .await?;
+        Ok(())
+    }
+
+    // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
+    // the checkpoint, and return them in the order they should be included in the checkpoint.
+    // `effects_in_current_checkpoint` tracks the transactions that already exist in the current
+    // checkpoint.
+    #[instrument(level = "debug", skip_all)]
+    async fn resolve_checkpoint_transactions(
+        &self,
+        roots: Vec<TransactionKey>,
+        effects_in_current_checkpoint: &mut BTreeSet<TransactionDigest>,
+    ) -> SuiResult<Vec<TransactionEffects>> {
         self.metrics
             .checkpoint_roots_count
             .inc_by(roots.len() as u64);
@@ -1035,15 +1066,96 @@ impl CheckpointBuilder {
             .await?;
 
         let _scope = monitored_scope("CheckpointBuilder");
-        let unsorted = self.complete_checkpoint_effects(root_effects)?;
-        let sorted = {
-            let _scope = monitored_scope("CheckpointBuilder::causal_sort");
-            CausalOrder::causal_sort(unsorted)
+
+        let consensus_commit_prologue = if self
+            .epoch_store
+            .protocol_config()
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
+        {
+            // If the roots contains consensus commit prologue transaction, we want to extract it,
+            // and put it to the front of the checkpoint.
+
+            let consensus_commit_prologue = self
+                .extract_consensus_commit_prologue(&root_digests, &root_effects)
+                .await?;
+
+            // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
+            // other dependencies that haven't been included in any previous checkpoints.
+            if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
+                let unsorted_ccp = self.complete_checkpoint_effects(
+                    vec![ccp_effects.clone()],
+                    effects_in_current_checkpoint,
+                )?;
+
+                // No other dependencies of this consensus commit prologue that haven't been included
+                // in any previous checkpoint.
+                assert_eq!(unsorted_ccp.len(), 1);
+                assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
+            }
+            consensus_commit_prologue
+        } else {
+            None
         };
-        let new_checkpoints = self.create_checkpoints(sorted, &last_details).await?;
-        self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
-            .await?;
-        Ok(())
+
+        let unsorted =
+            self.complete_checkpoint_effects(root_effects, effects_in_current_checkpoint)?;
+
+        let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+        let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
+        if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
+            #[cfg(debug_assertions)]
+            {
+                // When consensus_commit_prologue is extracted, it should not be included in the `unsorted`.
+                for tx in unsorted.iter() {
+                    assert!(tx.transaction_digest() != &ccp_digest);
+                }
+            }
+            sorted.push(ccp_effects);
+        }
+        sorted.extend(CausalOrder::causal_sort(unsorted));
+
+        #[cfg(msim)]
+        {
+            // Check consensus commit prologue invariants in sim test.
+            self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
+        }
+
+        Ok(sorted)
+    }
+
+    // This function is used to extract the consensus commit prologue digest and effects from the root
+    // transactions.
+    // This function can only be used when prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled.
+    // The consensus commit prologue is expected to be the first transaction in the roots.
+    async fn extract_consensus_commit_prologue(
+        &self,
+        root_digests: &[TransactionDigest],
+        root_effects: &[TransactionEffects],
+    ) -> SuiResult<Option<(TransactionDigest, TransactionEffects)>> {
+        let _scope = monitored_scope("CheckpointBuilder::extract_consensus_commit_prologue");
+        if root_digests.is_empty() {
+            return Ok(None);
+        }
+
+        // Reads the first transaction in the roots, and checks whether it is a consensus commit prologue
+        // transaction.
+        // When prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled, the consensus commit prologue
+        // transaction should be the first transaction in the roots written by the consensus handler.
+        let first_tx = self
+            .state
+            .get_transaction_cache_reader()
+            .get_transaction_block(&root_digests[0])?
+            .expect("Transaction block must exist");
+
+        Ok(match first_tx.transaction_data().kind() {
+            TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::ConsensusCommitPrologueV2(_)
+            | TransactionKind::ConsensusCommitPrologueV3(_) => {
+                assert_eq!(first_tx.digest(), root_effects[0].transaction_digest());
+                Some((*first_tx.digest(), root_effects[0].clone()))
+            }
+            _ => None,
+        })
     }
 
     #[instrument(level = "debug", skip_all)]
@@ -1454,11 +1566,16 @@ impl CheckpointBuilder {
     }
 
     /// For the given roots return complete list of effects to include in checkpoint
-    /// This list includes the roots and all their dependencies, which are not part of checkpoint already
+    /// This list includes the roots and all their dependencies, which are not part of checkpoint already.
+    /// Note that this function may be called multiple times to construct the checkpoint.
+    /// `existing_tx_digests_in_checkpoint` is used to track the transactions that are already included in the checkpoint.
+    /// Txs in `roots` that need to be included in the checkpoint will be added to `existing_tx_digests_in_checkpoint`
+    /// after the call of this function.
     #[instrument(level = "debug", skip_all)]
     fn complete_checkpoint_effects(
         &self,
         mut roots: Vec<TransactionEffects>,
+        existing_tx_digests_in_checkpoint: &mut BTreeSet<TransactionDigest>,
     ) -> SuiResult<Vec<TransactionEffects>> {
         let _scope = monitored_scope("CheckpointBuilder::complete_checkpoint_effects");
         let mut results = vec![];
@@ -1476,6 +1593,11 @@ impl CheckpointBuilder {
                 let digest = effect.transaction_digest();
                 // Unnecessary to read effects of a dependency if the effect is already processed.
                 seen.insert(*digest);
+
+                // Skip roots that are already included in the checkpoint.
+                if existing_tx_digests_in_checkpoint.contains(effect.transaction_digest()) {
+                    continue;
+                }
 
                 // Skip roots already included in checkpoints or roots from previous epochs
                 if tx_included || effect.executed_epoch() < self.epoch_store.epoch() {
@@ -1520,7 +1642,103 @@ impl CheckpointBuilder {
                 .collect::<Vec<_>>();
             roots = effects;
         }
+
+        existing_tx_digests_in_checkpoint.extend(results.iter().map(|e| e.transaction_digest()));
         Ok(results)
+    }
+
+    // This function is used to check the invariants of the consensus commit prologue transactions in the checkpoint
+    // in simtest.
+    #[cfg(msim)]
+    fn expensive_consensus_commit_prologue_invariants_check(
+        &self,
+        root_digests: &[TransactionDigest],
+        sorted: &[TransactionEffects],
+    ) {
+        if !self
+            .epoch_store
+            .protocol_config()
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
+        {
+            return;
+        }
+
+        // Gets all the consensus commit prologue transactions from the roots.
+        let root_txs = self
+            .state
+            .get_transaction_cache_reader()
+            .multi_get_transaction_blocks(root_digests)
+            .unwrap();
+        let ccps = root_txs
+            .iter()
+            .filter_map(|tx| {
+                if let Some(tx) = tx {
+                    if matches!(
+                        tx.transaction_data().kind(),
+                        TransactionKind::ConsensusCommitPrologue(_)
+                            | TransactionKind::ConsensusCommitPrologueV2(_)
+                            | TransactionKind::ConsensusCommitPrologueV3(_)
+                    ) {
+                        Some(tx)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // There should be at most one consensus commit prologue transaction in the roots.
+        assert!(ccps.len() <= 1);
+
+        // Get all the transactions in the checkpoint.
+        let txs = self
+            .state
+            .get_transaction_cache_reader()
+            .multi_get_transaction_blocks(
+                &sorted
+                    .iter()
+                    .map(|tx| tx.transaction_digest().clone())
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+
+        if ccps.len() == 0 {
+            // If there is no consensus commit prologue transaction in the roots, then there should be no
+            // consensus commit prologue transaction in the checkpoint.
+            for tx in txs.iter() {
+                if let Some(tx) = tx {
+                    assert!(!matches!(
+                        tx.transaction_data().kind(),
+                        TransactionKind::ConsensusCommitPrologue(_)
+                            | TransactionKind::ConsensusCommitPrologueV2(_)
+                            | TransactionKind::ConsensusCommitPrologueV3(_)
+                    ));
+                }
+            }
+        } else {
+            // If there is one consensus commit prologue, it must be the first one in the checkpoint.
+            assert!(matches!(
+                txs[0].as_ref().unwrap().transaction_data().kind(),
+                TransactionKind::ConsensusCommitPrologue(_)
+                    | TransactionKind::ConsensusCommitPrologueV2(_)
+                    | TransactionKind::ConsensusCommitPrologueV3(_)
+            ));
+
+            assert_eq!(ccps[0].digest(), txs[0].as_ref().unwrap().digest());
+
+            for tx in txs.iter().skip(1) {
+                if let Some(tx) = tx {
+                    assert!(!matches!(
+                        tx.transaction_data().kind(),
+                        TransactionKind::ConsensusCommitPrologue(_)
+                            | TransactionKind::ConsensusCommitPrologueV2(_)
+                            | TransactionKind::ConsensusCommitPrologueV3(_)
+                    ));
+                }
+            }
+        }
     }
 }
 
