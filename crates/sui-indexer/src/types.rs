@@ -45,6 +45,8 @@ pub struct IndexedCheckpoint {
     pub successful_tx_num: usize,
     pub end_of_epoch_data: Option<EndOfEpochData>,
     pub end_of_epoch: bool,
+    pub min_tx_sequence_number: Option<u64>,
+    pub max_tx_sequence_number: Option<u64>,
 }
 
 impl IndexedCheckpoint {
@@ -52,6 +54,8 @@ impl IndexedCheckpoint {
         checkpoint: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
         contents: &sui_types::messages_checkpoint::CheckpointContents,
         successful_tx_num: usize,
+        min_tx_sequence_number: Option<u64>,
+        max_tx_sequence_number: Option<u64>,
     ) -> Self {
         let total_gas_cost = checkpoint.epoch_rolling_gas_cost_summary.computation_cost as i64
             + checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64
@@ -78,6 +82,8 @@ impl IndexedCheckpoint {
             timestamp_ms: checkpoint.timestamp_ms,
             validator_signature: auth_sig.clone(),
             checkpoint_commitments: checkpoint.checkpoint_commitments.clone(),
+            min_tx_sequence_number,
+            max_tx_sequence_number,
         }
     }
 }

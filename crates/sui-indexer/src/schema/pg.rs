@@ -20,6 +20,8 @@ diesel::table! {
         checkpoint_commitments -> Bytea,
         validator_signature -> Bytea,
         end_of_epoch_data -> Nullable<Bytea>,
+        min_tx_sequence_number -> Nullable<Int8>,
+        max_tx_sequence_number -> Nullable<Int8>
     }
 }
 

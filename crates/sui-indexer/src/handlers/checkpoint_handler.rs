@@ -315,6 +315,8 @@ where
                     &checkpoint_summary,
                     &checkpoint_contents,
                     successful_tx_num as usize,
+                    db_transactions.first().map(|t| t.tx_sequence_number),
+                    db_transactions.last().map(|t| t.tx_sequence_number),
                 ),
                 db_transactions,
                 db_events,
@@ -397,6 +399,7 @@ where
                     checkpoint_seq, tx_digest, sender_signed_data.digest()
                 )));
             }
+
             let tx = sender_signed_data.transaction_data();
             let events = events
                 .as_ref()
