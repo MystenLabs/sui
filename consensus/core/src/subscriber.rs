@@ -186,10 +186,18 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             let mut buffered_blocks = Vec::new();
 
             async fn process_blocks<S: NetworkService>(
+                context: &Context,
+                peer_hostname: &str,
                 to_process: Vec<Bytes>,
                 authority_service: Arc<S>,
                 peer: AuthorityIndex,
             ) {
+                context
+                    .metrics
+                    .node_metrics
+                    .subscriber_batched_blocks
+                    .with_label_values(&[&peer_hostname])
+                    .observe(to_process.len() as f64);
                 if let Err(e) = authority_service.handle_send_blocks(peer, to_process).await {
                     match e {
                         ConsensusError::BlockRejected { block_ref, reason } => {
@@ -231,7 +239,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                                     let mut to_process = Vec::new();
                                     mem::swap(&mut to_process, &mut buffered_blocks);
 
-                                    process_blocks(to_process, authority_service.clone(), peer).await;
+                                    process_blocks(&context, peer_hostname, to_process, authority_service.clone(), peer).await;
                                 }
 
                                 // Reset retries when a block is received.
@@ -257,7 +265,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                         let mut to_process = Vec::new();
                         mem::swap(&mut to_process, &mut buffered_blocks);
 
-                        process_blocks(to_process, authority_service.clone(), peer).await;
+                        process_blocks(&context, peer_hostname, to_process, authority_service.clone(), peer).await;
                     }
                 }
             }

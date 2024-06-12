@@ -138,6 +138,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) num_of_bad_nodes: IntGauge,
     pub(crate) quorum_receive_latency: Histogram,
     pub(crate) reputation_scores: IntGaugeVec,
+    pub(crate) subscriber_batched_blocks: HistogramVec,
     pub(crate) scope_processing_time: HistogramVec,
     pub(crate) sub_dags_per_commit_count: Histogram,
     pub(crate) block_suspensions: IntCounterVec,
@@ -396,6 +397,12 @@ impl NodeMetrics {
             reputation_scores: register_int_gauge_vec_with_registry!(
                 "reputation_scores",
                 "Reputation scores for each authority",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            subscriber_batched_blocks: register_histogram_vec_with_registry!(
+                "subscriber_batched_blocks",
+                "Subscriber number of blocks processed in batch",
                 &["authority"],
                 registry,
             ).unwrap(),

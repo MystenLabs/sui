@@ -76,139 +76,142 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         serialized_blocks: Vec<Bytes>,
     ) -> ConsensusResult<()> {
         fail_point_async!("consensus-rpc-response");
-        let serialized_block = serialized_blocks.first().unwrap().clone();
-
         let peer_hostname = &self.context.committee.authority(peer).hostname;
+        let mut verified_blocks = Vec::new();
 
-        // TODO: dedup block verifications, here and with fetched blocks.
-        let signed_block: SignedBlock =
-            bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
+        for serialized_block in serialized_blocks {
+            // TODO: dedup block verifications, here and with fetched blocks.
+            let signed_block: SignedBlock =
+                bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
 
-        // Reject blocks not produced by the peer.
-        if peer != signed_block.author() {
-            self.context
-                .metrics
-                .node_metrics
-                .invalid_blocks
-                .with_label_values(&[peer_hostname, "handle_send_block"])
-                .inc();
-            let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
-            info!("Block with wrong authority from {}: {}", peer, e);
-            return Err(e);
-        }
-        let peer_hostname = &self.context.committee.authority(peer).hostname;
+            // Reject blocks not produced by the peer.
+            if peer != signed_block.author() {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .invalid_blocks
+                    .with_label_values(&[peer_hostname, "handle_send_block"])
+                    .inc();
+                let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
+                info!("Block with wrong authority from {}: {}", peer, e);
+                return Err(e);
+            }
+            let peer_hostname = &self.context.committee.authority(peer).hostname;
 
-        // Reject blocks failing validations.
-        if let Err(e) = self.block_verifier.verify(&signed_block) {
-            self.context
-                .metrics
-                .node_metrics
-                .invalid_blocks
-                .with_label_values(&[peer_hostname, "handle_send_block"])
-                .inc();
-            info!("Invalid block from {}: {}", peer, e);
-            return Err(e);
-        }
-        let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
+            // Reject blocks failing validations.
+            if let Err(e) = self.block_verifier.verify(&signed_block) {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .invalid_blocks
+                    .with_label_values(&[peer_hostname, "handle_send_block"])
+                    .inc();
+                info!("Invalid block from {}: {}", peer, e);
+                return Err(e);
+            }
+            let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
 
-        trace!("Received block {verified_block} via send block.");
+            trace!("Received block {verified_block} via send block.");
 
-        // Reject block with timestamp too far in the future.
-        let now = self.context.clock.timestamp_utc_ms();
-        let forward_time_drift =
-            Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
-        if forward_time_drift > self.context.parameters.max_forward_time_drift {
-            self.context
-                .metrics
-                .node_metrics
-                .rejected_future_blocks
-                .with_label_values(&[&peer_hostname])
-                .inc();
-            debug!(
-                "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
-                verified_block.reference(),
-                verified_block.timestamp_ms(),
-                now,
-            );
-            return Err(ConsensusError::BlockRejected {
-                block_ref: verified_block.reference(),
-                reason: format!(
-                    "Block timestamp is too far in the future: {} > {}",
+            // Reject block with timestamp too far in the future.
+            let now = self.context.clock.timestamp_utc_ms();
+            let forward_time_drift =
+                Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
+            if forward_time_drift > self.context.parameters.max_forward_time_drift {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .rejected_future_blocks
+                    .with_label_values(&[&peer_hostname])
+                    .inc();
+                debug!(
+                    "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
+                    verified_block.reference(),
                     verified_block.timestamp_ms(),
-                    now
-                ),
-            });
-        }
+                    now,
+                );
+                return Err(ConsensusError::BlockRejected {
+                    block_ref: verified_block.reference(),
+                    reason: format!(
+                        "Block timestamp is too far in the future: {} > {}",
+                        verified_block.timestamp_ms(),
+                        now
+                    ),
+                });
+            }
 
-        // Wait until the block's timestamp is current.
-        if forward_time_drift > Duration::ZERO {
-            self.context
-                .metrics
-                .node_metrics
-                .block_timestamp_drift_wait_ms
-                .with_label_values(&[peer_hostname, &"handle_send_block"])
-                .inc_by(forward_time_drift.as_millis() as u64);
-            debug!(
-                "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
-                verified_block.reference(),
-                verified_block.timestamp_ms(),
-                now,
-                forward_time_drift.as_millis(),
-            );
-            sleep(forward_time_drift).await;
-        }
+            // Wait until the block's timestamp is current.
+            if forward_time_drift > Duration::ZERO {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .block_timestamp_drift_wait_ms
+                    .with_label_values(&[peer_hostname, &"handle_send_block"])
+                    .inc_by(forward_time_drift.as_millis() as u64);
+                debug!(
+                    "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
+                    verified_block.reference(),
+                    verified_block.timestamp_ms(),
+                    now,
+                    forward_time_drift.as_millis(),
+                );
+                sleep(forward_time_drift).await;
+            }
 
-        // Observe the block for the commit votes. When local commit is lagging too much,
-        // commit sync loop will trigger fetching.
-        self.commit_vote_monitor.observe(&verified_block);
+            // Observe the block for the commit votes. When local commit is lagging too much,
+            // commit sync loop will trigger fetching.
+            self.commit_vote_monitor.observe(&verified_block);
 
-        // Reject blocks when local commit index is lagging too far from quorum commit index.
-        //
-        // IMPORTANT: this must be done after observing votes from the block, otherwise
-        // observed quorum commit will no longer progress.
-        //
-        // Since the main issue with too many suspended blocks is memory usage not CPU,
-        // it is ok to reject after block verifications instead of before.
-        let last_commit_index = self.dag_state.read().last_commit_index();
-        let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
-        // The threshold to ignore block should be larger than commit_sync_batch_size,
-        // to avoid excessive block rejections and synchronizations.
-        const COMMIT_LAG_MULTIPLIER: u32 = 5;
-        if last_commit_index
-            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
-            < quorum_commit_index
-        {
-            self.context
-                .metrics
-                .node_metrics
-                .rejected_blocks
-                .with_label_values(&[&"commit_lagging"])
-                .inc();
-            debug!(
+            // Reject blocks when local commit index is lagging too far from quorum commit index.
+            //
+            // IMPORTANT: this must be done after observing votes from the block, otherwise
+            // observed quorum commit will no longer progress.
+            //
+            // Since the main issue with too many suspended blocks is memory usage not CPU,
+            // it is ok to reject after block verifications instead of before.
+            let last_commit_index = self.dag_state.read().last_commit_index();
+            let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
+            // The threshold to ignore block should be larger than commit_sync_batch_size,
+            // to avoid excessive block rejections and synchronizations.
+            const COMMIT_LAG_MULTIPLIER: u32 = 5;
+            if last_commit_index
+                + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
+                < quorum_commit_index
+            {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .rejected_blocks
+                    .with_label_values(&[&"commit_lagging"])
+                    .inc();
+                debug!(
                 "Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} < {})",
                 verified_block.reference(),
                 last_commit_index,
                 quorum_commit_index,
             );
-            return Err(ConsensusError::BlockRejected {
-                block_ref: verified_block.reference(),
-                reason: format!(
-                    "Last commit index is lagging quorum commit index too much ({} < {})",
-                    last_commit_index, quorum_commit_index,
-                ),
-            });
-        }
+                return Err(ConsensusError::BlockRejected {
+                    block_ref: verified_block.reference(),
+                    reason: format!(
+                        "Last commit index is lagging quorum commit index too much ({} < {})",
+                        last_commit_index, quorum_commit_index,
+                    ),
+                });
+            }
 
-        self.context
-            .metrics
-            .node_metrics
-            .verified_blocks
-            .with_label_values(&[&peer_hostname])
-            .inc();
+            self.context
+                .metrics
+                .node_metrics
+                .verified_blocks
+                .with_label_values(&[&peer_hostname])
+                .inc();
+
+            verified_blocks.push(verified_block);
+        }
 
         let missing_ancestors = self
             .core_dispatcher
-            .add_blocks(vec![verified_block])
+            .add_blocks(verified_blocks)
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
         if !missing_ancestors.is_empty() {
