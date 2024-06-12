@@ -183,6 +183,9 @@ pub enum SuiValidatorCommand {
         /// Must present if `print_unsigned_transaction_only` is true.
         #[clap(long)]
         validator_address: Option<SuiAddress>,
+        /// Gas budget for this transaction.
+        #[clap(name = "gas-budget", long)]
+        gas_budget: Option<u64>,
     },
     /// Update sui native bridge committee node url
     UpdateBridgeCommitteeNodeUrl {
@@ -193,9 +196,12 @@ pub enum SuiValidatorCommand {
         /// This is useful for offline signing.
         #[clap(name = "print-only", long, default_value = "false")]
         print_unsigned_transaction_only: bool,
-        /// Must present if `print_unsigned_transaction_only` is true.
+        /// Must be present if `print_unsigned_transaction_only` is true.
         #[clap(long)]
         validator_address: Option<SuiAddress>,
+        /// Gas budget for this transaction.
+        #[clap(name = "gas-budget", long)]
+        gas_budget: Option<u64>,
     },
 }
 
@@ -501,27 +507,18 @@ impl SuiValidatorCommand {
                 bridge_authority_url,
                 print_unsigned_transaction_only,
                 validator_address,
+                gas_budget,
             } => {
                 // Read bridge keypair
                 let ecdsa_keypair = match read_key(&bridge_authority_key_path, true)? {
                     SuiKeyPair::Secp256k1(key) => key,
                     _ => unreachable!("we required secp256k1 key in `read_key`"),
                 };
-                let address = if !print_unsigned_transaction_only {
-                    let address = context.active_address()?;
-                    if let Some(validator_address) = validator_address {
-                        if validator_address != address {
-                            bail!(
-                                "`--validator-address` must be the same as the current active address: {}",
-                                address
-                            );
-                        }
-                    }
-                    address
-                } else {
-                    validator_address
-                        .ok_or_else(|| anyhow!("--validator-address must be provided when `print_unsigned_transaction_only` is true"))?
-                };
+                let address = check_address(
+                    context.active_address()?,
+                    validator_address,
+                    print_unsigned_transaction_only,
+                )?;
                 // Make sure the address is a validator
                 let sui_client = context.get_client().await?;
                 let active_validators = sui_client
@@ -542,19 +539,20 @@ impl SuiValidatorCommand {
                     .get_mutable_bridge_object_arg_must_succeed()
                     .await;
 
-                let gas = context
-                    .get_one_gas_object_owned_by_address(address)
-                    .await?
-                    .unwrap_or_else(|| panic!("Cannot find gas object from address : {address}"));
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let (_, gas) = context
+                    .gas_for_owner_budget(address, gas_budget, Default::default())
+                    .await?;
 
                 let gas_price = context.get_reference_gas_price().await?;
                 let tx_data = build_committee_register_transaction(
                     address,
-                    &gas,
+                    &gas.object_ref(),
                     bridge,
                     ecdsa_keypair.public().as_bytes().to_vec(),
                     &bridge_authority_url,
                     gas_price,
+                    gas_budget,
                 )
                 .map_err(|e| anyhow!("{e:?}"))?;
                 if print_unsigned_transaction_only {
@@ -580,23 +578,14 @@ impl SuiValidatorCommand {
                 bridge_authority_url,
                 print_unsigned_transaction_only,
                 validator_address,
+                gas_budget,
             } => {
                 // Make sure the address is member of the committee
-                let address = if !print_unsigned_transaction_only {
-                    let address = context.active_address()?;
-                    if let Some(validator_address) = validator_address {
-                        if validator_address != address {
-                            bail!(
-                                "`--validator-address` must be the same as the current active address: {}",
-                                address
-                            );
-                        }
-                    }
-                    address
-                } else {
-                    validator_address
-                        .ok_or_else(|| anyhow!("--validator-address must be provided when `print_unsigned_transaction_only` is true"))?
-                };
+                let address = check_address(
+                    context.active_address()?,
+                    validator_address,
+                    print_unsigned_transaction_only,
+                )?;
                 let sui_rpc_url = &context.config.get_active_env().unwrap().rpc;
                 let bridge_client = SuiBridgeClient::new(sui_rpc_url).await?;
                 let committee_members = bridge_client
@@ -620,18 +609,19 @@ impl SuiValidatorCommand {
                     .get_mutable_bridge_object_arg_must_succeed()
                     .await;
 
-                let gas = context
-                    .get_one_gas_object_owned_by_address(address)
-                    .await?
-                    .unwrap_or_else(|| panic!("Cannot find gas object from address : {address}"));
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let (_, gas) = context
+                    .gas_for_owner_budget(address, gas_budget, Default::default())
+                    .await?;
 
                 let gas_price = context.get_reference_gas_price().await?;
                 let tx_data = build_committee_update_url_transaction(
                     address,
-                    &gas,
+                    &gas.object_ref(),
                     bridge,
                     &bridge_authority_url,
                     gas_price,
+                    gas_budget,
                 )
                 .map_err(|e| anyhow!("{e:?}"))?;
                 if print_unsigned_transaction_only {
@@ -655,6 +645,27 @@ impl SuiValidatorCommand {
             }
         });
         ret
+    }
+}
+
+fn check_address(
+    active_address: SuiAddress,
+    validator_address: Option<SuiAddress>,
+    print_unsigned_transaction_only: bool,
+) -> Result<SuiAddress, anyhow::Error> {
+    if !print_unsigned_transaction_only {
+        if let Some(validator_address) = validator_address {
+            if validator_address != active_address {
+                bail!(
+                    "`--validator-address` must be the same as the current active address: {}",
+                    active_address
+                );
+            }
+        }
+        Ok(active_address)
+    } else {
+        validator_address
+            .ok_or_else(|| anyhow!("--validator-address must be provided when `print_unsigned_transaction_only` is true"))
     }
 }
 

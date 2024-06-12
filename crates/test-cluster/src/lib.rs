@@ -1238,6 +1238,7 @@ impl TestClusterBuilder {
                 kp.public().as_bytes().to_vec(),
                 &server_url,
                 ref_gas_price,
+                1000000000,
             )
             .unwrap();
 

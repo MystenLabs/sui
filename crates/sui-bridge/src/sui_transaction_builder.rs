@@ -554,6 +554,7 @@ pub fn build_committee_register_transaction(
     bridge_authority_pub_key_bytes: Vec<u8>,
     bridge_url: &str,
     ref_gas_price: u64,
+    gas_budget: u64,
 ) -> BridgeResult<TransactionData> {
     let mut builder = ProgrammableTransactionBuilder::new();
     let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
@@ -577,7 +578,7 @@ pub fn build_committee_register_transaction(
         validator_address,
         vec![*gas_object_ref],
         builder.finish(),
-        1000000000,
+        gas_budget,
         ref_gas_price,
     );
     Ok(data)
@@ -589,6 +590,7 @@ pub fn build_committee_update_url_transaction(
     bridge_object_arg: ObjectArg,
     bridge_url: &str,
     ref_gas_price: u64,
+    gas_budget: u64,
 ) -> BridgeResult<TransactionData> {
     let mut builder = ProgrammableTransactionBuilder::new();
     let bridge = builder.obj(bridge_object_arg).unwrap();
@@ -606,7 +608,7 @@ pub fn build_committee_update_url_transaction(
         validator_address,
         vec![*gas_object_ref],
         builder.finish(),
-        100_000_000,
+        gas_budget,
         ref_gas_price,
     );
     Ok(data)

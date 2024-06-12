@@ -412,6 +412,7 @@ impl SuiCommand {
                         kp.public().as_bytes().to_vec(),
                         &format!("http://127.0.0.1:{port}"),
                         rgp,
+                        1000000000,
                     )
                     .unwrap();
                     let signed_tx = context.sign_transaction(&tx);
