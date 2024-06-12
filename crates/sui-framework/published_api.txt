@@ -1789,6 +1789,9 @@ destroy_empty
 drop
 	public fun
 	0x2::table
+emit
+	public fun
+	0x2::event
 Config
 	public struct
 	0x2::config
@@ -1822,7 +1825,7 @@ borrow_most_recent
 read_setting
 	public(package) fun
 	0x2::config
-read_setting_
+read_setting_impl
 	fun
 	0x2::config
 DenyList
@@ -1832,6 +1835,18 @@ ConfigWriteCap
 	public struct
 	0x2::deny_list
 ConfigKey
+	public struct
+	0x2::deny_list
+MarkerKey
+	public struct
+	0x2::deny_list
+AddressKey
+	public struct
+	0x2::deny_list
+GlobalPauseKey
+	public struct
+	0x2::deny_list
+PerTypeConfigCreated
 	public struct
 	0x2::deny_list
 PerTypeList
@@ -1858,22 +1873,16 @@ v2_most_recent_is_global_pause_enabled
 maybe_create_deny_list_v2_marker
 	fun
 	0x2::deny_list
-deny_list_v2_marker_setting_name
-	fun
-	0x2::deny_list
-deny_list_v2_address_setting_name
-	fun
-	0x2::deny_list
-deny_list_v2_global_pause_setting_name
-	fun
-	0x2::deny_list
 add_per_type_config
+	public(package) fun
+	0x2::deny_list
+borrow_per_type_config_mut
 	public(package) fun
 	0x2::deny_list
 borrow_per_type_config
 	public(package) fun
 	0x2::deny_list
-borrow_per_type_config_mut
+per_type_exists
 	public(package) fun
 	0x2::deny_list
 v1_add
@@ -2194,9 +2203,6 @@ commit_upgrade
 restrict
 	fun
 	0x2::package
-emit
-	public fun
-	0x2::event
 Display
 	public struct
 	0x2::display
