@@ -8,6 +8,7 @@ import type { WalletWithFeatures } from '@wallet-standard/core';
 
 import type {
 	SuiSignAndExecuteTransactionInput,
+	SuiSignPersonalMessageInput,
 	SuiSignTransactionInput,
 	SuiWalletFeatures,
 } from './features/index.js';
@@ -95,4 +96,17 @@ export async function signTransaction(
 	});
 
 	return { bytes: transactionBlockBytes, signature };
+}
+
+export async function signPersonalMessage(
+	wallet: WalletWithFeatures<Partial<SuiWalletFeatures>>,
+	input: SuiSignPersonalMessageInput,
+) {
+	if (!wallet.features['sui:signPersonalMessage']) {
+		throw new Error(
+			`Provided wallet (${wallet.name}) does not support the signPersonalMessage feature.`,
+		);
+	}
+
+	return wallet.features['sui:signPersonalMessage'].signPersonalMessage(input);
 }
