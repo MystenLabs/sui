@@ -18,6 +18,7 @@ import { Link } from 'react-router-dom';
 
 import { useHiddenAssets } from './HiddenAssetsProvider';
 import {useBlockedObjectList} from "_app/hooks/useBlockedObjectList";
+import {normalizeStructTag} from "@mysten/sui/utils";
 
 function HiddenNftsPage() {
 	const { hiddenAssetIds, showAsset } = useHiddenAssets();
@@ -44,7 +45,10 @@ function HiddenNftsPage() {
 
 		return hiddenNfts
 			?.filter((nft) => nft.data && hiddenAssetIds.includes(nft?.data?.objectId))
-			.filter((nft) => !blockedObjectList?.includes(nft.data?.type ?? ''))
+			.filter((nft) => {
+				const normalizedType = normalizeStructTag(nft.data?.type || '');
+				return !blockedObjectList?.includes(normalizedType);
+			})
 			.sort((nftA, nftB) => {
 				let nameA = nftA.display?.name || '';
 				let nameB = nftB.display?.name || '';
