@@ -160,7 +160,7 @@ impl CoreThread {
                 _ = self.rx_consumer_availability.changed() => {
                     let _scope = monitored_scope("CoreThread::loop::set_consumer_availability");
                     let available = *self.rx_consumer_availability.borrow();
-                    self.core.set_consumer_availability(available);
+                    self.core.set_consumer_availability(true);
                     if available {
                         // If a consumer becomes available, try to produce a new block to ensure liveness,
                         // because block proposal could have been skipped.
