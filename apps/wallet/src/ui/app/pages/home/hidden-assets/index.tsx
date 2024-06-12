@@ -17,10 +17,12 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useHiddenAssets } from './HiddenAssetsProvider';
+import {useBlockedObjectList} from "_app/hooks/useBlockedObjectList";
 
 function HiddenNftsPage() {
 	const { hiddenAssetIds, showAsset } = useHiddenAssets();
 	const kioskClient = useKioskClient();
+	const { data: blockedObjectList } = useBlockedObjectList();
 
 	const { data, isLoading, isPending, isError, error } = useMultiGetObjects(
 		hiddenAssetIds,
@@ -42,6 +44,7 @@ function HiddenNftsPage() {
 
 		return hiddenNfts
 			?.filter((nft) => nft.data && hiddenAssetIds.includes(nft?.data?.objectId))
+			.filter((nft) => !blockedObjectList?.includes(nft.data?.type ?? ''))
 			.sort((nftA, nftB) => {
 				let nameA = nftA.display?.name || '';
 				let nameB = nftB.display?.name || '';
