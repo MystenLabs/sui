@@ -172,26 +172,24 @@ impl UnitTestingConfig {
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let test_plan = unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
+        let mapped_files = compilation_env.file_mapping().clone();
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =
             diagnostics::unwrap_or_report_pass_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings);
         let units: Vec<_> = units.into_iter().map(|unit| unit.named_module).collect();
-        test_plan.map(|tests| TestPlan::new(tests, files, units))
+        test_plan.map(|tests| TestPlan::new(tests, mapped_files, units))
     }
 
     /// Build a test plan from a unit test config
     pub fn build_test_plan(&self) -> Option<TestPlan> {
         let deps = self.dep_files.clone();
 
-        let TestPlan {
-            files, module_info, ..
-        } = self.compile_to_test_plan(deps.clone(), vec![])?;
+        let TestPlan { module_info, .. } = self.compile_to_test_plan(deps.clone(), vec![])?;
 
         let mut test_plan = self.compile_to_test_plan(self.source_files.clone(), deps)?;
         test_plan.module_info.extend(module_info);
-        test_plan.files.extend(files);
         Some(test_plan)
     }
 
