@@ -7,3 +7,5 @@ pub mod pre_exec_agent;
 pub mod primary_agent;
 pub mod pre_exec_worker;
 pub mod primary_worker;
+pub mod mock_consensus_worker;
+pub mod input_traffic_manager;

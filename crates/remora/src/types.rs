@@ -170,6 +170,9 @@ pub enum RemoraMessage {
         written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
     },
 
+    RequestPreExecResult(),
+    PreExecReply(TransactionEffects),
+
     // Execution Worker <-> Storage Engine
     StateUpdate(TransactionEffects),
     Checkpointed(u64),
