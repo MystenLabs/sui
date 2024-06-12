@@ -264,6 +264,35 @@ pub trait PositionInfo {
         };
         Some(posn)
     }
+
+    /// Given a line number in the file return the `Loc` for the line.
+    fn line_to_loc_opt(&self, file_hash: &FileHash, line_number: usize) -> Option<Loc> {
+        let file_id = self.file_mapping().get(file_hash)?;
+        let line_range = self.files().line_range(*file_id, line_number).ok()?;
+        Some(Loc::new(
+            *file_hash,
+            line_range.start as u32,
+            line_range.end as u32,
+        ))
+    }
+
+    /// Given a location `Loc` return a new loc only for source with leading and trailing
+    /// whitespace removed.
+    fn trimmed_loc_opt(&self, loc: &Loc) -> Option<Loc> {
+        let source_str = self.source_of_loc_opt(loc)?;
+        let trimmed_front = source_str.trim_start();
+        let new_start = loc.start() as usize + (source_str.len() - trimmed_front.len());
+        let trimmed_back = trimmed_front.trim_end();
+        let new_end = (loc.end() as usize).saturating_sub(trimmed_front.len() - trimmed_back.len());
+        Some(Loc::new(loc.file_hash(), new_start as u32, new_end as u32))
+    }
+
+    /// Given a location `Loc` return the source for the location. This include any leading and
+    /// trailing whitespace.
+    fn source_of_loc_opt(&self, loc: &Loc) -> Option<&str> {
+        let file_id = *self.file_mapping().get(&loc.file_hash())?;
+        Some(&self.files().source(file_id).ok()?[loc.usize_range()])
+    }
 }
 
 impl PositionInfo for MappedFiles {

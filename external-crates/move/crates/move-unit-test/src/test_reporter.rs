@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::format_module_id;
-use codespan_reporting::files::Files;
 use colored::{control, Colorize};
 use move_binary_format::errors::{ExecutionState, Location, VMError};
 use move_command_line_common::error_bitset::ErrorBitset;
@@ -129,32 +128,10 @@ fn clever_error_line_number_to_loc(test_plan: &TestPlan, vm_error: &VMError) -> 
         Location::Module(module_id) => {
             let source_map = &test_plan.module_info.get(module_id)?.source_map;
             let file_hash = source_map.definition_location.file_hash();
-            let file_id = test_plan.mapped_files.file_mapping().get(&file_hash)?;
-            let line_range = test_plan
+            let loc = test_plan
                 .mapped_files
-                .files()
-                .line_range(*file_id, line_number as usize)
-                .ok()?;
-
-            let mut start = line_range.start;
-            // Sub 1 to trim off newline character
-            let end = line_range.end - 1;
-
-            // Since we only have the line span, trim the start of the line to remove any
-            // whitespace.
-            let source_slice =
-                &test_plan.mapped_files.files().source(*file_id).unwrap()[start..end];
-            if let Some((whitespace, rest)) =
-                source_slice.split_once(|ch: char| !ch.is_ascii_whitespace())
-            {
-                // If for some reason the whole line is whitespace fail.
-                if rest.is_empty() {
-                    return None;
-                }
-                start += whitespace.len();
-            }
-
-            Some(Loc::new(file_hash, start as u32, end as u32))
+                .line_to_loc_opt(&file_hash, line_number as usize)?;
+            test_plan.mapped_files.trimmed_loc_opt(&loc)
         }
     }
 }
