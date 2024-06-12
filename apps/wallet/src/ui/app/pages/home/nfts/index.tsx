@@ -11,6 +11,7 @@ import { setToSessionStorage } from '_src/background/storage-utils';
 import { AssetFilterTypes, useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { useOnScreen } from '@mysten/core';
+import { normalizeStructTag } from '@mysten/sui/utils';
 import { useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -53,7 +54,10 @@ function NftsPage() {
 		} else {
 			filteredData = ownedAssets?.[filterType as AssetFilterTypes] ?? [];
 		}
-		return filteredData?.filter((ownedAsset) => !blockedObjectList?.includes(ownedAsset.objectId));
+		return filteredData?.filter((ownedAsset) => {
+			const normalizedType = normalizeStructTag(ownedAsset.type || '');
+			return !blockedObjectList?.includes(normalizedType);
+		});
 	}, [ownedAssets, filterType, blockedObjectList]);
 	const { hiddenAssetIds } = useHiddenAssets();
 
