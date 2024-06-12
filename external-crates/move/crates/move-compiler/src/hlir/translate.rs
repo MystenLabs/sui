@@ -17,8 +17,12 @@ use crate::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, VariantName,
     },
     shared::{
-        matching::MatchContext, process_binops, program_info::TypingProgramInfo,
-        string_utils::debug_print, unique_map::UniqueMap, *,
+        matching::{new_match_var_name, MatchContext, MATCH_TEMP_PREFIX},
+        process_binops,
+        program_info::TypingProgramInfo,
+        string_utils::debug_print,
+        unique_map::UniqueMap,
+        *,
     },
     sui_mode::ID_FIELD_NAME,
     typing::ast as T,
@@ -71,11 +75,6 @@ fn translate_block_label(lbl: N::BlockLabel) -> H::BlockLabel {
 
 const TEMP_PREFIX: &str = "%";
 static TEMP_PREFIX_SYMBOL: Lazy<Symbol> = Lazy::new(|| TEMP_PREFIX.into());
-
-// NOTE: this _must_ be a string that a user cannot write, as otherwise we could incorrectly shadow
-// macro-expanded names.
-const MATCH_TEMP_PREFIX: &str = "__match_tmp%";
-pub static MATCH_TEMP_PREFIX_SYMBOL: Lazy<Symbol> = Lazy::new(|| MATCH_TEMP_PREFIX.into());
 
 fn new_temp_name(context: &mut Context) -> Symbol {
     format!(
@@ -258,11 +257,7 @@ impl MatchContext<true> for Context<'_> {
     /// translation after expansion.
     fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var {
         let id = self.counter_next();
-        let name = format!(
-            "{}{NEW_NAME_DELIM}{name}{NEW_NAME_DELIM}{id}",
-            *MATCH_TEMP_PREFIX_SYMBOL,
-        )
-        .into();
+        let name = new_match_var_name(&name, id);
         // NOTE: this color is "wrong" insofar as it really should reflect whatever the current
         // color scope is. Since these are only used as match temporaries, however, and they have
         // names that may not be written as input, it's impossible for these to shadow macro

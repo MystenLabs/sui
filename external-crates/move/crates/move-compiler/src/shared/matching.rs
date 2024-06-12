@@ -3,6 +3,7 @@
 
 use crate::{
     expansion::ast::{Fields, ModuleIdent, Mutability, Value},
+    hlir::translate::NEW_NAME_DELIM,
     naming::ast::{self as N, Type, Var},
     parser::ast::{BinOp_, ConstantName, Field, VariantName},
     shared::{program_info::ProgramInfo, unique_map::UniqueMap, CompilationEnv},
@@ -13,6 +14,7 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
+use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 //**************************************************************************************************
@@ -933,7 +935,15 @@ pub fn order_fields_by_decl<T: std::fmt::Debug>(
     texp_fields
 }
 
+pub const MATCH_TEMP_PREFIX: &str = "__match_tmp%";
+
 // Expression Creation Helpers
+// NOTE: this _must_ be a string that a user cannot write, as otherwise we could incorrectly shadow
+// macro-expanded names.
+/// Create a new name for match variable usage.
+pub fn new_match_var_name(name: &str, id: usize) -> Symbol {
+    format!("{MATCH_TEMP_PREFIX}{NEW_NAME_DELIM}{name}{NEW_NAME_DELIM}{id}",).into()
+}
 
 // Since these are guards, we need to borrow the constant
 fn make_const_test(ty: N::Type, var: N::Var, loc: Loc, m: ModuleIdent, c: ConstantName) -> T::Exp {

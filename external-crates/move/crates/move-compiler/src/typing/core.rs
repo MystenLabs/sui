@@ -10,7 +10,6 @@ use crate::{
     },
     editions::FeatureGate,
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
-    hlir::translate::{MATCH_TEMP_PREFIX_SYMBOL, NEW_NAME_DELIM},
     ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, DatatypeTypeParameter, EnumDefinition,
@@ -23,7 +22,7 @@ use crate::{
     shared::{
         ide::{IDEAnnotation, IDEInfo},
         known_attributes::TestingAttribute,
-        matching::MatchContext,
+        matching::{new_match_var_name, MatchContext},
         program_info::*,
         string_utils::debug_print,
         unique_map::UniqueMap,
@@ -797,11 +796,7 @@ impl MatchContext<false> for Context<'_> {
     /// translation after type expansion.
     fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var {
         let id = self.next_match_var_id();
-        let name = format!(
-            "{}{NEW_NAME_DELIM}{name}{NEW_NAME_DELIM}{id}",
-            *MATCH_TEMP_PREFIX_SYMBOL,
-        )
-        .into();
+        let name = new_match_var_name(&name, id);
         // NOTE: Since these variables are only used for counterexample generation, etc., color
         // does not matter.
         sp(
