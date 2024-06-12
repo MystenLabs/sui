@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useBlockedObjectList } from '_app/hooks/useBlockedObjectList';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
@@ -12,13 +13,12 @@ import PageTitle from '_src/ui/app/shared/PageTitle';
 import { getKioskIdFromOwnerCap, isKioskOwnerToken, useMultiGetObjects } from '@mysten/core';
 import { useKioskClient } from '@mysten/core/src/hooks/useKioskClient';
 import { EyeClose16 } from '@mysten/icons';
+import { normalizeStructTag } from '@mysten/sui/utils';
 import { keepPreviousData } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useHiddenAssets } from './HiddenAssetsProvider';
-import {useBlockedObjectList} from "_app/hooks/useBlockedObjectList";
-import {normalizeStructTag} from "@mysten/sui/utils";
 
 function HiddenNftsPage() {
 	const { hiddenAssetIds, showAsset } = useHiddenAssets();
@@ -60,7 +60,7 @@ function HiddenNftsPage() {
 				}
 				return 0;
 			});
-	}, [hiddenAssetIds, data]);
+	}, [hiddenAssetIds, data, blockedObjectList]);
 
 	if (isLoading) {
 		return (
