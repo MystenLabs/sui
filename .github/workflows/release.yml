@@ -103,7 +103,6 @@ jobs:
           mkdir -p ${{ env.TMP_BUILD_DIR }}
           aws s3 cp s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz
           tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}
-          ls -al ${{ env.TMP_BUILD_DIR }}
 
       - name: Setup caching
         if: ${{ env.s3_archive_exist == '' }}
