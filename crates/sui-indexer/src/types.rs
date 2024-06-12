@@ -356,12 +356,13 @@ pub struct IndexedTransaction {
 #[derive(Debug, Clone)]
 pub struct TxIndex {
     pub tx_sequence_number: u64,
+    pub tx_kind: TransactionKind,
     pub transaction_digest: TransactionDigest,
     pub checkpoint_sequence_number: u64,
     pub input_objects: Vec<ObjectID>,
     pub changed_objects: Vec<ObjectID>,
     pub payers: Vec<SuiAddress>,
-    pub senders: Vec<SuiAddress>,
+    pub sender: SuiAddress,
     pub recipients: Vec<SuiAddress>,
     pub move_calls: Vec<(ObjectID, String, String)>,
 }

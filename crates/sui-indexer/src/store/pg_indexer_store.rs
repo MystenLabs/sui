@@ -37,10 +37,11 @@ use crate::models::objects::{
 };
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
+use crate::schema::tx_kinds;
 use crate::schema::{
     checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
-    transactions, tx_calls, tx_changed_objects, tx_digests, tx_input_objects, tx_recipients,
-    tx_senders,
+    transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests,
+    tx_input_objects, tx_recipients, tx_senders,
 };
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
@@ -687,9 +688,12 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             .checkpoint_db_commit_latency_tx_indices_chunks
             .start_timer();
         let len = indices.len();
-        let (senders, recipients, input_objects, changed_objects, calls, digests) =
+        let (senders, recipients, input_objects, changed_objects, pkgs, mods, funs, digests, kinds) =
             indices.into_iter().map(|i| i.split()).fold(
                 (
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
                     Vec::new(),
                     Vec::new(),
                     Vec::new(),
@@ -702,23 +706,32 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     mut tx_recipients,
                     mut tx_input_objects,
                     mut tx_changed_objects,
-                    mut tx_calls,
+                    mut tx_pkgs,
+                    mut tx_mods,
+                    mut tx_funs,
                     mut tx_digests,
+                    mut tx_kinds,
                 ),
                  index| {
                     tx_senders.extend(index.0);
                     tx_recipients.extend(index.1);
                     tx_input_objects.extend(index.2);
                     tx_changed_objects.extend(index.3);
-                    tx_calls.extend(index.4);
-                    tx_digests.extend(index.5);
+                    tx_pkgs.extend(index.4);
+                    tx_mods.extend(index.5);
+                    tx_funs.extend(index.6);
+                    tx_digests.extend(index.7);
+                    tx_kinds.extend(index.8);
                     (
                         tx_senders,
                         tx_recipients,
                         tx_input_objects,
                         tx_changed_objects,
-                        tx_calls,
+                        tx_pkgs,
+                        tx_mods,
+                        tx_funs,
                         tx_digests,
+                        tx_kinds,
                     )
                 },
             );
@@ -807,14 +820,15 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 tracing::error!("Failed to persist tx_changed_objects with error: {}", e);
             })
         }));
+
         futures.push(self.spawn_blocking_task(move |this| {
             let now = Instant::now();
-            let calls_len = calls.len();
+            let rows_len = pkgs.len();
             transactional_blocking_with_retry!(
                 &this.blocking_cp,
                 |conn| {
-                    for chunk in calls.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        insert_or_ignore_into!(tx_calls::table, chunk, conn);
+                    for chunk in pkgs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        insert_or_ignore_into!(tx_calls_pkg::table, chunk, conn);
                     }
                     Ok::<(), IndexerError>(())
                 },
@@ -822,12 +836,60 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             )
             .tap_ok(|_| {
                 let elapsed = now.elapsed().as_secs_f64();
-                info!(elapsed, "Persisted {} rows to tx_calls tables", calls_len);
+                info!(
+                    elapsed,
+                    "Persisted {} rows to tx_calls_pkg tables", rows_len
+                );
             })
             .tap_err(|e| {
-                tracing::error!("Failed to persist tx_calls with error: {}", e);
+                tracing::error!("Failed to persist tx_calls_pkg with error: {}", e);
             })
         }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let rows_len = mods.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in mods.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        insert_or_ignore_into!(tx_calls_mod::table, chunk, conn);
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                PG_DB_COMMIT_SLEEP_DURATION
+            )
+            .tap_ok(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(elapsed, "Persisted {} rows to tx_calls_mod table", rows_len);
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist tx_calls_mod with error: {}", e);
+            })
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let rows_len = funs.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in funs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        insert_or_ignore_into!(tx_calls_fun::table, chunk, conn);
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                PG_DB_COMMIT_SLEEP_DURATION
+            )
+            .tap_ok(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(elapsed, "Persisted {} rows to tx_calls_fun table", rows_len);
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist tx_calls_fun with error: {}", e);
+            })
+        }));
+
         futures.push(self.spawn_blocking_task(move |this| {
             let now = Instant::now();
             let calls_len = digests.len();
@@ -852,6 +914,33 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             })
             .tap_err(|e| {
                 tracing::error!("Failed to persist tx_digests with error: {}", e);
+            })
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let rows_len = kinds.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in kinds.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_kinds::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .map_err(IndexerError::from)
+                            .context("Failed to write tx_digests chunk to PostgresDB")?;
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                Duration::from_secs(60)
+            )
+            .tap_ok(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(elapsed, "Persisted {} rows to tx_kinds tables", rows_len);
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist tx_kinds with error: {}", e);
             })
         }));
 
