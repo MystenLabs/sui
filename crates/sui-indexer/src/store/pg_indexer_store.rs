@@ -40,7 +40,7 @@ use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::schema::{
     checkpoints, display, epochs, events, objects, objects_history, objects_snapshot,
-    objects_version, packages, transactions, tx_calls, tx_changed_objects, tx_digests,
+    objects_version, packages, transactions, tx_calls_fun, tx_changed_objects, tx_digests,
     tx_input_objects, tx_recipients, tx_senders,
 };
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
@@ -811,7 +811,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 &this.blocking_cp,
                 |conn| {
                     for chunk in calls.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        insert_or_ignore_into!(tx_calls::table, chunk, conn);
+                        insert_or_ignore_into!(tx_calls_fun::table, chunk, conn);
                     }
                     Ok::<(), IndexerError>(())
                 },
