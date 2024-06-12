@@ -1605,6 +1605,10 @@ impl ObjectCacheRead for WritebackCache {
         )?;
         Ok(())
     }
+
+    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        self.store.perpetual_tables.get_highest_pruned_checkpoint()
+    }
 }
 
 impl TransactionCacheRead for WritebackCache {

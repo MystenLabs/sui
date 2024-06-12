@@ -46,7 +46,7 @@ use self::epoch_state::EpochState;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
 pub use self::store::SimulatorStore;
-use sui_types::messages_checkpoint::CheckpointContents;
+use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::{
     gas_coin::GasCoin,
@@ -557,6 +557,12 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RestStateReader for
         Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
     > {
         todo!()
+    }
+
+    fn get_lowest_available_checkpoint_objects(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        Ok(0)
     }
 
     fn get_chain_identifier(

@@ -56,7 +56,15 @@ pub trait ReadStore: ObjectStore {
     /// are guaranteed to be present in the store
     fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint>;
 
-    /// The lowest available checkpoint that hasn't yet been pruned.
+    /// Lowest available checkpoint for which transaction and checkpoint data can be requested.
+    ///
+    /// Specifically this is the lowest checkpoint for which the following data can be requested:
+    ///  - checkpoints
+    ///  - transactions
+    ///  - effects
+    ///  - events
+    ///
+    /// For object availability see `get_lowest_available_checkpoint_objects`.
     fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber>;
 
     fn get_checkpoint_by_digest(
@@ -638,6 +646,12 @@ pub trait RestStateReader: ObjectStore + ReadStore + Send + Sync {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<CheckpointSequenceNumber>>;
+
+    /// Lowest available checkpoint for which object data can be requested.
+    ///
+    /// Specifically this is the lowest checkpoint for which input/output object data will be
+    /// available.
+    fn get_lowest_available_checkpoint_objects(&self) -> Result<CheckpointSequenceNumber>;
 
     fn get_chain_identifier(&self) -> Result<ChainIdentifier>;
 }

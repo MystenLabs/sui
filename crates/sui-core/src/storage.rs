@@ -480,6 +480,16 @@ impl RestStateReader for RestReadStore {
             .map_err(StorageError::custom)
     }
 
+    fn get_lowest_available_checkpoint_objects(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        self.state
+            .get_object_cache_reader()
+            .get_highest_pruned_checkpoint()
+            .map(|seq| seq + 1)
+            .map_err(StorageError::custom)
+    }
+
     fn get_chain_identifier(
         &self,
     ) -> sui_types::storage::error::Result<sui_types::digests::ChainIdentifier> {
