@@ -8,7 +8,7 @@ import { useAppsBackend } from '../../../../../core';
 export function useBlockedObjectList() {
 	const { request } = useAppsBackend();
 	return useQuery({
-		queryKey: ['apps-backend', 'blocklist'],
+		queryKey: ['apps-backend', 'object-list'],
 		queryFn: () => request<{ blocklist: string[] }>('guardian/object-list'),
 		select: (data) => data?.blocklist.map(normalizeStructTag) ?? [],
 	});
