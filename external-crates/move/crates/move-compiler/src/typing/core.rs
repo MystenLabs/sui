@@ -920,21 +920,28 @@ impl<'env> Context<'env> {
             if let Some(names) = scope.use_funs.get(tn) {
                 let mut new_names = names
                     .iter()
-                    .flat_map(|(_, method_name, use_fun)| {
-                        vec![
-                            AutocompleteMethod::new(*method_name, use_fun.target_function),
-                            AutocompleteMethod::new(
-                                use_fun.target_function.1.value(),
-                                use_fun.target_function,
-                            ),
-                        ]
+                    .map(|(_, method_name, use_fun)| {
+                        AutocompleteMethod::new(*method_name, use_fun.target_function)
                     })
                     .collect();
                 result.append(&mut new_names);
             }
         });
-        debug_print!(self.debug.autocomplete_resolution, (lines "result" => &result; dbg));
-        result
+        let (mut same, mut different) = result
+            .clone()
+            .into_iter()
+            .partition::<BTreeSet<_>, _>(|a| a.method_name == a.target_function.1.value());
+        // favor aliased completions over those where method name is the same as the target function
+        // name as the former are shadowing the latter - keep the latter only if the aliased set has
+        // no entry with the same target or with the same method name
+        same.retain(|sa| {
+            different.iter().all(|da| da.method_name != sa.method_name)
+                && different
+                    .iter()
+                    .all(|da| da.target_function.1.value() != sa.target_function.1.value())
+        });
+        different.append(&mut same);
+        different
     }
 
     /// Find all valid fields in scope for a given `TypeName`. This is used for autocomplete.
