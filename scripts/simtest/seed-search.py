@@ -12,6 +12,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Run the simulator with different seeds')
 parser.add_argument('binary', type=str, help='Name of simulator binary, or full path to binary')
 parser.add_argument('--test', type=str, help='Name of the test to run', required=True)
+parser.add_argument('--exact', action='store_true', help='Use exact matching for test name', default=False)
 parser.add_argument('--num-seeds', type=int, help='Number of seeds to run', default=200)
 parser.add_argument(
     '--seed-start',
@@ -94,7 +95,7 @@ if __name__ == "__main__":
 
     for i in range(1, args.num_seeds + 1):
         next_seed = args.seed_start + i
-        commands.append(("%s --exact %s" % (binary, args.test), {
+        commands.append(("%s %s %s" % (binary, '--exact' if args.exact else '', args.test), {
           "MSIM_TEST_SEED": "%d" % next_seed,
           "RUST_LOG": "off",
         }))
