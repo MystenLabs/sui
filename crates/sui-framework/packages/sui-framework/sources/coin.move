@@ -8,9 +8,8 @@ module sui::coin {
     use std::string;
     use std::ascii;
     use sui::balance::{Self, Balance, Supply};
-    use sui::config::{Self, Config};
     use sui::url::{Self, Url};
-    use sui::deny_list::{Self, DenyList};
+    use sui::deny_list::DenyList;
     use std::type_name;
 
     // Allows calling `.split_vec(amounts, ctx)` on `coin`
@@ -82,8 +81,6 @@ module sui::coin {
         id: UID,
         allow_global_pause: bool,
     }
-
-    public struct DenyListV2WriteCap has drop {}
 
     // === Supply <-> TreasuryCap morphing and accessors  ===
 
@@ -239,7 +236,7 @@ module sui::coin {
         )
     }
 
-    public fun create_regulated_currency_v2<T: drop>(
+    public(package) fun create_regulated_currency_v2<T: drop>(
         witness: T,
         decimals: u8,
         symbol: vector<u8>,
@@ -298,93 +295,61 @@ module sui::coin {
         cap.total_supply.decrease_supply(balance)
     }
 
-    public fun deny_list_v2_add<T>(
-        deny_list: &mut Config<DenyListV2WriteCap>,
+    public(package) fun deny_list_v2_add<T>(
+        deny_list: &mut DenyList,
         _deny_cap: &mut DenyCapV2<T>,
         addr: address,
         ctx: &mut TxContext,
     ) {
-        maybe_create_deny_list_v2_marker<T>(deny_list, ctx);
-        let setting_name = deny_list_v2_address_setting_name<T>(addr);
-        deny_list.update!<_, _, bool>(
-            &mut DenyListV2WriteCap {},
-            setting_name,
-            |_deny_list, _cap, _ctx| true,
-            |_prev, next| *next = true,
-            ctx,
-        );
+        let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+        deny_list.v2_add(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
-    public fun deny_list_v2_remove<T>(
-        deny_list: &mut Config<DenyListV2WriteCap>,
+    public(package) fun deny_list_v2_remove<T>(
+        deny_list: &mut DenyList,
         _deny_cap: &mut DenyCapV2<T>,
         addr: address,
         ctx: &mut TxContext,
     ) {
-        maybe_create_deny_list_v2_marker<T>(deny_list, ctx);
-        let setting_name = deny_list_v2_address_setting_name<T>(addr);
-        deny_list.update!<_, vector<u8>, bool>(
-            &mut DenyListV2WriteCap {},
-            setting_name,
-            |_deny_list, _cap, _ctx| false,
-            |_prev, next| *next = false,
-            ctx,
-        );
+        let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+        deny_list.v2_remove(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
-    public fun deny_list_v2_contains<T>(
-        deny_list: &mut Config<DenyListV2WriteCap>,
+    public(package) fun deny_list_v2_most_recent_contains<T>(
+        deny_list: &DenyList,
         addr: address,
         ctx: &TxContext,
     ): bool {
-        let setting_name = deny_list_v2_address_setting_name<T>(addr);
-        let denied =
-            config::read_setting<_, bool>(object::id(deny_list), setting_name, ctx);
-        denied.is_some() && denied.destroy_some()
+        let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+        deny_list.v2_most_recent_contains(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
-    public fun deny_list_v2_enable_global_pause<T>(
-        deny_list: &mut Config<DenyListV2WriteCap>,
-        deny_cap: &mut DenyCapV2<T>,
+    public(package) fun deny_list_v2_enable_global_pause<T>(
+        deny_list: &mut DenyList,
+        _deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
     ) {
-        assert!(deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
-        maybe_create_deny_list_v2_marker<T>(deny_list, ctx);
-        let setting_name = deny_list_v2_global_pause_setting_name<T>();
-        deny_list.update!<_, vector<u8>, bool>(
-            &mut DenyListV2WriteCap {},
-            setting_name,
-            |_deny_list, _cap, _ctx| true,
-            |_prev, next| *next = true,
-            ctx,
-        )
+        assert!(_deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
+        let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+        deny_list.v2_enable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
     }
 
-    public fun deny_list_v2_disable_global_pause<T>(
-        deny_list: &mut Config<DenyListV2WriteCap>,
-        deny_cap: &mut DenyCapV2<T>,
+    public(package) fun deny_list_v2_disable_global_pause<T>(
+        deny_list: &mut DenyList,
+        _deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
     ) {
-        assert!(deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
-        maybe_create_deny_list_v2_marker<T>(deny_list, ctx);
-        let setting_name = deny_list_v2_global_pause_setting_name<T>();
-        deny_list.update!<_, vector<u8>, bool>(
-            &mut DenyListV2WriteCap {},
-            setting_name,
-            |_deny_list, _cap, _ctx| false,
-            |_prev, next| *next = false,
-            ctx,
-        )
+        assert!(_deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
+        let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+        deny_list.v2_disable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
     }
 
-    public fun deny_list_v2_is_global_pause_enabled<T>(
-        deny_list: &Config<DenyListV2WriteCap>,
+    public(package) fun deny_list_v2_most_recent_is_global_pause_enabled<T>(
+        deny_list: &DenyList,
         ctx: &TxContext,
     ): bool {
-        let setting_name = deny_list_v2_global_pause_setting_name<T>();
-        let paused =
-            config::read_setting<_, bool>(object::id(deny_list), setting_name, ctx);
-        paused.is_some() && paused.destroy_some()
+        let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+        deny_list.v2_most_recent_is_global_pause_enabled(DENY_LIST_COIN_INDEX, ty, ctx)
     }
 
     // === Entrypoints ===
@@ -446,50 +411,6 @@ module sui::coin {
 
     public fun get_icon_url<T>(metadata: &CoinMetadata<T>): Option<Url> {
         metadata.icon_url
-    }
-
-    // === Internal code ===
-
-    const DL_V2_MARKER: vector<u8> = b"::marker";
-    const DL_V2_ADDRESSES: vector<u8> = b"::address::";
-    const DL_V2_global_pause: vector<u8> = b"::global_pause";
-
-    // b"{type}::marker"
-    fun deny_list_v2_marker_setting_name<T>(): vector<u8> {
-        let mut setting_name =
-            type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
-        setting_name.append(DL_V2_MARKER);
-        setting_name
-    }
-
-    // b"{type}::address::{addr:x}"
-    fun deny_list_v2_address_setting_name<T>(addr: address): vector<u8> {
-        let mut setting_name =
-            type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
-        setting_name.append(DL_V2_ADDRESSES);
-        setting_name.append(sui::hex::encode(sui::address::to_bytes(addr)));
-        setting_name
-    }
-
-    // b"{type}::global_pause"
-    fun deny_list_v2_global_pause_setting_name<T>(): vector<u8> {
-        let mut setting_name =
-            type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
-        setting_name.append(DL_V2_global_pause);
-        setting_name
-    }
-
-    fun maybe_create_deny_list_v2_marker<T>(
-        deny_list: &mut Config<DenyListV2WriteCap>,
-        ctx: &mut TxContext,
-    ) {
-        let setting_name = deny_list_v2_marker_setting_name<T>();
-        let setting =
-            config::read_setting<vector<u8>, bool>(object::id(deny_list), setting_name, ctx);
-        if (setting.is_some()) return;
-        let cap = &mut DenyListV2WriteCap {};
-        if (deny_list.has_for_epoch<_, vector<u8>, bool>(cap, setting_name, ctx)) return;
-        deny_list.new_for_epoch<_, vector<u8>, bool>(cap, setting_name, false, ctx);
     }
 
     // === Test-only code ===
@@ -584,8 +505,7 @@ module sui::coin {
     ) {
         let `type` =
             type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
-        deny_list::add(
-            deny_list,
+        deny_list.v1_add(
             DENY_LIST_COIN_INDEX,
             `type`,
             addr,
@@ -602,8 +522,7 @@ module sui::coin {
     ) {
         let `type` =
             type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
-        deny_list::remove(
-            deny_list,
+        deny_list.v1_remove(
             DENY_LIST_COIN_INDEX,
             `type`,
             addr,
@@ -613,13 +532,13 @@ module sui::coin {
     /// Returns true iff the given address is denied for the given coin type. It will
     /// return false if given a non-coin type.
     public fun deny_list_contains<T>(
-       freezer: &DenyList,
+       deny_list: &DenyList,
        addr: address,
     ): bool {
         let name = type_name::get_with_original_ids<T>();
         if (type_name::is_primitive(&name)) return false;
 
         let `type` = type_name::into_string(name).into_bytes();
-        freezer.contains(DENY_LIST_COIN_INDEX, `type`, addr)
+        deny_list.v1_contains(DENY_LIST_COIN_INDEX, `type`, addr)
     }
 }
