@@ -179,7 +179,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 .with_label_values(&[peer_hostname])
                 .set(1);
 
-            const BATCH_TIMEOUT: Duration = Duration::from_millis(50);
+            const BATCH_TIMEOUT: Duration = Duration::from_millis(25);
             const BATCH_MAX_SIZE: usize = 10;
             let timer_start = Instant::now();
             let batch_timeout = sleep_until(timer_start + BATCH_TIMEOUT);
