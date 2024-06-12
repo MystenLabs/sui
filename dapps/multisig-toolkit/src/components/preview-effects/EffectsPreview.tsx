@@ -12,12 +12,7 @@ import { ObjectChanges } from './partials/ObjectChanges';
 import { Overview } from './partials/Overview';
 import { Transactions } from './partials/Transactions';
 
-export function EffectsPreview({
-	output,
-}: {
-	output: DryRunTransactionBlockResponse;
-	network: string;
-}) {
+export function EffectsPreview({ output }: { output: DryRunTransactionBlockResponse }) {
 	const [tab, setTab] = useState('balance-changes');
 
 	const { objectChanges, balanceChanges } = output;

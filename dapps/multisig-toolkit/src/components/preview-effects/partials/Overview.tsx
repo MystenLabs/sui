@@ -24,7 +24,6 @@ const calculateGas = (gas: GasCostSummary): string => {
 export function Overview({ output }: { output: DryRunTransactionBlockResponse }) {
 	const { network } = useDryRunContext();
 
-	// const { network } = useSuiClientContext();
 	const metadata: Record<string, ReactNode> = {
 		network,
 		status:
