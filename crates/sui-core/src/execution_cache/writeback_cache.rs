@@ -1350,6 +1350,7 @@ impl ObjectCacheRead for WritebackCache {
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(object_id, version_bound))]
     fn find_object_lt_or_eq_version(
         &self,
         object_id: ObjectID,
@@ -1374,6 +1375,9 @@ impl ObjectCacheRead for WritebackCache {
                                 .record_cache_negative_hit("object_lt_or_eq_version", $level);
                             return Ok(None);
                         }
+                    } else {
+                        self.metrics
+                            .record_cache_miss("object_lt_or_eq_version", $level);
                     }
                 }
             };

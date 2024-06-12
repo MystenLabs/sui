@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use tracing::trace;
+
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_gauge_with_registry, IntCounterVec,
     IntGauge, Registry,
@@ -67,6 +69,7 @@ impl ExecutionCacheMetrics {
     }
 
     pub(crate) fn record_cache_request(&self, request_type: &'static str, level: &'static str) {
+        trace!(target: "cache_metrics", "Cache request: {} {}", request_type, level);
         self.cache_requests
             .with_label_values(&[request_type, level])
             .inc();
@@ -78,18 +81,27 @@ impl ExecutionCacheMetrics {
         level: &'static str,
         count: usize,
     ) {
+        trace!(
+            target: "cache_metrics",
+            "Cache multi request: {} {} count: {}",
+            request_type,
+            level,
+            count
+        );
         self.cache_requests
             .with_label_values(&[request_type, level])
             .inc_by(count as u64);
     }
 
     pub(crate) fn record_cache_hit(&self, request_type: &'static str, level: &'static str) {
+        trace!(target: "cache_metrics", "Cache hit: {} {}", request_type, level);
         self.cache_hits
             .with_label_values(&[request_type, level])
             .inc();
     }
 
     pub(crate) fn record_cache_miss(&self, request_type: &'static str, level: &'static str) {
+        trace!(target: "cache_metrics", "Cache miss: {} {}", request_type, level);
         self.cache_misses
             .with_label_values(&[request_type, level])
             .inc();
@@ -100,6 +112,7 @@ impl ExecutionCacheMetrics {
         request_type: &'static str,
         level: &'static str,
     ) {
+        trace!(target: "cache_metrics", "Cache negative hit: {} {}", request_type, level);
         self.cache_negative_hits
             .with_label_values(&[request_type, level])
             .inc();
