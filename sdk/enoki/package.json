@@ -56,9 +56,11 @@
 	},
 	"dependencies": {
 		"@mysten/sui": "workspace:*",
+		"@mysten/wallet-standard": "workspace:*",
 		"@mysten/zklogin": "workspace:*",
 		"@nanostores/react": "^0.7.1",
 		"jose": "^5.2.3",
+		"mitt": "^3.0.1",
 		"nanostores": "^0.9.3"
 	},
 	"peerDependencies": {

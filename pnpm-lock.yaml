@@ -1310,6 +1310,9 @@ importers:
       '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
+      '@mysten/wallet-standard':
+        specifier: workspace:*
+        version: link:../wallet-standard
       '@mysten/zklogin':
         specifier: workspace:*
         version: link:../zklogin
@@ -1319,6 +1322,9 @@ importers:
       jose:
         specifier: ^5.2.3
         version: 5.2.3
+      mitt:
+        specifier: ^3.0.1
+        version: 3.0.1
       nanostores:
         specifier: ^0.9.3
         version: 0.9.3

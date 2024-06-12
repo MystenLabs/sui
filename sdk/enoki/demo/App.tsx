@@ -33,6 +33,17 @@ export function App() {
 			) : (
 				<button onClick={() => flow.logout()}>Sign Out</button>
 			)}
+			<button
+				onClick={() => {
+					const popup = window.open(`http://localhost:5174`);
+
+					popup?.addEventListener('hashchange', () => {
+						console.log('hashchange', popup?.location.hash);
+					});
+				}}
+			>
+				Open login page
+			</button>
 
 			{zkLogin.address && (
 				<button
