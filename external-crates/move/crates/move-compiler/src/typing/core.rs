@@ -181,7 +181,7 @@ impl<'env> Context<'env> {
     ) -> Self {
         let global_use_funs = UseFunsScope::global(&info);
         let debug = TypingDebugFlags {
-            match_counterexample: true,
+            match_counterexample: false,
             autocomplete_resolution: false,
             function_translation: false,
             type_elaboration: false,
