@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
+import { useBlockedObjectList } from '_app/hooks/useBlockedObjectList';
 import Alert from '_components/alert';
 import FiltersPortal from '_components/filters-tags';
 import Loading from '_components/loading';
@@ -20,6 +21,7 @@ import VisualAssets from './VisualAssets';
 
 function NftsPage() {
 	const accountAddress = useActiveAddress();
+	const { data: blockedObjectList } = useBlockedObjectList();
 	const {
 		data: ownedAssets,
 		hasNextPage,
@@ -45,9 +47,14 @@ function NftsPage() {
 	};
 	const { filterType } = useParams();
 	const filteredNFTs = useMemo(() => {
-		if (!filterType) return ownedAssets?.visual;
-		return ownedAssets?.[filterType as AssetFilterTypes] ?? [];
-	}, [ownedAssets, filterType]);
+		let filteredData;
+		if (!filterType) {
+			filteredData = ownedAssets?.visual;
+		} else {
+			filteredData = ownedAssets?.[filterType as AssetFilterTypes] ?? [];
+		}
+		return filteredData?.filter((ownedAsset) => !blockedObjectList?.includes(ownedAsset.objectId));
+	}, [ownedAssets, filterType, blockedObjectList]);
 	const { hiddenAssetIds } = useHiddenAssets();
 
 	if (isLoading) {
