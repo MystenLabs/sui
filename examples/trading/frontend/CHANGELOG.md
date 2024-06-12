@@ -1,5 +1,13 @@
 # frontend
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [101f1ff4b8]
+  - @mysten/sui@1.1.1
+  - @mysten/dapp-kit@0.14.7
+
 ## 0.0.7
 
 ### Patch Changes
