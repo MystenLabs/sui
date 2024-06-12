@@ -70,4 +70,9 @@ module std::u16_tests {
             vector[0, 2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59];
         integer_tests::test_sqrt!(MAX, CASES, reflexive_cases)
     }
+
+    #[test]
+    fun test_dos() {
+        integer_tests::test_dos!(MAX, CASES);
+    }
 }

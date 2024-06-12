@@ -56,4 +56,24 @@ module std::u64 {
     public fun sqrt(x: u64): u64 {
         std::macros::num_sqrt!<u64, u128>(x, 64)
     }
+
+    /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)
+    public macro fun range_do($start: u64, $stop: u64, $f: |u64|) {
+        std::macros::range_do!($start, $stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `$start` to `$stop` (inclusive)
+    public macro fun range_do_eq($start: u64, $stop: u64, $f: |u64|) {
+        std::macros::range_do_eq!($start, $stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `0` to `$stop` (exclusive)
+    public macro fun do($stop: u64, $f: |u64|) {
+        std::macros::do!($stop, $f)
+    }
+
+    /// Loops applying `$f` to each number from `0` to `$stop` (inclusive)
+    public macro fun do_eq($stop: u64, $f: |u64|) {
+        std::macros::do_eq!($stop, $f)
+    }
 }

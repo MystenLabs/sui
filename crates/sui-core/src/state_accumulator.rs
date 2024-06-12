@@ -380,7 +380,7 @@ impl StateAccumulator {
         &self,
         effects: Vec<TransactionEffects>,
         checkpoint_seq_num: CheckpointSequenceNumber,
-        epoch_store: Arc<AuthorityPerEpochStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Accumulator> {
         let _scope = monitored_scope("AccumulateCheckpoint");
         if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {

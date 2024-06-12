@@ -35,6 +35,7 @@ use sui_types::accumulator::Accumulator;
 use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::message_envelope::Message;
 use sui_types::transaction::TransactionKind;
 use sui_types::{
@@ -55,7 +56,9 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use self::metrics::CheckpointExecutorMetrics;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityState;
-use crate::checkpoints::checkpoint_executor::data_ingestion_handler::store_checkpoint_locally;
+use crate::checkpoints::checkpoint_executor::data_ingestion_handler::{
+    load_checkpoint_data, store_checkpoint_locally,
+};
 use crate::state_accumulator::StateAccumulator;
 use crate::transaction_manager::TransactionManager;
 use crate::{
@@ -667,7 +670,7 @@ impl CheckpointExecutor {
                         self.transaction_cache_reader.as_ref(),
                         self.checkpoint_store.clone(),
                         &all_tx_digests,
-                        epoch_store.clone(),
+                        &epoch_store,
                         checkpoint.clone(),
                         self.accumulator.clone(),
                         effects,
@@ -889,7 +892,7 @@ async fn handle_execution_effects(
                             transaction_cache_reader,
                             checkpoint_store.clone(),
                             &all_tx_digests,
-                            epoch_store.clone(),
+                            &epoch_store,
                             checkpoint.clone(),
                             accumulator.clone(),
                             effects,
@@ -1283,7 +1286,7 @@ async fn finalize_checkpoint(
     transaction_cache_reader: &dyn TransactionCacheRead,
     checkpoint_store: Arc<CheckpointStore>,
     tx_digests: &[TransactionDigest],
-    epoch_store: Arc<AuthorityPerEpochStore>,
+    epoch_store: &Arc<AuthorityPerEpochStore>,
     checkpoint: VerifiedCheckpoint,
     accumulator: Arc<StateAccumulator>,
     effects: Vec<TransactionEffects>,
@@ -1305,15 +1308,28 @@ async fn finalize_checkpoint(
     let checkpoint_acc =
         accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
 
-    if let Some(path) = data_ingestion_dir {
-        store_checkpoint_locally(
-            path,
+    if data_ingestion_dir.is_some() || state.rest_index.is_some() {
+        let checkpoint_data = load_checkpoint_data(
             checkpoint,
             object_cache_reader,
             transaction_cache_reader,
             checkpoint_store,
-            tx_digests.to_vec(),
+            tx_digests,
         )?;
+
+        // TODO(bmwill) discuss with team a better location for this indexing so that it isn't on
+        // the critical path and the writes to the DB are done in checkpoint order
+        if let Some(rest_index) = &state.rest_index {
+            let mut layout_resolver = epoch_store.executor().type_layout_resolver(Box::new(
+                PackageStoreWithFallback::new(state.get_backing_package_store(), &checkpoint_data),
+            ));
+
+            rest_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut())?;
+        }
+
+        if let Some(path) = data_ingestion_dir {
+            store_checkpoint_locally(path, &checkpoint_data)?;
+        }
     }
     Ok(checkpoint_acc)
 }

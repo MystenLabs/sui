@@ -2586,7 +2586,13 @@ impl AuthorityPerEpochStore {
             .chain(sequenced_randomness_transactions)
             .collect();
 
-        let (transactions_to_schedule, notifications, lock, final_round) = self
+        let (
+            transactions_to_schedule,
+            notifications,
+            lock,
+            final_round,
+            consensus_commit_prologue_root,
+        ) = self
             .process_consensus_transactions(
                 &mut batch,
                 &consensus_transactions,
@@ -2627,8 +2633,23 @@ impl AuthorityPerEpochStore {
             } else {
                 consensus_commit_info.round
             };
+
+            let mut checkpoint_roots: Vec<TransactionKey> = Vec::with_capacity(roots.len() + 1);
+
+            if let Some(consensus_commit_prologue_root) = consensus_commit_prologue_root {
+                if self
+                    .protocol_config()
+                    .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
+                {
+                    // Put consensus commit prologue root at the beginning of the checkpoint roots.
+                    checkpoint_roots.push(consensus_commit_prologue_root);
+                } else {
+                    roots.insert(consensus_commit_prologue_root);
+                }
+            }
+            checkpoint_roots.extend(roots.into_iter());
             let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
-                roots: roots.into_iter().collect(),
+                roots: checkpoint_roots,
                 details: PendingCheckpointInfo {
                     timestamp_ms: consensus_commit_info.timestamp,
                     last_of_epoch: final_round && randomness_round.is_none(),
@@ -2699,18 +2720,18 @@ impl AuthorityPerEpochStore {
 
     // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update
     // the system clock used in all transactions in the current consensus commit.
+    // Returns the root of the consensus commit prologue transaction if it was added to the input.
     fn add_consensus_commit_prologue_transaction(
         &self,
         batch: &mut DBBatch,
         transactions: &mut VecDeque<VerifiedExecutableTransaction>,
         consensus_commit_info: &ConsensusCommitInfo,
-        roots: &mut BTreeSet<TransactionKey>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-    ) -> SuiResult {
+    ) -> SuiResult<Option<TransactionKey>> {
         #[cfg(any(test, feature = "test-utils"))]
         {
             if consensus_commit_info.skip_consensus_commit_prologue_in_test() {
-                return Ok(());
+                return Ok(None);
             }
         }
 
@@ -2747,12 +2768,12 @@ impl AuthorityPerEpochStore {
             self.protocol_config(),
             version_assignment,
         );
-        match self.process_consensus_system_transaction(&transaction) {
+        let consensus_commit_prologue_root = match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
-                roots.insert(processed_tx.key());
-                transactions.push_front(processed_tx);
+                transactions.push_front(processed_tx.clone());
+                Some(processed_tx.key())
             }
-            ConsensusCertificateResult::IgnoredSystem => (),
+            ConsensusCertificateResult::IgnoredSystem => None,
             _ => unreachable!("process_consensus_system_transaction returned unexpected ConsensusCertificateResult."),
         };
 
@@ -2760,7 +2781,7 @@ impl AuthorityPerEpochStore {
             batch,
             SequencedConsensusTransactionKey::System(*transaction.digest()),
         )?;
-        Ok(())
+        Ok(consensus_commit_prologue_root)
     }
 
     // Assigns shared object versions to transactions and updates the shared object version state.
@@ -2884,7 +2905,8 @@ impl AuthorityPerEpochStore {
         Vec<VerifiedExecutableTransaction>,    // transactions to schedule
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
         Option<RwLockWriteGuard<ReconfigState>>,
-        bool, // true if final round
+        bool,                   // true if final round
+        Option<TransactionKey>, // consensus commit prologue root
     )> {
         if randomness_round.is_some() {
             assert!(!dkg_failed); // invariant check
@@ -3020,14 +3042,11 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        // TODO: once transaction cancellation is implemented, we need to add cancelled transaction info to
-        //       the created consensus commit prologue transactions.
         // Add the consensus commit prologue transaction to the beginning of `verified_certificates`.
-        self.add_consensus_commit_prologue_transaction(
+        let consensus_commit_prologue_root = self.add_consensus_commit_prologue_transaction(
             batch,
             &mut verified_certificates,
             consensus_commit_info,
-            roots,
             &cancelled_txns,
         )?;
 
@@ -3048,7 +3067,13 @@ impl AuthorityPerEpochStore {
             commit_has_deferred_txns,
         )?;
 
-        Ok((verified_certificates, notifications, lock, final_round))
+        Ok((
+            verified_certificates,
+            notifications,
+            lock,
+            final_round,
+            consensus_commit_prologue_root,
+        ))
     }
 
     fn process_end_of_publish_transactions_and_reconfig(

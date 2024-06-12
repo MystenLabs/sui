@@ -38,11 +38,13 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
 use anyhow::anyhow;
+use clap::ValueEnum;
 use eyre::ContextCompat;
 use fastcrypto::hash::MultisetHash;
 use futures::{StreamExt, TryStreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use prometheus::Registry;
+use serde::{Deserialize, Serialize};
 use sui_archival::reader::{ArchiveReader, ArchiveReaderMetrics};
 use sui_archival::{verify_archive_with_checksums, verify_archive_with_genesis_config};
 use sui_config::node::ArchiveReaderConfig;
@@ -70,6 +72,19 @@ use typed_store::rocks::MetricConf;
 pub mod commands;
 pub mod db_tool;
 pub mod pkg_dump;
+
+#[derive(
+    Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
+)]
+pub enum SnapshotVerifyMode {
+    /// verification of both db state and checkpoint chain is skipped.
+    None,
+    /// verify snapshot state during download, but no post-restore db verification.
+    #[default]
+    Normal,
+    /// verify db state post-restore against the end of epoch state root commitment.
+    Strict,
+}
 
 // This functions requires at least one of genesis or fullnode_rpc to be `Some`.
 async fn make_clients(
@@ -843,11 +858,11 @@ pub async fn download_formal_snapshot(
     archive_store_config: ObjectStoreConfig,
     num_parallel_downloads: usize,
     network: Chain,
-    verify: bool,
+    verify: SnapshotVerifyMode,
 ) -> Result<(), anyhow::Error> {
     eprintln!(
-        "Beginning formal snapshot restore to end of epoch {}, network: {:?}",
-        epoch, network,
+        "Beginning formal snapshot restore to end of epoch {}, network: {:?}, verification mode: {:?}",
+        epoch, network, verify,
     );
     let path = path.join("staging").to_path_buf();
     if path.exists() {
@@ -878,7 +893,7 @@ pub async fn download_formal_snapshot(
         archive_store_config.clone(),
         epoch,
         num_parallel_downloads,
-        verify,
+        verify != SnapshotVerifyMode::None,
     );
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     let perpetual_db_clone = perpetual_db.clone();
@@ -891,6 +906,7 @@ pub async fn download_formal_snapshot(
     // TODO if verify is false, we should skip generating these and
     // not pass in a channel to the reader
     let (sender, mut receiver) = mpsc::channel(num_parallel_downloads);
+    let m_clone = m.clone();
 
     let snapshot_handle = tokio::spawn(async move {
         let local_store_config = ObjectStoreConfig {
@@ -904,7 +920,7 @@ pub async fn download_formal_snapshot(
             &local_store_config,
             usize::MAX,
             NonZeroUsize::new(num_parallel_downloads).unwrap(),
-            m,
+            m_clone,
         )
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
@@ -915,7 +931,9 @@ pub async fn download_formal_snapshot(
         Ok::<(), anyhow::Error>(())
     });
     let mut root_accumulator = Accumulator::default();
-    while let Some(partial_acc) = receiver.recv().await {
+    let mut num_live_objects = 0;
+    while let Some((partial_acc, num_objects)) = receiver.recv().await {
+        num_live_objects += num_objects;
         root_accumulator.union(&partial_acc);
     }
     summaries_handle
@@ -928,7 +946,7 @@ pub async fn download_formal_snapshot(
         .expect("Expected nonempty checkpoint store");
 
     // Perform snapshot state verification
-    if verify {
+    if verify != SnapshotVerifyMode::None {
         assert_eq!(
             last_checkpoint.epoch(),
             epoch,
@@ -955,7 +973,7 @@ pub async fn download_formal_snapshot(
                 assert_eq!(
                     *consensus_digest, local_digest,
                     "End of epoch {} root state digest {} does not match \
-                    local root state hash {} after restoring from formal snapshot",
+                    local root state hash {} computed from snapshot data",
                     epoch, consensus_digest.digest, local_digest.digest,
                 );
                 eprintln!("Formal snapshot state verification completed successfully!");
@@ -981,10 +999,14 @@ pub async fn download_formal_snapshot(
 
     setup_db_state(
         epoch,
-        root_accumulator,
-        perpetual_db,
+        root_accumulator.clone(),
+        perpetual_db.clone(),
         checkpoint_store,
         committee_store,
+        network,
+        verify == SnapshotVerifyMode::Strict,
+        num_live_objects,
+        m,
     )
     .await?;
 
