@@ -137,7 +137,7 @@ jobs:
           brew install postgresql          
 
       - name: Check out ${{ env.sui_tag }}
-        if: ${{ env.s3_archive_exist == '' }}
+        # if: ${{ env.s3_archive_exist == '' }}
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           ref: ${{ env.sui_tag }}
