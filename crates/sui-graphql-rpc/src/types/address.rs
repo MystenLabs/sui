@@ -144,6 +144,7 @@ impl Address {
         before: Option<transaction_block::Cursor>,
         relation: Option<AddressTransactionBlockRelationship>,
         filter: Option<TransactionBlockFilter>,
+        scan_limit: Option<u64>,
     ) -> Result<Connection<String, TransactionBlock>> {
         use AddressTransactionBlockRelationship as R;
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
@@ -164,10 +165,11 @@ impl Address {
         };
 
         TransactionBlock::paginate(
-            ctx.data_unchecked(),
+            ctx,
             page,
             filter,
             self.checkpoint_viewed_at,
+            Some(scan_limit.unwrap_or(10000000)),
         )
         .await
         .extend()

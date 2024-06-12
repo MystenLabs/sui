@@ -240,6 +240,7 @@ impl Epoch {
         let Some(filter) = filter
             .unwrap_or_default()
             .intersect(TransactionBlockFilter {
+                // If `first_checkpoint_id` is 0, we include the 0th checkpoint by leaving it None
                 after_checkpoint: (self.stored.first_checkpoint_id > 0)
                     .then(|| self.stored.first_checkpoint_id as u64 - 1),
                 before_checkpoint: self.stored.last_checkpoint_id.map(|id| id as u64 + 1),
@@ -249,11 +250,19 @@ impl Epoch {
             return Ok(Connection::new(false, false));
         };
 
+        let scan_limit = self
+            .stored
+            .last_checkpoint_id
+            .map(|id| id as u64)
+            .unwrap_or(self.checkpoint_viewed_at)
+            - (self.stored.first_checkpoint_id as u64);
+
         TransactionBlock::paginate(
-            ctx.data_unchecked(),
+            ctx,
             page,
             filter,
             self.checkpoint_viewed_at,
+            Some(scan_limit),
         )
         .await
         .extend()
