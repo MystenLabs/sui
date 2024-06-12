@@ -170,9 +170,8 @@ jobs:
         shell: bash
         run: |
           choco install checksum
-          pwd
           export sui_sha=$(checksum -t sha256 ${{ env.TMP_BUILD_DIR }}/sui.exe)
-          mkdir target/release && cp ${{ env.TMP_BUILD_DIR }}/sui.exe target/release
+          mkdir -p ./target/release && cp ${{ env.TMP_BUILD_DIR }}/sui.exe ./target/release
           cd chocolatey
 
           cat <<EOF >>VERIFICATION.txt
