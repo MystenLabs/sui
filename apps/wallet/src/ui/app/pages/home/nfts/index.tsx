@@ -53,7 +53,10 @@ function NftsPage() {
 			filteredData = ownedAssets?.[filterType as AssetFilterTypes] ?? [];
 		}
 		return filteredData?.filter((ownedAsset) => {
-			const normalizedType = normalizeStructTag(ownedAsset.type || '');
+			if (!ownedAsset.type) {
+				return true;
+			}
+			const normalizedType = normalizeStructTag(ownedAsset.type);
 			return !blockedObjectList?.includes(normalizedType);
 		});
 	}, [ownedAssets, filterType, blockedObjectList]);

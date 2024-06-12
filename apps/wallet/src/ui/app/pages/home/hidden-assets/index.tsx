@@ -46,7 +46,10 @@ function HiddenNftsPage() {
 		return hiddenNfts
 			?.filter((nft) => nft.data && hiddenAssetIds.includes(nft?.data?.objectId))
 			.filter((nft) => {
-				const normalizedType = normalizeStructTag(nft.data?.type || '');
+				if (!nft.data?.type) {
+					return true;
+				}
+				const normalizedType = normalizeStructTag(nft.data.type);
 				return !blockedObjectList?.includes(normalizedType);
 			})
 			.sort((nftA, nftB) => {
