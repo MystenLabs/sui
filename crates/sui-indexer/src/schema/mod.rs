@@ -13,6 +13,7 @@ mod pg;
 #[cfg(feature = "postgres-feature")]
 mod inner {
     pub use crate::schema::pg::checkpoints;
+    pub use crate::schema::pg::cp_tx;
     pub use crate::schema::pg::display;
     pub use crate::schema::pg::epochs;
     pub use crate::schema::pg::events;
@@ -21,10 +22,13 @@ mod inner {
     pub use crate::schema::pg::objects_snapshot;
     pub use crate::schema::pg::packages;
     pub use crate::schema::pg::transactions;
-    pub use crate::schema::pg::tx_calls;
+    pub use crate::schema::pg::tx_calls_fun;
+    pub use crate::schema::pg::tx_calls_mod;
+    pub use crate::schema::pg::tx_calls_pkg;
     pub use crate::schema::pg::tx_changed_objects;
     pub use crate::schema::pg::tx_digests;
     pub use crate::schema::pg::tx_input_objects;
+    pub use crate::schema::pg::tx_kinds;
     pub use crate::schema::pg::tx_recipients;
     pub use crate::schema::pg::tx_senders;
 }
@@ -50,6 +54,7 @@ mod inner {
 }
 
 pub use inner::checkpoints;
+pub use inner::cp_tx;
 pub use inner::display;
 pub use inner::epochs;
 pub use inner::events;
@@ -58,9 +63,12 @@ pub use inner::objects_history;
 pub use inner::objects_snapshot;
 pub use inner::packages;
 pub use inner::transactions;
-pub use inner::tx_calls;
+pub use inner::tx_calls_fun;
+pub use inner::tx_calls_mod;
+pub use inner::tx_calls_pkg;
 pub use inner::tx_changed_objects;
 pub use inner::tx_digests;
 pub use inner::tx_input_objects;
+pub use inner::tx_kinds;
 pub use inner::tx_recipients;
 pub use inner::tx_senders;
