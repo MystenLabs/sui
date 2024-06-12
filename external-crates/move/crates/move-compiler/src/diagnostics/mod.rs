@@ -132,6 +132,7 @@ pub struct Migration {
 }
 
 /// A mapping from file ids to file contents along with the mapping of filehash to fileID.
+#[derive(Debug, Clone)]
 pub struct MappedFiles {
     files: SimpleFiles<Symbol, Arc<str>>,
     file_mapping: HashMap<FileHash, FileId>,
@@ -351,6 +352,20 @@ pub fn report_diagnostics_to_buffer(
     writer.into_inner()
 }
 
+pub fn report_diagnostics_to_buffer_with_mapped_files(
+    mapped_files: &MappedFiles,
+    diags: Diagnostics,
+    ansi_color: bool,
+) -> Vec<u8> {
+    let mut writer = if ansi_color {
+        Buffer::ansi()
+    } else {
+        Buffer::no_color()
+    };
+    render_diagnostics(&mut writer, mapped_files, diags);
+    writer.into_inner()
+}
+
 fn env_color() -> ColorChoice {
     match read_env_var(COLOR_MODE_ENV_VAR).as_str() {
         "NONE" => ColorChoice::Never,
@@ -366,10 +381,10 @@ fn output_diagnostics<W: WriteColor>(
     diags: Diagnostics,
 ) {
     let mapping = MappedFiles::new(sources.clone());
-    render_diagnostics(writer, mapping, diags);
+    render_diagnostics(writer, &mapping, diags);
 }
 
-fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: Diagnostics) {
+fn render_diagnostics(writer: &mut dyn WriteColor, mapping: &MappedFiles, diags: Diagnostics) {
     let Diagnostics {
         diags: Some(mut diags),
         format,
@@ -387,8 +402,8 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: 
         loc1.cmp(loc2)
     });
     match format {
-        DiagnosticsFormat::Text => emit_diagnostics_text(writer, &mapping, diags),
-        DiagnosticsFormat::JSON => emit_diagnostics_json(writer, &mapping, diags),
+        DiagnosticsFormat::Text => emit_diagnostics_text(writer, mapping, diags),
+        DiagnosticsFormat::JSON => emit_diagnostics_json(writer, mapping, diags),
     }
 }
 

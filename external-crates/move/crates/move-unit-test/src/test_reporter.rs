@@ -3,21 +3,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::format_module_id;
-use codespan_reporting::files::{Files, SimpleFiles};
+use codespan_reporting::files::Files;
 use colored::{control, Colorize};
 use move_binary_format::errors::{ExecutionState, Location, VMError};
-use move_command_line_common::files::FileHash;
+use move_command_line_common::error_bitset::ErrorBitset;
 use move_compiler::{
-    diagnostics::{self, Diagnostic, Diagnostics},
+    diagnostics::{self, Diagnostic, Diagnostics, PositionInfo},
     unit_test::{ModuleTestPlan, MoveErrorType, TestPlan},
 };
-use move_core_types::{language_storage::ModuleId, vm_status::StatusType};
+use move_core_types::{
+    language_storage::ModuleId,
+    vm_status::{StatusCode, StatusType},
+};
 use move_ir_types::location::Loc;
-use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     io::{Result, Write},
-    sync::{Arc, Mutex},
+    sync::Mutex,
     time::Duration,
 };
 
@@ -61,7 +63,7 @@ pub struct TestStatistics {
     failed: BTreeMap<ModuleId, TestRuns<TestFailure>>,
 }
 
-#[derive(Debug, Clone)]
+// #[derive(Debug, Clone)]
 pub struct TestResults {
     final_statistics: TestStatistics,
     test_plan: TestPlan,
@@ -107,6 +109,53 @@ impl FailureReason {
 
     pub fn property(details: String) -> Self {
         FailureReason::Property(details)
+    }
+}
+
+fn clever_error_line_number_to_loc(test_plan: &TestPlan, vm_error: &VMError) -> Option<Loc> {
+    let abort_code = match (vm_error.major_status(), vm_error.sub_status()) {
+        (StatusCode::ABORTED, Some(abort_code)) => abort_code,
+        _ => return None,
+    };
+    let location = vm_error.location();
+    let bitset = ErrorBitset::from_u64(abort_code)?;
+    if bitset.identifier_index().is_some() || bitset.constant_index().is_some() {
+        return None;
+    }
+    let line_number = bitset.line_number()? - 1;
+
+    match location {
+        Location::Undefined => None,
+        Location::Module(module_id) => {
+            let source_map = &test_plan.module_info.get(module_id)?.source_map;
+            let file_hash = source_map.definition_location.file_hash();
+            let file_id = test_plan.mapped_files.file_mapping().get(&file_hash)?;
+            let line_range = test_plan
+                .mapped_files
+                .files()
+                .line_range(*file_id, line_number as usize)
+                .ok()?;
+
+            let mut start = line_range.start;
+            // Sub 1 to trim off newline character
+            let end = line_range.end - 1;
+
+            // Since we only have the line span, trim the start of the line to remove any
+            // whitespace.
+            let source_slice =
+                &test_plan.mapped_files.files().source(*file_id).unwrap()[start..end];
+            if let Some((whitespace, rest)) =
+                source_slice.split_once(|ch: char| !ch.is_ascii_whitespace())
+            {
+                // If for some reason the whole line is whitespace fail.
+                if rest.is_empty() {
+                    return None;
+                }
+                start += whitespace.len();
+            }
+
+            Some(Loc::new(file_hash, start as u32, end as u32))
+        }
     }
 }
 
@@ -177,46 +226,11 @@ impl TestFailure {
         }
     }
 
-    fn get_line_number(
-        loc: &Loc,
-        files: &SimpleFiles<Symbol, Arc<str>>,
-        file_mapping: &HashMap<FileHash, usize>,
-    ) -> String {
-        Self::get_line_number_internal(loc, files, file_mapping)
-            .unwrap_or_else(|_| "no_source_line".to_string())
-    }
-
-    fn get_line_number_internal(
-        loc: &Loc,
-        files: &SimpleFiles<Symbol, Arc<str>>,
-        file_mapping: &HashMap<FileHash, usize>,
-    ) -> std::result::Result<String, codespan_reporting::files::Error> {
-        let id = file_mapping
-            .get(&loc.file_hash())
-            .ok_or(codespan_reporting::files::Error::FileMissing)?;
-        let start_line_index = files.line_index(*id, loc.start() as usize)?;
-        let start_line_number = files.line_number(*id, start_line_index)?;
-        let end_line_index = files.line_index(*id, loc.end() as usize)?;
-        let end_line_number = files.line_number(*id, end_line_index)?;
-        if start_line_number == end_line_number {
-            Ok(start_line_number.to_string())
-        } else {
-            Ok(format!("{}-{}", start_line_number, end_line_number))
-        }
-    }
-
     fn report_exec_state(test_plan: &TestPlan, exec_state: &ExecutionState) -> String {
         let stack_trace = exec_state.stack_trace();
         let mut buf = String::new();
         if !stack_trace.is_empty() {
             buf.push_str("stack trace\n");
-            let mut files = SimpleFiles::new();
-            let mut file_mapping = HashMap::new();
-            for (fhash, (fname, source)) in &test_plan.files {
-                let id = files.add(*fname, source.clone());
-                file_mapping.insert(*fhash, id);
-            }
-
             for frame in stack_trace {
                 let module_id = &frame.0;
                 let named_module = match test_plan.module_info.get(module_id) {
@@ -233,9 +247,14 @@ impl TestFailure {
                 let fn_handle_idx = named_module.module.function_def_at(frame.1).function;
                 let fn_id_idx = named_module.module.function_handle_at(fn_handle_idx).name;
                 let fn_name = named_module.module.identifier_at(fn_id_idx).as_str();
-                let file_name = match test_plan.files.get(&loc.file_hash()) {
-                    Some(v) => format!("{}", v.0),
-                    None => "unknown_source".to_string(),
+                let file_name = test_plan.mapped_files.filename(&loc.file_hash());
+                let formatted_line = {
+                    let position = test_plan.mapped_files.position(&loc);
+                    if position.start.line == position.end.line {
+                        format!("{}", position.start.line)
+                    } else {
+                        format!("{}-{}", position.start.line, position.end.line)
+                    }
                 };
                 buf.push_str(
                     &format!(
@@ -243,7 +262,7 @@ impl TestFailure {
                         module_id.name(),
                         fn_name,
                         file_name,
-                        Self::get_line_number(&loc, &files, &file_mapping)
+                        formatted_line
                     )
                     .to_string(),
                 );
@@ -257,9 +276,9 @@ impl TestFailure {
         base_message: String,
         vm_error: &Option<VMError>,
     ) -> String {
-        let report_diagnostics = |files, diags| {
-            diagnostics::report_diagnostics_to_buffer(
-                files,
+        let report_diagnostics = |mapped_files, diags| {
+            diagnostics::report_diagnostics_to_buffer_with_mapped_files(
+                mapped_files,
                 diags,
                 control::SHOULD_COLORIZE.should_colorize(),
             )
@@ -280,6 +299,15 @@ impl TestFailure {
                         .get_function_source_map(*fdef_idx)
                         .ok()?;
                     let loc = function_source_map.get_code_location(*offset).unwrap();
+
+                    let alternate_location_opt =
+                        clever_error_line_number_to_loc(test_plan, vm_error);
+                    let loc =
+                        if alternate_location_opt.is_some_and(|alt_loc| !loc.overlaps(&alt_loc)) {
+                            alternate_location_opt.unwrap()
+                        } else {
+                            loc
+                        };
                     let msg = format!(
                         "In this function in {}",
                         format_module_id(&test_plan.module_info, module_id)
@@ -295,7 +323,7 @@ impl TestFailure {
                 match diag_opt {
                     None => base_message,
                     Some(diag) => String::from_utf8(report_diagnostics(
-                        &test_plan.files,
+                        &test_plan.mapped_files,
                         Diagnostics::from(vec![diag]),
                     ))
                     .unwrap(),
