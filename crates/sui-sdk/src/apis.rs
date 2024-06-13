@@ -704,6 +704,18 @@ impl ReadApi {
     ) -> SuiRpcResult<ProtocolConfigResponse> {
         Ok(self.api.http.get_protocol_config(version).await?)
     }
+
+    pub async fn try_get_object_before_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> SuiRpcResult<SuiPastObjectResponse> {
+        Ok(self
+            .api
+            .http
+            .try_get_object_before_version(object_id, version)
+            .await?)
+    }
 }
 
 /// Coin Read API provides the functionality needed to get information from the Sui network regarding the coins owned by an address.

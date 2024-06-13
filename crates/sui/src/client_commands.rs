@@ -697,7 +697,6 @@ impl SuiClientCommands {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
                     show_effects: true,
-                    diag: false,
                     executor_version,
                     protocol_version,
                 };
