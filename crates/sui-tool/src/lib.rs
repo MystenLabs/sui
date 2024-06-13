@@ -77,12 +77,17 @@ pub mod pkg_dump;
     Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
 )]
 pub enum SnapshotVerifyMode {
-    /// verification of both db state and checkpoint chain is skipped.
+    /// verification of both db state and downloaded checkpoints are skipped.
+    /// This is the fastest mode, but is unsafe, and thus should only be used
+    /// if you fully trust the source for both the snapshot and the checkpoint
+    /// archive.
     None,
     /// verify snapshot state during download, but no post-restore db verification.
+    /// Checkpoint verification is performed.
     #[default]
     Normal,
-    /// verify db state post-restore against the end of epoch state root commitment.
+    /// In ADDITION to the behavior of `--verify normal`, verify db state post-restore
+    /// against the end of epoch state root commitment.
     Strict,
 }
 
@@ -660,7 +665,7 @@ fn start_summary_sync(
     epoch: u64,
     num_parallel_downloads: usize,
     verify: bool,
-    with_skiplist: bool,
+    all_checkpoints: bool,
 ) -> JoinHandle<Result<(), anyhow::Error>> {
     tokio::spawn(async move {
         info!("Starting summary sync");
@@ -697,14 +702,14 @@ fn start_summary_sync(
             .last()
             .expect("Expected at least one checkpoint");
 
-        let num_to_sync = if with_skiplist {
-            end_of_epoch_checkpoint_seq_nums.len() as u64
-        } else {
+        let num_to_sync = if all_checkpoints {
             *last_checkpoint
+        } else {
+            end_of_epoch_checkpoint_seq_nums.len() as u64
         };
         let sync_progress_bar = m.add(
             ProgressBar::new(num_to_sync).with_style(
-                ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len}({msg})")
+                ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len} ({msg})")
                     .unwrap(),
             ),
         );
@@ -739,22 +744,20 @@ fn start_summary_sync(
             }
         });
 
-        if with_skiplist {
+        if all_checkpoints {
             archive_reader
-                .read_summaries_with_skiplist(
+                .read_summaries_for_range_no_verify(
                     state_sync_store.clone(),
-                    end_of_epoch_checkpoint_seq_nums.clone(),
+                    s_start..last_checkpoint + 1,
                     sync_checkpoint_counter,
                 )
                 .await?;
         } else {
             archive_reader
-                .read_summaries_with_range(
+                .read_summaries_for_list_no_verify(
                     state_sync_store.clone(),
-                    s_start..last_checkpoint + 1,
+                    end_of_epoch_checkpoint_seq_nums.clone(),
                     sync_checkpoint_counter,
-                    // rather than blocking on verify, sync all summaries first, then verify later
-                    false,
                 )
                 .await?;
         }
@@ -763,12 +766,11 @@ fn start_summary_sync(
         let checkpoint = checkpoint_store
             .get_checkpoint_by_sequence_number(*last_checkpoint)?
             .ok_or(anyhow!("Failed to read last checkpoint"))?;
-
         if verify {
             let verify_progress_bar = m.add(
                 ProgressBar::new(num_to_sync).with_style(
                     ProgressStyle::with_template(
-                        "[{elapsed_precise}] {wide_bar} {pos}/{len}({msg})",
+                        "[{elapsed_precise}] {wide_bar} {pos}/{len} ({msg})",
                     )
                     .unwrap(),
                 ),
@@ -779,7 +781,7 @@ fn start_summary_sync(
             let v_instant = Instant::now();
 
             tokio::spawn(async move {
-                let v_start = if with_skiplist { 0 } else { s_start };
+                let v_start = if all_checkpoints { s_start } else { 0 };
                 loop {
                     if cloned_verify_progress_bar.is_finished() {
                         break;
@@ -796,27 +798,7 @@ fn start_summary_sync(
                 }
             });
 
-            if with_skiplist {
-                // in this case we only need to verify the end of epoch checkpoints by checking
-                // signatures against the corresponding epoch committee.
-                for (cp_epoch, epoch_last_cp_seq_num) in
-                    end_of_epoch_checkpoint_seq_nums.iter().enumerate()
-                {
-                    let epoch_last_checkpoint = checkpoint_store
-                        .get_checkpoint_by_sequence_number(*epoch_last_cp_seq_num)?
-                        .ok_or(anyhow!("Failed to read checkpoint"))?;
-                    let committee = state_sync_store
-                        .get_committee(cp_epoch as u64)
-                        .expect("store operation should not fail")
-                        .expect(
-                            "Expected committee to exist after syncing all end of epoch checkpoints",
-                        );
-                    epoch_last_checkpoint
-                        .verify_authority_signatures(&committee)
-                        .expect("Failed to verify checkpoint");
-                    verify_checkpoint_counter.fetch_add(1, Ordering::Relaxed);
-                }
-            } else {
+            if all_checkpoints {
                 // in this case we need to verify all the checkpoints in the range pairwise
                 let v_start = s_start;
                 // update highest verified to be highest synced. We will move back
@@ -837,6 +819,26 @@ fn start_summary_sync(
                     num_parallel_downloads,
                 )
                 .await;
+            } else {
+                // in this case we only need to verify the end of epoch checkpoints by checking
+                // signatures against the corresponding epoch committee.
+                for (cp_epoch, epoch_last_cp_seq_num) in
+                    end_of_epoch_checkpoint_seq_nums.iter().enumerate()
+                {
+                    let epoch_last_checkpoint = checkpoint_store
+                        .get_checkpoint_by_sequence_number(*epoch_last_cp_seq_num)?
+                        .ok_or(anyhow!("Failed to read checkpoint"))?;
+                    let committee = state_sync_store
+                        .get_committee(cp_epoch as u64)
+                        .expect("store operation should not fail")
+                        .expect(
+                            "Expected committee to exist after syncing all end of epoch checkpoints",
+                        );
+                    epoch_last_checkpoint
+                        .verify_authority_signatures(&committee)
+                        .expect("Failed to verify checkpoint");
+                    verify_checkpoint_counter.fetch_add(1, Ordering::Relaxed);
+                }
             }
 
             verify_progress_bar.finish_with_message("Checkpoint summary verification is complete");
@@ -906,7 +908,7 @@ pub async fn download_formal_snapshot(
     num_parallel_downloads: usize,
     network: Chain,
     verify: SnapshotVerifyMode,
-    with_skiplist: bool,
+    all_checkpoints: bool,
 ) -> Result<(), anyhow::Error> {
     let m = MultiProgress::new();
     m.println(format!(
@@ -942,7 +944,7 @@ pub async fn download_formal_snapshot(
         epoch,
         num_parallel_downloads,
         verify != SnapshotVerifyMode::None,
-        with_skiplist,
+        all_checkpoints,
     );
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     let perpetual_db_clone = perpetual_db.clone();
@@ -1025,14 +1027,22 @@ pub async fn download_formal_snapshot(
                     local root state hash {} computed from snapshot data",
                     epoch, consensus_digest.digest, local_digest.digest,
                 );
-                m.println("Formal snapshot state verification completed successfully!")?;
+                let progress_bar = m.add(
+                    ProgressBar::new(1).with_style(
+                        ProgressStyle::with_template(
+                            "[{elapsed_precise}] {wide_bar} Verifying snapshot contents against root state hash ({msg})",
+                        )
+                        .unwrap(),
+                    ),
+                );
+                progress_bar.finish_with_message("Verification complete");
             }
         };
     } else {
         m.println(
             "WARNING: Skipping snapshot verification! \
             This is highly discouraged unless you fully trust the source of this snapshot and its contents.
-            If this was unintentional, rerun with `--verify` set to `true`"
+            If this was unintentional, rerun with `--verify` set to `normal` or `strict`.",
         )?;
     }
 
@@ -1065,7 +1075,7 @@ pub async fn download_formal_snapshot(
     }
     fs::rename(&path, &new_path)?;
     fs::remove_dir_all(snapshot_dir.clone())?;
-    info!(
+    println!(
         "Successfully restored state from snapshot at end of epoch {}",
         epoch
     );
@@ -1128,7 +1138,7 @@ pub async fn download_db_snapshot(
         let progress_bar = m.add(
             ProgressBar::new(files.len() as u64).with_style(
                 ProgressStyle::with_template(
-                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} files done\n({msg})",
+                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} files done ({msg})",
                 )
                 .unwrap(),
             ),

@@ -265,12 +265,11 @@ impl ArchiveReader {
 
     /// Load checkpoints from archive into the input store `S` for the given checkpoint
     /// range. Summaries are downloaded out of order and inserted without verification
-    pub async fn read_summaries_with_range<S>(
+    pub async fn read_summaries_for_range_no_verify<S>(
         &self,
         store: S,
         checkpoint_range: Range<CheckpointSequenceNumber>,
         checkpoint_counter: Arc<AtomicU64>,
-        verify: bool,
     ) -> Result<()>
     where
         S: WriteStore + Clone,
@@ -291,14 +290,11 @@ impl ArchiveReader {
                 }
             })
             .boxed();
-        if verify {
-            stream
-                .buffered(self.concurrency)
-                .try_for_each(|summary_data| {
-                    let result: Result<(), anyhow::Error> = make_iterator::<
-                        CertifiedCheckpointSummary,
-                        Reader<Bytes>,
-                    >(
+        stream
+            .buffer_unordered(self.concurrency)
+            .try_for_each(|summary_data| {
+                let result: Result<(), anyhow::Error> =
+                    make_iterator::<CertifiedCheckpointSummary, Reader<Bytes>>(
                         SUMMARY_FILE_MAGIC,
                         summary_data.reader(),
                     )
@@ -309,58 +305,19 @@ impl ArchiveReader {
                                     && s.sequence_number < checkpoint_range.end
                             })
                             .try_for_each(|summary| {
-                                let verified_checkpoint = Self::get_or_insert_verified_checkpoint(
-                                    &store,
-                                    summary.clone(),
-                                    true,
-                                )
-                                .unwrap_or_else(|_| {
-                                    panic!(
-                                        "Checkpoint verification failed for checkpoint {}",
-                                        summary.sequence_number
-                                    )
-                                });
-                                // Update highest synced watermark
-                                store
-                                    .update_highest_verified_checkpoint(&verified_checkpoint)
-                                    .expect("Failed to update watermark");
+                                Self::insert_certified_checkpoint(&store, summary)?;
                                 checkpoint_counter.fetch_add(1, Ordering::Relaxed);
                                 Ok::<(), anyhow::Error>(())
                             })
                     });
-                    futures::future::ready(result)
-                })
-                .await
-        } else {
-            stream
-                .buffer_unordered(self.concurrency)
-                .try_for_each(|summary_data| {
-                    let result: Result<(), anyhow::Error> =
-                        make_iterator::<CertifiedCheckpointSummary, Reader<Bytes>>(
-                            SUMMARY_FILE_MAGIC,
-                            summary_data.reader(),
-                        )
-                        .and_then(|summary_iter| {
-                            summary_iter
-                                .filter(|s| {
-                                    s.sequence_number >= checkpoint_range.start
-                                        && s.sequence_number < checkpoint_range.end
-                                })
-                                .try_for_each(|summary| {
-                                    Self::insert_certified_checkpoint(&store, summary)?;
-                                    checkpoint_counter.fetch_add(1, Ordering::Relaxed);
-                                    Ok::<(), anyhow::Error>(())
-                                })
-                        });
-                    futures::future::ready(result)
-                })
-                .await
-        }
+                futures::future::ready(result)
+            })
+            .await
     }
 
     /// Load given list of checkpoints from archive into the input store `S`.
     /// Summaries are downloaded out of order and inserted without verification
-    pub async fn read_summaries_with_skiplist<S>(
+    pub async fn read_summaries_for_list_no_verify<S>(
         &self,
         store: S,
         skiplist: Vec<CheckpointSequenceNumber>,

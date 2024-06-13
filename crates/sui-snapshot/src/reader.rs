@@ -138,7 +138,7 @@ impl StateSnapshotReaderV1 {
         let progress_bar = m.add(
             ProgressBar::new(files.len() as u64).with_style(
                 ProgressStyle::with_template(
-                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .ref files done\n({msg})",
+                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .ref files done ({msg})",
                 )
                 .unwrap(),
             ),
@@ -351,7 +351,7 @@ impl StateSnapshotReaderV1 {
         let obj_progress_bar = self.m.add(
             ProgressBar::new(input_files.len() as u64).with_style(
                 ProgressStyle::with_template(
-                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .obj files done\n({msg})",
+                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .obj files done ({msg})",
                 )
                 .unwrap(),
             ),
