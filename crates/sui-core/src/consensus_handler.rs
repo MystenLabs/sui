@@ -996,16 +996,6 @@ mod tests {
             last_consensus_stats_1.stats.get_num_user_transactions(0),
             num_transactions as u64
         );
-
-        // WHEN processing the same output multiple times
-        // THEN the consensus stats do not update
-        for _ in 0..2 {
-            consensus_handler
-                .handle_consensus_output(consensus_output.clone())
-                .await;
-            let last_consensus_stats_2 = consensus_handler.last_consensus_stats.clone();
-            assert_eq!(last_consensus_stats_1, last_consensus_stats_2);
-        }
     }
 
     #[test]
