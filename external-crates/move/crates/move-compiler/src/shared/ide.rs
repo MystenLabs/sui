@@ -31,6 +31,8 @@ pub enum IDEAnnotation {
     AutocompleteInfo(Box<AutocompleteInfo>),
     /// Match Missing Arm.
     MissingMatchArms(Box<MissingMatchArmsInfo>),
+    /// Ellipsis Match Arm.
+    EllipsisMatchEntries(Box<EllipsisMatchEntries>),
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +104,14 @@ pub enum PatternSuggestion {
         /// The fields, in order, to generate
         fields: Vec<Symbol>,
     },
+}
+
+#[derive(Debug, Clone)]
+pub enum EllipsisMatchEntries {
+    /// A number of wildcards inserted for the ellipsis for a positional match.
+    Positional(Vec<Symbol>),
+    /// A list of symbols mappec to wildcards that  are added to a named match.
+    Named(Vec<Symbol>),
 }
 
 //*************************************************************************************************
@@ -189,6 +199,22 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                 let MissingMatchArmsInfo { arms } = *info;
                 let msg = format!("Missing arms: {}", format_oxford_list!("and", "'{}'", arms));
                 diag!(IDE::MissingMatchArms, (loc, msg))
+            }
+            IDEAnnotation::EllipsisMatchEntries(entries) => {
+                let entries = match *entries {
+                    EllipsisMatchEntries::Positional(entries) => entries
+                        .iter()
+                        .map(|name| format!("{}", name))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    EllipsisMatchEntries::Named(entries) => entries
+                        .iter()
+                        .map(|name| format!("{}: _", name))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                };
+                let msg = format!("Ellipsis expansion: {}", entries);
+                diag!(IDE::EllipsisExpansion, (loc, msg))
             }
         }
     }

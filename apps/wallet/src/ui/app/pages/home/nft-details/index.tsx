@@ -165,9 +165,9 @@ function NFTDetailsPage() {
 												value={nftDisplayData?.description}
 												multiline
 											/>
-											<LabelValueItem label="Creator" value={nftDisplayData?.creator} parseUrl />
-											<LabelValueItem label="Link" value={nftDisplayData?.link} parseUrl />
-											<LabelValueItem label="Website" value={nftDisplayData?.projectUrl} parseUrl />
+											<LabelValueItem label="Creator" value={nftDisplayData?.creator} />
+											<LabelValueItem label="Link" value={nftDisplayData?.link} />
+											<LabelValueItem label="Website" value={nftDisplayData?.projectUrl} />
 										</LabelValuesContainer>
 									</Collapsible>
 									{metaKeys.length ? (

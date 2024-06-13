@@ -3,7 +3,7 @@
 
 use anyhow::bail;
 use clap::Parser;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use move_cli::base;
 use move_package::{
@@ -45,7 +45,7 @@ pub struct ManagePackage {
 impl ManagePackage {
     pub fn execute(
         self,
-        package_path: Option<PathBuf>,
+        package_path: Option<&Path>,
         build_config: BuildConfig,
     ) -> anyhow::Result<()> {
         let build_config = resolve_lock_file_path(build_config, package_path)?;
@@ -86,7 +86,7 @@ impl ManagePackage {
 /// Resolve Move.lock file path in package directory (where Move.toml is).
 pub fn resolve_lock_file_path(
     mut build_config: BuildConfig,
-    package_path: Option<PathBuf>,
+    package_path: Option<&Path>,
 ) -> Result<BuildConfig, anyhow::Error> {
     if build_config.lock_file.is_none() {
         let package_root = base::reroot_path(package_path)?;

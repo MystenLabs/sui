@@ -93,7 +93,7 @@ pub async fn run_with_test_cluster_and_strategy(
     .await;
     info!("Created {} surfer tasks", tasks.len());
 
-    for path in package_paths {
+    for path in &package_paths {
         tasks
             .choose_mut(&mut rng)
             .unwrap()

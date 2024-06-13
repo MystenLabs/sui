@@ -4,6 +4,7 @@
 
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
+use crate::rest_index::RestIndexStore;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::verify_indexes;
 use anyhow::anyhow;
@@ -45,6 +46,7 @@ use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
 use sui_types::crypto::RandomnessRound;
 use sui_types::execution_status::ExecutionStatus;
+use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::type_resolver::into_struct_layout;
 use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
@@ -91,8 +93,7 @@ use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{
-    InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TemporaryPackageStore, TxCoins,
-    WrittenObjects,
+    InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
 };
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -753,6 +754,7 @@ pub struct AuthorityState {
     execution_lock: RwLock<EpochId>,
 
     pub indexes: Option<Arc<IndexStore>>,
+    pub rest_index: Option<Arc<RestIndexStore>>,
 
     pub subscription_handler: Arc<SubscriptionHandler>,
     checkpoint_store: Arc<CheckpointStore>,
@@ -1748,9 +1750,9 @@ impl AuthorityState {
         let mut layout_resolver =
             epoch_store
                 .executor()
-                .type_layout_resolver(Box::new(TemporaryPackageStore::new(
+                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
                     &inner_temp_store,
-                    self.get_backing_package_store().clone(),
+                    self.get_backing_package_store(),
                 )));
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let object_changes = Vec::new();
@@ -1992,12 +1994,13 @@ impl AuthorityState {
             vec![]
         };
 
-        let package_store =
-            TemporaryPackageStore::new(&inner_temp_store, self.get_backing_package_store().clone());
-
-        let mut layout_resolver = epoch_store
-            .executor()
-            .type_layout_resolver(Box::new(package_store));
+        let mut layout_resolver =
+            epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
+                    &inner_temp_store,
+                    self.get_backing_package_store(),
+                )));
 
         DevInspectResults::new(
             effects,
@@ -2110,10 +2113,11 @@ impl AuthorityState {
         let mut layout_resolver =
             epoch_store
                 .executor()
-                .type_layout_resolver(Box::new(TemporaryPackageStore::new(
+                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
                     inner_temporary_store,
-                    self.get_backing_package_store().clone(),
+                    self.get_backing_package_store(),
                 )));
+
         let modified_at_version = effects
             .modified_at_versions()
             .into_iter()
@@ -2386,9 +2390,9 @@ impl AuthorityState {
         let mut layout_resolver =
             epoch_store
                 .executor()
-                .type_layout_resolver(Box::new(TemporaryPackageStore::new(
+                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
                     inner_temporary_store,
-                    self.get_backing_package_store().clone(),
+                    self.get_backing_package_store(),
                 )));
         SuiTransactionBlockEvents::try_from(
             transaction_events,
@@ -2574,6 +2578,7 @@ impl AuthorityState {
         epoch_store: Arc<AuthorityPerEpochStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
+        rest_index: Option<Arc<RestIndexStore>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
         genesis_objects: &[Object],
@@ -2604,6 +2609,7 @@ impl AuthorityState {
         let _pruner = AuthorityStorePruner::new(
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
+            rest_index.clone(),
             store.objects_lock_table.clone(),
             config.authority_store_pruning_config.clone(),
             epoch_store.committee().authority_exists(&name),
@@ -2623,6 +2629,7 @@ impl AuthorityState {
             input_loader,
             execution_cache_trait_pointers,
             indexes,
+            rest_index,
             subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),
             checkpoint_store,
             committee_store,
@@ -2713,6 +2720,7 @@ impl AuthorityState {
         AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
             &self.database_for_testing().perpetual_tables,
             &self.checkpoint_store,
+            self.rest_index.as_deref(),
             &self.database_for_testing().objects_lock_table,
             config.authority_store_pruning_config,
             metrics,

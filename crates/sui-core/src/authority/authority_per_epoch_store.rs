@@ -273,6 +273,9 @@ pub struct AuthorityPerEpochStore {
     pub(crate) signature_verifier: SignatureVerifier,
 
     pub(crate) checkpoint_state_notify_read: NotifyRead<CheckpointSequenceNumber, Accumulator>,
+
+    running_root_notify_read: NotifyRead<CheckpointSequenceNumber, Accumulator>,
+
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
     /// This is used to notify all epoch specific tasks that epoch has ended.
@@ -457,6 +460,12 @@ pub struct AuthorityEpochTables {
     // the accumulator is complete wrt the checkpoint
     pub state_hash_by_checkpoint: DBMap<CheckpointSequenceNumber, Accumulator>,
 
+    /// Maps checkpoint sequence number to the running (non-finalized) root state
+    /// accumulator up th that checkpoint. This should be equivalent to the root
+    /// state hash at end of epoch. Guaranteed to be written to in checkpoint
+    /// sequence number order.
+    pub running_root_accumulators: DBMap<CheckpointSequenceNumber, Accumulator>,
+
     /// Record of the capabilities advertised by each authority.
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilities>,
 
@@ -502,8 +511,9 @@ pub struct AuthorityEpochTables {
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares.
     pub(crate) dkg_output: DBMap<u64, dkg::Output<PkG, EncG>>,
-    /// RandomnessRound numbers that are still pending generation.
-    pub(crate) randomness_rounds_pending: DBMap<RandomnessRound, ()>,
+    /// This table is no longer used (can be removed when DBMap supports removing tables)
+    #[allow(dead_code)]
+    randomness_rounds_pending: DBMap<RandomnessRound, ()>,
     /// Holds the value of the next RandomnessRound to be generated.
     pub(crate) randomness_next_round: DBMap<u64, RandomnessRound>,
     /// Holds the value of the highest completed RandomnessRound (as reported to RandomnessReporter).
@@ -657,31 +667,6 @@ impl AuthorityEpochTables {
         batch.write()?;
         Ok(())
     }
-
-    pub fn check_and_fix_consistency(&self) {
-        if let Some(randomness_highest_completed_round) = self
-            .randomness_highest_completed_round
-            .get(&crate::epoch::randomness::SINGLETON_KEY)
-            .expect("typed_store should not fail")
-        {
-            let old_randomness_rounds = self
-                .randomness_rounds_pending
-                .unbounded_iter()
-                .map(|(round, _)| round)
-                .take_while(|round| *round <= randomness_highest_completed_round)
-                .collect::<Vec<_>>();
-            // TODO: enable this debug_assert once race is fixed.
-            // debug_assert!(old_randomness_rounds.is_empty());
-            if !old_randomness_rounds.is_empty() {
-                error!("Found {} pending randomness rounds that are older than the highest completed round {randomness_highest_completed_round}. Removing them now.", old_randomness_rounds.len());
-            };
-            for round in old_randomness_rounds {
-                self.randomness_rounds_pending
-                    .remove(&round)
-                    .expect("typed_store should not fail");
-            }
-        }
-    }
 }
 
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
@@ -706,8 +691,6 @@ impl AuthorityPerEpochStore {
         let epoch_id = committee.epoch;
 
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
-        tables.check_and_fix_consistency();
-
         let end_of_publish =
             StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.unbounded_iter());
         let reconfig_state = tables
@@ -820,6 +803,7 @@ impl AuthorityPerEpochStore {
             consensus_notify_read: NotifyRead::new(),
             signature_verifier,
             checkpoint_state_notify_read: NotifyRead::new(),
+            running_root_notify_read: NotifyRead::new(),
             executed_digests_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
@@ -925,6 +909,12 @@ impl AuthorityPerEpochStore {
         self.parent_path.clone()
     }
 
+    pub fn state_accumulator_v2_enabled(&self) -> bool {
+        self.epoch_start_configuration
+            .flags()
+            .contains(&EpochFlag::StateAccumulatorV2Enabled)
+    }
+
     /// Returns `&Arc<EpochStartConfiguration>`
     /// User can treat this `Arc` as `&EpochStartConfiguration`, or clone the Arc to pass as owned object
     pub fn epoch_start_config(&self) -> &Arc<EpochStartConfiguration> {
@@ -996,6 +986,37 @@ impl AuthorityPerEpochStore {
             .tables()?
             .state_hash_by_checkpoint
             .insert(checkpoint, accumulator)?)
+    }
+
+    pub fn get_running_root_accumulator(
+        &self,
+        checkpoint: &CheckpointSequenceNumber,
+    ) -> SuiResult<Option<Accumulator>> {
+        Ok(self.tables()?.running_root_accumulators.get(checkpoint)?)
+    }
+
+    pub fn get_highest_running_root_accumulator(
+        &self,
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, Accumulator)>> {
+        Ok(self
+            .tables()?
+            .running_root_accumulators
+            .unbounded_iter()
+            .skip_to_last()
+            .next())
+    }
+
+    pub fn insert_running_root_accumulator(
+        &self,
+        checkpoint: &CheckpointSequenceNumber,
+        acc: &Accumulator,
+    ) -> SuiResult {
+        self.tables()?
+            .running_root_accumulators
+            .insert(checkpoint, acc)?;
+        self.running_root_notify_read.notify(checkpoint, acc);
+
+        Ok(())
     }
 
     pub fn reference_gas_price(&self) -> u64 {
@@ -1230,7 +1251,8 @@ impl AuthorityPerEpochStore {
     }
 
     /// Returns future containing the state digest for the given epoch
-    /// once available
+    /// once available.
+    /// TODO: remove once StateAccumulatorV1 is removed
     pub async fn notify_read_checkpoint_state_digests(
         &self,
         checkpoints: Vec<CheckpointSequenceNumber>,
@@ -1256,6 +1278,22 @@ impl AuthorityPerEpochStore {
                 });
 
         Ok(join_all(results).await)
+    }
+
+    pub async fn notify_read_running_root(
+        &self,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult<Accumulator> {
+        let registration = self.running_root_notify_read.register_one(&checkpoint);
+        let acc = self.tables()?.running_root_accumulators.get(&checkpoint)?;
+
+        let result = match acc {
+            Some(ready) => Either::Left(futures::future::ready(ready)),
+            None => Either::Right(registration),
+        }
+        .await;
+
+        Ok(result)
     }
 
     /// `pending_certificates` table related methods. Should only be used from TransactionManager.
@@ -2548,7 +2586,13 @@ impl AuthorityPerEpochStore {
             .chain(sequenced_randomness_transactions)
             .collect();
 
-        let (transactions_to_schedule, notifications, lock, final_round) = self
+        let (
+            transactions_to_schedule,
+            notifications,
+            lock,
+            final_round,
+            consensus_commit_prologue_root,
+        ) = self
             .process_consensus_transactions(
                 &mut batch,
                 &consensus_transactions,
@@ -2589,8 +2633,23 @@ impl AuthorityPerEpochStore {
             } else {
                 consensus_commit_info.round
             };
+
+            let mut checkpoint_roots: Vec<TransactionKey> = Vec::with_capacity(roots.len() + 1);
+
+            if let Some(consensus_commit_prologue_root) = consensus_commit_prologue_root {
+                if self
+                    .protocol_config()
+                    .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
+                {
+                    // Put consensus commit prologue root at the beginning of the checkpoint roots.
+                    checkpoint_roots.push(consensus_commit_prologue_root);
+                } else {
+                    roots.insert(consensus_commit_prologue_root);
+                }
+            }
+            checkpoint_roots.extend(roots.into_iter());
             let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
-                roots: roots.into_iter().collect(),
+                roots: checkpoint_roots,
                 details: PendingCheckpointInfo {
                     timestamp_ms: consensus_commit_info.timestamp,
                     last_of_epoch: final_round && randomness_round.is_none(),
@@ -2661,18 +2720,18 @@ impl AuthorityPerEpochStore {
 
     // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update
     // the system clock used in all transactions in the current consensus commit.
+    // Returns the root of the consensus commit prologue transaction if it was added to the input.
     fn add_consensus_commit_prologue_transaction(
         &self,
         batch: &mut DBBatch,
         transactions: &mut VecDeque<VerifiedExecutableTransaction>,
         consensus_commit_info: &ConsensusCommitInfo,
-        roots: &mut BTreeSet<TransactionKey>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-    ) -> SuiResult {
+    ) -> SuiResult<Option<TransactionKey>> {
         #[cfg(any(test, feature = "test-utils"))]
         {
             if consensus_commit_info.skip_consensus_commit_prologue_in_test() {
-                return Ok(());
+                return Ok(None);
             }
         }
 
@@ -2709,12 +2768,12 @@ impl AuthorityPerEpochStore {
             self.protocol_config(),
             version_assignment,
         );
-        match self.process_consensus_system_transaction(&transaction) {
+        let consensus_commit_prologue_root = match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
-                roots.insert(processed_tx.key());
-                transactions.push_front(processed_tx);
+                transactions.push_front(processed_tx.clone());
+                Some(processed_tx.key())
             }
-            ConsensusCertificateResult::IgnoredSystem => (),
+            ConsensusCertificateResult::IgnoredSystem => None,
             _ => unreachable!("process_consensus_system_transaction returned unexpected ConsensusCertificateResult."),
         };
 
@@ -2722,7 +2781,7 @@ impl AuthorityPerEpochStore {
             batch,
             SequencedConsensusTransactionKey::System(*transaction.digest()),
         )?;
-        Ok(())
+        Ok(consensus_commit_prologue_root)
     }
 
     // Assigns shared object versions to transactions and updates the shared object version state.
@@ -2846,7 +2905,8 @@ impl AuthorityPerEpochStore {
         Vec<VerifiedExecutableTransaction>,    // transactions to schedule
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
         Option<RwLockWriteGuard<ReconfigState>>,
-        bool, // true if final round
+        bool,                   // true if final round
+        Option<TransactionKey>, // consensus commit prologue root
     )> {
         if randomness_round.is_some() {
             assert!(!dkg_failed); // invariant check
@@ -2982,14 +3042,11 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        // TODO: once transaction cancellation is implemented, we need to add cancelled transaction info to
-        //       the created consensus commit prologue transactions.
         // Add the consensus commit prologue transaction to the beginning of `verified_certificates`.
-        self.add_consensus_commit_prologue_transaction(
+        let consensus_commit_prologue_root = self.add_consensus_commit_prologue_transaction(
             batch,
             &mut verified_certificates,
             consensus_commit_info,
-            roots,
             &cancelled_txns,
         )?;
 
@@ -3010,7 +3067,13 @@ impl AuthorityPerEpochStore {
             commit_has_deferred_txns,
         )?;
 
-        Ok((verified_certificates, notifications, lock, final_round))
+        Ok((
+            verified_certificates,
+            notifications,
+            lock,
+            final_round,
+            consensus_commit_prologue_root,
+        ))
     }
 
     fn process_end_of_publish_transactions_and_reconfig(
@@ -3547,14 +3610,16 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn last_built_checkpoint_commit_height(&self) -> SuiResult<Option<CheckpointHeight>> {
+    pub fn last_built_checkpoint_builder_summary(
+        &self,
+    ) -> SuiResult<Option<BuilderCheckpointSummary>> {
         Ok(self
             .tables()?
             .builder_checkpoint_summary_v2
             .unbounded_iter()
             .skip_to_last()
             .next()
-            .and_then(|(_, b)| b.checkpoint_height))
+            .map(|(_, s)| s))
     }
 
     pub fn last_built_checkpoint_summary(

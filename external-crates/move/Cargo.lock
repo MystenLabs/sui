@@ -1692,7 +1692,6 @@ dependencies = [
  "move-coverage",
  "move-disassembler",
  "move-docgen",
- "move-errmapgen",
  "move-ir-types",
  "move-package",
  "move-prover",
@@ -1855,30 +1854,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-errmapgen"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "codespan-reporting",
- "datatest-stable",
- "move-command-line-common",
- "move-core-types",
- "move-model",
- "move-prover",
- "serde",
-]
-
-[[package]]
-name = "move-explain"
-version = "0.1.0"
-dependencies = [
- "bcs",
- "clap 4.5.4",
- "move-command-line-common",
- "move-core-types",
-]
-
-[[package]]
 name = "move-ir-compiler"
 version = "0.1.0"
 dependencies = [
@@ -2025,7 +2000,6 @@ dependencies = [
  "move-command-line-common",
  "move-compiler",
  "move-docgen",
- "move-errmapgen",
  "move-model",
  "move-prover-test-utils",
  "move-stackless-bytecode",
@@ -2086,7 +2060,6 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-errmapgen",
  "move-package",
  "move-prover",
  "move-stdlib-natives",
@@ -2223,6 +2196,7 @@ dependencies = [
  "move-vm-test-utils",
  "move-vm-types",
  "once_cell",
+ "rand 0.8.5",
  "rayon",
  "regex",
 ]

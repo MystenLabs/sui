@@ -132,6 +132,7 @@ pub struct Migration {
 }
 
 /// A mapping from file ids to file contents along with the mapping of filehash to fileID.
+#[derive(Debug, Clone)]
 pub struct MappedFiles {
     files: SimpleFiles<Symbol, Arc<str>>,
     file_mapping: HashMap<FileHash, FileId>,
@@ -263,6 +264,35 @@ pub trait PositionInfo {
         };
         Some(posn)
     }
+
+    /// Given a line number in the file return the `Loc` for the line.
+    fn line_to_loc_opt(&self, file_hash: &FileHash, line_number: usize) -> Option<Loc> {
+        let file_id = self.file_mapping().get(file_hash)?;
+        let line_range = self.files().line_range(*file_id, line_number).ok()?;
+        Some(Loc::new(
+            *file_hash,
+            line_range.start as u32,
+            line_range.end as u32,
+        ))
+    }
+
+    /// Given a location `Loc` return a new loc only for source with leading and trailing
+    /// whitespace removed.
+    fn trimmed_loc_opt(&self, loc: &Loc) -> Option<Loc> {
+        let source_str = self.source_of_loc_opt(loc)?;
+        let trimmed_front = source_str.trim_start();
+        let new_start = loc.start() as usize + (source_str.len() - trimmed_front.len());
+        let trimmed_back = trimmed_front.trim_end();
+        let new_end = (loc.end() as usize).saturating_sub(trimmed_front.len() - trimmed_back.len());
+        Some(Loc::new(loc.file_hash(), new_start as u32, new_end as u32))
+    }
+
+    /// Given a location `Loc` return the source for the location. This include any leading and
+    /// trailing whitespace.
+    fn source_of_loc_opt(&self, loc: &Loc) -> Option<&str> {
+        let file_id = *self.file_mapping().get(&loc.file_hash())?;
+        Some(&self.files().source(file_id).ok()?[loc.usize_range()])
+    }
 }
 
 impl PositionInfo for MappedFiles {
@@ -290,7 +320,7 @@ pub fn report_warnings(files: &FilesSourceText, warnings: Diagnostics) {
     if warnings.is_empty() {
         return;
     }
-    debug_assert!(warnings.max_severity().unwrap() == Severity::Warning);
+    debug_assert!(warnings.max_severity_at_or_under_severity(Severity::Warning));
     report_diagnostics_impl(files, warnings, false)
 }
 
@@ -351,6 +381,20 @@ pub fn report_diagnostics_to_buffer(
     writer.into_inner()
 }
 
+pub fn report_diagnostics_to_buffer_with_mapped_files(
+    mapped_files: &MappedFiles,
+    diags: Diagnostics,
+    ansi_color: bool,
+) -> Vec<u8> {
+    let mut writer = if ansi_color {
+        Buffer::ansi()
+    } else {
+        Buffer::no_color()
+    };
+    render_diagnostics(&mut writer, mapped_files, diags);
+    writer.into_inner()
+}
+
 fn env_color() -> ColorChoice {
     match read_env_var(COLOR_MODE_ENV_VAR).as_str() {
         "NONE" => ColorChoice::Never,
@@ -366,10 +410,10 @@ fn output_diagnostics<W: WriteColor>(
     diags: Diagnostics,
 ) {
     let mapping = MappedFiles::new(sources.clone());
-    render_diagnostics(writer, mapping, diags);
+    render_diagnostics(writer, &mapping, diags);
 }
 
-fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: Diagnostics) {
+fn render_diagnostics(writer: &mut dyn WriteColor, mapping: &MappedFiles, diags: Diagnostics) {
     let Diagnostics {
         diags: Some(mut diags),
         format,
@@ -387,8 +431,8 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: 
         loc1.cmp(loc2)
     });
     match format {
-        DiagnosticsFormat::Text => emit_diagnostics_text(writer, &mapping, diags),
-        DiagnosticsFormat::JSON => emit_diagnostics_json(writer, &mapping, diags),
+        DiagnosticsFormat::Text => emit_diagnostics_text(writer, mapping, diags),
+        DiagnosticsFormat::JSON => emit_diagnostics_json(writer, mapping, diags),
     }
 }
 
@@ -529,6 +573,23 @@ impl Diagnostics {
 
     pub fn set_format(&mut self, format: DiagnosticsFormat) {
         self.format = format;
+    }
+
+    /// Always false when no diagnostics are present.
+    pub fn max_severity_at_or_above_severity(&self, threshold: Severity) -> bool {
+        match self.max_severity() {
+            Some(max) if max >= threshold => true,
+            Some(_) | None => false,
+        }
+    }
+
+    /// Always true when no diagnostics are present.
+    pub fn max_severity_at_or_under_severity(&self, threshold: Severity) -> bool {
+        match self.max_severity() {
+            Some(max) if max <= threshold => true,
+            None => true,
+            Some(_) => false,
+        }
     }
 
     pub fn max_severity(&self) -> Option<Severity> {

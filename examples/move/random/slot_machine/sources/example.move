@@ -11,7 +11,6 @@
 module slot_machine::example {
     use sui::balance::Balance;
     use sui::coin::{Self, Coin};
-    use sui::math;
     use sui::random::{Random, new_generator};
     use sui::sui::SUI;
 
@@ -67,7 +66,7 @@ module slot_machine::example {
 
         // move the bet amount from the user's coin to the game's balance
         let coin_value = coin.value();
-        let bet_amount = math::min(coin_value, game.balance.value());
+        let bet_amount = coin_value.min(game.balance.value());
         coin::put(&mut game.balance, coin.split(bet_amount, ctx));
 
         // move the reward to the user's coin

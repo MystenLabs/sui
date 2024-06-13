@@ -6,7 +6,8 @@ use super::ObjectStore;
 use crate::base_types::EpochId;
 use crate::committee::Committee;
 use crate::digests::{
-    CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
+    ChainIdentifier, CheckpointContentsDigest, CheckpointDigest, TransactionDigest,
+    TransactionEventsDigest,
 };
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::full_checkpoint_content::CheckpointData;
@@ -155,7 +156,7 @@ pub trait ReadStore: ObjectStore {
         use super::ObjectKey;
         use crate::effects::TransactionEffectsAPI;
         use crate::full_checkpoint_content::CheckpointTransaction;
-        use std::collections::{HashMap, HashSet};
+        use std::collections::HashMap;
 
         let transaction_digests = checkpoint_contents
             .iter()
@@ -198,29 +199,11 @@ pub trait ReadStore: ObjectStore {
                     .cloned()
                     .expect("event was already checked to be present")
             });
-            // Note unwrapped_then_deleted contains **updated** versions.
-            let unwrapped_then_deleted_obj_ids = fx
-                .unwrapped_then_deleted()
-                .into_iter()
-                .map(|k| k.0)
-                .collect::<HashSet<_>>();
 
             let input_object_keys = fx
-                .input_shared_objects()
+                .modified_at_versions()
                 .into_iter()
-                .map(|kind| {
-                    let (id, version) = kind.id_and_version();
-                    ObjectKey(id, version)
-                })
-                .chain(
-                    fx.modified_at_versions()
-                        .into_iter()
-                        .map(|(object_id, version)| ObjectKey(object_id, version)),
-                )
-                .collect::<HashSet<_>>()
-                .into_iter()
-                // Unwrapped-then-deleted objects are not stored in state before the tx, so we have nothing to fetch.
-                .filter(|key| !unwrapped_then_deleted_obj_ids.contains(&key.0))
+                .map(|(object_id, version)| ObjectKey(object_id, version))
                 .collect::<Vec<_>>();
 
             let input_objects = self
@@ -644,4 +627,17 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
     ) -> anyhow::Result<CheckpointData> {
         (**self).get_checkpoint_data(checkpoint, checkpoint_contents)
     }
+}
+
+/// Trait used to provide functionality to the REST API service.
+///
+/// It extends both ObjectStore and ReadStore by adding functionality that may require more
+/// detailed underlying databases or indexes to support.
+pub trait RestStateReader: ObjectStore + ReadStore + Send + Sync {
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>>;
+
+    fn get_chain_identifier(&self) -> Result<ChainIdentifier>;
 }

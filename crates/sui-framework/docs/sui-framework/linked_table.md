@@ -59,7 +59,7 @@ removal
  the ID of this table
 </dd>
 <dt>
-<code>size: u64</code>
+<code>size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  the number of key-value pairs in the table
@@ -129,7 +129,7 @@ removal
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_ETableNotEmpty">ETableNotEmpty</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_ETableNotEmpty">ETableNotEmpty</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -138,7 +138,7 @@ removal
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_ETableIsEmpty">ETableIsEmpty</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_ETableIsEmpty">ETableIsEmpty</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -549,7 +549,7 @@ Returns true iff there is a value associated with the key <code>k: K</code> in t
 Returns the size of the table, the number of key-value pairs
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_length">length</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: &<a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;K, V&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_length">length</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: &<a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;K, V&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -558,7 +558,7 @@ Returns the size of the table, the number of key-value pairs
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_length">length</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: &<a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_length">length</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: &<a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="../sui-framework/table.md#0x2_table">table</a>.size
 }
 </code></pre>

@@ -61,19 +61,22 @@ impl FilterContext for Context<'_> {
     }
 
     // A module member should be removed if:
-    // * It is annotated as a test function (test_only, test, abort) and test mode is not set; or
+    // * It is annotated as a test function (test_only, test, random_test, abort) and test mode is not set; or
     // * If it is a library and is annotated as #[test]
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
         use known_attributes::TestingAttribute;
         let flattened_attrs: Vec<_> = attrs.iter().flat_map(test_attributes).collect();
-        let is_test_only = flattened_attrs
-            .iter()
-            .any(|attr| matches!(attr.1, TestingAttribute::Test | TestingAttribute::TestOnly));
+        let is_test_only = flattened_attrs.iter().any(|attr| {
+            matches!(
+                attr.1,
+                TestingAttribute::Test | TestingAttribute::TestOnly | TestingAttribute::RandTest
+            )
+        });
         is_test_only && !self.env.flags().keep_testing_functions()
             || (!self.is_source_def
-                && flattened_attrs
-                    .iter()
-                    .any(|attr| attr.1 == TestingAttribute::Test))
+                && flattened_attrs.iter().any(|attr| {
+                    matches!(attr.1, TestingAttribute::Test | TestingAttribute::RandTest)
+                }))
     }
 }
 

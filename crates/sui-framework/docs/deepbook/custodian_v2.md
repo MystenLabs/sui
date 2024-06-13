@@ -149,7 +149,7 @@ that can access funds, but cannot create new <code><a href="custodian_v2.md#0xde
 
 
 
-<pre><code><b>const</b> <a href="custodian_v2.md#0xdee9_custodian_v2_EAdminAccountCapRequired">EAdminAccountCapRequired</a>: u64 = 2;
+<pre><code><b>const</b> <a href="custodian_v2.md#0xdee9_custodian_v2_EAdminAccountCapRequired">EAdminAccountCapRequired</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -271,7 +271,7 @@ Return the owner of an AccountCap
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_balance">account_balance</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;Asset&gt;, owner: <b>address</b>): (u64, u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_balance">account_balance</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;Asset&gt;, owner: <b>address</b>): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -283,7 +283,7 @@ Return the owner of an AccountCap
 <pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_balance">account_balance</a>&lt;Asset&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;Asset&gt;,
     owner: <b>address</b>
-): (u64, u64) {
+): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
     // <b>if</b> <a href="custodian.md#0xdee9_custodian">custodian</a> account is not created yet, directly <b>return</b> (0, 0) rather than <b>abort</b>
     <b>if</b> (!<a href="../sui-framework/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)) {
         <b>return</b> (0, 0)
@@ -332,7 +332,7 @@ Return the owner of an AccountCap
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;Asset&gt;, quantity: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;Asset&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;Asset&gt;, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;Asset&gt;
 </code></pre>
 
 
@@ -343,7 +343,7 @@ Return the owner of an AccountCap
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;Asset&gt;,
-    quantity: u64,
+    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;Asset&gt; {
@@ -390,7 +390,7 @@ Return the owner of an AccountCap
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: u64): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -402,7 +402,7 @@ Return the owner of an AccountCap
 <pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
-    quantity: u64,
+    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
 ): Balance&lt;T&gt; {
     <b>let</b> account = <a href="custodian_v2.md#0xdee9_custodian_v2_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, account_cap.owner);
     <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> account.available_balance, quantity)
@@ -448,7 +448,7 @@ Return the owner of an AccountCap
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>, quantity: u64): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -460,7 +460,7 @@ Return the owner of an AccountCap
 <pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
-    quantity: u64,
+    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
 ): Balance&lt;T&gt; {
     <b>let</b> account = <a href="custodian_v2.md#0xdee9_custodian_v2_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, owner);
     split(&<b>mut</b> account.locked_balance, quantity)
@@ -478,7 +478,7 @@ Return the owner of an AccountCap
 Move <code>quantity</code> from the unlocked balance of <code>user</code> to the locked balance of <code>user</code>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_lock_balance">lock_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_lock_balance">lock_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -490,7 +490,7 @@ Move <code>quantity</code> from the unlocked balance of <code>user</code> to the
 <pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_lock_balance">lock_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
-    quantity: u64,
+    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
 ) {
     <b>let</b> to_lock = <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>(<a href="custodian.md#0xdee9_custodian">custodian</a>, account_cap, quantity);
     <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_locked_balance">increase_user_locked_balance</a>(<a href="custodian.md#0xdee9_custodian">custodian</a>, account_cap, to_lock);
@@ -508,7 +508,7 @@ Move <code>quantity</code> from the unlocked balance of <code>user</code> to the
 Move <code>quantity</code> from the locked balance of <code>user</code> to the unlocked balance of <code>user</code>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_unlock_balance">unlock_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>, quantity: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_unlock_balance">unlock_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>, quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -520,7 +520,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_unlock_balance">unlock_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
-    quantity: u64,
+    quantity: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
 ) {
     <b>let</b> locked_balance = <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, owner, quantity);
     <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_available_balance">increase_user_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, owner, locked_balance)
@@ -537,7 +537,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_available_balance">account_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_available_balance">account_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -549,7 +549,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_available_balance">account_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
-): u64 {
+): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&<a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner).available_balance)
 }
 </code></pre>
@@ -564,7 +564,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_locked_balance">account_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_locked_balance">account_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -576,7 +576,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_locked_balance">account_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
-): u64 {
+): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&<a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner).locked_balance)
 }
 </code></pre>

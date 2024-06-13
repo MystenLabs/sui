@@ -16,6 +16,8 @@ pub struct Config {
     pub concurrency: u64,
     pub eth_sui_bridge_contract_address: String,
     pub start_block: u64,
+    pub metric_url: String,
+    pub metric_port: u16,
 }
 
 /// Load the config to run.

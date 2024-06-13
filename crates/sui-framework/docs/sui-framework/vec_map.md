@@ -111,7 +111,7 @@ An entry in the map
 This key already exists in the map
 
 
-<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EKeyAlreadyExists">EKeyAlreadyExists</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EKeyAlreadyExists">EKeyAlreadyExists</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -121,7 +121,7 @@ This key already exists in the map
 This key does not exist in the map
 
 
-<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EKeyDoesNotExist">EKeyDoesNotExist</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EKeyDoesNotExist">EKeyDoesNotExist</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -131,7 +131,7 @@ This key does not exist in the map
 Trying to access an element of the map at an invalid index
 
 
-<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -141,7 +141,7 @@ Trying to access an element of the map at an invalid index
 Trying to pop from a map that is empty
 
 
-<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EMapEmpty">EMapEmpty</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EMapEmpty">EMapEmpty</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
@@ -151,7 +151,7 @@ Trying to pop from a map that is empty
 Trying to destroy a map that is not empty
 
 
-<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EMapNotEmpty">EMapNotEmpty</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EMapNotEmpty">EMapNotEmpty</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -161,7 +161,7 @@ Trying to destroy a map that is not empty
 Trying to construct a map from keys and values of different lengths
 
 
-<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EUnequalLengths">EUnequalLengths</a>: u64 = 5;
+<pre><code><b>const</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_EUnequalLengths">EUnequalLengths</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 5;
 </code></pre>
 
 
@@ -391,7 +391,7 @@ Return true if <code>self</code> contains an entry for <code>key</code>, false o
 Return the number of entries in <code>self</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -400,7 +400,7 @@ Return the number of entries in <code>self</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K,V&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K,V&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     self.contents.length()
 }
 </code></pre>
@@ -582,7 +582,7 @@ Find the index of <code>key</code> in <code>self</code>. Return <code>None</code
 Note that map entries are stored in insertion order, *not* sorted by key.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -591,7 +591,7 @@ Note that map entries are stored in insertion order, *not* sorted by key.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K,V&gt;, key: &K): Option&lt;u64&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K,V&gt;, key: &K): Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> n = <a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self);
     <b>while</b> (i &lt; n) {
@@ -616,7 +616,7 @@ Find the index of <code>key</code> in <code>self</code>. Aborts if <code>key</co
 Note that map entries are stored in insertion order, *not* sorted by key.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_idx">get_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_idx">get_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -625,7 +625,7 @@ Note that map entries are stored in insertion order, *not* sorted by key.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_idx">get_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K,V&gt;, key: &K): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_idx">get_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K,V&gt;, key: &K): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> idx_opt = self.<a href="../sui-framework/vec_map.md#0x2_vec_map_get_idx_opt">get_idx_opt</a>(key);
     <b>assert</b>!(idx_opt.is_some(), <a href="../sui-framework/vec_map.md#0x2_vec_map_EKeyDoesNotExist">EKeyDoesNotExist</a>);
     idx_opt.destroy_some()
@@ -645,7 +645,7 @@ Note that map entries are stored in insertion order, *not* sorted by key.
 Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self)</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx">get_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, idx: u64): (&K, &V)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx">get_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, idx: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (&K, &V)
 </code></pre>
 
 
@@ -654,7 +654,7 @@ Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui-fra
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx">get_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;, idx: u64): (&K, &V) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx">get_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;, idx: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (&K, &V) {
     <b>assert</b>!(idx &lt; <a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self), <a href="../sui-framework/vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>let</b> entry = &self.contents[idx];
     (&entry.key, &entry.value)
@@ -674,7 +674,7 @@ Note that map entries are stored in insertion order, *not* sorted by key.
 Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self)</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx_mut">get_entry_by_idx_mut</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, idx: u64): (&K, &<b>mut</b> V)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx_mut">get_entry_by_idx_mut</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, idx: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (&K, &<b>mut</b> V)
 </code></pre>
 
 
@@ -683,7 +683,7 @@ Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui-fra
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx_mut">get_entry_by_idx_mut</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;, idx: u64): (&K, &<b>mut</b> V) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx_mut">get_entry_by_idx_mut</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;, idx: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (&K, &<b>mut</b> V) {
     <b>assert</b>!(idx &lt; <a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self), <a href="../sui-framework/vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>let</b> entry = &<b>mut</b> self.contents[idx];
     (&entry.key, &<b>mut</b> entry.value)
@@ -702,7 +702,7 @@ Remove the entry at index <code>idx</code> from self.
 Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self)</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_remove_entry_by_idx">remove_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, idx: u64): (K, V)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_remove_entry_by_idx">remove_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, idx: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (K, V)
 </code></pre>
 
 
@@ -711,7 +711,7 @@ Aborts if <code>idx</code> is greater than or equal to <code><a href="../sui-fra
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_remove_entry_by_idx">remove_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;, idx: u64): (K, V) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_remove_entry_by_idx">remove_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;, idx: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (K, V) {
     <b>assert</b>!(idx &lt; <a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self), <a href="../sui-framework/vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>let</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_Entry">Entry</a> { key, value } = self.contents.<a href="../sui-framework/vec_map.md#0x2_vec_map_remove">remove</a>(idx);
     (key, value)

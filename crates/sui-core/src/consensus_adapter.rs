@@ -378,6 +378,9 @@ impl ConsensusAdapter {
             recovered.len()
         );
         for transaction in recovered {
+            if transaction.is_end_of_publish() {
+                info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
+            }
             self.submit_unchecked(&[transaction], epoch_store);
         }
     }
@@ -418,9 +421,9 @@ impl ConsensusAdapter {
         let (position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
 
-        const DEFAULT_LATENCY: Duration = Duration::from_secs(3); // > p50 consensus latency with global deployment
+        const DEFAULT_LATENCY: Duration = Duration::from_secs(1); // > p50 consensus latency with global deployment
         const MIN_LATENCY: Duration = Duration::from_millis(150);
-        const MAX_LATENCY: Duration = Duration::from_secs(10);
+        const MAX_LATENCY: Duration = Duration::from_secs(3);
 
         let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
         self.metrics
@@ -879,6 +882,7 @@ impl ConsensusAdapter {
         };
         if send_end_of_publish {
             // sending message outside of any locks scope
+            info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
                 None,
@@ -992,6 +996,7 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             // reconfig_guard lock is dropped here.
         };
         if send_end_of_publish {
+            info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
                 None,
@@ -1229,8 +1234,8 @@ mod adapter_tests {
 
         assert_eq!(position, 7);
 
-        // delay_step * position = 3 * 2 * 7 = 42
-        assert_eq!(delay_step, Duration::from_secs(42));
+        // delay_step * position * 2 = 1 * 7 * 2 = 14
+        assert_eq!(delay_step, Duration::from_secs(14));
         assert!(!positions_moved > 0);
     }
 

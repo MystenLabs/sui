@@ -1,0 +1,42 @@
+---
+title: Create a Non-Fungible Token
+keywords: [ERC-721, NFT]
+---
+
+On Sui, everything is an object. Moreover, everything is a non-fungible token (NFT) as its objects are unique, non-fungible, and owned.
+
+Creating NFTs on Sui differs from other blockchains that are not object based. Those blockchains require a dedicated standard to handle the properties that define NFTs because they are based on a mapping between smart contracts and the token's ID. For instance, the ERC-721 standard on Ethereum was necessary to pair a globally unique ID with the relevant smart contract address to create a unique token instance on the network. 
+
+On Sui, every object already has a unique ID, so whether you're dealing with a million fungible tokens, like coins, or thousands of NFTs with individual characteristics, like SuiFrens, your smart contracts on Sui always interact with individual objects. 
+
+Imagine you create an Excitable Chimp NFT collection on Sui and another blockchain that isn't object based. To get an attribute like the Chimp's name on the other blockchain, you would need to interact with the smart contract that created the NFT to get that information (typically from off-chain storage) using the NFT ID. On Sui, the name attribute can be a field on the object that defines the NFT itself. This construct provides a much more straightforward process for accessing metadata for the NFT as the smart contract that wants the information can just return the name from the object itself.
+
+## Example
+
+The following example creates a basic NFT on Sui. The `TestnetNFT` struct defines the NFT with an `id`, `name`, `description`, and `url` fields. 
+
+{@inject: examples/move/nft/sources/testnet_nft.move#struct=TestnetNFT noComments}
+
+In this example, anyone can mint the NFT by calling the `mint_to_sender` function. As the name suggests, the function creates a new `TestnetNFT` and transfers it to the address that makes the call. 
+
+{@inject: examples/move/nft/sources/testnet_nft.move#fun=mint_to_sender noComments}
+
+The module includes functions to return NFT metadata, too. Referencing the hypothetical used previously, you can call the `name` function to get that value. As you can see, the function simply returns the name field value of the NFT itself.
+
+{@inject: examples/move/nft/sources/testnet_nft.move#fun=name noComments}
+
+<details>
+<summary>
+Toggle complete source code 
+</summary>
+
+{@inject: examples/move/nft/sources/testnet_nft.move}
+
+</details>
+
+## Related links
+
+- [NFT Rental](./nft/nft-rental.mdx): Example that rents NFTs using Kiosk Apps. 
+- [Asset Tokenization](./nft/asset-tokenization.mdx): Example that uses NFTs to tokenize real-world assets.
+- [Kiosk](../../standards/kiosk.mdx): Asset storage on the Sui network.
+- [Kiosk Apps](../../standards/kiosk-apps.mdx): Extend the functionality of the Kiosk standard. 

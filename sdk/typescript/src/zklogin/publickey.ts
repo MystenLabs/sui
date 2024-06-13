@@ -70,8 +70,9 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	 */
 	verifyPersonalMessage(message: Uint8Array, signature: Uint8Array | string): Promise<boolean> {
 		const parsedSignature = parseSerializedZkLoginSignature(signature);
+		const address = new ZkLoginPublicIdentifier(parsedSignature.publicKey).toSuiAddress();
 		return graphqlVerifyZkLoginSignature({
-			address: parsedSignature.zkLogin!.address,
+			address: address,
 			bytes: toB64(message),
 			signature: parsedSignature.serializedSignature,
 			intentScope: 'PERSONAL_MESSAGE',
@@ -84,8 +85,9 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	 */
 	verifyTransaction(transaction: Uint8Array, signature: Uint8Array | string): Promise<boolean> {
 		const parsedSignature = parseSerializedZkLoginSignature(signature);
+		const address = new ZkLoginPublicIdentifier(parsedSignature.publicKey).toSuiAddress();
 		return graphqlVerifyZkLoginSignature({
-			address: parsedSignature.zkLogin!.address,
+			address: address,
 			bytes: toB64(transaction),
 			signature: parsedSignature.serializedSignature,
 			intentScope: 'TRANSACTION_DATA',
@@ -172,7 +174,6 @@ export function parseSerializedZkLoginSignature(signature: Uint8Array | string) 
 	const { issBase64Details, addressSeed } = inputs;
 	const iss = extractClaimValue<string>(issBase64Details, 'iss');
 	const publicIdentifer = toZkLoginPublicIdentifier(BigInt(addressSeed), iss);
-	const address = publicIdentifer.toSuiAddress();
 	return {
 		serializedSignature: toB64(bytes),
 		signatureScheme: 'ZkLogin' as const,
@@ -181,7 +182,6 @@ export function parseSerializedZkLoginSignature(signature: Uint8Array | string) 
 			maxEpoch,
 			userSignature,
 			iss,
-			address,
 			addressSeed: BigInt(addressSeed),
 		},
 		signature: bytes,

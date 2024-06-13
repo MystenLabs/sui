@@ -29,11 +29,12 @@ use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::consensus_manager::ConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
+use sui_core::storage::RestReadStore;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
-use sui_json_rpc::ServerType;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
+use sui_rest_api::RestMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
@@ -86,6 +87,7 @@ use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
+use sui_core::rest_index::RestIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
@@ -535,6 +537,25 @@ impl SuiNode {
                 epoch_store
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
+                config.remove_deprecated_tables,
+            )))
+        } else {
+            None
+        };
+
+        let rest_index = if is_full_node
+            && config.enable_experimental_rest_api
+            && config.enable_index_processing
+        {
+            let mut resolver = epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(&cache_traits.backing_package_store));
+
+            Some(Arc::new(RestIndexStore::new(
+                config.db_path().join("rest_index"),
+                &store,
+                &checkpoint_store,
+                resolver.as_mut(),
             )))
         } else {
             None
@@ -618,6 +639,7 @@ impl SuiNode {
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
+            rest_index,
             checkpoint_store.clone(),
             &prometheus_registry,
             genesis.objects(),
@@ -694,6 +716,7 @@ impl SuiNode {
 
         let accumulator = Arc::new(StateAccumulator::new(
             cache_traits.accumulator_store.clone(),
+            &epoch_store,
         ));
 
         let authority_names_to_peer_ids = epoch_store
@@ -1830,8 +1853,6 @@ pub async fn build_http_server(
         return Ok(None);
     }
 
-    let chain_id = state.get_chain_identifier().unwrap();
-
     let mut router = axum::Router::new();
 
     let json_rpc_router = {
@@ -1895,23 +1916,31 @@ pub async fn build_http_server(
             metrics,
             config.indexer_max_subscriptions,
         ))?;
-        server.register_module(MoveUtils::new(state))?;
+        server.register_module(MoveUtils::new(state.clone()))?;
 
-        let server_type = if config.websocket_only {
-            Some(ServerType::WebSocket)
-        } else {
-            None
-        };
+        let server_type = config.jsonrpc_server_type();
+
         server.to_router(server_type).await?
     };
 
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let rest_router =
-            sui_rest_api::RestService::new(Arc::new(store.clone()), chain_id, software_version)
-                .into_router();
-        router = router.nest("/rest", rest_router);
+        let mut rest_service = sui_rest_api::RestService::new(
+            Arc::new(RestReadStore::new(state, store)),
+            software_version,
+        );
+
+        rest_service.with_metrics(RestMetrics::new(prometheus_registry));
+
+        if let Some(transaction_orchestrator) = transaction_orchestrator {
+            rest_service.with_executor(transaction_orchestrator.clone())
+        }
+
+        let rest_router = rest_service.into_router();
+        router = router
+            .nest("/rest", rest_router.clone())
+            .nest("/v2", rest_router);
     }
 
     let server = axum::Server::bind(&config.json_rpc_address)

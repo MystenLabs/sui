@@ -507,6 +507,13 @@ impl LiveObject {
             LiveObject::Wrapped(key) => (key.0, key.1, ObjectDigest::OBJECT_DIGEST_WRAPPED),
         }
     }
+
+    pub fn to_normal(self) -> Option<Object> {
+        match self {
+            LiveObject::Normal(object) => Some(object),
+            LiveObject::Wrapped(_) => None,
+        }
+    }
 }
 
 impl LiveSetIter<'_> {

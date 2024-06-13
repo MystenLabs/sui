@@ -110,7 +110,7 @@ module bridge::bridge_tests {
     #[test]
     fun test_register_foreign_token() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(),addr);
+        let mut env = create_env(chain_ids::sui_testnet(), addr);
         env.create_bridge_default();
         let (upgrade_cap, treasury_cap, metadata) = create_test_token(env.scenario().ctx());
         env.register_foreign_token<TEST_TOKEN>(treasury_cap, upgrade_cap, metadata, addr);
@@ -121,7 +121,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::treasury::ETokenSupplyNonZero)]
     fun test_register_foreign_token_non_zero_supply() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(),addr);
+        let mut env = create_env(chain_ids::sui_testnet(), addr);
         env.create_bridge_default();
         let (upgrade_cap, mut treasury_cap, metadata) = create_test_token(env.scenario().ctx());
         let _coin = treasury_cap.mint(1, env.scenario().ctx());
@@ -134,7 +134,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::treasury::EInvalidNotionalValue)]
     fun test_add_token_price_zero_value() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(),addr);
+        let mut env = create_env(chain_ids::sui_testnet(), addr);
         env.create_bridge_default();
         env.add_tokens(
             addr,
@@ -151,7 +151,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::bridge::EMalformedMessageError)]
     fun test_add_token_malformed_1() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(),addr);
+        let mut env = create_env(chain_ids::sui_testnet(), addr);
         env.create_bridge_default();
         env.add_tokens(
             addr,
@@ -168,7 +168,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::bridge::EMalformedMessageError)]
     fun test_add_token_malformed_2() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(),addr);
+        let mut env = create_env(chain_ids::sui_testnet(), addr);
         env.create_bridge_default();
         env.add_tokens(
             addr,
@@ -185,7 +185,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::bridge::EMalformedMessageError)]
     fun test_add_token_malformed_3() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(),addr);
+        let mut env = create_env(chain_ids::sui_testnet(), addr);
         env.create_bridge_default();
         env.add_tokens(
             addr,
@@ -202,7 +202,7 @@ module bridge::bridge_tests {
     fun test_add_native_token_nop() {
         // adding a native token is simply a NO-OP at the moment
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(),addr);
+        let mut env = create_env(chain_ids::sui_testnet(), addr);
         env.create_bridge_default();
         env.add_tokens(
             addr,
@@ -218,7 +218,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::treasury::EInvalidUpgradeCap)]
     fun test_register_foreign_token_bad_upgrade_cap() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(),addr);
+        let mut env = create_env(chain_ids::sui_testnet(), addr);
         env.create_bridge_default();
         let (_upgrade_cap, treasury_cap, metadata) = create_test_token(env.scenario().ctx());
         let upgrade_cap = test_publish(@0x42.to_id(), env.scenario().ctx());
@@ -235,6 +235,18 @@ module bridge::bridge_tests {
         let eth_address = x"0000000000000000000000000000000000000000";
         env.send_token(chain_ids::eth_sepolia(), eth_address, btc);
         env.destroy_env();
+    }
+
+    #[test]
+    #[expected_failure(abort_code = bridge::bridge::ETokenValueIsZero)]
+    fun test_execute_send_token_zero_value() {
+        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        env.create_bridge_default();
+        let btc: Coin<BTC> = env.get_btc(0);
+        let eth_address = x"0000000000000000000000000000000000000000";
+        env.send_token(chain_ids::eth_sepolia(), eth_address, btc);
+
+        abort TEST_DONE
     }
 
     #[test]
@@ -573,8 +585,8 @@ module bridge::bridge_tests {
         assert!(
             bridge.test_get_parsed_token_transfer_message(chain_id, 11)
                 == option::some(
-                    to_parsed_token_transfer_message(&message)
-                ),
+                to_parsed_token_transfer_message(&message)
+            ),
         );
 
         // Test when already claimed
@@ -603,8 +615,8 @@ module bridge::bridge_tests {
         assert!(
             bridge.test_get_parsed_token_transfer_message(chain_id, 12)
                 == option::some(
-                    to_parsed_token_transfer_message(&message)
-                ),
+                to_parsed_token_transfer_message(&message)
+            ),
         );
 
         // Test when message not found

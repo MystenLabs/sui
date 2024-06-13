@@ -1366,6 +1366,10 @@ impl DBBatch {
         }
         Ok(())
     }
+
+    pub fn size_in_bytes(&self) -> usize {
+        self.batch.size_in_bytes()
+    }
 }
 
 // TODO: Remove this entire implementation once we switch to sally

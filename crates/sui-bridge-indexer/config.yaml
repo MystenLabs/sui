@@ -16,3 +16,7 @@
 # eth_sui_bridge_contract_address: <contract_address>
 # Starting block number
 # start_block: <indexing_start_block>
+# Client metric URL
+# metric_url: <url>
+# Client metric port
+# metric_port: <port>

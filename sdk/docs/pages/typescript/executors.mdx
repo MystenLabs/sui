@@ -44,8 +44,8 @@ const [coin2] = tx1.splitCoins(tx2.gas, [1]);
 tx1.transferObjects([coin2], address2);
 
 const [{ digest: digest1 }, { digest: digest2 }] = await Promise.all([
-	executor.execute(tx1),
-	executor.execute(tx2),
+	executor.executeTransaction(tx1),
+	executor.executeTransaction(tx2),
 ]);
 ```
 
@@ -109,8 +109,8 @@ const [coin2] = tx1.splitCoins(tx2.gas, [1]);
 tx1.transferObjects([coin2], address2);
 
 const [{ digest: digest1 }, { digest: digest2 }] = await Promise.all([
-	executor.execute(tx1),
-	executor.execute(tx2),
+	executor.executeTransaction(tx1),
+	executor.executeTransaction(tx2),
 ]);
 ```
 

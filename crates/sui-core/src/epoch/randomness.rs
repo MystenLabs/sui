@@ -278,13 +278,15 @@ impl RandomnessManager {
             "random beacon: starting from next_randomness_round={}",
             rm.next_randomness_round.0
         );
-        for result in tables.randomness_rounds_pending.safe_iter() {
-            let (round, _) = result.expect("typed_store should not fail");
+        if highest_completed_round + 1 < rm.next_randomness_round {
             info!(
-                "random beacon: resuming generation for randomness round {}",
-                round.0
+                "random beacon: resuming generation for randomness rounds from {} to {}",
+                highest_completed_round + 1,
+                rm.next_randomness_round - 1,
             );
-            network_handle.send_partial_signatures(committee.epoch(), round);
+            for r in highest_completed_round.0 + 1..rm.next_randomness_round.0 {
+                network_handle.send_partial_signatures(committee.epoch(), RandomnessRound(r));
+            }
         }
 
         Some(rm)
@@ -590,10 +592,6 @@ impl RandomnessManager {
             .expect("RandomnessRound should not overflow");
 
         batch.insert_batch(
-            &tables.randomness_rounds_pending,
-            std::iter::once((randomness_round, ())),
-        )?;
-        batch.insert_batch(
             &tables.randomness_next_round,
             std::iter::once((SINGLETON_KEY, self.next_randomness_round)),
         )?;
@@ -693,10 +691,6 @@ impl RandomnessReporter {
             .epoch_store
             .upgrade()
             .ok_or(SuiError::EpochEnded(self.epoch))?;
-        epoch_store
-            .tables()?
-            .randomness_rounds_pending
-            .remove(&round)?;
         let mut highest_completed_round = self.highest_completed_round.lock();
         if round > *highest_completed_round {
             *highest_completed_round = round;
@@ -704,9 +698,9 @@ impl RandomnessReporter {
                 .tables()?
                 .randomness_highest_completed_round
                 .insert(&SINGLETON_KEY, &highest_completed_round)?;
+            self.network_handle
+                .complete_round(epoch_store.committee().epoch(), round);
         }
-        self.network_handle
-            .complete_round(epoch_store.committee().epoch(), round);
         Ok(())
     }
 }

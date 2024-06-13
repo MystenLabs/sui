@@ -1,5 +1,17 @@
 # @mysten/sui.js
 
+## 1.1.1
+
+### Patch Changes
+
+- 101f1ff4b8: Fix coinWithBalance when passing balance using a number instead of a bigint
+
+## 1.1.0
+
+### Minor Changes
+
+- bae8f9683c: Remove address from parseSerializedSignature
+
 ## 1.0.5
 
 ### Patch Changes
