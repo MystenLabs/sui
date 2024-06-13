@@ -5,9 +5,10 @@ use crate::{
     object_runtime::{object_store::ObjectResult, ObjectRuntime},
     NativesCostTable,
 };
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
-    account_address::AccountAddress, gas_algebra::InternalGas, vm_status::StatusCode,
+    account_address::AccountAddress, gas_algebra::InternalGas, language_storage::StructTag,
+    vm_status::StatusCode,
 };
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::native_functions::NativeContext;
@@ -15,10 +16,11 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
-    values::{Reference, Struct, StructRef, Value, Vector, VectorRef},
+    values::{Struct, Value, Vector},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
+use sui_types::{base_types::MoveObjectType, TypeTag};
 use tracing::instrument;
 
 const E_READ_SETTING_FAILED: u64 = 2;
@@ -59,11 +61,21 @@ pub fn read_setting_impl(
     let name_df_addr = pop_arg!(args, AccountAddress);
     let config_addr = pop_arg!(args, AccountAddress);
 
+    let setting_value_tag: StructTag = match context.type_to_type_tag(&setting_value_ty)? {
+        TypeTag::Struct(s) => *s,
+        _ => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Sui verifier guarantees this is a struct".to_string()),
+            )
+        }
+    };
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
 
     let read_value_opt = consistent_value_before_current_epoch(
         object_runtime,
         &setting_value_ty,
+        setting_value_tag,
         &setting_data_value_ty,
         &value_ty,
         config_addr,
@@ -86,54 +98,60 @@ pub fn read_setting_impl(
 fn consistent_value_before_current_epoch(
     object_runtime: &mut ObjectRuntime,
     setting_value_ty: &Type,
+    setting_value_tag: StructTag,
     setting_data_value_ty: &Type,
     value_ty: &Type,
     config_addr: AccountAddress,
     name_df_addr: AccountAddress,
     current_epoch: u64,
 ) -> PartialVMResult<Value> {
-    let global_value = match object_runtime.config_setting_unsequenced_read(
+    let setting = match object_runtime.config_setting_unsequenced_read(
         config_addr,
         name_df_addr,
-        current_epoch,
-    ) {
-        ObjectResult::MismatchedType => return option_none(&value_ty),
-        ObjectResult::Loaded(gv) => gv,
+        setting_value_ty,
+        MoveObjectType::from(setting_value_tag),
+    )? {
+        ObjectResult::MismatchedType | ObjectResult::Loaded(None) => return option_none(&value_ty),
+        ObjectResult::Loaded(Some(value)) => value,
     };
-    if !global_value.exists()? {
-        return option_none(&value_ty);
-    }
-    let setting_ref: Value = global_value.borrow_global().map_err(|err| {
-        assert!(err.major_status() != StatusCode::MISSING_DATA);
-        err
-    })?;
-    let setting_ref: StructRef = setting_ref.value_as()?;
-    let data_opt_ref: StructRef = setting_ref.borrow_field(1)?.value_as()?;
-    let data_ref = match borrow_option_value(data_opt_ref, &setting_data_value_ty)? {
+
+    let [id, data_opt]: [Value; 2] = unpack_struct(setting)?;
+    let data = match unpack_option(data_opt, &setting_data_value_ty)? {
         None => {
             // invariant violation?
             return option_none(&value_ty);
         }
-        Some(data_ref) => data_ref,
+        Some(data) => data,
     };
-    let data_ref: StructRef = data_ref.value_as()?;
-    let newer_value_epoch: u64 = data_ref.borrow_field(0)?.value_as()?;
+    let [newer_value_epoch, newer_value, older_value_opt]: [Value; 3] = unpack_struct(data)?;
+    let newer_value_epoch: u64 = newer_value_epoch.value_as()?;
     if current_epoch > newer_value_epoch {
-        let newer_value_ref: Reference = data_ref.borrow_field(1)?.value_as()?;
-        let newer_value = newer_value_ref.read_ref()?;
         option_some(&value_ty, newer_value)
     } else {
-        let older_value_opt_ref: Reference = data_ref.borrow_field(2)?.value_as()?;
-        older_value_opt_ref.read_ref()
+        Ok(older_value_opt)
     }
 }
 
-fn borrow_option_value(option_ref: StructRef, type_param: &Type) -> PartialVMResult<Option<Value>> {
-    let vec_ref: VectorRef = option_ref.borrow_field(0)?.value_as()?;
-    if vec_ref.len(&type_param)?.value_as::<u64>()? == 0 {
-        return Ok(None);
-    }
-    Ok(Some(vec_ref.borrow_elem(0, &type_param)?))
+fn unpack_struct<const N: usize>(s: Value) -> PartialVMResult<[Value; N]> {
+    let s: Struct = s.value_as()?;
+    s.unpack()?.collect::<Vec<_>>().try_into().map_err(|e| {
+        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+            .with_message(format!("struct expected to have have {N} fields: {e:?}"))
+    })
+}
+
+fn unpack_option(option: Value, type_param: &Type) -> PartialVMResult<Option<Value>> {
+    let [vec_value]: [Value; 1] = unpack_struct(option)?;
+    let vec: Vector = vec_value.value_as()?;
+    Ok(if vec.elem_len() == 0 {
+        None
+    } else {
+        let [elem]: [Value; 1] = vec.unpack(type_param, 1)?.try_into().map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(format!("vector expected to have one element: {e:?}"))
+        })?;
+        Some(elem)
+    })
 }
 
 fn option_none(type_param: &Type) -> PartialVMResult<Value> {
