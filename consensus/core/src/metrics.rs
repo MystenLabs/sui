@@ -109,6 +109,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
     pub(crate) core_add_blocks_batch_size: Histogram,
+    pub(crate) core_thread_add_blocks_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
     pub(crate) highest_accepted_authority_round: IntGaugeVec,
@@ -236,6 +237,12 @@ impl NodeMetrics {
             core_add_blocks_batch_size: register_histogram_with_registry!(
                 "core_add_blocks_batch_size",
                 "The number of blocks received from Core for processing on a single batch",
+                NUM_BLOCKS_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            core_thread_add_blocks_batch_size: register_histogram_with_registry!(
+                "core_thread_add_blocks_batch_size",
+                "The number of blocks received on CoreThread for processing on a single batch",
                 NUM_BLOCKS_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),

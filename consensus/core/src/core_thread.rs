@@ -13,7 +13,7 @@ use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
 use crate::{
-    block::{BlockRef, Round, VerifiedBlock},
+    block::{BlockAPI, BlockRef, Round, VerifiedBlock},
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
@@ -22,6 +22,7 @@ use crate::{
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
 
+#[derive(Debug)]
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
     AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
@@ -58,6 +59,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
 
 pub(crate) struct CoreThreadHandle {
     sender: Sender<CoreThreadCommand>,
+    add_blocks_sender: Sender<CoreThreadCommand>,
     join_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -65,6 +67,7 @@ impl CoreThreadHandle {
     pub async fn stop(self) {
         // drop the sender, that will force all the other weak senders to not able to upgrade.
         drop(self.sender);
+        drop(self.add_blocks_sender);
         self.join_handle.await.ok();
     }
 }
@@ -72,6 +75,7 @@ impl CoreThreadHandle {
 struct CoreThread {
     core: Core,
     receiver: Receiver<CoreThreadCommand>,
+    add_blocks_receiver: Receiver<CoreThreadCommand>,
     rx_consumer_availability: watch::Receiver<bool>,
     context: Arc<Context>,
 }
@@ -88,11 +92,6 @@ impl CoreThread {
                     };
                     self.context.metrics.node_metrics.core_lock_dequeued.inc();
                     match command {
-                        CoreThreadCommand::AddBlocks(blocks, sender) => {
-                            let _scope = monitored_scope("CoreThread::loop::add_blocks");
-                            let missing_blocks = self.core.add_blocks(blocks)?;
-                            sender.send(missing_blocks).ok();
-                        }
                         CoreThreadCommand::NewBlock(round, sender, force) => {
                             let _scope = monitored_scope("CoreThread::loop::new_block");
                             self.core.new_block(round, force)?;
@@ -102,6 +101,60 @@ impl CoreThread {
                             let _scope = monitored_scope("CoreThread::loop::get_missing");
                             sender.send(self.core.get_missing_blocks()).ok();
                         }
+                        _ => panic!("Unexpected command received {command:?}")
+                    }
+                }
+                command = self.add_blocks_receiver.recv() => {
+                    let _scope = monitored_scope("CoreThread::loop::add_blocks");
+                    const MAX_BATCH_SIZE: usize = 20;
+                    let mut buffered_commands = Vec::new();
+                    let mut buffered_blocks = Vec::new();
+
+                    let Some(command) = command else {
+                        break;
+                    };
+
+                    if let CoreThreadCommand::AddBlocks(blocks, _) = &command {
+                        buffered_blocks.extend(blocks.clone());
+                        buffered_commands.push(command);
+                    } else {
+                        panic!("Unexpected command received: {command:?}")
+                    }
+
+                    'consume: loop {
+                        if let Ok(command) = self.add_blocks_receiver.try_recv() {
+                            if let CoreThreadCommand::AddBlocks(blocks, _) = &command {
+                                buffered_blocks.extend(blocks.clone());
+                            } else {
+                                panic!("Unexpected command received: {command:?}")
+                            }
+
+                            buffered_commands.push(command);
+                        } else {
+                            break 'consume;
+                        }
+
+                        if buffered_blocks.len() >= MAX_BATCH_SIZE {
+                            break 'consume;
+                        }
+                    }
+
+                    self.context.metrics.node_metrics.core_thread_add_blocks_batch_size.observe(buffered_commands.len() as f64);
+                    let missing_blocks = self.core.add_blocks(buffered_blocks)?;
+
+                    for command in buffered_commands {
+                        let CoreThreadCommand::AddBlocks(blocks, sender) = command else { panic!("Unexpected command received: {command:?}") };
+
+                        // filter out only the relative parent blocks
+                        let mut peer_missing_blocks = BTreeSet::new();
+                        for block in blocks {
+                            for ancestor in block.ancestors() {
+                                if missing_blocks.contains(ancestor) {
+                                    peer_missing_blocks.insert(*ancestor);
+                                }
+                            }
+                        }
+                        sender.send(peer_missing_blocks).ok();
                     }
                 }
                 _ = self.rx_consumer_availability.changed() => {
@@ -125,6 +178,7 @@ impl CoreThread {
 pub(crate) struct ChannelCoreThreadDispatcher {
     context: Arc<Context>,
     sender: WeakSender<CoreThreadCommand>,
+    add_blocks_sender: WeakSender<CoreThreadCommand>,
     tx_consumer_availability: Arc<watch::Sender<bool>>,
 }
 
@@ -132,12 +186,17 @@ impl ChannelCoreThreadDispatcher {
     pub(crate) fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadHandle) {
         let (sender, receiver) =
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
+        let (add_blocks_sender, add_blocks_receiver) = channel(
+            "consensus_add_blocks_commands",
+            CORE_THREAD_COMMANDS_CHANNEL_SIZE,
+        );
         let (tx_consumer_availability, mut rx_consumer_availability) = watch::channel(false);
         rx_consumer_availability.mark_unchanged();
         let core_thread = CoreThread {
             core,
             receiver,
             rx_consumer_availability,
+            add_blocks_receiver,
             context: context.clone(),
         };
 
@@ -157,18 +216,29 @@ impl ChannelCoreThreadDispatcher {
         let dispatcher = ChannelCoreThreadDispatcher {
             context,
             sender: sender.downgrade(),
+            add_blocks_sender: add_blocks_sender.downgrade(),
             tx_consumer_availability: Arc::new(tx_consumer_availability),
         };
         let handle = CoreThreadHandle {
             join_handle,
             sender,
+            add_blocks_sender,
         };
         (dispatcher, handle)
     }
 
     async fn send(&self, command: CoreThreadCommand) {
         self.context.metrics.node_metrics.core_lock_enqueued.inc();
-        if let Some(sender) = self.sender.upgrade() {
+        if let CoreThreadCommand::AddBlocks(_, _) = command {
+            if let Some(sender) = self.add_blocks_sender.upgrade() {
+                if let Err(err) = sender.send(command).await {
+                    warn!(
+                    "Couldn't send add blocks command to core thread, probably is shutting down: {}",
+                    err
+                );
+                }
+            }
+        } else if let Some(sender) = self.sender.upgrade() {
             if let Err(err) = sender.send(command).await {
                 warn!(
                     "Couldn't send command to core thread, probably is shutting down: {}",
