@@ -14,9 +14,9 @@ module sui::config {
     const ENotSetForEpoch: u64 = 1;
 
     // #[error]
-    // const ENotSetForEpoch: vector<u8> = b"Could not read setting for the provided Config";
+    // const ENotSetForEpoch: vector<u8> = b"Could not generate a layout for the type";
     #[allow(unused_const)]
-    const EReadSettingFailed: u64 = 2;
+    const EBCSSerializationFailure: u64 = 2;
 
     public struct Config<phantom WriteCap> has key {
         id: UID,
