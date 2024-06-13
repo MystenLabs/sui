@@ -474,7 +474,7 @@ impl Object {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_field(ctx, name, self.root_version())
+            .dynamic_field(ctx, name, Some(self.get_root_version()?))
             .await
     }
 
@@ -491,7 +491,7 @@ impl Object {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_object_field(ctx, name, self.root_version())
+            .dynamic_object_field(ctx, name, Some(self.get_root_version()?))
             .await
     }
 
@@ -508,7 +508,14 @@ impl Object {
         before: Option<Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_fields(ctx, first, after, last, before, self.root_version())
+            .dynamic_fields(
+                ctx,
+                first,
+                after,
+                last,
+                before,
+                Some(self.get_root_version()?),
+            )
             .await
     }
 
@@ -727,6 +734,13 @@ impl Object {
     /// dynamic field. Check [`Object::root_version`] for details.
     pub(crate) fn root_version(&self) -> Option<u64> {
         self.root_version
+    }
+
+    /// Require this object's root parent object version for dynamic field queries.
+    ///
+    /// Fails with an error if the query was rooted in a child object.
+    pub(crate) fn get_root_version(&self) -> Result<u64, Error> {
+        self.root_version.ok_or(Error::MissingRootObject)
     }
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.
