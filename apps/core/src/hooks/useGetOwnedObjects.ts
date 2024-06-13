@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClient } from '@mysten/dapp-kit';
-import { PaginatedObjectsResponse, type SuiObjectDataFilter } from '@mysten/sui.js/client';
+import { PaginatedObjectsResponse, type SuiObjectDataFilter } from '@mysten/sui/client';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 const MAX_OBJECTS_PER_REQ = 6;

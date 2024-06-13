@@ -19,7 +19,15 @@ use crate::{
     parser::ast::{
         Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
     },
-    shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
+    shared::{
+        ide::{IDEAnnotation, IDEInfo},
+        known_attributes::TestingAttribute,
+        matching::{new_match_var_name, MatchContext},
+        program_info::*,
+        string_utils::debug_print,
+        unique_map::UniqueMap,
+        *,
+    },
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -71,10 +79,21 @@ pub enum MacroExpansion {
     Argument { scope_color: Color },
 }
 
+pub(super) struct TypingDebugFlags {
+    pub(super) match_counterexample: bool,
+    pub(super) autocomplete_resolution: bool,
+    pub(super) function_translation: bool,
+    pub(super) type_elaboration: bool,
+}
+
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env mut CompilationEnv,
+    pub(super) debug: TypingDebugFlags,
+
+    // for generating new variables during match compilation
+    next_match_var_id: usize,
 
     use_funs: Vec<UseFunsScope>,
     pub current_package: Option<Symbol>,
@@ -104,6 +123,9 @@ pub struct Context<'env> {
     /// This is to prevent accidentally thinking we are in a recursive call if a macro is used
     /// inside a lambda body
     pub lambda_expansion: Vec<Vec<MacroExpansion>>,
+    /// IDE Info for the current module member. We hold onto this during typing so we can elaborate
+    /// it at the end.
+    pub ide_info: IDEInfo,
 }
 
 pub struct ResolvedFunctionType {
@@ -158,6 +180,12 @@ impl<'env> Context<'env> {
         info: NamingProgramInfo,
     ) -> Self {
         let global_use_funs = UseFunsScope::global(&info);
+        let debug = TypingDebugFlags {
+            match_counterexample: false,
+            autocomplete_resolution: false,
+            function_translation: false,
+            type_elaboration: false,
+        };
         Context {
             use_funs: vec![global_use_funs],
             subst: Subst::empty(),
@@ -173,10 +201,13 @@ impl<'env> Context<'env> {
             macros: UniqueMap::new(),
             named_block_map: BTreeMap::new(),
             env,
+            debug,
+            next_match_var_id: 0,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
             macro_expansion: vec![],
             lambda_expansion: vec![],
+            ide_info: IDEInfo::new(),
         }
     }
 
@@ -444,7 +475,7 @@ impl<'env> Context<'env> {
         self.use_funs.last().unwrap().color.unwrap()
     }
 
-    pub fn reset_for_module_item(&mut self) {
+    pub fn reset_for_module_item(&mut self, loc: Loc) {
         self.named_block_map = BTreeMap::new();
         self.return_type = None;
         self.locals = UniqueMap::new();
@@ -455,6 +486,12 @@ impl<'env> Context<'env> {
         self.max_variable_color = RefCell::new(0);
         self.macro_expansion = vec![];
         self.lambda_expansion = vec![];
+
+        if !self.ide_info.is_empty() {
+            self.env
+                .add_diag(ice!((loc, "IDE info should be cleared after each item")));
+            self.ide_info = IDEInfo::new();
+        }
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
@@ -672,6 +709,108 @@ impl<'env> Context<'env> {
             color,
         );
         *max_variable_color = color;
+    }
+
+    fn next_match_var_id(&mut self) -> usize {
+        self.next_match_var_id += 1;
+        self.next_match_var_id
+    }
+
+    //********************************************
+    // IDE Information
+    //********************************************
+
+    /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
+    pub fn find_all_methods(
+        &mut self,
+        tn: &TypeName,
+    ) -> BTreeSet<(Spanned<ModuleIdent_>, FunctionName)> {
+        debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
+        if !self
+            .env
+            .supports_feature(self.current_package(), FeatureGate::DotCall)
+        {
+            debug_print!(self.debug.autocomplete_resolution, (msg "dot call unsupported"));
+            return BTreeSet::new();
+        }
+        let cur_color = self.use_funs.last().unwrap().color;
+        let mut result = BTreeSet::new();
+        self.use_funs.iter().rev().for_each(|scope| {
+            if scope.color.is_some() && scope.color != cur_color {
+                return;
+            }
+            if let Some(names) = scope.use_funs.get(tn) {
+                let mut new_names = names
+                    .iter()
+                    .map(|(_, _, use_fun)| use_fun.target_function)
+                    .collect();
+                result.append(&mut new_names);
+            }
+        });
+        debug_print!(self.debug.autocomplete_resolution, (lines "result" => &result; dbg));
+        result
+    }
+
+    /// Find all valid fields in scope for a given `TypeName`. This is used for autocomplete.
+    pub fn find_all_fields(&mut self, tn: &TypeName) -> BTreeSet<Symbol> {
+        debug_print!(self.debug.autocomplete_resolution, (msg "fields"), ("name" => tn));
+        let fields = match &tn.value {
+            TypeName_::Multiple(_) => BTreeSet::new(),
+            // TODO(cswords): are there any valid builtin fielsd?
+            TypeName_::Builtin(_) => BTreeSet::new(),
+            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => BTreeSet::new(),
+            TypeName_::ModuleType(m, n) => match self.datatype_kind(m, n) {
+                DatatypeKind::Enum => BTreeSet::new(),
+                DatatypeKind::Struct => match &self.struct_definition(m, n).fields {
+                    N::StructFields::Native(_) => BTreeSet::new(),
+                    N::StructFields::Defined(is_positional, fields) => {
+                        if *is_positional {
+                            (0..fields.len()).map(|n| format!("{}", n).into()).collect()
+                        } else {
+                            fields.key_cloned_iter().map(|(k, _)| k.value()).collect()
+                        }
+                    }
+                },
+            },
+        };
+        debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields; dbg));
+        fields
+    }
+
+    pub fn add_ide_info(&mut self, loc: Loc, info: IDEAnnotation) {
+        self.ide_info.add_ide_annotation(loc, info);
+    }
+}
+
+impl MatchContext<false> for Context<'_> {
+    fn env(&mut self) -> &mut CompilationEnv {
+        self.env
+    }
+
+    fn env_ref(&self) -> &CompilationEnv {
+        self.env
+    }
+
+    /// Makes a new `naming/ast.rs` variable. Does _not_ record it as a function local, since this
+    /// should only be called in match expansion, which will have its body processed in HLIR
+    /// translation after type expansion.
+    fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var {
+        let id = self.next_match_var_id();
+        let name = new_match_var_name(&name, id);
+        // NOTE: Since these variables are only used for counterexample generation, etc., color
+        // does not matter.
+        sp(
+            loc,
+            N::Var_ {
+                name,
+                id: id as u16,
+                color: 0,
+            },
+        )
+    }
+
+    fn program_info(&self) -> &ProgramInfo<false> {
+        &self.modules
     }
 }
 
@@ -1250,6 +1389,8 @@ pub fn make_method_call_type(
     Some((target_m, target_f, function_ty))
 }
 
+/// Make a new resolved function type for the provided function and type arguments.
+/// This also checks call visibility, including recording new friends for `public(package)`.
 pub fn make_function_type(
     context: &mut Context,
     loc: Loc,
@@ -1257,10 +1398,30 @@ pub fn make_function_type(
     f: &FunctionName,
     ty_args_opt: Option<Vec<Type>>,
 ) -> ResolvedFunctionType {
-    let in_current_module = match &context.current_module {
-        Some(current) => m == current,
-        None => false,
-    };
+    let return_ty = make_function_type_no_visibility_check(context, loc, m, f, ty_args_opt);
+    let finfo = context.function_info(m, f);
+    let defined_loc = finfo.defined_loc;
+    check_function_visibility(
+        context,
+        defined_loc,
+        loc,
+        m,
+        f,
+        finfo.entry,
+        finfo.visibility,
+    );
+    return_ty
+}
+
+/// Make a new resolved function type for the provided function and type arguments.
+/// THIS DOES NOT CHECK CALL VISIBILITY, AND SHOULD BE USED CAREFULLY.
+pub fn make_function_type_no_visibility_check(
+    context: &mut Context,
+    loc: Loc,
+    m: &ModuleIdent,
+    f: &FunctionName,
+    ty_args_opt: Option<Vec<Type>>,
+) -> ResolvedFunctionType {
     let finfo = context.function_info(m, f);
     let macro_ = finfo.macro_;
     let constraints: Vec<_> = finfo
@@ -1308,13 +1469,35 @@ pub fn make_function_type(
     let return_ty = subst_tparams(tparam_subst, finfo.signature.return_type.clone());
 
     let defined_loc = finfo.defined_loc;
+    ResolvedFunctionType {
+        declared: defined_loc,
+        macro_,
+        ty_args,
+        params,
+        return_: return_ty,
+    }
+}
+
+fn check_function_visibility(
+    context: &mut Context,
+    defined_loc: Loc,
+    usage_loc: Loc,
+    m: &ModuleIdent,
+    f: &FunctionName,
+    entry_opt: Option<Loc>,
+    visibility: Visibility,
+) {
+    let in_current_module = match &context.current_module {
+        Some(current) => m == current,
+        None => false,
+    };
     let public_for_testing =
-        public_testing_visibility(context.env, context.current_package, f, finfo.entry);
+        public_testing_visibility(context.env, context.current_package, f, entry_opt);
     let is_testing_context = context.is_testing_context();
     let supports_public_package = context
         .env
         .supports_feature(context.current_package, FeatureGate::PublicPackage);
-    match finfo.visibility {
+    match visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
@@ -1329,10 +1512,13 @@ pub fn make_function_type(
                 Visibility::PUBLIC,
                 friend_or_package,
             );
-            visibility_error(
+            report_visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to internal function '{m}::{f}'")),
+                (
+                    usage_loc,
+                    format!("Invalid call to internal function '{m}::{f}'"),
+                ),
                 (defined_loc, internal_msg),
             );
         }
@@ -1368,10 +1554,10 @@ pub fn make_function_type(
                     .map(|pkg_name| format!("{}", pkg_name))
                     .unwrap_or("<unknown package>".to_string())
             );
-            visibility_error(
+            report_visibility_error(
                 context,
                 public_for_testing,
-                (loc, msg),
+                (usage_loc, msg),
                 (vis_loc, internal_msg),
             );
         }
@@ -1383,21 +1569,14 @@ pub fn make_function_type(
             );
             let internal_msg =
                 format!("This function can only be called from a 'friend' of module '{m}'",);
-            visibility_error(
+            report_visibility_error(
                 context,
                 public_for_testing,
-                (loc, msg),
+                (usage_loc, msg),
                 (vis_loc, internal_msg),
             );
         }
         Visibility::Public(_) => (),
-    };
-    ResolvedFunctionType {
-        declared: defined_loc,
-        macro_,
-        ty_args,
-        params,
-        return_: return_ty,
     }
 }
 
@@ -1427,7 +1606,7 @@ pub fn public_testing_visibility(
     callee_entry.map(PublicForTesting::Entry)
 }
 
-fn visibility_error(
+fn report_visibility_error(
     context: &mut Context,
     public_for_testing: Option<PublicForTesting>,
     (call_loc, call_msg): (Loc, impl ToString),
@@ -1455,7 +1634,7 @@ fn visibility_error(
             diag.add_secondary_label((test_loc, test_msg))
         }
     }
-    context.env.add_diag(diag)
+    context.env.add_diag(diag);
 }
 
 pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
@@ -1740,6 +1919,30 @@ pub fn unfold_type(subst: &Subst, sp!(loc, t_): Type) -> Type {
             }
         }
         x => sp(loc, x),
+    }
+}
+
+pub fn unfold_type_recur(subst: &Subst, sp!(_loc, t_): &mut Type) {
+    match t_ {
+        Type_::Var(i) => {
+            let last_tvar = forward_tvar(subst, *i);
+            match subst.get(last_tvar) {
+                Some(sp!(_, Type_::Var(_))) => unreachable!(),
+                None => {
+                    *t_ = Type_::Anything;
+                }
+                Some(inner) => {
+                    *t_ = inner.value.clone();
+                }
+            }
+        }
+        Type_::Unit | Type_::Param(_) | Type_::Anything | Type_::UnresolvedError => (),
+        Type_::Ref(_, inner) => unfold_type_recur(subst, inner),
+        Type_::Apply(_, _, args) => args.iter_mut().for_each(|ty| unfold_type_recur(subst, ty)),
+        Type_::Fun(args, ret) => {
+            args.iter_mut().for_each(|ty| unfold_type_recur(subst, ty));
+            unfold_type_recur(subst, ret);
+        }
     }
 }
 

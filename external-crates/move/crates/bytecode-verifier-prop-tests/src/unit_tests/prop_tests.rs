@@ -14,7 +14,7 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::{
     ability_field_requirements, constants, instantiation_loops::InstantiationLoopChecker,
-    DuplicationChecker, InstructionConsistency, RecursiveStructDefChecker, SignatureChecker,
+    DuplicationChecker, InstructionConsistency, RecursiveDataDefChecker, SignatureChecker,
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
@@ -106,7 +106,7 @@ proptest! {
         InstructionConsistency::verify_module(&module).expect("InstructionConsistency failure");
         constants::verify_module(&module).expect("constants failure");
         ability_field_requirements::verify_module(&module).expect("ability_field_requirements failure");
-        RecursiveStructDefChecker::verify_module(&module).expect("RecursiveStructDefChecker failure");
+        RecursiveDataDefChecker::verify_module(&module).expect("RecursiveDataDefChecker failure");
         InstantiationLoopChecker::verify_module(&module).expect("InstantiationLoopChecker failure");
     }
 
@@ -143,7 +143,7 @@ proptest! {
 
     #[test]
     fn valid_recursive_struct_defs(module in CompiledModule::valid_strategy(20)) {
-        prop_assert!(RecursiveStructDefChecker::verify_module(&module).is_ok());
+        prop_assert!(RecursiveDataDefChecker::verify_module(&module).is_ok());
     }
 }
 

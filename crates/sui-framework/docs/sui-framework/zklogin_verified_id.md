@@ -91,7 +91,7 @@ Possession of a VerifiedID proves that the user's address was created using zklo
 
 
 
-<pre><code><b>const</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_EFunctionDisabled">EFunctionDisabled</a>: u64 = 0;
+<pre><code><b>const</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_EFunctionDisabled">EFunctionDisabled</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 

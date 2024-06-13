@@ -5,8 +5,6 @@ use clap::Parser;
 use std::{path::PathBuf, time::Duration};
 use tracing::info;
 
-use sui_surfer::default_surf_strategy::DefaultSurfStrategy;
-
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 struct Args {
@@ -36,7 +34,7 @@ async fn main() {
         .with_env()
         .init();
 
-    let results = sui_surfer::run::<DefaultSurfStrategy>(
+    let results = sui_surfer::run(
         Duration::from_secs(args.run_duration.unwrap_or(DEFAULT_RUN_DURATION)),
         Duration::from_secs(args.run_duration.unwrap_or(DEFAULT_EPOCH_DURATION)),
         args.packages,

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiMoveNormalizedType } from '@mysten/sui.js/client';
+import { type SuiMoveNormalizedType } from '@mysten/sui/client';
 
 export interface TypeReference {
 	address: string;

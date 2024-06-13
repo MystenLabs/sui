@@ -8,3 +8,14 @@ module 0x42.Test {
         return T{fint: false};
     }
 }
+
+//# publish
+module 0x43.Test {
+    enum T{V {fint: u64} }
+
+    public t1(): Self.T {
+    label b0:
+        // arg type mismatch
+        return T.V{fint: false};
+    }
+}

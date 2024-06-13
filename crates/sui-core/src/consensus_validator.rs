@@ -5,12 +5,16 @@ use std::sync::Arc;
 
 use consensus_core::{TransactionVerifier, ValidationError};
 use eyre::WrapErr;
+use fastcrypto_tbls::dkg;
 use mysten_metrics::monitored_scope;
 use narwhal_types::{validate_batch_version, BatchAPI};
 use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
+use sui_types::{
+    error::SuiError,
+    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
+};
 use tap::TapFallible;
 use tracing::{info, warn};
 
@@ -69,12 +73,22 @@ impl SuiTxValidator {
                     ckpt_messages.push(signature.clone());
                     ckpt_batch.push(signature.summary);
                 }
+                ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
+                    if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
+                        warn!("batch verification error: DKG Message too large");
+                        return Err(SuiError::InvalidDkgMessageSize.into());
+                    }
+                }
+                ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
+                    if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
+                        warn!("batch verification error: DKG Confirmation too large");
+                        return Err(SuiError::InvalidDkgMessageSize.into());
+                    }
+                }
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_)
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
-                | ConsensusTransactionKind::RandomnessStateUpdate(_, _)
-                | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
-                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => {}
+                | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
             }
         }
 
@@ -216,7 +230,8 @@ mod tests {
         // Initialize an authority with a (owned) gas object and a shared object; then
         // make a test certificate.
         let mut objects = test_gas_objects();
-        objects.push(Object::shared_for_testing());
+        let shared_object = Object::shared_for_testing();
+        objects.push(shared_object.clone());
 
         let latest_protocol_config = &latest_protocol_version();
 
@@ -230,7 +245,7 @@ mod tests {
             .build()
             .await;
         let name1 = state.name;
-        let certificates = test_certificates(&state).await;
+        let certificates = test_certificates(&state, shared_object).await;
 
         let first_transaction = certificates[0].clone();
         let first_transaction_bytes: Vec<u8> = bcs::to_bytes(

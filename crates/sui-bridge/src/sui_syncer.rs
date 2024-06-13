@@ -1,30 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! The SuiSyncer module is responsible for synchronizing Events emitted on Sui blockchain from
-//! concerned bridge packages.
+//! The SuiSyncer module is responsible for synchronizing Events emitted
+//! on Sui blockchain from concerned modules of bridge package 0x9.
 
 use crate::{
     error::BridgeResult,
     retry_with_max_elapsed_time,
     sui_client::{SuiClient, SuiClientInner},
-    sui_transaction_builder::get_bridge_package_id,
 };
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{collections::HashMap, sync::Arc};
 use sui_json_rpc_types::SuiEvent;
+use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::{event::EventID, Identifier};
 use tokio::{
     task::JoinHandle,
     time::{self, Duration},
 };
 
-// TODO: use the right package id
-// const PACKAGE_ID: ObjectID = SUI_SYSTEM_PACKAGE_ID;
 const SUI_EVENTS_CHANNEL_SIZE: usize = 1000;
 
 /// Map from contract address to their start cursor (exclusive)
-pub type SuiTargetModules = HashMap<Identifier, EventID>;
+pub type SuiTargetModules = HashMap<Identifier, Option<EventID>>;
 
 pub struct SuiSyncer<C> {
     sui_client: Arc<SuiClient<C>>,
@@ -55,13 +53,16 @@ where
             SUI_EVENTS_CHANNEL_SIZE,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["sui_events_queue"]),
         );
 
         let mut task_handles = vec![];
         for (module, cursor) in self.cursors {
-            let events_rx_clone = events_tx.clone();
+            let events_rx_clone: mysten_metrics::metered_channel::Sender<(
+                Identifier,
+                Vec<SuiEvent>,
+            )> = events_tx.clone();
             let sui_client_clone = self.sui_client.clone();
             task_handles.push(spawn_logged_monitored_task!(
                 Self::run_event_listening_task(
@@ -80,7 +81,7 @@ where
         // The module where interested events are defined.
         // Moudle is always of bridge package 0x9.
         module: Identifier,
-        mut cursor: EventID,
+        mut cursor: Option<EventID>,
         events_sender: mysten_metrics::metered_channel::Sender<(Identifier, Vec<SuiEvent>)>,
         sui_client: Arc<SuiClient<C>>,
         query_interval: Duration,
@@ -91,7 +92,7 @@ where
         loop {
             interval.tick().await;
             let Ok(Ok(events)) = retry_with_max_elapsed_time!(
-                sui_client.query_events_by_module(*get_bridge_package_id(), module.clone(), cursor),
+                sui_client.query_events_by_module(BRIDGE_PACKAGE_ID, module.clone(), cursor),
                 Duration::from_secs(10)
             ) else {
                 tracing::error!("Failed to query events from sui client after retry");
@@ -100,16 +101,12 @@ where
 
             let len = events.data.len();
             if len != 0 {
-                // Note: it's extremely critical to make sure the SuiEvents we send via this channel
-                // are complete per transaction level. Namely, we should never send a partial list
-                // of events for a transaction. Otherwise, we may end up missing events.
-                // See `sui_client.query_events_by_module` for how this is implemented.
                 events_sender
                     .send((module.clone(), events.data))
                     .await
                     .expect("All Sui event channel receivers are closed");
                 if let Some(next) = events.next_cursor {
-                    cursor = next;
+                    cursor = Some(next);
                 }
                 tracing::info!(?module, ?cursor, "Observed {len} new Sui events");
             }
@@ -146,8 +143,8 @@ mod tests {
         add_event_response(&mock, module_bar.clone(), cursor, empty_events.clone());
 
         let target_modules = HashMap::from_iter(vec![
-            (module_foo.clone(), cursor),
-            (module_bar.clone(), cursor),
+            (module_foo.clone(), Some(cursor)),
+            (module_bar.clone(), Some(cursor)),
         ]);
         let interval = Duration::from_millis(200);
         let (_handles, mut events_rx) = SuiSyncer::new(client, target_modules)
@@ -160,7 +157,7 @@ mod tests {
 
         // Module Foo has new events
         let mut event_1: SuiEvent = SuiEvent::random_for_testing();
-        let package_id = *get_bridge_package_id();
+        let package_id = BRIDGE_PACKAGE_ID;
         event_1.type_.address = package_id.into();
         event_1.type_.module = module_foo.clone();
         let module_foo_events_1: sui_json_rpc_types::Page<SuiEvent, EventID> = EventPage {
@@ -223,11 +220,6 @@ mod tests {
         cursor: EventID,
         events: EventPage,
     ) {
-        mock.add_event_response(
-            *get_bridge_package_id(),
-            module.clone(),
-            cursor,
-            events.clone(),
-        );
+        mock.add_event_response(BRIDGE_PACKAGE_ID, module.clone(), cursor, events.clone());
     }
 }

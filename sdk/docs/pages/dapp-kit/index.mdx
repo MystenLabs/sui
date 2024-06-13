@@ -19,7 +19,7 @@ Some of the core features of the dApp Kit include:
 To use the Sui dApp Kit in your project, run the following command in your project root:
 
 ```sh npm2yarn
-npm i --save @mysten/dapp-kit @mysten/sui.js @tanstack/react-query
+npm i --save @mysten/dapp-kit @mysten/sui @tanstack/react-query
 ```
 
 ## Setting up providers
@@ -30,7 +30,7 @@ respective pages.
 
 ```tsx
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Config options for the networks you want to connect to
@@ -56,8 +56,8 @@ function App() {
 ## Using UI components to connect to a wallet
 
 The dApp Kit provides a set of flexible UI components that you can use to connect and manage wallet
-accounts from your dApp. The components are built on top of [Radix UI](radix-ui.com/primitives) and
-are customizable.
+accounts from your dApp. The components are built on top of
+[Radix UI](https://www.radix-ui.com/primitives) and are customizable.
 
 To use the provided UI components, import the dApp Kit CSS stylesheet into your dApp. For more
 information regarding customization options, check out the respective documentation pages for the

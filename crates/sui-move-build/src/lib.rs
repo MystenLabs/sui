@@ -6,7 +6,7 @@ extern crate move_ir_types;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
-    path::{Path, PathBuf},
+    path::Path,
     str::FromStr,
 };
 
@@ -46,7 +46,8 @@ use sui_types::{
     error::{SuiError, SuiResult},
     is_system_package,
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
-    DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
+    BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
@@ -62,8 +63,6 @@ pub struct CompiledPackage {
     pub published_at: Result<ObjectID, PublishedAtError>,
     /// The dependency IDs of this package
     pub dependency_ids: PackageDependencies,
-    /// Path to the Move package (i.e., where the Move.toml file is)
-    pub path: PathBuf,
 }
 
 /// Wrapper around the core Move `BuildConfig` with some Sui-specific info
@@ -88,6 +87,7 @@ impl BuildConfig {
             .config
             .lint_flag
             .set(move_compiler::linters::LintLevel::None);
+        build_config.config.silence_warnings = true;
         build_config
     }
 
@@ -153,12 +153,11 @@ impl BuildConfig {
 
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
-    pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
+    pub fn build(self, path: &Path) -> SuiResult<CompiledPackage> {
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
-        let resolution_graph = self.resolution_graph(&path)?;
+        let resolution_graph = self.resolution_graph(path)?;
         build_from_resolution_graph(
-            path.clone(),
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
@@ -187,7 +186,7 @@ impl BuildConfig {
 /// (optionally report diagnostics themselves if files argument is provided).
 pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceText>) {
     let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
-    let (filtered_diags_num, filtered_categories) =
+    let (filtered_diags_num, unique) =
         warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
     if let Some(f) = files {
         report_warnings(f, warning_diags);
@@ -196,7 +195,7 @@ pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceT
         eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
     }
     if filtered_diags_num > 0 {
-        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
+        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (unique lints: {unique})");
     }
 }
 
@@ -217,7 +216,6 @@ pub fn set_sui_flavor(build_config: &mut MoveBuildConfig) -> Option<String> {
 }
 
 pub fn build_from_resolution_graph(
-    path: PathBuf,
     resolution_graph: ResolvedGraph,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
@@ -258,7 +256,6 @@ pub fn build_from_resolution_graph(
         package,
         published_at,
         dependency_ids,
-        path,
     })
 }
 
@@ -396,6 +393,12 @@ impl CompiledPackage {
             .filter(|m| *m.self_id().address() == DEEPBOOK_ADDRESS)
     }
 
+    /// Get bytecode modules from DeepBook that are used by this package
+    pub fn get_bridge_modules(&self) -> impl Iterator<Item = &CompiledModule> {
+        self.get_modules_and_deps()
+            .filter(|m| *m.self_id().address() == BRIDGE_ADDRESS)
+    }
+
     /// Get bytecode modules from the Sui System that are used by this package
     pub fn get_sui_system_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_modules_and_deps()
@@ -475,7 +478,7 @@ impl CompiledPackage {
         }
         let mut layout_builder = SerdeLayoutBuilder::new(self);
         for typ in &package_types {
-            layout_builder.build_struct_layout(typ).unwrap();
+            layout_builder.build_data_layout(typ).unwrap();
         }
         layout_builder.into_registry()
     }
@@ -608,7 +611,7 @@ impl PackageHooks for SuiPackageHooks {
         &self,
         manifest: &SourceManifest,
     ) -> anyhow::Result<PackageIdentifier> {
-        if manifest.package.edition == Some(Edition::DEVELOPMENT) {
+        if !cfg!(debug_assertions) && manifest.package.edition == Some(Edition::DEVELOPMENT) {
             return Err(Edition::DEVELOPMENT.unknown_edition_error());
         }
         Ok(manifest.package.name)

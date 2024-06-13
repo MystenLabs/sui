@@ -99,6 +99,17 @@ fn verify_global_storage_access(module: &CompiledModule) -> Result<(), Execution
                 | Bytecode::VecPopBack(_)
                 | Bytecode::VecUnpack(_, _)
                 | Bytecode::VecSwap(_) => {}
+                Bytecode::PackVariant(_)
+                | Bytecode::PackVariantGeneric(_)
+                | Bytecode::UnpackVariant(_)
+                | Bytecode::UnpackVariantImmRef(_)
+                | Bytecode::UnpackVariantMutRef(_)
+                | Bytecode::UnpackVariantGeneric(_)
+                | Bytecode::UnpackVariantGenericImmRef(_)
+                | Bytecode::UnpackVariantGenericMutRef(_)
+                | Bytecode::VariantSwitch(_) => {
+                    unreachable!("variant bytecodes should never occur in v0")
+                }
             }
         }
         if !invalid_bytecode.is_empty() {

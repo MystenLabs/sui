@@ -360,6 +360,9 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     fn parse_gas_budget(&mut self) -> PTBResult<Spanned<u64>> {
         Ok(match self.parse_argument()? {
             sp!(sp, Argument::U64(u)) => sp.wrap(u),
+            sp!(sp, Argument::InferredNum(n)) => {
+                sp.wrap(u64::try_from(n).map_err(|_| err!(sp, "Value does not fit within a u64"))?)
+            }
             sp!(sp, _) => error!(sp, "Expected a u64 value"),
         })
     }
@@ -628,10 +631,10 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             L(T::Ident, A::U128) => parse_num!(parse_u128, V::U128),
             L(T::Ident, A::U256) => parse_num!(parse_u256, V::U256),
 
-            // If there's no suffix, assume u64, and don't consume the peeked character.
-            _ => match parse_u64(contents.value) {
-                Ok((value, _)) => contents.span.wrap(V::U64(value)),
-                Err(e) => error!(contents.span, "{e}"),
+            // If there's no suffix, parse as `InferredNum`, and don't consume the peeked character.
+            _ => match parse_u256(contents.value) {
+                Ok((value, _)) => contents.span.wrap(V::InferredNum(value)),
+                Err(_) => error!(contents.span, "Invalid integer literal"),
             },
         })
     }

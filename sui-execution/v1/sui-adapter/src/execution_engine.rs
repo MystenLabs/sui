@@ -35,7 +35,7 @@ mod checked {
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
     use sui_types::execution_config_utils::to_binary_config;
-    use sui_types::execution_status::ExecutionStatus;
+    use sui_types::execution_status::{CongestedObjects, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
@@ -50,7 +50,7 @@ mod checked {
         TransactionKind,
     };
     use sui_types::{
-        base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
+        base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
@@ -84,6 +84,7 @@ mod checked {
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
         let contains_deleted_input = input_objects.contains_deleted_objects();
+        let congested_objects = input_objects.get_congested_objects();
 
         let mut temporary_store = TemporaryStore::new(
             store,
@@ -117,6 +118,7 @@ mod checked {
             enable_expensive_checks,
             deny_cert,
             contains_deleted_input,
+            congested_objects,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -241,6 +243,7 @@ mod checked {
         enable_expensive_checks: bool,
         deny_cert: bool,
         contains_deleted_input: bool,
+        congested_objects: Option<Vec<ObjectID>>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -268,6 +271,13 @@ mod checked {
             } else if contains_deleted_input {
                 Err(ExecutionError::new(
                     ExecutionErrorKind::InputObjectDeleted,
+                    None,
+                ))
+            } else if let Some(congested_objects) = congested_objects {
+                Err(ExecutionError::new(
+                    ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                        congested_objects: CongestedObjects(congested_objects),
+                    },
                     None,
                 ))
             } else {
@@ -561,6 +571,19 @@ mod checked {
                 .expect("ConsensusCommitPrologue cannot fail");
                 Ok(Mode::empty_results())
             }
+            TransactionKind::ConsensusCommitPrologueV3(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologue cannot fail");
+                Ok(Mode::empty_results())
+            }
             TransactionKind::ProgrammableTransaction(pt) => {
                 programmable_transactions::execution::execute::<Mode>(
                     protocol_config,
@@ -607,6 +630,14 @@ mod checked {
                         }
                         EndOfEpochTransactionKind::DenyListStateCreate => {
                             panic!("EndOfEpochTransactionKind::CoinDenyListStateCreate should not exist in v1");
+                        }
+                        EndOfEpochTransactionKind::BridgeStateCreate(_) => {
+                            panic!(
+                                "EndOfEpochTransactionKind::BridgeStateCreate should not exist in v1"
+                            );
+                        }
+                        EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
+                            panic!("EndOfEpochTransactionKind::BridgeCommitteeInit should not exist in v1");
                         }
                     }
                 }

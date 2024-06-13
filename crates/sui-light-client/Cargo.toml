@@ -1,6 +1,6 @@
 [package]
 name = "sui-light-client"
-version = "0.0.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false

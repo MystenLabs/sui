@@ -22,19 +22,19 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let packages_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("packages");
 
+    let bridge_path = packages_path.join("bridge");
     let deepbook_path = packages_path.join("deepbook");
     let sui_system_path = packages_path.join("sui-system");
     let sui_framework_path = packages_path.join("sui-framework");
-    let deepbook_path_clone = deepbook_path.clone();
-    let sui_system_path_clone = sui_system_path.clone();
-    let sui_framework_path_clone = sui_framework_path.clone();
     let move_stdlib_path = packages_path.join("move-stdlib");
 
     build_packages(
-        deepbook_path_clone,
-        sui_system_path_clone,
-        sui_framework_path_clone,
-        out_dir,
+        &bridge_path,
+        &deepbook_path,
+        &sui_system_path,
+        &sui_framework_path,
+        &move_stdlib_path,
+        &out_dir,
     );
 
     println!("cargo:rerun-if-changed=build.rs");
@@ -45,6 +45,14 @@ fn main() {
     println!(
         "cargo:rerun-if-changed={}",
         deepbook_path.join("sources").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        bridge_path.join("Move.toml").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        bridge_path.join("sources").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
@@ -73,10 +81,12 @@ fn main() {
 }
 
 fn build_packages(
-    deepbook_path: PathBuf,
-    sui_system_path: PathBuf,
-    sui_framework_path: PathBuf,
-    out_dir: PathBuf,
+    bridge_path: &Path,
+    deepbook_path: &Path,
+    sui_system_path: &Path,
+    sui_framework_path: &Path,
+    stdlib_path: &Path,
+    out_dir: &Path,
 ) {
     let config = MoveBuildConfig {
         generate_docs: true,
@@ -88,10 +98,13 @@ fn build_packages(
     };
     debug_assert!(!config.test_mode);
     build_packages_with_move_config(
-        deepbook_path.clone(),
-        sui_system_path.clone(),
-        sui_framework_path.clone(),
-        out_dir.clone(),
+        bridge_path,
+        deepbook_path,
+        sui_system_path,
+        sui_framework_path,
+        stdlib_path,
+        out_dir,
+        "bridge",
         "deepbook",
         "sui-system",
         "sui-framework",
@@ -109,10 +122,13 @@ fn build_packages(
         ..Default::default()
     };
     build_packages_with_move_config(
+        bridge_path,
         deepbook_path,
         sui_system_path,
         sui_framework_path,
+        stdlib_path,
         out_dir,
+        "bridge-test",
         "deepbook-test",
         "sui-system-test",
         "sui-framework-test",
@@ -123,10 +139,13 @@ fn build_packages(
 }
 
 fn build_packages_with_move_config(
-    deepbook_path: PathBuf,
-    sui_system_path: PathBuf,
-    sui_framework_path: PathBuf,
-    out_dir: PathBuf,
+    bridge_path: &Path,
+    deepbook_path: &Path,
+    sui_system_path: &Path,
+    sui_framework_path: &Path,
+    stdlib_path: &Path,
+    out_dir: &Path,
+    bridge_dir: &str,
     deepbook_dir: &str,
     system_dir: &str,
     framework_dir: &str,
@@ -134,6 +153,13 @@ fn build_packages_with_move_config(
     config: MoveBuildConfig,
     write_docs: bool,
 ) {
+    let stdlib_pkg = BuildConfig {
+        config: config.clone(),
+        run_bytecode_verifier: true,
+        print_diags_to_stderr: false,
+    }
+    .build(stdlib_path)
+    .unwrap();
     let framework_pkg = BuildConfig {
         config: config.clone(),
         run_bytecode_verifier: true,
@@ -149,17 +175,25 @@ fn build_packages_with_move_config(
     .build(sui_system_path)
     .unwrap();
     let deepbook_pkg = BuildConfig {
-        config,
+        config: config.clone(),
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
     }
     .build(deepbook_path)
     .unwrap();
+    let bridge_pkg = BuildConfig {
+        config,
+        run_bytecode_verifier: true,
+        print_diags_to_stderr: false,
+    }
+    .build(bridge_path)
+    .unwrap();
 
+    let move_stdlib = stdlib_pkg.get_stdlib_modules();
     let sui_system = system_pkg.get_sui_system_modules();
     let sui_framework = framework_pkg.get_sui_framework_modules();
     let deepbook = deepbook_pkg.get_deepbook_modules();
-    let move_stdlib = framework_pkg.get_stdlib_modules();
+    let bridge = bridge_pkg.get_bridge_modules();
 
     let sui_system_members =
         serialize_modules_to_file(sui_system, &out_dir.join(system_dir)).unwrap();
@@ -167,6 +201,7 @@ fn build_packages_with_move_config(
         serialize_modules_to_file(sui_framework, &out_dir.join(framework_dir)).unwrap();
     let deepbook_members =
         serialize_modules_to_file(deepbook, &out_dir.join(deepbook_dir)).unwrap();
+    let bridge_members = serialize_modules_to_file(bridge, &out_dir.join(bridge_dir)).unwrap();
     let stdlib_members = serialize_modules_to_file(move_stdlib, &out_dir.join(stdlib_dir)).unwrap();
 
     // write out generated docs
@@ -192,6 +227,11 @@ fn build_packages_with_move_config(
             &framework_pkg.package.compiled_docs.unwrap(),
             &mut files_to_write,
         );
+        relocate_docs(
+            bridge_dir,
+            &bridge_pkg.package.compiled_docs.unwrap(),
+            &mut files_to_write,
+        );
         for (fname, doc) in files_to_write {
             let mut dst_path = PathBuf::from(DOCS_DIR);
             dst_path.push(fname);
@@ -203,6 +243,7 @@ fn build_packages_with_move_config(
             sui_system_members.join("\n"),
             sui_framework_members.join("\n"),
             deepbook_members.join("\n"),
+            bridge_members.join("\n"),
             stdlib_members.join("\n"),
         ]
         .join("\n");
@@ -263,9 +304,15 @@ fn serialize_modules_to_file<'a>(
     for module in modules {
         let module_name = module.self_id().short_str_lossless();
         for def in module.struct_defs() {
-            let sh = module.struct_handle_at(def.struct_handle);
+            let sh = module.datatype_handle_at(def.struct_handle);
             let sn = module.identifier_at(sh.name);
             members.push(format!("{sn}\n\tpublic struct\n\t{module_name}"));
+        }
+
+        for def in module.enum_defs() {
+            let eh = module.datatype_handle_at(def.enum_handle);
+            let en = module.identifier_at(eh.name);
+            members.push(format!("{en}\n\tpublic enum\n\t{module_name}"));
         }
 
         for def in module.function_defs() {

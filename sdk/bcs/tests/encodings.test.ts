@@ -3,57 +3,20 @@
 
 import { describe, expect, it } from 'vitest';
 
-import {
-	BCS,
-	fromB58,
-	fromB64,
-	fromHEX,
-	getSuiMoveConfig,
-	toB58,
-	toB64,
-	toHEX,
-} from './../src/index';
+import { bcs, fromB58, fromB64, fromHEX, toHEX } from './../src/index';
 
 describe('BCS: Encodings', () => {
 	it('should de/ser hex, base58 and base64', () => {
-		const bcs = new BCS(getSuiMoveConfig());
-
-		expect(bcs.de('u8', 'AA==', 'base64')).toEqual(0);
-		expect(bcs.de('u8', '00', 'hex')).toEqual(0);
-		expect(bcs.de('u8', '1', 'base58')).toEqual(0);
+		expect(bcs.u8().parse(fromB64('AA=='))).toEqual(0);
+		expect(bcs.u8().parse(fromHEX('00'))).toEqual(0);
+		expect(bcs.u8().parse(fromB58('1'))).toEqual(0);
 
 		const STR = 'this is a test string';
-		const str = bcs.ser('string', STR);
+		const str = bcs.string().serialize(STR);
 
-		expect(bcs.de('string', fromB58(str.toString('base58')), 'base58')).toEqual(STR);
-		expect(bcs.de('string', fromB64(str.toString('base64')), 'base64')).toEqual(STR);
-		expect(bcs.de('string', fromHEX(str.toString('hex')), 'hex')).toEqual(STR);
-	});
-
-	it('should de/ser native encoding types', () => {
-		const bcs = new BCS(getSuiMoveConfig());
-
-		bcs.registerStructType('TestStruct', {
-			hex: BCS.HEX,
-			base58: BCS.BASE58,
-			base64: BCS.BASE64,
-		});
-
-		let hex_str = toHEX(new Uint8Array([1, 2, 3, 4, 5, 6]));
-		let b58_str = toB58(new Uint8Array([1, 2, 3, 4, 5, 6]));
-		let b64_str = toB64(new Uint8Array([1, 2, 3, 4, 5, 6]));
-
-		let serialized = bcs.ser('TestStruct', {
-			hex: hex_str,
-			base58: b58_str,
-			base64: b64_str,
-		});
-
-		let deserialized = bcs.de('TestStruct', serialized.toBytes());
-
-		expect(deserialized.hex).toEqual(hex_str);
-		expect(deserialized.base58).toEqual(b58_str);
-		expect(deserialized.base64).toEqual(b64_str);
+		expect(bcs.string().parse(fromB58(str.toBase58()))).toEqual(STR);
+		expect(bcs.string().parse(fromB64(str.toBase64()))).toEqual(STR);
+		expect(bcs.string().parse(fromHEX(str.toHex()))).toEqual(STR);
 	});
 
 	it('should deserialize hex with leading 0s', () => {

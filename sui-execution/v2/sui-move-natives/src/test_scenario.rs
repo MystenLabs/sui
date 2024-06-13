@@ -9,7 +9,7 @@ use indexmap::{IndexMap, IndexSet};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::{MoveStruct, MoveValue},
+    annotated_value::{MoveStruct, MoveValue, MoveVariant},
     identifier::Identifier,
     language_storage::StructTag,
     vm_status::StatusCode,
@@ -724,6 +724,12 @@ fn visit_structs_impl<FVisitTypes>(
             }
         }
         MoveValue::Struct(MoveStruct { type_, fields }) => {
+            let fields = visit_with_types(depth, type_, fields);
+            for (_, v) in fields {
+                visit_structs_impl(v, visit_with_types, next_depth)
+            }
+        }
+        MoveValue::Variant(MoveVariant { type_, fields, .. }) => {
             let fields = visit_with_types(depth, type_, fields);
             for (_, v) in fields {
                 visit_structs_impl(v, visit_with_types, next_depth)

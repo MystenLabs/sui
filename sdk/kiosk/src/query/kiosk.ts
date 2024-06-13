@@ -7,8 +7,8 @@ import type {
 	SuiObjectData,
 	SuiObjectDataFilter,
 	SuiObjectResponse,
-} from '@mysten/sui.js/client';
-import { isValidSuiAddress } from '@mysten/sui.js/utils';
+} from '@mysten/sui/client';
+import { isValidSuiAddress } from '@mysten/sui/utils';
 
 import type {
 	FetchKioskOptions,

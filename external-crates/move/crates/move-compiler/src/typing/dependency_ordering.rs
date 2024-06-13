@@ -477,7 +477,6 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e);
             type_(context, ty)
         }
-        E::InvalidAccess(e) => exp(context, e),
         E::Unit { .. }
         | E::Value(_)
         | E::Move { .. }
@@ -491,6 +490,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
     }
 }
 
+#[growing_stack]
 fn pat(context: &mut Context, p: &T::MatchPattern) {
     use T::UnannotatedPat_ as P;
     match &p.pat.value {

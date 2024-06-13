@@ -1,9 +1,6 @@
-import { TransactionBlock } from "@mysten/sui.js/transactions";
+import { Transaction } from "@mysten/sui/transactions";
 import { Button, Container } from "@radix-ui/themes";
-import {
-  useSignAndExecuteTransactionBlock,
-  useSuiClient,
-} from "@mysten/dapp-kit";
+import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useNetworkVariable } from "./networkConfig";
 
 export function CreateCounter({
@@ -13,7 +10,7 @@ export function CreateCounter({
 }) {
   const client = useSuiClient();
   const counterPackageId = useNetworkVariable("counterPackageId");
-  const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
 
   return (
     <Container>
@@ -29,28 +26,27 @@ export function CreateCounter({
   );
 
   function create() {
-    const txb = new TransactionBlock();
+    const tx = new Transaction();
 
-    txb.moveCall({
+    tx.moveCall({
       arguments: [],
       target: `${counterPackageId}::counter::create`,
     });
 
     signAndExecute(
       {
-        transactionBlock: txb,
-        options: {
-          showEffects: true,
-          showObjectChanges: true,
-        },
+        transaction: tx,
       },
       {
-        onSuccess: (tx) => {
+        onSuccess: ({ digest }) => {
           client
-            .waitForTransactionBlock({
-              digest: tx.digest,
+            .waitForTransaction({
+              digest: digest,
+              options: {
+                showEffects: true,
+              },
             })
-            .then(() => {
+            .then((tx) => {
               const objectId = tx.effects?.created?.[0]?.reference?.objectId;
 
               if (objectId) {

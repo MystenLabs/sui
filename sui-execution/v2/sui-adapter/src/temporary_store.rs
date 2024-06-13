@@ -111,8 +111,12 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     pub fn update_object_version_and_prev_tx(&mut self) {
-        self.execution_results
-            .update_version_and_previous_tx(self.lamport_timestamp, self.tx_digest);
+        self.execution_results.update_version_and_previous_tx(
+            self.lamport_timestamp,
+            self.tx_digest,
+            &self.input_objects,
+            false,
+        );
 
         #[cfg(debug_assertions)]
         {
@@ -230,6 +234,9 @@ impl<'backing> TemporaryStore<'backing> {
                     SharedInput::Existing(oref) => oref,
                     SharedInput::Deleted(_) => {
                         unreachable!("Shared object deletion not supported in effects v1")
+                    }
+                    SharedInput::Cancelled(_) => {
+                        unreachable!("Per object congestion control not supported in effects v1.")
                     }
                 })
                 .collect();

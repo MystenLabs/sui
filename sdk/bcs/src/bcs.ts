@@ -11,7 +11,7 @@ import {
 	stringLikeBcsType,
 	uIntBcsType,
 } from './bcs-type.js';
-import type { GenericPlaceholder, ReplaceBcsGenerics } from './types.js';
+import type { EnumInputShape, EnumOutputShape } from './types.js';
 import { ulebEncode } from './uleb.js';
 
 export const bcs = {
@@ -167,7 +167,7 @@ export const bcs = {
 			...options,
 			validate: (value) => {
 				options?.validate?.(value);
-				if (!('length' in value)) {
+				if (!value || typeof value !== 'object' || !('length' in value)) {
 					throw new TypeError(`Expected array, found ${typeof value}`);
 				}
 				if (value.length !== size) {
@@ -220,7 +220,7 @@ export const bcs = {
 			...options,
 			validate: (value) => {
 				options?.validate?.(value);
-				if (!('length' in value)) {
+				if (!value || typeof value !== 'object' || !('length' in value)) {
 					throw new TypeError(`Expected array, found ${typeof value}`);
 				}
 				if (value.length !== size) {
@@ -252,7 +252,7 @@ export const bcs = {
 					return { Some: value };
 				},
 				output: (value) => {
-					if ('Some' in value) {
+					if (value.$kind === 'Some') {
 						return value.Some;
 					}
 
@@ -291,7 +291,7 @@ export const bcs = {
 			...options,
 			validate: (value) => {
 				options?.validate?.(value);
-				if (!('length' in value)) {
+				if (!value || typeof value !== 'object' || !('length' in value)) {
 					throw new TypeError(`Expected array, found ${typeof value}`);
 				}
 			},
@@ -459,30 +459,24 @@ export const bcs = {
 		values: T,
 		options?: Omit<
 			BcsTypeOptions<
-				{
-					[K in keyof T]: T[K] extends BcsType<infer U, any>
-						? { [K2 in K]: U }
-						: { [K2 in K]: true };
-				}[keyof T],
-				{
-					[K in keyof T]: T[K] extends BcsType<any, infer U>
-						? { [K2 in K]: U }
-						: { [K2 in K]: unknown };
-				}[keyof T]
+				EnumOutputShape<{
+					[K in keyof T]: T[K] extends BcsType<infer U, any> ? U : true;
+				}>,
+				EnumInputShape<{
+					[K in keyof T]: T[K] extends BcsType<any, infer U> ? U : boolean | object | null;
+				}>
 			>,
 			'name'
 		>,
 	) {
 		const canonicalOrder = Object.entries(values as object);
 		return new BcsType<
-			{
-				[K in keyof T]: T[K] extends BcsType<infer U, any> ? { [K2 in K]: U } : { [K2 in K]: true };
-			}[keyof T],
-			{
-				[K in keyof T]: T[K] extends BcsType<any, infer U>
-					? { [K2 in K]: U }
-					: { [K2 in K]: unknown };
-			}[keyof T]
+			EnumOutputShape<{
+				[K in keyof T]: T[K] extends BcsType<infer U, any> ? U : true;
+			}>,
+			EnumInputShape<{
+				[K in keyof T]: T[K] extends BcsType<any, infer U> ? U : boolean | object | null;
+			}>
 		>({
 			name,
 			read: (reader) => {
@@ -490,10 +484,14 @@ export const bcs = {
 				const [name, type] = canonicalOrder[index];
 				return {
 					[name]: type?.read(reader) ?? true,
+					$kind: name,
 				} as never;
 			},
 			write: (value, writer) => {
-				const [name, val] = Object.entries(value)[0];
+				const [name, val] = Object.entries(value).filter(([name]) =>
+					Object.hasOwn(values, name),
+				)[0];
+
 				for (let i = 0; i < canonicalOrder.length; i++) {
 					const [optionName, optionType] = canonicalOrder[i];
 					if (optionName === name) {
@@ -510,15 +508,20 @@ export const bcs = {
 					throw new TypeError(`Expected object, found ${typeof value}`);
 				}
 
-				const keys = Object.keys(value);
+				const keys = Object.keys(value).filter(
+					(k) => value[k] !== undefined && Object.hasOwn(values, k),
+				);
+
 				if (keys.length !== 1) {
-					throw new TypeError(`Expected object with one key, found ${keys.length}`);
+					throw new TypeError(
+						`Expected object with one key, but found ${keys.length} for type ${name}}`,
+					);
 				}
 
-				const [name] = keys;
+				const [variant] = keys;
 
-				if (!Object.hasOwn(values, name)) {
-					throw new TypeError(`Invalid enum variant ${name}`);
+				if (!Object.hasOwn(values, variant)) {
+					throw new TypeError(`Invalid enum variant ${variant}`);
 				}
 			},
 		});
@@ -546,35 +549,6 @@ export const bcs = {
 				return result;
 			},
 		});
-	},
-
-	/**
-	 * @deprecated
-	 *
-	 * Generics should be implemented as generic typescript functions instead:
-	 *
-	 * ```ts
-	 * function VecMap<K, V>, (K: BcsType<K>, V: BcsType<V>) {
-	 *   return bcs.struct('VecMap<K, V>', {
-	 *     keys: bcs.vector(K),
-	 *     values: bcs.vector(V),
-	 *   })
-	 * }
-	 * ```
-	 */
-	generic<const Names extends readonly string[], const Type extends BcsType<any>>(
-		_names: Names,
-		cb: (...types: { [K in keyof Names]: BcsType<GenericPlaceholder<Names[K]>> }) => Type,
-	): <T extends { [K in keyof Names]: BcsType<any> }>(
-		...types: T
-	) => ReplaceBcsGenerics<Type, Names, T> {
-		return (...types) => {
-			return cb(...types).transform({
-				name: `${cb.name}<${types.map((t) => t.name).join(', ')}>`,
-				input: (value) => value,
-				output: (value) => value,
-			}) as never;
-		};
 	},
 
 	/**

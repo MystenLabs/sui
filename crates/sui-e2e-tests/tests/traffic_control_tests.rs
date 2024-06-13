@@ -28,18 +28,59 @@ use sui_types::{
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 #[tokio::test]
+async fn test_validator_traffic_control_noop() -> Result<(), anyhow::Error> {
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 5,
+        // This should never be invoked when set as an error policy
+        // as we are not sending requests that error
+        error_policy_type: PolicyType::TestPanicOnInvocation,
+        dry_run: false,
+        spam_sample_rate: Weight::one(),
+        ..Default::default()
+    };
+    let network_config = ConfigBuilder::new_with_temp_dir()
+        .with_policy_config(Some(policy_config))
+        .build();
+    let test_cluster = TestClusterBuilder::new()
+        .set_network_config(network_config)
+        .build()
+        .await;
+
+    assert_traffic_control_ok(test_cluster).await
+}
+
+#[tokio::test]
+async fn test_fullnode_traffic_control_noop() -> Result<(), anyhow::Error> {
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 5,
+        // This should never be invoked when set as an error policy
+        // as we are not sending requests that error
+        error_policy_type: PolicyType::TestPanicOnInvocation,
+        spam_sample_rate: Weight::one(),
+        dry_run: false,
+        ..Default::default()
+    };
+    let test_cluster = TestClusterBuilder::new()
+        .with_fullnode_policy_config(Some(policy_config))
+        .build()
+        .await;
+    assert_traffic_control_ok(test_cluster).await
+}
+
+#[tokio::test]
 async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
-        // Test that IP forwarding works through this policy
-        spam_policy_type: PolicyType::TestInspectIp,
+        spam_policy_type: PolicyType::TestNConnIP(5),
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
-        channel_capacity: 100,
         dry_run: false,
         spam_sample_rate: Weight::one(),
+        ..Default::default()
     };
     let network_config = ConfigBuilder::new_with_temp_dir()
         .with_policy_config(Some(policy_config))
@@ -57,10 +98,10 @@ async fn test_fullnode_traffic_control_ok() -> Result<(), anyhow::Error> {
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
+        spam_policy_type: PolicyType::TestNConnIP(10),
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
-        channel_capacity: 100,
         spam_sample_rate: Weight::one(),
         dry_run: false,
         ..Default::default()
@@ -74,17 +115,17 @@ async fn test_fullnode_traffic_control_ok() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_validator_traffic_control_dry_run() -> Result<(), anyhow::Error> {
+    let n = 5;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
-        // Test that IP forwarding works through this policy
-        spam_policy_type: PolicyType::TestInspectIp,
+        spam_policy_type: PolicyType::TestNConnIP(n - 1),
         spam_sample_rate: Weight::one(),
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
-        channel_capacity: 100,
         dry_run: true,
+        ..Default::default()
     };
     let network_config = ConfigBuilder::new_with_temp_dir()
         .with_policy_config(Some(policy_config))
@@ -94,19 +135,20 @@ async fn test_validator_traffic_control_dry_run() -> Result<(), anyhow::Error> {
         .build()
         .await;
 
-    assert_traffic_control_dry_run(test_cluster).await
+    assert_traffic_control_dry_run(test_cluster, n as usize).await
 }
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
+    let n = 15;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
+        spam_policy_type: PolicyType::TestNConnIP(n - 1),
         spam_sample_rate: Weight::one(),
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
-        channel_capacity: 100,
         dry_run: true,
         ..Default::default()
     };
@@ -114,7 +156,7 @@ async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
         .with_fullnode_policy_config(Some(policy_config))
         .build()
         .await;
-    assert_traffic_control_dry_run(test_cluster).await
+    assert_traffic_control_dry_run(test_cluster, n as usize).await
 }
 
 #[tokio::test]
@@ -125,7 +167,6 @@ async fn test_validator_traffic_control_spam_blocked() -> Result<(), anyhow::Err
         // Test that any N requests will cause an IP to be added to the blocklist.
         spam_policy_type: PolicyType::TestNConnIP(n - 1),
         spam_sample_rate: Weight::one(),
-        channel_capacity: 100,
         dry_run: false,
         ..Default::default()
     };
@@ -147,7 +188,6 @@ async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Erro
         // Test that any N requests will cause an IP to be added to the blocklist.
         spam_policy_type: PolicyType::TestNConnIP(n - 1),
         spam_sample_rate: Weight::one(),
-        channel_capacity: 100,
         dry_run: false,
         ..Default::default()
     };
@@ -161,18 +201,19 @@ async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Erro
 #[tokio::test]
 async fn test_validator_traffic_control_spam_delegated() -> Result<(), anyhow::Error> {
     let n = 4;
+    let port = 65000;
     let policy_config = PolicyConfig {
-        connection_blocklist_ttl_sec: 3,
+        connection_blocklist_ttl_sec: 120,
+        proxy_blocklist_ttl_sec: 120,
         // Test that any N - 1 requests will cause an IP to be added to the blocklist.
         spam_policy_type: PolicyType::TestNConnIP(n - 1),
         spam_sample_rate: Weight::one(),
-        channel_capacity: 100,
         dry_run: false,
         ..Default::default()
     };
     // enable remote firewall delegation
     let firewall_config = RemoteFirewallConfig {
-        remote_fw_url: String::from("http://127.0.0.1:65000"),
+        remote_fw_url: format!("http://127.0.0.1:{}", port),
         delegate_spam_blocking: true,
         delegate_error_blocking: false,
         destination_port: 8080,
@@ -187,24 +228,25 @@ async fn test_validator_traffic_control_spam_delegated() -> Result<(), anyhow::E
         .set_network_config(network_config)
         .build()
         .await;
-    assert_traffic_control_spam_delegated(test_cluster, n as usize, 65000).await
+    assert_traffic_control_spam_delegated(test_cluster, n as usize, port).await
 }
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Error> {
     let n = 10;
+    let port = 65001;
     let policy_config = PolicyConfig {
-        connection_blocklist_ttl_sec: 3,
+        connection_blocklist_ttl_sec: 120,
+        proxy_blocklist_ttl_sec: 120,
         // Test that any N - 1 requests will cause an IP to be added to the blocklist.
         spam_policy_type: PolicyType::TestNConnIP(n - 1),
         spam_sample_rate: Weight::one(),
-        channel_capacity: 100,
         dry_run: false,
         ..Default::default()
     };
     // enable remote firewall delegation
     let firewall_config = RemoteFirewallConfig {
-        remote_fw_url: String::from("http://127.0.0.1:65000"),
+        remote_fw_url: format!("http://127.0.0.1:{}", port),
         delegate_spam_blocking: true,
         delegate_error_blocking: false,
         destination_port: 9000,
@@ -216,7 +258,7 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
         .with_fullnode_fw_config(Some(firewall_config.clone()))
         .build()
         .await;
-    assert_traffic_control_spam_delegated(test_cluster, n as usize, 65000).await
+    assert_traffic_control_spam_delegated(test_cluster, n as usize, port).await
 }
 
 #[tokio::test]
@@ -225,7 +267,6 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
         connection_blocklist_ttl_sec: 3,
         spam_policy_type: PolicyType::TestNConnIP(10),
         spam_sample_rate: Weight::one(),
-        channel_capacity: 100,
         dry_run: false,
         ..Default::default()
     };
@@ -290,7 +331,8 @@ async fn test_traffic_control_manual_set_dead_mans_switch() -> Result<(), anyhow
 #[sim_test]
 async fn test_traffic_sketch_no_blocks() {
     let sketch_config = FreqThresholdConfig {
-        threshold: 10_100,
+        client_threshold: 10_100,
+        proxied_client_threshold: 10_100,
         window_size_secs: 4,
         update_interval_secs: 1,
         ..Default::default()
@@ -328,7 +370,8 @@ async fn test_traffic_sketch_no_blocks() {
 #[sim_test]
 async fn test_traffic_sketch_with_slow_blocks() {
     let sketch_config = FreqThresholdConfig {
-        threshold: 9_900,
+        client_threshold: 9_900,
+        proxied_client_threshold: 9_900,
         window_size_secs: 4,
         update_interval_secs: 1,
         ..Default::default()
@@ -366,7 +409,8 @@ async fn test_traffic_sketch_with_slow_blocks() {
 #[sim_test]
 async fn test_traffic_sketch_with_sampled_spam() {
     let sketch_config = FreqThresholdConfig {
-        threshold: 4_500,
+        client_threshold: 4_500,
+        proxied_client_threshold: 4_500,
         window_size_secs: 4,
         update_interval_secs: 1,
         ..Default::default()
@@ -375,10 +419,9 @@ async fn test_traffic_sketch_with_sampled_spam() {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 1,
         spam_policy_type: PolicyType::FreqThreshold(sketch_config),
-        error_policy_type: PolicyType::NoOp,
         spam_sample_rate: Weight::new(0.5).unwrap(),
-        channel_capacity: 100,
         dry_run: false,
+        ..Default::default()
     };
     let metrics = TrafficSim::run(
         policy,
@@ -470,11 +513,10 @@ async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), 
 /// are allowed to proceed.
 async fn assert_traffic_control_dry_run(
     mut test_cluster: TestCluster,
+    txn_count: usize,
 ) -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
-
-    let txn_count = 4;
     let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
@@ -586,12 +628,6 @@ async fn assert_traffic_control_spam_delegated(
     assert!(
         !fw_blocklist.is_empty(),
         "Expected blocklist to be non-empty"
-    );
-    tokio::time::sleep(tokio::time::Duration::from_secs(6)).await;
-    let fw_blocklist = server.list_addresses_rpc().await;
-    assert!(
-        fw_blocklist.is_empty(),
-        "Expected blocklist to now be empty after TTL"
     );
     server.stop().await;
     Ok(())

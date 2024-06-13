@@ -17,7 +17,6 @@ use move_compiler::diagnostics::{self, report_diagnostics, Diagnostic, Diagnosti
 use move_core_types::{
     account_address::AccountAddress,
     effects::{ChangeSet, Op},
-    errmap::ErrorMapping,
     language_storage::{ModuleId, TypeTag},
     transaction_argument::TransactionArgument,
     vm_status::{StatusCode, StatusType},
@@ -163,12 +162,13 @@ pub(crate) fn explain_publish_error(
             let new_api = normalized::Module::new(module);
 
             if (Compatibility {
-                check_struct_and_pub_function_linking: false,
-                check_struct_layout: true,
+                check_datatype_and_pub_function_linking: false,
+                check_datatype_layout: true,
                 check_friend_linking: false,
                 check_private_entry_linking: true,
                 disallowed_new_abilities: AbilitySet::EMPTY,
-                disallow_change_struct_type_params: false,
+                disallow_change_datatype_type_params: false,
+                disallow_new_variants: false,
             })
             .check(&old_api, &new_api)
             .is_err()
@@ -177,12 +177,13 @@ pub(crate) fn explain_publish_error(
                 // structs of this type. but probably a bad idea
                 println!("Layout API for structs of module {} has changed. Need to do a data migration of published structs", module_id)
             } else if (Compatibility {
-                check_struct_and_pub_function_linking: true,
-                check_struct_layout: false,
+                check_datatype_and_pub_function_linking: true,
+                check_datatype_layout: false,
                 check_friend_linking: false,
                 check_private_entry_linking: true,
                 disallowed_new_abilities: AbilitySet::EMPTY,
-                disallow_change_struct_type_params: false,
+                disallow_change_datatype_type_params: false,
+                disallow_new_variants: false,
             })
             .check(&old_api, &new_api)
             .is_err()
@@ -278,7 +279,6 @@ pub(crate) fn explain_publish_error(
 
 /// Explain an execution error
 pub(crate) fn explain_execution_error(
-    error_descriptions: &ErrorMapping,
     error: VMError,
     state: &OnDiskStateView,
     script_type_parameters: &[AbilitySet],
@@ -290,21 +290,10 @@ pub(crate) fn explain_execution_error(
     use StatusCode::*;
     match (error.location(), error.major_status(), error.sub_status()) {
         (Location::Module(module_id), StatusCode::ABORTED, Some(abort_code)) => {
-            // try to use move-explain to explain the abort
-
-            print!(
+            println!(
                 "Execution aborted with code {} in module {}.",
                 abort_code, module_id
             );
-
-            if let Some(error_desc) = error_descriptions.get_explanation(module_id, abort_code) {
-                println!(
-                    " Abort code details:\nName: {}\nDescription:{}",
-                    error_desc.code_name, error_desc.code_description,
-                )
-            } else {
-                println!()
-            }
         }
         (location, status_code, _) if error.status_type() == StatusType::Execution => {
             let (function, code_offset) = error.offsets()[0];

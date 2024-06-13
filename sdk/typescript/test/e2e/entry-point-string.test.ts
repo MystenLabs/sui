@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { bcs } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { TransactionBlock } from '../../src/transactions';
+import { Transaction } from '../../src/transactions';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Move call with strings', () => {
@@ -11,13 +12,16 @@ describe('Test Move call with strings', () => {
 	let packageId: string;
 
 	async function callWithString(str: string | string[], len: number, funcName: string) {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::entry_point_types::${funcName}`,
-			arguments: [tx.pure(str), tx.pure(len)],
+			arguments: [
+				Array.isArray(str) ? bcs.vector(bcs.string()).serialize(str) : tx.pure.string(str),
+				tx.pure.u64(len),
+			],
 		});
-		const result = await toolbox.client.signAndExecuteTransactionBlock({
-			transactionBlock: tx,
+		const result = await toolbox.client.signAndExecuteTransaction({
+			transaction: tx,
 			signer: toolbox.keypair,
 			options: {
 				showEffects: true,

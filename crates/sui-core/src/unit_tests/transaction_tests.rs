@@ -8,17 +8,18 @@ use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
-use sui_types::base_types::random_object_ref;
+use sui_types::crypto::{PublicKey, SuiSignature, ToFromBytes, ZkLoginPublicIdentifier};
+use sui_types::utils::get_one_zklogin_inputs;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
     crypto::{get_key_pair, AccountKeyPair, Signature, SuiKeyPair},
     error::{SuiError, UserInputError},
+    messages_consensus::ConsensusDeterminedVersionAssignments,
     multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
     transaction::{
-        AuthenticatorStateUpdate, GenesisTransaction, TransactionDataAPI, TransactionExpiration,
-        TransactionKind,
+        AuthenticatorStateUpdate, GenesisTransaction, TransactionDataAPI, TransactionKind,
     },
     utils::{load_test_vectors, to_sender_signed_transaction},
     zk_login_authenticator::ZkLoginAuthenticator,
@@ -26,7 +27,6 @@ use sui_types::{
 };
 
 use sui_macros::sim_test;
-
 macro_rules! assert_matches {
     ($expression:expr, $pattern:pat $(if $guard: expr)?) => {
         match $expression {
@@ -50,7 +50,9 @@ use crate::{
 use super::*;
 use fastcrypto::traits::AggregateAuthenticator;
 use sui_types::digests::ConsensusCommitDigest;
-use sui_types::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologueV2};
+use sui_types::messages_consensus::{
+    ConsensusCommitPrologue, ConsensusCommitPrologueV2, ConsensusCommitPrologueV3,
+};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 pub use crate::authority::authority_test_utils::init_state_with_ids;
@@ -109,79 +111,6 @@ async fn test_handle_transfer_transaction_extra_signature() {
                 SuiError::SignerSignatureNumberMismatch {
                     expected: 1,
                     actual: 2
-                }
-            );
-        },
-    )
-    .await;
-}
-
-// TODO: verify that these cases are not exploitable via consensus input
-#[sim_test]
-async fn test_empty_sender_signed_data() {
-    do_transaction_test(
-        0,
-        |_| {},
-        |tx| {
-            let data = tx.data_mut_for_testing();
-            data.inner_vec_mut_for_testing().clear();
-        },
-        |err| {
-            assert_matches!(
-                err,
-                SuiError::UserInputError {
-                    error: UserInputError::Unsupported { .. }
-                }
-            );
-        },
-    )
-    .await;
-}
-
-#[sim_test]
-async fn test_multiple_sender_signed_data() {
-    do_transaction_test(
-        0,
-        |_| {},
-        |tx| {
-            let data = tx.data_mut_for_testing();
-            let tx_vec = data.inner_vec_mut_for_testing();
-            assert_eq!(tx_vec.len(), 1);
-            let mut new = tx_vec[0].clone();
-            // make sure second message has unique digest
-            *new.intent_message.value.expiration_mut_for_testing() =
-                TransactionExpiration::Epoch(123);
-            tx_vec.push(new);
-        },
-        |err| {
-            assert_matches!(
-                err,
-                SuiError::UserInputError {
-                    error: UserInputError::Unsupported { .. }
-                }
-            );
-        },
-    )
-    .await;
-}
-
-#[sim_test]
-async fn test_duplicate_sender_signed_data() {
-    do_transaction_test(
-        0,
-        |_| {},
-        |tx| {
-            let data = tx.data_mut_for_testing();
-            let tx_vec = data.inner_vec_mut_for_testing();
-            assert_eq!(tx_vec.len(), 1);
-            let new = tx_vec[0].clone();
-            tx_vec.push(new);
-        },
-        |err| {
-            assert_matches!(
-                err,
-                SuiError::UserInputError {
-                    error: UserInputError::Unsupported { .. }
                 }
             );
         },
@@ -300,6 +229,22 @@ async fn test_user_sends_consensus_commit_prologue_v2() {
             round: 0,
             commit_timestamp_ms: 42,
             consensus_commit_digest: ConsensusCommitDigest::default(),
+        },
+    ))
+    .await;
+}
+
+#[tokio::test]
+async fn test_user_sends_consensus_commit_prologue_v3() {
+    test_user_sends_system_transaction_impl(TransactionKind::ConsensusCommitPrologueV3(
+        ConsensusCommitPrologueV3 {
+            epoch: 0,
+            round: 0,
+            sub_dag_index: None,
+            commit_timestamp_ms: 42,
+            consensus_commit_digest: ConsensusCommitDigest::default(),
+            consensus_determined_version_assignments:
+                ConsensusDeterminedVersionAssignments::CancelledTransactions(Vec::new()),
         },
     ))
     .await;
@@ -517,8 +462,18 @@ async fn test_zklogin_transfer_with_bad_ephemeral_sig() {
 #[sim_test]
 async fn test_zklogin_transfer_with_large_address_seed() {
     telemetry_subscribers::init_for_testing();
-    let (object_ids, gas_object_ids, authority_state, _epoch_store, _, _, _server, client) =
-        setup_zklogin_network(|_| {}).await;
+    let (
+        object_ids,
+        gas_object_ids,
+        authority_state,
+        _epoch_store,
+        _,
+        _,
+        _server,
+        client,
+        _senders,
+        _multisig_pk,
+    ) = setup_zklogin_network(|_| {}).await;
 
     let ephemeral_key = Ed25519KeyPair::generate(&mut StdRng::from_seed([3; 32]));
 
@@ -547,26 +502,28 @@ async fn test_zklogin_transfer_with_large_address_seed() {
 }
 
 #[sim_test]
-async fn zklogin_test_cached_proof_wrong_key() {
+async fn zklogin_test_caching_scenarios() {
     telemetry_subscribers::init_for_testing();
     let (
-        mut object_ids,
+        object_ids,
         gas_object_ids,
         authority_state,
-        _epoch_store,
+        epoch_store,
         transfer_transaction,
         metrics,
         _server,
         client,
+        senders,
+        multisig_pk,
     ) = setup_zklogin_network(|_| {}).await;
     let socket_addr = make_socket_addr();
 
+    // case 1: a valid zklogin txn verifies ok, cache misses bc its a fresh zklogin inputs.
     let res = client
         .handle_transaction(transfer_transaction, Some(socket_addr))
         .await;
     assert!(res.is_ok());
 
-    /*
     assert_eq!(
         epoch_store
             .signature_verifier
@@ -575,7 +532,6 @@ async fn zklogin_test_cached_proof_wrong_key() {
             .get(),
         1
     );
-    */
 
     let (skp, _eph_pk, zklogin) =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
@@ -583,10 +539,12 @@ async fn zklogin_test_cached_proof_wrong_key() {
         SuiKeyPair::Ed25519(kp) => kp,
         _ => panic!(),
     };
-    let sender = SuiAddress::try_from_unpadded(zklogin).unwrap();
+    let sender = senders[0];
     let recipient = dbg_addr(2);
 
-    let mut transfer_transaction2 = init_zklogin_transfer(
+    // case 2: use a different ephemeral key for a valid ephemeral pk + sig, but pk does
+    // not match the zklogin inputs, cache misses and txn fails.
+    let mut txn = init_zklogin_transfer(
         &authority_state,
         object_ids[2],
         gas_object_ids[2],
@@ -598,28 +556,62 @@ async fn zklogin_test_cached_proof_wrong_key() {
     )
     .await;
 
-    let intent_message = transfer_transaction2.data().intent_message().clone();
-    match &mut transfer_transaction2
-        .data_mut_for_testing()
-        .tx_signatures_mut_for_testing()[0]
-    {
+    let intent_message = txn.clone().data().intent_message().clone();
+    match &mut txn.data_mut_for_testing().tx_signatures_mut_for_testing()[0] {
         GenericSignature::ZkLoginAuthenticator(zklogin) => {
             let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
-            // replace the signature with a bogus one
+            // replace the ephemeral signature with a bogus one
             *zklogin.user_signature_mut_for_testing() =
                 Signature::new_secure(&intent_message, &unknown_key);
         }
         _ => panic!(),
     }
 
-    // This tx should fail, but passes because we skip the ephemeral sig check when hitting the zklogin check!
-    assert!(client
-        .handle_transaction(transfer_transaction2, Some(socket_addr))
-        .await
-        .is_err());
+    assert!(matches!(
+        client
+            .handle_transaction(txn.clone(), Some(socket_addr))
+            .await
+            .unwrap_err(),
+        SuiError::InvalidSignature { .. }
+    ));
+    assert_eq!(metrics.signature_errors.get(), 1);
 
-    // TODO: re-enable when cache is re-enabled.
-    /*
+    assert_eq!(
+        epoch_store
+            .signature_verifier
+            .metrics
+            .zklogin_inputs_cache_misses
+            .get(),
+        2
+    );
+    assert_eq!(
+        epoch_store
+            .signature_verifier
+            .metrics
+            .zklogin_inputs_cache_hits
+            .get(),
+        0
+    );
+
+    // case 3: use the same proof and same ephemeral key for a different txn
+    // cache hits, also txn verifies.
+    let txn3 = init_zklogin_transfer(
+        &authority_state,
+        object_ids[3],
+        gas_object_ids[3],
+        recipient,
+        sender,
+        |_| {},
+        ephemeral_key,
+        zklogin,
+    )
+    .await;
+
+    assert!(client
+        .handle_transaction(txn3, Some(socket_addr))
+        .await
+        .is_ok());
+
     assert_eq!(
         epoch_store
             .signature_verifier
@@ -628,12 +620,197 @@ async fn zklogin_test_cached_proof_wrong_key() {
             .get(),
         1
     );
-    */
 
-    assert_eq!(metrics.signature_errors.get(), 1);
+    // case 4: create a multisig txn where the zklogin signature inside is already cached
+    // from the first call for the single zklogin txn. cache hits and txn verifies.
+    let sender_2 = senders[1];
+    let multisig_txn = sign_with_zklogin_inside_multisig(
+        &authority_state,
+        object_ids[11],
+        gas_object_ids[11],
+        recipient,
+        sender_2,
+        |_| {},
+        ephemeral_key,
+        zklogin,
+        2,
+        multisig_pk.clone(),
+    )
+    .await;
+    assert!(client
+        .handle_transaction(multisig_txn, Some(socket_addr))
+        .await
+        .is_ok());
 
-    object_ids.remove(0); // first object was successfully locked.
-    check_locks(authority_state, object_ids).await;
+    assert_eq!(
+        epoch_store
+            .signature_verifier
+            .metrics
+            .zklogin_inputs_cache_hits
+            .get(),
+        2
+    );
+    // case 5: use the same proof and modify ephemeral sig bytes but keep the ephemeral pk and flag as same,
+    // it fails earlier at the ephemeral sig verify check, txn fails, did not miss or hit cache.
+    let intent_message = txn.data().intent_message().clone();
+    match &mut txn.data_mut_for_testing().tx_signatures_mut_for_testing()[0] {
+        GenericSignature::ZkLoginAuthenticator(zklogin) => {
+            let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
+            let correct_sig = Signature::new_secure(&intent_message, ephemeral_key);
+            let unknown_sig = Signature::new_secure(&intent_message, &unknown_key);
+
+            // create a mutated sig with the correct flag and pk bytes, but wrong signature bytes
+            let mut mutated_bytes = vec![correct_sig.scheme().flag()];
+            mutated_bytes.extend_from_slice(unknown_sig.signature_bytes());
+            mutated_bytes.extend_from_slice(correct_sig.public_key_bytes());
+            let mutated_sig = Signature::from_bytes(&mutated_bytes).unwrap();
+            *zklogin.user_signature_mut_for_testing() = mutated_sig;
+        }
+        _ => panic!(),
+    }
+
+    assert!(matches!(
+        client
+            .handle_transaction(txn.clone(), Some(socket_addr))
+            .await
+            .unwrap_err(),
+        SuiError::InvalidSignature { .. }
+    ));
+    assert_eq!(metrics.signature_errors.get(), 2);
+
+    // cache hits unchanged
+    assert_eq!(
+        epoch_store
+            .signature_verifier
+            .metrics
+            .zklogin_inputs_cache_hits
+            .get(),
+        2
+    );
+
+    // cache misses unchanged
+    assert_eq!(
+        epoch_store
+            .signature_verifier
+            .metrics
+            .zklogin_inputs_cache_misses
+            .get(),
+        2
+    );
+
+    // case 6: use the same proof and modify max_epoch, cache misses and txn fails.
+    let mut transfer_transaction3 = init_zklogin_transfer(
+        &authority_state,
+        object_ids[4],
+        gas_object_ids[4],
+        recipient,
+        sender,
+        |_| {},
+        ephemeral_key,
+        zklogin,
+    )
+    .await;
+    match &mut transfer_transaction3
+        .data_mut_for_testing()
+        .tx_signatures_mut_for_testing()[0]
+    {
+        GenericSignature::ZkLoginAuthenticator(zklogin) => {
+            *zklogin.max_epoch_mut_for_testing() += 1; // modify max epoch
+        }
+        _ => panic!(),
+    }
+    assert!(matches!(
+        client
+            .handle_transaction(transfer_transaction3.clone(), Some(socket_addr))
+            .await
+            .unwrap_err(),
+        SuiError::InvalidSignature { .. }
+    ));
+    assert_eq!(metrics.signature_errors.get(), 3);
+
+    assert_eq!(
+        epoch_store
+            .signature_verifier
+            .metrics
+            .zklogin_inputs_cache_misses
+            .get(),
+        3
+    );
+
+    // case 7: create a multisig txn with zklogin inside where the max epoch is changed,
+    // cache misses and txn fails.
+    let multisig_txn = sign_with_zklogin_inside_multisig(
+        &authority_state,
+        object_ids[11],
+        gas_object_ids[11],
+        recipient,
+        sender_2,
+        |_| {},
+        ephemeral_key,
+        zklogin,
+        3, // modified from 2 to 3
+        multisig_pk.clone(),
+    )
+    .await;
+    assert!(matches!(
+        client
+            .handle_transaction(multisig_txn.clone(), Some(socket_addr))
+            .await
+            .unwrap_err(),
+        SuiError::InvalidSignature { .. }
+    ));
+
+    assert_eq!(
+        epoch_store
+            .signature_verifier
+            .metrics
+            .zklogin_inputs_cache_misses
+            .get(),
+        4
+    );
+
+    // case 8: use the same proof and modify zklogin_inputs.address_seed, cache misses and txn fails.
+    // use test_vectors[1] but with modified address_seed to create a bad zklogin inputs, and derive sender.
+    let zklogin_json_string =
+        &get_one_zklogin_inputs("../sui-types/src/unit_tests/zklogin_test_vectors.json");
+    let bad_zklogin_inputs = ZkLoginInputs::from_json(zklogin_json_string, "111").unwrap();
+    let sender = SuiAddress::try_from_unpadded(&bad_zklogin_inputs).unwrap();
+
+    let mut txn4 = init_zklogin_transfer(
+        &authority_state,
+        object_ids[5],
+        gas_object_ids[5],
+        recipient,
+        sender,
+        |_| {},
+        ephemeral_key,
+        zklogin,
+    )
+    .await;
+    match &mut txn4.data_mut_for_testing().tx_signatures_mut_for_testing()[0] {
+        GenericSignature::ZkLoginAuthenticator(zklogin) => {
+            *zklogin.zk_login_inputs_mut_for_testing() = bad_zklogin_inputs;
+        }
+        _ => panic!(),
+    }
+
+    assert!(matches!(
+        client
+            .handle_transaction(txn4.clone(), Some(socket_addr))
+            .await
+            .unwrap_err(),
+        SuiError::InvalidSignature { .. }
+    ));
+    assert_eq!(metrics.signature_errors.get(), 5);
+
+    assert_eq!(
+        epoch_store
+            .signature_verifier
+            .metrics
+            .zklogin_inputs_cache_misses
+            .get(),
+        5
+    );
 }
 
 async fn do_zklogin_transaction_test(
@@ -645,11 +822,13 @@ async fn do_zklogin_transaction_test(
         object_ids,
         _gas_object_id,
         authority_state,
-        _epoch_store,
+        epoch_store,
         mut transfer_transaction,
         metrics,
         _server,
         client,
+        _senders,
+        _multisig_pk,
     ) = setup_zklogin_network(pre_sign_mutations).await;
 
     post_sign_mutations(&mut transfer_transaction);
@@ -659,8 +838,6 @@ async fn do_zklogin_transaction_test(
         .await
         .is_err());
 
-    // TODO: re-enable when cache is re-enabled.
-    /*
     assert_eq!(
         epoch_store
             .signature_verifier
@@ -669,7 +846,6 @@ async fn do_zklogin_transaction_test(
             .get(),
         1
     );
-    */
 
     assert_eq!(metrics.signature_errors.get(), expected_sig_errors);
 
@@ -705,6 +881,8 @@ async fn setup_zklogin_network(
     Arc<crate::authority_server::ValidatorServiceMetrics>,
     AuthorityServerHandle,
     NetworkAuthorityClient,
+    Vec<SuiAddress>,
+    MultiSigPublicKey,
 ) {
     let (skp, _eph_pk, zklogin) =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
@@ -712,11 +890,31 @@ async fn setup_zklogin_network(
         SuiKeyPair::Ed25519(kp) => kp,
         _ => panic!(),
     };
+
+    // a single zklogin address.
     let sender = SuiAddress::try_from_unpadded(zklogin).unwrap();
 
+    // a 1-out-2 multisig address.
+    let zklogin_pk = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(zklogin.get_iss(), zklogin.get_address_seed()).unwrap(),
+    );
+    let regular_pk = skp.public();
+    let multisig_pk = MultiSigPublicKey::new(vec![zklogin_pk, regular_pk], vec![1, 1], 1).unwrap();
+    let sender_2 = SuiAddress::from(&multisig_pk);
+
     let recipient = dbg_addr(2);
-    let objects: Vec<_> = (0..10).map(|_| (sender, ObjectID::random())).collect();
-    let gas_objects: Vec<_> = (0..10).map(|_| (sender, ObjectID::random())).collect();
+    let objects: Vec<_> = (0..20)
+        .map(|i| match i < 10 {
+            true => (sender, ObjectID::random()),
+            false => (sender_2, ObjectID::random()),
+        })
+        .collect();
+    let gas_objects: Vec<_> = (0..20)
+        .map(|i| match i < 10 {
+            true => (sender, ObjectID::random()),
+            false => (sender_2, ObjectID::random()),
+        })
+        .collect();
     let object_ids: Vec<_> = objects.iter().map(|(_, id)| *id).collect();
     let gas_object_ids: Vec<_> = gas_objects.iter().map(|(_, id)| *id).collect();
 
@@ -776,6 +974,8 @@ async fn setup_zklogin_network(
         metrics,
         server_handle,
         client,
+        vec![sender, sender_2],
+        multisig_pk,
     )
 }
 
@@ -824,6 +1024,59 @@ async fn init_zklogin_transfer(
         signature,
     ));
     tx.data_mut_for_testing().tx_signatures_mut_for_testing()[0] = authenticator;
+    tx
+}
+
+async fn sign_with_zklogin_inside_multisig(
+    authority_state: &Arc<AuthorityState>,
+    object_id: ObjectID,
+    gas_object_id: ObjectID,
+    recipient: SuiAddress,
+    sender: SuiAddress,
+    pre_sign_mutations: impl FnOnce(&mut TransactionData),
+    ephemeral_key: &Ed25519KeyPair,
+    zklogin: &ZkLoginInputs,
+    max_epoch: u64,
+    multisig_pk: MultiSigPublicKey,
+) -> sui_types::message_envelope::Envelope<SenderSignedData, sui_types::crypto::EmptySignInfo> {
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let object_ref = object.compute_object_reference();
+    let gas_object_ref = gas_object.compute_object_reference();
+    let gas_budget = rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
+    let mut data = TransactionData::new_transfer(
+        recipient,
+        object_ref,
+        sender,
+        gas_object_ref,
+        gas_budget,
+        rgp,
+    );
+    pre_sign_mutations(&mut data);
+    let mut tx = to_sender_signed_transaction(data, ephemeral_key);
+    let GenericSignature::Signature(signature) =
+        tx.data_mut_for_testing().tx_signatures_mut_for_testing()[0].clone()
+    else {
+        panic!();
+    };
+    let multisig = MultiSig::combine(
+        vec![GenericSignature::ZkLoginAuthenticator(
+            ZkLoginAuthenticator::new(zklogin.clone(), max_epoch, signature),
+        )],
+        multisig_pk,
+    )
+    .unwrap();
+    tx.data_mut_for_testing().tx_signatures_mut_for_testing()[0] =
+        GenericSignature::MultiSig(multisig);
     tx
 }
 
@@ -1239,7 +1492,6 @@ async fn test_handle_certificate_errors() {
         .handle_certificate_v2(ct.clone(), Some(socket_addr))
         .await
         .unwrap_err();
-
     assert_matches!(
         err,
         SuiError::WrongEpoch {
@@ -1256,29 +1508,7 @@ async fn test_handle_certificate_errors() {
         &*authority_state.secret,
     );
 
-    let mut empty_tx = transfer_transaction.clone();
-    let data = empty_tx.data_mut_for_testing();
-    data.inner_vec_mut_for_testing().clear();
-
     let committee = epoch_store.committee().deref().clone();
-    let ct = CertifiedTransaction::new(
-        data.clone(),
-        vec![signed_transaction.auth_sig().clone()],
-        &committee,
-    )
-    .unwrap();
-
-    let err = client
-        .handle_certificate_v2(ct.clone(), Some(socket_addr))
-        .await
-        .unwrap_err();
-
-    assert_matches!(
-        err,
-        SuiError::UserInputError {
-            error: UserInputError::Unsupported(message)
-        } if message == "SenderSignedData must contain exactly one transaction"
-    );
 
     let tx = VerifiedTransaction::new_consensus_commit_prologue(0, 0, 42);
     let ct = CertifiedTransaction::new(

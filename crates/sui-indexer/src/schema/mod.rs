@@ -3,7 +3,11 @@
 
 #![allow(clippy::all)]
 
+#[cfg(feature = "mysql-feature")]
+#[cfg(not(feature = "postgres-feature"))]
 mod mysql;
+
+#[cfg(feature = "postgres-feature")]
 mod pg;
 
 #[cfg(feature = "postgres-feature")]

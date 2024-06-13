@@ -14,6 +14,7 @@ bcs.workspace = true
 byteorder.workspace = true
 chrono.workspace = true
 consensus-config.workspace = true
+num_enum.workspace = true
 im.workspace = true
 itertools.workspace = true
 nonempty.workspace = true
@@ -70,6 +71,9 @@ derive_more.workspace = true
 proptest.workspace = true
 proptest-derive.workspace = true
 better_any.workspace = true
+lru.workspace = true
+
+sui-sdk2.workspace = true
 
 [dev-dependencies]
 bincode.workspace = true

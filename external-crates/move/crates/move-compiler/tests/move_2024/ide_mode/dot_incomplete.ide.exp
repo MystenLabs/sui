@@ -1,0 +1,57 @@
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:13:23
+   │
+13 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+   │                       ^ Autocompletes to: 'a'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:13:24
+   │
+13 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+   │                        ^
+   │                        │
+   │                        Unexpected ';'
+   │                        Expected an identifier or a decimal number
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:24
+   │
+14 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                        ^ Autocompletes to: 'a'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:25
+   │
+14 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                         ^ Autocompletes to: 'x'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:26
+   │
+14 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                          ^
+   │                          │
+   │                          Unexpected ';'
+   │                          Expected an identifier or a decimal number
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:24
+   │
+15 │         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
+   │                        ^ Autocompletes to: 'a'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:25
+   │
+15 │         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
+   │                         ^ Autocompletes to: 'x'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:16:9
+   │
+16 │         let _tmp4 = _s.
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an identifier or a decimal number
+

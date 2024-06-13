@@ -28,14 +28,14 @@ async function mintFren(address: string) {
 	// Choose the first kiosk for simplicity. We could have extra logic here (e.g. let the user choose, pick a personal one, etc).
 	const cap = kioskOwnerCaps[0];
 
-	const txb = new TransactionBlock();
-	const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
+	const tx = new Transaction();
+	const kioskTx = new KioskTransaction({ transaction: tx, kioskClient, cap });
 
 	// We're mixing the logic here. If the cap is undefined, we create a new kiosk.
 	if (!cap) kioskTx.create();
 
 	// Let's mint a capy here into the kiosk (either a new or an existing one).
-	txb.moveCall({
+	tx.moveCall({
 		target: `${packageId}::suifrens::mint_app::mint`,
 		arguments: [kioskTx.getKiosk(), kioskTx.getKioskCap()],
 		typeArguments: [capyType],
@@ -46,8 +46,8 @@ async function mintFren(address: string) {
 
 	kioskTx.finalize();
 
-	// sign and execute transaction block.
-	await signAndExecuteTransactionBlock({ tx: txb });
+	// sign and execute transaction.
+	await signAndExecuteTransaction({ tx: tx });
 }
 ```
 
@@ -58,8 +58,8 @@ This example demonstrates how to use the Kiosk SDK to mix two `bullsharks`.
 ```typescript
 // We're mixing two frens.
 async function mixFrens(firstFrenObjectId: string, secondFrenObjectId: string, cap: KioskOwnerCap) {
-    const txb = new TransactionBlock();
-    const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
+    const tx = new Transaction();
+    const kioskTx = new KioskTransaction({ transaction: tx, kioskClient, cap });
 
     // borrow both frens.
     const [fren1, promise1] = kioskTx.borrow({
@@ -73,7 +73,7 @@ async function mixFrens(firstFrenObjectId: string, secondFrenObjectId: string, c
     });
 
     // Let's call the mix function. We skip any payment related stuff here.
-    txb.moveCall({
+    tx.moveCall({
         target: `${packageId}::mix_app::mix`,
         arguments: [
             fren1,
@@ -95,7 +95,7 @@ async function mixFrens(firstFrenObjectId: string, secondFrenObjectId: string, c
         promise: promise2
     }).finalize();
 
-    // sign and execute transaction block.
-    await signAndExecuteTransactionBlock({ tx: txb });
+    // sign and execute transaction.
+    await signAndExecuteTransaction({ tx: tx });
 }
 ```

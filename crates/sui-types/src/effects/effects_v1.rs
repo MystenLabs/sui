@@ -93,6 +93,30 @@ impl TransactionEffectsV1 {
             dependencies,
         }
     }
+
+    pub fn modified_at_versions(&self) -> &[(ObjectID, SequenceNumber)] {
+        &self.modified_at_versions
+    }
+
+    pub fn mutated(&self) -> &[(ObjectRef, Owner)] {
+        &self.mutated
+    }
+
+    pub fn created(&self) -> &[(ObjectRef, Owner)] {
+        &self.created
+    }
+
+    pub fn unwrapped(&self) -> &[(ObjectRef, Owner)] {
+        &self.unwrapped
+    }
+
+    pub fn deleted(&self) -> &[ObjectRef] {
+        &self.deleted
+    }
+
+    pub fn wrapped(&self) -> &[ObjectRef] {
+        &self.wrapped
+    }
 }
 
 impl TransactionEffectsAPI for TransactionEffectsV1 {
@@ -275,6 +299,9 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             | InputSharedObject::MutateDeleted(id, version) => {
                 self.shared_objects
                     .push((id, version, ObjectDigest::OBJECT_DIGEST_DELETED));
+            }
+            InputSharedObject::Cancelled(..) => {
+                panic!("Transaction cancellation is not supported in effect v1");
             }
         }
     }

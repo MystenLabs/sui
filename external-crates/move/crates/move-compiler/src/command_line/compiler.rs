@@ -3,20 +3,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::{self, visitor::AbsIntVisitorObj},
+    cfgir::{
+        self,
+        visitor::{AbsIntVisitorObj, CFGIRVisitorObj},
+    },
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
-    compiled_unit,
-    compiled_unit::AnnotatedCompiledUnit,
+    compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{
         codes::{Severity, WarningFilter},
         *,
     },
     editions::Edition,
-    expansion, hlir, interface_generator, naming, parser,
-    parser::{comments::*, *},
+    expansion, hlir, interface_generator, naming,
+    parser::{self, comments::*, *},
     shared::{
         CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, NamedAddressMap,
-        NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths,
+        NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SaveFlag, SaveHook,
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
@@ -62,6 +64,8 @@ pub struct Compiler {
     default_config: Option<PackageConfig>,
     /// Root path of the virtual file system.
     vfs_root: Option<VfsPath>,
+    /// Hooks to save the ASTs
+    save_hooks: Vec<SaveHook>,
 }
 
 pub struct SteppedCompiler<const P: Pass> {
@@ -106,6 +110,7 @@ pub struct FullyCompiledProgram {
 
 pub enum Visitor {
     TypingVisitor(TypingVisitorObj),
+    CFGIRVisitor(CFGIRVisitorObj),
     AbsIntVisitor(AbsIntVisitorObj),
 }
 
@@ -192,6 +197,7 @@ impl Compiler {
             package_configs,
             default_config: None,
             vfs_root,
+            save_hooks: vec![],
         })
     }
 
@@ -217,6 +223,11 @@ impl Compiler {
     pub fn set_flags(mut self, flags: Flags) -> Self {
         assert!(self.flags.is_empty());
         self.flags = flags;
+        self
+    }
+
+    pub fn set_ide_mode(mut self) -> Self {
+        self.flags = self.flags.set_ide_mode(true);
         self
     }
 
@@ -291,6 +302,11 @@ impl Compiler {
         self
     }
 
+    pub fn add_save_hook(mut self, save: &(impl Into<SaveHook> + Clone)) -> Self {
+        self.save_hooks.push(save.clone().into());
+        self
+    }
+
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
@@ -311,6 +327,7 @@ impl Compiler {
             package_configs,
             default_config,
             vfs_root,
+            save_hooks,
         } = self;
         let vfs_root = match vfs_root {
             Some(p) => p,
@@ -359,7 +376,7 @@ impl Compiler {
             &compiled_module_named_address_mapping,
         )?;
         let mut compilation_env =
-            CompilationEnv::new(flags, visitors, package_configs, default_config);
+            CompilationEnv::new(flags, visitors, save_hooks, package_configs, default_config);
         if let Some(filter) = warning_filter {
             compilation_env.add_warning_filter_scope(filter);
         }
@@ -472,7 +489,6 @@ impl<const P: Pass> SteppedCompiler<P> {
             pre_compiled_lib.clone(),
             program.unwrap(),
             TARGET,
-            |_, _| (),
         )?;
         assert!(new_prog.equivalent_pass() == TARGET);
         Ok(SteppedCompiler {
@@ -611,14 +627,25 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     targets: Vec<PackagePaths<Paths, NamedAddress>>,
     interface_files_dir_opt: Option<String>,
     flags: Flags,
+    vfs_root: Option<VfsPath>,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
+    let hook = SaveHook::new([
+        SaveFlag::Parser,
+        SaveFlag::Expansion,
+        SaveFlag::Naming,
+        SaveFlag::Typing,
+        SaveFlag::TypingInfo,
+        SaveFlag::HLIR,
+        SaveFlag::CFGIR,
+    ]);
     let (files, pprog_and_comments_res) = Compiler::from_package_paths(
-        None,
+        vfs_root,
         targets,
         Vec::<PackagePaths<Paths, NamedAddress>>::new(),
     )?
     .set_interface_files_dir_opt(interface_files_dir_opt)
     .set_flags(flags)
+    .add_save_hook(&hook)
     .run::<PASS_PARSER>()?;
 
     let (_comments, stepped) = match pprog_and_comments_res {
@@ -629,62 +656,19 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     let (empty_compiler, ast) = stepped.into_ast();
     let mut compilation_env = empty_compiler.compilation_env;
     let start = PassResult::Parser(ast);
-    let mut parser = None;
-    let mut expansion = None;
-    let mut naming = None;
-    let mut typing = None;
-    let mut hlir = None;
-    let mut cfgir = None;
-    let mut compiled = None;
-
-    let save_result = |cur: &PassResult, _env: &CompilationEnv| match cur {
-        PassResult::Parser(prog) => {
-            assert!(parser.is_none());
-            parser = Some(prog.clone())
-        }
-        PassResult::Expansion(eprog) => {
-            assert!(expansion.is_none());
-            expansion = Some(eprog.clone())
-        }
-        PassResult::Naming(nprog) => {
-            assert!(naming.is_none());
-            naming = Some(nprog.clone())
-        }
-        PassResult::Typing(tprog) => {
-            assert!(typing.is_none());
-            typing = Some(tprog.clone())
-        }
-        PassResult::HLIR(hprog) => {
-            assert!(hlir.is_none());
-            hlir = Some(hprog.clone());
-        }
-        PassResult::CFGIR(cprog) => {
-            assert!(cfgir.is_none());
-            cfgir = Some(cprog.clone());
-        }
-        PassResult::Compilation(units, _final_diags) => {
-            assert!(compiled.is_none());
-            compiled = Some(units.clone())
-        }
-    };
-    match run(
-        &mut compilation_env,
-        None,
-        start,
-        PASS_COMPILATION,
-        save_result,
-    ) {
+    match run(&mut compilation_env, None, start, PASS_COMPILATION) {
         Err((_pass, errors)) => Ok(Err((files, errors))),
-        Ok(_) => Ok(Ok(FullyCompiledProgram {
+        Ok(PassResult::Compilation(compiled, _)) => Ok(Ok(FullyCompiledProgram {
             files,
-            parser: parser.unwrap(),
-            expansion: expansion.unwrap(),
-            naming: naming.unwrap(),
-            typing: typing.unwrap(),
-            hlir: hlir.unwrap(),
-            cfgir: cfgir.unwrap(),
-            compiled: compiled.unwrap(),
+            parser: hook.take_parser_ast(),
+            expansion: hook.take_expansion_ast(),
+            naming: hook.take_naming_ast(),
+            typing: hook.take_typing_ast(),
+            hlir: hook.take_hlir_ast(),
+            cfgir: hook.take_cfgir_ast(),
+            compiled,
         })),
+        Ok(_) => unreachable!(),
     }
 }
 
@@ -723,7 +707,6 @@ pub fn sanity_check_compiled_units(
 
 /// Given a file map and a set of compiled programs, saves the compiled programs to disk
 pub fn output_compiled_units(
-    bytecode_version: Option<u32>,
     emit_source_maps: bool,
     files: FilesSourceText,
     compiled_units: Vec<AnnotatedCompiledUnit>,
@@ -745,7 +728,7 @@ pub fn output_compiled_units(
             }
 
             $path.set_extension(MOVE_COMPILED_EXTENSION);
-            fs::write($path.as_path(), &$unit.serialize(bytecode_version))?
+            fs::write($path.as_path(), &$unit.serialize())?
         }};
     }
 
@@ -934,6 +917,31 @@ impl PassResult {
             PassResult::Compilation(_, _) => PASS_COMPILATION,
         }
     }
+
+    pub fn save(&self, compilation_env: &mut CompilationEnv) {
+        match self {
+            PassResult::Parser(prog) => {
+                compilation_env.save_parser_ast(prog);
+            }
+            PassResult::Expansion(prog) => {
+                compilation_env.save_expansion_ast(prog);
+            }
+            PassResult::Naming(prog) => {
+                compilation_env.save_naming_ast(prog);
+            }
+            PassResult::Typing(prog) => {
+                compilation_env.save_typing_ast(prog);
+                compilation_env.save_typing_info(&prog.info);
+            }
+            PassResult::HLIR(prog) => {
+                compilation_env.save_hlir_ast(prog);
+            }
+            PassResult::CFGIR(prog) => {
+                compilation_env.save_cfgir_ast(prog);
+            }
+            PassResult::Compilation(_, _) => (),
+        }
+    }
 }
 
 fn run(
@@ -941,7 +949,6 @@ fn run(
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     cur: PassResult,
     until: Pass,
-    result_check: impl FnMut(&PassResult, &CompilationEnv),
 ) -> Result<PassResult, (Pass, Diagnostics)> {
     #[growing_stack]
     fn rec(
@@ -949,8 +956,8 @@ fn run(
         pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         cur: PassResult,
         until: Pass,
-        mut result_check: impl FnMut(&PassResult, &CompilationEnv),
     ) -> Result<PassResult, (Pass, Diagnostics)> {
+        cur.save(compilation_env);
         let cur_pass = cur.equivalent_pass();
         compilation_env
             .check_diags_at_or_above_severity(Severity::Bug)
@@ -959,7 +966,6 @@ fn run(
             until <= PASS_COMPILATION,
             "Invalid pass for run_to. Target is greater than maximum pass"
         );
-        result_check(&cur, compilation_env);
         if cur.equivalent_pass() >= until {
             return Ok(cur);
         }
@@ -980,7 +986,6 @@ fn run(
                     pre_compiled_lib,
                     PassResult::Expansion(eprog),
                     until,
-                    result_check,
                 )
             }
             PassResult::Expansion(eprog) => {
@@ -991,7 +996,6 @@ fn run(
                     pre_compiled_lib,
                     PassResult::Naming(nprog),
                     until,
-                    result_check,
                 )
             }
             PassResult::Naming(nprog) => {
@@ -1002,7 +1006,6 @@ fn run(
                     pre_compiled_lib,
                     PassResult::Typing(tprog),
                     until,
-                    result_check,
                 )
             }
             PassResult::Typing(tprog) => {
@@ -1016,7 +1019,6 @@ fn run(
                     pre_compiled_lib,
                     PassResult::HLIR(hprog),
                     until,
-                    result_check,
                 )
             }
             PassResult::HLIR(hprog) => {
@@ -1027,7 +1029,6 @@ fn run(
                     pre_compiled_lib,
                     PassResult::CFGIR(cprog),
                     until,
-                    result_check,
                 )
             }
             PassResult::CFGIR(cprog) => {
@@ -1051,13 +1052,12 @@ fn run(
                     pre_compiled_lib,
                     PassResult::Compilation(compiled_units, warnings),
                     PASS_COMPILATION,
-                    result_check,
                 )
             }
             PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
         }
     }
-    rec(compilation_env, pre_compiled_lib, cur, until, result_check)
+    rec(compilation_env, pre_compiled_lib, cur, until)
 }
 
 //**************************************************************************************************

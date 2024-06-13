@@ -11,7 +11,7 @@ Response: {
   "data": {
     "epoch": {
       "protocolConfigs": {
-        "protocolVersion": 39,
+        "protocolVersion": 48,
         "randomBeacon": {
           "value": true
         }
@@ -28,7 +28,7 @@ Response: {
           "json": {
             "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
             "inner": {
-              "id": "0x3c4d339a23b4495c9e3b3c2b8619f8500e561ebcba8affde50966fa9cd1a4491",
+              "id": "0xa02463986ebfae3b6897e502c4194b64bfefa1740e56bdde09992f89c3eed995",
               "version": "1"
             }
           }

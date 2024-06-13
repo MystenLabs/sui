@@ -1,0 +1,103 @@
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: u64): Self.Foo<u64> {
+        let y: Self.Foo<u64>;
+    label b0:
+        y = Foo.V<bool> { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: u64): Self.Foo<bool> {
+        let y: Self.Foo<u64>;
+    label b0:
+        y = Foo.V<u64> { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: u64): Self.Foo<u64> {
+        let y: Self.Foo<bool>;
+    label b0:
+        y = Foo.V<u64> { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: u64): Self.Foo<u64> {
+        let y: Self.Foo<u64>;
+    label b0:
+        y = Foo.V<u64, bool> { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: u64): Self.Foo<u64> {
+        let y: Self.Foo<u64, bool>;
+    label b0:
+        y = Foo.V<u64> { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: u64): Self.Foo<u64, bool> {
+        let y: Self.Foo<u64>;
+    label b0:
+        y = Foo.V<u64> { x: move(x) };
+        return move(y);
+    }
+}
+
+
+//# publish
+module 0x1.O {
+    enum Foo<T> { V { x: T } }
+}
+
+//# publish
+module 0x2.O {
+    import 0x1.O;
+    enum Foo<T> { V { x: T } }
+
+    foo(x: u64): O.Foo<u64> {
+        let y: Self.Foo<u64>;
+    label b0:
+        y = Foo.V<u64> { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    import 0x1.O;
+    enum Foo<T> { V { x: T } }
+
+    foo(x: u64): O.Foo<u64> {
+        let y: O.Foo<u64>;
+    label b0:
+        y = Foo.V<u64> { x: move(x) };
+        return move(y);
+    }
+}

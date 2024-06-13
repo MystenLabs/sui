@@ -17,7 +17,7 @@ diesel::table! {
         storage_cost -> Bigint,
         storage_rebate -> Bigint,
         non_refundable_storage_fee -> Bigint,
-        checkpoint_commitments -> Blob,
+        checkpoint_commitments -> Mediumblob,
         validator_signature -> Blob,
         end_of_epoch_data -> Nullable<Blob>,
     }
@@ -28,7 +28,7 @@ diesel::table! {
         object_type -> Text,
         id -> Blob,
         version -> Smallint,
-        bcs -> Blob,
+        bcs -> Mediumblob,
     }
 }
 
@@ -41,7 +41,7 @@ diesel::table! {
         protocol_version -> Bigint,
         total_stake -> Bigint,
         storage_fund_balance -> Bigint,
-        system_state -> Blob,
+        system_state -> Mediumblob,
         epoch_total_transactions -> Nullable<Bigint>,
         last_checkpoint_id -> Nullable<Bigint>,
         epoch_end_timestamp -> Nullable<Bigint>,
@@ -70,7 +70,7 @@ diesel::table! {
         event_type_module -> Text,
         event_type_name -> Text,
         timestamp_ms -> Bigint,
-        bcs -> Blob,
+        bcs -> Mediumblob,
     }
 }
 
@@ -145,7 +145,7 @@ diesel::table! {
 diesel::table! {
     packages (package_id) {
         package_id -> Blob,
-        move_package -> Blob,
+        move_package -> Mediumblob,
     }
 }
 
@@ -153,8 +153,8 @@ diesel::table! {
     transactions (tx_sequence_number, checkpoint_sequence_number) {
         tx_sequence_number -> Bigint,
         transaction_digest -> Blob,
-        raw_transaction -> Blob,
-        raw_effects -> Blob,
+        raw_transaction -> Mediumblob,
+        raw_effects -> Mediumblob,
         checkpoint_sequence_number -> Bigint,
         timestamp_ms -> Bigint,
         object_changes -> Json,

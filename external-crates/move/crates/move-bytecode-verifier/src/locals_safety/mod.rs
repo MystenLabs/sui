@@ -8,11 +8,9 @@
 
 mod abstract_state;
 
-use crate::{
-    absint::{AbstractInterpreter, FunctionContext, TransferFunctions},
-    locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST},
-};
+use crate::locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST};
 use abstract_state::{AbstractState, LocalState};
+use move_abstract_interpreter::absint::{AbstractInterpreter, FunctionContext, TransferFunctions};
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset},
@@ -159,7 +157,16 @@ fn execute_inner(
         | Bytecode::VecPushBack(_)
         | Bytecode::VecPopBack(_)
         | Bytecode::VecUnpack(..)
-        | Bytecode::VecSwap(_) => (),
+        | Bytecode::VecSwap(_)
+        | Bytecode::PackVariant(_)
+        | Bytecode::PackVariantGeneric(_)
+        | Bytecode::UnpackVariant(_)
+        | Bytecode::UnpackVariantImmRef(_)
+        | Bytecode::UnpackVariantMutRef(_)
+        | Bytecode::UnpackVariantGeneric(_)
+        | Bytecode::UnpackVariantGenericImmRef(_)
+        | Bytecode::UnpackVariantGenericMutRef(_)
+        | Bytecode::VariantSwitch(_) => (),
     };
     Ok(())
 }

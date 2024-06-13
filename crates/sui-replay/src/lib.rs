@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_recursion::async_recursion;
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use config::ReplayableNetworkConfigSet;
 use fuzz::ReplayFuzzer;
 use fuzz::ReplayFuzzerConfig;
@@ -90,8 +90,6 @@ pub enum ReplayToolCommand {
         tx_digest: String,
         #[arg(long, short)]
         show_effects: bool,
-        #[arg(long, short)]
-        diag: bool,
         /// Optional version of the executor to use, if not specified defaults to the one originally used for the transaction.
         #[arg(long, short, allow_hyphen_values = true)]
         executor_version: Option<i64>,
@@ -120,14 +118,6 @@ pub enum ReplayToolCommand {
             This will allow faster replay next time."
         )]
         persist_path: Option<PathBuf>,
-        #[arg(
-            long,
-            value_enum,
-            ignore_case = true,
-            help = "Format of the sandbox files",
-            default_value = "json"
-        )]
-        sandbox_format: SandboxFileFormat,
     },
 
     /// Replay a transaction from a node state dump
@@ -154,14 +144,6 @@ pub enum ReplayToolCommand {
             help = "Number of tasks to run in parallel"
         )]
         num_tasks: usize,
-        #[arg(
-            long,
-            value_enum,
-            ignore_case = true,
-            help = "Format of the sandbox files",
-            default_value = "json"
-        )]
-        sandbox_format: SandboxFileFormat,
     },
 
     /// Replay all transactions in a range of checkpoints
@@ -203,12 +185,6 @@ pub enum ReplayToolCommand {
     Report,
 }
 
-#[derive(Parser, Copy, Clone, ValueEnum)]
-pub enum SandboxFileFormat {
-    Json,
-    Bcs,
-}
-
 #[async_recursion]
 pub async fn execute_replay_command(
     rpc_url: Option<String>,
@@ -228,11 +204,8 @@ pub async fn execute_replay_command(
             let contents = std::fs::read_to_string(path)?;
             let sandbox_state: ExecutionSandboxState = serde_json::from_str(&contents)?;
             info!("Executing tx: {}", sandbox_state.transaction_info.tx_digest);
-            let sandbox_state = LocalExec::certificate_execute_with_sandbox_state(
-                &sandbox_state,
-                &sandbox_state.pre_exec_diag,
-            )
-            .await?;
+            let sandbox_state =
+                LocalExec::certificate_execute_with_sandbox_state(&sandbox_state).await?;
             sandbox_state.check_effects()?;
             info!("Execution finished successfully. Local and on-chain effects match.");
             None
@@ -310,7 +283,6 @@ pub async fn execute_replay_command(
             terminate_early,
             num_tasks,
             persist_path,
-            sandbox_format,
         } => {
             let file = std::fs::File::open(path).unwrap();
             let buf_reader = std::io::BufReader::new(file);
@@ -328,18 +300,13 @@ pub async fn execute_replay_command(
                 use_authority,
                 terminate_early,
                 persist_path,
-                sandbox_format,
             )
             .await;
 
             // TODO: clean this up
             Some((0u64, 0u64))
         }
-        ReplayToolCommand::BatchReplayFromSandbox {
-            path,
-            num_tasks,
-            sandbox_format,
-        } => {
+        ReplayToolCommand::BatchReplayFromSandbox { path, num_tasks } => {
             let files: Vec<_> = std::fs::read_dir(path)?
                 .filter_map(|entry| {
                     let path = entry.ok()?.path();
@@ -355,22 +322,13 @@ pub async fn execute_replay_command(
             let tasks = chunks.into_iter().map(|chunk| async move {
                 for file in chunk {
                     info!("Replaying from state dump file {}", file);
-                    let sandbox_state: ExecutionSandboxState = match sandbox_format {
-                        SandboxFileFormat::Json => {
-                            let contents = std::fs::read_to_string(file).unwrap();
-                            serde_json::from_str(&contents).unwrap()
-                        }
-                        SandboxFileFormat::Bcs => {
-                            let contents = std::fs::read(file).unwrap();
-                            bcs::from_bytes(&contents).unwrap()
-                        }
-                    };
-                    let sandbox_state = LocalExec::certificate_execute_with_sandbox_state(
-                        &sandbox_state,
-                        &sandbox_state.pre_exec_diag,
-                    )
-                    .await
-                    .unwrap();
+                    let contents = std::fs::read_to_string(file).unwrap();
+                    let sandbox_state: ExecutionSandboxState =
+                        serde_json::from_str(&contents).unwrap();
+                    let sandbox_state =
+                        LocalExec::certificate_execute_with_sandbox_state(&sandbox_state)
+                            .await
+                            .unwrap();
                     sandbox_state.check_effects().unwrap();
                 }
             });
@@ -407,7 +365,6 @@ pub async fn execute_replay_command(
         ReplayToolCommand::ReplayTransaction {
             tx_digest,
             show_effects,
-            diag,
             executor_version,
             protocol_version,
         } => {
@@ -424,9 +381,6 @@ pub async fn execute_replay_command(
             )
             .await?;
 
-            if diag {
-                println!("{:#?}", sandbox_state.pre_exec_diag);
-            }
             if show_effects {
                 println!("{}", sandbox_state.local_exec_effects);
             }

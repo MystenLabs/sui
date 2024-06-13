@@ -19,6 +19,8 @@ members = [
     "move-execution/v1/crates/move-stdlib-natives",
     "move-execution/v2/crates/move-stdlib-natives",
     # "move-execution/$CUT/crates/move-stdlib-natives",
+    "move-execution/v2/crates/move-abstract-interpreter",
+    # "move-execution/$CUT/crates/move-abstract-interpreter",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace
@@ -66,8 +68,8 @@ itertools = "0.10.0"
 leb128 = "0.2.5"
 libfuzzer-sys = "0.4"
 log = { version = "0.4.14", features = ["serde"] }
-lsp-server = "0.5.1"
-lsp-types = "0.90.1"
+lsp-server = "0.7.6"
+lsp-types = "0.95.1"
 memory-stats = "1.0.0"
 mirai-annotations = "1.10.1"
 named-lock = "0.2.0"
@@ -132,6 +134,7 @@ bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util"}
 invalid-mutations = { path = "crates/invalid-mutations" }
 module-generation = { path = "crates/module-generation" }
+move-abstract-interpreter = { path = "crates/move-abstract-interpreter" }
 move-abstract-stack = { path = "crates/move-abstract-stack" }
 move-binary-format = { path = "crates/move-binary-format" }
 move-borrow-graph = { path = "crates/move-borrow-graph" }
@@ -147,7 +150,6 @@ move-core-types = { path = "crates/move-core-types" }
 move-coverage = { path = "crates/move-coverage" }
 move-disassembler = { path = "crates/move-disassembler" }
 move-docgen = { path = "crates/move-docgen" }
-move-errmapgen = { path = "crates/move-errmapgen" }
 move-ir-compiler = { path = "crates/move-ir-compiler" }
 move-ir-to-bytecode = { path = "crates/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "crates/move-ir-to-bytecode-syntax" }
@@ -157,9 +159,7 @@ move-package = { path = "crates/move-package" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-prover = { path = "crates/move-prover" }
 move-prover-test-utils = { path = "crates/move-prover-test-utils" }
-move-read-write-set-types = { path = "crates/move-read-write-set-types" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
-move-stackless-bytecode-interpreter = { path = "crates/move-stackless-bytecode-interpreter" }
 move-stdlib = { path = "crates/move-stdlib" }
 move-stdlib-natives = { path = "crates/move-stdlib-natives" }
 move-symbol-pool = { path = "crates/move-symbol-pool" }

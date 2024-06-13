@@ -30,7 +30,7 @@ use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
-    loaded_data::runtime_types::{CachedStructIndex, StructType, Type},
+    loaded_data::runtime_types::{CachedTypeIndex, CachedDatatype, Type},
     values::{Locals, Reference, VMValueCast, Value},
 };
 use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};
@@ -83,6 +83,10 @@ impl VMRuntime {
                     blob,
                     &BinaryConfig::legacy(
                         self.loader.vm_config().max_binary_format_version,
+                        self.loader
+                            .vm_config()
+                            .binary_config
+                            .min_binary_format_version,
                         self.loader
                             .vm_config()
                             .check_no_extraneous_bytes_during_deserialization,
@@ -458,7 +462,7 @@ impl VMRuntime {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
-    pub fn get_struct_type(&self, index: CachedStructIndex) -> Option<Arc<StructType>> {
+    pub fn get_type(&self, index: CachedTypeIndex) -> Option<Arc<CachedDatatype>> {
         self.loader.get_struct_type(index)
     }
 
@@ -473,7 +477,7 @@ impl VMRuntime {
         module_id: &ModuleId,
         struct_name: &IdentStr,
         data_store: &impl DataStore,
-    ) -> VMResult<(CachedStructIndex, Arc<StructType>)> {
+    ) -> VMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         self.loader
             .load_struct_by_name(struct_name, module_id, data_store)
     }

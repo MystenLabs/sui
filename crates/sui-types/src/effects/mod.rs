@@ -69,7 +69,7 @@ impl VersionedProtocolMessage for TransactionEffects {
         })
     }
 
-    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
         match self {
             Self::V1(_) => Ok(()),
             Self::V2(_) => {
@@ -304,6 +304,7 @@ pub enum InputSharedObject {
     ReadOnly(ObjectRef),
     ReadDeleted(ObjectID, SequenceNumber),
     MutateDeleted(ObjectID, SequenceNumber),
+    Cancelled(ObjectID, SequenceNumber),
 }
 
 impl InputSharedObject {
@@ -318,6 +319,9 @@ impl InputSharedObject {
             InputSharedObject::ReadDeleted(id, version)
             | InputSharedObject::MutateDeleted(id, version) => {
                 (*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED)
+            }
+            InputSharedObject::Cancelled(id, version) => {
+                (*id, *version, ObjectDigest::OBJECT_DIGEST_CANCELLED)
             }
         }
     }
@@ -372,7 +376,8 @@ pub trait TransactionEffectsAPI {
                 InputSharedObject::MutateDeleted(id, _) => Some(id),
                 InputSharedObject::Mutate(..)
                 | InputSharedObject::ReadOnly(..)
-                | InputSharedObject::ReadDeleted(..) => None,
+                | InputSharedObject::ReadDeleted(..)
+                | InputSharedObject::Cancelled(..) => None,
             })
             .collect()
     }

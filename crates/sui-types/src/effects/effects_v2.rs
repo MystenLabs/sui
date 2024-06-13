@@ -41,7 +41,7 @@ pub struct TransactionEffectsV2 {
     dependencies: Vec<TransactionDigest>,
 
     /// The version number of all the written Move objects by this transaction.
-    lamport_version: SequenceNumber,
+    pub(crate) lamport_version: SequenceNumber,
     /// Objects whose state are changed in the object store.
     changed_objects: Vec<(ObjectID, EffectsObjectChange)>,
     /// Shared objects that are not mutated in this transaction. Unlike owned objects,
@@ -117,6 +117,9 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                     }
                     UnchangedSharedKind::ReadDeleted(seqno) => {
                         InputSharedObject::ReadDeleted(*id, *seqno)
+                    }
+                    UnchangedSharedKind::Cancelled(seqno) => {
+                        InputSharedObject::Cancelled(*id, *seqno)
                     }
                 },
             ))
@@ -354,6 +357,9 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             InputSharedObject::MutateDeleted(obj_id, seqno) => self
                 .unchanged_shared_objects
                 .push((obj_id, UnchangedSharedKind::MutateDeleted(seqno))),
+            InputSharedObject::Cancelled(obj_id, seqno) => self
+                .unchanged_shared_objects
+                .push((obj_id, UnchangedSharedKind::Cancelled(seqno))),
         }
     }
 
@@ -419,6 +425,10 @@ impl TransactionEffectsV2 {
                     } else {
                         Some((id, UnchangedSharedKind::ReadDeleted(version)))
                     }
+                }
+                SharedInput::Cancelled((id, version)) => {
+                    debug_assert!(!changed_objects.contains_key(&id));
+                    Some((id, UnchangedSharedKind::Cancelled(version)))
                 }
             })
             .collect();
@@ -546,6 +556,10 @@ impl TransactionEffectsV2 {
             );
         }
     }
+
+    pub fn changed_objects(&self) -> &[(ObjectID, EffectsObjectChange)] {
+        &self.changed_objects
+    }
 }
 
 impl Default for TransactionEffectsV2 {
@@ -575,4 +589,6 @@ pub enum UnchangedSharedKind {
     MutateDeleted(SequenceNumber),
     /// Deleted shared objects that appear as read-only in the input.
     ReadDeleted(SequenceNumber),
+    /// Shared objects in cancelled transaction. The sequence number embed cancellation reason.
+    Cancelled(SequenceNumber),
 }

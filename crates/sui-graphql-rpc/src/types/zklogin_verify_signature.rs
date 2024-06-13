@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use crate::config::ZkLoginConfig;
 use crate::error::Error;
 use crate::server::watermark_task::Watermark;
@@ -19,6 +21,7 @@ use sui_types::crypto::ToFromBytes;
 use sui_types::dynamic_field::{DynamicFieldType, Field};
 use sui_types::signature::GenericSignature;
 use sui_types::signature::VerifyParams;
+use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::TransactionData;
 use sui_types::{TypeTag, SUI_AUTHENTICATOR_STATE_ADDRESS};
 use tracing::warn;
@@ -75,11 +78,14 @@ pub(crate) async fn verify_zklogin_signature(
         ));
     };
 
-    // fetch on-chain JWKs from dynamic field of system object.
-    let df = DynamicField::query(
-        ctx,
+    // fetch on-chain JWKs from dynamic field of system object. Due to recent performance
+    // degradations, the existing `DynamicField::query` method is now consistently timing out. As a
+    // workaround, we are using the `query_latest_dynamic_field` method, which fetches object data
+    // from the live `objects` table. This can be reverted once the `objects_snapshot` lag issue is
+    // fixed and we've backfilled the `objects_version` table.
+    let df = DynamicField::query_latest_dynamic_field(
+        ctx.data_unchecked(),
         SUI_AUTHENTICATOR_STATE_ADDRESS.into(),
-        None,
         DynamicFieldName {
             type_: ExactTypeFilter(TypeTag::U64),
             bcs: Base64(bcs::to_bytes(&1u64).unwrap()),
@@ -125,12 +131,14 @@ pub(crate) async fn verify_zklogin_signature(
             let tx_data: TransactionData = bcs::from_bytes(&bytes)
                 .map_err(|_| Error::Client("Invalid tx data bytes".to_string()))?;
             let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
-            let tx_sender = tx_data.execution_parts().1;
-            if tx_sender != author.into() {
-                return Err(Error::Client("Tx sender mismatch author".to_string()));
-            }
             let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
-            match sig.verify_authenticator(&intent_msg, tx_sender, curr_epoch, &verify_params) {
+            match sig.verify_authenticator(
+                &intent_msg,
+                author.into(),
+                curr_epoch,
+                &verify_params,
+                Arc::new(VerifiedDigestCache::new_empty()),
+            ) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
                     errors: vec![],
@@ -153,7 +161,13 @@ pub(crate) async fn verify_zklogin_signature(
             );
 
             let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
-            match sig.verify_authenticator(&intent_msg, author.into(), curr_epoch, &verify_params) {
+            match sig.verify_authenticator(
+                &intent_msg,
+                author.into(),
+                curr_epoch,
+                &verify_params,
+                Arc::new(VerifiedDigestCache::new_empty()),
+            ) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
                     errors: vec![],

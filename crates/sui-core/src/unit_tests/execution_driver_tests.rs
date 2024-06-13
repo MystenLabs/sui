@@ -4,7 +4,6 @@
 use crate::authority::authority_tests::{send_consensus, send_consensus_no_execution};
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::AuthorityState;
-use crate::authority::EffectsNotifyRead;
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
@@ -250,7 +249,7 @@ async fn execute_owned_on_first_three_authorities(
     do_transaction(&authority_clients[2], txn).await;
     let cert = extract_cert(authority_clients, committee, txn.digest())
         .await
-        .try_into_verified(committee, &Default::default())
+        .try_into_verified_for_testing(committee, &Default::default())
         .unwrap();
     do_cert(&authority_clients[0], &cert).await;
     do_cert(&authority_clients[1], &cert).await;
@@ -264,8 +263,8 @@ pub async fn do_cert_with_shared_objects(
 ) -> TransactionEffects {
     send_consensus(authority, cert).await;
     authority
-        .get_effects_notify_read()
-        .notify_read_executed_effects(vec![*cert.digest()])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[*cert.digest()])
         .await
         .unwrap()
         .pop()
@@ -282,7 +281,7 @@ async fn execute_shared_on_first_three_authorities(
     do_transaction(&authority_clients[2], txn).await;
     let cert = extract_cert(authority_clients, committee, txn.digest())
         .await
-        .try_into_verified(committee, &Default::default())
+        .try_into_verified_for_testing(committee, &Default::default())
         .unwrap();
     do_cert_with_shared_objects(&authority_clients[0].authority_client().state, &cert).await;
     do_cert_with_shared_objects(&authority_clients[1].authority_client().state, &cert).await;
@@ -437,14 +436,14 @@ async fn test_execution_with_dependencies() {
     }
 
     // All certs should get executed eventually.
-    let digests = executed_shared_certs
+    let digests: Vec<_> = executed_shared_certs
         .iter()
         .chain(executed_owned_certs.iter())
         .map(|cert| *cert.digest())
         .collect();
     authorities[3]
-        .get_effects_notify_read()
-        .notify_read_executed_effects(digests)
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&digests)
         .await
         .unwrap();
 }
@@ -465,7 +464,7 @@ async fn try_sign_on_first_three_authorities(
     }
     extract_cert(authority_clients, committee, txn.digest())
         .await
-        .try_into_verified(committee, &Default::default())
+        .try_into_verified_for_testing(committee, &Default::default())
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -507,8 +506,8 @@ async fn test_per_object_overload() {
     }
     for authority in authorities.iter().take(3) {
         authority
-            .get_effects_notify_read()
-            .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+            .get_transaction_cache_reader()
+            .notify_read_executed_effects(&[*create_counter_cert.digest()])
             .await
             .unwrap()
             .pop()
@@ -522,8 +521,8 @@ async fn test_per_object_overload() {
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
-        .get_effects_notify_read()
-        .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[*create_counter_cert.digest()])
         .await
         .unwrap()
         .pop()
@@ -636,8 +635,8 @@ async fn test_txn_age_overload() {
     }
     for authority in authorities.iter().take(3) {
         authority
-            .get_effects_notify_read()
-            .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+            .get_transaction_cache_reader()
+            .notify_read_executed_effects(&[*create_counter_cert.digest()])
             .await
             .unwrap()
             .pop()
@@ -651,8 +650,8 @@ async fn test_txn_age_overload() {
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
-        .get_effects_notify_read()
-        .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[*create_counter_cert.digest()])
         .await
         .unwrap()
         .pop()

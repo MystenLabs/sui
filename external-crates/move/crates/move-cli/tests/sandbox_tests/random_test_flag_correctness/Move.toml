@@ -1,0 +1,8 @@
+[package]
+name = "random_test_flag_correctness"
+
+[addresses]
+std = "0x1"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }

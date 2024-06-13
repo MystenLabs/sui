@@ -132,6 +132,7 @@ pub struct Migration {
 }
 
 /// A mapping from file ids to file contents along with the mapping of filehash to fileID.
+#[derive(Debug, Clone)]
 pub struct MappedFiles {
     files: SimpleFiles<Symbol, Arc<str>>,
     file_mapping: HashMap<FileHash, FileId>,
@@ -139,14 +140,14 @@ pub struct MappedFiles {
 
 /// A file, and the line:column start, and line:column end that corresponds to a `Loc`
 #[allow(dead_code)]
-pub struct FileLineColSpan {
+pub struct FilePosition {
     pub file_id: FileId,
-    pub start: LineColLocation,
-    pub end: LineColLocation,
+    pub start: Position,
+    pub end: Position,
 }
 
-/// A line and column location in a file
-pub struct LineColLocation {
+/// A position holds the byte offset  along with the  line and column location in a file.
+pub struct Position {
     pub line: usize,
     pub column: usize,
     pub byte: usize,
@@ -193,37 +194,115 @@ impl MappedFiles {
         let id = self.files.add(fname, source);
         self.file_mapping.insert(fhash, id);
     }
+}
 
-    #[allow(dead_code)]
-    pub fn location(&self, loc: Loc) -> FileLineColSpan {
+// This is abstracted into a trait for reuse by the Move Analyzer.
+
+pub trait PositionInfo {
+    type FileContents: AsRef<str>;
+    fn files(&self) -> &SimpleFiles<Symbol, Self::FileContents>;
+    fn file_mapping(&self) -> &HashMap<FileHash, FileId>;
+
+    fn filename(&self, fhash: &FileHash) -> &str {
+        let file_id = self.file_mapping().get(fhash).unwrap();
+        self.files().get(*file_id).unwrap().name()
+    }
+
+    fn start_position(&self, loc: &Loc) -> Position {
+        self.position(loc).start
+    }
+
+    fn end_position(&self, loc: &Loc) -> Position {
+        self.position(loc).end
+    }
+
+    fn position(&self, loc: &Loc) -> FilePosition {
+        self.position_opt(loc).unwrap()
+    }
+
+    fn byte_span(&self, loc: &Loc) -> FileByteSpan {
+        self.byte_span_opt(loc).unwrap()
+    }
+
+    fn start_position_opt(&self, loc: &Loc) -> Option<Position> {
+        self.position_opt(loc).map(|posn| posn.start)
+    }
+
+    fn end_position_opt(&self, loc: &Loc) -> Option<Position> {
+        self.position_opt(loc).map(|posn| posn.end)
+    }
+
+    fn position_opt(&self, loc: &Loc) -> Option<FilePosition> {
         let start_loc = loc.start() as usize;
         let end_loc = loc.end() as usize;
-        let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
-        let start_file_loc = self.files.location(file_id, start_loc).unwrap();
-        let end_file_loc = self.files.location(file_id, end_loc).unwrap();
-        FileLineColSpan {
+        let file_id = *self.file_mapping().get(&loc.file_hash())?;
+        let start_file_loc = self.files().location(file_id, start_loc).ok()?;
+        let end_file_loc = self.files().location(file_id, end_loc).ok()?;
+        let posn = FilePosition {
             file_id,
-            start: LineColLocation {
+            start: Position {
                 line: start_file_loc.line_number,
                 column: start_file_loc.column_number - 1,
                 byte: start_loc,
             },
-            end: LineColLocation {
+            end: Position {
                 line: end_file_loc.line_number,
                 column: end_file_loc.column_number - 1,
                 byte: end_loc,
             },
-        }
+        };
+        Some(posn)
     }
 
-    pub fn byte_location(&self, loc: Loc) -> FileByteSpan {
+    fn byte_span_opt(&self, loc: &Loc) -> Option<FileByteSpan> {
         let start = loc.start() as usize;
         let end = loc.end() as usize;
-        let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
-        FileByteSpan {
+        let file_id = *self.file_mapping().get(&loc.file_hash())?;
+        let posn = FileByteSpan {
             byte_span: ByteSpan { start, end },
             file_id,
-        }
+        };
+        Some(posn)
+    }
+
+    /// Given a line number in the file return the `Loc` for the line.
+    fn line_to_loc_opt(&self, file_hash: &FileHash, line_number: usize) -> Option<Loc> {
+        let file_id = self.file_mapping().get(file_hash)?;
+        let line_range = self.files().line_range(*file_id, line_number).ok()?;
+        Some(Loc::new(
+            *file_hash,
+            line_range.start as u32,
+            line_range.end as u32,
+        ))
+    }
+
+    /// Given a location `Loc` return a new loc only for source with leading and trailing
+    /// whitespace removed.
+    fn trimmed_loc_opt(&self, loc: &Loc) -> Option<Loc> {
+        let source_str = self.source_of_loc_opt(loc)?;
+        let trimmed_front = source_str.trim_start();
+        let new_start = loc.start() as usize + (source_str.len() - trimmed_front.len());
+        let trimmed_back = trimmed_front.trim_end();
+        let new_end = (loc.end() as usize).saturating_sub(trimmed_front.len() - trimmed_back.len());
+        Some(Loc::new(loc.file_hash(), new_start as u32, new_end as u32))
+    }
+
+    /// Given a location `Loc` return the source for the location. This include any leading and
+    /// trailing whitespace.
+    fn source_of_loc_opt(&self, loc: &Loc) -> Option<&str> {
+        let file_id = *self.file_mapping().get(&loc.file_hash())?;
+        Some(&self.files().source(file_id).ok()?[loc.usize_range()])
+    }
+}
+
+impl PositionInfo for MappedFiles {
+    type FileContents = Arc<str>;
+    fn files(&self) -> &SimpleFiles<Symbol, Self::FileContents> {
+        &self.files
+    }
+
+    fn file_mapping(&self) -> &HashMap<FileHash, FileId> {
+        &self.file_mapping
     }
 }
 
@@ -241,7 +320,7 @@ pub fn report_warnings(files: &FilesSourceText, warnings: Diagnostics) {
     if warnings.is_empty() {
         return;
     }
-    debug_assert!(warnings.max_severity().unwrap() == Severity::Warning);
+    debug_assert!(warnings.max_severity_at_or_under_severity(Severity::Warning));
     report_diagnostics_impl(files, warnings, false)
 }
 
@@ -302,6 +381,20 @@ pub fn report_diagnostics_to_buffer(
     writer.into_inner()
 }
 
+pub fn report_diagnostics_to_buffer_with_mapped_files(
+    mapped_files: &MappedFiles,
+    diags: Diagnostics,
+    ansi_color: bool,
+) -> Vec<u8> {
+    let mut writer = if ansi_color {
+        Buffer::ansi()
+    } else {
+        Buffer::no_color()
+    };
+    render_diagnostics(&mut writer, mapped_files, diags);
+    writer.into_inner()
+}
+
 fn env_color() -> ColorChoice {
     match read_env_var(COLOR_MODE_ENV_VAR).as_str() {
         "NONE" => ColorChoice::Never,
@@ -317,10 +410,10 @@ fn output_diagnostics<W: WriteColor>(
     diags: Diagnostics,
 ) {
     let mapping = MappedFiles::new(sources.clone());
-    render_diagnostics(writer, mapping, diags);
+    render_diagnostics(writer, &mapping, diags);
 }
 
-fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: Diagnostics) {
+fn render_diagnostics(writer: &mut dyn WriteColor, mapping: &MappedFiles, diags: Diagnostics) {
     let Diagnostics {
         diags: Some(mut diags),
         format,
@@ -338,8 +431,8 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: 
         loc1.cmp(loc2)
     });
     match format {
-        DiagnosticsFormat::Text => emit_diagnostics_text(writer, &mapping, diags),
-        DiagnosticsFormat::JSON => emit_diagnostics_json(writer, &mapping, diags),
+        DiagnosticsFormat::Text => emit_diagnostics_text(writer, mapping, diags),
+        DiagnosticsFormat::JSON => emit_diagnostics_json(writer, mapping, diags),
     }
 }
 
@@ -480,6 +573,23 @@ impl Diagnostics {
 
     pub fn set_format(&mut self, format: DiagnosticsFormat) {
         self.format = format;
+    }
+
+    /// Always false when no diagnostics are present.
+    pub fn max_severity_at_or_above_severity(&self, threshold: Severity) -> bool {
+        match self.max_severity() {
+            Some(max) if max >= threshold => true,
+            Some(_) | None => false,
+        }
+    }
+
+    /// Always true when no diagnostics are present.
+    pub fn max_severity_at_or_under_severity(&self, threshold: Severity) -> bool {
+        match self.max_severity() {
+            Some(max) if max <= threshold => true,
+            None => true,
+            Some(_) => false,
+        }
     }
 
     pub fn max_severity(&self) -> Option<Severity> {
@@ -660,9 +770,8 @@ impl Diagnostics {
             .any(|d| d.info().category() == Category::Syntax as u8 && d.primary_label.0 == loc)
     }
 
-    /// Returns the number of diags filtered in source (user) code (an not in the dependencies) that
-    /// have a given prefix (first value returned) and how many different categories of diags were
-    /// filtered.
+    /// Returns the number of diags filtered in source (user) code (not in the dependencies) that
+    /// have a given prefix and how many different unique lints were filtered.
     pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
         let Self {
             diags: Some(inner),
@@ -672,14 +781,14 @@ impl Diagnostics {
             return (0, 0);
         };
         let mut filtered_diags_num = 0;
-        let mut filtered_categories = HashSet::new();
+        let mut unique = HashSet::new();
         inner.filtered_source_diagnostics.iter().for_each(|d| {
             if d.info.external_prefix() == Some(prefix) {
                 filtered_diags_num += 1;
-                filtered_categories.insert(d.info.category());
+                unique.insert((d.info.category(), d.info.code()));
             }
         });
-        (filtered_diags_num, filtered_categories.len())
+        (filtered_diags_num, unique.len())
     }
 
     fn env_color(&self) -> ColorChoice {
@@ -781,7 +890,7 @@ impl Diagnostic {
             notes: _,
         } = self;
 
-        let bloc = mapped_files.location(*ploc);
+        let bloc = mapped_files.position(ploc);
         JsonDiagnostic {
             file: mapped_files
                 .files
@@ -1099,7 +1208,7 @@ impl Migration {
 
     fn find_file_location(&mut self, diag: &Diagnostic) -> FileByteSpan {
         let (loc, _msg) = &diag.primary_label;
-        self.mapped_files.byte_location(*loc)
+        self.mapped_files.byte_span(loc)
     }
 
     fn get_file_contents(&self, file_id: FileId) -> String {

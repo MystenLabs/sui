@@ -13,22 +13,22 @@ module sui::table_vec_tests {
         let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
 
         let mut table_vec = table_vec::empty<u64>(scenario.ctx());
-        assert!(table_vec.length() == 0, 0);
+        assert!(table_vec.length() == 0);
 
         table_vec.push_back(7);
         let mut_value = &mut table_vec[0];
         *mut_value = *mut_value + 1;
         let value = &table_vec[0];
-        assert!(*value == 8, 0);
+        assert!(*value == 8);
 
         table_vec.push_back(5);
         table_vec.swap(0, 1);
 
         let value = table_vec.swap_remove(0);
-        assert!(value == 5, 0);
+        assert!(value == 5);
 
         let value = table_vec.pop_back();
-        assert!(value == 8, 0);
+        assert!(value == 8);
         table_vec.destroy_empty();
         scenario.end();
     }

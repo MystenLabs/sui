@@ -33,6 +33,7 @@ feature_flags:
   loaded_child_object_format_type: true
   receive_objects: true
   random_beacon: true
+  bridge: true
   enable_effects_v2: true
   narwhal_certificate_v2: true
   verify_legacy_zklogin_address: true
@@ -49,6 +50,7 @@ feature_flags:
   consensus_choice: SwapEachEpoch
   consensus_network: Tonic
   zklogin_max_epoch_upper_bound_delta: 30
+  mysticeti_leader_scoring_and_schedule: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -64,6 +66,7 @@ max_type_argument_depth: 16
 max_pure_argument_size: 16384
 max_programmable_tx_commands: 1024
 move_binary_format_version: 6
+min_move_binary_format_version: 6
 binary_module_handles: 100
 binary_struct_handles: 300
 binary_function_handles: 1500

@@ -16,15 +16,16 @@
 //! - its only instance in existence is passed as an argument to the module initializer
 //! - it is never instantiated anywhere in its defining module
 use move_binary_format::file_format::{
-    Ability, AbilitySet, Bytecode, CompiledModule, FunctionDefinition, FunctionHandle,
-    SignatureToken, StructDefinition, StructHandle,
+    Ability, AbilitySet, Bytecode, CompiledModule, DatatypeHandle, FunctionDefinition,
+    FunctionHandle, SignatureToken, StructDefinition,
 };
 use move_core_types::{ident_str, language_storage::ModuleId};
+use sui_types::bridge::BRIDGE_SUPPORTED_ASSET;
 use sui_types::{
     base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     error::ExecutionError,
     move_package::{is_test_fun, FnInfoMap},
-    SUI_FRAMEWORK_ADDRESS,
+    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
 use crate::{verification_failure, INIT_FN_NAME};
@@ -41,7 +42,16 @@ pub fn verify_module(
     // the module has no initializer). The reason for it is that the SUI coin is only instantiated
     // during genesis. It is easiest to simply special-case this module particularly that this is
     // framework code and thus deemed correct.
-    if ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("sui").to_owned()) == module.self_id() {
+    let self_id = module.self_id();
+
+    if ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("sui").to_owned()) == self_id {
+        return Ok(());
+    }
+
+    if BRIDGE_SUPPORTED_ASSET
+        .iter()
+        .any(|token| ModuleId::new(BRIDGE_ADDRESS, ident_str!(token).to_owned()) == self_id)
+    {
         return Ok(());
     }
 
@@ -51,7 +61,7 @@ pub fn verify_module(
     let mut one_time_witness_candidate = None;
     // find structs that can potentially represent a one-time witness type
     for def in struct_defs {
-        let struct_handle = module.struct_handle_at(def.struct_handle);
+        let struct_handle = module.datatype_handle_at(def.struct_handle);
         let struct_name = module.identifier_at(struct_handle.name).as_str();
         if mod_name.to_ascii_uppercase() == struct_name {
             // one-time witness candidate's type name must be the same as capitalized module name
@@ -107,7 +117,7 @@ pub fn verify_module(
 fn verify_one_time_witness(
     module: &CompiledModule,
     candidate_name: &str,
-    candidate_handle: &StructHandle,
+    candidate_handle: &DatatypeHandle,
 ) -> Result<(), String> {
     // must have only one ability: drop
     let drop_set = AbilitySet::EMPTY | Ability::Drop;
@@ -135,7 +145,7 @@ fn verify_init_one_time_witness(
     module: &CompiledModule,
     fn_handle: &FunctionHandle,
     candidate_name: &str,
-    candidate_handle: &StructHandle,
+    candidate_handle: &DatatypeHandle,
 ) -> Result<(), String> {
     let fn_sig = module.signature_at(fn_handle.parameters);
     if fn_sig.len() != 2 || !is_one_time_witness(module, &fn_sig.0[0], candidate_handle) {
@@ -157,9 +167,9 @@ fn verify_init_one_time_witness(
 fn is_one_time_witness(
     view: &CompiledModule,
     tok: &SignatureToken,
-    candidate_handle: &StructHandle,
+    candidate_handle: &DatatypeHandle,
 ) -> bool {
-    matches!(tok, SignatureToken::Struct(idx) if view.struct_handle_at(*idx) == candidate_handle)
+    matches!(tok, SignatureToken::Datatype(idx) if view.datatype_handle_at(*idx) == candidate_handle)
 }
 
 /// Checks if this module's `init` function has a single parameter of TxContext type only

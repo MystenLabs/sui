@@ -19,6 +19,7 @@ export default {
 	theme: {
 		extend: {
 			colors: {
+				black: '#000000',
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',
 				facebook: '#1877F2',

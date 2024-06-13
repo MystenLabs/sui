@@ -4,17 +4,18 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
 use crate::authority::epoch_start_configuration::EpochFlag;
-use crate::authority::{
-    authority_notify_read::EffectsNotifyRead, epoch_start_configuration::EpochStartConfiguration,
-};
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::AuthorityStore;
+use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
-use async_trait::async_trait;
+use sui_types::bridge::Bridge;
 
 use futures::{future::BoxFuture, FutureExt};
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use prometheus::Registry;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
+use sui_config::ExecutionCacheConfig;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::VerifiedExecutionData;
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
@@ -24,8 +25,8 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{
     error::{Error as StorageError, Result as StorageResult},
-    BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey, ObjectOrTombstone,
-    ObjectStore, PackageObject, ParentSync,
+    BackingPackageStore, BackingStore, ChildObjectResolver, MarkerValue, ObjectKey,
+    ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
@@ -37,31 +38,136 @@ use sui_types::{
 use tracing::instrument;
 
 pub(crate) mod cache_types;
+pub mod metrics;
 mod object_locks;
 pub mod passthrough_cache;
+pub mod proxy_cache;
 pub mod writeback_cache;
 
-use passthrough_cache::PassthroughCache;
-use writeback_cache::WritebackCache;
+pub use passthrough_cache::PassthroughCache;
+pub use proxy_cache::ProxyCache;
+pub use writeback_cache::WritebackCache;
 
-pub struct ExecutionCacheMetrics {
-    pending_notify_read: IntGauge,
+use metrics::ExecutionCacheMetrics;
+
+// If you have Arc<ExecutionCache>, you cannot return a reference to it as
+// an &Arc<dyn ExecutionCacheRead> (for example), because the trait object is a fat pointer.
+// So, in order to be able to return &Arc<dyn T>, we create all the converted trait objects
+// (aka fat pointers) up front and return references to them.
+#[derive(Clone)]
+pub struct ExecutionCacheTraitPointers {
+    pub object_cache_reader: Arc<dyn ObjectCacheRead>,
+    pub transaction_cache_reader: Arc<dyn TransactionCacheRead>,
+    pub cache_writer: Arc<dyn ExecutionCacheWrite>,
+    pub backing_store: Arc<dyn BackingStore + Send + Sync>,
+    pub backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
+    pub object_store: Arc<dyn ObjectStore + Send + Sync>,
+    pub reconfig_api: Arc<dyn ExecutionCacheReconfigAPI>,
+    pub accumulator_store: Arc<dyn AccumulatorStore>,
+    pub checkpoint_cache: Arc<dyn CheckpointCache>,
+    pub state_sync_store: Arc<dyn StateSyncAPI>,
+    pub cache_commit: Arc<dyn ExecutionCacheCommit>,
+    pub testing_api: Arc<dyn TestingAPI>,
 }
 
-impl ExecutionCacheMetrics {
-    pub fn new(registry: &Registry) -> Self {
+impl ExecutionCacheTraitPointers {
+    pub fn new<T>(cache: Arc<T>) -> Self
+    where
+        T: ObjectCacheRead
+            + TransactionCacheRead
+            + ExecutionCacheWrite
+            + BackingStore
+            + BackingPackageStore
+            + ObjectStore
+            + ExecutionCacheReconfigAPI
+            + AccumulatorStore
+            + CheckpointCache
+            + StateSyncAPI
+            + ExecutionCacheCommit
+            + TestingAPI
+            + 'static,
+    {
         Self {
-            pending_notify_read: register_int_gauge_with_registry!(
-                "pending_notify_read",
-                "Pending notify read requests",
-                registry,
-            )
-            .unwrap(),
+            object_cache_reader: cache.clone(),
+            transaction_cache_reader: cache.clone(),
+            cache_writer: cache.clone(),
+            backing_store: cache.clone(),
+            backing_package_store: cache.clone(),
+            object_store: cache.clone(),
+            reconfig_api: cache.clone(),
+            accumulator_store: cache.clone(),
+            checkpoint_cache: cache.clone(),
+            state_sync_store: cache.clone(),
+            cache_commit: cache.clone(),
+            testing_api: cache.clone(),
         }
     }
 }
 
-pub type ExecutionCache = PassthroughCache;
+static ENABLE_WRITEBACK_CACHE_ENV_VAR: &str = "ENABLE_WRITEBACK_CACHE";
+
+#[derive(Debug)]
+pub enum ExecutionCacheConfigType {
+    WritebackCache,
+    PassthroughCache,
+}
+
+pub fn choose_execution_cache(config: &ExecutionCacheConfig) -> ExecutionCacheConfigType {
+    #[cfg(msim)]
+    {
+        let mut use_random_cache = None;
+        sui_macros::fail_point_if!("select-random-cache", || {
+            let random = rand::random::<bool>();
+            tracing::info!("Randomly selecting cache: {}", random);
+            use_random_cache = Some(random);
+        });
+        if let Some(random) = use_random_cache {
+            if random {
+                return ExecutionCacheConfigType::PassthroughCache;
+            } else {
+                return ExecutionCacheConfigType::WritebackCache;
+            }
+        }
+    }
+
+    if std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok()
+        || matches!(config, ExecutionCacheConfig::WritebackCache { .. })
+    {
+        ExecutionCacheConfigType::WritebackCache
+    } else {
+        ExecutionCacheConfigType::PassthroughCache
+    }
+}
+
+pub fn build_execution_cache(
+    epoch_start_config: &EpochStartConfiguration,
+    prometheus_registry: &Registry,
+    store: &Arc<AuthorityStore>,
+) -> ExecutionCacheTraitPointers {
+    let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
+    ExecutionCacheTraitPointers::new(
+        ProxyCache::new(epoch_start_config, store.clone(), execution_cache_metrics).into(),
+    )
+}
+
+/// Should only be used for sui-tool or tests. Nodes must use build_execution_cache which
+/// uses the epoch_start_config to prevent cache impl from switching except at epoch boundaries.
+pub fn build_execution_cache_from_env(
+    prometheus_registry: &Registry,
+    store: &Arc<AuthorityStore>,
+) -> ExecutionCacheTraitPointers {
+    let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
+
+    if std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
+        ExecutionCacheTraitPointers::new(
+            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
+        )
+    } else {
+        ExecutionCacheTraitPointers::new(
+            PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
+        )
+    }
+}
 
 pub trait ExecutionCacheCommit: Send + Sync {
     /// Durably commit the outputs of the given transactions to the database.
@@ -89,7 +195,7 @@ pub trait ExecutionCacheCommit: Send + Sync {
     ) -> BoxFuture<'a, SuiResult>;
 }
 
-pub trait ExecutionCacheRead: Send + Sync {
+pub trait ObjectCacheRead: Send + Sync {
     fn get_package_object(&self, id: &ObjectID) -> SuiResult<Option<PackageObject>>;
     fn force_reload_system_packages(&self, system_package_ids: &[ObjectID]);
 
@@ -195,6 +301,12 @@ pub trait ExecutionCacheRead: Send + Sync {
             )?
             .into_iter(),
         ) {
+            assert!(
+                input_key.version().is_none() || input_key.version().unwrap().is_valid(),
+                "Shared objects in cancelled transaction should always be available immediately, 
+                 but it appears that transaction manager is waiting for {:?} to become available",
+                input_key
+            );
             // If the key exists at the specified version, then the object is available.
             if has_key {
                 versioned_results.push((*idx, true))
@@ -271,6 +383,83 @@ pub trait ExecutionCacheRead: Send + Sync {
     // safety check before execution, and could potentially be deleted or changed to a debug_assert
     fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
 
+    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState>;
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge>;
+
+    // Marker methods
+
+    /// Get the marker at a specific version
+    fn get_marker_value(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<MarkerValue>>;
+
+    /// Get the latest marker for a given object.
+    fn get_latest_marker(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>>;
+
+    /// If the shared object was deleted, return deletion info for the current live version
+    fn get_last_shared_object_deletion_info(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<(SequenceNumber, TransactionDigest)>> {
+        match self.get_latest_marker(object_id, epoch_id)? {
+            Some((version, MarkerValue::SharedDeleted(digest))) => Ok(Some((version, digest))),
+            _ => Ok(None),
+        }
+    }
+
+    /// If the shared object was deleted, return deletion info for the specified version.
+    fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<TransactionDigest>> {
+        match self.get_marker_value(object_id, version, epoch_id)? {
+            Some(MarkerValue::SharedDeleted(digest)) => Ok(Some(digest)),
+            _ => Ok(None),
+        }
+    }
+
+    fn have_received_object_at_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<bool> {
+        match self.get_marker_value(object_id, version, epoch_id)? {
+            Some(MarkerValue::Received) => Ok(true),
+            _ => Ok(false),
+        }
+    }
+
+    fn have_deleted_owned_object_at_version_or_after(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<bool> {
+        match self.get_latest_marker(object_id, epoch_id)? {
+            Some((marker_version, MarkerValue::OwnedDeleted)) if marker_version >= version => {
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
+    }
+
+    /// Return the watermark for the highest checkpoint for which we've pruned objects.
+    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber>;
+}
+
+pub trait TransactionCacheRead: Send + Sync {
     fn multi_get_transaction_blocks(
         &self,
         digests: &[TransactionDigest],
@@ -414,76 +603,6 @@ pub trait ExecutionCacheRead: Send + Sync {
         }
         .boxed()
     }
-
-    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState>;
-
-    // Marker methods
-
-    /// Get the marker at a specific version
-    fn get_marker_value(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<MarkerValue>>;
-
-    /// Get the latest marker for a given object.
-    fn get_latest_marker(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>>;
-
-    /// If the shared object was deleted, return deletion info for the current live version
-    fn get_last_shared_object_deletion_info(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, TransactionDigest)>> {
-        match self.get_latest_marker(object_id, epoch_id)? {
-            Some((version, MarkerValue::SharedDeleted(digest))) => Ok(Some((version, digest))),
-            _ => Ok(None),
-        }
-    }
-
-    /// If the shared object was deleted, return deletion info for the specified version.
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<TransactionDigest>> {
-        match self.get_marker_value(object_id, version, epoch_id)? {
-            Some(MarkerValue::SharedDeleted(digest)) => Ok(Some(digest)),
-            _ => Ok(None),
-        }
-    }
-
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<bool> {
-        match self.get_marker_value(object_id, version, epoch_id)? {
-            Some(MarkerValue::Received) => Ok(true),
-            _ => Ok(false),
-        }
-    }
-
-    fn have_deleted_owned_object_at_version_or_after(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<bool> {
-        match self.get_latest_marker(object_id, epoch_id)? {
-            Some((marker_version, MarkerValue::OwnedDeleted)) if marker_version >= version => {
-                Ok(true)
-            }
-            _ => Ok(false),
-        }
-    }
 }
 
 pub trait ExecutionCacheWrite: Send + Sync {
@@ -570,6 +689,14 @@ pub trait ExecutionCacheReconfigAPI: Send + Sync {
         cur_epoch_store: &AuthorityPerEpochStore,
         new_protocol_version: ProtocolVersion,
     );
+
+    /// Reconfigure the cache itself.
+    /// TODO: this is only needed for ProxyCache to switch between cache impls. It can be removed
+    /// once WritebackCache is the sole cache impl.
+    fn reconfigure_cache<'a>(
+        &'a self,
+        epoch_start_config: &'a EpochStartConfiguration,
+    ) -> BoxFuture<'a, ()>;
 }
 
 // StateSyncAPI is for writing any data that was not the result of transaction execution,
@@ -588,45 +715,15 @@ pub trait StateSyncAPI: Send + Sync {
     ) -> SuiResult;
 }
 
-// TODO: Remove EffectsNotifyRead trait and just use ExecutionCacheRead directly everywhere.
-/// This wrapper is used so that we don't have to disambiguate traits at every callsite.
-pub struct NotifyReadWrapper<T>(Arc<T>);
-
-impl<T> Clone for NotifyReadWrapper<T> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-#[async_trait]
-impl<T: ExecutionCacheRead + 'static> EffectsNotifyRead for NotifyReadWrapper<T> {
-    async fn notify_read_executed_effects(
-        &self,
-        digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<TransactionEffects>> {
-        self.0.notify_read_executed_effects(&digests).await
-    }
-
-    async fn notify_read_executed_effects_digests(
-        &self,
-        digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<TransactionEffectsDigest>> {
-        self.0.notify_read_executed_effects_digests(&digests).await
-    }
-
-    fn multi_get_executed_effects(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.0.multi_get_executed_effects(digests)
-    }
+pub trait TestingAPI: Send + Sync {
+    fn database_for_testing(&self) -> Arc<AuthorityStore>;
 }
 
 macro_rules! implement_storage_traits {
     ($implementor: ident) => {
         impl ObjectStore for $implementor {
             fn get_object(&self, object_id: &ObjectID) -> StorageResult<Option<Object>> {
-                ExecutionCacheRead::get_object(self, object_id).map_err(StorageError::custom)
+                ObjectCacheRead::get_object(self, object_id).map_err(StorageError::custom)
             }
 
             fn get_object_by_key(
@@ -634,7 +731,7 @@ macro_rules! implement_storage_traits {
                 object_id: &ObjectID,
                 version: sui_types::base_types::VersionNumber,
             ) -> StorageResult<Option<Object>> {
-                ExecutionCacheRead::get_object_by_key(self, object_id, version)
+                ObjectCacheRead::get_object_by_key(self, object_id, version)
                     .map_err(StorageError::custom)
             }
         }
@@ -670,7 +767,7 @@ macro_rules! implement_storage_traits {
                 receive_object_at_version: SequenceNumber,
                 epoch_id: EpochId,
             ) -> SuiResult<Option<Object>> {
-                let Some(recv_object) = ExecutionCacheRead::get_object_by_key(
+                let Some(recv_object) = ObjectCacheRead::get_object_by_key(
                     self,
                     receiving_object_id,
                     receive_object_at_version,
@@ -703,7 +800,7 @@ macro_rules! implement_storage_traits {
                 &self,
                 package_id: &ObjectID,
             ) -> SuiResult<Option<PackageObject>> {
-                ExecutionCacheRead::get_package_object(self, package_id)
+                ObjectCacheRead::get_package_object(self, package_id)
             }
         }
 
@@ -712,7 +809,7 @@ macro_rules! implement_storage_traits {
                 &self,
                 object_id: ObjectID,
             ) -> SuiResult<Option<ObjectRef>> {
-                ExecutionCacheRead::get_latest_object_ref_or_tombstone(self, object_id)
+                ObjectCacheRead::get_latest_object_ref_or_tombstone(self, object_id)
             }
         }
     };
@@ -796,6 +893,20 @@ macro_rules! implement_passthrough_traits {
                 self.store
                     .maybe_reaccumulate_state_hash(cur_epoch_store, new_protocol_version)
             }
+
+            fn reconfigure_cache<'a>(
+                &'a self,
+                _: &'a EpochStartConfiguration,
+            ) -> BoxFuture<'a, ()> {
+                // If we call this method instead of ProxyCache::reconfigure_cache, it's a bug.
+                // Such a bug would almost certainly cause other test failures before reaching this
+                // point, but if it somehow slipped through it is better to crash than risk forking
+                // because ProxyCache::reconfigure_cache was not called.
+                panic!(
+                    "reconfigure_cache should not be called on a {}",
+                    stringify!($implementor)
+                );
+            }
         }
 
         impl StateSyncAPI for $implementor {
@@ -818,6 +929,12 @@ macro_rules! implement_passthrough_traits {
                     .multi_insert_transaction_and_effects(transactions_and_effects.iter())?)
             }
         }
+
+        impl TestingAPI for $implementor {
+            fn database_for_testing(&self) -> Arc<AuthorityStore> {
+                self.store.clone()
+            }
+        }
     };
 }
 
@@ -825,9 +942,10 @@ use implement_passthrough_traits;
 
 implement_storage_traits!(PassthroughCache);
 implement_storage_traits!(WritebackCache);
+implement_storage_traits!(ProxyCache);
 
 pub trait ExecutionCacheAPI:
-    ExecutionCacheRead
+    ObjectCacheRead
     + ExecutionCacheWrite
     + ExecutionCacheCommit
     + ExecutionCacheReconfigAPI

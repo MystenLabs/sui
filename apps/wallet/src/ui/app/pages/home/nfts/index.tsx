@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
+import { useBlockedObjectList } from '_app/hooks/useBlockedObjectList';
 import Alert from '_components/alert';
 import FiltersPortal from '_components/filters-tags';
 import Loading from '_components/loading';
@@ -10,6 +11,7 @@ import { setToSessionStorage } from '_src/background/storage-utils';
 import { AssetFilterTypes, useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { useOnScreen } from '@mysten/core';
+import { normalizeStructTag } from '@mysten/sui/utils';
 import { useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -20,6 +22,7 @@ import VisualAssets from './VisualAssets';
 
 function NftsPage() {
 	const accountAddress = useActiveAddress();
+	const { data: blockedObjectList } = useBlockedObjectList();
 	const {
 		data: ownedAssets,
 		hasNextPage,
@@ -45,9 +48,18 @@ function NftsPage() {
 	};
 	const { filterType } = useParams();
 	const filteredNFTs = useMemo(() => {
-		if (!filterType) return ownedAssets?.visual;
-		return ownedAssets?.[filterType as AssetFilterTypes] ?? [];
-	}, [ownedAssets, filterType]);
+		let filteredData = ownedAssets?.visual;
+		if (filterType) {
+			filteredData = ownedAssets?.[filterType as AssetFilterTypes] ?? [];
+		}
+		return filteredData?.filter((ownedAsset) => {
+			if (!ownedAsset.type) {
+				return true;
+			}
+			const normalizedType = normalizeStructTag(ownedAsset.type);
+			return !blockedObjectList?.includes(normalizedType);
+		});
+	}, [ownedAssets, filterType, blockedObjectList]);
 	const { hiddenAssetIds } = useHiddenAssets();
 
 	if (isLoading) {

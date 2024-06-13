@@ -3,6 +3,7 @@
 
 use crate::authority::authority_store_types::{ObjectContentDigest, StoreData, StoreObject};
 use crate::checkpoints::{CheckpointStore, CheckpointWatermark};
+use crate::rest_index::RestIndexStore;
 use anyhow::anyhow;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use once_cell::sync::Lazy;
@@ -20,6 +21,7 @@ use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
 use sui_types::base_types::SequenceNumber;
+use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
@@ -229,6 +231,7 @@ impl AuthorityStorePruner {
     fn prune_checkpoints(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_db: &Arc<CheckpointStore>,
+        rest_index: Option<&RestIndexStore>,
         checkpoint_number: CheckpointSequenceNumber,
         checkpoints_to_prune: Vec<CheckpointDigest>,
         checkpoint_content_to_prune: Vec<CheckpointContents>,
@@ -292,6 +295,9 @@ impl AuthorityStorePruner {
             )],
         )?;
 
+        if let Some(rest_index) = rest_index {
+            rest_index.prune(&checkpoint_content_to_prune)?;
+        }
         perpetual_batch.write()?;
         checkpoints_batch.write()?;
         metrics
@@ -304,27 +310,33 @@ impl AuthorityStorePruner {
     pub async fn prune_objects_for_eligible_epochs(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
+        rest_index: Option<&RestIndexStore>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
         epoch_duration_ms: u64,
     ) -> anyhow::Result<()> {
-        let mut max_eligible_checkpoint_number = checkpoint_store
+        let _scope = monitored_scope("PruneObjectsForEligibleEpochs");
+        let (mut max_eligible_checkpoint_number, epoch_id) = checkpoint_store
             .get_highest_executed_checkpoint()?
-            .map(|c| *c.sequence_number())
+            .map(|c| (*c.sequence_number(), c.epoch))
             .unwrap_or_default();
         let pruned_checkpoint_number = perpetual_db.get_highest_pruned_checkpoint()?;
         if config.smooth && config.num_epochs_to_retain > 0 {
             max_eligible_checkpoint_number = Self::smoothed_max_eligible_checkpoint_number(
-                pruned_checkpoint_number,
+                checkpoint_store,
                 max_eligible_checkpoint_number,
+                pruned_checkpoint_number,
+                epoch_id,
                 epoch_duration_ms,
-            );
+                config.num_epochs_to_retain,
+            )?;
         }
         Self::prune_for_eligible_epochs(
             perpetual_db,
             checkpoint_store,
+            rest_index,
             PruningMode::Objects,
             config.num_epochs_to_retain,
             pruned_checkpoint_number,
@@ -340,6 +352,7 @@ impl AuthorityStorePruner {
     pub async fn prune_checkpoints_for_eligible_epochs(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
+        rest_index: Option<&RestIndexStore>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
@@ -347,11 +360,12 @@ impl AuthorityStorePruner {
         archive_readers: ArchiveReaderBalancer,
         epoch_duration_ms: u64,
     ) -> anyhow::Result<()> {
+        let _scope = monitored_scope("PruneCheckpointsForEligibleEpochs");
         let pruned_checkpoint_number =
             checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
-        let last_executed_checkpoint = checkpoint_store
+        let (last_executed_checkpoint, epoch_id) = checkpoint_store
             .get_highest_executed_checkpoint()?
-            .map(|c| *c.sequence_number())
+            .map(|c| (*c.sequence_number(), c.epoch))
             .unwrap_or_default();
         let latest_archived_checkpoint = archive_readers
             .get_archive_watermark()
@@ -365,16 +379,22 @@ impl AuthorityStorePruner {
             );
         }
         if config.smooth {
-            max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
-                pruned_checkpoint_number,
-                max_eligible_checkpoint,
-                epoch_duration_ms,
-            );
+            if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints {
+                max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
+                    checkpoint_store,
+                    max_eligible_checkpoint,
+                    pruned_checkpoint_number,
+                    epoch_id,
+                    epoch_duration_ms,
+                    num_epochs_to_retain,
+                )?;
+            }
         }
         debug!("Max eligible checkpoint {}", max_eligible_checkpoint);
         Self::prune_for_eligible_epochs(
             perpetual_db,
             checkpoint_store,
+            rest_index,
             PruningMode::Checkpoints,
             config
                 .num_epochs_to_retain_for_checkpoints()
@@ -393,6 +413,7 @@ impl AuthorityStorePruner {
     pub async fn prune_for_eligible_epochs(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
+        rest_index: Option<&RestIndexStore>,
         mode: PruningMode,
         num_epochs_to_retain: u64,
         starting_checkpoint_number: CheckpointSequenceNumber,
@@ -402,6 +423,8 @@ impl AuthorityStorePruner {
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
     ) -> anyhow::Result<()> {
+        let _scope = monitored_scope("PruneForEligibleEpochs");
+
         let mut checkpoint_number = starting_checkpoint_number;
         let current_epoch = checkpoint_store
             .get_highest_executed_checkpoint()?
@@ -467,6 +490,7 @@ impl AuthorityStorePruner {
                     PruningMode::Checkpoints => Self::prune_checkpoints(
                         perpetual_db,
                         checkpoint_store,
+                        rest_index,
                         checkpoint_number,
                         checkpoints_to_prune,
                         checkpoint_content_to_prune,
@@ -477,6 +501,8 @@ impl AuthorityStorePruner {
                 checkpoints_to_prune = vec![];
                 checkpoint_content_to_prune = vec![];
                 effects_to_prune = vec![];
+                // yield back to the tokio runtime. Prevent potential halt of other tasks
+                tokio::task::yield_now().await;
             }
         }
 
@@ -497,6 +523,7 @@ impl AuthorityStorePruner {
                 PruningMode::Checkpoints => Self::prune_checkpoints(
                     perpetual_db,
                     checkpoint_store,
+                    rest_index,
                     checkpoint_number,
                     checkpoints_to_prune,
                     checkpoint_content_to_prune,
@@ -560,12 +587,23 @@ impl AuthorityStorePruner {
     }
 
     fn smoothed_max_eligible_checkpoint_number(
+        checkpoint_store: &Arc<CheckpointStore>,
+        mut max_eligible_checkpoint: CheckpointSequenceNumber,
         pruned_checkpoint: CheckpointSequenceNumber,
-        max_eligible_checkpoint: CheckpointSequenceNumber,
+        epoch_id: EpochId,
         epoch_duration_ms: u64,
-    ) -> CheckpointSequenceNumber {
+        num_epochs_to_retain: u64,
+    ) -> anyhow::Result<CheckpointSequenceNumber> {
+        if epoch_id < num_epochs_to_retain {
+            return Ok(0);
+        }
+        let last_checkpoint_in_epoch = checkpoint_store
+            .get_epoch_last_checkpoint(epoch_id - num_epochs_to_retain)?
+            .map(|checkpoint| checkpoint.sequence_number)
+            .unwrap_or_default();
+        max_eligible_checkpoint = max_eligible_checkpoint.min(last_checkpoint_in_epoch);
         if max_eligible_checkpoint == 0 {
-            return max_eligible_checkpoint;
+            return Ok(max_eligible_checkpoint);
         }
         let num_intervals = epoch_duration_ms
             .checked_div(Self::pruning_tick_duration_ms(epoch_duration_ms))
@@ -575,7 +613,7 @@ impl AuthorityStorePruner {
             .unwrap_or_default()
             .checked_div(num_intervals)
             .unwrap_or(1);
-        pruned_checkpoint + delta
+        Ok(pruned_checkpoint + delta)
     }
 
     fn setup_pruning(
@@ -583,6 +621,7 @@ impl AuthorityStorePruner {
         epoch_duration_ms: u64,
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
+        rest_index: Option<Arc<RestIndexStore>>,
         objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
@@ -644,12 +683,12 @@ impl AuthorityStorePruner {
             loop {
                 tokio::select! {
                     _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold, epoch_duration_ms).await {
+                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rest_index.as_deref(), &objects_lock_table, config.clone(), metrics.clone(), indirect_objects_threshold, epoch_duration_ms).await {
                             error!("Failed to prune objects: {:?}", err);
                         }
                     },
                     _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold, archive_readers.clone(), epoch_duration_ms).await {
+                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rest_index.as_deref(), &objects_lock_table, config.clone(), metrics.clone(), indirect_objects_threshold, archive_readers.clone(), epoch_duration_ms).await {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
                     },
@@ -663,6 +702,7 @@ impl AuthorityStorePruner {
     pub fn new(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
+        rest_index: Option<Arc<RestIndexStore>>,
         objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
         mut pruning_config: AuthorityStorePruningConfig,
         is_validator: bool,
@@ -687,6 +727,7 @@ impl AuthorityStorePruner {
                 epoch_duration_ms,
                 perpetual_db,
                 checkpoint_store,
+                rest_index,
                 objects_lock_table,
                 AuthorityStorePruningMetrics::new(registry),
                 indirect_objects_threshold,

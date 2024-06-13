@@ -1,13 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::RangeInclusive;
-use std::{collections::BTreeMap, ops::Bound::Included, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    ops::{Bound::Included, RangeInclusive},
+    sync::Arc,
+};
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
+use crate::commit::{sort_sub_dag_blocks, CommitDigest, TrustedCommit};
 use crate::{
     block::{
         genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot, TestBlock,
@@ -17,6 +21,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
+    CommittedSubDag,
 };
 
 /// DagBuilder API
@@ -117,6 +122,66 @@ impl DagBuilder {
             .filter_map(|(block_ref, block)| rounds.contains(&block_ref.round).then_some(block))
             .cloned()
             .collect::<Vec<VerifiedBlock>>()
+    }
+
+    // TODO: reuse logic from Linearizer.
+    pub(crate) fn get_sub_dag_and_commit(
+        &self,
+        leader_block: VerifiedBlock,
+        last_committed_rounds: Vec<Round>,
+        commit_index: u32,
+    ) -> (CommittedSubDag, TrustedCommit) {
+        let mut to_commit = Vec::new();
+        let mut committed = HashSet::new();
+
+        let timestamp_ms = leader_block.timestamp_ms();
+        let leader_block_ref = leader_block.reference();
+        let mut buffer = vec![leader_block];
+        assert!(committed.insert(leader_block_ref));
+        while let Some(x) = buffer.pop() {
+            to_commit.push(x.clone());
+
+            let ancestors = self.get_blocks(
+                &x.ancestors()
+                    .iter()
+                    .copied()
+                    .filter(|ancestor| {
+                        // We skip the block if we already committed it or we reached a
+                        // round that we already committed.
+                        !committed.contains(ancestor)
+                            && last_committed_rounds[ancestor.author] < ancestor.round
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
+            for ancestor in ancestors {
+                buffer.push(ancestor.clone());
+                assert!(committed.insert(ancestor.reference()));
+            }
+        }
+
+        sort_sub_dag_blocks(&mut to_commit);
+
+        let commit = TrustedCommit::new_for_test(
+            commit_index,
+            CommitDigest::MIN,
+            timestamp_ms,
+            leader_block_ref,
+            to_commit
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+        );
+
+        let sub_dag = CommittedSubDag::new(
+            leader_block_ref,
+            to_commit,
+            timestamp_ms,
+            commit.reference(),
+            vec![],
+        );
+
+        (sub_dag, commit)
     }
 
     pub(crate) fn leader_blocks(
@@ -229,6 +294,25 @@ impl DagBuilder {
             blocks.push(block.clone())
         }
         blocks
+    }
+
+    pub(crate) fn get_blocks(&self, block_refs: &[BlockRef]) -> Vec<VerifiedBlock> {
+        let mut blocks = vec![None; block_refs.len()];
+
+        for (index, block_ref) in block_refs.iter().enumerate() {
+            if block_ref.round == 0 {
+                if let Some(block) = self.genesis.get(block_ref) {
+                    blocks[index] = Some(block.clone());
+                }
+                continue;
+            }
+            if let Some(block) = self.blocks.get(block_ref) {
+                blocks[index] = Some(block.clone());
+                continue;
+            }
+        }
+
+        blocks.into_iter().map(|x| x.unwrap()).collect()
     }
 
     pub(crate) fn genesis_block_refs(&self) -> Vec<BlockRef> {

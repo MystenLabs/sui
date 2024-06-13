@@ -2,7 +2,7 @@
 	"name": "@mysten/deepbook",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui Deepbook SDK",
-	"version": "0.7.5",
+	"version": "0.8.7",
 	"license": "Apache-2.0",
 	"type": "commonjs",
 	"main": "./dist/cjs/index.js",
@@ -20,14 +20,12 @@
 		"src"
 	],
 	"engines": {
-		"node": ">=16"
+		"node": ">=18"
 	},
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"build": "build-package",
 		"prepublishOnly": "pnpm build",
-		"dev": "ts-node src/deepbook_sdk.ts",
-		"bfs": "ts-node src/bfs.ts",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
 		"eslint:check": "eslint --max-warnings=0 .",
@@ -38,7 +36,7 @@
 		"prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*"
+		"@mysten/sui": "workspace:*"
 	},
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
@@ -48,7 +46,7 @@
 		"ts-retry-promise": "^0.7.0",
 		"typescript": "^5.3.3",
 		"vite": "^4.4.4",
-		"vitest": "^0.33.0",
+		"vitest": "^1.6.0",
 		"wait-on": "^7.0.1"
 	}
 }

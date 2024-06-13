@@ -10,8 +10,8 @@
 //! signature. Additionally, the stack height must not dip below that at the beginning of the
 //! block for any basic block.
 use crate::absint::FunctionContext;
+use move_abstract_interpreter::control_flow_graph::{BlockId, ControlFlowGraph};
 use move_binary_format::{
-    control_flow_graph::{BlockId, ControlFlowGraph},
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeUnit, FunctionDefinitionIndex, Signature, StructFieldInformation},
     CompiledModule,
@@ -264,6 +264,20 @@ impl<'a> StackUsageVerifier<'a> {
                     StructFieldInformation::Declared(fields) => fields.len(),
                 };
                 (1, field_count as u64)
+            }
+            Bytecode::PackVariant(_)
+            | Bytecode::PackVariantGeneric(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantGeneric(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantGenericImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::VariantSwitch(_) => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Unexpected variant opcode in version 2".to_string()),
+                );
             }
         })
     }

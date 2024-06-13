@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useSuiClientContext } from '@mysten/dapp-kit';
-import { DryRunTransactionBlockResponse, GasCostSummary } from '@mysten/sui.js/src/client';
+import { DryRunTransactionBlockResponse, GasCostSummary } from '@mysten/sui/client';
 import { ReactNode } from 'react';
 
+import { useDryRunContext } from '../DryRunContext';
 import { ObjectLink } from '../ObjectLink';
 import { onChainAmountToFloat } from '../utils';
 
@@ -22,7 +22,8 @@ const calculateGas = (gas: GasCostSummary): string => {
 };
 
 export function Overview({ output }: { output: DryRunTransactionBlockResponse }) {
-	const { network } = useSuiClientContext();
+	const { network } = useDryRunContext();
+
 	const metadata: Record<string, ReactNode> = {
 		network,
 		status:

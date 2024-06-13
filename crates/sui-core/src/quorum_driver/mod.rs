@@ -38,6 +38,7 @@ use mysten_metrics::{
     spawn_monitored_task, GaugeGuard, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX,
 };
 use std::fmt::Write;
+use sui_macros::fail_point;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::transaction::{CertifiedTransaction, Transaction};
@@ -157,21 +158,26 @@ impl<A: Clone> QuorumDriver<A> {
             );
             return Ok(());
         }
-        self.backoff_and_enqueue(request, tx_cert, old_retry_times, client_addr)
+        self.backoff_and_enqueue(request, tx_cert, old_retry_times, client_addr, None)
             .await
     }
 
     /// Performs exponential backoff and enqueue the `transaction` to the execution queue.
+    /// When `min_backoff_duration` is provided, the backoff duration will be at least `min_backoff_duration`.
     async fn backoff_and_enqueue(
         &self,
         request: ExecuteTransactionRequestV3,
         tx_cert: Option<CertifiedTransaction>,
         old_retry_times: u32,
         client_addr: Option<SocketAddr>,
+        min_backoff_duration: Option<Duration>,
     ) -> SuiResult<()> {
-        let next_retry_after =
-            Instant::now() + Duration::from_millis(200 * u64::pow(2, old_retry_times));
+        let next_retry_after = Instant::now()
+            + Duration::from_millis(200 * u64::pow(2, old_retry_times))
+                .max(min_backoff_duration.unwrap_or(Duration::from_secs(0)));
         sleep_until(next_retry_after).await;
+
+        fail_point!("count_retry_times");
 
         let tx_cert = match tx_cert {
             // TxCert is only valid when its epoch matches current epoch.
@@ -373,7 +379,11 @@ where
                 retry_after_secs,
             }) => {
                 self.metrics.total_retryable_overload_errors.inc();
-                debug!(?tx_digest, ?errors, "System overload and retry");
+                debug!(
+                    ?tx_digest,
+                    ?errors,
+                    "System overload and retry after secs {retry_after_secs}",
+                );
                 Err(Some(QuorumDriverError::SystemOverloadRetryAfter {
                     overload_stake,
                     errors,
@@ -875,7 +885,9 @@ where
                     client_addr,
                 ));
             }
-            Some(QuorumDriverError::SystemOverloadRetryAfter { .. }) => {
+            Some(QuorumDriverError::SystemOverloadRetryAfter {
+                retry_after_secs, ..
+            }) => {
                 // Special case for SystemOverloadRetryAfter error. In this case, due to that objects are already
                 // locked inside validators, we need to perform continuous retry and ignore `max_retry_times`.
                 // TODO: the txn can potentially be retried unlimited times, therefore, we need to bound the number
@@ -887,6 +899,7 @@ where
                     tx_cert,
                     old_retry_times,
                     client_addr,
+                    Some(Duration::from_secs(retry_after_secs)),
                 ));
             }
             Some(qd_error) => {

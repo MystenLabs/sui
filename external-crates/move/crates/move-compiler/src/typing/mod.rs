@@ -8,6 +8,7 @@ mod dependency_ordering;
 mod expand;
 mod infinite_instantiations;
 mod macro_expand;
+mod match_analysis;
 mod recursive_datatypes;
 mod syntax_methods;
 pub(crate) mod translate;

@@ -42,6 +42,6 @@ module utils::immutable_external_resource {
 
     /// Update the URL, but the digest of the resource must never change.
     public fun update(self: &mut ImmutableExternalResource, url: Url) {
-        sui::url::update(&mut self.url, inner_url(&url))
+        self.url.update(url.inner_url())
     }
 }

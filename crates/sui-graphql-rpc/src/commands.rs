@@ -31,6 +31,9 @@ pub enum Command {
         /// DB URL for data fetching
         #[clap(short, long)]
         db_url: Option<String>,
+        /// Pool size for DB connections
+        #[clap(long)]
+        db_pool_size: Option<u32>,
         /// Port to bind the server to
         #[clap(short, long)]
         port: Option<u16>,

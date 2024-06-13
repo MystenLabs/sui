@@ -1,7 +1,0 @@
-Command `test --stackless`:
-INCLUDING DEPENDENCY Bar
-INCLUDING DEPENDENCY MoveStdlib
-BUILDING Foo
-Running Move unit tests
-[ PASS    ] 0x2::M::nop
-Test result: OK. Total tests: 1; passed: 1; failed: 0

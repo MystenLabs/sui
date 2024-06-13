@@ -64,9 +64,8 @@ impl BridgeAuthorityAggregator {
     pub async fn request_committee_signatures(
         &self,
         action: BridgeAction,
-        threshold: StakeUnit,
     ) -> BridgeResult<VerifiedCertifiedBridgeAction> {
-        let state = GetSigsState::new(threshold, self.committee.clone());
+        let state = GetSigsState::new(action.approval_threshold(), self.committee.clone());
         request_sign_bridge_action_into_certification(
             action,
             self.committee.clone(),
@@ -218,16 +217,18 @@ async fn request_sign_bridge_action_into_certification(
     .await
     .map_err(|state| {
         error!(
-            "Failed to get enough signatures, bad stake: {}, blocklisted stake: {}, good stake: {}",
+            "Failed to get enough signatures, bad stake: {}, blocklisted stake: {}, good stake: {}, validity threshold: {}",
             state.total_bad_stake,
             state.committee.total_blocklisted_stake(),
-            state.total_ok_stake
+            state.total_ok_stake,
+            state.validity_threshold,
         );
         BridgeError::AuthoritySignatureAggregationTooManyError(format!(
-            "Failed to get enough signatures, bad stake: {}, blocklisted stake: {}, good stake: {}",
+            "Failed to get enough signatures, bad stake: {}, blocklisted stake: {}, good stake: {}, validity threshold: {}",
             state.total_bad_stake,
             state.committee.total_blocklisted_stake(),
-            state.total_ok_stake
+            state.total_ok_stake,
+            state.validity_threshold,
         ))
     })?;
     Ok(result)
@@ -328,6 +329,9 @@ mod tests {
             Some(sui_tx_event_index),
             Some(nonce),
             Some(amount),
+            None,
+            None,
+            None,
         );
 
         // All authorities return signatures
@@ -351,7 +355,7 @@ mod tests {
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[3])),
         );
-        agg.request_committee_signatures(action.clone(), VALIDITY_THRESHOLD)
+        agg.request_committee_signatures(action.clone())
             .await
             .unwrap();
 
@@ -361,7 +365,7 @@ mod tests {
             sui_tx_event_index,
             Err(BridgeError::RestAPIError("".into())),
         );
-        agg.request_committee_signatures(action.clone(), VALIDITY_THRESHOLD)
+        agg.request_committee_signatures(action.clone())
             .await
             .unwrap();
 
@@ -371,7 +375,7 @@ mod tests {
             sui_tx_event_index,
             Err(BridgeError::RestAPIError("".into())),
         );
-        agg.request_committee_signatures(action.clone(), VALIDITY_THRESHOLD)
+        agg.request_committee_signatures(action.clone())
             .await
             .unwrap();
 
@@ -382,7 +386,7 @@ mod tests {
             Err(BridgeError::RestAPIError("".into())),
         );
         let err = agg
-            .request_committee_signatures(action.clone(), VALIDITY_THRESHOLD)
+            .request_committee_signatures(action.clone())
             .await
             .unwrap_err();
         assert!(matches!(
@@ -422,6 +426,9 @@ mod tests {
             Some(sui_tx_event_index),
             Some(nonce),
             Some(amount),
+            None,
+            None,
+            None,
         );
 
         // Only mock authority 2 and 3 to return signatures, such that if BridgeAuthorityAggregator
@@ -437,7 +444,7 @@ mod tests {
             Ok(sign_action_with_key(&action, &secrets[3])),
         );
         let certified = agg
-            .request_committee_signatures(action.clone(), VALIDITY_THRESHOLD)
+            .request_committee_signatures(action.clone())
             .await
             .unwrap();
         let signers = certified
@@ -461,7 +468,7 @@ mod tests {
             Err(BridgeError::RestAPIError("".into())),
         );
         let err = agg
-            .request_committee_signatures(action.clone(), VALIDITY_THRESHOLD)
+            .request_committee_signatures(action.clone())
             .await
             .unwrap_err();
         assert!(matches!(
@@ -476,7 +483,7 @@ mod tests {
             Ok(sign_action_with_key(&action, &secrets[2])),
         );
         let err = agg
-            .request_committee_signatures(action.clone(), VALIDITY_THRESHOLD)
+            .request_committee_signatures(action.clone())
             .await
             .unwrap_err();
         assert!(matches!(
@@ -554,6 +561,9 @@ mod tests {
             Some(sui_tx_event_index),
             Some(nonce),
             Some(amount),
+            None,
+            None,
+            None,
         );
 
         let sig_0 = sign_action_with_key(&action, &secrets[0]);
@@ -621,7 +631,7 @@ mod tests {
             .is_none());
         assert_eq!(state.total_ok_stake, 2501);
 
-        // Collect signtuare from authority 2 - reach validity threshold
+        // Collect signature from authority 2 - reach validity threshold
         let sig_2 = sign_action_with_key(&action, &secrets[2]);
         // returns Ok(None)
         let certificate = state

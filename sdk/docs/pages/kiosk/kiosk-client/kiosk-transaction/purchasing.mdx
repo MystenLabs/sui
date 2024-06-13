@@ -21,8 +21,8 @@ const item = {
 };
 
 // Assume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
-const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
+const tx = new Transaction();
+const kioskTx = new KioskTransaction({ transaction: tx, kioskClient, cap });
 
 await kioskTx.purchaseAndResolve({
 	itemType: item.itemType,
@@ -33,8 +33,8 @@ await kioskTx.purchaseAndResolve({
 
 kioskTx.finalize();
 
-// Sign and execute transaction block.
-await signAndExecuteTransactionBlock({ tx: txb });
+// Sign and execute transaction.
+await signAndExecuteTransaction({ tx: tx });
 ```
 
 > The function queries for a TransferPolicy for that item, and if a policy is found, it
@@ -54,16 +54,16 @@ const myCustomRule = {
         // The resolving function. This is called when calling the `purchaseAndResolve`.
 		resolveRuleFunction: (params: RuleResolvingParams) => {
             // By knowing the params we have here, we can extract the variables we need to resolve this rule.
-            const { transactionBlock, itemType, packageId, extraArgs } = params;
+            const { transaction, itemType, packageId, extraArgs } = params;
             const { gamePass } = extraArgs;
             if(!gamePass) throw new Error("GamePass not supplied");
 
             // Calls the game's rule prove function, which could, for example
             // allow rules to resolve only if the holder has a gamePass object.
-            transactionBlock.moveCall({
+            transaction.moveCall({
                 target: `${packageId}::game_rule::prove_pass`,
                 typeArguments: [itemType],
-                arguments: [transferRequest, transactionBlock.object(gamePass)],
+                arguments: [transferRequest, transaction.object(gamePass)],
             });
         },
 };
@@ -71,8 +71,8 @@ const myCustomRule = {
 kioskClient.addRuleResolver(myCustomRule);
 
 // Assume `cap` is supplied to the function as explained in the introduction section.
-const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
+const tx = new Transaction();
+const kioskTx = new KioskTransaction({ transaction: tx, kioskClient, cap });
 
 await kioskTx.purchaseAndResolve({
 	itemType: item.itemType,
@@ -86,14 +86,14 @@ await kioskTx.purchaseAndResolve({
 
 kioskTx.finalize();
 
-// Sign and execute transaction block.
-await signAndExecuteTransactionBlock({ tx: txb });
+// Sign and execute transaction.
+await signAndExecuteTransaction({ tx: tx });
 ```
 
 ```typescript
 // For reference, here's the RuleResolvingParams contents.
 type RuleResolvingParams = {
-	transactionBlock: TransactionBlock;
+	transaction: Transaction;
 	itemType: string;
 	itemId: string;
 	price: string;

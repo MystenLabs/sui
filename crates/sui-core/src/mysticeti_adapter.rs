@@ -7,7 +7,7 @@ use arc_swap::{ArcSwapOption, Guard};
 use consensus_core::TransactionClient;
 use sui_types::{
     error::{SuiError, SuiResult},
-    messages_consensus::ConsensusTransaction,
+    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
 };
 use tap::prelude::*;
 use tokio::time::{sleep, timeout};
@@ -15,7 +15,7 @@ use tracing::warn;
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    consensus_adapter::SubmitToConsensus,
+    consensus_adapter::SubmitToConsensus, consensus_handler::SequencedConsensusTransactionKey,
 };
 
 /// Basically a wrapper struct that reads from the LOCAL_MYSTICETI_CLIENT variable where the latest
@@ -74,24 +74,42 @@ impl LazyMysticetiClient {
 impl SubmitToConsensus for LazyMysticetiClient {
     async fn submit_to_consensus(
         &self,
-        transaction: &ConsensusTransaction,
+        transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         // TODO(mysticeti): confirm comment is still true
         // The retrieved TransactionClient can be from the past epoch. Submit would fail after
         // Mysticeti shuts down, so there should be no correctness issue.
         let client = self.get().await;
-        let tx_bytes = bcs::to_bytes(&transaction).expect("Serialization should not fail.");
-        client
+        let transactions_bytes = transactions
+            .iter()
+            .map(|t| bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail"))
+            .collect::<Vec<_>>();
+        let block_ref = client
             .as_ref()
             .expect("Client should always be returned")
-            .submit(tx_bytes)
+            .submit(transactions_bytes)
             .await
             .tap_err(|r| {
                 // Will be logged by caller as well.
-                warn!("Submit transaction failed with: {:?}", r);
+                warn!("Submit transactions failed with: {:?}", r);
             })
             .map_err(|err| SuiError::FailedToSubmitToConsensus(err.to_string()))?;
+
+        let is_soft_bundle = transactions.len() > 1;
+
+        if !is_soft_bundle
+            && matches!(
+                transactions[0].kind,
+                ConsensusTransactionKind::EndOfPublish(_)
+                    | ConsensusTransactionKind::CapabilityNotification(_)
+                    | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                    | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
+            )
+        {
+            let transaction_key = SequencedConsensusTransactionKey::External(transactions[0].key());
+            tracing::info!("Transaction {transaction_key:?} was included in {block_ref}",)
+        };
         Ok(())
     }
 }

@@ -60,8 +60,9 @@ impl MockConsensusClient {
                         .process_consensus_transactions_for_tests(
                             vec![SequencedConsensusTransaction::new_test(tx.clone())],
                             &checkpoint_service,
-                            validator.get_cache_reader().as_ref(),
+                            validator.get_object_cache_reader().as_ref(),
                             &authority_metrics,
+                            true,
                         )
                         .await
                         .unwrap();
@@ -83,9 +84,12 @@ impl MockConsensusClient {
 impl SubmitToConsensus for MockConsensusClient {
     async fn submit_to_consensus(
         &self,
-        transaction: &ConsensusTransaction,
+        transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        // TODO: maybe support multi-transactions and remove this check
+        assert!(transactions.len() == 1);
+        let transaction = &transactions[0];
         self.tx_sender.send(transaction.clone()).await.unwrap();
         Ok(())
     }

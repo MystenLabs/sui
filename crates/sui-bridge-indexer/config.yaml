@@ -1,0 +1,22 @@
+# config.yaml format:
+
+# URL of the remote store
+# remote_store_url: <url>
+# URL for Ethereum RPC
+# eth_rpc_url: <url>
+# Database connection URL
+# db_url: <url>
+# File to store the progress
+# progress_store_file: <path>
+# Path to the checkpoints
+# checkpoints_path: <path>
+# Number of concurrent operations
+# concurrency: 1
+# Ethereum to Sui bridge contract address
+# eth_sui_bridge_contract_address: <contract_address>
+# Starting block number
+# start_block: <indexing_start_block>
+# Client metric URL
+# metric_url: <url>
+# Client metric port
+# metric_port: <port>

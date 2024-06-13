@@ -9,9 +9,11 @@
 //! the stack height by the number of values returned by the function as indicated in its
 //! signature. Additionally, the stack height must not dip below that at the beginning of the
 //! block for any basic block.
-use crate::absint::FunctionContext;
-use move_binary_format::{
+use move_abstract_interpreter::{
+    absint::FunctionContext,
     control_flow_graph::{BlockId, ControlFlowGraph},
+};
+use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeUnit, FunctionDefinitionIndex, Signature, StructFieldInformation},
     CompiledModule,
@@ -122,7 +124,8 @@ impl<'a> StackUsageVerifier<'a> {
             | Bytecode::BrTrue(_)
             | Bytecode::BrFalse(_)
             | Bytecode::StLoc(_)
-            | Bytecode::Abort => (1, 0),
+            | Bytecode::Abort
+            | Bytecode::VariantSwitch(_) => (1, 0),
 
             // Instructions that push, but don't pop
             Bytecode::LdU8(_)
@@ -263,6 +266,46 @@ impl<'a> StackUsageVerifier<'a> {
                     StructFieldInformation::Native => 0,
                     StructFieldInformation::Declared(fields) => fields.len(),
                 };
+                (1, field_count as u64)
+            }
+
+            // Pack performs `num_fields` pops and one push
+            Bytecode::PackVariant(vidx) => {
+                let handle = self.module.variant_handle_at(*vidx);
+                let variant_definition =
+                    self.module.variant_def_at(handle.enum_def, handle.variant);
+                let field_count = variant_definition.fields.len();
+                (field_count as u64, 1)
+            }
+            Bytecode::PackVariantGeneric(vidx) => {
+                let handle = self.module.variant_instantiation_handle_at(*vidx);
+                let enum_def_instantiation = self.module.enum_instantiation_at(handle.enum_def);
+                let variant_definition = self
+                    .module
+                    .variant_def_at(enum_def_instantiation.def, handle.variant);
+                let field_count = variant_definition.fields.len();
+                (field_count as u64, 1)
+            }
+
+            // Unpack performs one pop and `num_fields` pushes
+            Bytecode::UnpackVariant(vidx)
+            | Bytecode::UnpackVariantImmRef(vidx)
+            | Bytecode::UnpackVariantMutRef(vidx) => {
+                let handle = self.module.variant_handle_at(*vidx);
+                let variant_definition =
+                    self.module.variant_def_at(handle.enum_def, handle.variant);
+                let field_count = variant_definition.fields.len();
+                (1, field_count as u64)
+            }
+            Bytecode::UnpackVariantGeneric(vidx)
+            | Bytecode::UnpackVariantGenericImmRef(vidx)
+            | Bytecode::UnpackVariantGenericMutRef(vidx) => {
+                let handle = self.module.variant_instantiation_handle_at(*vidx);
+                let enum_def_instantiation = self.module.enum_instantiation_at(handle.enum_def);
+                let variant_definition = self
+                    .module
+                    .variant_def_at(enum_def_instantiation.def, handle.variant);
+                let field_count = variant_definition.fields.len();
                 (1, field_count as u64)
             }
         })

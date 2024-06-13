@@ -15,23 +15,23 @@ module sui::bag_tests {
         bag.add(b"hello", 0);
         bag.add(1, 1u8);
         // check they exist
-        assert!(bag.contains_with_type<vector<u8>, u64>(b"hello"), 0);
-        assert!(bag.contains_with_type<u64, u8>(1), 0);
+        assert!(bag.contains_with_type<vector<u8>, u64>(b"hello"));
+        assert!(bag.contains_with_type<u64, u8>(1));
         // check the values
-        assert!(bag[b"hello"] == 0, 0);
-        assert!(bag[1] == 1u8, 0);
+        assert!(bag[b"hello"] == 0);
+        assert!(bag[1] == 1u8);
         // mutate them
         *(&mut bag[b"hello"]) = bag[b"hello"] * 2;
         *(&mut bag[1]) = bag[1] * 2u8;
         // check the new value
-        assert!(bag[b"hello"] == 0, 0);
-        assert!(bag[1] == 2u8, 0);
+        assert!(bag[b"hello"] == 0);
+        assert!(bag[1] == 2u8);
         // remove the value and check it
-        assert!(bag.remove(b"hello") == 0, 0);
-        assert!(bag.remove(1) == 2u8, 0);
+        assert!(bag.remove(b"hello") == 0);
+        assert!(bag.remove(1) == 2u8);
         // verify that they are not there
-        assert!(!bag.contains_with_type<vector<u8>, u64>(b"hello"), 0);
-        assert!(!bag.contains_with_type<u64, u8>(1), 0);
+        assert!(!bag.contains_with_type<vector<u8>, u64>(b"hello"));
+        assert!(!bag.contains_with_type<u64, u8>(1));
         scenario.end();
         bag.destroy_empty();
     }
@@ -137,10 +137,10 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut bag = bag::new(scenario.ctx());
-        assert!(!bag.contains_with_type<u64, u64>(0), 0);
+        assert!(!bag.contains_with_type<u64, u64>(0));
         bag.add(0, 0);
-        assert!(bag.contains_with_type<u64, u64>(0), 0);
-        assert!(!bag.contains_with_type<u64, u64>(1), 0);
+        assert!(bag.contains_with_type<u64, u64>(0));
+        assert!(!bag.contains_with_type<u64, u64>(1));
         scenario.end();
         bag.remove<u64, u64>(0);
         bag.destroy_empty();
@@ -151,14 +151,14 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut bag = bag::new(scenario.ctx());
-        assert!(bag.is_empty(), 0);
-        assert!(bag.length() == 0, 0);
+        assert!(bag.is_empty());
+        assert!(bag.length() == 0);
         bag.add(0, 0);
-        assert!(!bag.is_empty(), 0);
-        assert!(bag.length() == 1, 0);
+        assert!(!bag.is_empty());
+        assert!(bag.length() == 1);
         bag.add(1, 0);
-        assert!(!bag.is_empty(), 0);
-        assert!(bag.length() == 2, 0);
+        assert!(!bag.is_empty());
+        assert!(bag.length() == 2);
         bag.remove<u64, u64>(0);
         bag.remove<u64, u64>(1);
         scenario.end();
