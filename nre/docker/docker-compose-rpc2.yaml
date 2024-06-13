@@ -15,12 +15,11 @@ services:
     command: ["postgres", "-c", "max-connections=500"]
 
   graphql:
-    #build:
-    #  context: ../../docker/graphql
-    #  dockerfile: Dockerfile
+    build:
+      context: ../../
+      dockerfile: docker/sui-graphql-rpc/Dockerfile
     container_name: graphql
-    #image: mysten/sui-grapqhl:${SHA} 
-    image: mysten/sui-graphql-rpc:ci
+    #image: mysten/sui-graphql-rpc:ci
     ports:
       - "8001:8001"
     environment:
@@ -35,11 +34,10 @@ services:
     command: ["start-server", "--host", "0.0.0.0", "--port", "8001", "--db-url", "postgres://myuser:mypassword@localhost:5432/mydb", "--db-pool-size", "10", "--node-rpc-url", "https://fullnode.testnet.sui.io:443", "--config", "/opt/sui/config/sui-graphql.toml", "--ide-title", "Sui GraphQL"]
 
   indexer-writer:
-    #build:
-    #  context: ../../docker/sui-indexer
-    #  dockerfile: Dockerfile
-    #image: mysten/sui-indexer:${SHA}
-    image: mysten/sui-indexer:sui-v1.27.0-release
+    build:
+      context: ../../
+      dockerfile: docker/sui-indexer/Dockerfile
+    #image: mysten/sui-indexer:sui-v1.27.0-release
     container_name: indexer-writer
     network_mode: "host"
     environment:
@@ -50,11 +48,10 @@ services:
     command: ["--db-url",  "postgres://myuser:mypassword@localhost:5432/mydb", "--rpc-client-url", "https://fullnode.testnet.sui.io", "--remote-store-url", "https://checkpoints.testnet.sui.io", "--fullnode-sync-worker", "--client-metric-port", "9185", "--reset-db"]
 
   indexer-reader:
-    #build:
-    #  context: ../../docker/sui-indexer
-    #  dockerfile: Dockerfile
-    #image: mysten/sui-indexer:${SHA} 
-    image: mysten/sui-indexer:sui-v1.27.0-release
+    build:
+      context: ../../
+      dockerfile: docker/sui-indexer/Dockerfile
+    #image: mysten/sui-indexer:sui-v1.27.0-release
     container_name: indexer-reader
     network_mode: "host"
     ports:
