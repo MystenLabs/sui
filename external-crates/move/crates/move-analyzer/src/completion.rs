@@ -512,6 +512,7 @@ pub fn on_completion_request(
         .to_file_path()
         .unwrap();
 
+    let pos = parameters.text_document_position.position;
     let items = match SymbolicatorRunner::root_dir(&path) {
         Some(pkg_path) => {
             match symbols::get_symbols(
@@ -520,11 +521,11 @@ pub fn on_completion_request(
                 &pkg_path,
                 LintLevel::None,
             ) {
-                Ok((Some(symbols), _)) => completion_items(parameters, &path, &symbols),
-                _ => completion_items(parameters, &path, &context.symbols.lock().unwrap()),
+                Ok((Some(symbols), _)) => completion_items(pos, &path, &symbols),
+                _ => completion_items(pos, &path, &context.symbols.lock().unwrap()),
             }
         }
-        None => completion_items(parameters, &path, &context.symbols.lock().unwrap()),
+        None => completion_items(pos, &path, &context.symbols.lock().unwrap()),
     };
 
     let result = serde_json::to_value(items).expect("could not serialize completion response");
@@ -540,11 +541,7 @@ pub fn on_completion_request(
 }
 
 /// Computes completion items for a given completion request.
-fn completion_items(
-    parameters: CompletionParams,
-    path: &Path,
-    symbols: &Symbols,
-) -> Vec<CompletionItem> {
+fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<CompletionItem> {
     let mut items = vec![];
 
     let Some(fhash) = symbols.file_hash(path) else {
@@ -560,13 +557,13 @@ fn completion_items(
     let buffer = file.source().clone();
     if !buffer.is_empty() {
         let mut only_custom_items = false;
-        let cursor = get_cursor_token(buffer.as_str(), &parameters.text_document_position.position);
+        let cursor = get_cursor_token(buffer.as_str(), &pos);
         match cursor {
             Some(Tok::Colon) => {
                 items.extend_from_slice(&primitive_types());
             }
             Some(Tok::Period) => {
-                items = dot(symbols, path, &parameters.text_document_position.position);
+                items = dot(symbols, path, &pos);
                 if !items.is_empty() {
                     // found dot completions - do not look for any other
                     only_custom_items = true;
@@ -578,11 +575,7 @@ fn completion_items(
                 // below.
             }
             Some(Tok::LBrace) => {
-                let custom_items = context_specific_lbrace(
-                    symbols,
-                    path,
-                    &parameters.text_document_position.position,
-                );
+                let custom_items = context_specific_lbrace(symbols, path, &pos);
                 items.extend_from_slice(&custom_items);
                 // "generic" autocompletion for `{` does not make sense
                 only_custom_items = true;
@@ -591,12 +584,8 @@ fn completion_items(
                 // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
                 // offer them context-specific autocompletion items as well as
                 // Move's keywords, operators, and builtins.
-                let (custom_items, custom) = context_specific_no_trigger(
-                    symbols,
-                    path,
-                    buffer.as_str(),
-                    &parameters.text_document_position.position,
-                );
+                let (custom_items, custom) =
+                    context_specific_no_trigger(symbols, path, buffer.as_str(), &pos);
                 only_custom_items = custom;
                 items.extend_from_slice(&custom_items);
                 if !only_custom_items {
@@ -615,4 +604,178 @@ fn completion_items(
         items.extend_from_slice(&builtins());
     }
     items
+}
+
+#[cfg(test)]
+fn validate_item(
+    loc: String,
+    items: &[CompletionItem],
+    idx: usize,
+    label: &str,
+    detail: Option<&str>,
+    description: Option<&str>,
+    text: &str,
+) {
+    let item = &items[idx];
+    assert!(
+        item.label == label,
+        "wrong label for item {} at {}:  {:#?}",
+        idx,
+        loc,
+        item
+    );
+    if item.label_details.is_none() {
+        if detail.is_some() || description.is_some() {
+            assert!(
+                false,
+                "item {} at {} has no label details:  {:#?}",
+                idx, loc, item
+            );
+        }
+    } else {
+        assert!(
+            item.label_details.as_ref().unwrap().detail == detail.map(|s| s.to_string()),
+            "wrong label detail (detail) for item {} at {}:  {:#?}",
+            idx,
+            loc,
+            item
+        );
+        assert!(
+            item.label_details.as_ref().unwrap().description == description.map(|s| s.to_string()),
+            "wrong label detail (description) for item {} at {}:  {:#?}",
+            idx,
+            loc,
+            item
+        );
+        assert!(
+            item.insert_text == Some(text.to_string()),
+            "wrong inserted text for item {} at {}:  {:#?}",
+            idx,
+            loc,
+            item
+        );
+    }
+}
+
+#[test]
+/// Tests if symbolication + doc_string information for documented Move constructs is constructed correctly.
+fn completion_dot_test() {
+    use vfs::impls::memory::MemoryFS;
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/completion");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = symbols::get_symbols(
+        Arc::new(Mutex::new(BTreeMap::new())),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/dot.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    // simple test
+    let pos = Position {
+        line: 14,
+        character: 10,
+    };
+    let items = completion_items(pos, &cpath, &symbols);
+    let loc = format!("{:?} (line: {}, col: {}", cpath, pos.line, pos.character);
+    assert!(items.len() == 3, "wrong number of items at {}", loc.clone());
+    validate_item(
+        loc.clone(),
+        &items,
+        0,
+        "bar()",
+        Some(" (Completion::dot::bar)"),
+        Some("fun <T>(SomeStruct, u64, T): SomeStruct"),
+        "bar(${1:_param1}, ${2:_param2})",
+    );
+    validate_item(
+        loc.clone(),
+        &items,
+        1,
+        "foo()",
+        Some(" (Completion::dot::foo)"),
+        Some("fun (SomeStruct)"),
+        "foo()",
+    );
+    validate_item(
+        loc,
+        &items,
+        2,
+        "some_field",
+        None,
+        Some("u64"),
+        "some_field",
+    );
+
+    // test with aliasing
+    let pos = Position {
+        line: 20,
+        character: 10,
+    };
+    let items = completion_items(pos, &cpath, &symbols);
+    let loc = format!("{:?} (line: {}, col: {}", cpath, pos.line, pos.character);
+    assert!(items.len() == 3, "wrong number of items at {}", loc.clone());
+    validate_item(
+        loc.clone(),
+        &items,
+        0,
+        "bak()",
+        Some(" (Completion::dot::bar)"),
+        Some("fun <T>(SomeStruct, u64, T): SomeStruct"),
+        "bak(${1:_param1}, ${2:_param2})",
+    );
+    validate_item(
+        loc.clone(),
+        &items,
+        1,
+        "foo()",
+        Some(" (Completion::dot::foo)"),
+        Some("fun (SomeStruct)"),
+        "foo()",
+    );
+    validate_item(
+        loc,
+        &items,
+        2,
+        "some_field",
+        None,
+        Some("u64"),
+        "some_field",
+    );
+
+    // test with shadowing
+    let pos = Position {
+        line: 26,
+        character: 10,
+    };
+    let items = completion_items(pos, &cpath, &symbols);
+    let loc = format!("{:?} (line: {}, col: {}", cpath, pos.line, pos.character);
+    assert!(items.len() == 2, "wrong number of items at {}", loc.clone());
+    validate_item(
+        loc.clone(),
+        &items,
+        0,
+        "foo()",
+        Some(" (Completion::dot::bar)"),
+        Some("fun <T>(SomeStruct, u64, T): SomeStruct"),
+        "foo(${1:_param1}, ${2:_param2})",
+    );
+    validate_item(
+        loc,
+        &items,
+        1,
+        "some_field",
+        None,
+        Some("u64"),
+        "some_field",
+    );
 }
