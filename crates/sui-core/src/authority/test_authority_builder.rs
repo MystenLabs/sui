@@ -1,21 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_tables::AuthorityPerpetualTables;
-use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::authority::{AuthorityState, AuthorityStore};
-use crate::checkpoints::CheckpointStore;
-use crate::epoch::committee_store::CommitteeStore;
-use crate::epoch::epoch_metrics::EpochMetrics;
-use crate::execution_cache::build_execution_cache;
-use crate::module_cache_metrics::ResolverMetrics;
-use crate::rest_index::RestIndexStore;
-use crate::signature_verifier::SignatureVerifierMetrics;
-use fastcrypto::traits::KeyPair;
-use prometheus::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+use fastcrypto::traits::KeyPair;
+use prometheus::Registry;
+
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
@@ -37,6 +28,18 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::VerifiedTransaction;
+
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::{AuthorityState, AuthorityStore};
+use crate::checkpoints::CheckpointStore;
+use crate::epoch::committee_store::CommitteeStore;
+use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::execution_cache::build_execution_cache;
+use crate::module_cache_metrics::ResolverMetrics;
+use crate::rest_index::RestIndexStore;
+use crate::signature_verifier::SignatureVerifierMetrics;
 
 use super::epoch_start_configuration::EpochFlag;
 

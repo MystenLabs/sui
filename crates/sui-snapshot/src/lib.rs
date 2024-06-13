@@ -260,10 +260,6 @@ pub async fn setup_db_state(
     checkpoint_store.update_highest_executed_checkpoint(&last_checkpoint)?;
 
     if verify {
-        eprintln!(
-            "Beginning DB live object state verification. This may take a while, \
-            and currently does not provide progress updates..."
-        );
         let simplified_unwrap_then_delete = match (chain, epoch) {
             (Chain::Mainnet, ep) if ep >= 87 => true,
             (Chain::Mainnet, ep) if ep < 87 => false,
@@ -274,7 +270,9 @@ pub async fn setup_db_state(
         let include_tombstones = !simplified_unwrap_then_delete;
         let iter = perpetual_db.iter_live_object_set(include_tombstones);
         let local_digest = ECMHLiveObjectSetDigest::from(
-            accumulate_live_object_iter(Box::new(iter), m, num_live_objects).digest(),
+            accumulate_live_object_iter(Box::new(iter), m.clone(), num_live_objects)
+                .await
+                .digest(),
         );
         assert_eq!(
             root_digest, local_digest,
@@ -282,29 +280,28 @@ pub async fn setup_db_state(
                 local root state hash {} after restoring db from formal snapshot",
             epoch, root_digest.digest, local_digest.digest,
         );
-        eprintln!("DB live object state verification completed successfully!");
+        println!("DB live object state verification completed successfully!");
     }
 
     Ok(())
 }
 
-pub fn accumulate_live_object_iter(
+pub async fn accumulate_live_object_iter(
     iter: Box<dyn Iterator<Item = LiveObject> + '_>,
     m: MultiProgress,
     num_live_objects: u64,
 ) -> Accumulator {
     // Monitor progress of live object accumulation
     let accum_progress_bar = m.add(ProgressBar::new(num_live_objects).with_style(
-        ProgressStyle::with_template(
-            "[{elapsed_precise}] {wide_bar} {pos} out of {len} ref files accumulated from db ({msg})",
-        ).unwrap(),
+        ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len} ({msg})").unwrap(),
     ));
     let accum_counter = Arc::new(AtomicU64::new(0));
     let cloned_accum_counter = accum_counter.clone();
-    tokio::spawn(async move {
+    let cloned_progress_bar = accum_progress_bar.clone();
+    let handle = tokio::spawn(async move {
         let a_instant = Instant::now();
         loop {
-            if accum_progress_bar.is_finished() {
+            if cloned_progress_bar.is_finished() {
                 break;
             }
             let num_accumulated = cloned_accum_counter.load(Ordering::Relaxed);
@@ -313,9 +310,9 @@ pub fn accumulate_live_object_iter(
                 "Accumulated more objects (at least {num_accumulated}) than expected ({num_live_objects})"
             );
             let accumulations_per_sec = num_accumulated as f64 / a_instant.elapsed().as_secs_f64();
-            accum_progress_bar.set_position(num_accumulated);
-            accum_progress_bar.set_message(format!(
-                "live obj accumulations per sec: {}",
+            cloned_progress_bar.set_position(num_accumulated);
+            cloned_progress_bar.set_message(format!(
+                "DB live obj accumulations per sec: {}",
                 accumulations_per_sec
             ));
             tokio::time::sleep(Duration::from_secs(1)).await;
@@ -338,5 +335,9 @@ pub fn accumulate_live_object_iter(
         }
         accum_counter.fetch_add(1, Ordering::Relaxed);
     }
+    accum_progress_bar.finish_with_message("DB live object accumulation completed");
+    handle
+        .await
+        .expect("Failed to join live object accumulation progress monitor");
     acc
 }

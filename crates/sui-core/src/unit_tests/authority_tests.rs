@@ -2,6 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
+use std::fs;
+use std::{convert::TryInto, env};
+
 use bcs;
 use fastcrypto::traits::KeyPair;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -22,9 +26,6 @@ use rand::{
     Rng, SeedableRng,
 };
 use serde_json::json;
-use std::collections::HashSet;
-use std::fs;
-use std::{convert::TryInto, env};
 
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
@@ -60,6 +61,7 @@ use sui_types::{
 };
 
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+pub use crate::authority::authority_test_utils::*;
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::transaction_deferral::DeferralKey;
@@ -71,8 +73,6 @@ use crate::{
 };
 
 use super::*;
-
-pub use crate::authority::authority_test_utils::*;
 
 pub enum TestCallArg {
     Pure(Vec<u8>),
@@ -1234,7 +1234,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     assert!(authority_state
         .get_transaction_lock(
             &object.compute_object_reference(),
-            &authority_state.epoch_store_for_testing()
+            &authority_state.epoch_store_for_testing(),
         )
         .await
         .unwrap()
@@ -1243,7 +1243,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     assert!(authority_state
         .get_transaction_lock(
             &object.compute_object_reference(),
-            &authority_state.epoch_store_for_testing()
+            &authority_state.epoch_store_for_testing(),
         )
         .await
         .unwrap()
@@ -1355,7 +1355,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
     assert!(authority_state
         .get_transaction_lock(
             &object.compute_object_reference(),
-            &authority_state.epoch_store_for_testing()
+            &authority_state.epoch_store_for_testing(),
         )
         .await
         .unwrap()
@@ -1364,7 +1364,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
     assert!(authority_state
         .get_transaction_lock(
             &object.compute_object_reference(),
-            &authority_state.epoch_store_for_testing()
+            &authority_state.epoch_store_for_testing(),
         )
         .await
         .unwrap()
@@ -1415,7 +1415,7 @@ async fn test_handle_transfer_transaction_ok() {
     assert!(authority_state
         .get_transaction_lock(
             &(object_id, before_object_version, object.digest()),
-            &authority_state.epoch_store_for_testing()
+            &authority_state.epoch_store_for_testing(),
         )
         .await
         .unwrap()
@@ -1423,7 +1423,7 @@ async fn test_handle_transfer_transaction_ok() {
     assert!(authority_state
         .get_transaction_lock(
             &(object_id, after_object_version, object.digest()),
-            &authority_state.epoch_store_for_testing()
+            &authority_state.epoch_store_for_testing(),
         )
         .await
         .is_err());
@@ -2411,14 +2411,14 @@ async fn test_handle_confirmation_transaction_ok() {
     assert!(authority_state
         .get_transaction_lock(
             &(object_id, 1.into(), old_account.digest()),
-            &authority_state.epoch_store_for_testing()
+            &authority_state.epoch_store_for_testing(),
         )
         .await
         .is_err());
     assert!(authority_state
         .get_transaction_lock(
             &(object_id, 2.into(), new_account.digest()),
-            &authority_state.epoch_store_for_testing()
+            &authority_state.epoch_store_for_testing(),
         )
         .await
         .expect("Exists")
@@ -3169,7 +3169,7 @@ async fn test_invalid_object_ownership() {
     };
     assert_eq!(
         UserInputError::try_from(e).unwrap(),
-        UserInputError::IncorrectUserSignature { error:  format!("Object {:?} is owned by account address {:?}, but given owner/signer address is {:?}", invalid_ownership_object_id, invalid_owner, sender)}
+        UserInputError::IncorrectUserSignature { error: format!("Object {:?} is owned by account address {:?}, but given owner/signer address is {:?}", invalid_ownership_object_id, invalid_owner, sender) }
     );
 }
 
@@ -3547,6 +3547,7 @@ async fn test_store_revert_unwrap_move_call() {
     let gas = db.get_object(&gas_object_id).unwrap().unwrap();
     assert_eq!(gas.version(), wrap_effects.gas_object().0 .1);
 }
+
 #[tokio::test]
 async fn test_store_get_dynamic_object() {
     let (_, fields) = create_and_retrieve_df_info(ident_str!("add_ofield")).await;
@@ -6124,7 +6125,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         shared_inputs,
         vec![
             SharedInput::Cancelled((shared_objects[0].id(), SequenceNumber::CONGESTED)),
-            SharedInput::Cancelled((shared_objects[1].id(), SequenceNumber::CANCELLED_READ))
+            SharedInput::Cancelled((shared_objects[1].id(), SequenceNumber::CANCELLED_READ)),
         ]
     );
 
@@ -6150,4 +6151,12 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     } else {
         panic!("First scheduled transaction must be a ConsensusCommitPrologueV3 transaction.");
     }
+}
+
+#[tokio::test]
+async fn test_single_authority_reconfigure() {
+    let state = TestAuthorityBuilder::new().build().await;
+    assert_eq!(state.epoch_store_for_testing().epoch(), 0);
+    state.reconfigure_for_testing().await;
+    assert_eq!(state.epoch_store_for_testing().epoch(), 1);
 }

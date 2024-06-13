@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::future::Future;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::sync::Arc;
+
 use arc_swap::ArcSwapOption;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::groups::bls12381;
@@ -11,17 +17,28 @@ use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use itertools::{izip, Itertools};
-use narwhal_executor::ExecutionIndices;
+use move_bytecode_utils::module_cache::SyncModuleCache;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
+use prometheus::IntCounter;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
-use std::future::Future;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use tap::TapOptional;
+use tokio::sync::OnceCell;
+use tokio::time::Instant;
+use tracing::{debug, error, info, instrument, trace, warn};
+
+use mysten_common::sync::notify_once::NotifyOnce;
+use mysten_common::sync::notify_read::NotifyRead;
+use mysten_metrics::monitored_scope;
+use narwhal_executor::ExecutionIndices;
+use narwhal_types::{Round, TimestampMs};
 use sui_config::node::ExpensiveSafetyCheckConfig;
+use sui_execution::{self, Executor};
+use sui_macros::fail_point;
 use sui_macros::fail_point_arg;
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
@@ -30,37 +47,48 @@ use sui_types::committee::Committee;
 use sui_types::committee::CommitteeTrait;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo, RandomnessRound};
 use sui_types::digests::ChainIdentifier;
+use sui_types::effects::TransactionEffects;
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::executable_transaction::{
+    TrustedExecutableTransaction, VerifiedExecutableTransaction,
+};
+use sui_types::message_envelope::TrustedEnvelope;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
+};
+use sui_types::messages_consensus::{
+    check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey,
+    ConsensusTransactionKind,
+};
 use sui_types::signature::GenericSignature;
+use sui_types::storage::GetSharedLocks;
 use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
+use sui_types::sui_system_state::epoch_start_sui_system_state::{
+    EpochStartSystemState, EpochStartSystemStateTrait,
+};
 use sui_types::transaction::{
     AuthenticatorStateUpdate, CertifiedTransaction, InputObjectKind, SenderSignedData, Transaction,
     TransactionDataAPI, TransactionKey, TransactionKind, VerifiedCertificate,
     VerifiedSignedTransaction, VerifiedTransaction,
 };
-use tokio::sync::OnceCell;
-use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::rocks::{read_size_from_env, ReadWriteOptions};
+use typed_store::{retry_transaction_forever, Map};
 use typed_store::{
     rocks::{default_db_options, DBBatch, DBMap, DBOptions, MetricConf},
     traits::{TableSummary, TypedStoreDebug},
     TypedStoreError,
 };
+use typed_store_derive::DBMapUtils;
 
-use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
-use super::epoch_start_configuration::EpochStartConfigTrait;
-use super::shared_object_congestion_tracker::SharedObjectCongestionTracker;
-use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
+use crate::authority::shared_object_version_manager::{
+    AssignedTxAndVersions, ConsensusSharedObjVerAssignment, SharedObjVerManager,
+};
 use crate::authority::AuthorityMetrics;
 use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointHeight, CheckpointServiceNotify, EpochStats,
     PendingCheckpoint, PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
-};
-
-use crate::authority::shared_object_version_manager::{
-    AssignedTxAndVersions, ConsensusSharedObjVerAssignment, SharedObjVerManager,
 };
 use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -74,37 +102,11 @@ use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
 use crate::signature_verifier::*;
 use crate::stake_aggregator::{GenericMultiStakeAggregator, StakeAggregator};
-use move_bytecode_utils::module_cache::SyncModuleCache;
-use mysten_common::sync::notify_once::NotifyOnce;
-use mysten_common::sync::notify_read::NotifyRead;
-use mysten_metrics::monitored_scope;
-use narwhal_types::{Round, TimestampMs};
-use prometheus::IntCounter;
-use std::str::FromStr;
-use sui_execution::{self, Executor};
-use sui_macros::fail_point;
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-use sui_storage::mutex_table::{MutexGuard, MutexTable};
-use sui_types::effects::TransactionEffects;
-use sui_types::executable_transaction::{
-    TrustedExecutableTransaction, VerifiedExecutableTransaction,
-};
-use sui_types::message_envelope::TrustedEnvelope;
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
-};
-use sui_types::messages_consensus::{
-    check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey,
-    ConsensusTransactionKind,
-};
-use sui_types::storage::GetSharedLocks;
-use sui_types::sui_system_state::epoch_start_sui_system_state::{
-    EpochStartSystemState, EpochStartSystemStateTrait,
-};
-use tap::TapOptional;
-use tokio::time::Instant;
-use typed_store::{retry_transaction_forever, Map};
-use typed_store_derive::DBMapUtils;
+
+use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
+use super::epoch_start_configuration::EpochStartConfigTrait;
+use super::shared_object_congestion_tracker::SharedObjectCongestionTracker;
+use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -121,6 +123,7 @@ pub(crate) type EncG = bls12381::G2Element;
 // anyway. If we need to support distributed object storage, having this distinction will be
 // useful, as we will most likely have to re-implement a retry / write-ahead-log at that point.
 pub struct CertLockGuard(MutexGuard);
+
 pub struct CertTxGuard(CertLockGuard);
 
 impl CertTxGuard {
@@ -672,7 +675,9 @@ impl AuthorityEpochTables {
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
 
 impl AuthorityPerEpochStore {
-    #[instrument(name = "AuthorityPerEpochStore::new", level = "error", skip_all, fields(epoch = committee.epoch))]
+    #[instrument(name = "AuthorityPerEpochStore::new", level = "error", skip_all, fields(
+        epoch = committee.epoch
+    ))]
     pub fn new(
         name: AuthorityName,
         committee: Arc<Committee>,
@@ -713,7 +718,6 @@ impl AuthorityPerEpochStore {
             epoch_start_configuration.epoch_start_state().epoch(),
             epoch_id
         );
-        let epoch_start_configuration = Arc::new(epoch_start_configuration);
         metrics.current_epoch.set(epoch_id as i64);
         metrics
             .current_voting_right
@@ -811,7 +815,7 @@ impl AuthorityPerEpochStore {
             epoch_open_time: current_time,
             epoch_close_time: Default::default(),
             metrics,
-            epoch_start_configuration,
+            epoch_start_configuration: Arc::new(epoch_start_configuration),
             execution_component,
             chain_identifier,
             jwk_aggregator,
@@ -955,6 +959,29 @@ impl AuthorityPerEpochStore {
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
             chain_identifier,
+        )
+    }
+
+    pub fn new_at_next_epoch_for_testing(
+        &self,
+        backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
+        object_store: Arc<dyn ObjectStore + Send + Sync>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+    ) -> Arc<Self> {
+        let next_epoch = self.epoch() + 1;
+        let next_committee = Committee::new(
+            next_epoch,
+            self.committee.voting_rights.iter().cloned().collect(),
+        );
+        self.new_at_next_epoch(
+            self.name,
+            next_committee,
+            self.epoch_start_configuration
+                .new_at_next_epoch_for_testing(),
+            backing_package_store,
+            object_store,
+            expensive_safety_check_config,
+            self.chain_identifier,
         )
     }
 

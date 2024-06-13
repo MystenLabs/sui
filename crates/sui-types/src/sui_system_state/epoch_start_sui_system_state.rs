@@ -1,22 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use enum_dispatch::enum_dispatch;
 use std::collections::{BTreeMap, HashMap};
 
-use crate::base_types::{AuthorityName, EpochId, SuiAddress};
-use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, StakeUnit};
-use crate::multiaddr::Multiaddr;
 use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
+use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
+use tracing::{error, warn};
+
 use consensus_config::{
     Authority, AuthorityPublicKey, Committee as ConsensusCommittee, NetworkPublicKey,
     ProtocolPublicKey,
 };
 use narwhal_config::{Committee as NarwhalCommittee, CommitteeBuilder, WorkerCache, WorkerIndex};
-use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
-use tracing::{error, warn};
+
+use crate::base_types::{AuthorityName, EpochId, SuiAddress};
+use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, StakeUnit};
+use crate::multiaddr::Multiaddr;
 
 #[enum_dispatch]
 pub trait EpochStartSystemStateTrait {
@@ -73,6 +75,21 @@ impl EpochStartSystemState {
 
     pub fn new_for_testing_with_epoch(epoch: EpochId) -> Self {
         Self::V1(EpochStartSystemStateV1::new_for_testing_with_epoch(epoch))
+    }
+
+    pub fn new_at_next_epoch_for_testing(&self) -> Self {
+        // Only need to support the latest version for testing.
+        match self {
+            Self::V1(state) => Self::V1(EpochStartSystemStateV1 {
+                epoch: state.epoch + 1,
+                protocol_version: state.protocol_version,
+                reference_gas_price: state.reference_gas_price,
+                safe_mode: state.safe_mode,
+                epoch_start_timestamp_ms: state.epoch_start_timestamp_ms,
+                epoch_duration_ms: state.epoch_duration_ms,
+                active_validators: state.active_validators.clone(),
+            }),
+        }
     }
 }
 
@@ -298,7 +315,7 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct EpochStartValidatorInfoV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey: narwhal_crypto::PublicKey,
@@ -320,17 +337,19 @@ impl EpochStartValidatorInfoV1 {
 
 #[cfg(test)]
 mod test {
+    use fastcrypto::traits::KeyPair;
+    use rand::thread_rng;
+
+    use mysten_network::Multiaddr;
+    use narwhal_crypto::NetworkKeyPair;
+    use sui_protocol_config::ProtocolVersion;
+
     use crate::base_types::SuiAddress;
     use crate::committee::CommitteeTrait;
     use crate::crypto::{get_key_pair, AuthorityKeyPair};
     use crate::sui_system_state::epoch_start_sui_system_state::{
         EpochStartSystemStateTrait, EpochStartSystemStateV1, EpochStartValidatorInfoV1,
     };
-    use fastcrypto::traits::KeyPair;
-    use mysten_network::Multiaddr;
-    use narwhal_crypto::NetworkKeyPair;
-    use rand::thread_rng;
-    use sui_protocol_config::ProtocolVersion;
 
     #[test]
     fn test_sui_and_mysticeti_committee_are_same() {

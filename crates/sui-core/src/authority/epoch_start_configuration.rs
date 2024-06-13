@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt;
+
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
-use sui_config::{ExecutionCacheConfig, NodeConfig};
 
-use std::fmt;
+use sui_config::{ExecutionCacheConfig, NodeConfig};
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::SequenceNumber;
 use sui_types::bridge::{get_bridge_obj_initial_shared_version, is_bridge_committee_initiated};
@@ -152,6 +153,26 @@ impl EpochStartConfiguration {
 
     pub fn object_lock_split_tables_enabled(&self) -> bool {
         self.flags().contains(&EpochFlag::ObjectLockSplitTables)
+    }
+
+    pub fn new_at_next_epoch_for_testing(&self) -> Self {
+        // We only need to implement this function for the latest version.
+        // When a new version is introduced, this function should be updated.
+        match self {
+            Self::V6(config) => {
+                Self::V6(EpochStartConfigurationV6 {
+                    system_state: config.system_state.new_at_next_epoch_for_testing(),
+                    epoch_digest: config.epoch_digest.clone(),
+                    flags: config.flags.clone(),
+                    authenticator_obj_initial_shared_version: config.authenticator_obj_initial_shared_version,
+                    randomness_obj_initial_shared_version: config.randomness_obj_initial_shared_version,
+                    coin_deny_list_obj_initial_shared_version: config.coin_deny_list_obj_initial_shared_version,
+                    bridge_obj_initial_shared_version: config.bridge_obj_initial_shared_version,
+                    bridge_committee_initiated: config.bridge_committee_initiated,
+                })
+            }
+            _ => panic!("This function is only implemented for the latest version of EpochStartConfiguration"),
+        }
     }
 }
 

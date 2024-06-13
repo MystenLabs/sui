@@ -2,33 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution_cache::ExecutionCacheTraitPointers;
-use crate::execution_cache::TransactionCacheRead;
-use crate::rest_index::RestIndexStore;
-use crate::transaction_outputs::TransactionOutputs;
-use crate::verify_indexes::verify_indexes;
-use anyhow::anyhow;
-use arc_swap::{ArcSwap, Guard};
-use async_trait::async_trait;
-use chrono::prelude::*;
-use fastcrypto::encoding::Base58;
-use fastcrypto::encoding::Encoding;
-use fastcrypto::hash::MultisetHash;
-use itertools::Itertools;
-use move_binary_format::binary_config::BinaryConfig;
-use move_binary_format::CompiledModule;
-use move_core_types::annotated_value::MoveStructLayout;
-use move_core_types::language_storage::ModuleId;
-use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
-use parking_lot::Mutex;
-use prometheus::{
-    register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-};
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
@@ -42,29 +15,44 @@ use std::{
     sync::Arc,
     vec,
 };
-use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
-use sui_config::NodeConfig;
-use sui_types::crypto::RandomnessRound;
-use sui_types::execution_status::ExecutionStatus;
-use sui_types::inner_temporary_store::PackageStoreWithFallback;
-use sui_types::type_resolver::into_struct_layout;
-use sui_types::type_resolver::LayoutResolver;
+
+use anyhow::anyhow;
+use arc_swap::{ArcSwap, Guard};
+use async_trait::async_trait;
+use chrono::prelude::*;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
+use fastcrypto::hash::MultisetHash;
+use itertools::Itertools;
+use move_binary_format::binary_config::BinaryConfig;
+use move_binary_format::CompiledModule;
+use move_core_types::annotated_value::MoveStructLayout;
+use move_core_types::language_storage::ModuleId;
+use once_cell::sync::OnceCell;
+use parking_lot::Mutex;
+use prometheus::{
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument, warn, Instrument};
 
-use self::authority_store::ExecutionLockWriteGuard;
-use self::authority_store_pruner::AuthorityStorePruningMetrics;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
-
-use once_cell::sync::OnceCell;
+use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::genesis::Genesis;
+use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
+use sui_config::NodeConfig;
 use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent, SuiMoveValue,
@@ -78,7 +66,10 @@ use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValue
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_storage::IndexStore;
 use sui_types::authenticator_state::get_authenticator_state;
+#[cfg(msim)]
+use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{EpochId, ProtocolVersion};
+use sui_types::crypto::RandomnessRound;
 use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
 use sui_types::deny_list_v1::check_coin_deny_list_v1;
 use sui_types::digests::ChainIdentifier;
@@ -91,7 +82,10 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::execution_config_utils::to_binary_config;
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::inner_temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
 };
@@ -115,6 +109,8 @@ use sui_types::storage::{
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
+use sui_types::type_resolver::into_struct_layout;
+use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -137,9 +133,15 @@ use crate::authority::authority_store_pruner::{
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
+#[cfg(msim)]
+pub use crate::checkpoints::checkpoint_executor::{
+    init_checkpoint_timeout_config, CheckpointTimeoutConfig,
+};
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::execution_cache::ExecutionCacheTraitPointers;
+use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::{
     CheckpointCache, ExecutionCacheCommit, ExecutionCacheReconfigAPI, ExecutionCacheWrite,
     ObjectCacheRead, StateSyncAPI,
@@ -149,20 +151,17 @@ use crate::metrics::LatencyObserver;
 use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::overload_monitor::{overload_monitor_accept_tx, AuthorityOverloadInfo};
+use crate::rest_index::RestIndexStore;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{AccumulatorStore, StateAccumulator, WrappedObject};
 use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
+use crate::transaction_outputs::TransactionOutputs;
+use crate::verify_indexes::verify_indexes;
 
-#[cfg(msim)]
-pub use crate::checkpoints::checkpoint_executor::{
-    init_checkpoint_timeout_config, CheckpointTimeoutConfig,
-};
-
-#[cfg(msim)]
-use sui_types::committee::CommitteeTrait;
-use sui_types::execution_config_utils::to_binary_config;
+use self::authority_store::ExecutionLockWriteGuard;
+use self::authority_store_pruner::AuthorityStorePruningMetrics;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -355,75 +354,75 @@ impl AuthorityMetrics {
                 "Total number of transaction orders",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             total_certs: register_int_counter_with_registry!(
                 "total_transaction_certificates",
                 "Total number of transaction certificates handled",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             total_cert_attempts: register_int_counter_with_registry!(
                 "total_handle_certificate_attempts",
                 "Number of calls to handle_certificate",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             // total_effects == total transactions finished
             total_effects: register_int_counter_with_registry!(
                 "total_transaction_effects",
                 "Total number of transaction effects produced",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
 
             shared_obj_tx: register_int_counter_with_registry!(
                 "num_shared_obj_tx",
                 "Number of transactions involving shared objects",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
 
             sponsored_tx: register_int_counter_with_registry!(
                 "num_sponsored_tx",
                 "Number of sponsored transactions",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
 
             tx_already_processed: register_int_counter_with_registry!(
                 "num_tx_already_processed",
                 "Number of transaction orders already processed previously",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             num_input_objs: register_histogram_with_registry!(
                 "num_input_objects",
                 "Distribution of number of input TX objects per TX",
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             num_shared_objects: register_histogram_with_registry!(
                 "num_shared_objects",
                 "Number of shared input objects per TX",
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             batch_size: register_histogram_with_registry!(
                 "batch_size",
                 "Distribution of size of transaction batch",
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             authority_state_handle_transaction_latency: register_histogram_with_registry!(
                 "authority_state_handle_transaction_latency",
                 "Latency of handling transactions",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             execute_certificate_latency_single_writer,
             execute_certificate_latency_shared_object,
             execute_certificate_with_effects_latency: register_histogram_with_registry!(
@@ -432,35 +431,35 @@ impl AuthorityMetrics {
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             internal_execution_latency: register_histogram_with_registry!(
                 "authority_state_internal_execution_latency",
                 "Latency of actual certificate executions",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             execution_load_input_objects_latency: register_histogram_with_registry!(
                 "authority_state_execution_load_input_objects_latency",
                 "Latency of loading input objects for execution",
                 LOW_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             prepare_certificate_latency: register_histogram_with_registry!(
                 "authority_state_prepare_certificate_latency",
                 "Latency of executing certificates, before committing the results",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             commit_certificate_latency: register_histogram_with_registry!(
                 "authority_state_commit_certificate_latency",
                 "Latency of committing certificate execution results",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             db_checkpoint_latency: register_histogram_with_registry!(
                 "db_checkpoint_latency",
                 "Latency of checkpointing dbs",
@@ -473,165 +472,165 @@ impl AuthorityMetrics {
                 &["result"],
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_num_missing_objects: register_int_gauge_with_registry!(
                 "transaction_manager_num_missing_objects",
                 "Current number of missing objects in TransactionManager",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_num_pending_certificates: register_int_gauge_with_registry!(
                 "transaction_manager_num_pending_certificates",
                 "Number of certificates pending in TransactionManager, with at least 1 missing input object",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_num_executing_certificates: register_int_gauge_with_registry!(
                 "transaction_manager_num_executing_certificates",
                 "Number of executing certificates, including queued and actually running certificates",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_num_ready: register_int_gauge_with_registry!(
                 "transaction_manager_num_ready",
                 "Number of ready transactions in TransactionManager",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_object_cache_size: register_int_gauge_with_registry!(
                 "transaction_manager_object_cache_size",
                 "Current size of object-availability cache in TransactionManager",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_object_cache_hits: register_int_counter_with_registry!(
                 "transaction_manager_object_cache_hits",
                 "Number of object-availability cache hits in TransactionManager",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             authority_overload_status: register_int_gauge_with_registry!(
                 "authority_overload_status",
                 "Whether authority is current experiencing overload and enters load shedding mode.",
                 registry)
-            .unwrap(),
+                .unwrap(),
             authority_load_shedding_percentage: register_int_gauge_with_registry!(
                 "authority_load_shedding_percentage",
                 "The percentage of transactions is shed when the authority is in load shedding mode.",
                 registry)
-            .unwrap(),
+                .unwrap(),
             transaction_manager_object_cache_misses: register_int_counter_with_registry!(
                 "transaction_manager_object_cache_misses",
                 "Number of object-availability cache misses in TransactionManager",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_object_cache_evictions: register_int_counter_with_registry!(
                 "transaction_manager_object_cache_evictions",
                 "Number of object-availability cache evictions in TransactionManager",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_package_cache_size: register_int_gauge_with_registry!(
                 "transaction_manager_package_cache_size",
                 "Current size of package-availability cache in TransactionManager",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_package_cache_hits: register_int_counter_with_registry!(
                 "transaction_manager_package_cache_hits",
                 "Number of package-availability cache hits in TransactionManager",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_package_cache_misses: register_int_counter_with_registry!(
                 "transaction_manager_package_cache_misses",
                 "Number of package-availability cache misses in TransactionManager",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_package_cache_evictions: register_int_counter_with_registry!(
                 "transaction_manager_package_cache_evictions",
                 "Number of package-availability cache evictions in TransactionManager",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             transaction_manager_transaction_queue_age_s: register_histogram_with_registry!(
                 "transaction_manager_transaction_queue_age_s",
                 "Time spent in waiting for transaction in the queue",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             execution_driver_executed_transactions: register_int_counter_with_registry!(
                 "execution_driver_executed_transactions",
                 "Cumulative number of transaction executed by execution driver",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             execution_driver_dispatch_queue: register_int_gauge_with_registry!(
                 "execution_driver_dispatch_queue",
                 "Number of transaction pending in execution driver dispatch queue",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             execution_queueing_delay_s: register_histogram_with_registry!(
                 "execution_queueing_delay_s",
                 "Queueing delay between a transaction is ready for execution until it starts executing.",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
-            .unwrap(),
+                .unwrap(),
             prepare_cert_gas_latency_ratio: register_histogram_with_registry!(
                 "prepare_cert_gas_latency_ratio",
                 "The ratio of computation gas divided by VM execution latency.",
                 GAS_LATENCY_RATIO_BUCKETS.to_vec(),
                 registry
             )
-            .unwrap(),
+                .unwrap(),
             execution_gas_latency_ratio: register_histogram_with_registry!(
                 "execution_gas_latency_ratio",
                 "The ratio of computation gas divided by certificate execution latency, include committing certificate.",
                 GAS_LATENCY_RATIO_BUCKETS.to_vec(),
                 registry
             )
-            .unwrap(),
+                .unwrap(),
             skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             skipped_consensus_txns_cache_hit: register_int_counter_with_registry!(
                 "skipped_consensus_txns_cache_hit",
                 "Total number of consensus transactions skipped because of local cache hit",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             post_processing_total_events_emitted: register_int_counter_with_registry!(
                 "post_processing_total_events_emitted",
                 "Total number of events emitted in post processing",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             post_processing_total_tx_indexed: register_int_counter_with_registry!(
                 "post_processing_total_tx_indexed",
                 "Total number of txes indexed in post processing",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             post_processing_total_tx_had_event_processed: register_int_counter_with_registry!(
                 "post_processing_total_tx_had_event_processed",
                 "Total number of txes finished event processing in post processing",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             post_processing_total_failures: register_int_counter_with_registry!(
                 "post_processing_total_failures",
                 "Total number of failure in post processing",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             consensus_handler_processed: register_int_counter_vec_with_registry!(
                 "consensus_handler_processed",
                 "Number of transactions processed by consensus handler",
@@ -696,19 +695,19 @@ impl AuthorityMetrics {
                 "Number of failed authenticator state updates",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             zklogin_sig_count: register_int_counter_with_registry!(
                 "zklogin_sig_count",
                 "Count of zkLogin signatures",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             multisig_sig_count: register_int_counter_with_registry!(
                 "multisig_sig_count",
                 "Count of zkLogin signatures",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             consensus_calculated_throughput: register_int_gauge_with_registry!(
                 "consensus_calculated_throughput",
                 "The calculated throughput from consensus output. Result is calculated based on unique transactions.",
@@ -2213,7 +2212,7 @@ impl AuthorityState {
                             error!("try_create_dynamic_field_info should not fail, {}, new_object={:?}", e, new_object);
                             None
                         }
-                    )
+                        )
                         else {
                             // Skip indexing for non dynamic field objects.
                             continue;
@@ -2896,7 +2895,7 @@ impl AuthorityState {
             .reopen_epoch_db(
                 cur_epoch_store,
                 new_committee,
-                epoch_start_configuration,
+                Arc::new(epoch_start_configuration),
                 expensive_safety_check_config,
             )
             .await?;
@@ -2907,6 +2906,20 @@ impl AuthorityState {
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
         Ok(new_epoch_store)
+    }
+
+    pub async fn reconfigure_for_testing(&self) {
+        let mut execution_lock = self.execution_lock_for_reconfiguration().await;
+        let epoch_store = self.epoch_store_for_testing().clone();
+        let new_epoch_store = epoch_store.new_at_next_epoch_for_testing(
+            self.get_backing_package_store().clone(),
+            self.get_object_store().clone(),
+            &self.config.expensive_safety_check_config,
+        );
+        let new_epoch = new_epoch_store.epoch();
+        self.transaction_manager.reconfigure(new_epoch);
+        self.epoch_store.store(new_epoch_store);
+        *execution_lock = new_epoch;
     }
 
     /// This is a temporary method to be used when we enable simplified_unwrap_then_delete.
@@ -3805,7 +3818,7 @@ impl AuthorityState {
                     error: UserInputError::Unsupported(
                         "This query type is not supported by the full node.".to_string(),
                     ),
-                })
+                });
             }
         };
 
@@ -4695,7 +4708,7 @@ impl AuthorityState {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
-        epoch_start_configuration: EpochStartConfiguration,
+        epoch_start_configuration: Arc<EpochStartConfiguration>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
@@ -4786,7 +4799,7 @@ impl RandomnessRoundReceiver {
         info!("RandomnessRoundReceiver event loop ended");
     }
 
-    #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
+    #[instrument(level = "debug", skip_all, fields(? epoch, ? round))]
     fn handle_new_randomness(&self, epoch: EpochId, round: RandomnessRound, bytes: Vec<u8>) {
         let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         if epoch_store.epoch() != epoch {
@@ -4973,9 +4986,11 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
 
 #[cfg(msim)]
 pub mod framework_injection {
-    use move_binary_format::CompiledModule;
     use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::BTreeSet};
+
+    use move_binary_format::CompiledModule;
+
     use sui_framework::{BuiltInFramework, SystemPackage};
     use sui_types::base_types::{AuthorityName, ObjectID};
     use sui_types::is_system_package;
