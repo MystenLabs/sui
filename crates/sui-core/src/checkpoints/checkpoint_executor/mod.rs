@@ -381,17 +381,28 @@ impl CheckpointExecutor {
         const NUM_SAVED_FULL_CHECKPOINT_CONTENTS: u64 = 5_000;
         if seq >= NUM_SAVED_FULL_CHECKPOINT_CONTENTS {
             let prune_seq = seq - NUM_SAVED_FULL_CHECKPOINT_CONTENTS;
-            let prune_checkpoint = self
+            if let Some(prune_checkpoint) = self
                 .checkpoint_store
                 .get_checkpoint_by_sequence_number(prune_seq)
                 .expect("Failed to fetch checkpoint")
-                .expect("Failed to retrieve earlier checkpoint by sequence number");
-            self.checkpoint_store
-                .delete_full_checkpoint_contents(prune_seq)
-                .expect("Failed to delete full checkpoint contents");
-            self.checkpoint_store
-                .delete_contents_digest_sequence_number_mapping(&prune_checkpoint.content_digest)
-                .expect("Failed to delete contents digest -> sequence number mapping");
+            {
+                self.checkpoint_store
+                    .delete_full_checkpoint_contents(prune_seq)
+                    .expect("Failed to delete full checkpoint contents");
+                self.checkpoint_store
+                    .delete_contents_digest_sequence_number_mapping(
+                        &prune_checkpoint.content_digest,
+                    )
+                    .expect("Failed to delete contents digest -> sequence number mapping");
+            } else {
+                // If this is directly after a snapshot restore with skiplisting,
+                // this is expected for the first `NUM_SAVED_FULL_CHECKPOINT_CONTENTS`
+                // checkpoints.
+                debug!(
+                    "Failed to fetch checkpoint with sequence number {:?}",
+                    prune_seq
+                );
+            }
         }
 
         self.checkpoint_store

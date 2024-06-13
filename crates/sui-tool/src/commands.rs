@@ -365,6 +365,13 @@ pub enum ToolCommand {
         /// and output will be reduced to necessary status information.
         #[clap(long = "verbose")]
         verbose: bool,
+
+        /// If provided, all checkpoint summaries from genesis to the end of the target epoch
+        /// will be downloaded and (if --verify is provided) full checkpoint chain verification
+        /// will be performed. If omitted, only end of epoch checkpoint summaries will be
+        /// downloaded, and (if --verify is provided) will be verified via committee signature.
+        #[clap(long = "all-checkpoints")]
+        all_checkpoints: bool,
     },
 
     #[clap(name = "replay")]
@@ -709,6 +716,7 @@ impl ToolCommand {
                 no_sign_request,
                 latest,
                 verbose,
+                all_checkpoints,
             } => {
                 if !verbose {
                     tracing_handle
@@ -917,6 +925,7 @@ impl ToolCommand {
                     num_parallel_downloads,
                     network,
                     verify,
+                    all_checkpoints,
                 )
                 .await?;
             }
