@@ -6618,6 +6618,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-symbol-pool",
+ "serde",
  "serde_json",
  "sha2 0.9.9",
  "tempfile",
