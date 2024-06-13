@@ -111,13 +111,21 @@ fn parse_abort_status_string(
     s: &str,
 ) -> Result<(AccountAddress, Identifier, Identifier, u16, u64, u16), anyhow::Error> {
     use regex::Regex;
-    let re = Regex::new(r"MoveAbort.*address:\s*(.*?),.*Identifier...(.*?)\\.*instruction:\s+(\d+),.*function_name:\s*Some...(\w+?)\\.*},\s*(\d+).*in command\s*(\d+)").unwrap();
-    let captures = re.captures(s).unwrap();
+    let re = Regex::new(r#"MoveAbort.*address:\s*(.*?),.* name:.*Identifier\((.*?)\).*instruction:\s+(\d+),.*function_name:.*Some\((.*?)\).*},\s*(\d+).*in command\s*(\d+)"#).unwrap();
+    let Some(captures) = re.captures(s) else {
+        anyhow::bail!(
+            "Cannot parse abort status string: {} as a move abort string",
+            s
+        );
+    };
+
+    // Remove any escape characters from the string if present.
+    let clean_string = |s: &str| s.replace(['\\', '\"'], "");
 
     let address = AccountAddress::from_hex(&captures[1])?;
-    let module_name = Identifier::new(&captures[2])?;
+    let module_name = Identifier::new(clean_string(&captures[2]))?;
     let instruction = captures[3].parse::<u16>()?;
-    let function_name = Identifier::new(&captures[4])?;
+    let function_name = Identifier::new(clean_string(&captures[4]))?;
     let abort_code = captures[5].parse::<u64>()?;
     let command_index = captures[6].parse::<u16>()?;
     Ok((
@@ -141,6 +149,8 @@ mod tests {
             r#"Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 1, instruction: 1, function_name: Some(\"aborter_line_no\") }, 9223372105574252543) in command 0" }"#,
             r#"Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 2, instruction: 1, function_name: Some(\"clever_aborter\") }, 9223372118459154433) in command 0" }"#,
             r#"Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 3, instruction: 1, function_name: Some(\"clever_aborter_not_a_string\") }, 9223372135639154691) in command 0" }"#,
+            r#"MoveAbort(MoveLocation { module: ModuleId { address: 24bf9e624820625ac1e38076901421d2630b2b225b638aaf0b85264b857a608b, name: Identifier(\"tester\") }, function: 0, instruction: 1, function_name: Some(\"test\") }, 9223372071214514177) in command 0"#,
+            r#"MoveAbort(MoveLocation { module: ModuleId { address: 24bf9e624820625ac1e38076901421d2630b2b225b638aaf0b85264b857a608b, name: Identifier("tester") }, function: 0, instruction: 1, function_name: Some("test") }, 9223372071214514177) in command 0"#,
         ];
         let parsed: Vec<_> = corpus.into_iter().map(|c| {
             let (address, module_name, function_name, instruction, abort_code, command_index) =

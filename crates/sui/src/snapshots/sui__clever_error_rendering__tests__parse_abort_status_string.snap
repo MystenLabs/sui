@@ -33,3 +33,19 @@ original abort message: Failure { error: "MoveAbort(MoveLocation { module: Modul
  instruction: 1
  abort_code: 9223372135639154691
  command_index: 0
+------
+original abort message: MoveAbort(MoveLocation { module: ModuleId { address: 24bf9e624820625ac1e38076901421d2630b2b225b638aaf0b85264b857a608b, name: Identifier(\"tester\") }, function: 0, instruction: 1, function_name: Some(\"test\") }, 9223372071214514177) in command 0
+ address: 24bf9e624820625ac1e38076901421d2630b2b225b638aaf0b85264b857a608b
+ module_name: tester
+ function_name: test
+ instruction: 1
+ abort_code: 9223372071214514177
+ command_index: 0
+------
+original abort message: MoveAbort(MoveLocation { module: ModuleId { address: 24bf9e624820625ac1e38076901421d2630b2b225b638aaf0b85264b857a608b, name: Identifier("tester") }, function: 0, instruction: 1, function_name: Some("test") }, 9223372071214514177) in command 0
+ address: 24bf9e624820625ac1e38076901421d2630b2b225b638aaf0b85264b857a608b
+ module_name: tester
+ function_name: test
+ instruction: 1
+ abort_code: 9223372071214514177
+ command_index: 0
