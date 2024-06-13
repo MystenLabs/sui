@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 50;
+const MAX_PROTOCOL_VERSION: u64 = 51;
 
 // Record history of protocol version allocations here:
 //
@@ -146,6 +146,7 @@ const MAX_PROTOCOL_VERSION: u64 = 50;
 //             Enable checkpoint batching in testnet.
 //             Prepose consensus commit prologue in checkpoints.
 //             Set number of leaders per round for Mysticeti commits.
+// Version 51: Switch to DKG V1.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1135,6 +1136,9 @@ pub struct ProtocolConfig {
     /// Minimum interval between consecutive rounds of generated randomness.
     random_beacon_min_round_interval_ms: Option<u64>,
 
+    /// Version of the random beacon DKG protocol, 0 when not set.
+    random_beacon_dkg_version: Option<u64>,
+
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
@@ -1329,6 +1333,10 @@ impl ProtocolConfig {
 
     pub fn random_beacon(&self) -> bool {
         self.feature_flags.random_beacon
+    }
+
+    pub fn dkg_version(&self) -> u64 {
+        self.random_beacon_dkg_version.unwrap_or(0)
     }
 
     pub fn enable_bridge(&self) -> bool {
@@ -1890,6 +1898,8 @@ impl ProtocolConfig {
 
             random_beacon_min_round_interval_ms: None,
 
+            random_beacon_dkg_version: None,
+
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
@@ -2405,6 +2415,9 @@ impl ProtocolConfig {
 
                     // Set max transaction deferral to 10 consensus rounds.
                     cfg.max_deferral_rounds_for_congestion_control = Some(10);
+                }
+                51 => {
+                    cfg.random_beacon_dkg_version = Some(1);
                 }
                 // Use this template when making changes:
                 //
