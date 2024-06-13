@@ -45,6 +45,8 @@
 	"homepage": "https://github.com/mystenlabs/sui#readme",
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
+		"@mysten/dapp-kit": "workspace:*",
+		"@tanstack/react-query": "^5.0.0",
 		"@types/node": "^20.4.2",
 		"@types/react": "^18.2.15",
 		"@types/react-dom": "^18.2.7",

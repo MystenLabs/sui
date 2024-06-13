@@ -44,9 +44,17 @@ type UncontrolledModalProps = {
 type ConnectModalProps = {
 	/** The trigger button that opens the dialog. */
 	trigger: NonNullable<ReactNode>;
+	/** Filter the wallets shown in the connect modal */
+	walletFilter?: (wallet: WalletWithRequiredFeatures) => boolean;
 } & (ControlledModalProps | UncontrolledModalProps);
 
-export function ConnectModal({ trigger, open, defaultOpen, onOpenChange }: ConnectModalProps) {
+export function ConnectModal({
+	trigger,
+	open,
+	defaultOpen,
+	onOpenChange,
+	walletFilter,
+}: ConnectModalProps) {
 	const [isModalOpen, setModalOpen] = useState(open ?? defaultOpen);
 	const [currentView, setCurrentView] = useState<ConnectModalView>();
 	const [selectedWallet, setSelectedWallet] = useState<WalletWithRequiredFeatures>();
@@ -113,6 +121,7 @@ export function ConnectModal({ trigger, open, defaultOpen, onOpenChange }: Conne
 										<Heading as="h2">Connect a Wallet</Heading>
 									</Dialog.Title>
 									<WalletList
+										walletFilter={walletFilter}
 										selectedWalletName={getWalletUniqueIdentifier(selectedWallet)}
 										onPlaceholderClick={() => setCurrentView('getting-started')}
 										onSelect={(wallet) => {

@@ -13,14 +13,21 @@ type WalletListProps = {
 	selectedWalletName?: string;
 	onPlaceholderClick: () => void;
 	onSelect: (wallet: WalletWithRequiredFeatures) => void;
+	walletFilter?: (wallet: WalletWithRequiredFeatures) => boolean;
 };
 
-export function WalletList({ selectedWalletName, onPlaceholderClick, onSelect }: WalletListProps) {
+export function WalletList({
+	selectedWalletName,
+	onPlaceholderClick,
+	onSelect,
+	walletFilter,
+}: WalletListProps) {
 	const wallets = useWallets();
+	const filteredWallets = walletFilter ? wallets.filter((wallet) => walletFilter(wallet)) : wallets;
 	return (
 		<ul className={styles.container}>
-			{wallets.length > 0 ? (
-				wallets.map((wallet) => (
+			{filteredWallets.length > 0 ? (
+				filteredWallets.map((wallet) => (
 					<WalletListItem
 						key={getWalletUniqueIdentifier(wallet)}
 						name={wallet.name}

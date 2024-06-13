@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { SuiClient } from '@mysten/sui/client';
 import { useStore } from '@nanostores/react';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { EnokiFlowConfig } from './EnokiFlow.js';
 import { EnokiFlow } from './EnokiFlow.js';
+import { registerEnokiWallets } from './wallet/index.js';
 
 const EnokiFlowContext = createContext<EnokiFlow | null>(null);
 
@@ -66,4 +68,57 @@ export function useAuthCallback() {
 	}, [hash, flow]);
 
 	return { handled, state };
+}
+
+export const EnokiWalletContext = createContext<{
+	wallets: ReturnType<typeof registerEnokiWallets>['wallets'];
+	client: SuiClient;
+	flow: EnokiFlow;
+} | null>(null);
+
+export function EnokiWalletProvider({
+	children,
+	config,
+	useSuiClientContext,
+}: {
+	config: Omit<Parameters<typeof registerEnokiWallets>[0], 'client'>;
+	useSuiClientContext: () => { client: SuiClient; network: string };
+	children: React.ReactNode;
+}) {
+	const { client, network } = useSuiClientContext();
+
+	const { wallets, unregister, flow } = useMemo(
+		() => registerEnokiWallets({ ...config, client, network }),
+		[client, config, network],
+	);
+
+	useEffect(() => {
+		return () => {
+			unregister();
+		};
+	}, [unregister]);
+
+	return (
+		<EnokiWalletContext.Provider value={{ wallets, flow, client }}>
+			{children}
+		</EnokiWalletContext.Provider>
+	);
+}
+
+export function useEnokiWallets() {
+	const context = useContext(EnokiWalletContext);
+	if (!context) {
+		throw new Error('Missing `EnokiWalletContext` provider');
+	}
+	const { flow, wallets, client } = context;
+	return {
+		wallets,
+		flow,
+		execute: ({ bytes, signature }: { bytes: string; signature: string }) =>
+			flow.executeSignedTransaction({
+				bytes,
+				signature,
+				client,
+			}),
+	};
 }

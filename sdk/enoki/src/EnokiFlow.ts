@@ -5,6 +5,7 @@ import type { SuiClient } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { Transaction } from '@mysten/sui/transactions';
+import { TransactionDataBuilder } from '@mysten/sui/transactions';
 import { fromB64, toB64 } from '@mysten/sui/utils';
 import type { ZkLoginSignatureInputs } from '@mysten/sui/zklogin';
 import { decodeJwt } from 'jose';
@@ -15,6 +16,7 @@ import type { Encryption } from './encryption.js';
 import { createDefaultEncryption } from './encryption.js';
 import type { EnokiClientConfig } from './EnokiClient/index.js';
 import { EnokiClient } from './EnokiClient/index.js';
+import type { EnokiNetwork } from './EnokiClient/type.js';
 import { EnokiKeypair } from './EnokiKeypair.js';
 import type { SyncStore } from './stores.js';
 import { createSessionStorage } from './stores.js';
@@ -108,10 +110,25 @@ export class EnokiFlow {
 		provider: AuthProvider;
 		clientId: string;
 		redirectUrl: string;
-		network?: 'mainnet' | 'testnet' | 'devnet';
+		network?: EnokiNetwork;
 		extraParams?: Record<string, unknown>;
 	}) {
 		const ephemeralKeyPair = new Ed25519Keypair();
+		// const { epoch, epochDurationMs, epochStartTimestampMs } = await new SuiClient({
+		// 	url: getFullnodeUrl(input.network ?? 'mainnet'),
+		// }).getLatestSuiSystemState();
+		// const additionalEpochs = 2;
+
+		// const maxEpoch = Number(epoch) + additionalEpochs;
+
+		// const epochEstimatedEndTimestamp = Number(epochStartTimestampMs) + Number(epochDurationMs);
+
+		// const estimatedExpiration =
+		// 	Number(epochEstimatedEndTimestamp) + additionalEpochs * Number(epochDurationMs);
+
+		// const randomness = generateRandomness();
+
+		// const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
 		const { nonce, randomness, maxEpoch, estimatedExpiration } =
 			await this.#enokiClient.createZkLoginNonce({
 				network: input.network,
@@ -257,7 +274,7 @@ export class EnokiFlow {
 	}
 
 	// TODO: Should this return the proof if it already exists?
-	async getProof({ network }: { network?: 'mainnet' | 'testnet' } = {}) {
+	async getProof({ network }: { network?: EnokiNetwork } = {}) {
 		const zkp = await this.getSession();
 		const { salt } = this.$zkLoginState.get();
 
@@ -291,7 +308,7 @@ export class EnokiFlow {
 		return proof;
 	}
 
-	async getKeypair({ network }: { network?: 'mainnet' | 'testnet' } = {}) {
+	async getKeypair({ network }: { network?: EnokiNetwork } = {}) {
 		// Get the proof, so that we ensure it exists in state:
 		await this.getProof({ network });
 
@@ -320,7 +337,7 @@ export class EnokiFlow {
 		transaction,
 		client,
 	}: {
-		network?: 'mainnet' | 'testnet';
+		network?: EnokiNetwork;
 		transaction: Transaction;
 		client: SuiClient;
 	}) {
@@ -348,7 +365,7 @@ export class EnokiFlow {
 		digest,
 		client,
 	}: {
-		network?: 'mainnet' | 'testnet';
+		network?: EnokiNetwork;
 		bytes: string;
 		digest: string;
 		client: SuiClient;
@@ -362,9 +379,42 @@ export class EnokiFlow {
 		});
 
 		// TODO: Should the parent just do this?
-		await client.waitForTransaction({ digest });
+		const { rawEffects } = await client.waitForTransaction({
+			digest,
+			options: { showRawEffects: true },
+		});
 
-		return { digest };
+		return {
+			digest,
+			signature: userSignature.signature,
+			bytes,
+			effects: toB64(Uint8Array.from(rawEffects!)),
+		};
+	}
+
+	async executeSignedTransaction({
+		bytes,
+		signature,
+		client,
+	}: {
+		network?: EnokiNetwork;
+		signature: string;
+		bytes: string;
+		client: SuiClient;
+	}) {
+		const digest = TransactionDataBuilder.getDigestFromBytes(fromB64(bytes));
+		await this.#enokiClient.executeSponsoredTransaction({
+			digest,
+			signature,
+		});
+
+		// TODO: Should the parent just do this?
+		const { rawEffects } = await client.waitForTransaction({
+			digest,
+			options: { showRawEffects: true },
+		});
+
+		return { digest, bytes, signature, rawEffects };
 	}
 
 	async sponsorAndExecuteTransaction({
@@ -372,7 +422,7 @@ export class EnokiFlow {
 		transaction,
 		client,
 	}: {
-		network?: 'mainnet' | 'testnet';
+		network?: EnokiNetwork;
 		transaction: Transaction;
 		client: SuiClient;
 	}) {
