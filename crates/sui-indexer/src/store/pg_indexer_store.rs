@@ -1086,10 +1086,15 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 })
                 .context("Failed to read last epoch from PostgresDB")?;
             if let Some(last_epoch) = last_db_epoch {
-                let epoch_partition_data =
+                let mut epoch_partition_data =
                     EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
                 let table_partitions = self.partition_manager.get_table_partitions()?;
+
                 for (table, (first_partition, last_partition)) in table_partitions {
+                    // consult the partition mapping to determine partition strategy
+                    self.partition_manager
+                        .apply_strategy(&table, &mut epoch_partition_data)?;
+
                     let guard = self.metrics.advance_epoch_latency.start_timer();
                     self.partition_manager.advance_and_prune_epoch_partition(
                         table.clone(),

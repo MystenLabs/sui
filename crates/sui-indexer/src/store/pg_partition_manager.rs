@@ -1,17 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// use diesel::query_dsl::methods::FilterDsl;
 use diesel::r2d2::R2D2Connection;
 use diesel::sql_types::{BigInt, VarChar};
-use diesel::{QueryableByName, RunQueryDsl};
-use std::collections::BTreeMap;
+use diesel::QueryDsl;
+use diesel::{ExpressionMethods, QueryableByName, RunQueryDsl};
+use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 use tracing::{error, info};
 
 use crate::db::ConnectionPool;
-use crate::errors::IndexerError;
+use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
 use crate::models::epoch::StoredEpochInfo;
+use crate::schema::cp_tx;
 use crate::store::diesel_macro::*;
 use downcast::Any;
 
@@ -44,42 +47,60 @@ GROUP BY table_name;
 
 pub struct PgPartitionManager<T: R2D2Connection + 'static> {
     cp: ConnectionPool<T>,
+    partition_strategies: HashMap<&'static str, PgPartitionStrategy>,
 }
 
 impl<T: R2D2Connection> Clone for PgPartitionManager<T> {
     fn clone(&self) -> PgPartitionManager<T> {
         Self {
             cp: self.cp.clone(),
+            partition_strategies: self.partition_strategies.clone(),
         }
     }
+}
+
+#[derive(Clone)]
+pub enum PgPartitionStrategy {
+    CheckpointSequenceNumber,
+    TxSequenceNumber,
 }
 
 #[derive(Clone, Debug)]
 pub struct EpochPartitionData {
     last_epoch: u64,
     next_epoch: u64,
-    last_epoch_start_cp: u64,
-    next_epoch_start_cp: u64,
+    last_epoch_start: u64,
+    next_epoch_start: u64,
 }
 
 impl EpochPartitionData {
     pub fn compose_data(epoch: EpochToCommit, last_db_epoch: StoredEpochInfo) -> Self {
         let last_epoch = last_db_epoch.epoch as u64;
-        let last_epoch_start_cp = last_db_epoch.first_checkpoint_id as u64;
+        let last_epoch_start = last_db_epoch.first_checkpoint_id as u64;
         let next_epoch = epoch.new_epoch.epoch;
-        let next_epoch_start_cp = epoch.new_epoch.first_checkpoint_id;
+        let next_epoch_start = epoch.new_epoch.first_checkpoint_id;
         Self {
             last_epoch,
             next_epoch,
-            last_epoch_start_cp,
-            next_epoch_start_cp,
+            last_epoch_start,
+            next_epoch_start,
         }
+    }
+
+    pub fn update_with_tx_sequence_number(&mut self, start: u64, end: u64) {
+        self.last_epoch_start = start;
+        self.next_epoch_start = end;
     }
 }
 
 impl<T: R2D2Connection> PgPartitionManager<T> {
     pub fn new(cp: ConnectionPool<T>) -> Result<Self, IndexerError> {
-        let manager = Self { cp };
+        let mut partition_strategies = HashMap::new();
+        partition_strategies.insert("transactions", PgPartitionStrategy::TxSequenceNumber);
+        let manager = Self {
+            cp,
+            partition_strategies,
+        };
         let tables = manager.get_table_partitions()?;
         info!(
             "Found {} tables with partitions : [{:?}]",
@@ -116,6 +137,51 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
         )
     }
 
+    /// Tries to fetch the partitioning strategy for the given partitioned table. Defaults to
+    /// `CheckpointSequenceNumber` as the majority of our tables are partitioned on an epoch's
+    /// checkpoints today.
+    pub fn get_strategy(&self, table_name: &str) -> &PgPartitionStrategy {
+        self.partition_strategies
+            .get(table_name)
+            .unwrap_or(&PgPartitionStrategy::CheckpointSequenceNumber)
+    }
+
+    pub fn apply_strategy(
+        &self,
+        table_name: &str,
+        data: &mut EpochPartitionData,
+    ) -> Result<(), IndexerError> {
+        match self.get_strategy(table_name) {
+            PgPartitionStrategy::CheckpointSequenceNumber => Ok(()),
+            PgPartitionStrategy::TxSequenceNumber => {
+                let last_epoch_start = read_only_blocking!(&self.cp, |conn| {
+                    cp_tx::table
+                        .filter(cp_tx::checkpoint_sequence_number.eq(data.last_epoch_start as i64))
+                        .select(cp_tx::min_tx_sequence_number)
+                        .first::<i64>(conn)
+                })
+                .context("Failed to fetch last epoch start tx")
+                .map(|v| v as u64)?;
+
+                let next_epoch_start = read_only_blocking!(&self.cp, |conn| {
+                    cp_tx::table
+                        .filter(
+                            cp_tx::checkpoint_sequence_number.eq(data.next_epoch_start as i64 - 1),
+                        )
+                        .select(cp_tx::max_tx_sequence_number)
+                        .first::<i64>(conn)
+                })
+                .context("Failed to fetch next epoch start tx")
+                .map(|v| v as u64)?
+                    + 1; // in postgres, upper bound is exclusive
+
+                data.update_with_tx_sequence_number(last_epoch_start, next_epoch_start);
+
+                Ok(())
+            }
+        }
+    }
+
     pub fn advance_and_prune_epoch_partition(
         &self,
         table: String,
@@ -138,8 +204,8 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
                             .bind::<diesel::sql_types::Text, _>(table.clone())
                             .bind::<diesel::sql_types::BigInt, _>(data.last_epoch as i64)
                             .bind::<diesel::sql_types::BigInt, _>(data.next_epoch as i64)
-                            .bind::<diesel::sql_types::BigInt, _>(data.last_epoch_start_cp as i64)
-                            .bind::<diesel::sql_types::BigInt, _>(data.next_epoch_start_cp as i64),
+                            .bind::<diesel::sql_types::BigInt, _>(data.last_epoch_start as i64)
+                            .bind::<diesel::sql_types::BigInt, _>(data.next_epoch_start as i64),
                         conn,
                     )
                 },
@@ -150,13 +216,13 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
             transactional_blocking_with_retry!(
                 &self.cp,
                 |conn| {
-                    RunQueryDsl::execute(diesel::sql_query(format!("ALTER TABLE {table_name} REORGANIZE PARTITION {table_name}_partition_{last_epoch} INTO (PARTITION {table_name}_partition_{last_epoch} VALUES LESS THAN ({next_epoch_start_cp}), PARTITION {table_name}_partition_{next_epoch} VALUES LESS THAN MAXVALUE)", table_name = table.clone(), last_epoch = data.last_epoch as i64, next_epoch_start_cp = data.next_epoch_start_cp as i64, next_epoch = data.next_epoch as i64)), conn)
+                    RunQueryDsl::execute(diesel::sql_query(format!("ALTER TABLE {table_name} REORGANIZE PARTITION {table_name}_partition_{last_epoch} INTO (PARTITION {table_name}_partition_{last_epoch} VALUES LESS THAN ({next_epoch_start}), PARTITION {table_name}_partition_{next_epoch} VALUES LESS THAN MAXVALUE)", table_name = table.clone(), last_epoch = data.last_epoch as i64, next_epoch_start = data.next_epoch_start as i64, next_epoch = data.next_epoch as i64)), conn)
                 },
                 Duration::from_secs(10)
             )?;
             info!(
                 "Advanced epoch partition for table {} from {} to {}, prev partition upper bound {}",
-                table, last_partition, data.next_epoch, data.last_epoch_start_cp
+                table, last_partition, data.next_epoch, data.last_epoch_start
             );
 
             // prune old partitions beyond the retention period
