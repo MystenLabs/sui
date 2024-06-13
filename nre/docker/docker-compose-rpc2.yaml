@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    command: ["postgres", "-c", "max-connections=500"]
+
+  graphql:
+    #build:
+    #  context: ../../docker/graphql
+    #  dockerfile: Dockerfile
+    container_name: graphql
+    #image: mysten/sui-grapqhl:${SHA} 
+    image: mysten/sui-graphql-rpc:ci
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgres://myuser:mypassword@localhost:5432/mydb
+    depends_on:
+      - postgres
+    network_mode: "host"
+    restart: on-failure
+    volumes:
+      - ./graphql.toml:/opt/sui/config/sui-graphql.toml:ro
+    entrypoint: ["/opt/sui/bin/sui-graphql-rpc"]
+    command: ["start-server", "--host", "0.0.0.0", "--port", "8001", "--db-url", "postgres://myuser:mypassword@localhost:5432/mydb", "--db-pool-size", "10", "--node-rpc-url", "https://fullnode.testnet.sui.io:443", "--config", "/opt/sui/config/sui-graphql.toml", "--ide-title", "Sui GraphQL"]
+
+  indexer-writer:
+    #build:
+    #  context: ../../docker/sui-indexer
+    #  dockerfile: Dockerfile
+    #image: mysten/sui-indexer:${SHA}
+    image: mysten/sui-indexer:sui-v1.27.0-release
+    container_name: indexer-writer
+    network_mode: "host"
+    environment:
+      DATABASE_URL: postgres://myuser:mypassword@localhost:5432/mydb
+    depends_on:
+      - postgres
+    entrypoint: ["/usr/local/bin/sui-indexer"]
+    command: ["--db-url",  "postgres://myuser:mypassword@localhost:5432/mydb", "--rpc-client-url", "https://fullnode.testnet.sui.io", "--remote-store-url", "https://checkpoints.testnet.sui.io", "--fullnode-sync-worker", "--client-metric-port", "9185", "--reset-db"]
+
+  indexer-reader:
+    #build:
+    #  context: ../../docker/sui-indexer
+    #  dockerfile: Dockerfile
+    #image: mysten/sui-indexer:${SHA} 
+    image: mysten/sui-indexer:sui-v1.27.0-release
+    container_name: indexer-reader
+    network_mode: "host"
+    ports:
+      - "9000:9000"
+    environment:
+      DATABASE_URL: postgres://myuser:mypassword@localhost:5432/mydb
+    depends_on:
+      - postgres
+    entrypoint: ["/usr/local/bin/sui-indexer"]
+    command: ["--db-url",  "postgres://myuser:mypassword@localhost:5432/mydb", "--rpc-client-url", "https://fullnode.testnet.sui.io:443", "--remote-store-url", "https://checkpoints.testnet.sui.io", "--rpc-server-worker","--client-metric-port", "9186"]
+
+volumes:
+  postgres-data:
