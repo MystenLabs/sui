@@ -145,7 +145,7 @@ const MAX_PROTOCOL_VERSION: u64 = 50;
 //             New Move stdlib integer modules
 //             Enable checkpoint batching in testnet.
 //             Prepose consensus commit prologue in checkpoints.
-//             Disable multi-leader per round in Mysticeti universal committer.
+//             Set number of leaders per round for Mysticeti commits.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -498,9 +498,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     prepend_prologue_tx_in_consensus_commit_in_checkpoints: bool,
 
-    // Disable multi-leader per round in Mysticeti universal committer.
-    #[serde(skip_serializing_if = "is_false")]
-    mysticeti_disable_multi_leader_per_round_in_committer: bool,
+    // Set number of leaders per round for Mysticeti commits.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mysticeti_num_leaders_per_round: Option<usize>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1430,9 +1430,8 @@ impl ProtocolConfig {
         self.feature_flags.fresh_vm_on_framework_upgrade
     }
 
-    pub fn mysticeti_disable_multi_leader_per_round_in_committer(&self) -> bool {
-        self.feature_flags
-            .mysticeti_disable_multi_leader_per_round_in_committer
+    pub fn mysticeti_num_leaders_per_round(&self) -> Option<usize> {
+        self.feature_flags.mysticeti_num_leaders_per_round
     }
 }
 
@@ -2388,8 +2387,7 @@ impl ProtocolConfig {
                             .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
                     }
 
-                    cfg.feature_flags
-                        .mysticeti_disable_multi_leader_per_round_in_committer = true;
+                    cfg.feature_flags.mysticeti_num_leaders_per_round = Some(1);
                 }
                 // Use this template when making changes:
                 //
@@ -2560,8 +2558,13 @@ impl ProtocolConfig {
     pub fn set_mysticeti_leader_scoring_and_schedule(&mut self, val: bool) {
         self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
     }
+
     pub fn set_min_checkpoint_interval_ms(&mut self, val: u64) {
         self.min_checkpoint_interval_ms = Some(val);
+    }
+
+    pub fn set_mysticeti_num_leaders_per_round(&mut self, val: Option<usize>) {
+        self.feature_flags.mysticeti_num_leaders_per_round = val;
     }
 }
 

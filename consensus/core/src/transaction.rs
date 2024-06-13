@@ -175,6 +175,7 @@ impl TransactionClient {
     /// Submits a list of transactions to be sequenced. The method returns when all the transactions have been successfully included
     /// to next proposed blocks.
     pub async fn submit(&self, transactions: Vec<Vec<u8>>) -> Result<BlockRef, ClientError> {
+        // TODO: Support returning the block refs for transactions that span multiple blocks
         let included_in_block = self.submit_no_wait(transactions).await?;
         included_in_block
             .await
