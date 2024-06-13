@@ -105,7 +105,7 @@ title: Module `0x2::config`
 
 <dl>
 <dt>
-<code>newer_value_epoch: u64</code>
+<code>newer_value_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -136,7 +136,7 @@ title: Module `0x2::config`
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/config.md#0x2_config_EBCSSerializationFailure">EBCSSerializationFailure</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui-framework/config.md#0x2_config_EBCSSerializationFailure">EBCSSerializationFailure</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -145,7 +145,7 @@ title: Module `0x2::config`
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/config.md#0x2_config_EAlreadySetForEpoch">EAlreadySetForEpoch</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/config.md#0x2_config_EAlreadySetForEpoch">EAlreadySetForEpoch</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -154,7 +154,7 @@ title: Module `0x2::config`
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/config.md#0x2_config_ENotSetForEpoch">ENotSetForEpoch</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/config.md#0x2_config_ENotSetForEpoch">ENotSetForEpoch</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -425,12 +425,11 @@ title: Module `0x2::config`
 ): Option&lt;Value&gt; {
     <b>let</b> config_id = <a href="../sui-framework/config.md#0x2_config">config</a>.to_address();
     <b>let</b> setting_df = field::hash_type_and_key(config_id, name);
-    <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;
-        Name,
-        <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;,
-        <a href="../sui-framework/config.md#0x2_config_SettingData">SettingData</a>&lt;Value&gt;,
-        Value,
-    &gt;(config_id, setting_df, ctx.epoch())
+    <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;<a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;, <a href="../sui-framework/config.md#0x2_config_SettingData">SettingData</a>&lt;Value&gt;, Value&gt;(
+        config_id,
+        setting_df,
+        ctx.epoch(),
+    )
 }
 </code></pre>
 
@@ -444,7 +443,7 @@ title: Module `0x2::config`
 
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;Name: <b>copy</b>, drop, store, SettingValue: store, key, SettingDataValue: store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: u64): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;SettingValue: store, key, SettingDataValue: store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -454,14 +453,13 @@ title: Module `0x2::config`
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;
-    Name: <b>copy</b> + drop + store,
     SettingValue: key + store,
     SettingDataValue: store,
     Value: <b>copy</b> + drop + store,
 &gt;(
     <a href="../sui-framework/config.md#0x2_config">config</a>: <b>address</b>,
     name: <b>address</b>,
-    current_epoch: u64,
+    current_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
 ): Option&lt;Value&gt;;
 </code></pre>
 
