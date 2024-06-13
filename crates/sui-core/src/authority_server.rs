@@ -422,7 +422,6 @@ impl ValidatorService {
         _include_auxiliary_data: bool,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         wait_for_effects: bool,
-        is_soft_bundle: bool,
     ) -> Result<Option<Vec<HandleCertificateResponseV3>>, tonic::Status> {
         // Validate if cert can be executed
         // Fullnode does not serve handle_certificate call.
@@ -451,8 +450,8 @@ impl ValidatorService {
 
         // 1) Check if the certificate is already executed.
         //    This is only needed when we have only one certificate (not a soft bundle).
-        if !is_soft_bundle {
-            assert!(certificates.len() == 1); // Guranateed by caller.
+        //    When multiple certificates are provided, we will either submit all of them or none of them to consensus.
+        if certificates.len() == 1 {
             let tx_digest = *certificates[0].digest();
 
             if let Some(signed_effects) = self
@@ -628,7 +627,6 @@ impl ValidatorService {
             false,
             &epoch_store,
             false,
-            false,
         )
         .instrument(span)
         .await
@@ -656,7 +654,6 @@ impl ValidatorService {
             false,
             &epoch_store,
             true,
-            false,
         )
         .instrument(span)
         .await
@@ -686,7 +683,6 @@ impl ValidatorService {
             request.include_auxiliary_data,
             &epoch_store,
             true,
-            false,
         )
         .instrument(span)
         .await
@@ -812,7 +808,6 @@ impl ValidatorService {
             request.include_auxiliary_data,
             &epoch_store,
             request.wait_for_effects,
-            true,
         )
         .instrument(span)
         .await
