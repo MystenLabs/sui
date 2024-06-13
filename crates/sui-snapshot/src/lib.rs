@@ -260,10 +260,10 @@ pub async fn setup_db_state(
     checkpoint_store.update_highest_executed_checkpoint(&last_checkpoint)?;
 
     if verify {
-        eprintln!(
+        m.println(
             "Beginning DB live object state verification. This may take a while, \
-            and currently does not provide progress updates..."
-        );
+            and currently does not provide progress updates...",
+        )?;
         let simplified_unwrap_then_delete = match (chain, epoch) {
             (Chain::Mainnet, ep) if ep >= 87 => true,
             (Chain::Mainnet, ep) if ep < 87 => false,
@@ -274,7 +274,7 @@ pub async fn setup_db_state(
         let include_tombstones = !simplified_unwrap_then_delete;
         let iter = perpetual_db.iter_live_object_set(include_tombstones);
         let local_digest = ECMHLiveObjectSetDigest::from(
-            accumulate_live_object_iter(Box::new(iter), m, num_live_objects).digest(),
+            accumulate_live_object_iter(Box::new(iter), m.clone(), num_live_objects).digest(),
         );
         assert_eq!(
             root_digest, local_digest,
@@ -282,7 +282,7 @@ pub async fn setup_db_state(
                 local root state hash {} after restoring db from formal snapshot",
             epoch, root_digest.digest, local_digest.digest,
         );
-        eprintln!("DB live object state verification completed successfully!");
+        m.println("DB live object state verification completed successfully!")?;
     }
 
     Ok(())

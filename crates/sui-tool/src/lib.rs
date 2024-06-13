@@ -702,9 +702,11 @@ fn start_summary_sync(
         } else {
             *last_checkpoint
         };
-        let sync_progress_bar = ProgressBar::new(num_to_sync).with_style(
-            ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len}({msg})")
-                .unwrap(),
+        let sync_progress_bar = m.add(
+            ProgressBar::new(num_to_sync).with_style(
+                ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len}({msg})")
+                    .unwrap(),
+            ),
         );
 
         let cloned_progress_bar = sync_progress_bar.clone();
@@ -906,10 +908,11 @@ pub async fn download_formal_snapshot(
     verify: SnapshotVerifyMode,
     with_skiplist: bool,
 ) -> Result<(), anyhow::Error> {
-    eprintln!(
+    let m = MultiProgress::new();
+    m.println(format!(
         "Beginning formal snapshot restore to end of epoch {}, network: {:?}, verification mode: {:?}",
         epoch, network, verify,
-    );
+    ))?;
     let path = path.join("staging").to_path_buf();
     if path.exists() {
         fs::remove_dir_all(path.clone())?;
@@ -929,7 +932,6 @@ pub async fn download_formal_snapshot(
         None,
     ));
 
-    let m = MultiProgress::new();
     let summaries_handle = start_summary_sync(
         perpetual_db.clone(),
         committee_store.clone(),
@@ -1023,15 +1025,15 @@ pub async fn download_formal_snapshot(
                     local root state hash {} computed from snapshot data",
                     epoch, consensus_digest.digest, local_digest.digest,
                 );
-                eprintln!("Formal snapshot state verification completed successfully!");
+                m.println("Formal snapshot state verification completed successfully!")?;
             }
         };
     } else {
-        eprintln!(
+        m.println(
             "WARNING: Skipping snapshot verification! \
             This is highly discouraged unless you fully trust the source of this snapshot and its contents.
             If this was unintentional, rerun with `--verify` set to `true`"
-        );
+        )?;
     }
 
     snapshot_handle
