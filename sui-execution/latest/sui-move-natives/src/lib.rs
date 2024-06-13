@@ -178,6 +178,15 @@ impl NativesCostTable {
                 address_from_u256_cost_base: protocol_config.address_from_u256_cost_base().into(),
             },
 
+            config_read_setting_impl_cost_params: ConfigReadSettingImplCostParams {
+                config_read_setting_impl_cost_base: protocol_config
+                    .config_read_setting_impl_cost_base()
+                    .into(),
+                config_read_setting_impl_cost_per_byte: protocol_config
+                    .config_read_setting_impl_cost_per_byte()
+                    .into(),
+            },
+
             dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams {
                 dynamic_field_hash_type_and_key_cost_base: protocol_config
                     .dynamic_field_hash_type_and_key_cost_base()

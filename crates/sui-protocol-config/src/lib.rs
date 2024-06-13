@@ -820,6 +820,13 @@ pub struct ProtocolConfig {
     // Cost params for the Move native function `address::from_u256(u256): address`
     address_from_u256_cost_base: Option<u64>,
 
+    // `config` module
+    // Cost params for the Move native function `read_setting_impl<Name: copy + drop + store,
+    // SettingValue: key + store, SettingDataValue: store, Value: copy + drop + store,
+    // >(config: address, name: address, current_epoch: u64): Option<Value>`
+    config_read_setting_impl_cost_base: Option<u64>,
+    config_read_setting_impl_cost_per_byte: Option<u64>,
+
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
     dynamic_field_hash_type_and_key_cost_base: Option<u64>,
@@ -1529,6 +1536,11 @@ impl ProtocolConfig {
             address_to_u256_cost_base: Some(52),
             // Cost params for the Move native function `address::from_u256(u256): address`
             address_from_u256_cost_base: Some(52),
+
+            // `config` module
+            // Cost params for the Move native function `read_setting_impl``
+            config_read_setting_impl_cost_base: None,
+            config_read_setting_impl_cost_per_byte: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`

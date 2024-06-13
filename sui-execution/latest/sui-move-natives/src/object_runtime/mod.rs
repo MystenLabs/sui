@@ -407,7 +407,7 @@ impl<'a> ObjectRuntime<'a> {
         name_df_addr: ObjectID,
         setting_value_ty: &Type,
         setting_value_layout: &R::MoveTypeLayout,
-        setting_value_object_type: MoveObjectType,
+        setting_value_object_type: &MoveObjectType,
     ) -> Option<Value> {
         match self.child_object_store.config_setting_unsequenced_read(
             config_addr,
