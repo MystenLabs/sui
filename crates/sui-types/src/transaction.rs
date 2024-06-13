@@ -2238,7 +2238,9 @@ impl SenderSignedData {
     pub fn has_zklogin_sig(&self) -> bool {
         self.tx_signatures().iter().any(|sig| sig.is_zklogin())
     }
-
+    pub fn has_passkey_sig(&self) -> bool {
+        self.tx_signatures().iter().any(|sig| sig.is_passkey())
+    }
     pub fn has_upgraded_multisig(&self) -> bool {
         self.tx_signatures()
             .iter()
@@ -2269,6 +2271,7 @@ impl SenderSignedData {
     }
 
     fn check_user_signature_protocol_compatibility(&self, config: &ProtocolConfig) -> SuiResult {
+<<<<<<< HEAD
         for sig in &self.inner().tx_signatures {
             match sig {
                 GenericSignature::MultiSig(_) => {
@@ -2291,6 +2294,23 @@ impl SenderSignedData {
                 }
                 GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
             }
+=======
+        if !config.zklogin_auth() && self.has_zklogin_sig() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "zklogin is not enabled on this network".to_string(),
+            });
+        }
+        if !config.passkey_auth() && self.has_passkey_sig() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "passkey is not enabled on this network".to_string(),
+            });
+        }
+
+        if !config.supports_upgraded_multisig() && self.has_upgraded_multisig() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "upgraded multisig format not enabled on this network".to_string(),
+            });
+>>>>>>> 7c5d42d38c (add protocol config, simtest)
         }
 
         Ok(())

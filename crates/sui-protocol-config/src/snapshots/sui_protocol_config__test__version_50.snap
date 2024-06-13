@@ -59,6 +59,7 @@ feature_flags:
   fresh_vm_on_framework_upgrade: true
   prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
   mysticeti_num_leaders_per_round: 1
+  passkey_auth: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -288,5 +289,9 @@ consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
 max_deferral_rounds_for_congestion_control: 10
 min_checkpoint_interval_ms: 200
+<<<<<<< HEAD
 checkpoint_summary_version_specific_data: 1
 
+=======
+checkpoint_summary_version_specific_data: 1
+>>>>>>> 04bbe83559 (add protocol config, simtest)
