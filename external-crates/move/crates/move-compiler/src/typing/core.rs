@@ -902,14 +902,14 @@ impl<'env> Context<'env> {
     //********************************************
 
     /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
-    pub fn find_all_methods(&mut self, tn: &TypeName) -> BTreeSet<AutocompleteMethod> {
+    pub fn find_all_methods(&mut self, tn: &TypeName) -> Vec<AutocompleteMethod> {
         debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
         if !self
             .env
             .supports_feature(self.current_package(), FeatureGate::DotCall)
         {
             debug_print!(self.debug.autocomplete_resolution, (msg "dot call unsupported"));
-            return BTreeSet::new();
+            return vec![];
         }
         let cur_color = self.use_funs.last().unwrap().color;
         let mut result = BTreeSet::new();
@@ -927,20 +927,27 @@ impl<'env> Context<'env> {
                 result.append(&mut new_names);
             }
         });
-        let (mut same, mut different) = result
+        let (same, mut different) = result
             .clone()
             .into_iter()
-            .partition::<BTreeSet<_>, _>(|a| a.method_name == a.target_function.1.value());
+            .partition::<Vec<_>, _>(|a| a.method_name == a.target_function.1.value());
         // favor aliased completions over those where method name is the same as the target function
         // name as the former are shadowing the latter - keep the latter only if the aliased set has
         // no entry with the same target or with the same method name
-        same.retain(|sa| {
-            different.iter().all(|da| da.method_name != sa.method_name)
-                && different
-                    .iter()
-                    .all(|da| da.target_function.1.value() != sa.target_function.1.value())
-        });
-        different.append(&mut same);
+        let mut same_filtered = vec![];
+        'outer: for sa in same.into_iter() {
+            for da in different.iter() {
+                if da.method_name == sa.method_name
+                    || da.target_function.1.value() == sa.target_function.1.value()
+                {
+                    continue 'outer;
+                }
+            }
+            same_filtered.push(sa);
+        }
+
+        different.append(&mut same_filtered);
+        different.sort_by(|a1, a2| a1.method_name.cmp(&a2.method_name));
         different
     }
 

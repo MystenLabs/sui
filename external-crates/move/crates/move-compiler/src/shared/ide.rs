@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt};
+use std::fmt;
 
 use crate::{
     debug_display, diag, diagnostics::Diagnostic, expansion::ast as E, naming::ast as N,
@@ -54,15 +54,9 @@ pub struct AutocompleteMethod {
 }
 
 #[derive(Debug, Clone)]
-pub struct AutocompleteFields {
-    pub enclosing_type: N::Type,
-    pub names: BTreeSet<Symbol>,
-}
-
-#[derive(Debug, Clone)]
 pub struct AutocompleteInfo {
     /// Methods that are valid auto-completes
-    pub methods: BTreeSet<AutocompleteMethod>,
+    pub methods: Vec<AutocompleteMethod>,
     /// Fields that are valid auto-completes (e.g., for a struct) along with their types
     pub fields: Vec<(Symbol, N::Type)>,
 }
