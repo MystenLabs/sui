@@ -56,6 +56,7 @@ use crate::{
     consensus_adapter::ConnectionMonitorStatusForTests,
     traffic_controller::metrics::TrafficControllerMetrics,
 };
+use nonempty::{nonempty, NonEmpty};
 use tonic::transport::server::TcpConnectInfo;
 
 #[cfg(test)]
@@ -414,7 +415,7 @@ impl ValidatorService {
 
     async fn handle_certificates(
         &self,
-        certificates: Vec<CertifiedTransaction>,
+        certificates: NonEmpty<CertifiedTransaction>,
         include_events: bool,
         include_input_objects: bool,
         include_output_objects: bool,
@@ -430,64 +431,7 @@ impl ValidatorService {
             SuiError::FullNodeCantHandleCertificate.into()
         );
 
-        fp_ensure!(
-            !certificates.is_empty(),
-            SuiError::NoCertificateProvided.into()
-        );
-
-        if is_soft_bundle {
-            // See [SIP-19](https://github.com/sui-foundation/sips/blob/main/sips/sip-19.md) for more details.
-            let protocol_config = epoch_store.protocol_config();
-            // The request is a Soft Bundle, enforce these checks per SIP-19:
-            // - All certs must access at least one shared object.
-            // - All certs must not be already executed.
-            // - All certs must have the same gas price.
-            // - Number of certs must not exceed the max allowed.
-            fp_ensure!(
-                certificates.len() as u64 <= protocol_config.max_soft_bundle_size(),
-                SuiError::UserInputError {
-                    error: UserInputError::TooManyTransactionsInSoftBundle {
-                        limit: protocol_config.max_soft_bundle_size()
-                    }
-                }
-                .into()
-            );
-            let mut gas_price = None;
-            for certificate in &certificates {
-                let tx_digest = *certificate.digest();
-                fp_ensure!(
-                    certificate.contains_shared_object(),
-                    SuiError::UserInputError {
-                        error: UserInputError::NoSharedObjectError { digest: tx_digest }
-                    }
-                    .into()
-                );
-                fp_ensure!(
-                    !self.state.is_tx_already_executed(&tx_digest)?,
-                    SuiError::UserInputError {
-                        error: UserInputError::AlreadyExecutedError { digest: tx_digest }
-                    }
-                    .into()
-                );
-                if let Some(gas) = gas_price {
-                    fp_ensure!(
-                        gas == certificate.gas_price(),
-                        SuiError::UserInputError {
-                            error: UserInputError::GasPriceMismatchError {
-                                digest: tx_digest,
-                                expected: gas,
-                                actual: certificate.gas_price()
-                            }
-                        }
-                        .into()
-                    );
-                } else {
-                    gas_price = Some(certificate.gas_price());
-                }
-            }
-        }
-
-        let shared_object_tx = is_soft_bundle || certificates[0].contains_shared_object();
+        let shared_object_tx = certificates[0].contains_shared_object();
 
         let _metrics_guard = if wait_for_effects {
             if shared_object_tx {
@@ -556,7 +500,7 @@ impl ValidatorService {
             let _timer = self.metrics.cert_verification_latency.start_timer();
             epoch_store
                 .signature_verifier
-                .multi_verify_certs(certificates)
+                .multi_verify_certs(certificates.into())
                 .await
                 .into_iter()
                 .collect::<Result<Vec<_>, _>>()?
@@ -574,23 +518,9 @@ impl ValidatorService {
             // For shared objects this will wait until either timeout or we have heard back from consensus.
             // For owned objects this will return without waiting for certificate to be sequenced
             // First do quick dirty non-async check.
-            //
-            // For Soft Bundle, if at this point we know at least one certificate has already been processed,
-            // reject the entire bundle.  Otherwise, submit all certificates in one request.
-            let should_submit = if is_soft_bundle {
-                fp_ensure!(
-                    !epoch_store
-                        .is_any_tx_certs_consensus_message_processed(&verified_certificates)?,
-                    SuiError::UserInputError {
-                        error: UserInputError::CeritificateAlreadyProcessed
-                    }
-                    .into()
-                );
-                true
-            } else {
-                !epoch_store.is_tx_cert_consensus_message_processed(&verified_certificates[0])?
-            };
-            if should_submit {
+            if !epoch_store
+                .is_all_tx_certs_consensus_message_processed(verified_certificates.iter())?
+            {
                 let _metrics_guard = if shared_object_tx {
                     Some(self.metrics.consensus_latency.start_timer())
                 } else {
@@ -691,7 +621,7 @@ impl ValidatorService {
 
         let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
         self.handle_certificates(
-            vec![certificate],
+            nonempty![certificate],
             true,
             false,
             false,
@@ -719,7 +649,7 @@ impl ValidatorService {
 
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
         self.handle_certificates(
-            vec![certificate],
+            nonempty![certificate],
             true,
             false,
             false,
@@ -749,7 +679,7 @@ impl ValidatorService {
 
         let span = error_span!("handle_certificate_v3", tx_digest = ?request.certificate.digest());
         self.handle_certificates(
-            vec![request.certificate],
+            nonempty![request.certificate],
             request.include_events,
             request.include_input_objects,
             request.include_output_objects,
@@ -768,16 +698,19 @@ impl ValidatorService {
         })
     }
 
-    async fn handle_soft_bundle_certificates_v3_impl(
+    async fn soft_bundle_validity_check(
         &self,
-        request: tonic::Request<HandleSoftBundleCertificatesRequestV3>,
-    ) -> Result<tonic::Response<HandleSoftBundleCertificatesResponseV3>, tonic::Status> {
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        certificates: &NonEmpty<CertifiedTransaction>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Result<(), tonic::Status> {
         let protocol_config = epoch_store.protocol_config();
         let node_config = &self.state.config;
+
         // Soft Bundle MUST be enabled both in protocol config and local node config.
-        // This acts an extra safety measure where a validator node have the choice to turn this feature off, without
-        // having to upgrade the entire network.
+        //
+        // The local node config is by default enabled, but can be turned off by the node operator.
+        // This acts an extra safety measure where a validator node have the choice to turn this feature off,
+        // without having to upgrade the entire network.
         fp_ensure!(
             protocol_config.soft_bundle() && node_config.enable_soft_bundle,
             SuiError::UnsupportedFeatureError {
@@ -786,9 +719,78 @@ impl ValidatorService {
             .into()
         );
 
-        let request = request.into_inner();
-        let certificates = request.certificates;
+        // Enforce these checks per [SIP-19](https://github.com/sui-foundation/sips/blob/main/sips/sip-19.md):
+        // - All certs must access at least one shared object.
+        // - All certs must not be already executed.
+        // - All certs must have the same gas price.
+        // - Number of certs must not exceed the max allowed.
+        fp_ensure!(
+            certificates.len() as u64 <= protocol_config.max_soft_bundle_size(),
+            SuiError::UserInputError {
+                error: UserInputError::TooManyTransactionsInSoftBundle {
+                    limit: protocol_config.max_soft_bundle_size()
+                }
+            }
+            .into()
+        );
+        let mut gas_price = None;
+        for certificate in certificates {
+            let tx_digest = *certificate.digest();
+            fp_ensure!(
+                certificate.contains_shared_object(),
+                SuiError::UserInputError {
+                    error: UserInputError::NoSharedObjectError { digest: tx_digest }
+                }
+                .into()
+            );
+            fp_ensure!(
+                !self.state.is_tx_already_executed(&tx_digest)?,
+                SuiError::UserInputError {
+                    error: UserInputError::AlreadyExecutedError { digest: tx_digest }
+                }
+                .into()
+            );
+            if let Some(gas) = gas_price {
+                fp_ensure!(
+                    gas == certificate.gas_price(),
+                    SuiError::UserInputError {
+                        error: UserInputError::GasPriceMismatchError {
+                            digest: tx_digest,
+                            expected: gas,
+                            actual: certificate.gas_price()
+                        }
+                    }
+                    .into()
+                );
+            } else {
+                gas_price = Some(certificate.gas_price());
+            }
+        }
 
+        // For Soft Bundle, if at this point we know at least one certificate has already been processed,
+        // reject the entire bundle.  Otherwise, submit all certificates in one request.
+        // This is not a strict check as there may be race conditions where one or more certificates are
+        // already being processed by another actor, and we could not know it.
+        fp_ensure!(
+            !epoch_store.is_any_tx_certs_consensus_message_processed(certificates.iter())?,
+            SuiError::UserInputError {
+                error: UserInputError::CeritificateAlreadyProcessed
+            }
+            .into()
+        );
+
+        Ok(())
+    }
+
+    async fn handle_soft_bundle_certificates_v3_impl(
+        &self,
+        request: tonic::Request<HandleSoftBundleCertificatesRequestV3>,
+    ) -> Result<tonic::Response<HandleSoftBundleCertificatesResponseV3>, tonic::Status> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let request = request.into_inner();
+
+        let certificates = NonEmpty::from_vec(request.certificates)
+            .ok_or_else(|| SuiError::NoCertificateProvidedError)?;
         for certificate in &certificates {
             // CRITICAL: DO NOT USE `certificates` BEFORE THIS CHECK.
             // This must be the first thing to check before anything else, because the transaction
@@ -796,6 +798,10 @@ impl ValidatorService {
             // We need to check this first because we haven't verified the cert signature.
             Self::transaction_validity_check(&epoch_store, certificate.data())?;
         }
+
+        // Now that individual certificates are valid, we check if the bundle is valid.
+        self.soft_bundle_validity_check(&certificates, &epoch_store)
+            .await?;
 
         let span = error_span!("handle_soft_bundle_certificates_v3");
         self.handle_certificates(

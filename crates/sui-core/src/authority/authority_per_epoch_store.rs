@@ -1824,11 +1824,11 @@ impl AuthorityPerEpochStore {
 
     /// Check whether any certificates were processed by consensus.
     /// This handles multiple certificates at once.
-    pub fn is_any_tx_certs_consensus_message_processed(
+    pub fn is_any_tx_certs_consensus_message_processed<'a>(
         &self,
-        certificates: &[VerifiedCertificate],
+        certificates: impl Iterator<Item = &'a CertifiedTransaction>,
     ) -> SuiResult<bool> {
-        let keys = certificates.iter().map(|cert| {
+        let keys = certificates.map(|cert| {
             SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
                 *cert.digest(),
             ))
@@ -1837,6 +1837,23 @@ impl AuthorityPerEpochStore {
             .check_consensus_messages_processed(keys)?
             .into_iter()
             .any(|processed| processed))
+    }
+
+    /// Check whether any certificates were processed by consensus.
+    /// This handles multiple certificates at once.
+    pub fn is_all_tx_certs_consensus_message_processed<'a>(
+        &self,
+        certificates: impl Iterator<Item = &'a VerifiedCertificate>,
+    ) -> SuiResult<bool> {
+        let keys = certificates.map(|cert| {
+            SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                *cert.digest(),
+            ))
+        });
+        Ok(self
+            .check_consensus_messages_processed(keys)?
+            .into_iter()
+            .all(|processed| processed))
     }
 
     pub fn is_consensus_message_processed(
@@ -1867,7 +1884,7 @@ impl AuthorityPerEpochStore {
 
         let unprocessed_keys_registrations = registrations
             .into_iter()
-            .zip(self.check_consensus_messages_processed(keys.iter().cloned())?)
+            .zip(self.check_consensus_messages_processed(keys.into_iter())?)
             .filter(|(_, processed)| !processed)
             .map(|(registration, _)| registration);
 
