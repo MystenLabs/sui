@@ -13,13 +13,14 @@ use sui_indexer::models::objects::{StoredHistoryObject, StoredObjectSnapshot};
 use sui_indexer::models::packages::StoredPackage;
 use sui_indexer::models::transactions::StoredTransaction;
 use sui_indexer::models::tx_indices::{
-    StoredTxCalls, StoredTxChangedObject, StoredTxDigest, StoredTxInputObject, StoredTxRecipients,
-    StoredTxSenders,
+    StoredTxChangedObject, StoredTxDigest, StoredTxFun, StoredTxInputObject, StoredTxMod,
+    StoredTxPkg, StoredTxRecipients, StoredTxSenders,
 };
 use sui_indexer::schema::tx_digests;
 use sui_indexer::schema::{
     checkpoints, display, epochs, events, objects_history, objects_snapshot, packages,
-    transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
+    transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_input_objects,
+    tx_recipients, tx_senders,
 };
 
 #[macro_export]
@@ -67,7 +68,9 @@ generate_check_all_tables!(
     (objects_snapshot, StoredObjectSnapshot),
     (packages, StoredPackage),
     (transactions, StoredTransaction),
-    (tx_calls, StoredTxCalls),
+    (tx_calls_pkg, StoredTxPkg),
+    (tx_calls_mod, StoredTxMod),
+    (tx_calls_fun, StoredTxFun),
     (tx_changed_objects, StoredTxChangedObject),
     (tx_digests, StoredTxDigest),
     (tx_input_objects, StoredTxInputObject),

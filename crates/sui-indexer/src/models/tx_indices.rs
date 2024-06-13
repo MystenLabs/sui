@@ -72,7 +72,7 @@ pub struct StoredTxMod {
 
 #[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = tx_calls_fun)]
-pub struct StoredTxCalls {
+pub struct StoredTxFun {
     pub tx_sequence_number: i64,
     pub package: Vec<u8>,
     pub module: String,
@@ -105,7 +105,7 @@ impl TxIndex {
         Vec<StoredTxChangedObject>,
         Vec<StoredTxPkg>,
         Vec<StoredTxMod>,
-        Vec<StoredTxCalls>,
+        Vec<StoredTxFun>,
         Vec<StoredTxDigest>,
         Vec<StoredTxKind>,
     ) {
@@ -179,7 +179,7 @@ impl TxIndex {
 
         let tx_calls = packages_modules_funcs
             .iter()
-            .map(|(p, m, f)| StoredTxCalls {
+            .map(|(p, m, f)| StoredTxFun {
                 tx_sequence_number,
                 package: p.to_vec(),
                 module: m.to_string(),

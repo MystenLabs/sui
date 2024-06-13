@@ -57,7 +57,7 @@ use crate::{
         transactions::{tx_events_to_sui_tx_events, StoredTransaction},
         tx_indices::TxSequenceNumber,
     },
-    schema::{checkpoints, display, epochs, events, objects, objects_snapshot, transactions},
+    schema::{checkpoints, display, epochs, events, objects, transactions},
     store::package_resolver::IndexerStorePackageResolver,
     types::{IndexerResult, OwnerType},
 };
@@ -777,14 +777,14 @@ impl<U: R2D2Connection> IndexerReader<U> {
                 let package = Hex::encode(package.to_vec());
                 match (module, function) {
                     (Some(module), Some(function)) => (
-                        "tx_calls".into(),
+                        "tx_calls_fun".into(),
                         format!(
                             "package = '\\x{}'::bytea AND module = '{}' AND func = '{}'",
                             package, module, function
                         ),
                     ),
                     (Some(module), None) => (
-                        "tx_calls".into(),
+                        "tx_calls_mod".into(),
                         format!(
                             "package = '\\x{}'::bytea AND module = '{}'",
                             package, module
@@ -792,11 +792,11 @@ impl<U: R2D2Connection> IndexerReader<U> {
                     ),
                     (None, Some(_)) => {
                         return Err(IndexerError::InvalidArgumentError(
-                            "Function cannot be present wihtout Module.".into(),
+                            "Function cannot be present without Module.".into(),
                         ));
                     }
                     (None, None) => (
-                        "tx_calls".into(),
+                        "tx_calls_pkg".into(),
                         format!("package = '\\x{}'::bytea", package),
                     ),
                 }
@@ -1545,29 +1545,6 @@ impl<U: R2D2Connection> IndexerReader<U> {
                     treasury_cap_obj_id
                 )))?;
         Ok(TreasuryCap::try_from(treasury_cap_obj_object)?.total_supply)
-    }
-
-    pub fn get_consistent_read_range(&self) -> Result<(i64, i64), IndexerError> {
-        let latest_checkpoint_sequence = run_query!(&self.pool, |conn| {
-            checkpoints::table
-                .select(checkpoints::sequence_number)
-                .order(checkpoints::sequence_number.desc())
-                .first::<i64>(conn)
-                .optional()
-        })?
-        .unwrap_or_default();
-        let latest_object_snapshot_checkpoint_sequence = run_query!(&self.pool, |conn| {
-            objects_snapshot::table
-                .select(objects_snapshot::checkpoint_sequence_number)
-                .order(objects_snapshot::checkpoint_sequence_number.desc())
-                .first::<i64>(conn)
-                .optional()
-        })?
-        .unwrap_or_default();
-        Ok((
-            latest_object_snapshot_checkpoint_sequence,
-            latest_checkpoint_sequence,
-        ))
     }
 
     pub fn package_resolver(&self) -> PackageResolver<U> {
