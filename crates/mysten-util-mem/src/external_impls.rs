@@ -39,7 +39,7 @@ where
         self.complaints.size_of(ops)
     }
 }
-impl<G, EG> MallocSizeOf for fastcrypto_tbls::dkg::Message<G, EG>
+impl<G, EG> MallocSizeOf for fastcrypto_tbls::dkg_v0::Message<G, EG>
 where
     G: fastcrypto::groups::GroupElement,
     EG: fastcrypto::groups::GroupElement,
@@ -48,7 +48,7 @@ where
         self.encrypted_shares.size_of(ops)
     }
 }
-impl<G> MallocSizeOf for fastcrypto_tbls::ecies::Encryption<G>
+impl<G> MallocSizeOf for fastcrypto_tbls::ecies_v0::Encryption<G>
 where
     G: fastcrypto::groups::GroupElement,
 {
@@ -57,7 +57,7 @@ where
         0
     }
 }
-impl<G> MallocSizeOf for fastcrypto_tbls::ecies::MultiRecipientEncryption<G>
+impl<G> MallocSizeOf for fastcrypto_tbls::ecies_v0::MultiRecipientEncryption<G>
 where
     G: fastcrypto::groups::GroupElement,
 {

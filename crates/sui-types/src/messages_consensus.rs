@@ -10,7 +10,7 @@ use crate::messages_checkpoint::{
 use crate::transaction::CertifiedTransaction;
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::dkg;
+use fastcrypto_tbls::{dkg, dkg_v0};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -291,7 +291,7 @@ impl ConsensusTransaction {
 
     pub fn new_randomness_dkg_message(
         authority: AuthorityName,
-        message: &dkg::Message<bls12381::G2Element, bls12381::G2Element>,
+        message: &dkg_v0::Message<bls12381::G2Element, bls12381::G2Element>,
     ) -> Self {
         let message = bcs::to_bytes(message).expect("message serialization should not fail");
         let mut hasher = DefaultHasher::new();

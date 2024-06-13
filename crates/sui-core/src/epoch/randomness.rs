@@ -8,7 +8,7 @@ use fastcrypto::groups::bls12381;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_tbls::nodes::PartyId;
-use fastcrypto_tbls::{dkg, nodes};
+use fastcrypto_tbls::{dkg, dkg_v0, nodes};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use narwhal_types::{Round, TimestampMs};
@@ -70,9 +70,9 @@ pub struct RandomnessManager {
     // State for DKG.
     dkg_start_time: OnceCell<Instant>,
     party: Arc<dkg::Party<PkG, EncG>>,
-    enqueued_messages: BTreeMap<PartyId, JoinHandle<Option<dkg::ProcessedMessage<PkG, EncG>>>>,
-    processed_messages: BTreeMap<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
-    used_messages: OnceCell<dkg::UsedProcessedMessages<PkG, EncG>>,
+    enqueued_messages: BTreeMap<PartyId, JoinHandle<Option<dkg_v0::ProcessedMessage<PkG, EncG>>>>,
+    processed_messages: BTreeMap<PartyId, dkg_v0::ProcessedMessage<PkG, EncG>>,
+    used_messages: OnceCell<dkg_v0::UsedProcessedMessages<PkG, EncG>>,
     confirmations: BTreeMap<PartyId, dkg::Confirmation<EncG>>,
     dkg_output: OnceCell<Option<dkg::Output<PkG, EncG>>>,
 
@@ -494,7 +494,7 @@ impl RandomnessManager {
     pub fn add_message(
         &mut self,
         authority: &AuthorityName,
-        msg: dkg::Message<PkG, EncG>,
+        msg: dkg_v0::Message<PkG, EncG>,
     ) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // We've already sent a `Confirmation`, so we can't add any more messages.
@@ -792,7 +792,7 @@ mod tests {
             assert!(dkg_message.len() == 1);
             match dkg_message.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
-                    let msg: fastcrypto_tbls::dkg::Message<PkG, EncG> = bcs::from_bytes(&bytes)
+                    let msg: fastcrypto_tbls::dkg_v0::Message<PkG, EncG> = bcs::from_bytes(&bytes)
                         .expect("DKG message deserialization should not fail");
                     dkg_messages.push(msg);
                 }
@@ -915,7 +915,7 @@ mod tests {
             assert!(dkg_message.len() == 1);
             match dkg_message.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
-                    let msg: fastcrypto_tbls::dkg::Message<PkG, EncG> = bcs::from_bytes(&bytes)
+                    let msg: fastcrypto_tbls::dkg_v0::Message<PkG, EncG> = bcs::from_bytes(&bytes)
                         .expect("DKG message deserialization should not fail");
                     dkg_messages.push(msg);
                 }

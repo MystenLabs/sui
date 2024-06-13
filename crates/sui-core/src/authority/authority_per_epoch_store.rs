@@ -4,8 +4,8 @@
 use arc_swap::ArcSwapOption;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::dkg;
 use fastcrypto_tbls::nodes::PartyId;
+use fastcrypto_tbls::{dkg, dkg_v0};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
@@ -501,10 +501,10 @@ pub struct AuthorityEpochTables {
 
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.
-    pub(crate) dkg_processed_messages: DBMap<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
+    pub(crate) dkg_processed_messages: DBMap<PartyId, dkg_v0::ProcessedMessage<PkG, EncG>>,
     /// Records messages used to generate a DKG confirmation. Updated when enough DKG
     /// messages are received to progress to the next phase.
-    pub(crate) dkg_used_messages: DBMap<u64, dkg::UsedProcessedMessages<PkG, EncG>>,
+    pub(crate) dkg_used_messages: DBMap<u64, dkg_v0::UsedProcessedMessages<PkG, EncG>>,
     /// Records confirmations received from other nodes. Updated when receiving a new
     /// dkg::Confirmation via consensus.
     pub(crate) dkg_confirmations: DBMap<PartyId, dkg::Confirmation<EncG>>,
