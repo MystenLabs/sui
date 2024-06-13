@@ -626,11 +626,7 @@ fn validate_item(
     );
     if item.label_details.is_none() {
         if detail.is_some() || description.is_some() {
-            assert!(
-                false,
-                "item {} at {} has no label details:  {:#?}",
-                idx, loc, item
-            );
+            panic!("item {} at {} has no label details:  {:#?}", idx, loc, item);
         }
     } else {
         assert!(
