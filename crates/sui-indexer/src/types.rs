@@ -47,6 +47,13 @@ pub struct IndexedCheckpoint {
     pub end_of_epoch: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct IndexedCpTx {
+    pub checkpoint_sequence_number: u64,
+    pub min_tx_sequence_number: u64,
+    pub max_tx_sequence_number: u64,
+}
+
 impl IndexedCheckpoint {
     pub fn from_sui_checkpoint(
         checkpoint: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,

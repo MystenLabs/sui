@@ -9,8 +9,8 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::gas::GasCostSummary;
 
 use crate::errors::IndexerError;
-use crate::schema::checkpoints;
-use crate::types::IndexedCheckpoint;
+use crate::schema::{checkpoints, cp_tx};
+use crate::types::{IndexedCheckpoint, IndexedCpTx};
 
 #[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = checkpoints)]
@@ -36,6 +36,24 @@ pub struct StoredCheckpoint {
     pub checkpoint_commitments: Vec<u8>,
     pub validator_signature: Vec<u8>,
     pub end_of_epoch_data: Option<Vec<u8>>,
+}
+
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
+#[diesel(table_name = cp_tx)]
+pub struct StoredCpTx {
+    pub checkpoint_sequence_number: i64,
+    pub min_tx_sequence_number: i64,
+    pub max_tx_sequence_number: i64,
+}
+
+impl From<&IndexedCpTx> for StoredCpTx {
+    fn from(c: &IndexedCpTx) -> Self {
+        Self {
+            checkpoint_sequence_number: c.checkpoint_sequence_number as i64,
+            min_tx_sequence_number: c.min_tx_sequence_number as i64,
+            max_tx_sequence_number: c.max_tx_sequence_number as i64,
+        }
+    }
 }
 
 impl From<&IndexedCheckpoint> for StoredCheckpoint {

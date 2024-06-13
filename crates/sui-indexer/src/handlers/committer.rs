@@ -14,7 +14,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
-use crate::types::IndexerResult;
+use crate::types::{IndexedCpTx, IndexerResult};
 
 use super::{CheckpointDataToCommit, EpochToCommit};
 
@@ -137,6 +137,7 @@ async fn commit_checkpoints<S>(
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
     let mut checkpoint_batch = vec![];
+    let mut cp_tx_batch = vec![];
     let mut tx_batch = vec![];
     let mut events_batch = vec![];
     let mut tx_indices_batch = vec![];
@@ -156,7 +157,14 @@ async fn commit_checkpoints<S>(
             object_history_changes,
             packages,
             epoch: _,
+            min_tx_sequence_number,
+            max_tx_sequence_number,
         } = indexed_checkpoint;
+        cp_tx_batch.push(IndexedCpTx {
+            checkpoint_sequence_number: checkpoint.sequence_number,
+            min_tx_sequence_number,
+            max_tx_sequence_number,
+        });
         checkpoint_batch.push(checkpoint);
         tx_batch.push(transactions);
         events_batch.push(events);
@@ -188,6 +196,7 @@ async fn commit_checkpoints<S>(
             state.persist_packages(packages_batch),
             state.persist_objects(object_changes_batch.clone()),
             state.persist_object_history(object_history_changes_batch.clone()),
+            state.persist_cp_tx_mapping(cp_tx_batch.clone()),
         ];
         if object_snapshot_backfill_mode {
             persist_tasks.push(state.backfill_objects_snapshot(object_changes_batch));

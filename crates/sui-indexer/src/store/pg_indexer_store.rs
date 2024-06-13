@@ -28,6 +28,7 @@ use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
 use crate::metrics::IndexerMetrics;
 use crate::models::checkpoints::StoredCheckpoint;
+use crate::models::checkpoints::StoredCpTx;
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
 use crate::models::events::StoredEvent;
@@ -39,10 +40,11 @@ use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::schema::tx_kinds;
 use crate::schema::{
-    checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
-    transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests,
-    tx_input_objects, tx_recipients, tx_senders,
+    checkpoints, cp_tx, display, epochs, events, objects, objects_history, objects_snapshot,
+    packages, transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects,
+    tx_digests, tx_input_objects, tx_recipients, tx_senders,
 };
+use crate::types::IndexedCpTx;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
     insert_or_ignore_into, on_conflict_do_update, read_only_blocking,
@@ -534,6 +536,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     stored_checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
                     insert_or_ignore_into!(checkpoints::table, stored_checkpoint_chunk, conn);
+                    // also update cp_tx here
                     let time_now_ms = chrono::Utc::now().timestamp_millis();
                     for stored_checkpoint in stored_checkpoint_chunk {
                         self.metrics
@@ -564,6 +567,35 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist checkpoints with error: {}", e);
+        })
+    }
+
+    fn persist_cp_tx_mapping(&self, mapping: Vec<IndexedCpTx>) -> Result<(), IndexerError> {
+        if mapping.is_empty() {
+            return Ok(());
+        }
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_cp_tx_mapping
+            .start_timer();
+
+        let stored = mapping.iter().map(StoredCpTx::from).collect::<Vec<_>>();
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                for stored_chunk in stored.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    insert_or_ignore_into!(cp_tx::table, stored_chunk, conn);
+                }
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted {} cp_tx mappings", mapping.len());
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist cp_tx mapping with error: {}", e);
         })
     }
 
@@ -1380,6 +1412,11 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
         checkpoints: Vec<IndexedCheckpoint>,
     ) -> Result<(), IndexerError> {
         self.execute_in_blocking_worker(move |this| this.persist_checkpoints(checkpoints))
+            .await
+    }
+
+    async fn persist_cp_tx_mapping(&self, mapping: Vec<IndexedCpTx>) -> Result<(), IndexerError> {
+        self.execute_in_blocking_worker(move |this| this.persist_cp_tx_mapping(mapping))
             .await
     }
 

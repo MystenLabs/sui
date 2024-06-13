@@ -145,6 +145,7 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency_tx_indices: Histogram,
     pub checkpoint_db_commit_latency_tx_indices_chunks: Histogram,
     pub checkpoint_db_commit_latency_checkpoints: Histogram,
+    pub checkpoint_db_commit_latency_cp_tx_mapping: Histogram,
     pub checkpoint_db_commit_latency_epoch: Histogram,
     pub thousand_transaction_avg_db_commit_latency: Histogram,
     pub object_db_commit_latency: Histogram,
@@ -163,6 +164,7 @@ pub struct IndexerMetrics {
     pub try_multi_get_past_objects_latency: Histogram,
     pub get_checkpoint_latency: Histogram,
     pub get_checkpoints_latency: Histogram,
+    pub get_cp_tx_mapping_latency: Histogram,
     pub get_events_latency: Histogram,
     pub get_loaded_child_objects_latency: Histogram,
     pub get_total_transaction_blocks_latency: Histogram,
@@ -520,6 +522,12 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            checkpoint_db_commit_latency_cp_tx_mapping: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_cp_tx_mapping",
+                "Time spent commiting cp_tx_mapping",
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             checkpoint_db_commit_latency_epoch: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_epochs",
                 "Time spent commiting epochs",
@@ -650,6 +658,12 @@ impl IndexerMetrics {
                 registry
             )
             .unwrap(),
+            get_cp_tx_mapping_latency: register_histogram_with_registry!(
+                "get_cp_tx_mapping_latency",
+                "Time spent in get_cp_tx_mapping on the fullnode behind.",
+                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
             get_events_latency: register_histogram_with_registry!(
                 "get_events_latency",
                 "Time spent in get_events on the fullnode behind.",

@@ -290,14 +290,28 @@ where
         let object_history_changes: TransactionObjectChangesToCommit =
             Self::index_objects_history(data.clone(), package_resolver.clone()).await?;
 
-        let (checkpoint, db_transactions, db_events, db_indices, db_displays) = {
+        let (
+            checkpoint,
+            db_transactions,
+            db_events,
+            db_indices,
+            db_displays,
+            min_tx_sequence_number,
+            max_tx_sequence_number,
+        ) = {
             let CheckpointData {
                 transactions,
                 checkpoint_summary,
                 checkpoint_contents,
             } = data;
 
-            let (db_transactions, db_events, db_indices, db_displays) = Self::index_transactions(
+            let (
+                db_transactions,
+                db_events,
+                db_indices,
+                db_displays,
+                (min_tx_sequence_number, max_tx_sequence_number),
+            ) = Self::index_transactions(
                 transactions,
                 &checkpoint_summary,
                 &checkpoint_contents,
@@ -316,6 +330,8 @@ where
                 db_events,
                 db_indices,
                 db_displays,
+                min_tx_sequence_number,
+                max_tx_sequence_number,
             )
         };
         let time_now_ms = chrono::Utc::now().timestamp_millis();
@@ -343,6 +359,8 @@ where
             object_history_changes,
             packages,
             epoch,
+            min_tx_sequence_number,
+            max_tx_sequence_number,
         })
     }
 
@@ -356,6 +374,8 @@ where
         Vec<IndexedEvent>,
         Vec<TxIndex>,
         BTreeMap<String, StoredDisplay>,
+        // min and max tx_sequence_number for the checkpoint
+        (u64, u64),
     )> {
         let checkpoint_seq = checkpoint_summary.sequence_number();
 
@@ -377,6 +397,9 @@ where
         let mut db_displays = BTreeMap::new();
         let mut db_indices = Vec::new();
 
+        let mut min_tx_sequence_number = checkpoint_summary.network_total_transactions;
+        let mut max_tx_sequence_number = 0;
+
         for tx in transactions {
             let CheckpointTransaction {
                 transaction: sender_signed_data,
@@ -393,6 +416,10 @@ where
                     checkpoint_seq, tx_digest, sender_signed_data.digest()
                 )));
             }
+
+            min_tx_sequence_number = min_tx_sequence_number.min(tx_sequence_number);
+            max_tx_sequence_number = max_tx_sequence_number.max(tx_sequence_number);
+
             let tx = sender_signed_data.transaction_data();
             let events = events
                 .as_ref()
@@ -505,7 +532,13 @@ where
                 tx_kind: transaction_kind,
             });
         }
-        Ok((db_transactions, db_events, db_indices, db_displays))
+        Ok((
+            db_transactions,
+            db_events,
+            db_indices,
+            db_displays,
+            (min_tx_sequence_number, max_tx_sequence_number),
+        ))
     }
 
     async fn index_objects(

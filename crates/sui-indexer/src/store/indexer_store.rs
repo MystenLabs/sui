@@ -10,7 +10,9 @@ use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
-use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
+use crate::types::{
+    IndexedCheckpoint, IndexedCpTx, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
+};
 
 #[allow(clippy::large_enum_variant)]
 pub enum ObjectChangeToCommit {
@@ -50,6 +52,8 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
         &self,
         checkpoints: Vec<IndexedCheckpoint>,
     ) -> Result<(), IndexerError>;
+
+    async fn persist_cp_tx_mapping(&self, mapping: Vec<IndexedCpTx>) -> Result<(), IndexerError>;
 
     async fn persist_transactions(
         &self,

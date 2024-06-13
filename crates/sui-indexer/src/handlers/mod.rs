@@ -27,6 +27,8 @@ pub struct CheckpointDataToCommit {
     pub object_history_changes: TransactionObjectChangesToCommit,
     pub packages: Vec<IndexedPackage>,
     pub epoch: Option<EpochToCommit>,
+    pub min_tx_sequence_number: u64,
+    pub max_tx_sequence_number: u64,
 }
 
 #[derive(Clone, Debug)]
