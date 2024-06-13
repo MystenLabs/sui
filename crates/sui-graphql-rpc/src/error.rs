@@ -71,11 +71,6 @@ pub enum Error {
     CursorNoFirstLast,
     #[error("Connection's page size of {0} exceeds max of {1}")]
     PageTooLarge(u64, u64),
-    #[error(
-        "Root parent object version not set. Make sure the roots of dynamic field trees in your \
-        query are not child objects if an explicit version of them was required."
-    )]
-    MissingRootVersion,
     // Catch-all for client-fault errors
     #[error("{0}")]
     Client(String),
@@ -90,7 +85,6 @@ impl ErrorExtensions for Error {
             | Error::CursorNoFirstLast
             | Error::PageTooLarge(_, _)
             | Error::ProtocolVersionUnsupported(_, _)
-            | Error::MissingRootVersion
             | Error::Client(_) => {
                 e.set("code", code::BAD_USER_INPUT);
             }

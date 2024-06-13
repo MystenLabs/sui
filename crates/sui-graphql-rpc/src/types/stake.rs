@@ -252,7 +252,7 @@ impl StakedSui {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_field(ctx, name, self.super_.root_version()?)
+            .dynamic_field(ctx, name, self.super_.root_version())
             .await
     }
 
@@ -269,7 +269,7 @@ impl StakedSui {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_object_field(ctx, name, self.super_.root_version()?)
+            .dynamic_object_field(ctx, name, self.super_.root_version())
             .await
     }
 
@@ -286,7 +286,7 @@ impl StakedSui {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_fields(ctx, first, after, last, before, self.super_.root_version()?)
+            .dynamic_fields(ctx, first, after, last, before, self.super_.root_version())
             .await
     }
 
