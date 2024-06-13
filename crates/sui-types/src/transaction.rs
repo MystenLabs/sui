@@ -438,7 +438,7 @@ impl EndOfEpochTransactionKind {
             }
             Self::DenyListStateCreate => {
                 // Transaction should have been rejected earlier (or never formed).
-                assert!(config.enable_coin_deny_list());
+                assert!(config.enable_coin_deny_list_v1());
             }
             Self::BridgeStateCreate(_) | Self::BridgeCommitteeInit(_) => {
                 // Transaction should have been rejected earlier (or never formed).
@@ -520,7 +520,7 @@ impl VersionedProtocolMessage for TransactionKind {
                                 }
                             }
                             EndOfEpochTransactionKind::DenyListStateCreate => {
-                                if !protocol_config.enable_coin_deny_list() {
+                                if !protocol_config.enable_coin_deny_list_v1() {
                                     return Err(SuiError::UnsupportedFeatureError {
                                         error: "coin deny list not enabled".to_string(),
                                     });

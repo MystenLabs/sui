@@ -8,6 +8,7 @@ use crate::error::{UserInputError, UserInputResult};
 use crate::id::{ID, UID};
 use crate::object::{Object, Owner};
 use crate::storage::ObjectStore;
+use crate::transaction::{CheckedInputObjects, ReceivingObjects};
 use crate::SUI_DENY_LIST_OBJECT_ID;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -46,59 +47,74 @@ pub struct PerTypeDenyList {
     pub denied_addresses: Table,
 }
 
-impl DenyList {
-    pub fn check_coin_deny_list(
-        address: SuiAddress,
-        coin_types: BTreeSet<String>,
-        object_store: &dyn ObjectStore,
-    ) -> UserInputResult {
-        let Some(deny_list) = get_coin_deny_list(object_store) else {
-            // TODO: This is where we should fire an invariant violation metric.
-            if cfg!(debug_assertions) {
-                panic!("Failed to get the coin deny list");
+/// Checks coin denylist v1 at signing time.
+/// It checks that none of the coin types in the transaction are denied for the sender.
+pub fn check_coin_deny_list_v1(
+    sender: SuiAddress,
+    input_objects: &CheckedInputObjects,
+    receiving_objects: &ReceivingObjects,
+    object_store: &dyn ObjectStore,
+) -> UserInputResult {
+    let all_objects = input_objects
+        .inner()
+        .iter_objects()
+        .chain(receiving_objects.iter_objects());
+    let coin_types = all_objects
+        .filter_map(|obj| {
+            if obj.is_gas_coin() {
+                None
             } else {
-                return Ok(());
+                obj.coin_type_maybe()
+                    .map(|type_tag| type_tag.to_canonical_string(false))
             }
-        };
-        Self::check_deny_list(deny_list, address, coin_types, object_store)
-    }
+        })
+        .collect::<BTreeSet<_>>();
 
-    fn check_deny_list(
-        deny_list: PerTypeDenyList,
-        address: SuiAddress,
-        coin_types: BTreeSet<String>,
-        object_store: &dyn ObjectStore,
-    ) -> UserInputResult {
-        // TODO: Add caches to avoid repeated DF reads.
-        let Ok(count) = get_dynamic_field_from_store::<SuiAddress, u64>(
-            object_store,
-            deny_list.denied_count.id,
-            &address,
-        ) else {
-            return Ok(());
-        };
-        if count == 0 {
+    let Some(deny_list) = get_coin_deny_list(object_store) else {
+        // TODO: This is where we should fire an invariant violation metric.
+        if cfg!(debug_assertions) {
+            panic!("Failed to get the coin deny list");
+        } else {
             return Ok(());
         }
-        for coin_type in coin_types {
-            let Ok(denied_addresses) = get_dynamic_field_from_store::<Vec<u8>, VecSet<SuiAddress>>(
-                object_store,
-                deny_list.denied_addresses.id,
-                &coin_type.clone().into_bytes(),
-            ) else {
-                continue;
-            };
-            let denied_addresses: BTreeSet<_> = denied_addresses.contents.into_iter().collect();
-            if denied_addresses.contains(&address) {
-                debug!(
-                    "Address {} is denied for coin package {:?}",
-                    address, coin_type
-                );
-                return Err(UserInputError::AddressDeniedForCoin { address, coin_type });
-            }
-        }
-        Ok(())
+    };
+    check_deny_list_v1_impl(deny_list, sender, coin_types, object_store)
+}
+
+fn check_deny_list_v1_impl(
+    deny_list: PerTypeDenyList,
+    address: SuiAddress,
+    coin_types: BTreeSet<String>,
+    object_store: &dyn ObjectStore,
+) -> UserInputResult {
+    let Ok(count) = get_dynamic_field_from_store::<SuiAddress, u64>(
+        object_store,
+        deny_list.denied_count.id,
+        &address,
+    ) else {
+        return Ok(());
+    };
+    if count == 0 {
+        return Ok(());
     }
+    for coin_type in coin_types {
+        let Ok(denied_addresses) = get_dynamic_field_from_store::<Vec<u8>, VecSet<SuiAddress>>(
+            object_store,
+            deny_list.denied_addresses.id,
+            &coin_type.clone().into_bytes(),
+        ) else {
+            continue;
+        };
+        let denied_addresses: BTreeSet<_> = denied_addresses.contents.into_iter().collect();
+        if denied_addresses.contains(&address) {
+            debug!(
+                "Address {} is denied for coin package {:?}",
+                address, coin_type
+            );
+            return Err(UserInputError::AddressDeniedForCoin { address, coin_type });
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
