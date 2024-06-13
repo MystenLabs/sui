@@ -34,7 +34,7 @@ use crate::{
         core::{
             self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
-        dependency_ordering, expand, infinite_instantiations, macro_expand, match_compilation,
+        dependency_ordering, expand, infinite_instantiations, macro_expand, match_analysis,
         recursive_datatypes,
         syntax_methods::validate_syntax_methods,
     },
@@ -349,7 +349,7 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
     };
     core::solve_constraints(context);
     expand::function_body_(context, &mut b_);
-    match_compilation::function_body_(context, &mut b_);
+    match_analysis::function_body_(context, &mut b_);
     debug_print!(context.debug.function_translation, ("output" => b_));
     sp(loc, b_)
 }
