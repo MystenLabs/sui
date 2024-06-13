@@ -49,8 +49,8 @@ use crate::db::ConnectionPool;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
-    IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
-    IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
+    IndexedCheckpoint, IndexedCpTx, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent,
+    IndexedObject, IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
 };
 
 use super::tx_processor::EpochEndIndexingObjectStore;
@@ -290,34 +290,21 @@ where
         let object_history_changes: TransactionObjectChangesToCommit =
             Self::index_objects_history(data.clone(), package_resolver.clone()).await?;
 
-        let (
-            checkpoint,
-            db_transactions,
-            db_events,
-            db_indices,
-            db_displays,
-            min_tx_sequence_number,
-            max_tx_sequence_number,
-        ) = {
+        let (checkpoint, db_transactions, db_events, db_indices, db_displays, cp_tx) = {
             let CheckpointData {
                 transactions,
                 checkpoint_summary,
                 checkpoint_contents,
             } = data;
 
-            let (
-                db_transactions,
-                db_events,
-                db_indices,
-                db_displays,
-                (min_tx_sequence_number, max_tx_sequence_number),
-            ) = Self::index_transactions(
-                transactions,
-                &checkpoint_summary,
-                &checkpoint_contents,
-                &metrics,
-            )
-            .await?;
+            let (db_transactions, db_events, db_indices, db_displays, cp_tx) =
+                Self::index_transactions(
+                    transactions,
+                    &checkpoint_summary,
+                    &checkpoint_contents,
+                    &metrics,
+                )
+                .await?;
 
             let successful_tx_num: u64 = db_transactions.iter().map(|t| t.successful_tx_num).sum();
             (
@@ -330,8 +317,7 @@ where
                 db_events,
                 db_indices,
                 db_displays,
-                min_tx_sequence_number,
-                max_tx_sequence_number,
+                cp_tx,
             )
         };
         let time_now_ms = chrono::Utc::now().timestamp_millis();
@@ -359,8 +345,7 @@ where
             object_history_changes,
             packages,
             epoch,
-            min_tx_sequence_number,
-            max_tx_sequence_number,
+            cp_tx,
         })
     }
 
@@ -375,7 +360,7 @@ where
         Vec<TxIndex>,
         BTreeMap<String, StoredDisplay>,
         // min and max tx_sequence_number for the checkpoint
-        (u64, u64),
+        IndexedCpTx,
     )> {
         let checkpoint_seq = checkpoint_summary.sequence_number();
 
@@ -537,7 +522,11 @@ where
             db_events,
             db_indices,
             db_displays,
-            (min_tx_sequence_number, max_tx_sequence_number),
+            IndexedCpTx {
+                checkpoint_sequence_number: *checkpoint_summary.sequence_number(),
+                min_tx_sequence_number,
+                max_tx_sequence_number,
+            },
         ))
     }
 

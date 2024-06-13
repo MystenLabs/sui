@@ -14,7 +14,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
-use crate::types::{IndexedCpTx, IndexerResult};
+use crate::types::IndexerResult;
 
 use super::{CheckpointDataToCommit, EpochToCommit};
 
@@ -157,14 +157,9 @@ async fn commit_checkpoints<S>(
             object_history_changes,
             packages,
             epoch: _,
-            min_tx_sequence_number,
-            max_tx_sequence_number,
+            cp_tx,
         } = indexed_checkpoint;
-        cp_tx_batch.push(IndexedCpTx {
-            checkpoint_sequence_number: checkpoint.sequence_number,
-            min_tx_sequence_number,
-            max_tx_sequence_number,
-        });
+        cp_tx_batch.push(cp_tx);
         checkpoint_batch.push(checkpoint);
         tx_batch.push(transactions);
         events_batch.push(events);
