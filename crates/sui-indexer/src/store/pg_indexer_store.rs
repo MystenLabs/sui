@@ -1038,7 +1038,11 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         })
     }
 
-    fn advance_epoch(&self, epoch_to_commit: EpochToCommit) -> Result<(), IndexerError> {
+    fn advance_epoch(
+        &self,
+        epoch_to_commit: EpochToCommit,
+        network_total_transactions: u64,
+    ) -> Result<(), IndexerError> {
         let last_epoch_id = epoch_to_commit.last_epoch.as_ref().map(|e| e.epoch);
         // partition_0 has been created, so no need to advance it.
         if let Some(last_epoch_id) = last_epoch_id {
@@ -1051,8 +1055,12 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 })
                 .context("Failed to read last epoch from PostgresDB")?;
             if let Some(last_epoch) = last_db_epoch {
-                let epoch_partition_data =
-                    EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
+                let epoch_partition_data = EpochPartitionData::compose_data(
+                    epoch_to_commit,
+                    last_epoch,
+                    network_total_transactions,
+                );
+
                 let table_partitions = self.partition_manager.get_table_partitions()?;
                 for (table, (first_partition, last_partition)) in table_partitions {
                     let guard = self.metrics.advance_epoch_latency.start_timer();
@@ -1518,9 +1526,15 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .await
     }
 
-    async fn advance_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.advance_epoch(epoch))
-            .await
+    async fn advance_epoch(
+        &self,
+        epoch: EpochToCommit,
+        network_total_transactions: u64,
+    ) -> Result<(), IndexerError> {
+        self.execute_in_blocking_worker(move |this| {
+            this.advance_epoch(epoch, network_total_transactions)
+        })
+        .await
     }
 
     async fn get_network_total_transactions_by_end_of_epoch(

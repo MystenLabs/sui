@@ -68,7 +68,11 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
 
     async fn persist_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError>;
 
-    async fn advance_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError>;
+    async fn advance_epoch(
+        &self,
+        epoch: EpochToCommit,
+        network_total_transactions: u64,
+    ) -> Result<(), IndexerError>;
 
     async fn get_network_total_transactions_by_end_of_epoch(
         &self,

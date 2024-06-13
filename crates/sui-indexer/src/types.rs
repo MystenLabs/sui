@@ -82,6 +82,8 @@ impl IndexedCheckpoint {
     }
 }
 
+/// Represents system state and summary info at the start and end of an epoch. Optional fields are
+/// populated at epoch boundary, since they cannot be determined at the start of the epoch.
 #[derive(Clone, Debug, Default)]
 pub struct IndexedEpochInfo {
     pub epoch: u64,
@@ -127,6 +129,9 @@ impl IndexedEpochInfo {
         }
     }
 
+    /// Creates `IndexedEpochInfo` for epoch X-1 at the boundary of epoch X-1 to X.
+    /// `network_total_tx_num_at_last_epoch_end` is needed to determine the number of transactions
+    /// that occurred in the epoch X-1.
     pub fn from_end_of_epoch_data(
         system_state_summary: &SuiSystemStateSummary,
         last_checkpoint_summary: &CertifiedCheckpointSummary,

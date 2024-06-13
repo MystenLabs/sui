@@ -198,7 +198,10 @@ async fn commit_checkpoints<S>(
     // handle partitioning on epoch boundary
     if let Some(epoch_data) = epoch {
         state
-            .advance_epoch(epoch_data)
+            .advance_epoch(
+                epoch_data,
+                checkpoint_batch.last().unwrap().network_total_transactions,
+            )
             .await
             .tap_err(|e| {
                 error!("Failed to advance epoch with error: {}", e.to_string());
