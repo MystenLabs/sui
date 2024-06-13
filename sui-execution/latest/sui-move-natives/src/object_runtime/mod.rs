@@ -401,6 +401,30 @@ impl<'a> ObjectRuntime<'a> {
             .add_object(parent, child, child_ty, child_move_type, child_value)
     }
 
+    pub(crate) fn config_setting_unsequenced_read(
+        &mut self,
+        config_addr: ObjectID,
+        name_df_addr: ObjectID,
+        setting_value_ty: &Type,
+        setting_value_layout: &R::MoveTypeLayout,
+        setting_value_object_type: MoveObjectType,
+    ) -> Option<Value> {
+        match self.child_object_store.config_setting_unsequenced_read(
+            config_addr,
+            name_df_addr,
+            setting_value_ty,
+            setting_value_layout,
+            setting_value_object_type,
+        ) {
+            Err(e) => {
+                // TODO logging
+                None
+            }
+            Ok(ObjectResult::MismatchedType) | Ok(ObjectResult::Loaded(None)) => None,
+            Ok(ObjectResult::Loaded(Some(value))) => Some(value),
+        }
+    }
+
     // returns None if a child object is still borrowed
     pub(crate) fn take_state(&mut self) -> ObjectRuntimeState {
         std::mem::take(&mut self.state)

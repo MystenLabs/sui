@@ -3446,6 +3446,10 @@ impl Struct {
 }
 
 impl Vector {
+    pub fn elem_len(&self) -> usize {
+        self.0.len()
+    }
+
     #[allow(clippy::needless_lifetimes)]
     pub fn elem_views<'a>(&'a self) -> impl ExactSizeIterator<Item = impl ValueView + 'a> {
         struct ElemView<'b> {
