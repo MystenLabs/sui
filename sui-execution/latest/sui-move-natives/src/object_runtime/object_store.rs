@@ -266,20 +266,19 @@ impl<'a> Inner<'a> {
         child_ty: &Type,
         child_ty_layout: &R::MoveTypeLayout,
         child_ty_fully_annotated_layout: &A::MoveTypeLayout,
-        child_move_type: MoveObjectType,
-    ) -> PartialVMResult<ObjectResult<(Type, MoveObjectType, GlobalValue)>> {
+        child_move_type: &MoveObjectType,
+    ) -> PartialVMResult<ObjectResult<(Type, GlobalValue)>> {
         let obj = match self.get_or_fetch_object_from_store(parent, child)? {
             None => {
                 return Ok(ObjectResult::Loaded((
                     child_ty.clone(),
-                    child_move_type,
                     GlobalValue::none(),
                 )))
             }
             Some(obj) => obj,
         };
         // object exists, but the type does not match
-        if obj.type_() != &child_move_type {
+        if obj.type_() != child_move_type {
             return Ok(ObjectResult::MismatchedType);
         }
         // generate a GlobalValue
@@ -318,11 +317,7 @@ impl<'a> Inner<'a> {
                 }
             }
         }
-        Ok(ObjectResult::Loaded((
-            child_ty.clone(),
-            child_move_type,
-            global_value,
-        )))
+        Ok(ObjectResult::Loaded((child_ty.clone(), global_value)))
     }
 }
 
@@ -467,13 +462,13 @@ impl<'a> ChildObjectStore<'a> {
         let store_entries_count = self.store.len() as u64;
         let child_object = match self.store.entry(child) {
             btree_map::Entry::Vacant(e) => {
-                let (ty, move_type, value) = match self.inner.fetch_object_impl(
+                let (ty, value) = match self.inner.fetch_object_impl(
                     parent,
                     child,
                     child_ty,
                     child_layout,
                     child_fully_annotated_layout,
-                    child_move_type,
+                    &child_move_type,
                 )? {
                     ObjectResult::MismatchedType => return Ok(ObjectResult::MismatchedType),
                     ObjectResult::Loaded(res) => res,
@@ -504,7 +499,7 @@ impl<'a> ChildObjectStore<'a> {
                 e.insert(ChildObject {
                     owner: parent,
                     ty,
-                    move_type,
+                    move_type: child_move_type,
                     value,
                 })
             }
@@ -601,7 +596,7 @@ impl<'a> ChildObjectStore<'a> {
         name_df_addr: ObjectID,
         setting_value_ty: &Type,
         setting_value_layout: &R::MoveTypeLayout,
-        setting_value_object_type: MoveObjectType,
+        setting_value_object_type: &MoveObjectType,
     ) -> PartialVMResult<ObjectResult<Option<Value>>> {
         let parent = config_addr;
         let child = name_df_addr;

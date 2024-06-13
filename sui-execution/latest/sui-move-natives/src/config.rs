@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    object_runtime::{object_store::ObjectResult, ObjectRuntime},
-    NativesCostTable,
-};
+use crate::{object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::StructTag,
-    vm_status::StatusCode,
+    runtime_value as R, vm_status::StatusCode,
 };
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::native_functions::NativeContext;
@@ -23,7 +20,7 @@ use std::collections::VecDeque;
 use sui_types::{base_types::MoveObjectType, TypeTag};
 use tracing::instrument;
 
-const E_READ_SETTING_FAILED: u64 = 2;
+const E_BCS_SERIALIZATION_FAILURE: u64 = 2;
 
 #[derive(Clone)]
 pub struct ConfigReadSettingImplCostParams {
@@ -70,12 +67,19 @@ pub fn read_setting_impl(
             )
         }
     };
+    let Some(setting_value_layout_opt) = context.type_to_type_layout(&setting_value_ty)? else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_BCS_SERIALIZATION_FAILURE,
+        ));
+    };
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
 
     let read_value_opt = consistent_value_before_current_epoch(
         object_runtime,
         &setting_value_ty,
         setting_value_tag,
+        &setting_value_layout_opt,
         &setting_data_value_ty,
         &value_ty,
         config_addr,
@@ -99,20 +103,21 @@ fn consistent_value_before_current_epoch(
     object_runtime: &mut ObjectRuntime,
     setting_value_ty: &Type,
     setting_value_tag: StructTag,
+    setting_value_layout: &R::MoveTypeLayout,
     setting_data_value_ty: &Type,
     value_ty: &Type,
     config_addr: AccountAddress,
     name_df_addr: AccountAddress,
     current_epoch: u64,
 ) -> PartialVMResult<Value> {
-    let setting = match object_runtime.config_setting_unsequenced_read(
-        config_addr,
-        name_df_addr,
+    let Some(setting) = object_runtime.config_setting_unsequenced_read(
+        config_addr.into(),
+        name_df_addr.into(),
         setting_value_ty,
-        MoveObjectType::from(setting_value_tag),
-    )? {
-        ObjectResult::MismatchedType | ObjectResult::Loaded(None) => return option_none(&value_ty),
-        ObjectResult::Loaded(Some(value)) => value,
+        setting_value_layout,
+        &MoveObjectType::from(setting_value_tag),
+    ) else {
+        return option_none(&value_ty);
     };
 
     let [id, data_opt]: [Value; 2] = unpack_struct(setting)?;

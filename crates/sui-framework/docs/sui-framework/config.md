@@ -132,6 +132,15 @@ title: Module `0x2::config`
 ## Constants
 
 
+<a name="0x2_config_EBCSSerializationFailure"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui-framework/config.md#0x2_config_EBCSSerializationFailure">EBCSSerializationFailure</a>: u64 = 2;
+</code></pre>
+
+
+
 <a name="0x2_config_EAlreadySetForEpoch"></a>
 
 
@@ -146,15 +155,6 @@ title: Module `0x2::config`
 
 
 <pre><code><b>const</b> <a href="../sui-framework/config.md#0x2_config_ENotSetForEpoch">ENotSetForEpoch</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="0x2_config_EReadSettingFailed"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui-framework/config.md#0x2_config_EReadSettingFailed">EReadSettingFailed</a>: u64 = 2;
 </code></pre>
 
 
