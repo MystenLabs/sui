@@ -685,16 +685,17 @@ impl Object {
     /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
     /// be as if it was read at the same checkpoint.
     ///
-    /// `root_version` represents the version of the root object in some nested ownership, and if
-    /// None, then the current object being instantiated is the root object (as long as it's not
-    /// immutable or is itself a child object / dynamic field)
+    /// `root_version` represents the version of the root object in some nested ownership, and
+    /// should be propagated from this object's parent, if any.
+    /// If None, then we use [`version_for_dynamic_fields`] to infer a root version to then
+    /// propagate from this object down to its dynamic fields.
     pub(crate) fn from_native(
         address: SuiAddress,
         native: NativeObject,
         checkpoint_viewed_at: u64,
         root_version: Option<u64>,
     ) -> Object {
-        let root_version = root_version.or_else(|| infer_root_version(&native));
+        let root_version = root_version.or_else(|| version_for_dynamic_fields(&native));
         Object {
             address,
             kind: ObjectKind::NotIndexed(native),
@@ -883,9 +884,10 @@ impl Object {
     /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
     /// be as if it was read at the same checkpoint.
     ///
-    /// `root_version` represents the version of the root object in some nested ownership, and if
-    /// None, then the current object being instantiated is the root object (as long as it's not
-    /// immutable or is itself a child object / dynamic field)
+    /// `root_version` represents the version of the root object in some nested ownership, and
+    /// should be propagated from this object's parent, if any.
+    /// If None, then we use [`version_for_dynamic_fields`] to infer a root version to then
+    /// propagate from this object down to its dynamic fields.
     pub(crate) fn try_from_stored_history_object(
         history_object: StoredHistoryObject,
         checkpoint_viewed_at: u64,
@@ -914,7 +916,8 @@ impl Object {
                     Error::Internal(format!("Failed to deserialize object {address}"))
                 })?;
 
-                let root_version = root_version.or_else(|| infer_root_version(&native_object));
+                let root_version =
+                    root_version.or_else(|| version_for_dynamic_fields(&native_object));
                 Ok(Self {
                     address,
                     kind: ObjectKind::Indexed(native_object, history_object),
@@ -937,12 +940,20 @@ impl Object {
     }
 }
 
-fn infer_root_version(native: &NativeObject) -> Option<u64> {
+/// We're deliberately choosing to use a child object's version as the root here, and letting the
+/// caller override it with the actual root object's version if it has access to it.
+///
+/// Using the child object's version as the root means that we're seeing the dynamic field tree
+/// under this object at the state resulting from the transaction that produced this version.
+///
+/// See [`Object::root_version`] for more details on parent/child object version mechanics.
+fn version_for_dynamic_fields(native: &NativeObject) -> Option<u64> {
+    use NativeOwner::*;
     match native.as_inner().owner {
-        NativeOwner::AddressOwner(_) | NativeOwner::Shared { .. } => {
+        AddressOwner(_) | Shared { .. } | ObjectOwner(_) => {
             Some(native.as_inner().version().into())
         }
-        _ => None,
+        Immutable => None,
     }
 }
 
