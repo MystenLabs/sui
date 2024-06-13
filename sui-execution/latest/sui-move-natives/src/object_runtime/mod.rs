@@ -416,7 +416,7 @@ impl<'a> ObjectRuntime<'a> {
             setting_value_layout,
             setting_value_object_type,
         ) {
-            Err(e) => {
+            Err(_e) => {
                 // TODO logging
                 None
             }

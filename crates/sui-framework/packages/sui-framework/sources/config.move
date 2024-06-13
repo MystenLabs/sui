@@ -194,19 +194,17 @@ module sui::config {
     ): Option<Value> {
         let config_id = config.to_address();
         let setting_df = field::hash_type_and_key(config_id, name);
-        read_setting_impl<
-            Name,
-            Setting<Value>,
-            SettingData<Value>,
-            Value,
-        >(config_id, setting_df, ctx.epoch())
+        read_setting_impl<Setting<Value>, SettingData<Value>, Value>(
+            config_id,
+            setting_df,
+            ctx.epoch(),
+        )
     }
 
     /*
     This is kept native to keep gas costing consistent.
     */
     native fun read_setting_impl<
-        Name: copy + drop + store,
         SettingValue: key + store,
         SettingDataValue: store,
         Value: copy + drop + store,

@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 50;
+const MAX_PROTOCOL_VERSION: u64 = 51;
 
 // Record history of protocol version allocations here:
 //
@@ -2400,6 +2400,10 @@ impl ProtocolConfig {
                     }
 
                     cfg.feature_flags.mysticeti_num_leaders_per_round = Some(1);
+                }
+                51 => {
+                    cfg.config_read_setting_impl_cost_base = Some(100);
+                    cfg.config_read_setting_impl_cost_per_byte = Some(40);
                 }
                 // Use this template when making changes:
                 //
