@@ -2072,7 +2072,6 @@ impl AuthorityState {
                 digest,
                 timestamp_ms,
                 tx_coins,
-                &inner_temporary_store.loaded_runtime_objects,
             )
             .await
     }
@@ -3536,15 +3535,6 @@ impl AuthorityState {
                 error: "extended object indexing is not enabled on this server".into(),
             }),
         }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn loaded_child_object_versions(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
-        self.get_indexes()?
-            .loaded_child_object_versions(transaction_digest)
     }
 
     pub async fn get_transactions_for_tests(

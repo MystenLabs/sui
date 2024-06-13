@@ -4,12 +4,12 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 
+use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{ProtocolConfigResponse, SuiLoadedChildObjectsResponse};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::sui_serde::BigInt;
@@ -99,12 +99,6 @@ pub trait ReadApi {
         /// options for specifying the content to be returned
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>>;
-
-    #[method(name = "getLoadedChildObjects")]
-    async fn get_loaded_child_objects(
-        &self,
-        digest: TransactionDigest,
-    ) -> RpcResult<SuiLoadedChildObjectsResponse>;
 
     /// Return a checkpoint
     #[method(name = "getCheckpoint")]
