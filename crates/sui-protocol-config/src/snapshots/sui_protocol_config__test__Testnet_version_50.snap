@@ -53,6 +53,7 @@ feature_flags:
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
   fresh_vm_on_framework_upgrade: true
+  mysticeti_num_leaders_per_round: 1
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

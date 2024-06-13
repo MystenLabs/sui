@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    cell::RefCell,
+    collections::BTreeSet,
+    sync::atomic::{AtomicBool, Ordering},
+};
+
 use clap::*;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::cell::RefCell;
-use std::collections::BTreeSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
 use tracing::{info, warn};
 
@@ -142,6 +145,7 @@ const MAX_PROTOCOL_VERSION: u64 = 50;
 //             New Move stdlib integer modules
 //             Enable checkpoint batching in testnet.
 //             Prepose consensus commit prologue in checkpoints.
+//             Set number of leaders per round for Mysticeti commits.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -493,6 +497,10 @@ struct FeatureFlags {
     // cancellation.
     #[serde(skip_serializing_if = "is_false")]
     prepend_prologue_tx_in_consensus_commit_in_checkpoints: bool,
+
+    // Set number of leaders per round for Mysticeti commits.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mysticeti_num_leaders_per_round: Option<usize>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1420,6 +1428,10 @@ impl ProtocolConfig {
 
     pub fn fresh_vm_on_framework_upgrade(&self) -> bool {
         self.feature_flags.fresh_vm_on_framework_upgrade
+    }
+
+    pub fn mysticeti_num_leaders_per_round(&self) -> Option<usize> {
+        self.feature_flags.mysticeti_num_leaders_per_round
     }
 }
 
@@ -2374,6 +2386,8 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
                     }
+
+                    cfg.feature_flags.mysticeti_num_leaders_per_round = Some(1);
                 }
                 // Use this template when making changes:
                 //
@@ -2544,8 +2558,13 @@ impl ProtocolConfig {
     pub fn set_mysticeti_leader_scoring_and_schedule(&mut self, val: bool) {
         self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
     }
+
     pub fn set_min_checkpoint_interval_ms(&mut self, val: u64) {
         self.min_checkpoint_interval_ms = Some(val);
+    }
+
+    pub fn set_mysticeti_num_leaders_per_round(&mut self, val: Option<usize>) {
+        self.feature_flags.mysticeti_num_leaders_per_round = val;
     }
 }
 
@@ -2639,8 +2658,9 @@ macro_rules! check_limit_by_meter {
 
 #[cfg(all(test, not(msim)))]
 mod test {
-    use super::*;
     use insta::assert_yaml_snapshot;
+
+    use super::*;
 
     #[test]
     fn snapshot_tests() {

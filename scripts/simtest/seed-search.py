@@ -12,6 +12,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Run the simulator with different seeds')
 parser.add_argument('binary', type=str, help='Name of simulator binary, or full path to binary')
 parser.add_argument('--test', type=str, help='Name of the test to run', required=True)
+parser.add_argument('--exact', action='store_true', help='Use exact matching for test name', default=False)
 parser.add_argument('--num-seeds', type=int, help='Number of seeds to run', default=200)
 parser.add_argument(
     '--seed-start',
@@ -41,7 +42,7 @@ def run_command(command, env_vars):
         else:
           print("-- seed passed %s" % env_vars["MSIM_TEST_SEED"])
 
-        return 0
+        return exit_code
     except subprocess.CalledProcessError as e:
         print(f"Command '{e.cmd}' failed with exit code {e.returncode} for seed: " + env_vars["MSIM_TEST_SEED"])
         return e.returncode
@@ -55,12 +56,17 @@ def main(commands):
             future = executor.submit(run_command, cmd, env_vars)
             future_to_command[future] = cmd
 
+        all_passed = True
         for future in concurrent.futures.as_completed(future_to_command):
             cmd = future_to_command[future]
             exit_code = future.result()
             if exit_code != 0:
+                all_passed = False
                 print(f"Command '{cmd}' failed with exit code {exit_code}")
                 sys.exit(1)
+
+        if all_passed:
+            print("\033[92mAll tests passed successfully!\033[0m")
 
 if __name__ == "__main__":
     repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decode("utf-8").strip()
@@ -89,7 +95,7 @@ if __name__ == "__main__":
 
     for i in range(1, args.num_seeds + 1):
         next_seed = args.seed_start + i
-        commands.append(("%s --exact %s" % (binary, args.test), {
+        commands.append(("%s %s %s" % (binary, '--exact' if args.exact else '', args.test), {
           "MSIM_TEST_SEED": "%d" % next_seed,
           "RUST_LOG": "off",
         }))

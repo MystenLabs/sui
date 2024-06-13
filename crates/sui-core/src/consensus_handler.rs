@@ -233,17 +233,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let round = consensus_output.leader_round();
 
-        assert!(round >= last_committed_round);
-        if last_committed_round == round {
-            // we can receive the same commit twice after restart
-            // It is critical that the writes done by this function are atomic - otherwise we can
-            // lose the later parts of a commit if we restart midway through processing it.
-            info!(
-                "Ignoring consensus output for round {} as it is already committed",
-                round
-            );
-            return;
-        }
+        assert!(round > last_committed_round);
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
@@ -1006,16 +996,6 @@ mod tests {
             last_consensus_stats_1.stats.get_num_user_transactions(0),
             num_transactions as u64
         );
-
-        // WHEN processing the same output multiple times
-        // THEN the consensus stats do not update
-        for _ in 0..2 {
-            consensus_handler
-                .handle_consensus_output(consensus_output.clone())
-                .await;
-            let last_consensus_stats_2 = consensus_handler.last_consensus_stats.clone();
-            assert_eq!(last_consensus_stats_1, last_consensus_stats_2);
-        }
     }
 
     #[test]
