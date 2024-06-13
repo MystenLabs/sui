@@ -184,11 +184,11 @@ impl NativesCostTable {
 
             config_read_setting_impl_cost_params: ConfigReadSettingImplCostParams {
                 config_read_setting_impl_cost_base: protocol_config
-                    .config_read_setting_impl_cost_base()
-                    .into(),
+                    .config_read_setting_impl_cost_base_as_option()
+                    .map(Into::into),
                 config_read_setting_impl_cost_per_byte: protocol_config
-                    .config_read_setting_impl_cost_per_byte()
-                    .into(),
+                    .config_read_setting_impl_cost_per_byte_as_option()
+                    .map(Into::into),
             },
 
             dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams {
@@ -665,7 +665,8 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "config",
             "read_setting_impl",
             make_native!(config::read_setting_impl),
-        )(
+        ),
+        (
             "dynamic_field",
             "add_child_object",
             make_native!(dynamic_field::add_child_object),

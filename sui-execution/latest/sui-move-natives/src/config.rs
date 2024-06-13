@@ -24,8 +24,8 @@ const E_BCS_SERIALIZATION_FAILURE: u64 = 2;
 
 #[derive(Clone)]
 pub struct ConfigReadSettingImplCostParams {
-    pub config_read_setting_impl_cost_base: InternalGas,
-    pub config_read_setting_impl_cost_per_byte: InternalGas,
+    pub config_read_setting_impl_cost_base: Option<InternalGas>,
+    pub config_read_setting_impl_cost_per_byte: Option<InternalGas>,
 }
 
 #[instrument(level = "trace", skip_all, err)]
@@ -34,25 +34,34 @@ pub fn read_setting_impl(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert_eq!(ty_args.len(), 4);
+    assert_eq!(ty_args.len(), 3);
     assert_eq!(args.len(), 3);
 
-    let config_read_setting_impl_cost_params: ConfigReadSettingImplCostParams = context
+    let ConfigReadSettingImplCostParams {
+        config_read_setting_impl_cost_base,
+        config_read_setting_impl_cost_per_byte,
+    } = context
         .extensions_mut()
         .get::<NativesCostTable>()
         .config_read_setting_impl_cost_params
         .clone();
 
+    let config_read_setting_impl_cost_base =
+        config_read_setting_impl_cost_base.ok_or_else(|| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("gas cost is not set".to_string())
+        })?;
+    let config_read_setting_impl_cost_per_byte = config_read_setting_impl_cost_per_byte
+        .ok_or_else(|| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("gas cost is not set".to_string())
+        })?;
     // Charge base fee
-    native_charge_gas_early_exit!(
-        context,
-        config_read_setting_impl_cost_params.config_read_setting_impl_cost_base
-    );
+    native_charge_gas_early_exit!(context, config_read_setting_impl_cost_base);
 
     let value_ty = ty_args.pop().unwrap();
     let setting_data_value_ty = ty_args.pop().unwrap();
     let setting_value_ty = ty_args.pop().unwrap();
-    let key_type = ty_args.pop().unwrap();
 
     let current_epoch = pop_arg!(args, u64);
     let name_df_addr = pop_arg!(args, AccountAddress);
@@ -89,8 +98,7 @@ pub fn read_setting_impl(
 
     native_charge_gas_early_exit!(
         context,
-        config_read_setting_impl_cost_params.config_read_setting_impl_cost_per_byte
-            * u64::from(read_value_opt.legacy_size()).into()
+        config_read_setting_impl_cost_per_byte * u64::from(read_value_opt.legacy_size()).into()
     );
 
     Ok(NativeResult::ok(
@@ -120,7 +128,7 @@ fn consistent_value_before_current_epoch(
         return option_none(&value_ty);
     };
 
-    let [id, data_opt]: [Value; 2] = unpack_struct(setting)?;
+    let [_id, data_opt]: [Value; 2] = unpack_struct(setting)?;
     let data = match unpack_option(data_opt, &setting_data_value_ty)? {
         None => {
             // invariant violation?

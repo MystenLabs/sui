@@ -374,7 +374,7 @@ A type passed to create_supply is not a one-time witness.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/coin.md#0x2_coin_EGlobalPauseNotAllowed">EGlobalPauseNotAllowed</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../sui-framework/coin.md#0x2_coin_EGlobalPauseNotAllowed">EGlobalPauseNotAllowed</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 

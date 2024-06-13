@@ -217,7 +217,7 @@ impl<'a> Inner<'a> {
         // if not found, it must be new so it won't have any child objects, thus
         // we can return SequenceNumber(0) as no child object will be found
         let parents_root_version = parents_root_version.unwrap_or(SequenceNumber::new());
-        if let btree_map::Entry::Vacant(e) = self.cached_objects.entry(child) {
+        if !self.cached_objects.contains_key(&child) {
             let obj_opt = self.fetch_child_object_unbounded(
                 parent,
                 child,
@@ -244,7 +244,7 @@ impl<'a> Inner<'a> {
                     ));
             };
 
-            e.insert(obj_opt);
+            self.cached_objects.insert(child, obj_opt);
         }
         Ok(self
             .cached_objects
@@ -594,21 +594,18 @@ impl<'a> ChildObjectStore<'a> {
         &mut self,
         config_addr: ObjectID,
         name_df_addr: ObjectID,
-        setting_value_ty: &Type,
+        _setting_value_ty: &Type,
         setting_value_layout: &R::MoveTypeLayout,
         setting_value_object_type: &MoveObjectType,
     ) -> PartialVMResult<ObjectResult<Option<Value>>> {
         let parent = config_addr;
         let child = name_df_addr;
-        let child_ty = setting_value_ty;
 
         let child_move_type = setting_value_object_type;
-        let Some(move_obj) = self
-            .inner
-            .fetch_child_object_unbounded(parent, child, SequenceNumber::MAX, true)?
-            .as_ref()
-            .map(|obj| obj.data.try_as_move().unwrap())
-        else {
+        let obj_opt =
+            self.inner
+                .fetch_child_object_unbounded(parent, child, SequenceNumber::MAX, true)?;
+        let Some(move_obj) = obj_opt.as_ref().map(|obj| obj.data.try_as_move().unwrap()) else {
             return Ok(ObjectResult::Loaded(None));
         };
         // TODO cache and limits

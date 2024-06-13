@@ -2430,6 +2430,8 @@ impl ProtocolConfig {
                 }
                 51 => {
                     cfg.random_beacon_dkg_version = Some(1);
+                    cfg.config_read_setting_impl_cost_base = Some(100);
+                    cfg.config_read_setting_impl_cost_per_byte = Some(40);
                 }
                 // Use this template when making changes:
                 //
