@@ -1,17 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::sync::Arc;
-
-use super::PasskeyAuthenticator;
-use crate::{
-    base_types::{dbg_addr, ObjectID, SuiAddress},
-    crypto::{DefaultHash, PublicKey, Signature, SignatureScheme},
-    object::Object,
-    signature::GenericSignature,
-    signature_verification::VerifiedDigestCache,
-    transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER},
-};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::ToFromBytes;
 use p256::pkcs8::DecodePublicKey;
@@ -31,7 +19,36 @@ use passkey::{
     },
 };
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::net::SocketAddr;
+use sui_core::authority_client::AuthorityAPI;
+use sui_macros::sim_test;
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::crypto::Signature;
+use sui_types::error::{SuiError, SuiResult};
+use sui_types::signature::GenericSignature;
+use sui_types::transaction::Transaction;
+use sui_types::{
+    base_types::SuiAddress,
+    crypto::{DefaultHash, PublicKey, SignatureScheme},
+    passkey_authenticator::PasskeyAuthenticator,
+    transaction::TransactionData,
+};
+use test_cluster::TestCluster;
+use test_cluster::TestClusterBuilder;
 use url::Url;
+
+async fn do_passkey_test(tx: Transaction, test_cluster: &TestCluster) -> SuiResult {
+    test_cluster
+        .authority_aggregator()
+        .authority_clients
+        .values()
+        .next()
+        .unwrap()
+        .authority_client()
+        .handle_transaction(tx, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
+        .await
+        .map(|_| ())
+}
 
 struct MyUserValidationMethod {}
 #[async_trait::async_trait]
@@ -60,11 +77,10 @@ pub struct PasskeyResponse<T> {
     authenticator_data: Vec<u8>,
     client_data_json: Vec<u8>,
     intent_msg: IntentMessage<T>,
-    sender: SuiAddress,
 }
 
 /// Register a new passkey and return the public key in bytes.
-async fn register() -> PasskeyResponse<TransactionData> {
+async fn register(test_cluster: &TestCluster) -> PasskeyResponse<TransactionData> {
     // set up authenticator and client
     let user_entity = PublicKeyCredentialUserEntity {
         id: random_vec(32).into(),
@@ -124,18 +140,13 @@ async fn register() -> PasskeyResponse<TransactionData> {
 
     // compute sui address and make a test transaction
     let sender = SuiAddress::from(&pk);
-    let recipient = dbg_addr(2);
-    let object_id = ObjectID::ZERO;
-    let object = Object::immutable_with_id_for_testing(object_id);
-    let gas_price = 1000;
-    let tx_data = TransactionData::new_transfer_sui(
-        recipient,
-        sender,
-        None,
-        object.compute_object_reference(),
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        gas_price,
-    );
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), sender)
+        .await;
+    let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui(None, SuiAddress::ZERO)
+        .build();
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
 
     // compute the challenge = blake2b_hash(intent_msg(tx)) for passkey credential request
@@ -143,6 +154,7 @@ async fn register() -> PasskeyResponse<TransactionData> {
     hasher.update(&bcs::to_bytes(&intent_msg).expect("Message serialization should not fail"));
     let passkey_digest = hasher.finalize().digest;
 
+    // request a signature from passkey with challenge set to passkey_digest.
     let credential_request = CredentialRequestOptions {
         public_key: PublicKeyCredentialRequestOptions {
             challenge: Bytes::from(passkey_digest.to_vec()),
@@ -177,13 +189,10 @@ async fn register() -> PasskeyResponse<TransactionData> {
         authenticator_data: authenticator_data.to_vec(),
         client_data_json: client_data_json.to_vec(),
         intent_msg,
-        sender,
     }
 }
 
-#[tokio::test]
-async fn test_passkey_authenticator_verifies() {
-    let response = register().await;
+fn make_passkey_tx(response: PasskeyResponse<TransactionData>) -> Transaction {
     let mut user_sig_bytes = vec![SignatureScheme::Secp256r1.flag()];
     user_sig_bytes.extend_from_slice(&response.sig_bytes);
     user_sig_bytes.extend_from_slice(&response.pk_bytes);
@@ -196,19 +205,34 @@ async fn test_passkey_authenticator_verifies() {
         )
         .unwrap(),
     );
+    Transaction::from_generic_sig_data(response.intent_msg.value, vec![sig])
+}
 
-    let res = sig.verify_authenticator(
-        &response.intent_msg,
-        response.sender,
-        0,
-        &Default::default(),
-        Arc::new(VerifiedDigestCache::new_empty()),
-    );
+#[sim_test]
+async fn test_passkey_feature_deny() {
+    use sui_protocol_config::ProtocolConfig;
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_passkey_auth_for_testing(false);
+        config
+    });
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let response = register(&test_cluster).await;
+    let tx = make_passkey_tx(response);
+    let err = do_passkey_test(tx, &test_cluster).await.unwrap_err();
+    assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
+}
+
+#[sim_test]
+async fn test_passkey_authenticator_verifies() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let response = register(&test_cluster).await;
+    let tx = make_passkey_tx(response);
+    let res = do_passkey_test(tx, &test_cluster).await;
     assert!(res.is_ok());
 }
 
 #[tokio::test]
-async fn test_passkey_fails_incorrect_sgianture_scheme() {}
+async fn test_passkey_fails_incorrect_signature_scheme() {}
 
 #[tokio::test]
 async fn test_passkey_fails_invalid_challenge() {}

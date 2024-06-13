@@ -1,4 +1,3 @@
-// Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::crypto::PublicKey;
@@ -23,10 +22,6 @@ use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
-
-#[cfg(test)]
-#[path = "unit_tests/passkey_authenticator_test.rs"]
-mod passkey_authenticator_test;
 
 /// An passkey authenticator with all the necessary fields.
 #[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]

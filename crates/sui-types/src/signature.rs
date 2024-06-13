@@ -97,6 +97,9 @@ impl GenericSignature {
     pub fn is_zklogin(&self) -> bool {
         matches!(self, GenericSignature::ZkLoginAuthenticator(_))
     }
+    pub fn is_passkey(&self) -> bool {
+        matches!(self, GenericSignature::PasskeyAuthenticator(_))
+    }
 
     pub fn is_upgraded_multisig(&self) -> bool {
         matches!(self, GenericSignature::MultiSig(_))
