@@ -11,7 +11,7 @@ use std::{
     collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
 };
@@ -32,7 +32,7 @@ use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sui_move::build::resolve_lock_file_path;
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
@@ -697,7 +697,6 @@ impl SuiClientCommands {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
                     show_effects: true,
-                    diag: false,
                     executor_version,
                     protocol_version,
                 };
@@ -858,11 +857,17 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&opts.gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
+                let package_path =
+                    package_path
+                        .canonicalize()
+                        .map_err(|e| SuiError::ModulePublishFailure {
+                            error: format!("Failed to canonicalize package path: {}", e),
+                        })?;
                 let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
                     upgrade_package(
                         client.read_api(),
                         build_config.clone(),
-                        package_path.clone(),
+                        &package_path,
                         upgrade_capability,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
@@ -886,7 +891,7 @@ impl SuiClientCommands {
                 .await?;
 
                 if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                    let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                     if let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Upgrade,
@@ -931,10 +936,16 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&opts.gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
+                let package_path =
+                    package_path
+                        .canonicalize()
+                        .map_err(|e| SuiError::ModulePublishFailure {
+                            error: format!("Failed to canonicalize package path: {}", e),
+                        })?;
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     client.read_api(),
                     build_config.clone(),
-                    package_path.clone(),
+                    &package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
                 )
@@ -954,7 +965,7 @@ impl SuiClientCommands {
                 .await?;
 
                 if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                    let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                     if let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Publish,
@@ -1008,7 +1019,7 @@ impl SuiClientCommands {
 
                     (_, package_path) => {
                         let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
-                        let package = compile_package_simple(build_config, package_path)?;
+                        let package = compile_package_simple(build_config, &package_path)?;
                         let name = package
                             .package
                             .compiled_package_info
@@ -1543,14 +1554,13 @@ impl SuiClientCommands {
                     ));
                 }
 
-                let build_config =
-                    resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+                let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let compiled_package = BuildConfig {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
                 }
-                .build(package_path)?;
+                .build(&package_path)?;
 
                 let client = context.get_client().await?;
 
@@ -1586,27 +1596,22 @@ impl SuiClientCommands {
 
 fn compile_package_simple(
     build_config: MoveBuildConfig,
-    package_path: PathBuf,
+    package_path: &Path,
 ) -> Result<CompiledPackage, anyhow::Error> {
     let config = BuildConfig {
-        config: resolve_lock_file_path(build_config, Some(package_path.clone()))?,
+        config: resolve_lock_file_path(build_config, Some(package_path))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
     };
-    let resolution_graph = config.resolution_graph(&package_path)?;
+    let resolution_graph = config.resolution_graph(package_path)?;
 
-    Ok(build_from_resolution_graph(
-        package_path,
-        resolution_graph,
-        false,
-        false,
-    )?)
+    Ok(build_from_resolution_graph(resolution_graph, false, false)?)
 }
 
 pub(crate) async fn upgrade_package(
     read_api: &ReadApi,
     build_config: MoveBuildConfig,
-    package_path: PathBuf,
+    package_path: &Path,
     upgrade_capability: ObjectID,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
@@ -1667,7 +1672,7 @@ pub(crate) async fn upgrade_package(
 pub(crate) async fn compile_package(
     read_api: &ReadApi,
     build_config: MoveBuildConfig,
-    package_path: PathBuf,
+    package_path: &Path,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
 ) -> Result<
@@ -1679,7 +1684,7 @@ pub(crate) async fn compile_package(
     ),
     anyhow::Error,
 > {
-    let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+    let config = resolve_lock_file_path(build_config, Some(package_path))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
     let config = BuildConfig {
@@ -1687,14 +1692,13 @@ pub(crate) async fn compile_package(
         run_bytecode_verifier,
         print_diags_to_stderr,
     };
-    let resolution_graph = config.resolution_graph(&package_path)?;
+    let resolution_graph = config.resolution_graph(package_path)?;
     let (package_id, dependencies) = gather_published_ids(&resolution_graph);
     check_invalid_dependencies(&dependencies.invalid)?;
     if !with_unpublished_dependencies {
         check_unpublished_dependencies(&dependencies.unpublished)?;
     };
     let compiled_package = build_from_resolution_graph(
-        package_path.clone(),
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
@@ -1795,7 +1799,7 @@ pub(crate) async fn compile_package(
         .package
         .compiled_package_info
         .build_flags
-        .update_lock_file_toolchain_version(&package_path, env!("CARGO_PKG_VERSION").into())
+        .update_lock_file_toolchain_version(package_path, env!("CARGO_PKG_VERSION").into())
         .map_err(|e| SuiError::ModuleBuildFailure {
             error: format!("Failed to update Move.lock toolchain version: {e}"),
         })?;
@@ -2629,9 +2633,9 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         opts.serialize_unsigned_transaction,
         opts.serialize_signed_transaction,
     );
-    assert!(
+    ensure!(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
-        "Cannot specify both --serialize-unsigned-transaction and --serialize-signed-transaction"
+        "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
     );
     let gas_price = if let Some(gas_price) = gas_price {
         gas_price

@@ -164,13 +164,16 @@ fn validate_index_syntax_methods(
         .map(|tp| sp(tp.user_specified_name.loc, N::Type_::Param(tp.clone())))
         .collect::<Vec<_>>();
 
-    let index_ty = core::make_function_type(
+    // NOTE: This calls the version of `make_function_type_` that does not check function
+    // visibility, since that is not relevant here.
+    let index_ty = core::make_function_type_no_visibility_check(
         context,
         index_ann_loc,
         index_module,
         index_fn,
         Some(mut_tparam_types),
     );
+    context.current_module = None;
 
     let index_params = index_ty.params.iter().map(|(_, t1)| t1);
     let mut_params = mut_finfo.signature.parameters.iter().map(|(_, _, ty)| ty);

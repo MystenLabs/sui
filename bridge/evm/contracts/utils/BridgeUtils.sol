@@ -142,6 +142,9 @@ library BridgeUtils {
         // Ensure the converted amount fits within uint64
         require(amount <= type(uint64).max, "BridgeUtils: Amount too large for uint64");
 
+        // Ensure the converted amount is greater than 0
+        require(amount > 0, "BridgeUtils: Insufficient amount provided");
+
         return uint64(amount);
     }
 

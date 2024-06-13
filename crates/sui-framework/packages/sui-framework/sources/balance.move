@@ -148,7 +148,7 @@ module sui::balance_tests {
 
         balance.join(another);
 
-        assert!(balance.value() == 1000, 0);
+        assert!(balance.value() == 1000);
 
         let balance1 = balance.split(333);
         let balance2 = balance.split(333);
@@ -156,9 +156,9 @@ module sui::balance_tests {
 
         balance.destroy_zero();
 
-        assert!(balance1.value() == 333, 1);
-        assert!(balance2.value() == 333, 2);
-        assert!(balance3.value() == 334, 3);
+        assert!(balance1.value() == 333);
+        assert!(balance2.value() == 333);
+        assert!(balance3.value() == 334);
 
         test_utils::destroy(balance1);
         test_utils::destroy(balance2);

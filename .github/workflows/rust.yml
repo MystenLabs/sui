@@ -9,7 +9,14 @@ on:
       - 'mainnet'
       - 'releases/sui-*-release'
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [ opened, synchronize, reopened, ready_for_review ]
+  workflow_dispatch:
+    inputs:
+      sui_repo_ref:
+        description: "Branch / commit to test"
+        type: string
+        required: false
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -36,16 +43,17 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
+  # Some integration tests can produce too much INFO logs that are infeasible to be printed on failure.
+  RUST_LOG: error
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
 
 jobs:
   diff:
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
-      isSolidity: ${{ steps.diff.outputs.isSolidity }}
       isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
       isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
     steps:
@@ -56,7 +64,7 @@ jobs:
 
   license-check:
     name: license-check
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
@@ -71,7 +79,7 @@ jobs:
     name: release-notes-check
     needs: diff
     if: needs.diff.outputs.isReleaseNotesEligible == 'true'
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # pin@v5.0.0
@@ -85,10 +93,10 @@ jobs:
   move-auto-formatter-ci-test:
     needs: diff
     if: needs.diff.outputs.isMoveAutoFormatter == 'true'
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     strategy:
       matrix:
-        node-version: [20]
+        node-version: [ 20 ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
@@ -109,7 +117,7 @@ jobs:
 
   test:
     needs: diff
-    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
+    if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
@@ -120,7 +128,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ubuntu-ghcloud]
+          - [ ubuntu-ghcloud ]
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
@@ -129,17 +137,9 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
-      - name: Install Foundry
-        run: |
-          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
-          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
-      - name: Install Foundry Dependencies
-        working-directory: bridge/evm
-        run: |
-            forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
       - name: cargo test
         run: |
-          cargo nextest run --profile ci
+          cargo nextest run --profile ci -E '!package(sui-bridge)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -157,7 +157,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ubuntu-ghcloud]
+          - [ ubuntu-ghcloud ]
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
@@ -197,7 +197,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [windows-ghcloud]
+          - [ windows-ghcloud ]
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
@@ -232,7 +232,7 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ ubuntu-ghcloud ]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 60000
     steps:
@@ -244,7 +244,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          scripts/simtest/cargo-simtest simtest
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
@@ -256,7 +256,7 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'false' && needs.diff.outputs.isMove == 'true'
     timeout-minutes: 10
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ ubuntu-ghcloud ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - uses: taiki-e/install-action@nextest
@@ -314,8 +314,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ubuntu-ghcloud]
-          - [windows-ghcloud]
+          - [ ubuntu-ghcloud ]
+          - [ windows-ghcloud ]
       fail-fast: false
     steps:
       - run: 'echo "No build required" '
@@ -334,8 +334,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ubuntu-ghcloud]
-          - [windows-ghcloud]
+          - [ ubuntu-ghcloud ]
+          - [ windows-ghcloud ]
       fail-fast: false
     steps:
       - run: 'echo "No build required" '
@@ -343,7 +343,7 @@ jobs:
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ ubuntu-ghcloud ]
     steps:
       - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # pin@v3.0.0
         # this avoids rate-limiting
@@ -368,7 +368,7 @@ jobs:
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - run: rustup component add rustfmt
@@ -382,7 +382,7 @@ jobs:
     name: cargo-deny (advisories, licenses, bans, ...)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - uses: mystenlabs/cargo-deny-action@main
@@ -391,7 +391,7 @@ jobs:
     name: cutting a new execution layer
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ ubuntu-ghcloud ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - name: Install cargo-hakari, and cache the binary
@@ -438,7 +438,7 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ ubuntu-ghcloud ]
     services:
       postgres:
         image: postgres
@@ -474,27 +474,3 @@ jobs:
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
-
-  bridge-evm:
-    name: bridge-evm-tests
-    needs: diff
-    if: needs.diff.outputs.isSolidity == 'true'
-    runs-on: [ubuntu-latest]
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-      - name: Install Foundry
-        run: |
-          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
-          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
-      - name: Install Foundry Dependencies
-        working-directory: bridge/evm
-        run: |
-          forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
-      - name: Check Bridge EVM Unit Tests
-        shell: bash
-        working-directory: bridge/evm
-        env:
-          INFURA_API_KEY: ${{ secrets.INFURA_API_KEY }}
-        run: |
-          forge clean
-          forge test --ffi

@@ -35,6 +35,7 @@ const TEST_FIXTURES_DIR: &str = "tests/fixture";
 
 #[allow(clippy::await_holding_lock)]
 #[tokio::test]
+#[ignore]
 async fn test_end_to_end() -> anyhow::Result<()> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new()

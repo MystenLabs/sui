@@ -1,0 +1,29 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:3:16
+  │
+3 │         match (true) {
+  │                ^^^^ Pattern 'false' not covered
+
+note[I15004]: IDE missing match arms
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:3:22
+  │  
+3 │           match (true) {
+  │ ╭──────────────────────^
+4 │ │             true => 0
+5 │ │         }
+  │ ╰─────────^ Missing arms: 'false'
+
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:9:16
+  │
+9 │         match (true) {
+  │                ^^^^ Pattern '_' not covered
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:9:22
+   │  
+ 9 │           match (true) {
+   │ ╭──────────────────────^
+10 │ │         }
+   │ ╰─────────^ Missing arms: 'false' and 'true'
+

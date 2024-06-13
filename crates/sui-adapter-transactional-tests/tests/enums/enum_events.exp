@@ -1,0 +1,26 @@
+processed 6 tasks
+
+task 1 'publish'. lines 6-32:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5213600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 34-34:
+events: Event { package_id: Test, transaction_module: Identifier("f"), sender: _, type_: StructTag { address: Test, module: Identifier("f"), name: Identifier("F"), type_params: [] }, contents: [0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'run'. lines 36-36:
+events: Event { package_id: Test, transaction_module: Identifier("f"), sender: _, type_: StructTag { address: Test, module: Identifier("f"), name: Identifier("F"), type_params: [] }, contents: [1, 42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'run'. lines 38-38:
+events: Event { package_id: Test, transaction_module: Identifier("f"), sender: _, type_: StructTag { address: Test, module: Identifier("f"), name: Identifier("F"), type_params: [] }, contents: [2, 42, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5 'run'. lines 40-40:
+events: Event { package_id: Test, transaction_module: Identifier("f"), sender: _, type_: StructTag { address: Test, module: Identifier("f"), name: Identifier("F"), type_params: [] }, contents: [3, 42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

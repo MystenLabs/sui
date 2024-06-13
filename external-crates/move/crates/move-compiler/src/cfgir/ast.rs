@@ -10,12 +10,15 @@ use crate::{
         StructDefinition, Var, Visibility,
     },
     parser::ast::{ConstantName, DatatypeName, FunctionName, ENTRY_MODIFIER},
-    shared::{ast_debug::*, unique_map::UniqueMap},
+    shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use move_core_types::runtime_value::MoveValue;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, VecDeque};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::Arc,
+};
 
 // HLIR + Unstructured Control Flow + CFG
 
@@ -25,6 +28,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    pub info: Arc<TypingProgramInfo>,
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
@@ -187,7 +191,7 @@ fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, sp!(_, cmd_): &mut Comma
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules } = self;
+        let Program { modules, info: _ } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));
@@ -293,6 +297,7 @@ impl AstDebug for MoveValue {
                 w.write("]");
             }
             V::Struct(_) => panic!("ICE struct constants not supported"),
+            V::Variant(_) => panic!("ICE enum constants not supported"),
             V::Signer(_) => panic!("ICE signer constants not supported"),
         }
     }

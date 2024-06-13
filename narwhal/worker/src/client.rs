@@ -113,11 +113,11 @@ impl LazyNarwhalClient {
 #[derive(Clone)]
 pub struct LocalNarwhalClient {
     /// TODO: maybe use tx_batch_maker for load schedding.
-    tx_batch_maker: Sender<(Transaction, TxResponse)>,
+    tx_batch_maker: Sender<(Vec<Transaction>, TxResponse)>,
 }
 
 impl LocalNarwhalClient {
-    pub fn new(tx_batch_maker: Sender<(Transaction, TxResponse)>) -> Arc<Self> {
+    pub fn new(tx_batch_maker: Sender<(Vec<Transaction>, TxResponse)>) -> Arc<Self> {
         Arc::new(Self { tx_batch_maker })
     }
 
@@ -146,17 +146,23 @@ impl LocalNarwhalClient {
     }
 
     /// Submits a transaction to the local Narwhal worker.
-    pub async fn submit_transaction(&self, transaction: Transaction) -> Result<(), NarwhalError> {
-        if transaction.len() > MAX_ALLOWED_TRANSACTION_SIZE {
-            return Err(NarwhalError::TransactionTooLarge(
-                transaction.len(),
-                MAX_ALLOWED_TRANSACTION_SIZE,
-            ));
+    pub async fn submit_transactions(
+        &self,
+        transactions: Vec<Transaction>,
+    ) -> Result<(), NarwhalError> {
+        for transaction in &transactions {
+            if transaction.len() > MAX_ALLOWED_TRANSACTION_SIZE {
+                return Err(NarwhalError::TransactionTooLarge(
+                    transaction.len(),
+                    MAX_ALLOWED_TRANSACTION_SIZE,
+                ));
+            }
         }
+
         // Send the transaction to the batch maker.
         let (notifier, when_done) = tokio::sync::oneshot::channel();
         self.tx_batch_maker
-            .send((transaction, notifier))
+            .send((transactions, notifier))
             .await
             .map_err(|_| NarwhalError::ShuttingDown)?;
 

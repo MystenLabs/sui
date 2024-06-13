@@ -1,0 +1,109 @@
+warning[W09009]: unused struct field
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:14:23
+   │
+14 │     public struct C { c: u64, d: u64 } has drop;
+   │                       ^ The 'c' field of the 'C' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09009]: unused struct field
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:14:31
+   │
+14 │     public struct C { c: u64, d: u64 } has drop;
+   │                               ^ The 'd' field of the 'C' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:21
+   │
+17 │         let _ = &in.0.0[1]. ;
+   │                     ^ Autocompletes to: 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:23
+   │
+17 │         let _ = &in.0.0[1]. ;
+   │                       ^ Autocompletes to: '0'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:27
+   │
+17 │         let _ = &in.0.0[1]. ;
+   │                           ^ Autocompletes to: '0'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:29
+   │
+17 │         let _ = &in.0.0[1]. ;
+   │                             ^
+   │                             │
+   │                             Unexpected ';'
+   │                             Expected an identifier or a decimal number
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:21
+   │
+21 │         let _ = &in.0.0[1].0[0]. ;
+   │                     ^ Autocompletes to: 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:23
+   │
+21 │         let _ = &in.0.0[1].0[0]. ;
+   │                       ^ Autocompletes to: '0'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:28
+   │
+21 │         let _ = &in.0.0[1].0[0]. ;
+   │                            ^ Autocompletes to: '0'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:32
+   │
+21 │         let _ = &in.0.0[1].0[0]. ;
+   │                                ^ Autocompletes to: 
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:34
+   │
+21 │         let _ = &in.0.0[1].0[0]. ;
+   │                                  ^
+   │                                  │
+   │                                  Unexpected ';'
+   │                                  Expected an identifier or a decimal number
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:21
+   │
+25 │         let _ = &in.0.0[1].0[0]. ;
+   │                     ^ Autocompletes to: 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:23
+   │
+25 │         let _ = &in.0.0[1].0[0]. ;
+   │                       ^ Autocompletes to: '0'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:28
+   │
+25 │         let _ = &in.0.0[1].0[0]. ;
+   │                            ^ Autocompletes to: '0'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:32
+   │
+25 │         let _ = &in.0.0[1].0[0]. ;
+   │                                ^ Autocompletes to: 'c' or 'd'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:34
+   │
+25 │         let _ = &in.0.0[1].0[0]. ;
+   │                                  ^
+   │                                  │
+   │                                  Unexpected ';'
+   │                                  Expected an identifier or a decimal number
+

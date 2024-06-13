@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type {
+	Transaction,
 	TransactionArgument,
-	TransactionBlock,
 	TransactionObjectArgument,
-} from '@mysten/sui.js/transactions';
+} from '@mysten/sui/transactions';
 
 import * as kioskTx from '../tx/kiosk.js';
 import { convertToPersonalTx, transferPersonalCapTx } from '../tx/personal-kiosk.js';
@@ -23,8 +23,11 @@ import { getNormalizedRuleType } from '../utils.js';
 import type { KioskClient } from './kiosk-client.js';
 
 export type KioskTransactionParams = {
-	/** The TransactionBlock for this run */
-	transactionBlock: TransactionBlock;
+	/** The Transaction for this run */
+	transaction: Transaction;
+
+	/** @deprecated use transaction instead */
+	transactionBlock?: Transaction;
 	/**
 	 * You can create a new KioskClient by calling `new KioskClient()`
 	 */
@@ -41,7 +44,7 @@ export type KioskTransactionParams = {
  * A helper for building transactions that involve kiosk.
  */
 export class KioskTransaction {
-	transactionBlock: TransactionBlock;
+	transaction: Transaction;
 	kioskClient: KioskClient;
 	kiosk?: TransactionObjectArgument;
 	kioskCap?: TransactionObjectArgument;
@@ -56,8 +59,13 @@ export class KioskTransaction {
 	// A flag that checks whether kiosk TX is finalized.
 	#finalized: boolean = false;
 
-	constructor({ transactionBlock, kioskClient, cap }: KioskTransactionParams) {
-		this.transactionBlock = transactionBlock;
+	constructor({
+		transactionBlock,
+		transaction = transactionBlock!,
+		kioskClient,
+		cap,
+	}: KioskTransactionParams) {
+		this.transaction = transaction;
 		this.kioskClient = kioskClient;
 
 		if (cap) this.setCap(cap);
@@ -74,7 +82,7 @@ export class KioskTransaction {
 			share: true,
 			transfer: true,
 		});
-		const [kiosk, cap] = kioskTx.createKiosk(this.transactionBlock);
+		const [kiosk, cap] = kioskTx.createKiosk(this.transaction);
 		this.kiosk = kiosk;
 		this.kioskCap = cap;
 		return this;
@@ -98,7 +106,7 @@ export class KioskTransaction {
 		this.#validateKioskIsSet();
 
 		const cap = convertToPersonalTx(
-			this.transactionBlock,
+			this.transaction,
 			this.kiosk!,
 			this.kioskCap!,
 			this.kioskClient.getRulePackageId('personalKioskRulePackageId'),
@@ -117,8 +125,8 @@ export class KioskTransaction {
 	 */
 	createAndShare(address: string) {
 		this.#validateFinalizedStatus();
-		const cap = kioskTx.createKioskAndShare(this.transactionBlock);
-		this.transactionBlock.transferObjects([cap], this.transactionBlock.pure.address(address));
+		const cap = kioskTx.createKioskAndShare(this.transaction);
+		this.transaction.transferObjects([cap], this.transaction.pure.address(address));
 	}
 
 	/**
@@ -127,7 +135,7 @@ export class KioskTransaction {
 	share() {
 		this.#validateKioskIsSet();
 		this.#setPendingStatuses({ share: false });
-		kioskTx.shareKiosk(this.transactionBlock, this.kiosk!);
+		kioskTx.shareKiosk(this.transaction, this.kiosk!);
 	}
 
 	/**
@@ -139,10 +147,7 @@ export class KioskTransaction {
 			throw new Error('You can only call `shareAndTransferCap` on a non-personal kiosk.');
 		this.#setPendingStatuses({ transfer: false });
 		this.share();
-		this.transactionBlock.transferObjects(
-			[this.kioskCap!],
-			this.transactionBlock.pure.address(address),
-		);
+		this.transaction.transferObjects([this.kioskCap!], this.transaction.pure.address(address));
 	}
 
 	/**
@@ -152,7 +157,7 @@ export class KioskTransaction {
 	borrowTx({ itemType, itemId }: ItemId, callback: (item: TransactionArgument) => void) {
 		this.#validateKioskIsSet();
 		const [itemObj, promise] = kioskTx.borrowValue(
-			this.transactionBlock,
+			this.transaction,
 			itemType,
 			this.kiosk!,
 			this.kioskCap!,
@@ -173,7 +178,7 @@ export class KioskTransaction {
 	borrow({ itemType, itemId }: ItemId): [TransactionArgument, TransactionArgument] {
 		this.#validateKioskIsSet();
 		const [itemObj, promise] = kioskTx.borrowValue(
-			this.transactionBlock,
+			this.transaction,
 			itemType,
 			this.kiosk!,
 			this.kioskCap!,
@@ -189,7 +194,7 @@ export class KioskTransaction {
 	 */
 	return({ itemType, item, promise }: ItemValue & { promise: TransactionArgument }) {
 		this.#validateKioskIsSet();
-		kioskTx.returnValue(this.transactionBlock, itemType, this.kiosk!, item, promise);
+		kioskTx.returnValue(this.transaction, itemType, this.kiosk!, item, promise);
 		return this;
 	}
 
@@ -200,13 +205,8 @@ export class KioskTransaction {
 	 */
 	withdraw(address: string, amount?: string | bigint | number) {
 		this.#validateKioskIsSet();
-		const coin = kioskTx.withdrawFromKiosk(
-			this.transactionBlock,
-			this.kiosk!,
-			this.kioskCap!,
-			amount,
-		);
-		this.transactionBlock.transferObjects([coin], this.transactionBlock.pure.address(address));
+		const coin = kioskTx.withdrawFromKiosk(this.transaction, this.kiosk!, this.kioskCap!, amount);
+		this.transaction.transferObjects([coin], this.transaction.pure.address(address));
 		return this;
 	}
 
@@ -217,7 +217,7 @@ export class KioskTransaction {
 	 */
 	place({ itemType, item }: ItemReference) {
 		this.#validateKioskIsSet();
-		kioskTx.place(this.transactionBlock, itemType, this.kiosk!, this.kioskCap!, item);
+		kioskTx.place(this.transaction, itemType, this.kiosk!, this.kioskCap!, item);
 		return this;
 	}
 
@@ -229,7 +229,7 @@ export class KioskTransaction {
 	 */
 	placeAndList({ itemType, item, price }: ItemReference & Price) {
 		this.#validateKioskIsSet();
-		kioskTx.placeAndList(this.transactionBlock, itemType, this.kiosk!, this.kioskCap!, item, price);
+		kioskTx.placeAndList(this.transaction, itemType, this.kiosk!, this.kioskCap!, item, price);
 		return this;
 	}
 
@@ -241,7 +241,7 @@ export class KioskTransaction {
 	 */
 	list({ itemType, itemId, price }: ItemId & { price: string | bigint }) {
 		this.#validateKioskIsSet();
-		kioskTx.list(this.transactionBlock, itemType, this.kiosk!, this.kioskCap!, itemId, price);
+		kioskTx.list(this.transaction, itemType, this.kiosk!, this.kioskCap!, itemId, price);
 		return this;
 	}
 
@@ -252,7 +252,7 @@ export class KioskTransaction {
 	 */
 	delist({ itemType, itemId }: ItemId) {
 		this.#validateKioskIsSet();
-		kioskTx.delist(this.transactionBlock, itemType, this.kiosk!, this.kioskCap!, itemId);
+		kioskTx.delist(this.transaction, itemType, this.kiosk!, this.kioskCap!, itemId);
 		return this;
 	}
 
@@ -264,7 +264,7 @@ export class KioskTransaction {
 	 */
 	take({ itemType, itemId }: ItemId): TransactionObjectArgument {
 		this.#validateKioskIsSet();
-		return kioskTx.take(this.transactionBlock, itemType, this.kiosk!, this.kioskCap!, itemId);
+		return kioskTx.take(this.transaction, itemType, this.kiosk!, this.kioskCap!, itemId);
 	}
 
 	/**
@@ -277,7 +277,7 @@ export class KioskTransaction {
 	transfer({ itemType, itemId, address }: ItemId & { address: string }) {
 		this.#validateKioskIsSet();
 		const item = this.take({ itemType, itemId });
-		this.transactionBlock.transferObjects([item], this.transactionBlock.pure.address(address));
+		this.transaction.transferObjects([item], this.transaction.pure.address(address));
 		return this;
 	}
 
@@ -296,14 +296,7 @@ export class KioskTransaction {
 		policy,
 	}: ItemReference & { policy: ObjectArgument; itemId?: string }) {
 		this.#validateKioskIsSet();
-		kioskTx.lock(
-			this.transactionBlock,
-			itemType,
-			this.kiosk!,
-			this.kioskCap!,
-			policy,
-			itemId ?? item,
-		);
+		kioskTx.lock(this.transaction, itemType, this.kiosk!, this.kioskCap!, policy, itemId ?? item);
 		return this;
 	}
 
@@ -326,10 +319,10 @@ export class KioskTransaction {
 		TransactionObjectArgument,
 	] {
 		// Split the coin for the amount of the listing.
-		const coin = this.transactionBlock.splitCoins(this.transactionBlock.gas, [
-			this.transactionBlock.pure.u64(price),
+		const coin = this.transaction.splitCoins(this.transaction.gas, [
+			this.transaction.pure.u64(price),
 		]);
-		return kioskTx.purchase(this.transactionBlock, itemType, sellerKiosk, itemId, coin);
+		return kioskTx.purchase(this.transaction, itemType, sellerKiosk, itemId, coin);
 	}
 
 	/**
@@ -381,7 +374,8 @@ export class KioskTransaction {
 
 			ruleDefinition.resolveRuleFunction({
 				packageId: ruleDefinition.packageId,
-				transactionBlock: this.transactionBlock,
+				transactionBlock: this.transaction,
+				transaction: this.transaction,
 				itemType,
 				itemId,
 				price: price.toString(),
@@ -395,7 +389,7 @@ export class KioskTransaction {
 			});
 		}
 
-		confirmRequest(this.transactionBlock, itemType, policy.id, transferRequest);
+		confirmRequest(this.transaction, itemType, policy.id, transferRequest);
 
 		if (canTransferOutsideKiosk) this.place({ itemType, item: purchasedItem });
 
@@ -409,9 +403,9 @@ export class KioskTransaction {
 	 */
 	setCap(cap: KioskOwnerCap) {
 		this.#validateFinalizedStatus();
-		this.kiosk = this.transactionBlock.object(cap.kioskId);
+		this.kiosk = this.transaction.object(cap.kioskId);
 		if (!cap.isPersonal) {
-			this.kioskCap = this.transactionBlock.object(cap.objectId);
+			this.kioskCap = this.transaction.object(cap.objectId);
 			return;
 		}
 
@@ -419,7 +413,7 @@ export class KioskTransaction {
 	}
 
 	/**
-	 *	A function that ends up the kiosk building txb & returns the `kioskOwnerCap` back to the
+	 *	A function that ends up the kiosk building tx & returns the `kioskOwnerCap` back to the
 	 *  `PersonalKioskCap`, in case we are operating on a personal kiosk.
 	 * 	It will also share the `kiosk` if it's not shared, and finalize the transfer of the personal cap if it's pending.
 	 */
@@ -442,21 +436,17 @@ export class KioskTransaction {
 
 		// if we have a promise, return the `ownerCap` back to the personal cap.
 		if (this.#promise) {
-			this.transactionBlock.moveCall({
+			this.transaction.moveCall({
 				target: `${packageId}::personal_kiosk::return_val`,
-				arguments: [
-					this.#personalCap,
-					this.transactionBlock.object(this.kioskCap!),
-					this.#promise!,
-				],
+				arguments: [this.#personalCap, this.transaction.object(this.kioskCap!), this.#promise!],
 			});
 		}
 
 		// If we are pending transferring the personalCap, we do it here.
 		if (this.#pendingTransfer)
-			transferPersonalCapTx(this.transactionBlock, this.#personalCap, packageId);
+			transferPersonalCapTx(this.transaction, this.#personalCap, packageId);
 
-		// Mark the transaction block as finalized, so no other functions can be called.
+		// Mark the transaction as finalized, so no other functions can be called.
 		this.#finalized = true;
 	}
 
@@ -496,15 +486,15 @@ export class KioskTransaction {
 	 * A function to borrow from `personalCap`.
 	 */
 	#borrowFromPersonalCap(personalCap: ObjectArgument) {
-		const [kioskCap, promise] = this.transactionBlock.moveCall({
+		const [kioskCap, promise] = this.transaction.moveCall({
 			target: `${this.kioskClient.getRulePackageId(
 				'personalKioskRulePackageId',
 			)}::personal_kiosk::borrow_val`,
-			arguments: [this.transactionBlock.object(personalCap)],
+			arguments: [this.transaction.object(personalCap)],
 		});
 
 		this.kioskCap = kioskCap;
-		this.#personalCap = this.transactionBlock.object(personalCap);
+		this.#personalCap = this.transaction.object(personalCap);
 		this.#promise = promise;
 
 		return this;
@@ -527,6 +517,6 @@ export class KioskTransaction {
 	// Validates that `finalize`
 	#validateFinalizedStatus() {
 		if (this.#finalized)
-			throw new Error("You can't add more transactions to a finalized kiosk transaction block.");
+			throw new Error("You can't add more transactions to a finalized kiosk transaction.");
 	}
 }

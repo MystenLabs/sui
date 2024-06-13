@@ -26,19 +26,13 @@ export type SerializeSignatureInput = {
 };
 
 /**
- * (`flag || signature || pubkey` bytes, as base-64 encoded string).
- * Signature is committed to the intent message of the transaction data, as base-64 encoded string.
- */
-export type SerializedSignature = string;
-
-/**
  * Takes in a signature, its associated signing scheme and a public key, then serializes this data
  */
 export function toSerializedSignature({
 	signature,
 	signatureScheme,
 	publicKey,
-}: SerializeSignatureInput): SerializedSignature {
+}: SerializeSignatureInput): string {
 	if (!publicKey) {
 		throw new Error('`publicKey` is required');
 	}
@@ -54,7 +48,7 @@ export function toSerializedSignature({
 /**
  * Decodes a serialized signature into its constituent components: the signature scheme, the actual signature, and the public key
  */
-export function parseSerializedSignature(serializedSignature: SerializedSignature) {
+export function parseSerializedSignature(serializedSignature: string) {
 	const bytes = fromB64(serializedSignature);
 
 	const signatureScheme =

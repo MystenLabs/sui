@@ -411,8 +411,8 @@ module deepbook::critbit {
         min_leaf: u64,
         max_leaf: u64
     ): bool {
-        assert!(vector::length(internal_node_keys) == vector::length(internal_node), 0);
-        assert!(vector::length(leaves_keys) == vector::length(leaves), 0);
+        assert!(vector::length(internal_node_keys) == vector::length(internal_node));
+        assert!(vector::length(leaves_keys) == vector::length(leaves));
         if (tree.root != root || tree.min_leaf != min_leaf || tree.max_leaf != max_leaf) {
             return false
         };
@@ -442,11 +442,11 @@ module deepbook::critbit {
 
     #[test_only]
     public fun check_empty_tree<V: store>(tree: &CritbitTree<V>) {
-        assert!(table::is_empty(&tree.leaves), 0);
-        assert!(table::is_empty(&tree.internal_nodes), 0);
-        assert!(tree.root == PARTITION_INDEX, 0);
-        assert!(tree.min_leaf == PARTITION_INDEX, 0);
-        assert!(tree.max_leaf == PARTITION_INDEX, 0);
+        assert!(table::is_empty(&tree.leaves));
+        assert!(table::is_empty(&tree.internal_nodes));
+        assert!(tree.root == PARTITION_INDEX);
+        assert!(tree.min_leaf == PARTITION_INDEX);
+        assert!(tree.max_leaf == PARTITION_INDEX);
     }
 
 }

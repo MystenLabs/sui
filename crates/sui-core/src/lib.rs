@@ -25,6 +25,7 @@ pub mod mysticeti_adapter;
 pub mod overload_monitor;
 pub(crate) mod post_consensus_tx_reorder;
 pub mod quorum_driver;
+pub mod rest_index;
 pub mod safe_client;
 mod scoring_decision;
 mod stake_aggregator;
@@ -44,6 +45,9 @@ pub mod verify_indexes;
 #[cfg(test)]
 #[path = "unit_tests/congestion_control_tests.rs"]
 mod congestion_control_tests;
+#[cfg(test)]
+#[path = "unit_tests/move_package_management_tests.rs"]
+mod move_package_management_tests;
 #[cfg(test)]
 #[path = "unit_tests/move_package_publish_tests.rs"]
 mod move_package_publish_tests;

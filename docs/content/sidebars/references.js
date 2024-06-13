@@ -47,6 +47,7 @@ const references = [
 			id: 'references/cli',
 		},
 		items: [
+			'references/cli/cheatsheet',
 			'references/cli/client',
 			'references/cli/ptb',
 			'references/cli/console',
@@ -74,6 +75,11 @@ const references = [
 				type: 'link',
 				label: 'TypeScript SDK',
 				href: 'https://sdk.mystenlabs.com/typescript',
+			},
+			{
+				type: 'link',
+				label: 'zkSend SDK',
+				href: 'https://sdk.mystenlabs.com/zksend',
 			},
 		],
 	},

@@ -20,22 +20,19 @@ use axum::{Json, Router, Server};
 use hyper::http::{HeaderName, HeaderValue, Method};
 use hyper::server::conn::AddrIncoming;
 use hyper::{HeaderMap, StatusCode};
-use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::params::ArrayParams;
-use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use mysten_metrics::RegistryService;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 use url::Url;
 
 use move_core_types::account_address::AccountAddress;
 use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
 use move_symbol_pool::Symbol;
-use sui_move::build::resolve_lock_file_path;
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
-use sui_sdk::rpc_types::{SuiTransactionBlockEffects, TransactionFilter};
+use sui_sdk::rpc_types::SuiTransactionBlockEffects;
 use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::SuiClientBuilder;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
@@ -154,10 +151,8 @@ pub async fn verify_package(
     package_path: impl AsRef<Path>,
 ) -> anyhow::Result<(Network, AddressLookup)> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let mut config = resolve_lock_file_path(
-        MoveBuildConfig::default(),
-        Some(package_path.as_ref().to_path_buf()),
-    )?;
+    let mut config =
+        resolve_lock_file_path(MoveBuildConfig::default(), Some(package_path.as_ref()))?;
     config.lint_flag = LintFlag::LEVEL_NONE;
     config.silence_warnings = true;
     let build_config = BuildConfig {
@@ -165,7 +160,7 @@ pub async fn verify_package(
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
         print_diags_to_stderr: false,
     };
-    let compiled_package = build_config.build(package_path.as_ref().to_path_buf())?;
+    let compiled_package = build_config.build(package_path.as_ref())?;
 
     let network_url = match network {
         Network::Mainnet => MAINNET_URL,
@@ -433,82 +428,12 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
 // falsely report outdated sources for a package. Pass an optional `channel` to observe the upgrade transaction(s).
 // The `channel` parameter exists for testing.
 pub async fn watch_for_upgrades(
-    packages: Vec<PackageSource>,
-    app_state: Arc<RwLock<AppState>>,
-    network: Network,
-    channel: Option<Sender<SuiTransactionBlockEffects>>,
+    _packages: Vec<PackageSource>,
+    _app_state: Arc<RwLock<AppState>>,
+    _network: Network,
+    _channel: Option<Sender<SuiTransactionBlockEffects>>,
 ) -> anyhow::Result<()> {
-    let mut watch_ids = ArrayParams::new();
-    let mut num_packages = 0;
-    for s in packages {
-        let branches = match s {
-            PackageSource::Repository(RepositorySource { branches, .. }) => branches,
-            PackageSource::Directory(DirectorySource { paths, .. }) => vec![Branch {
-                branch: "".into(), // Unused.
-                paths,
-            }],
-        };
-        for b in branches {
-            for p in b.paths {
-                if let Some(id) = p.watch {
-                    num_packages += 1;
-                    watch_ids.insert(TransactionFilter::ChangedObject(id))?
-                }
-            }
-        }
-    }
-
-    let websocket_url = match network {
-        Network::Mainnet => MAINNET_WS_URL,
-        Network::Testnet => TESTNET_WS_URL,
-        Network::Devnet => DEVNET_WS_URL,
-        Network::Localnet => LOCALNET_WS_URL,
-    };
-
-    let client: WsClient = WsClientBuilder::default()
-        .ping_interval(WS_PING_INTERVAL)
-        .build(websocket_url)
-        .await?;
-    let mut subscription: Subscription<SuiTransactionBlockEffects> = client
-        .subscribe(
-            "suix_subscribeTransaction",
-            watch_ids,
-            "suix_unsubscribeTransaction",
-        )
-        .await
-        .map_err(|e| anyhow!("Failed to open websocket connection for {}: {}", network, e))?;
-
-    info!("Listening for upgrades on {num_packages} package(s) on {websocket_url}...");
-    loop {
-        let result: Option<Result<SuiTransactionBlockEffects, _>> = subscription.next().await;
-        match result {
-            Some(Ok(result)) => {
-                // We see an upgrade transaction. Clear all sources since all of part of these may now be invalid.
-                // Currently we need to restart the server within some time delta of this observation to resume
-                // returning source. Restarting revalidates the latest release sources per repositories in the config file.
-                // Restarting is a manual side-effect outside of this server because we need to ensure that sources in the
-                // repositories _actually contain_ the latest source corresponding to on-chain data (which is subject to
-                // manual syncing itself currently).
-                info!("Saw upgrade txn: {:?}", result);
-                let mut app_state = app_state.write().unwrap();
-                app_state.sources = NetworkLookup::new(); // Clear all sources.
-                app_state.sources_list = NetworkLookup::new(); // Clear all listed sources.
-                if let Some(channel) = channel {
-                    channel.send(result).unwrap();
-                    break Ok(());
-                }
-                info!("Shutting down server (resync performed on restart)");
-                std::process::exit(1)
-            }
-            Some(_) => {
-                info!("Saw failed transaction when listening to upgrades.")
-            }
-            None => {
-                error!("Fatal: WebSocket connection lost while listening for upgrades. Shutting down server.");
-                std::process::exit(1)
-            }
-        }
-    }
+    Err(anyhow!("Fatal: JsonRPC Subscriptions no longer supported. Reimplement without using subscriptions."))
 }
 
 pub struct AppState {

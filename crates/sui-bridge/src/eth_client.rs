@@ -99,7 +99,7 @@ where
         let bridge_event = EthBridgeEvent::try_from_eth_log(&eth_log)
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
         bridge_event
-            .try_into_bridge_action(tx_hash, event_idx)
+            .try_into_bridge_action(tx_hash, event_idx)?
             .ok_or(BridgeError::BridgeEventNotActionable)
     }
 

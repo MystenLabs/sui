@@ -1,0 +1,82 @@
+processed 9 tasks
+
+task 0 'publish'. lines 1-12:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByValue'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x2::ByValue,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 1 'publish'. lines 14-25:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByImmRef'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x2::ByImmRef,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 2 'publish'. lines 27-38:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByMutRef'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x2::ByMutRef,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 3 'publish'. lines 40-51:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByValue'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x2::ByValue,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 4 'publish'. lines 53-64:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByImmRef'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x2::ByImmRef,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 5 'publish'. lines 66-77:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByMutRef'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x2::ByMutRef,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 6 'publish'. lines 79-90:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByValue'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x2::ByValue,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 7 'publish'. lines 92-103:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByImmRef'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x2::ByImmRef,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 8 'publish'. lines 105-116:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByMutRef'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x2::ByMutRef,
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
+    offsets: [],
+}

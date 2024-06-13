@@ -26,99 +26,94 @@ use serde::{Deserialize, Serialize};
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
 
-// TODO: write a macro to handle variants
+macro_rules! gen_eth_events {
+    ($($contract:ident, $contract_event:ident, $abi_path:literal),* $(,)?) => {
+        $(
+            abigen!(
+                $contract,
+                $abi_path,
+                event_derives(serde::Deserialize, serde::Serialize)
+            );
+        )*
 
-// TODO: Add other events
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum EthBridgeEvent {
-    EthSuiBridgeEvents(EthSuiBridgeEvents),
-}
-
-abigen!(
-    EthSuiBridge,
-    "abi/sui_bridge.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
-abigen!(
-    EthBridgeCommittee,
-    "abi/bridge_committee.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
-abigen!(
-    EthBridgeVault,
-    "abi/bridge_vault.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
-abigen!(
-    EthBridgeLimiter,
-    "abi/bridge_limiter.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
-abigen!(
-    EthBridgeConfig,
-    "abi/bridge_config.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
-abigen!(
-    EthCommitteeUpgradeableContract,
-    "abi/bridge_committee_upgradeable.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
-impl EthBridgeEvent {
-    pub fn try_from_eth_log(log: &EthLog) -> Option<EthBridgeEvent> {
-        let raw_log = RawLog {
-            topics: log.log.topics.clone(),
-            data: log.log.data.to_vec(),
-        };
-
-        if let Ok(decoded) = EthSuiBridgeEvents::decode_log(&raw_log) {
-            return Some(EthBridgeEvent::EthSuiBridgeEvents(decoded));
+        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+        pub enum EthBridgeEvent {
+            $(
+                $contract_event($contract_event),
+            )*
         }
 
-        // TODO: try other variants
-        None
-    }
+        impl EthBridgeEvent {
+            pub fn try_from_eth_log(log: &EthLog) -> Option<EthBridgeEvent> {
+                Self::try_from_log(&log.log)
+            }
 
-    pub fn try_from_log(log: &Log) -> Option<EthBridgeEvent> {
-        let raw_log = RawLog {
-            topics: log.topics.clone(),
-            data: log.data.to_vec(),
-        };
+            pub fn try_from_log(log: &Log) -> Option<EthBridgeEvent> {
+                let raw_log = RawLog {
+                    topics: log.topics.clone(),
+                    data: log.data.to_vec(),
+                };
 
-        if let Ok(decoded) = EthSuiBridgeEvents::decode_log(&raw_log) {
-            return Some(EthBridgeEvent::EthSuiBridgeEvents(decoded));
+                $(
+                    if let Ok(decoded) = $contract_event::decode_log(&raw_log) {
+                        return Some(EthBridgeEvent::$contract_event(decoded));
+                    }
+                )*
+
+                None
+            }
         }
+    };
 
-        // TODO: try other variants
-        None
-    }
+    // For contracts that don't have Events
+    ($($contract:ident, $abi_path:literal),* $(,)?) => {
+        $(
+            abigen!(
+                $contract,
+                $abi_path,
+                event_derives(serde::Deserialize, serde::Serialize)
+            );
+        )*
+    };
 }
+
+#[rustfmt::skip]
+gen_eth_events!(
+    EthSuiBridge, EthSuiBridgeEvents, "abi/sui_bridge.json",
+    EthBridgeCommittee, EthBridgeCommitteeEvents, "abi/bridge_committee.json",
+    EthBridgeLimiter, EthBridgeLimiterEvents, "abi/bridge_limiter.json",
+    EthBridgeConfig, EthBridgeConfigEvents, "abi/bridge_config.json",
+    EthCommitteeUpgradeableContract, EthCommitteeUpgradeableContractEvents, "abi/bridge_committee_upgradeable.json"
+);
+
+gen_eth_events!(EthBridgeVault, "abi/bridge_vault.json");
 
 impl EthBridgeEvent {
     pub fn try_into_bridge_action(
         self,
         eth_tx_hash: ethers::types::H256,
         eth_event_index: u16,
-    ) -> Option<BridgeAction> {
-        match self {
+    ) -> BridgeResult<Option<BridgeAction>> {
+        Ok(match self {
             EthBridgeEvent::EthSuiBridgeEvents(event) => {
                 match event {
                     EthSuiBridgeEvents::TokensDepositedFilter(event) => {
                         let bridge_event = match EthToSuiTokenBridgeV1::try_from(&event) {
-                            Ok(bridge_event) => bridge_event,
+                            Ok(bridge_event) => {
+                                if bridge_event.sui_adjusted_amount == 0 {
+                                    return Err(BridgeError::ZeroValueBridgeTransfer(format!(
+                                        "Manual intervention is required: {}",
+                                        eth_tx_hash
+                                    )));
+                                }
+                                bridge_event
+                            }
                             // This only happens when solidity code does not align with rust code.
                             // When this happens in production, there is a risk of stuck bridge transfers.
                             // We log error here.
                             // TODO: add metrics and alert
                             Err(e) => {
-                                tracing::error!(?eth_tx_hash, eth_event_index, "Failed to convert TokensDepositedFilter log to EthToSuiTokenBridgeV1. This indicates incorrect parameters or a bug in the code: {:?}. Err: {:?}", event, e);
-                                return None;
+                                return Err(BridgeError::Generic(format!("Manual intervention is required. Failed to convert TokensDepositedFilter log to EthToSuiTokenBridgeV1. This indicates incorrect parameters or a bug in the code: {:?}. Err: {:?}", event, e)));
                             }
                         };
 
@@ -135,7 +130,29 @@ impl EthBridgeEvent {
                     EthSuiBridgeEvents::InitializedFilter(_event) => None,
                 }
             }
-        }
+            EthBridgeEvent::EthBridgeCommitteeEvents(event) => match event {
+                EthBridgeCommitteeEvents::BlocklistUpdatedFilter(_event) => None,
+                EthBridgeCommitteeEvents::InitializedFilter(_event) => None,
+                EthBridgeCommitteeEvents::UpgradedFilter(_event) => None,
+            },
+            EthBridgeEvent::EthBridgeLimiterEvents(event) => match event {
+                EthBridgeLimiterEvents::LimitUpdatedFilter(_event) => None,
+                EthBridgeLimiterEvents::InitializedFilter(_event) => None,
+                EthBridgeLimiterEvents::UpgradedFilter(_event) => None,
+                EthBridgeLimiterEvents::HourlyTransferAmountUpdatedFilter(_event) => None,
+                EthBridgeLimiterEvents::OwnershipTransferredFilter(_event) => None,
+            },
+            EthBridgeEvent::EthBridgeConfigEvents(event) => match event {
+                EthBridgeConfigEvents::InitializedFilter(_event) => None,
+                EthBridgeConfigEvents::UpgradedFilter(_event) => None,
+                EthBridgeConfigEvents::TokenAddedFilter(_event) => None,
+                EthBridgeConfigEvents::TokenPriceUpdatedFilter(_event) => None,
+            },
+            EthBridgeEvent::EthCommitteeUpgradeableContractEvents(event) => match event {
+                EthCommitteeUpgradeableContractEvents::InitializedFilter(_event) => None,
+                EthCommitteeUpgradeableContractEvents::UpgradedFilter(_event) => None,
+            },
+        })
     }
 }
 
@@ -274,7 +291,10 @@ mod tests {
         crypto::BridgeAuthorityPublicKeyBytes,
         types::{BlocklistType, EmergencyActionType},
     };
+    use ethers::types::TxHash;
     use fastcrypto::encoding::{Encoding, Hex};
+    use hex_literal::hex;
+    use std::str::FromStr;
     use sui_types::{bridge::TOKEN_ID_ETH, crypto::ToFromBytes};
 
     #[test]
@@ -427,5 +447,99 @@ mod tests {
             }
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_token_deposit_eth_log_to_sui_bridge_event_regression() -> anyhow::Result<()> {
+        telemetry_subscribers::init_for_testing();
+        let tx_hash = TxHash::random();
+        let action = EthLog {
+            block_number: 33,
+            tx_hash,
+            log_index_in_tx: 1,
+            log: Log {
+                address: EthAddress::repeat_byte(1),
+                topics: vec![
+                    hex!("a0f1d54820817ede8517e70a3d0a9197c015471c5360d2119b759f0359858ce6").into(),
+                    hex!("000000000000000000000000000000000000000000000000000000000000000c").into(),
+                    hex!("0000000000000000000000000000000000000000000000000000000000000000").into(),
+                    hex!("0000000000000000000000000000000000000000000000000000000000000002").into(),
+                ],
+                data: ethers::types::Bytes::from(
+                    Hex::decode("0x000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000fa56ea0000000000000000000000000014dc79964da2c08b23698b3d3cc7ca32193d9955000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000203b1eb23133e94d08d0da9303cfd38e7d4f8f6951f235daa62cd64ea5b6d96d77").unwrap(),
+                ),
+                block_hash: None,
+                block_number: None,
+                transaction_hash: Some(tx_hash),
+                transaction_index: Some(ethers::types::U64::from(0)),
+                log_index: Some(ethers::types::U256::from(1)),
+                transaction_log_index: None,
+                log_type: None,
+                removed: Some(false),
+            }
+        };
+        let event = EthBridgeEvent::try_from_eth_log(&action).unwrap();
+        assert_eq!(
+            event,
+            EthBridgeEvent::EthSuiBridgeEvents(EthSuiBridgeEvents::TokensDepositedFilter(
+                TokensDepositedFilter {
+                    source_chain_id: 12,
+                    nonce: 0,
+                    destination_chain_id: 2,
+                    token_id: 2,
+                    sui_adjusted_amount: 4200000000,
+                    sender_address: EthAddress::from_str(
+                        "0x14dc79964da2c08b23698b3d3cc7ca32193d9955"
+                    )
+                    .unwrap(),
+                    recipient_address: ethers::types::Bytes::from(
+                        Hex::decode(
+                            "0x3b1eb23133e94d08d0da9303cfd38e7d4f8f6951f235daa62cd64ea5b6d96d77"
+                        )
+                        .unwrap(),
+                    ),
+                }
+            ))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_0_sui_amount_conversion_for_eth_event() {
+        let e = EthBridgeEvent::EthSuiBridgeEvents(EthSuiBridgeEvents::TokensDepositedFilter(
+            TokensDepositedFilter {
+                source_chain_id: BridgeChainId::EthSepolia as u8,
+                nonce: 0,
+                destination_chain_id: BridgeChainId::SuiTestnet as u8,
+                token_id: 2,
+                sui_adjusted_amount: 1,
+                sender_address: EthAddress::random(),
+                recipient_address: ethers::types::Bytes::from(
+                    SuiAddress::random_for_testing_only().to_vec(),
+                ),
+            },
+        ));
+        assert!(e
+            .try_into_bridge_action(TxHash::random(), 0)
+            .unwrap()
+            .is_some());
+
+        let e = EthBridgeEvent::EthSuiBridgeEvents(EthSuiBridgeEvents::TokensDepositedFilter(
+            TokensDepositedFilter {
+                source_chain_id: BridgeChainId::EthSepolia as u8,
+                nonce: 0,
+                destination_chain_id: BridgeChainId::SuiTestnet as u8,
+                token_id: 2,
+                sui_adjusted_amount: 0, // <------------
+                sender_address: EthAddress::random(),
+                recipient_address: ethers::types::Bytes::from(
+                    SuiAddress::random_for_testing_only().to_vec(),
+                ),
+            },
+        ));
+        match e.try_into_bridge_action(TxHash::random(), 0).unwrap_err() {
+            BridgeError::ZeroValueBridgeTransfer(_) => {}
+            e => panic!("Unexpected error: {:?}", e),
+        }
     }
 }

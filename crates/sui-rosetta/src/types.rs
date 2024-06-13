@@ -423,7 +423,8 @@ impl From<&SuiTransactionBlockKind> for OperationType {
             SuiTransactionBlockKind::ChangeEpoch(_) => OperationType::EpochChange,
             SuiTransactionBlockKind::Genesis(_) => OperationType::Genesis,
             SuiTransactionBlockKind::ConsensusCommitPrologue(_)
-            | SuiTransactionBlockKind::ConsensusCommitPrologueV2(_) => {
+            | SuiTransactionBlockKind::ConsensusCommitPrologueV2(_)
+            | SuiTransactionBlockKind::ConsensusCommitPrologueV3(_) => {
                 OperationType::ConsensusCommitPrologue
             }
             SuiTransactionBlockKind::ProgrammableTransaction(_) => {

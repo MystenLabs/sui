@@ -42,7 +42,7 @@ async fn send_transactions(
     let mut client = TransactionsClient::new(channel);
     // Make a transaction to submit forever.
     let tx = TransactionProto {
-        transaction: Bytes::from(epoch.to_be_bytes().to_vec()),
+        transactions: vec![Bytes::from(epoch.to_be_bytes().to_vec())],
     };
     // Repeatedly send transactions.
     let interval = interval(Duration::from_millis(1));
@@ -69,16 +69,15 @@ async fn send_transactions(
 
 pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
     let (output, _result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
-    let accumulator = StateAccumulator::new(state.get_execution_cache());
-    let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
-
     let epoch_store = state.epoch_store_for_testing();
+    let accumulator = StateAccumulator::new(state.get_accumulator_store().clone(), &epoch_store);
+    let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
 
     let (checkpoint_service, _) = CheckpointService::spawn(
         state.clone(),
         state.get_checkpoint_store().clone(),
         epoch_store.clone(),
-        Arc::new(state.get_effects_notify_read().clone()),
+        state.get_transaction_cache_reader().clone(),
         Arc::new(accumulator),
         Box::new(output),
         Box::new(certified_output),

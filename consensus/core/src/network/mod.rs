@@ -25,17 +25,18 @@ use futures::Stream;
 
 use crate::{
     block::{BlockRef, VerifiedBlock},
-    commit::TrustedCommit,
+    commit::{CommitRange, TrustedCommit},
     context::Context,
     error::ConsensusResult,
-    CommitIndex, Round,
+    Round,
 };
 
-// Anemo generated stubs for RPCs.
+// Anemo generated RPC stubs.
 mod anemo_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusRpc.rs"));
 }
 
+// Tonic generated RPC stubs.
 mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
 }
@@ -44,9 +45,13 @@ pub(crate) mod anemo_network;
 pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
+mod metrics_layer;
+#[cfg(test)]
+mod network_tests;
 #[cfg(test)]
 pub(crate) mod test_network;
 pub(crate) mod tonic_network;
+mod tonic_tls;
 
 /// A stream of serialized blocks returned over the network.
 pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = Bytes> + Send>>;
@@ -57,7 +62,7 @@ pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = Bytes> + Send>>;
 /// But it is up to the server implementation if the timeout is honored.
 /// - To bound server resources, server should implement own timeout for incoming requests.
 #[async_trait]
-pub(crate) trait NetworkClient: Send + Sync + 'static {
+pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
     // Whether the network client streams blocks to subscribed peers.
     const SUPPORT_STREAMING: bool;
 
@@ -90,14 +95,13 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 
-    /// Fetches serialized commits from a peer, with index in [start, end].
+    /// Fetches serialized commits in the commit range from a peer.
     /// Returns a tuple of both the serialized commits, and serialized blocks that contain
-    /// votes certifiying the last commit.
+    /// votes certifying the last commit.
     async fn fetch_commits(
         &self,
         peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
 }
@@ -134,8 +138,7 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
     async fn handle_fetch_commits(
         &self,
         peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
 }
 
@@ -148,13 +151,13 @@ where
     type Client: NetworkClient;
 
     /// Creates a new network manager.
-    fn new(context: Arc<Context>) -> Self;
+    fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self;
 
     /// Returns the network client.
     fn client(&self) -> Arc<Self::Client>;
 
     /// Installs network service.
-    async fn install_service(&mut self, network_keypair: NetworkKeyPair, service: Arc<S>);
+    async fn install_service(&mut self, service: Arc<S>);
 
     /// Stops the network service.
     async fn stop(&mut self);

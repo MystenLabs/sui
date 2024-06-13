@@ -5,10 +5,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use diesel::prelude::*;
-
-use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::identifier::Identifier;
-use sui_json_rpc_types::{SuiEvent, SuiMoveStruct};
+
+use sui_json_rpc_types::{type_and_fields_from_move_event_data, SuiEvent};
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
@@ -20,7 +19,7 @@ use crate::errors::IndexerError;
 use crate::schema::events;
 use crate::types::IndexedEvent;
 
-#[derive(Queryable, QueryableByName, Insertable, Debug, Clone)]
+#[derive(Queryable, QueryableByName, Selectable, Insertable, Debug, Clone)]
 #[diesel(table_name = events)]
 pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
@@ -168,15 +167,10 @@ impl StoredEvent {
                     "Failed to convert to sui event with Error: {e}",
                 ))
             })?;
-        let move_struct_layout = match move_type_layout {
-            MoveTypeLayout::Struct(s) => Ok(s),
-            _ => Err(IndexerError::ResolveMoveStructError(
-                "MoveTypeLayout is not Struct".to_string(),
-            )),
-        }?;
-        let move_object = BoundedVisitor::deserialize_struct(&self.bcs, &move_struct_layout)
+        let move_object = BoundedVisitor::deserialize_value(&self.bcs, &move_type_layout)
             .map_err(|e| IndexerError::SerdeError(e.to_string()))?;
-        let parsed_json = SuiMoveStruct::from(move_object).to_json_value();
+        let (_, parsed_json) = type_and_fields_from_move_event_data(move_object)
+            .map_err(|e| IndexerError::SerdeError(e.to_string()))?;
         let tx_digest =
             TransactionDigest::try_from(self.transaction_digest.as_slice()).map_err(|e| {
                 IndexerError::SerdeError(format!(

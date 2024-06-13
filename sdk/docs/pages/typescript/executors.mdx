@@ -1,0 +1,131 @@
+# Transaction Executors
+
+import { Callout } from 'nextra/components';
+
+The Typescript SDK ships 2 Transaction executor classes that simplify the processes of efficiently
+executing multiple transactions signed by the same address. These executors help manage object
+versions and gas coins which significantly reduces the number of requests made to RPC nodes, and for
+many cases avoids the need to wait for the RPC nodes to index previously executed transactions.
+
+## `SerialTransactionExecutor`
+
+The `SerialTransactionExecutor` is designed for use in wallet implementations, and dapps where the
+objects owned by the address executing transactions are unlikely to be changed by transactions not
+executed through the executor.
+
+To fund transactions, the `SerialTransactionExecutor` will select all of the senders SUI coins for
+the first transaction, which will result in a single coin that will then be used as the gas payment
+on all subsequent transactions. This allows executing multiple transactions, without needing to
+re-query for gas coins, or wait for the RPC node to index the previous transactions.
+
+To further improve execution efficiency, the `SerialTransactionExecutor` caches the object versions
+of every object used or created by a transaction. This will significantly speed up the execution
+when multiple transactions use the same objects.
+
+`SerialTransactionExecutor` maintains an internal queue, so you don't need to wait for previous
+transactions to finish before sending the next one.
+
+```ts
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { SerialTransactionExecutor } from '@mysten/sui/transactions';
+
+const client = new SuiClient({ url: getFullnodeUrl('devnet') });
+
+const executor = new SerialTransactionExecutor({
+	client,
+	signer: yourKeyPair,
+});
+
+const tx1 = new Transaction();
+const [coin1] = tx1.splitCoins(tx1.gas, [1]);
+tx1.transferObjects([coin1], address1);
+const tx2 = new Transaction();
+const [coin2] = tx1.splitCoins(tx2.gas, [1]);
+tx1.transferObjects([coin2], address2);
+
+const [{ digest: digest1 }, { digest: digest2 }] = await Promise.all([
+	executor.executeTransaction(tx1),
+	executor.executeTransaction(tx2),
+]);
+```
+
+## `ParallelTransactionExecutor`
+
+<Callout type="warning">
+	`ParallelTransactionExecutor` is experimental and may change rapidly as it is being developed.
+</Callout>
+
+The `ParallelTransactionExecutor` class works similarly to the `SerialTransactionExecutor`, but
+allows for parallel execution of transactions. To make this work, the `ParallelTransactionExecutor`
+will maintain a pool of gas coins, and automatically execute additional transactions to refill the
+gas pool as needed.
+
+<Callout type="warning">
+	Using SuiClient or wallets to execute additional transactions while `ParallelTransactionExecutor`
+	is in use may consume/combine gas coins in the gasPool, causing transactions to fail. This may
+	also result in the coins becoming locked for the remainder of the current epoch, preventing them
+	from being used in future transactions.
+
+    Running multiple instances of `ParallelTransactionExecutor` using the same `sourceCoins` will
+    result in the same issues.
+
+</Callout>
+
+In addition to managing gas and caching object versions, the `ParallelTransactionExecutor` will
+automatically detect what objects are being used by transactions, and schedules transactions in a
+way that avoids conflicts between transactions using the same object ids.
+
+`ParallelTransactionExecutor` can be configured with a number of options:
+
+- `client`: An instance of `SuiClient` used to execute transactions.
+- `signer`: The signer/keypair used for signed transactions.
+- `coinBatchSize`: The maximum number of new coins to create when refilling the gas pool
+  (default 20)
+- `initialCoinBalance`: The balance of new coins created for the gas pool in MIST (default
+  `200_000_000n`),
+- `minimumCoinBalance`: After executing a transaction, the the gasCoin will be reused unless it's
+  balance is below this value (default `50_000_000n`),
+- `maxPoolSize`: The maximum number of gas coins to keep in the gas pool, which also limits the
+  maximum number of concurrent transactions (default 50),
+- sourceCoins`: An array of coins to use to create the gas pool, defaults to using all coins owned
+  by the signer.
+
+```ts
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { ParallelTransactionExecutor } from '@mysten/sui/transactions';
+
+const client = new SuiClient({ url: getFullnodeUrl('devnet') });
+
+const executor = new ParallelTransactionExecutor({
+	client,
+	signer: yourKeyPair,
+});
+
+const tx1 = new Transaction();
+const [coin1] = tx1.splitCoins(tx1.gas, [1]);
+tx1.transferObjects([coin1], address1);
+const tx2 = new Transaction();
+const [coin2] = tx1.splitCoins(tx2.gas, [1]);
+tx1.transferObjects([coin2], address2);
+
+const [{ digest: digest1 }, { digest: digest2 }] = await Promise.all([
+	executor.executeTransaction(tx1),
+	executor.executeTransaction(tx2),
+]);
+```
+
+## Building and Executing Transactions with Executors
+
+The executor classes will significantly improve efficiency when executing multiple transactions, but
+to get the best results there are some best practices to follow:
+
+When building transactions, always prefer using unresolved object IDs rather than specifying the
+full `id`/`version`/`digest` for an object input (eg use `tx.object(id)` rather than
+`tx.objectRef({ objectId, version, digest })`). By doing this, you allow the executor to use object
+versions and digests from the cache, and will avoid executing transactions using stale object
+versions.
+
+If the signer executes transactions that are not sent through the executor that may cause
+transactions to fail. The executor classes will handle this by invalidating the cache for any
+objects used in the transaction, so you will often be able to recover by re-trying a failed
+transaction once. If it was caused by a stale cache, it should succeed on the second execution.

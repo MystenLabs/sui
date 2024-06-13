@@ -1,36 +1,27 @@
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:12:23
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:13:24
    │
-12 │         let _tmp1 = s.;                // incomplete with `;` (next line should parse)
-   │                       ^
-   │                       │
-   │                       Unexpected ';'
-   │                       Expected an identifier or a decimal number
+13 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+   │                        ^
+   │                        │
+   │                        Unexpected ';'
+   │                        Expected an identifier or a decimal number
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:13:37
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:26
    │
-13 │         let _tmp2 = s.another_field.;  // incomplete with `;` (next line should parse)
-   │                                     ^
-   │                                     │
-   │                                     Unexpected ';'
-   │                                     Expected an identifier or a decimal number
+14 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                          ^
+   │                          │
+   │                          Unexpected ';'
+   │                          Expected an identifier or a decimal number
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:9
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:16:9
    │
-15 │         let _tmp4 = s;
+16 │         let _tmp4 = _s.
    │         ^^^
    │         │
    │         Unexpected 'let'
    │         Expected an identifier or a decimal number
-
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:17:5
-   │
-17 │     }
-   │     ^
-   │     │
-   │     Unexpected '}'
-   │     Expected an identifier or a decimal number
 

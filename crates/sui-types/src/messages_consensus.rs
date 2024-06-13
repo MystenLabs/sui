@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::ConciseableName;
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::digests::ConsensusCommitDigest;
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
@@ -12,6 +12,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg;
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
@@ -41,6 +42,30 @@ pub struct ConsensusCommitPrologueV2 {
     pub commit_timestamp_ms: CheckpointTimestamp,
     /// Digest of consensus output
     pub consensus_commit_digest: ConsensusCommitDigest,
+}
+
+/// Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
+pub enum ConsensusDeterminedVersionAssignments {
+    // Cancelled transaction version assignment.
+    CancelledTransactions(Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ConsensusCommitPrologueV3 {
+    /// Epoch of the commit prologue transaction
+    pub epoch: u64,
+    /// Consensus round of the commit
+    pub round: u64,
+    /// The sub DAG index of the consensus commit. This field will be populated if there
+    /// are multiple consensus commits per round.
+    pub sub_dag_index: Option<u64>,
+    /// Unix timestamp from consensus
+    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Digest of consensus output
+    pub consensus_commit_digest: ConsensusCommitDigest,
+    /// Stores consensus handler determined shared object version assignments.
+    pub consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
 }
 
 // In practice, JWKs are about 500 bytes of json each, plus a bit more for the ID.

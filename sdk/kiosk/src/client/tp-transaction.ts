@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
+import type { Transaction, TransactionObjectArgument } from '@mysten/sui/transactions';
 
 import {
 	attachFloorPriceRuleTx,
@@ -27,20 +27,27 @@ export type TransferPolicyBaseParams = {
 
 export type TransferPolicyTransactionParams = {
 	kioskClient: KioskClient;
-	transactionBlock: TransactionBlock;
+	transaction: Transaction;
+	/** @deprecated use transaction instead */
+	transactionBlock?: Transaction;
 	cap?: TransferPolicyCap;
 };
 
 export class TransferPolicyTransaction {
-	transactionBlock: TransactionBlock;
+	transaction: Transaction;
 	kioskClient: KioskClient;
 	policy?: ObjectArgument;
 	policyCap?: ObjectArgument;
 	type?: string;
 
-	constructor({ kioskClient, transactionBlock, cap }: TransferPolicyTransactionParams) {
+	constructor({
+		kioskClient,
+		transactionBlock,
+		transaction = transactionBlock!,
+		cap,
+	}: TransferPolicyTransactionParams) {
 		this.kioskClient = kioskClient;
-		this.transactionBlock = transactionBlock;
+		this.transaction = transaction;
 		if (cap) this.setCap(cap);
 	}
 
@@ -68,8 +75,8 @@ export class TransferPolicyTransaction {
 			const policies = await this.kioskClient.getTransferPolicies({ type });
 			if (policies.length > 0) throw new Error("There's already transfer policy for this Type.");
 		}
-		const cap = createTransferPolicy(this.transactionBlock, type, publisher);
-		this.transactionBlock.transferObjects([cap], this.transactionBlock.pure.address(address));
+		const cap = createTransferPolicy(this.transaction, type, publisher);
+		this.transaction.transferObjects([cap], this.transaction.pure.address(address));
 	}
 
 	/**
@@ -90,7 +97,7 @@ export class TransferPolicyTransaction {
 			if (policies.length > 0) throw new Error("There's already transfer policy for this Type.");
 		}
 		const [policy, policyCap] = createTransferPolicyWithoutSharing(
-			this.transactionBlock,
+			this.transaction,
 			type,
 			publisher,
 		);
@@ -109,10 +116,10 @@ export class TransferPolicyTransaction {
 		if (!this.type || !this.policyCap || !this.policy)
 			throw new Error('This function can only be called after `transferPolicyManager.create`');
 
-		shareTransferPolicy(this.transactionBlock, this.type, this.policy as TransactionObjectArgument);
-		this.transactionBlock.transferObjects(
+		shareTransferPolicy(this.transaction, this.type, this.policy as TransactionObjectArgument);
+		this.transaction.transferObjects(
 			[this.policyCap as TransactionObjectArgument],
-			this.transactionBlock.pure.address(address),
+			this.transaction.pure.address(address),
 		);
 	}
 
@@ -134,14 +141,14 @@ export class TransferPolicyTransaction {
 		this.#validateInputs();
 		// Withdraw coin for specified amount (or none)
 		const coin = withdrawFromPolicy(
-			this.transactionBlock,
+			this.transaction,
 			this.type!,
 			this.policy!,
 			this.policyCap!,
 			amount,
 		);
 
-		this.transactionBlock.transferObjects([coin], this.transactionBlock.pure.address(address));
+		this.transaction.transferObjects([coin], this.transaction.pure.address(address));
 
 		return this;
 	}
@@ -166,7 +173,7 @@ export class TransferPolicyTransaction {
 		// Also, it's hard to keep versioning as with network wipes, mainnet
 		// and testnet will conflict.
 		attachRoyaltyRuleTx(
-			this.transactionBlock,
+			this.transaction,
 			this.type!,
 			this.policy!,
 			this.policyCap!,
@@ -185,7 +192,7 @@ export class TransferPolicyTransaction {
 		this.#validateInputs();
 
 		attachKioskLockRuleTx(
-			this.transactionBlock,
+			this.transaction,
 			this.type!,
 			this.policy!,
 			this.policyCap!,
@@ -201,7 +208,7 @@ export class TransferPolicyTransaction {
 		this.#validateInputs();
 
 		attachPersonalKioskRuleTx(
-			this.transactionBlock,
+			this.transaction,
 			this.type!,
 			this.policy!,
 			this.policyCap!,
@@ -218,7 +225,7 @@ export class TransferPolicyTransaction {
 		this.#validateInputs();
 
 		attachFloorPriceRuleTx(
-			this.transactionBlock,
+			this.transaction,
 			this.type!,
 			this.policy!,
 			this.policyCap!,
@@ -237,7 +244,7 @@ export class TransferPolicyTransaction {
 		this.#validateInputs();
 
 		removeTransferPolicyRule(
-			this.transactionBlock,
+			this.transaction,
 			this.type!,
 			ruleType,
 			configType,
@@ -255,7 +262,7 @@ export class TransferPolicyTransaction {
 		const packageId = this.kioskClient.getRulePackageId('kioskLockRulePackageId');
 
 		removeTransferPolicyRule(
-			this.transactionBlock,
+			this.transaction,
 			this.type!,
 			`${packageId}::kiosk_lock_rule::Rule`,
 			`${packageId}::kiosk_lock_rule::Config`,
@@ -274,7 +281,7 @@ export class TransferPolicyTransaction {
 		const packageId = this.kioskClient.getRulePackageId('royaltyRulePackageId');
 
 		removeTransferPolicyRule(
-			this.transactionBlock,
+			this.transaction,
 			this.type!,
 			`${packageId}::royalty_rule::Rule`,
 			`${packageId}::royalty_rule::Config`,
@@ -290,7 +297,7 @@ export class TransferPolicyTransaction {
 		const packageId = this.kioskClient.getRulePackageId('personalKioskRulePackageId');
 
 		removeTransferPolicyRule(
-			this.transactionBlock,
+			this.transaction,
 			this.type!,
 			`${packageId}::personal_kiosk_rule::Rule`,
 			`bool`,
@@ -306,7 +313,7 @@ export class TransferPolicyTransaction {
 		const packageId = this.kioskClient.getRulePackageId('floorPriceRulePackageId');
 
 		removeTransferPolicyRule(
-			this.transactionBlock,
+			this.transaction,
 			this.type!,
 			`${packageId}::floor_price_rule::Rule`,
 			`${packageId}::floor_price_rule::Config`,

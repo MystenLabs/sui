@@ -1,0 +1,14 @@
+error[E04009]: expected specific type
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:6:10
+  │
+5 │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {
+  │                                                   - Expected a struct type in the current module but got: 'T'
+6 │     &mut action.inner.bar
+  │          ^^^^^^^^^^^^^^^^ Unbound field 'bar'
+
+note[I15001]: IDE autocomplete
+  ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:6:17
+  │
+6 │     &mut action.inner.bar
+  │                 ^^^^^ Autocompletes to: '0x42::m::make_action_ref' or 'inner'
+

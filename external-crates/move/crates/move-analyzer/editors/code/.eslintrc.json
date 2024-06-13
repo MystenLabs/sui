@@ -176,6 +176,7 @@
         "@typescript-eslint/no-unnecessary-type-arguments": "warn",
         "@typescript-eslint/no-unnecessary-type-constraint": "warn",
         "@typescript-eslint/no-unused-expressions": "warn",
+        "@typescript-eslint/no-unused-vars": "warn",
         "@typescript-eslint/no-use-before-define": "warn",
         "@typescript-eslint/non-nullable-type-assertion-style": "warn",
         "@typescript-eslint/object-curly-spacing": ["warn", "always"],

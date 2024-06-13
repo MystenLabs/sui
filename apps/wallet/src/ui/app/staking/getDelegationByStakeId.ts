@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { DelegatedStake } from '@mysten/sui.js/client';
+import type { DelegatedStake } from '@mysten/sui/client';
 
 // Helper function to get the delegation by stakedSuiId
 export const getDelegationDataByStakeId = (

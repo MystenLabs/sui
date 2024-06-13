@@ -1,0 +1,6 @@
+note[I15001]: IDE autocomplete
+  ┌─ tests/move_2024/ide_mode/type_param_no_autocomplete.move:6:17
+  │
+6 │     &mut action.inner
+  │                 ^^^^^ Autocompletes to: '0x42::m::make_action_ref' or 'inner'
+

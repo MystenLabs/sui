@@ -69,7 +69,7 @@ impl VersionedProtocolMessage for TransactionEffects {
         })
     }
 
-    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
         match self {
             Self::V1(_) => Ok(()),
             Self::V2(_) => {

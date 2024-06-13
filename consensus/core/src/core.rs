@@ -28,14 +28,11 @@ use crate::{
     leader_schedule::LeaderSchedule,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     threshold_clock::ThresholdClock,
-    transaction::{TransactionConsumer, TransactionGuard},
+    transaction::TransactionConsumer,
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
 };
-
-// TODO: Move to protocol config once initial value is finalized.
-const NUM_LEADERS_PER_ROUND: usize = 1;
 
 // Maximum number of commit votes to include in a block.
 // TODO: Move to protocol config, and verify in BlockVerifier.
@@ -50,6 +47,8 @@ pub(crate) struct Core {
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
     /// and accept them or suspend if we are missing their causal history
     block_manager: BlockManager,
+    /// Whether there are consumers waiting to consume blocks produced by the core.
+    consumer_availability: bool,
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
     /// The last produced block
@@ -83,18 +82,23 @@ impl Core {
         leader_schedule: Arc<LeaderSchedule>,
         transaction_consumer: TransactionConsumer,
         block_manager: BlockManager,
+        consumer_availability: bool,
         commit_observer: CommitObserver,
         signals: CoreSignals,
         block_signer: ProtocolKeyPair,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
+        let number_of_leaders = context
+            .protocol_config
+            .mysticeti_num_leaders_per_round()
+            .unwrap_or(1);
         let committer = UniversalCommitterBuilder::new(
             context.clone(),
             leader_schedule.clone(),
             dag_state.clone(),
         )
-        .with_number_of_leaders(NUM_LEADERS_PER_ROUND)
+        .with_number_of_leaders(number_of_leaders)
         .with_pipeline(true)
         .build();
 
@@ -125,6 +129,7 @@ impl Core {
             leader_schedule,
             transaction_consumer,
             block_manager,
+            consumer_availability,
             committer,
             commit_observer,
             signals,
@@ -168,7 +173,9 @@ impl Core {
         // Try to commit and propose, since they may not have run after the last storage write.
         self.try_commit().unwrap();
         if self.try_propose(true).unwrap().is_none() {
-            assert!(self.last_proposed_block.round() > GENESIS_ROUND, "At minimum a block of round higher that genesis should have been produced during recovery");
+            if self.should_propose() {
+                assert!(self.last_proposed_block.round() > GENESIS_ROUND, "At minimum a block of round higher that genesis should have been produced during recovery");
+            }
 
             // if no new block proposed then just re-broadcast the last proposed one to ensure liveness.
             self.signals
@@ -193,6 +200,11 @@ impl Core {
             .scope_processing_time
             .with_label_values(&["Core::add_blocks"])
             .start_timer();
+        self.context
+            .metrics
+            .node_metrics
+            .core_add_blocks_batch_size
+            .observe(blocks.len() as f64);
 
         // Try to accept them via the block manager
         let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
@@ -267,6 +279,9 @@ impl Core {
     // When force is true, ignore if leader from the last round exists among ancestors and if
     // the minimum round delay has passed.
     fn try_propose(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
+        if !self.should_propose() {
+            return Ok(None);
+        }
         if let Some(block) = self.try_new_block(force) {
             self.signals.new_block(block.clone())?;
 
@@ -331,6 +346,7 @@ impl Core {
                     .saturating_duration_since(self.threshold_clock.get_quorum_ts())
                     .as_millis() as u64,
             );
+
         self.context
             .metrics
             .node_metrics
@@ -365,11 +381,7 @@ impl Core {
 
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
         // the inclusion of transactions. Just let this be done in the end of the method.
-        let transaction_guards = self.transaction_consumer.next();
-        let transactions = transaction_guards
-            .iter()
-            .map(|t| t.transaction.clone())
-            .collect::<Vec<_>>();
+        let (transactions, ack_transactions) = self.transaction_consumer.next();
 
         // Consume the commit votes to be included.
         let commit_votes = self
@@ -418,9 +430,7 @@ impl Core {
         self.last_proposed_block = verified_block.clone();
 
         // Now acknowledge the transactions for their inclusion to block
-        transaction_guards
-            .into_iter()
-            .for_each(TransactionGuard::acknowledge);
+        ack_transactions(verified_block.reference());
 
         info!("Created block {:?}", verified_block);
 
@@ -489,11 +499,12 @@ impl Core {
                     tracing::info!(
                         "Leader schedule change triggered at commit index {last_commit_index}"
                     );
-                    self.leader_schedule
-                        .update_leader_schedule(self.dag_state.clone());
+                    self.leader_schedule.update_leader_schedule(&self.dag_state);
                     commits_until_update = self
                         .leader_schedule
                         .commits_until_leader_schedule_update(self.dag_state.clone());
+
+                    fail_point!("consensus-after-leader-schedule-change");
                 }
                 assert!(commits_until_update > 0);
 
@@ -555,6 +566,17 @@ impl Core {
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
         let _scope = monitored_scope("Core::get_missing_blocks");
         self.block_manager.missing_blocks()
+    }
+
+    /// Sets if there is consumer available to consume blocks produced by the core.
+    pub(crate) fn set_consumer_availability(&mut self, allow: bool) {
+        info!("Block consumer availability set to: {allow}");
+        self.consumer_availability = allow;
+    }
+
+    /// Whether the core should propose new blocks.
+    fn should_propose(&self) -> bool {
+        self.consumer_availability
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
@@ -725,17 +747,15 @@ mod test {
     use std::{collections::BTreeSet, time::Duration};
 
     use consensus_config::{local_committee_and_keys, AuthorityIndex, Parameters, Stake};
+    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
     use sui_protocol_config::ProtocolConfig;
-    use tokio::{
-        sync::mpsc::{unbounded_channel, UnboundedReceiver},
-        time::sleep,
-    };
+    use tokio::time::sleep;
 
     use super::*;
     use crate::{
         block::{genesis_blocks, TestBlock},
         block_verifier::NoopBlockVerifier,
-        commit::CommitAPI as _,
+        commit::{CommitAPI as _, CommitRange},
         leader_scoring::ReputationScores,
         storage::{mem_store::MemStore, Store, WriteBatch},
         transaction::TransactionClient,
@@ -786,7 +806,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -809,6 +829,7 @@ mod test {
             leader_schedule,
             transaction_consumer,
             block_manager,
+            true,
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
@@ -845,7 +866,7 @@ mod test {
         // as soon as the new block for round 5 is proposed.
         assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
-        let all_stored_commits = store.scan_commits((0..CommitIndex::MAX).into()).unwrap();
+        let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
         assert_eq!(all_stored_commits.len(), 2);
     }
 
@@ -902,7 +923,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -925,6 +946,7 @@ mod test {
             leader_schedule,
             transaction_consumer,
             block_manager,
+            true,
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
@@ -964,7 +986,7 @@ mod test {
         // as the new block for round 4 is proposed.
         assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
-        let all_stored_commits = store.scan_commits((0..CommitIndex::MAX).into()).unwrap();
+        let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
         assert_eq!(all_stored_commits.len(), 2);
     }
 
@@ -997,7 +1019,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -1011,6 +1033,7 @@ mod test {
             leader_schedule,
             transaction_consumer,
             block_manager,
+            true,
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
@@ -1026,7 +1049,7 @@ mod test {
             total += transaction.len();
             index += 1;
             let _w = transaction_client
-                .submit_no_wait(transaction)
+                .submit_no_wait(vec![transaction])
                 .await
                 .unwrap();
 
@@ -1105,7 +1128,7 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -1119,6 +1142,7 @@ mod test {
             leader_schedule,
             transaction_consumer,
             block_manager,
+            true,
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
@@ -1249,9 +1273,71 @@ mod test {
             // There are 1 leader rounds with rounds completed up to and including
             // round 4
             assert_eq!(last_commit.index(), 1);
-            let all_stored_commits = store.scan_commits((0..CommitIndex::MAX).into()).unwrap();
+            let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
             assert_eq!(all_stored_commits.len(), 1);
         }
+    }
+
+    #[tokio::test]
+    async fn test_core_set_consumer_availablity() {
+        telemetry_subscribers::init_for_testing();
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
+            context.clone(),
+            dag_state.clone(),
+        ));
+
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        // Need at least one subscriber to the block broadcast channel.
+        let _block_receiver = signal_receivers.block_broadcast_receiver();
+
+        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            CommitConsumer::new(sender.clone(), 0, 0),
+            dag_state.clone(),
+            store.clone(),
+            leader_schedule.clone(),
+        );
+
+        let mut core = Core::new(
+            context.clone(),
+            leader_schedule,
+            transaction_consumer,
+            block_manager,
+            false,
+            commit_observer,
+            signals,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
+        );
+
+        // No proposal during recovery.
+        assert_eq!(
+            core.last_proposed_round(),
+            GENESIS_ROUND,
+            "No block should have been created other than genesis"
+        );
+
+        // No proposal even with forced proposing.
+        assert!(core.try_propose(true).unwrap().is_none());
+
+        // Update core when consumer is available.
+        core.set_consumer_availability(true);
+
+        // Proposing now would succeed.
+        assert!(core.try_propose(true).unwrap().is_some());
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -1325,7 +1411,7 @@ mod test {
             // round 29. Round 30 blocks will only include their own blocks, so the
             // 28th leader will not be committed.
             assert_eq!(last_commit.index(), 27);
-            let all_stored_commits = store.scan_commits((0..CommitIndex::MAX).into()).unwrap();
+            let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
             assert_eq!(all_stored_commits.len(), 27);
             assert_eq!(
                 core.leader_schedule
@@ -1344,7 +1430,7 @@ mod test {
                 1
             );
             let expected_reputation_scores =
-                ReputationScores::new((11..21).into(), vec![9, 8, 8, 8]);
+                ReputationScores::new((11..=20).into(), vec![9, 8, 8, 8]);
             assert_eq!(
                 core.leader_schedule
                     .leader_swap_table
@@ -1428,7 +1514,7 @@ mod test {
             // round 29. Round 30 blocks will only include their own blocks, so the
             // 28th leader will not be committed.
             assert_eq!(last_commit.index(), 27);
-            let all_stored_commits = store.scan_commits((0..CommitIndex::MAX).into()).unwrap();
+            let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
             assert_eq!(all_stored_commits.len(), 27);
             assert_eq!(
                 core.leader_schedule
@@ -1446,7 +1532,134 @@ mod test {
                     .len(),
                 0
             );
-            let expected_reputation_scores = ReputationScores::new((0..0).into(), vec![]);
+            let expected_reputation_scores = ReputationScores::new(CommitRange::default(), vec![]);
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .reputation_scores,
+                expected_reputation_scores
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_commit_on_leader_schedule_change_boundary_without_multileader() {
+        parameterized_test_commit_on_leader_schedule_change_boundary(Some(1)).await;
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_commit_on_leader_schedule_change_boundary_with_multileader() {
+        parameterized_test_commit_on_leader_schedule_change_boundary(None).await;
+    }
+
+    async fn parameterized_test_commit_on_leader_schedule_change_boundary(
+        num_leaders_per_round: Option<usize>,
+    ) {
+        telemetry_subscribers::init_for_testing();
+        let default_params = Parameters::default();
+
+        let (mut context, _) = Context::new_for_test(6);
+        context
+            .protocol_config
+            .set_mysticeti_num_leaders_per_round(num_leaders_per_round);
+        // create the cores and their signals for all the authorities
+        let mut cores = create_cores(context, vec![1, 1, 1, 1, 1, 1]);
+
+        // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
+        let mut last_round_blocks = Vec::new();
+        for round in 1..=63 {
+            let mut this_round_blocks = Vec::new();
+
+            // Wait for min round delay to allow blocks to be proposed.
+            sleep(default_params.min_round_delay).await;
+
+            for (core, signal_receivers, block_receiver, _, _) in &mut cores {
+                // add the blocks from last round
+                // this will trigger a block creation for the round and a signal should be emitted
+                core.add_blocks(last_round_blocks.clone()).unwrap();
+
+                // A "new round" signal should be received given that all the blocks of previous round have been processed
+                let new_round = receive(
+                    Duration::from_secs(1),
+                    signal_receivers.new_round_receiver(),
+                )
+                .await;
+                assert_eq!(new_round, round);
+
+                // Check that a new block has been proposed.
+                let block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(block.round(), round);
+                assert_eq!(block.author(), core.context.own_index);
+
+                // append the new block to this round blocks
+                this_round_blocks.push(core.last_proposed_block().clone());
+
+                let block = core.last_proposed_block();
+
+                // ensure that produced block is referring to the blocks of last_round
+                assert_eq!(block.ancestors().len(), core.context.committee.size());
+                for ancestor in block.ancestors() {
+                    if block.round() > 1 {
+                        // don't bother with round 1 block which just contains the genesis blocks.
+                        assert!(
+                            last_round_blocks
+                                .iter()
+                                .any(|block| block.reference() == *ancestor),
+                            "Reference from previous round should be added"
+                        );
+                    }
+                }
+            }
+
+            last_round_blocks = this_round_blocks;
+        }
+
+        for (core, _, _, _, store) in cores {
+            // Check commits have been persisted to store
+            let last_commit = store
+                .read_last_commit()
+                .unwrap()
+                .expect("last commit should be set");
+            // There are 61 leader rounds with rounds completed up to and including
+            // round 63. Round 63 blocks will only include their own blocks, so there
+            // should only be 60 commits.
+            // However on a leader schedule change boundary its is possible for a
+            // new leader to get selected for the same round if the leader elected
+            // gets swapped allowing for multiple leaders to be committed at a round.
+            // Meaning with multi leader per round explicitly set to 1 we will have 60,
+            // otherwise 61.
+            // NOTE: We used 61 leader rounds to specifically trigger the scenario
+            // where the leader schedule boundary occured AND we had a swap to a new
+            // leader for the same round
+            let expected_commit_count = match num_leaders_per_round {
+                Some(1) => 60,
+                _ => 61,
+            };
+            assert_eq!(last_commit.index(), expected_commit_count);
+            let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
+            assert_eq!(all_stored_commits.len(), expected_commit_count as usize);
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .bad_nodes
+                    .len(),
+                1
+            );
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .good_nodes
+                    .len(),
+                1
+            );
+            let expected_reputation_scores =
+                ReputationScores::new((51..=60).into(), vec![8, 8, 9, 8, 8, 8]);
             assert_eq!(
                 core.leader_schedule
                     .leader_swap_table
@@ -1528,7 +1741,7 @@ mod test {
             // round 9. Round 10 blocks will only include their own blocks, so the
             // 8th leader will not be committed.
             assert_eq!(last_commit.index(), 7);
-            let all_stored_commits = store.scan_commits((0..CommitIndex::MAX).into()).unwrap();
+            let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
             assert_eq!(all_stored_commits.len(), 7);
         }
     }
@@ -1602,7 +1815,7 @@ mod test {
         // round 10. However because there were no blocks produced for authority 3
         // 2 leader rounds will be skipped.
         assert_eq!(last_commit.index(), 6);
-        let all_stored_commits = store.scan_commits((0..CommitIndex::MAX).into()).unwrap();
+        let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
         assert_eq!(all_stored_commits.len(), 6);
     }
 
@@ -1650,7 +1863,7 @@ mod test {
             // Need at least one subscriber to the block broadcast channel.
             let block_receiver = signal_receivers.block_broadcast_receiver();
 
-            let (commit_sender, commit_receiver) = unbounded_channel();
+            let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
             let commit_observer = CommitObserver::new(
                 context.clone(),
                 CommitConsumer::new(commit_sender.clone(), 0, 0),
@@ -1666,6 +1879,7 @@ mod test {
                 leader_schedule,
                 transaction_consumer,
                 block_manager,
+                true,
                 commit_observer,
                 signals,
                 block_signer,

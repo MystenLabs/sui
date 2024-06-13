@@ -8,7 +8,7 @@ use crate::file_format_common::{VERSION_1, VERSION_MAX};
 #[derive(Clone, Debug)]
 pub struct TableConfig {
     pub module_handles: u16,
-    pub struct_handles: u16,
+    pub datatype_handles: u16,
     pub function_handles: u16,
     pub function_instantiations: u16,
     pub signatures: u16,
@@ -21,6 +21,10 @@ pub struct TableConfig {
     pub field_handles: u16,
     pub field_instantiations: u16,
     pub friend_decls: u16,
+    pub enum_defs: u16,
+    pub enum_def_instantiations: u16,
+    pub variant_handles: u16,
+    pub variant_instantiation_handles: u16,
 }
 
 impl TableConfig {
@@ -30,7 +34,7 @@ impl TableConfig {
     pub fn legacy() -> Self {
         TableConfig {
             module_handles: u16::MAX,
-            struct_handles: u16::MAX,
+            datatype_handles: u16::MAX,
             function_handles: u16::MAX,
             function_instantiations: u16::MAX,
             signatures: u16::MAX,
@@ -43,6 +47,11 @@ impl TableConfig {
             field_handles: u16::MAX,
             field_instantiations: u16::MAX,
             friend_decls: u16::MAX,
+            // These can be any number
+            enum_defs: u16::MAX,
+            enum_def_instantiations: u16::MAX,
+            variant_handles: 1024,
+            variant_instantiation_handles: 1024,
         }
     }
 }

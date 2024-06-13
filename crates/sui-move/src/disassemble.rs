@@ -22,15 +22,18 @@ pub struct Disassemble {
     /// Whether to display the disassembly in raw Debug format
     #[clap(long = "Xdebug")]
     debug: bool,
+
+    #[clap(short = 'i', long = "interactive")]
+    interactive: bool,
 }
 
 impl Disassemble {
     pub fn execute(
         self,
-        package_path: Option<PathBuf>,
+        package_path: Option<&Path>,
         build_config: BuildConfig,
     ) -> anyhow::Result<()> {
-        if base::reroot_path(Some(self.module_path.clone())).is_ok() {
+        if base::reroot_path(Some(&self.module_path)).is_ok() {
             // disassembling bytecode inside the source package that produced it--use the source info
             let module_name = self
                 .module_path
@@ -40,7 +43,7 @@ impl Disassemble {
                 .expect("Cannot convert module name to string")
                 .to_owned();
             move_cli::base::disassemble::Disassemble {
-                interactive: false,
+                interactive: self.interactive,
                 package_name: None,
                 module_or_script_name: module_name,
                 debug: self.debug,

@@ -35,6 +35,105 @@ Formal snapshots provide a mechanism for a node to restore to a canonical state 
 
 Because these snapshots do not contain indexes, they are most immediately useful for validators and state sync Full nodes (SSFNs). You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you can recover from catastrophic failures in your system or hardware more efficiently.
 
+## Restoring a Full node using snapshots
+
+### Restoring using RocksDB snapshots
+
+To restore from a RocksDB snapshot, follow these steps:
+
+1. Download the snapshot for the epoch you want to restore to your local disk. There is one snapshot per epoch in s3 bucket.
+1. Place the snapshot into the directory that the `db-config` value points to in your fullnode.yaml file. For example, if the `db-config` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command:
+
+   You can use the aws cli (provided you have credentials to associate with the download):
+   `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive`.
+   
+   An alternative is to use `sui-tool` to copy the files:
+   ```
+   sui-tool download-db-snapshot --latest \
+       --network <NETWORK> --snapshot-bucket <BUCKET-NAME> \
+       --snapshot-bucket-type <TYPE> --path <PATH-TO-NODE-DB> \
+       --num-parallel-downloads 25 \
+       --skip-indexes \
+       --no-sign-request
+   ```
+   - `--epoch`: The epoch that you want to download. Mysten Labs hosted buckets will only keep the last 90 epochs, you can check the most recent epoch on sui explorers like [suivision](https://suivision.xyz/) or [suiscan](https://suiscan.xyz/).
+   - `--latest`: Rather than explicitly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
+   - `--network`: Network to download snapshot for. Defaults to "mainnet".
+   - `--path`: Path to snapshot directory on local filesystem.
+   - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and Cloudflare R2 is used.
+   - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`.
+   - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported.
+   - `--skip-indexes`: Skips downloading the very large `indexes/` dir, used by jsonrpc on the fullnode
+
+   The following environment variables are used if `--no-sign-request` is not set:
+   * *AWS*: `AWS_SNAPSHOT_ACCESS_KEY_ID`, `AWS_SNAPSHOT_SECRET_ACCESS_KEY`, `AWS_SNAPSHOT_REGION`
+   * *GCS*: `GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH`
+   * *AZURE*: `AZURE_SNAPSHOT_STORAGE_ACCOUNT`, `AZURE_SNAPSHOT_STORAGE_ACCESS_KEY`
+
+1. When using `sui-tool download-db-snapshot` the database is copied to the location you pass to `--path`, in a directory named `epoch_[NUM]`. Move this directory to the `live/` Full node database directory, for example `/opt/sui/db/authorities_db/full_node_db/live`.
+1. Make sure you update the ownership of the downloaded directory to the sui user (whichever linux user you run `sui-node` as)
+   `sudo chown -R sui:sui  /opt/sui/db/authorities_db/full_node_db/live`.
+1. Start the Sui node.
+
+:::info
+
+When you restore a Full node from a snapshot, write it to the path `/opt/sui/db/authorities_db/full_node_db/live`. To restore a Validator node, use the path `/opt/sui/db/authorities_db/live`.
+
+:::
+
+### Restoring using Formal snapshots
+
+To restore using a Formal snapshot, use the `sui-tool` binary. `sui-tool` can be downloaded along with other sui binaries.
+See [Install Sui](../developer/getting-started/sui-install.mdx) for more details.
+
+The following steps can be used to restore a node from a Formal snapshot:
+
+1. If it's running, stop the node.
+2. Run the command:
+   ```
+   sui-tool download-formal-snapshot --latest --genesis "<PATH-TO-GENESIS-BLOB>" \
+        --network <NETWORK> --snapshot-bucket <BUCKET-NAME> --snapshot-bucket-type <TYPE> \
+        --path <PATH-TO-NODE-DB> --num-parallel-downloads 50 --no-sign-request
+   ```
+   - `--epoch`: The epoch that you want to download. Mysten Labs hosted buckets will only keep the last 90 epochs, you can check the most recent epoch on sui explorers like [suivision](https://suivision.xyz/) or [suiscan](https://suiscan.xyz/).
+   - `--latest`: Rather than explicitly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
+   - `--genesis`: The path to the location of the network's `genesis.blob`.
+   - `--network`: Network to download snapshot for. Defaults to "mainnet".
+   - `--path`: Path to snapshot directory on local filesystem.
+   - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and Cloudflare R2 is used.
+   - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`.
+   - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported.
+
+   The following environment variables are used if `--no-sign-request` is not set:
+   * *AWS*: `AWS_SNAPSHOT_ACCESS_KEY_ID`, `AWS_SNAPSHOT_SECRET_ACCESS_KEY`, `AWS_SNAPSHOT_REGION`
+   * *GCS*: `GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH`
+   * *AZURE*: `AZURE_SNAPSHOT_STORAGE_ACCOUNT`, `AZURE_SNAPSHOT_STORAGE_ACCESS_KEY`
+
+
+## Mysten Labs managed snapshots
+
+Mysten Labs hosts two tiers of snapshot storage access. **High throughput, Requester Pays enabled buckets**, and **free, permissionless buckets**.
+
+**High throughput, Requester Pays enabled buckets:**
+* GCS and S3 are both setup with requester pays. This means that you'll need to provide a set of valid AWS/GCP credentials when downloading from these buckets.
+[Requester Pays](https://cloud.google.com/storage/docs/requester-pays) means you are charged for the egress costs of pulling the snapshot data.
+* If you are looking for the best download speeds, we recommend using the S3 buckets with [transfer acceleration](https://aws.amazon.com/s3/transfer-acceleration/) enabled.
+
+**Free, permissionless buckets:**
+* These are currently hosted on Cloudflare R2, currently only in North America, but we plan on adding more regions soon.
+* Since the bucket is open to the internet, there's no need to provide any cloud credentials.
+
+### Bucket Names
+**S3**
+Testnet: `s3://mysten-testnet-snapshots/`, `s3://mysten-testnet-formal/`
+Mainnet: `s3://mysten-mainnet-snapshots/`,  `s3://mysten-mainnet-formal/`
+
+**GCS**
+Testnet: `gs://mysten-testnet-snapshots/`, `gs://mysten-testnet-formal/`
+Mainnet: `gs://mysten-mainnet-snapshots/`,  `gs://mysten-mainnet-formal/`
+
+![Mysten Managed Snapshots](./images/mysten-cloud-snapshots.png "A diagram that shows the current architecture of mysten snapshot availability")
+
 ## Enabling snapshots
 
 Full nodes do not take snapshots by default. To enable this feature you must apply specific configs to your Full node.
@@ -80,100 +179,4 @@ Add an entry to the config file for `db-checkpoint-config`. Using Amazon's S3 se
        object-store-connection-limit: 200
    ```
    The configuration settings shown in the example are specific to AWS S3, but GCS, Azure Storage, and Cloudflare R2 are all supported.
-
-## Restoring a Full node using snapshots
-
-### Restoring using RocksDB snapshots
-
-To restore from a RocksDB snapshot, follow these steps:
-
-1. Download the snapshot for the epoch you want to restore to your local disk. There is one snapshot per epoch in s3 bucket.
-1. Place the snapshot into the directory that the `db-config` value points to in your fullnode.yaml file. For example, if the `db-config` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command:
-
-   You can use the aws cli (provided you have credentials to associate with the download):
-   `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive`.
-   
-   An alternative is to use `sui-tool` to copy the files:
-   ```
-   sui-tool download-db-snapshot --epoch "<EPOCH-NUMBER>" \
-       --network <NETWORK> --snapshot-bucket <BUCKET-NAME> \
-       --snapshot-bucket-type <TYPE> --path <PATH-TO-NODE-DB> \
-       --num-parallel-downloads 25 \
-       --skip-indexes \
-       --no-sign-request
-   ```
-   - `--epoch`: The epoch that you want to download, for example `200`. Mysten Labs hosted buckets will only keep the last 90 epochs.
-   - `--network`: Network to download snapshot for. Defaults to "mainnet".
-   - `--path`: Path to snapshot directory on local filesystem.
-   - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and Cloudflare R2 is used.
-   - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`.
-   - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported.
-   - `--skip-indexes`: Skips downloading the very large `indexes/` dir, used by jsonrpc on the fullnode
-
-   The following environment variables are used if `--no-sign-request` is not set:
-   * *AWS*: `AWS_SNAPSHOT_ACCESS_KEY_ID`, `AWS_SNAPSHOT_SECRET_ACCESS_KEY`, `AWS_SNAPSHOT_REGION`
-   * *GCS*: `GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH`
-   * *AZURE*: `AZURE_SNAPSHOT_STORAGE_ACCOUNT`, `AZURE_SNAPSHOT_STORAGE_ACCESS_KEY`
-
-1. Make sure you update the ownership of the downloaded directory to the sui user (whichever linux user you run `sui-node` as)
-   `sudo chown -R sui:sui  /opt/sui/db/authorities_db/full_node_db/live`.
-1. Start the Sui node.
-
-:::info
-
-When you restore a Full node from a snapshot, write it to the path `/opt/sui/db/authorities_db/full_node_db/live`. To restore a Validator node, use the path `/opt/sui/db/authorities_db/live`.
-
-:::
-
-### Restoring using Formal snapshots
-
-To restore using a Formal snapshot, use the `sui-tool` binary. `sui-tool` can be downloaded along with other sui binaries.
-See [Install Sui](../developer/getting-started/sui-install.mdx) for more details.
-
-The following steps can be used to restore a node from a Formal snapshot:
-
-1. If it's running, stop the node.
-2. Run the command:
-   ```
-   sui-tool download-formal-snapshot --epoch "<EPOCH-NUMBER>" --genesis "<PATH-TO-GENESIS-BLOB>" \
-        --network <NETWORK> --snapshot-bucket <BUCKET-NAME> --snapshot-bucket-type <TYPE> \
-        --path <PATH-TO-NODE-DB> --num-parallel-downloads 50 --no-sign-request
-   ```
-   - `--epoch`: The epoch that you want to download, for example `200`. Mysten Labs hosted buckets will only keep the last 90 epochs. 
-   - `--genesis`: The path to the location of the network's `genesis.blob`.
-   - `--network`: Network to download snapshot for. Defaults to "mainnet".
-   - `--path`: Path to snapshot directory on local filesystem.
-   - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and Cloudflare R2 is used.
-   - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`.
-   - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported.
-
-   The following environment variables are used if `--no-sign-request` is not set:
-   * *AWS*: `AWS_SNAPSHOT_ACCESS_KEY_ID`, `AWS_SNAPSHOT_SECRET_ACCESS_KEY`, `AWS_SNAPSHOT_REGION`
-   * *GCS*: `GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH`
-   * *AZURE*: `AZURE_SNAPSHOT_STORAGE_ACCOUNT`, `AZURE_SNAPSHOT_STORAGE_ACCESS_KEY`
-
-
-## Mysten Labs managed snapshots
-
-Mysten Labs hosts two tiers of snapshot storage access. **High throughput, Requester Pays enabled buckets**, and **free, permissionless buckets**.
-
-**High throughput, Requester Pays enabled buckets:**
-* GCS and S3 are both setup with requester pays. This means that you'll need to provide a set of valid AWS/GCP credentials when downloading from these buckets.
-[Requester Pays](https://cloud.google.com/storage/docs/requester-pays) means you are charged for the egress costs of pulling the snapshot data.
-* If you are looking for the best download speeds, we recommend using the S3 buckets with [transfer acceleration](https://aws.amazon.com/s3/transfer-acceleration/) enabled.
-
-**Free, permissionless buckets:**
-* These are currently hosted on Cloudflare R2, currently only in North America, but we plan on adding more regions soon.
-* Since the bucket is open to the internet, there's no need to provide any cloud credentials.
-
-### Bucket Names
-**S3**
-Testnet: `s3://mysten-testnet-snapshots/`, `s3://mysten-testnet-formal/`
-Mainnet: `s3://mysten-mainnet-snapshots/`,  `s3://mysten-mainnet-formal/`
-
-**GCS**
-Testnet: `gs://mysten-testnet-snapshots/`, `gs://mysten-testnet-formal/`
-Mainnet: `gs://mysten-mainnet-snapshots/`,  `gs://mysten-mainnet-formal/`
-
-![Mysten Managed Snapshots](./images/mysten-cloud-snapshots.png "A diagram that shows the current architecture of mysten snapshot availability")
 

@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { renderHook, waitFor } from '@testing-library/react';
 
 import { useSuiClientQueries } from '../../src/hooks/useSuiClientQueries.js';

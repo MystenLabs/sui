@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::{self, visitor::AbsIntVisitorObj},
+    cfgir::{
+        self,
+        visitor::{AbsIntVisitorObj, CFGIRVisitorObj},
+    },
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{
@@ -107,6 +110,7 @@ pub struct FullyCompiledProgram {
 
 pub enum Visitor {
     TypingVisitor(TypingVisitorObj),
+    CFGIRVisitor(CFGIRVisitorObj),
     AbsIntVisitor(AbsIntVisitorObj),
 }
 
@@ -623,6 +627,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     targets: Vec<PackagePaths<Paths, NamedAddress>>,
     interface_files_dir_opt: Option<String>,
     flags: Flags,
+    vfs_root: Option<VfsPath>,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
     let hook = SaveHook::new([
         SaveFlag::Parser,
@@ -634,7 +639,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
         SaveFlag::CFGIR,
     ]);
     let (files, pprog_and_comments_res) = Compiler::from_package_paths(
-        None,
+        vfs_root,
         targets,
         Vec::<PackagePaths<Paths, NamedAddress>>::new(),
     )?
@@ -702,7 +707,6 @@ pub fn sanity_check_compiled_units(
 
 /// Given a file map and a set of compiled programs, saves the compiled programs to disk
 pub fn output_compiled_units(
-    bytecode_version: Option<u32>,
     emit_source_maps: bool,
     files: FilesSourceText,
     compiled_units: Vec<AnnotatedCompiledUnit>,
@@ -724,7 +728,7 @@ pub fn output_compiled_units(
             }
 
             $path.set_extension(MOVE_COMPILED_EXTENSION);
-            fs::write($path.as_path(), &$unit.serialize(bytecode_version))?
+            fs::write($path.as_path(), &$unit.serialize())?
         }};
     }
 

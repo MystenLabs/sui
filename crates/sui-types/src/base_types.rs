@@ -368,6 +368,14 @@ impl MoveObjectType {
         }
     }
 
+    pub fn other(&self) -> Option<&StructTag> {
+        if let MoveObjectType_::Other(s) = &self.0 {
+            Some(s)
+        } else {
+            None
+        }
+    }
+
     /// Returns the string representation of this object's type using the canonical display.
     pub fn to_canonical_string(&self, with_prefix: bool) -> String {
         StructTag::from(self.clone()).to_canonical_string(with_prefix)
@@ -497,6 +505,17 @@ impl ObjectInfo {
             type_: o.into(),
             owner: o.owner,
             previous_transaction: o.previous_transaction,
+        }
+    }
+
+    pub fn from_object(object: &Object) -> Self {
+        Self {
+            object_id: object.id(),
+            version: object.version(),
+            digest: object.digest(),
+            type_: object.into(),
+            owner: object.owner,
+            previous_transaction: object.previous_transaction,
         }
     }
 }
@@ -925,7 +944,7 @@ impl TxContext {
             _ => return TxContextKind::None,
         };
 
-        let S::Struct(idx) = &**s else {
+        let S::Datatype(idx) = &**s else {
             return TxContextKind::None;
         };
 
@@ -1378,6 +1397,10 @@ impl<T> SizeOneVec<T> {
 
     pub fn element_mut(&mut self) -> &mut T {
         &mut self.e
+    }
+
+    pub fn into_inner(self) -> T {
+        self.e
     }
 
     pub fn iter(&self) -> std::iter::Once<&T> {

@@ -26,18 +26,17 @@ impl<'a> LimitsVerifier<'a> {
         let limit_check = Self { module };
         limit_check.verify_constants(config)?;
         limit_check.verify_function_handles(config)?;
-        limit_check.verify_struct_handles(config)?;
+        limit_check.verify_datatype_handles(config)?;
         limit_check.verify_type_nodes(config)?;
         limit_check.verify_identifiers(config)?;
         limit_check.verify_definitions(config)
     }
-
-    fn verify_struct_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
+    fn verify_datatype_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
         if let Some(limit) = config.max_generic_instantiation_length {
-            for (idx, struct_handle) in self.module.struct_handles().iter().enumerate() {
+            for (idx, struct_handle) in self.module.datatype_handles().iter().enumerate() {
                 if struct_handle.type_parameters.len() > limit {
                     return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_PARAMETERS)
-                        .at_index(IndexKind::StructHandle, idx as u16));
+                        .at_index(IndexKind::DatatypeHandle, idx as u16));
                 }
             }
         }
@@ -71,15 +70,22 @@ impl<'a> LimitsVerifier<'a> {
         for cons in self.module.constant_pool() {
             self.verify_type_node(config, &cons.type_)?
         }
-        let sdefs = self.module.struct_defs();
-        {
-            for sdef in sdefs {
-                if let StructFieldInformation::Declared(fdefs) = &sdef.field_information {
-                    for fdef in fdefs {
-                        self.verify_type_node(config, &fdef.signature.0)?
-                    }
+
+        for sdef in self.module.struct_defs() {
+            if let StructFieldInformation::Declared(fdefs) = &sdef.field_information {
+                for fdef in fdefs {
+                    self.verify_type_node(config, &fdef.signature.0)?
                 }
             }
+        }
+
+        for field in self
+            .module
+            .enum_defs()
+            .iter()
+            .flat_map(|e| e.variants.iter().flat_map(|v| &v.fields))
+        {
+            self.verify_type_node(config, &field.signature.0)?
         }
         Ok(())
     }
@@ -99,7 +105,7 @@ impl<'a> LimitsVerifier<'a> {
                 // Notice that the preorder traversal will iterate all type instantiations, so we
                 // why we can ignore them below.
                 match t {
-                    SignatureToken::Struct(..) | SignatureToken::StructInstantiation(..) => {
+                    SignatureToken::Datatype(..) | SignatureToken::DatatypeInstantiation(..) => {
                         size += STRUCT_SIZE_WEIGHT
                     }
                     SignatureToken::TypeParameter(..) => size += PARAM_SIZE_WEIGHT,
@@ -122,17 +128,17 @@ impl<'a> LimitsVerifier<'a> {
                 ));
             }
         }
-
-        let defs = self.module.struct_defs();
-        if let Some(max_struct_definitions) = config.max_struct_definitions {
-            if defs.len() > max_struct_definitions {
+        if let Some(max_data_definitions) = config.max_data_definitions {
+            let defs_len = self.module.struct_defs().len() + self.module.enum_defs().len();
+            if defs_len > max_data_definitions {
                 return Err(PartialVMError::new(
                     StatusCode::MAX_STRUCT_DEFINITIONS_REACHED,
                 ));
             }
         }
+
         if let Some(max_fields_in_struct) = config.max_fields_in_struct {
-            for def in defs {
+            for def in self.module.struct_defs() {
                 match &def.field_information {
                     StructFieldInformation::Native => (),
                     StructFieldInformation::Declared(fields) => {
@@ -141,6 +147,27 @@ impl<'a> LimitsVerifier<'a> {
                                 StatusCode::MAX_FIELD_DEFINITIONS_REACHED,
                             ));
                         }
+                    }
+                }
+            }
+
+            // 1. Total number of fields in the enum (added across all variants) is less than
+            //    the number of fields allowed in a struct.
+            // 2. Total number of variants in the enum is less than the number of variants allowed in an enum.
+            for def in self.module.enum_defs() {
+                if config
+                    .max_variants_in_enum
+                    .is_some_and(|max| def.variants.len() > max as usize)
+                {
+                    return Err(PartialVMError::new(StatusCode::MAX_VARIANTS_REACHED));
+                }
+                let mut num_fields = 0;
+                for variant in &def.variants {
+                    num_fields += variant.fields.len();
+                    if num_fields > max_fields_in_struct {
+                        return Err(PartialVMError::new(
+                            StatusCode::MAX_FIELD_DEFINITIONS_REACHED,
+                        ));
                     }
                 }
             }

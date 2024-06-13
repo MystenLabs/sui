@@ -11,7 +11,6 @@ module sui::authenticator_state {
     use std::string;
     use sui::dynamic_field;
     use std::string::{String, utf8};
-    use sui::math;
 
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
@@ -231,7 +230,7 @@ module sui::authenticator_state {
             // when they are equal, push only one, but use the max epoch of the two
             if (active_jwk_equal(old_jwk, new_jwk)) {
                 let mut jwk = *old_jwk;
-                jwk.epoch = math::max(old_jwk.epoch, new_jwk.epoch);
+                jwk.epoch = old_jwk.epoch.max(new_jwk.epoch);
                 res.push_back(jwk);
                 i = i + 1;
                 j = j + 1;
@@ -314,7 +313,7 @@ module sui::authenticator_state {
                 if (cur_iss == prev_issuer.borrow()) {
                     let back = issuer_max_epochs.length() - 1;
                     let prev_max_epoch = &mut issuer_max_epochs[back];
-                    *prev_max_epoch = math::max(*prev_max_epoch, cur.epoch);
+                    *prev_max_epoch = (*prev_max_epoch).max(cur.epoch);
                 } else {
                     *prev_issuer.borrow_mut() = *cur_iss;
                     issuer_max_epochs.push_back(cur.epoch);

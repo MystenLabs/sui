@@ -200,7 +200,7 @@ async fn test_generate_lock_file() {
     build_config.config.lock_file = Some(lock_file_path.clone());
     build_config
         .clone()
-        .build(path.clone())
+        .build(&path)
         .expect("Move package did not build");
     // Update the lock file with placeholder compiler version so this isn't bumped every release.
     build_config
@@ -262,7 +262,7 @@ async fn test_custom_property_parse_published_at() {
     path.extend(["src", "unit_tests", "data", "custom_properties_in_manifest"]);
 
     build_config
-        .build(path.clone())
+        .build(&path)
         .expect("Move package did not build");
     let manifest = manifest_parser::parse_move_manifest_from_file(path.as_path())
         .expect("Could not parse Move.toml");

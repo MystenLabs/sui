@@ -12,7 +12,7 @@ use sui_config::genesis;
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::storage::ReadStore;
+use sui_types::storage::{ReadStore, RestStateReader};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
@@ -702,6 +702,32 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
         Option<sui_types::messages_checkpoint::FullCheckpointContents>,
     > {
         todo!()
+    }
+}
+
+impl RestStateReader for PersistedStoreInnerReadOnlyWrapper {
+    fn get_transaction_checkpoint(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
+        todo!()
+    }
+
+    fn get_lowest_available_checkpoint_objects(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        Ok(0)
+    }
+
+    fn get_chain_identifier(
+        &self,
+    ) -> sui_types::storage::error::Result<sui_types::digests::ChainIdentifier> {
+        Ok((*self
+            .get_checkpoint_by_sequence_number(0)
+            .unwrap()
+            .unwrap()
+            .digest())
+        .into())
     }
 }
 

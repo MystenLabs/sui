@@ -14,6 +14,7 @@ use crate::{
     block::BlockAPI as _,
     context::Context,
     dag_state::DagState,
+    error::ConsensusError,
     network::{NetworkClient, NetworkService},
     Round,
 };
@@ -73,13 +74,6 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             peer,
             last_received,
         )));
-        let peer_hostname = &self.context.committee.authority(peer).hostname;
-        self.context
-            .metrics
-            .node_metrics
-            .subscriber_connections
-            .with_label_values(&[peer_hostname])
-            .set(1);
     }
 
     pub(crate) fn stop(&self) {
@@ -91,15 +85,17 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
 
     fn unsubscribe_locked(&self, peer: AuthorityIndex, subscription: &mut Option<JoinHandle<()>>) {
         let peer_hostname = &self.context.committee.authority(peer).hostname;
+        if let Some(subscription) = subscription.take() {
+            subscription.abort();
+        }
+        // There is a race between shutting down the subscription task and clearing the metric here.
+        // TODO: fix the race when unsubscribe_locked() gets called outside of stop().
         self.context
             .metrics
             .node_metrics
             .subscriber_connections
             .with_label_values(&[peer_hostname])
             .set(0);
-        if let Some(subscription) = subscription.take() {
-            subscription.abort();
-        }
     }
 
     async fn subscription_loop(
@@ -110,6 +106,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         last_received: Round,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
+        // When not immediately retrying, limit retry delay between 100ms and 10s.
         const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
         const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(10);
         const RETRY_INTERVAL_MULTIPLIER: f32 = 1.2;
@@ -117,15 +114,22 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         let mut retries: i64 = 0;
         let mut delay = INITIAL_RETRY_INTERVAL;
         'subscription: loop {
+            context
+                .metrics
+                .node_metrics
+                .subscriber_connections
+                .with_label_values(&[peer_hostname])
+                .set(0);
+
             if retries > IMMEDIATE_RETRIES {
-                // When not immediately retrying, delay retries from 100ms and to 10s.
                 debug!(
-                    "Delaying retry {} to subscribe to blocks from peer {} in {} seconds",
+                    "Delaying retry {} of peer {} subscription, in {} seconds",
                     retries,
                     peer,
                     delay.as_secs_f32(),
                 );
                 sleep(delay).await;
+                // Update delay for the next retry.
                 delay = delay
                     .mul_f32(RETRY_INTERVAL_MULTIPLIER)
                     .min(MAX_RETRY_INTERVAL);
@@ -136,11 +140,14 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 // First attempt, reset delay for next retries but no waiting.
                 delay = INITIAL_RETRY_INTERVAL;
             }
+            retries += 1;
+
             let mut blocks = match network_client
                 .subscribe_blocks(peer, last_received, MAX_RETRY_INTERVAL)
                 .await
             {
                 Ok(blocks) => {
+                    debug!("Subscribed to peer {} after {} attempts", peer, retries);
                     context
                         .metrics
                         .node_metrics
@@ -157,21 +164,43 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                         .subscriber_connection_attempts
                         .with_label_values(&[&peer_hostname, "failure"])
                         .inc();
-                    retries += 1;
                     continue 'subscription;
                 }
             };
+
+            // Now can consider the subscription successful
+            let peer_hostname = &context.committee.authority(peer).hostname;
+            context
+                .metrics
+                .node_metrics
+                .subscriber_connections
+                .with_label_values(&[peer_hostname])
+                .set(1);
+
             'stream: loop {
                 match blocks.next().await {
                     Some(block) => {
+                        context
+                            .metrics
+                            .node_metrics
+                            .subscribed_blocks
+                            .with_label_values(&[&peer_hostname])
+                            .inc();
                         let result = authority_service
                             .handle_send_block(peer, block.clone())
                             .await;
                         if let Err(e) = result {
-                            info!(
-                                "Failed to process block from peer {}: {}. Block: {:?}",
-                                peer, e, block,
-                            );
+                            match e {
+                                ConsensusError::BlockRejected { block_ref, reason } => {
+                                    debug!(
+                                        "Failed to process block from peer {} for block {:?}: {}",
+                                        peer, block_ref, reason
+                                    );
+                                }
+                                _ => {
+                                    info!("Invalid block received from peer {}: {}", peer, e,);
+                                }
+                            }
                         }
                         // Reset retries when a block is received.
                         retries = 0;
@@ -196,6 +225,7 @@ mod test {
     use super::*;
     use crate::{
         block::{BlockRef, VerifiedBlock},
+        commit::CommitRange,
         error::ConsensusResult,
         network::{test_network::TestService, BlockStream},
         storage::mem_store::MemStore,
@@ -249,8 +279,7 @@ mod test {
         async fn fetch_commits(
             &self,
             _peer: AuthorityIndex,
-            _start: Round,
-            _end: Round,
+            _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")

@@ -1,0 +1,37 @@
+[package]
+name = "sui-bridge-indexer"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+serde.workspace = true
+diesel = { version = "2.1.4", features = ["postgres", "r2d2", "serde_json"] }
+ethers = "2.0"
+tokio = { workspace = true, features = ["full"] }
+anyhow.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+bin-version.workspace = true
+clap.workspace = true
+mysten-metrics.workspace = true
+prometheus.workspace = true
+serde_yaml.workspace = true
+sui-bridge.workspace = true
+sui-data-ingestion-core.workspace = true
+sui-types.workspace = true
+telemetry-subscribers.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+sui-types = { workspace = true, features = ["test-utils"] }
+sui-config.workspace = true
+sui-test-transaction-builder.workspace = true
+test-cluster.workspace = true
+hex-literal = "0.3.4"
+
+[[bin]]
+name = "bridge-indexer"
+path = "src/main.rs"

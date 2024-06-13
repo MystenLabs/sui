@@ -13,6 +13,8 @@ use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthoritySignInfo;
 use crate::error::BridgeError;
 use crate::error::BridgeResult;
+use crate::metrics::BridgeMetrics;
+use crate::server::BridgeNodePublicMetadata;
 use crate::types::SignedBridgeAction;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
@@ -131,7 +133,13 @@ pub fn run_mock_server(
     mock_handler: BridgeRequestMockHandler,
 ) -> tokio::task::JoinHandle<()> {
     tracing::info!("Starting mock server at {}", socket_address);
-    let server = axum::Server::bind(&socket_address)
-        .serve(make_router(Arc::new(mock_handler)).into_make_service());
+    let server = axum::Server::bind(&socket_address).serve(
+        make_router(
+            Arc::new(mock_handler),
+            Arc::new(BridgeMetrics::new_for_testing()),
+            Arc::new(BridgeNodePublicMetadata::empty_for_testing()),
+        )
+        .into_make_service(),
+    );
     tokio::spawn(async move { server.await.unwrap() })
 }

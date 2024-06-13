@@ -11,7 +11,12 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
     IntCounterVec, Registry,
 };
-use std::{io, net::SocketAddr, sync::Arc, time::SystemTime};
+use std::{
+    io,
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+    time::SystemTime,
+};
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
@@ -25,7 +30,7 @@ use sui_types::messages_grpc::{
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, Weight};
+use sui_types::traffic_control::{ClientIdSource, PolicyConfig, RemoteFirewallConfig, Weight};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -135,6 +140,7 @@ impl AuthorityServer {
                 consensus_adapter: self.consensus_adapter,
                 metrics: self.metrics.clone(),
                 traffic_controller: None,
+                client_id_source: None,
             }))
             .bind(&address)
             .await
@@ -167,6 +173,7 @@ pub struct ValidatorServiceMetrics {
     connection_ip_not_found: IntCounter,
     forwarded_header_parse_error: IntCounter,
     forwarded_header_invalid: IntCounter,
+    forwarded_header_not_included: IntCounter,
 }
 
 impl ValidatorServiceMetrics {
@@ -257,6 +264,12 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
+            forwarded_header_not_included: register_int_counter_with_registry!(
+                "validator_service_forwarded_header_not_included",
+                "Number of times x-forwarded-for header was (unexpectedly) not included in request",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -272,6 +285,7 @@ pub struct ValidatorService {
     consensus_adapter: Arc<ConsensusAdapter>,
     metrics: Arc<ValidatorServiceMetrics>,
     traffic_controller: Option<Arc<TrafficController>>,
+    client_id_source: Option<ClientIdSource>,
 }
 
 impl ValidatorService {
@@ -287,13 +301,14 @@ impl ValidatorService {
             state,
             consensus_adapter,
             metrics: validator_metrics,
-            traffic_controller: policy_config.map(|policy| {
+            traffic_controller: policy_config.clone().map(|policy| {
                 Arc::new(TrafficController::spawn(
                     policy,
                     traffic_controller_metrics,
                     firewall_config,
                 ))
             }),
+            client_id_source: policy_config.map(|policy| policy.client_id_source),
         }
     }
 
@@ -326,6 +341,7 @@ impl ValidatorService {
             consensus_adapter,
             metrics,
             traffic_controller: _,
+            client_id_source: _,
         } = self.clone();
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
@@ -333,7 +349,7 @@ impl ValidatorService {
         // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
         // This must be the first thing to check before anything else, because the transaction
         // may not even be valid to access for any other checks.
-        Self::transaction_validity_check(&epoch_store, transaction.data())?;
+        transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
@@ -568,10 +584,6 @@ impl ValidatorService {
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
-        // This must be the first thing to check before anything else, because the transaction
-        // may not even be valid to access for any other checks.
-        // We need to check this first because we haven't verified the cert signature.
         Self::transaction_validity_check(&epoch_store, certificate.data())?;
 
         let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
@@ -598,10 +610,6 @@ impl ValidatorService {
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
-        // This must be the first thing to check before anything else, because the transaction
-        // may not even be valid to access for any other checks.
-        // We need to check this first because we haven't verified the cert signature.
         Self::transaction_validity_check(&epoch_store, certificate.data())?;
 
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
@@ -631,11 +639,8 @@ impl ValidatorService {
     ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let request = request.into_inner();
-        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
-        // This must be the first thing to check before anything else, because the transaction
-        // may not even be valid to access for any other checks.
-        // We need to check this first because we haven't verified the cert signature.
         Self::transaction_validity_check(&epoch_store, request.certificate.data())?;
+
         let span = error_span!("handle_certificate_v3", tx_digest = ?request.certificate.digest());
 
         self.handle_certificate(request, &epoch_store, true)
@@ -655,29 +660,18 @@ impl ValidatorService {
         transaction: &SenderSignedData,
     ) -> SuiResult<()> {
         let config = epoch_store.protocol_config();
-        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
-        // This must be the first thing to check because the transaction may not even be valid to
-        // access for any other checks.
         transaction.validity_check(config, epoch_store.epoch())?;
-
-        if !config.zklogin_auth() && transaction.has_zklogin_sig() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "zklogin is not enabled on this network".to_string(),
-            });
-        }
-
-        if !config.supports_upgraded_multisig() && transaction.has_upgraded_multisig() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "upgraded multisig format not enabled on this network".to_string(),
-            });
-        }
-
-        if !epoch_store.randomness_state_enabled() && transaction.uses_randomness() {
+        // TODO: The following check should be moved into
+        // TransactionData::check_version_and_features_supported.
+        // However that's blocked by some tests that uses randomness features
+        // even when the protocol feature is not enabled.
+        if !epoch_store.randomness_state_enabled()
+            && transaction.transaction_data().uses_randomness()
+        {
             return Err(SuiError::UnsupportedFeatureError {
                 error: "randomness is not enabled on this network".to_string(),
             });
         }
-
         Ok(())
     }
 
@@ -723,21 +717,15 @@ impl ValidatorService {
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
         let response = self
             .state
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_sui_system_state_object_unsafe()?;
 
         Ok(tonic::Response::new(response))
     }
 
-    async fn handle_traffic_req(
-        &self,
-        connection_ip: Option<SocketAddr>,
-        proxy_ip: Option<SocketAddr>,
-    ) -> Result<(), tonic::Status> {
+    async fn handle_traffic_req(&self, client: Option<IpAddr>) -> Result<(), tonic::Status> {
         if let Some(traffic_controller) = &self.traffic_controller {
-            let connection = connection_ip.map(|ip| ip.ip());
-            let proxy = proxy_ip.map(|ip| ip.ip());
-            if !traffic_controller.check(connection, proxy).await {
+            if !traffic_controller.check(&client, &None).await {
                 // Entity in blocklist
                 Err(tonic::Status::from_error(SuiError::TooManyRequests.into()))
             } else {
@@ -750,8 +738,7 @@ impl ValidatorService {
 
     fn handle_traffic_resp<T>(
         &self,
-        connection_ip: Option<SocketAddr>,
-        proxy_ip: Option<SocketAddr>,
+        client: Option<IpAddr>,
         response: &Result<tonic::Response<T>, tonic::Status>,
     ) {
         let error: Option<SuiError> = if let Err(status) = response {
@@ -762,8 +749,8 @@ impl ValidatorService {
 
         if let Some(traffic_controller) = self.traffic_controller.clone() {
             traffic_controller.tally(TrafficTally {
-                connection_ip: connection_ip.map(|ip| ip.ip()),
-                proxy_ip: proxy_ip.map(|ip| ip.ip()),
+                direct: client,
+                through_fullnode: None,
                 error_weight: error.map(normalize).unwrap_or(Weight::zero()),
                 timestamp: SystemTime::now(),
             })
@@ -803,57 +790,75 @@ fn normalize(err: SuiError) -> Weight {
 #[macro_export]
 macro_rules! handle_with_decoration {
     ($self:ident, $func_name:ident, $request:ident) => {{
-        // extract IP info. Note that in addition to extracting the client IP from
-        // the request header, we also get the remote address in case we need to
-        // throttle a fullnode, or an end user is running a local quorum driver.
-        let connection_ip: Option<SocketAddr> = $request.remote_addr();
-
-        // We will hit this case if the IO type used does not
-        // implement Connected or when using a unix domain socket.
-        // TODO: once we have confirmed that no legitimate traffic
-        // is hitting this case, we should reject such requests that
-        // hit this case.
-        if connection_ip.is_none() {
-            if cfg!(msim) {
-                // Ignore the error from simtests.
-            } else if cfg!(test) {
-                panic!("Failed to get remote address from request");
-            } else {
-                $self.metrics.connection_ip_not_found.inc();
-                error!("Failed to get remote address from request");
-            }
+        if $self.client_id_source.is_none() {
+            return $self.$func_name($request).await;
         }
 
-        let proxy_ip: Option<SocketAddr> =
-            if let Some(op) = $request.metadata().get("x-forwarded-for") {
-                match op.to_str() {
-                    Ok(ip) => match ip.parse() {
-                        Ok(ret) => Some(ret),
+        let client = match $self.client_id_source.as_ref().unwrap() {
+            ClientIdSource::SocketAddr => {
+                let socket_addr: Option<SocketAddr> = $request.remote_addr();
+
+                // We will hit this case if the IO type used does not
+                // implement Connected or when using a unix domain socket.
+                // TODO: once we have confirmed that no legitimate traffic
+                // is hitting this case, we should reject such requests that
+                // hit this case.
+                if let Some(socket_addr) = socket_addr {
+                    Some(socket_addr.ip())
+                } else {
+                    if cfg!(msim) {
+                        // Ignore the error from simtests.
+                    } else if cfg!(test) {
+                        panic!("Failed to get remote address from request");
+                    } else {
+                        $self.metrics.connection_ip_not_found.inc();
+                        error!("Failed to get remote address from request");
+                    }
+                    None
+                }
+            }
+            ClientIdSource::XForwardedFor => {
+                if let Some(op) = $request.metadata().get("x-forwarded-for") {
+                    match op.to_str() {
+                        Ok(header_val) => {
+                            match header_val.parse::<SocketAddr>() {
+                                Ok(socket_addr) => Some(socket_addr.ip()),
+                                Err(err) => {
+                                    $self.metrics.forwarded_header_parse_error.inc();
+                                    error!(
+                                        "Failed to parse x-forwarded-for header value of {:?} to ip address: {:?}. \
+                                        Please ensure that your proxy is configured to resolve client domains to an \
+                                        IP address before writing header",
+                                        header_val,
+                                        err,
+                                    );
+                                    None
+                                }
+                            }
+                        }
                         Err(e) => {
-                            $self.metrics.forwarded_header_parse_error.inc();
-                            error!("Failed to parse x-forwarded-for header value to SocketAddr: {:?}", e);
+                            // TODO: once we have confirmed that no legitimate traffic
+                            // is hitting this case, we should reject such requests that
+                            // hit this case.
+                            $self.metrics.forwarded_header_invalid.inc();
+                            error!("Invalid UTF-8 in x-forwarded-for header: {:?}", e);
                             None
                         }
-                    },
-                    Err(e) => {
-                        // TODO: once we have confirmed that no legitimate traffic
-                        // is hitting this case, we should reject such requests that
-                        // hit this case.
-                        $self.metrics.forwarded_header_invalid.inc();
-                        error!("Invalid UTF-8 in x-forwarded-for header: {:?}", e);
-                        None
                     }
+                } else {
+                    $self.metrics.forwarded_header_not_included.inc();
+                    error!("x-forwarded-header not present for request despite node configuring XForwardedFor tracking type");
+                    None
                 }
-            } else {
-                None
-            };
+            }
+        };
 
         // check if either IP is blocked, in which case return early
-        $self.handle_traffic_req(connection_ip, proxy_ip).await?;
+        $self.handle_traffic_req(client.clone()).await?;
         // handle request
         let response = $self.$func_name($request).await;
         // handle response tallying
-        $self.handle_traffic_resp(connection_ip, proxy_ip, &response);
+        $self.handle_traffic_resp(client, &response);
         response
     }};
 }

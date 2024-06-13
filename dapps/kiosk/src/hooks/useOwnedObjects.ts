@@ -3,7 +3,7 @@
 /* eslint-disable @tanstack/query/exhaustive-deps */
 
 import { useSuiClient } from '@mysten/dapp-kit';
-import { PaginatedObjectsResponse } from '@mysten/sui.js/client';
+import { PaginatedObjectsResponse } from '@mysten/sui/client';
 import { useQuery } from '@tanstack/react-query';
 
 import { TANSTACK_OWNED_OBJECTS_KEY } from '../utils/constants';

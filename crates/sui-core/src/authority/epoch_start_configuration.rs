@@ -3,12 +3,13 @@
 
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
+use sui_config::{ExecutionCacheConfig, NodeConfig};
 
 use std::fmt;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::SequenceNumber;
 use sui_types::bridge::{get_bridge_obj_initial_shared_version, is_bridge_committee_initiated};
-use sui_types::deny_list::get_deny_list_obj_initial_shared_version;
+use sui_types::deny_list_v1::get_deny_list_obj_initial_shared_version;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::SuiResult;
 use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointTimestamp};
@@ -17,6 +18,8 @@ use sui_types::storage::ObjectStore;
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
+
+use crate::execution_cache::{choose_execution_cache, ExecutionCacheConfigType};
 
 #[enum_dispatch]
 pub trait EpochStartConfigTrait {
@@ -28,6 +31,14 @@ pub trait EpochStartConfigTrait {
     fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn bridge_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn bridge_committee_initiated(&self) -> bool;
+
+    fn execution_cache_type(&self) -> ExecutionCacheConfigType {
+        if self.flags().contains(&EpochFlag::WritebackCacheEnabled) {
+            ExecutionCacheConfigType::WritebackCache
+        } else {
+            ExecutionCacheConfigType::PassthroughCache
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -35,6 +46,56 @@ pub enum EpochFlag {
     InMemoryCheckpointRoots,
     PerEpochFinalizedTransactions,
     ObjectLockSplitTables,
+    WritebackCacheEnabled,
+    StateAccumulatorV2Enabled,
+}
+
+impl EpochFlag {
+    pub fn default_flags_for_new_epoch(config: &NodeConfig) -> Vec<Self> {
+        Self::default_flags_impl(&config.execution_cache, config.state_accumulator_v2)
+    }
+
+    /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
+    pub fn default_for_no_config() -> Vec<Self> {
+        Self::default_flags_impl(&Default::default(), true)
+    }
+
+    fn default_flags_impl(
+        cache_config: &ExecutionCacheConfig,
+        enable_state_accumulator_v2: bool,
+    ) -> Vec<Self> {
+        let mut new_flags = vec![
+            EpochFlag::InMemoryCheckpointRoots,
+            EpochFlag::PerEpochFinalizedTransactions,
+            EpochFlag::ObjectLockSplitTables,
+        ];
+
+        if matches!(
+            choose_execution_cache(cache_config),
+            ExecutionCacheConfigType::WritebackCache
+        ) {
+            new_flags.push(EpochFlag::WritebackCacheEnabled);
+        }
+
+        if enable_state_accumulator_v2 {
+            new_flags.push(EpochFlag::StateAccumulatorV2Enabled);
+        }
+
+        new_flags
+    }
+}
+
+impl fmt::Display for EpochFlag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Important - implementation should return low cardinality values because this is used as metric key
+        match self {
+            EpochFlag::InMemoryCheckpointRoots => write!(f, "InMemoryCheckpointRoots"),
+            EpochFlag::PerEpochFinalizedTransactions => write!(f, "PerEpochFinalizedTransactions"),
+            EpochFlag::ObjectLockSplitTables => write!(f, "ObjectLockSplitTables"),
+            EpochFlag::WritebackCacheEnabled => write!(f, "WritebackCacheEnabled"),
+            EpochFlag::StateAccumulatorV2Enabled => write!(f, "StateAccumulatorV2Enabled"),
+        }
+    }
 }
 
 /// Parameters of the epoch fixed at epoch start.
@@ -54,7 +115,7 @@ impl EpochStartConfiguration {
         system_state: EpochStartSystemState,
         epoch_digest: CheckpointDigest,
         object_store: &dyn ObjectStore,
-        initial_epoch_flags: Option<Vec<EpochFlag>>,
+        initial_epoch_flags: Vec<EpochFlag>,
     ) -> SuiResult<Self> {
         let authenticator_obj_initial_shared_version =
             get_authenticator_state_obj_initial_shared_version(object_store)?;
@@ -68,7 +129,7 @@ impl EpochStartConfiguration {
         Ok(Self::V6(EpochStartConfigurationV6 {
             system_state,
             epoch_digest,
-            flags: initial_epoch_flags.unwrap_or_else(EpochFlag::default_flags_for_new_epoch),
+            flags: initial_epoch_flags,
             authenticator_obj_initial_shared_version,
             randomness_obj_initial_shared_version,
             coin_deny_list_obj_initial_shared_version,
@@ -362,26 +423,5 @@ impl EpochStartConfigTrait for EpochStartConfigurationV6 {
 
     fn bridge_committee_initiated(&self) -> bool {
         self.bridge_committee_initiated
-    }
-}
-
-impl EpochFlag {
-    pub fn default_flags_for_new_epoch() -> Vec<Self> {
-        vec![
-            EpochFlag::InMemoryCheckpointRoots,
-            EpochFlag::PerEpochFinalizedTransactions,
-            EpochFlag::ObjectLockSplitTables,
-        ]
-    }
-}
-
-impl fmt::Display for EpochFlag {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Important - implementation should return low cardinality values because this is used as metric key
-        match self {
-            EpochFlag::InMemoryCheckpointRoots => write!(f, "InMemoryCheckpointRoots"),
-            EpochFlag::PerEpochFinalizedTransactions => write!(f, "PerEpochFinalizedTransactions"),
-            EpochFlag::ObjectLockSplitTables => write!(f, "ObjectLockSplitTables"),
-        }
     }
 }

@@ -39,7 +39,7 @@ use crate::consensus_adapter::ConsensusAdapter;
 type PkG = bls12381::G2Element;
 type EncG = bls12381::G2Element;
 
-const SINGLETON_KEY: u64 = 0;
+pub const SINGLETON_KEY: u64 = 0;
 
 // State machine for randomness DKG and generation.
 //
@@ -278,13 +278,15 @@ impl RandomnessManager {
             "random beacon: starting from next_randomness_round={}",
             rm.next_randomness_round.0
         );
-        for result in tables.randomness_rounds_pending.safe_iter() {
-            let (round, _) = result.expect("typed_store should not fail");
+        if highest_completed_round + 1 < rm.next_randomness_round {
             info!(
-                "random beacon: resuming generation for randomness round {}",
-                round.0
+                "random beacon: resuming generation for randomness rounds from {} to {}",
+                highest_completed_round + 1,
+                rm.next_randomness_round - 1,
             );
-            network_handle.send_partial_signatures(committee.epoch(), round);
+            for r in highest_completed_round.0 + 1..rm.next_randomness_round.0 {
+                network_handle.send_partial_signatures(committee.epoch(), RandomnessRound(r));
+            }
         }
 
         Some(rm)
@@ -590,10 +592,6 @@ impl RandomnessManager {
             .expect("RandomnessRound should not overflow");
 
         batch.insert_batch(
-            &tables.randomness_rounds_pending,
-            std::iter::once((randomness_round, ())),
-        )?;
-        batch.insert_batch(
             &tables.randomness_next_round,
             std::iter::once((SINGLETON_KEY, self.next_randomness_round)),
         )?;
@@ -693,10 +691,6 @@ impl RandomnessReporter {
             .epoch_store
             .upgrade()
             .ok_or(SuiError::EpochEnded(self.epoch))?;
-        epoch_store
-            .tables()?
-            .randomness_rounds_pending
-            .remove(&round)?;
         let mut highest_completed_round = self.highest_completed_round.lock();
         if round > *highest_completed_round {
             *highest_completed_round = round;
@@ -704,9 +698,9 @@ impl RandomnessReporter {
                 .tables()?
                 .randomness_highest_completed_round
                 .insert(&SINGLETON_KEY, &highest_completed_round)?;
+            self.network_handle
+                .complete_round(epoch_store.committee().epoch(), round);
         }
-        self.network_handle
-            .complete_round(epoch_store.committee().epoch(), round);
         Ok(())
     }
 }
@@ -752,8 +746,8 @@ mod tests {
             let tx_consensus = tx_consensus.clone();
             mock_consensus_client
                 .expect_submit_to_consensus()
-                .withf(move |transaction: &ConsensusTransaction, _epoch_store| {
-                    tx_consensus.try_send(transaction.clone()).unwrap();
+                .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
+                    tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
                 .returning(|_, _| Ok(()));
@@ -792,8 +786,9 @@ mod tests {
         for randomness_manager in randomness_managers.iter_mut() {
             randomness_manager.start_dkg().unwrap();
 
-            let dkg_message = rx_consensus.recv().await.unwrap();
-            match dkg_message.kind {
+            let mut dkg_message = rx_consensus.recv().await.unwrap();
+            assert!(dkg_message.len() == 1);
+            match dkg_message.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
                     let msg: fastcrypto_tbls::dkg::Message<PkG, EncG> = bcs::from_bytes(&bytes)
                         .expect("DKG message deserialization should not fail");
@@ -823,8 +818,9 @@ mod tests {
         // Generate and distribute Confirmations.
         let mut dkg_confirmations = Vec::new();
         for _ in 0..randomness_managers.len() {
-            let dkg_confirmation = rx_consensus.recv().await.unwrap();
-            match dkg_confirmation.kind {
+            let mut dkg_confirmation = rx_consensus.recv().await.unwrap();
+            assert!(dkg_confirmation.len() == 1);
+            match dkg_confirmation.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
                     let msg: fastcrypto_tbls::dkg::Confirmation<EncG> = bcs::from_bytes(&bytes)
                         .expect("DKG confirmation deserialization should not fail");
@@ -873,8 +869,8 @@ mod tests {
             let tx_consensus = tx_consensus.clone();
             mock_consensus_client
                 .expect_submit_to_consensus()
-                .withf(move |transaction: &ConsensusTransaction, _epoch_store| {
-                    tx_consensus.try_send(transaction.clone()).unwrap();
+                .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
+                    tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
                 .returning(|_, _| Ok(()));
@@ -913,8 +909,9 @@ mod tests {
         for randomness_manager in randomness_managers.iter_mut() {
             randomness_manager.start_dkg().unwrap();
 
-            let dkg_message = rx_consensus.recv().await.unwrap();
-            match dkg_message.kind {
+            let mut dkg_message = rx_consensus.recv().await.unwrap();
+            assert!(dkg_message.len() == 1);
+            match dkg_message.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
                     let msg: fastcrypto_tbls::dkg::Message<PkG, EncG> = bcs::from_bytes(&bytes)
                         .expect("DKG message deserialization should not fail");

@@ -294,10 +294,10 @@ async fn test_congestion_control_execution_cancellation() {
     // Initialize shared object queue so that any transaction touches shared_object_1 should result in congestion and cancellation.
     register_fail_point_arg("initial_congestion_tracker", move || {
         Some(
-            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[(
-                shared_object_1.0,
-                10,
-            )]),
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(
+                &[(shared_object_1.0, 10)],
+                PerObjectCongestionControlMode::TotalGasBudget,
+            ),
         )
     });
 
@@ -348,7 +348,7 @@ async fn test_congestion_control_execution_cancellation() {
         .acquire_shared_locks_from_effects(
             &VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
             &effects,
-            authority_state_2.get_cache_reader().as_ref(),
+            authority_state_2.get_object_cache_reader().as_ref(),
         )
         .await
         .unwrap();

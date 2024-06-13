@@ -53,6 +53,9 @@ const MOVE_VM_TRACING_ENV_VAR_NAME: &str = "MOVE_VM_TRACE";
 /// be produced.
 const DEFAULT_TRACE_FILE: &str = "trace";
 
+/// The prefix for the stack trace that we want to remove from the stderr output if present.
+const STACK_TRACE_PREFIX: &str = "\nStack backtrace:";
+
 fn collect_coverage(
     trace_file: &Path,
     build_dir: &Path,
@@ -273,7 +276,10 @@ pub fn run_one(
         let cmd_output = cli_command_template().args(args_iter).output()?;
         writeln!(&mut output, "Command `{}`:", args_line)?;
         output += std::str::from_utf8(&cmd_output.stdout)?;
-        output += std::str::from_utf8(&cmd_output.stderr)?;
+        let stderr_output = std::str::from_utf8(&cmd_output.stderr)?;
+        // Remove stack traces from the stderr output if they exist
+        let clean_stderr = stderr_output.split(STACK_TRACE_PREFIX).next().unwrap();
+        output += clean_stderr;
     }
 
     // collect coverage information

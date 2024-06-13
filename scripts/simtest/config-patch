@@ -18,5 +18,5 @@ index c0829bc1b6..4007f97d66 100644
  include_dir = "0.7.3"
 +
 +[patch.crates-io]
-+tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89" }
-+futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89" }
++tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "3a490f1f1035cc6b7845f6a82d697ce47b067fd9" }
++futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "3a490f1f1035cc6b7845f6a82d697ce47b067fd9" }

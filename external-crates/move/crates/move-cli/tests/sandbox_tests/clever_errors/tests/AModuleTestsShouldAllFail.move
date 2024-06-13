@@ -27,4 +27,14 @@ module std::AModuleTestsShouldAllFail {
     fun double_three_const_based_different_module_fail() {
         AModule::double_except_three(3);
     }
+
+    #[test]
+    fun abort_in_macro() {
+        AModule::abort_!();
+    }
+
+    #[test]
+    fun clever_error_line_abort_in_non_macro() {
+        assert!(false);
+    }
 }
