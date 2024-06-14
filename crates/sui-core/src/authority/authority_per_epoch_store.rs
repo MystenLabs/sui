@@ -96,11 +96,11 @@ use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
-use sui_types::messages_consensus::VersionedDkgMessage;
 use sui_types::messages_consensus::{
     check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey,
     ConsensusTransactionKind,
 };
+use sui_types::messages_consensus::{VersionedDkgConfimation, VersionedDkgMessage};
 use sui_types::storage::GetSharedLocks;
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
@@ -508,6 +508,7 @@ pub struct AuthorityEpochTables {
     pub(crate) dkg_versioned_processed_messages: DBMap<PartyId, VersionedProcessedMessage>,
     /// This table is no longer used (can be removed when DBMap supports removing tables)
     #[allow(dead_code)]
+    #[deprecated]
     pub(crate) dkg_processed_messages: DBMap<PartyId, dkg_v0::ProcessedMessage<PkG, EncG>>,
 
     /// Records messages used to generate a DKG confirmation. Updated when enough DKG
@@ -515,10 +516,15 @@ pub struct AuthorityEpochTables {
     pub(crate) dkg_versioned_used_messages: DBMap<u64, VersionedUsedProcessedMessages>,
     /// This table is no longer used (can be removed when DBMap supports removing tables)
     #[allow(dead_code)]
+    #[deprecated]
     pub(crate) dkg_used_messages: DBMap<u64, dkg_v0::UsedProcessedMessages<PkG, EncG>>,
 
     /// Records confirmations received from other nodes. Updated when receiving a new
     /// dkg::Confirmation via consensus.
+    pub(crate) dkg_versioned_confirmations: DBMap<PartyId, VersionedDkgConfimation>,
+    /// This table is no longer used (can be removed when DBMap supports removing tables)
+    #[allow(dead_code)]
+    #[deprecated]
     pub(crate) dkg_confirmations: DBMap<PartyId, dkg::Confirmation<EncG>>,
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares.
@@ -3494,17 +3500,33 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgConfirmation from {:?}",
                             authority.concise()
                         );
-                        match bcs::from_bytes(bytes) {
-                            Ok(confirmation) => randomness_manager.add_confirmation(
-                                batch,
-                                authority,
-                                confirmation,
-                            )?,
-                            Err(e) => {
-                                warn!(
-                                    "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
+
+                        if self.protocol_config.dkg_version() == 0 {
+                            // old message was not an enum
+                            match bcs::from_bytes(bytes) {
+                                Ok(message) => randomness_manager.add_confirmation(
+                                    batch,
+                                    authority,
+                                    VersionedDkgConfimation::V0(message),
+                                )?,
+
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to deserialize RandomnessDkgConfirmation from {:?}: {e:?}",
+                                        authority.concise(),
+                                    );
+                                }
+                            }
+                        } else {
+                            match bcs::from_bytes(bytes) {
+                                Ok(message) => randomness_manager
+                                    .add_confirmation(batch, authority, message)?,
+                                Err(e) => {
+                                    warn!(
+                                    "Failed to deserialize versioned RandomnessDkgMessage from {:?}: {e:?}",
                                     authority.concise(),
                                 );
+                                }
                             }
                         }
                     } else {

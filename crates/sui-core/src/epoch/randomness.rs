@@ -8,7 +8,7 @@ use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
-use fastcrypto_tbls::dkg::{Confirmation, Output};
+use fastcrypto_tbls::dkg::Output;
 use fastcrypto_tbls::nodes::PartyId;
 use fastcrypto_tbls::{dkg, dkg_v0, dkg_v1, nodes};
 use futures::stream::FuturesUnordered;
@@ -27,8 +27,8 @@ use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_consensus::VersionedDkgMessage;
+use sui_types::messages_consensus::{ConsensusTransaction, VersionedDkgConfimation};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
@@ -100,7 +100,7 @@ pub struct RandomnessManager {
     enqueued_messages: BTreeMap<PartyId, JoinHandle<Option<VersionedProcessedMessage>>>,
     processed_messages: BTreeMap<PartyId, VersionedProcessedMessage>,
     used_messages: OnceCell<VersionedUsedProcessedMessages>,
-    confirmations: BTreeMap<PartyId, dkg::Confirmation<EncG>>,
+    confirmations: BTreeMap<PartyId, VersionedDkgConfimation>,
     dkg_output: OnceCell<Option<dkg::Output<PkG, EncG>>>,
 
     // State for randomness generation.
@@ -285,7 +285,7 @@ impl RandomnessManager {
             }
             rm.confirmations.extend(
                 tables
-                    .dkg_confirmations
+                    .dkg_versioned_confirmations
                     .safe_iter()
                     .map(|result| result.expect("typed_store should not fail")),
             );
@@ -338,7 +338,7 @@ impl RandomnessManager {
     fn merge_dkg_messages(
         &self,
         dkg_version: u64,
-    ) -> FastCryptoResult<(Confirmation<EncG>, VersionedUsedProcessedMessages)> {
+    ) -> FastCryptoResult<(VersionedDkgConfimation, VersionedUsedProcessedMessages)> {
         match dkg_version {
             0 => {
                 let (conf, msgs) = self.party.merge(
@@ -355,7 +355,10 @@ impl RandomnessManager {
                         .cloned()
                         .collect::<Vec<_>>(),
                 )?;
-                Ok((conf, VersionedUsedProcessedMessages::V0(msgs)))
+                Ok((
+                    VersionedDkgConfimation::V0(conf),
+                    VersionedUsedProcessedMessages::V0(msgs),
+                ))
             }
             1 => {
                 let (conf, msgs) = self.party.merge_v1(
@@ -372,14 +375,16 @@ impl RandomnessManager {
                         .cloned()
                         .collect::<Vec<_>>(),
                 )?;
-                Ok((conf, VersionedUsedProcessedMessages::V1(msgs)))
+                Ok((
+                    VersionedDkgConfimation::V1(conf),
+                    VersionedUsedProcessedMessages::V1(msgs),
+                ))
             }
             _ => panic!("BUG: invalid DKG version"),
         }
     }
 
     fn complete_dkg(&self, dkg_version: u64) -> FastCryptoResult<Output<PkG, EncG>> {
-        let confs = &self.confirmations.values().cloned().collect::<Vec<_>>();
         let rng = &mut StdRng::from_rng(OsRng).expect("RNG construction should not fail");
         match dkg_version {
             0 => self.party.complete(
@@ -392,7 +397,18 @@ impl RandomnessManager {
                 } else {
                     panic!("BUG: used_messages should be V0")
                 },
-                confs,
+                &self
+                    .confirmations
+                    .values()
+                    .filter_map(|vm| {
+                        if let VersionedDkgConfimation::V0(msg) = vm {
+                            Some(msg)
+                        } else {
+                            panic!("BUG: invalid versioned message")
+                        }
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>(),
                 rng,
             ),
             1 => self.party.complete_v1(
@@ -405,7 +421,18 @@ impl RandomnessManager {
                 } else {
                     panic!("BUG: used_messages should be V1")
                 },
-                confs,
+                &self
+                    .confirmations
+                    .values()
+                    .filter_map(|vm| {
+                        if let VersionedDkgConfimation::V1(msg) = vm {
+                            Some(msg)
+                        } else {
+                            panic!("BUG: invalid versioned message")
+                        }
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>(),
                 rng,
             ),
             _ => panic!("BUG: invalid DKG version"),
@@ -491,7 +518,7 @@ impl RandomnessManager {
                 Ok((conf, used_msgs)) => {
                     info!(
                         "random beacon: sending DKG Confirmation with {} complaints",
-                        conf.complaints.len()
+                        conf.num_of_complaints()
                     );
                     if self.used_messages.set(used_msgs.clone()).is_err() {
                         error!("BUG: used_messages should only ever be set once");
@@ -649,7 +676,7 @@ impl RandomnessManager {
         &mut self,
         batch: &mut DBBatch,
         authority: &AuthorityName,
-        conf: dkg::Confirmation<EncG>,
+        conf: VersionedDkgConfimation,
     ) -> SuiResult {
         if self.dkg_output.initialized() {
             // Once we have completed DKG, no more `Confirmation`s are needed.
@@ -661,14 +688,14 @@ impl RandomnessManager {
             );
             return Ok(());
         };
-        if *party_id != conf.sender {
+        if *party_id != conf.sender() {
             warn!("ignoring equivocating DKG Confirmation from authority {authority:?} pretending to be PartyId {party_id:?}");
             return Ok(());
         }
-        self.confirmations.insert(conf.sender, conf.clone());
+        self.confirmations.insert(conf.sender(), conf.clone());
         batch.insert_batch(
-            &self.tables()?.dkg_confirmations,
-            std::iter::once((conf.sender, conf)),
+            &self.tables()?.dkg_versioned_confirmations,
+            std::iter::once((conf.sender(), conf)),
         )?;
         Ok(())
     }
@@ -942,7 +969,7 @@ mod tests {
             let mut batch = epoch_stores[i]
                 .tables()
                 .unwrap()
-                .dkg_processed_messages
+                .dkg_versioned_processed_messages
                 .batch();
             for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
                 randomness_managers[i]
@@ -963,15 +990,25 @@ mod tests {
             assert!(dkg_confirmation.len() == 1);
             match dkg_confirmation.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
-                    let msg: fastcrypto_tbls::dkg::Confirmation<EncG> = bcs::from_bytes(&bytes)
-                        .expect("DKG confirmation deserialization should not fail");
-                    dkg_confirmations.push(msg);
+                    if version == 0 {
+                        let msg: fastcrypto_tbls::dkg::Confirmation<EncG> = bcs::from_bytes(&bytes)
+                            .expect("DKG confirmation deserialization should not fail");
+                        dkg_confirmations.push(VersionedDkgConfimation::V0(msg));
+                    } else {
+                        let msg: VersionedDkgConfimation = bcs::from_bytes(&bytes)
+                            .expect("DKG message deserialization should not fail");
+                        dkg_confirmations.push(msg);
+                    }
                 }
                 _ => panic!("wrong type of message sent"),
             }
         }
         for i in 0..randomness_managers.len() {
-            let mut batch = epoch_stores[i].tables().unwrap().dkg_confirmations.batch();
+            let mut batch = epoch_stores[i]
+                .tables()
+                .unwrap()
+                .dkg_versioned_confirmations
+                .batch();
             for (j, dkg_confirmation) in dkg_confirmations.iter().cloned().enumerate() {
                 randomness_managers[i]
                     .add_confirmation(&mut batch, &epoch_stores[j].name, dkg_confirmation)
@@ -1090,7 +1127,7 @@ mod tests {
             let mut batch = epoch_stores[i]
                 .tables()
                 .unwrap()
-                .dkg_processed_messages
+                .dkg_versioned_processed_messages
                 .batch();
             for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
                 randomness_managers[i]

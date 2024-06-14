@@ -222,6 +222,11 @@ pub enum VersionedDkgMessage {
     V1(dkg_v1::Message<bls12381::G2Element, bls12381::G2Element>),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VersionedDkgConfimation {
+    V0(dkg::Confirmation<bls12381::G2Element>),
+    V1(dkg::Confirmation<bls12381::G2Element>),
+}
 impl Debug for VersionedDkgMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -248,6 +253,22 @@ impl VersionedDkgMessage {
         match self {
             VersionedDkgMessage::V0(msg) => msg.sender,
             VersionedDkgMessage::V1(msg) => msg.sender,
+        }
+    }
+}
+
+impl VersionedDkgConfimation {
+    pub fn sender(&self) -> u16 {
+        match self {
+            VersionedDkgConfimation::V0(msg) => msg.sender,
+            VersionedDkgConfimation::V1(msg) => msg.sender,
+        }
+    }
+
+    pub fn num_of_complaints(&self) -> usize {
+        match self {
+            VersionedDkgConfimation::V0(msg) => msg.complaints.len(),
+            VersionedDkgConfimation::V1(msg) => msg.complaints.len(),
         }
     }
 }
@@ -346,10 +367,17 @@ impl ConsensusTransaction {
     }
     pub fn new_randomness_dkg_confirmation(
         authority: AuthorityName,
-        confirmation: &dkg::Confirmation<bls12381::G2Element>,
+        versioned_confirmation: &VersionedDkgConfimation,
     ) -> Self {
-        let confirmation =
-            bcs::to_bytes(confirmation).expect("message serialization should not fail");
+        let confirmation = match versioned_confirmation {
+            VersionedDkgConfimation::V0(msg) => {
+                // Old version does not use the enum, so we need to serialize it separately.
+                bcs::to_bytes(msg).expect("message serialization should not fail")
+            }
+            _ => bcs::to_bytes(versioned_confirmation)
+                .expect("message serialization should not fail"),
+        };
+
         let mut hasher = DefaultHasher::new();
         confirmation.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
