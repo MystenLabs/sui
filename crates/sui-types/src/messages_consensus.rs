@@ -9,6 +9,7 @@ use crate::messages_checkpoint::{
 };
 use crate::transaction::CertifiedTransaction;
 use byteorder::{BigEndian, ReadBytesExt};
+use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::{dkg, dkg_v0, dkg_v1};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
@@ -17,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use sui_protocol_config::SupportedProtocolVersions;
 
@@ -254,6 +256,23 @@ impl VersionedDkgMessage {
         match self {
             VersionedDkgMessage::V0(msg) => msg.sender,
             VersionedDkgMessage::V1(msg) => msg.sender,
+        }
+    }
+
+    pub fn create(
+        dkg_version: u64,
+        party: Arc<dkg::Party<bls12381::G2Element, bls12381::G2Element>>,
+    ) -> FastCryptoResult<VersionedDkgMessage> {
+        match dkg_version {
+            0 => {
+                let msg = party.create_message(&mut rand::thread_rng())?;
+                Ok(VersionedDkgMessage::V0(msg))
+            }
+            1 => {
+                let msg = party.create_message_v1(&mut rand::thread_rng())?;
+                Ok(VersionedDkgMessage::V1(msg))
+            }
+            _ => panic!("BUG: invalid DKG version"),
         }
     }
 }
