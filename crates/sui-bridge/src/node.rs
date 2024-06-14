@@ -104,6 +104,8 @@ async fn start_client_components(
             .expect("Failed to get committee"),
     );
     let bridge_auth_agg = BridgeAuthorityAggregator::new(committee);
+    let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
+    let (token_type_tags_tx, token_type_tags_rx) = tokio::sync::watch::channel(sui_token_type_tags);
 
     let bridge_action_executor = BridgeActionExecutor::new(
         sui_client.clone(),
@@ -112,6 +114,7 @@ async fn start_client_components(
         client_config.key,
         client_config.sui_address,
         client_config.gas_object_ref.0,
+        token_type_tags_rx,
         metrics.clone(),
     )
     .await;
@@ -121,6 +124,7 @@ async fn start_client_components(
         sui_events_rx,
         eth_events_rx,
         store.clone(),
+        token_type_tags_tx,
         metrics,
     );
 
