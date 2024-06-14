@@ -53,7 +53,7 @@ pub(crate) struct Object {
     pub kind: ObjectKind,
     /// The checkpoint sequence number at which this was viewed at.
     pub checkpoint_viewed_at: u64,
-    /// Optional root parent object version if this is a dynamic field.
+    /// Optional root parent object version for dynamic fields.
     ///
     /// This enables consistent dynamic field reads in the case of chained dynamic object fields,
     /// e.g., `Parent -> DOF1 -> DOF2`. In such cases, the object versions may end up like
@@ -685,10 +685,11 @@ impl Object {
     /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
     /// be as if it was read at the same checkpoint.
     ///
-    /// `root_version` represents the version of the root object in some nested ownership, and
-    /// should be propagated from this object's parent, if any.
-    /// If None, then we use [`version_for_dynamic_fields`] to infer a root version to then
-    /// propagate from this object down to its dynamic fields.
+    /// `root_version` represents the version of the root object in some nested chain of dynamic
+    /// fields. This should typically be left `None`, unless the object(s) being resolved is a
+    /// dynamic field, or if `root_version` has been explicitly set for this object. If None, then
+    /// we use [`version_for_dynamic_fields`] to infer a root version to then propagate from this
+    /// object down to its dynamic fields.
     pub(crate) fn from_native(
         address: SuiAddress,
         native: NativeObject,
@@ -722,7 +723,7 @@ impl Object {
         }
     }
 
-    /// Optional root parent object version if this is a dynamic field.
+    /// Optional root parent object version for dynamic fields.
     ///
     /// It may be `None` if the GQL query is rooted in this object and it is a child object /
     /// dynamic field. Check [`Object::root_version`] for details.
@@ -884,10 +885,11 @@ impl Object {
     /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
     /// be as if it was read at the same checkpoint.
     ///
-    /// `root_version` represents the version of the root object in some nested ownership, and
-    /// should be propagated from this object's parent, if any.
-    /// If None, then we use [`version_for_dynamic_fields`] to infer a root version to then
-    /// propagate from this object down to its dynamic fields.
+    /// `root_version` represents the version of the root object in some nested chain of dynamic
+    /// fields. This should typically be left `None`, unless the object(s) being resolved is a
+    /// dynamic field, or if `root_version` has been explicitly set for this object. If None, then
+    /// we use [`version_for_dynamic_fields`] to infer a root version to then propagate from this
+    /// object down to its dynamic fields.
     pub(crate) fn try_from_stored_history_object(
         history_object: StoredHistoryObject,
         checkpoint_viewed_at: u64,
