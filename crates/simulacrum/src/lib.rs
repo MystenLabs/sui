@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use fastcrypto::traits::Signer;
+use move_core_types::language_storage::StructTag;
 use rand::rngs::OsRng;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_protocol_config::ProtocolVersion;
@@ -575,6 +576,33 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RestStateReader for
             .digest()
             .to_owned()
             .into())
+    }
+
+    fn account_owned_objects_info_iter(
+        &self,
+        _owner: SuiAddress,
+        _cursor: Option<ObjectID>,
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = sui_types::storage::AccountOwnedObjectInfo> + '_>,
+    > {
+        todo!()
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        _parent: ObjectID,
+        _cursor: Option<ObjectID>,
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = sui_types::storage::RestDynamicFieldInfo> + '_>,
+    > {
+        todo!()
+    }
+
+    fn get_coin_info(
+        &self,
+        _coin_type: &StructTag,
+    ) -> sui_types::storage::error::Result<Option<sui_types::storage::CoinInfo>> {
+        todo!()
     }
 }
 
