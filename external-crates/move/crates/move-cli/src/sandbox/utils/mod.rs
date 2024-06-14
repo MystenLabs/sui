@@ -55,8 +55,6 @@ pub fn get_gas_status(cost_table: &CostTable, gas_budget: Option<u64>) -> Result
 }
 
 pub(crate) fn explain_publish_changeset(changeset: &ChangeSet) {
-    // publish effects should contain no resources
-    assert!(changeset.resources().next().is_none());
     // total bytes written across all accounts
     let mut total_bytes_written = 0;
     for (addr, name, blob_op) in changeset.modules() {
