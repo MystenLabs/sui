@@ -29,8 +29,8 @@ use std::{
     sync::RwLock,
 };
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
-    config::{self, Config},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
+    config,
     digests::{ObjectDigest, TransactionDigest},
     execution::DynamicallyLoadedObjectMetadata,
     id::UID,
@@ -174,13 +174,12 @@ pub fn end_transaction(
         inventories.taken.remove(id);
     }
     // handle transfers, inserting transferred/written objects into their respective inventory
+    let mut config_settings = vec![];
     let mut created = vec![];
     let mut written = vec![];
     for (id, (owner, ty, tag, value)) in writes {
         // write configs to cache
-        // if matches!(tag, Some(TypeTag::Struct(s)) if config::is_setting(&*s)) {
-        //     ()
-        // }
+        maybe_save_config_setting(&mut config_settings, id, owner, tag, &value);
         new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
         transferred.push((id, owner));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
@@ -265,6 +264,9 @@ pub fn end_transaction(
 
     // new input objects are remaining taken objects not written/deleted
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    for (config, setting, ty, value) in config_settings {
+        object_runtime_ref.config_setting_cache_insert(config, setting, ty, value)
+    }
     object_runtime_ref.state.input_objects = object_runtime_ref
         .test_inventories
         .taken
@@ -310,6 +312,31 @@ pub fn end_transaction(
         user_events.len() as u64,
     );
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![effects]))
+}
+
+fn maybe_save_config_setting(
+    config_settings: &mut Vec<(ObjectID, ObjectID, MoveObjectType, Value)>,
+    id: ObjectID,
+    owner: Owner,
+    tag: Option<TypeTag>,
+    value: &Value,
+) {
+    let Some(TypeTag::Struct(s)) = tag else {
+        return;
+    };
+    let s = *s;
+    if !config::is_setting(&s) {
+        return;
+    }
+    let Owner::ObjectOwner(config_id) = owner else {
+        return;
+    };
+    config_settings.push((
+        config_id.into(),
+        id,
+        MoveObjectType::from(s),
+        value.copy_value().unwrap(),
+    ));
 }
 
 // native fun take_from_address_by_id<T: key>(account: address, id: ID): T;

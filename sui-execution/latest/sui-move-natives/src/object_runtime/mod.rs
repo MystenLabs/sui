@@ -403,15 +403,15 @@ impl<'a> ObjectRuntime<'a> {
 
     pub(crate) fn config_setting_unsequenced_read(
         &mut self,
-        config_addr: ObjectID,
-        name_df_addr: ObjectID,
+        config_id: ObjectID,
+        name_df_id: ObjectID,
         setting_value_ty: &Type,
         setting_value_layout: &R::MoveTypeLayout,
         setting_value_object_type: &MoveObjectType,
     ) -> Option<Value> {
         match self.child_object_store.config_setting_unsequenced_read(
-            config_addr,
-            name_df_addr,
+            config_id,
+            name_df_id,
             setting_value_ty,
             setting_value_layout,
             setting_value_object_type,
@@ -423,6 +423,21 @@ impl<'a> ObjectRuntime<'a> {
             Ok(ObjectResult::MismatchedType) | Ok(ObjectResult::Loaded(None)) => None,
             Ok(ObjectResult::Loaded(Some(value))) => Some(value),
         }
+    }
+
+    pub(super) fn config_setting_cache_insert(
+        &mut self,
+        config_id: ObjectID,
+        name_df_id: ObjectID,
+        setting_value_object_type: MoveObjectType,
+        value: Value,
+    ) {
+        self.child_object_store.config_setting_cache_insert(
+            config_id,
+            name_df_id,
+            setting_value_object_type,
+            value,
+        )
     }
 
     // returns None if a child object is still borrowed
