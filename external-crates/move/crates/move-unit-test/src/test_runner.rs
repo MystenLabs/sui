@@ -290,7 +290,7 @@ impl SharedTestingConfig {
                 .into(),
         );
         match session.finish_with_extensions().0 {
-            Ok((cs, _, extensions)) => (Ok(cs), Ok(extensions), return_result, test_run_info),
+            Ok((cs, extensions)) => (Ok(cs), Ok(extensions), return_result, test_run_info),
             Err(err) => (Err(err.clone()), Err(err), return_result, test_run_info),
         }
     }
