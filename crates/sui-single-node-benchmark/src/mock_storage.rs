@@ -6,7 +6,8 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use once_cell::unsync::OnceCell;
 use prometheus::core::{Atomic, AtomicU64};
-use std::collections::HashMap;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+use std::collections::{HashMap, BTreeMap};
 use std::sync::{Arc, RwLock};
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
@@ -88,6 +89,18 @@ impl InMemoryObjectStore {
             }
         }
         for (object_id, object) in inner_temp_store.written {
+            objects.insert(object_id, object);
+        }
+    }
+
+    // FIXME: is there a way to retrieve written Object type from tx_effect?
+    // could't find for now
+    pub fn commit_effects(&self, tx_effect: TransactionEffects, written: BTreeMap<ObjectID, Object>) {
+        let mut objects = self.objects.write().unwrap();
+        for (object_id, _, _) in tx_effect.deleted() {
+            objects.remove(&object_id);
+        }
+        for (object_id, object) in written {
             objects.insert(object_id, object);
         }
     }

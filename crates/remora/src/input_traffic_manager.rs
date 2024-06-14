@@ -67,7 +67,7 @@ pub async fn input_traffic_manager_run(
                     if let Err(e) = out_consensus.send(msg) {
                         eprintln!("Failed to forward to consensus engine: {:?}", e);
                     };
-                } else if let RemoraMessage::PreExecReply(ref full_tx) = msg {
+                } else if let RemoraMessage::PreExecResult(ref full_tx) = msg {
                     if let Err(e) = out_executor.send(msg) {
                         eprintln!("Failed to forward to executor engine: {:?}", e);
                     };

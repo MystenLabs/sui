@@ -170,8 +170,7 @@ pub enum RemoraMessage {
         written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
     },
 
-    RequestPreExecResult(),
-    PreExecReply(TransactionEffects),
+    PreExecResult(TransactionWithResults),
 
     // Execution Worker <-> Storage Engine
     StateUpdate(TransactionEffects),
@@ -193,7 +192,7 @@ impl Message for RemoraMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionWithEffects {
-    pub tx: Transaction,
+    pub tx: CertifiedTransaction,
     pub ground_truth_effects: Option<TransactionEffects>, // full effects of tx, as ground truth exec result
     pub child_inputs: Option<Vec<ObjectID>>,              // TODO: mark mutable
     pub checkpoint_seq: Option<u64>,
@@ -302,12 +301,13 @@ impl TransactionWithEffects {
     }
 }
 
+#[derive(Debug,Deserialize,Serialize)]
 pub struct TransactionWithResults {
-    pub full_tx: TransactionWithEffects,
+    // pub full_tx: TransactionWithEffects,
     pub tx_effects: TransactionEffects, // determined after execution
-    pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
-    pub written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-    pub missing_objs: HashSet<ObjectID>,
+    // pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
+    pub written: BTreeMap<ObjectID, Object>,
+    // pub missing_objs: HashSet<ObjectID>,
 }
 
 #[derive(PartialEq)]
@@ -342,23 +342,23 @@ pub fn get_ews_for_tx(tx: &TransactionWithEffects, ew_ids: &Vec<UniqueId>) -> Ha
         .collect()
 }
 
-pub fn get_ews_for_tx_results(
-    tx_results: &TransactionWithResults,
-    ew_ids: &Vec<UniqueId>,
-) -> HashSet<UniqueId> {
-    // get deleted and written objects
-    let rw_set: Vec<_> = tx_results
-        .deleted
-        .keys()
-        .chain(tx_results.written.keys())
-        .cloned()
-        .collect();
+// pub fn get_ews_for_tx_results(
+//     tx_results: &TransactionWithResults,
+//     ew_ids: &Vec<UniqueId>,
+// ) -> HashSet<UniqueId> {
+//     // get deleted and written objects
+//     let rw_set: Vec<_> = tx_results
+//         .deleted
+//         .keys()
+//         .chain(tx_results.written.keys())
+//         .cloned()
+//         .collect();
 
-    rw_set
-        .into_iter()
-        .map(|obj_id| get_ew_owner_for_object(obj_id, ew_ids))
-        .collect()
-}
+//     rw_set
+//         .into_iter()
+//         .map(|obj_id| get_ew_owner_for_object(obj_id, ew_ids))
+//         .collect()
+// }
 
 pub fn get_ews_for_deleted_written(
     deleted: &BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,

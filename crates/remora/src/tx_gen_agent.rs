@@ -62,12 +62,12 @@ pub async fn generate_benchmark_ctx_workload(
 pub async fn generate_benchmark_txs(
     workload: Workload,
     mut ctx: BenchmarkContext,
-) -> (BenchmarkContext, Vec<Transaction>) {
+) -> (BenchmarkContext, Vec<CertifiedTransaction>) {
     let start_time = std::time::Instant::now();
     let tx_generator = workload.create_tx_generator(&mut ctx).await;
     let transactions = ctx.generate_transactions(tx_generator).await;
-    // let skip_signing = false;
-    // let transactions = ctx.certify_transactions(transactions, skip_signing).await;
+    let skip_signing = false;
+    let transactions = ctx.certify_transactions(transactions, skip_signing).await;
 
     let elapsed = start_time.elapsed().as_millis() as f64;
     println!(

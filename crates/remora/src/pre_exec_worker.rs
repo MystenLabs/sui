@@ -82,57 +82,62 @@ impl PreExecWorkerState
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         ctx: Arc<BenchmarkContext>,
-    ) -> TransactionEffects {
+        in_buffer: &mpsc::UnboundedSender<TransactionWithResults>,
+    ) {
         let tx = full_tx.tx.clone();
 
-        ctx.validator().execute_raw_transaction(tx).await
-        
+        // let effect = ctx.validator().execute_raw_transaction(tx).await;
+             
         //ctx.validator().execute_dry_run(tx).await
         
-        // let input_objects = tx.transaction_data().input_objects().unwrap();
-        // // FIXME: ugly deref
-        // let objects = memstore
-        //     .read_objects_for_execution(&**(ctx.validator().get_epoch_store()), &tx.key(), &input_objects)
-        //     .unwrap();
+        let input_objects = tx.transaction_data().input_objects().unwrap();
+        // FIXME: ugly deref
+        let objects = memstore
+            .read_objects_for_execution(&**(ctx.validator().get_epoch_store()), &tx.key(), &input_objects)
+            .unwrap();
 
-        // let executable = VerifiedExecutableTransaction::new_from_certificate(
-        //     VerifiedCertificate::new_unchecked(tx),
-        // );
+        let executable = VerifiedExecutableTransaction::new_from_certificate(
+            VerifiedCertificate::new_unchecked(tx),
+        );
        
-        // ctx.validator().get_validator()
-        //     .try_execute_immediately(&executable, None, ctx.validator().get_epoch_store())
-        //     .await
-        //     .unwrap()
-        //     .0
-        // let validator = ctx.validator();
-        // let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
-        //     &executable,
-        //     objects,
-        //     protocol_config,
-        //     reference_gas_price,
-        // )
-        // .unwrap();
-        // let (kind, signer, gas) = executable.transaction_data().execution_parts();
-        // let (inner_temp_store, _, effects, _) =
-        //     ctx.validator().get_epoch_store().executor().execute_transaction_to_effects(
-        //         &memstore,
-        //         protocol_config,
-        //         ctx.validator().get_validator().metrics.limits_metrics.clone(),
-        //         false,
-        //         &HashSet::new(),
-        //         &ctx.validator().get_epoch_store().epoch(),
-        //         0,
-        //         input_objects,
-        //         gas,
-        //         gas_status,
-        //         kind,
-        //         signer,
-        //         *executable.digest(),
-        //     );
-        // assert!(effects.status().is_ok());
-        // memstore.commit_objects(inner_temp_store);
-        // println!("finish exec a txn");
-        // effects
+        let validator = ctx.validator();
+        let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
+            &executable,
+            objects,
+            protocol_config,
+            reference_gas_price,
+        )
+        .unwrap();
+        let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        let (inner_temp_store, _, effects, _) =
+            ctx.validator().get_epoch_store().executor().execute_transaction_to_effects(
+                &memstore,
+                protocol_config,
+                ctx.validator().get_validator().metrics.limits_metrics.clone(),
+                false,
+                &HashSet::new(),
+                &ctx.validator().get_epoch_store().epoch(),
+                0,
+                input_objects,
+                gas,
+                gas_status,
+                kind,
+                signer,
+                *executable.digest(),
+            );
+        assert!(effects.status().is_ok());
+
+        let tx_res = TransactionWithResults {
+            tx_effects: effects,
+            written: inner_temp_store.written.clone(),
+        };
+   
+        memstore.commit_objects(inner_temp_store);
+        println!("finish exec a txn");
+
+        if let Err(e) = in_buffer.send(tx_res) {
+            eprintln!("PRE failed to forward in-channel exec res: {:?}", e);
+        } 
     }
 
     pub async fn run(&mut self,
@@ -142,6 +147,9 @@ impl PreExecWorkerState
         out_channel: &mpsc::Sender<NetworkMessage>,
         my_id: u16,
     ) {
+        let mut consensus_interval = tokio::time::interval(Duration::from_millis(100));
+        let (in_buffer, mut out_buffer) = mpsc::unbounded_channel::<TransactionWithResults>();
+
         loop {
             tokio::select! {
                 Some(msg) = in_channel.recv() => {
@@ -150,19 +158,35 @@ impl PreExecWorkerState
                     if let RemoraMessage::ProposeExec(full_tx) = msg {
                         let memstore = self.memory_store.clone();
                         let context = self.context.clone();
+                        let in_buffer = in_buffer.clone();
                         tokio::spawn(async move { 
-                            Self::async_exec(full_tx, 
+                            Self::async_exec(full_tx.clone(), 
                                              memstore,
                                              context.validator().get_epoch_store().protocol_config(), 
                                              context.validator().get_epoch_store().reference_gas_price(), 
-                                             context
+                                             context,
+                                             &in_buffer,
                             ).await 
-                        })
+                        });
                     } else {
                         eprintln!("EW {} received unexpected message from: {:?}", my_id, msg);
                         panic!("unexpected message");
                     };
-                }
+                },
+
+                _ = consensus_interval.tick() => {
+                    // drain the exec results and send it out
+                    while let Ok(msg) = out_buffer.try_recv() {
+                        out_channel.send(NetworkMessage {
+                        src: my_id,
+                        dst: vec![1],
+                        payload: RemoraMessage::PreExecResult(msg),
+                        })
+                        .await
+                        .expect("sending failed");
+                    } 
+
+                },
             }
         }
 
