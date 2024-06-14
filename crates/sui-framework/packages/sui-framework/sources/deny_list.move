@@ -119,6 +119,7 @@ module sui::deny_list {
         addr: address,
         _ctx: &TxContext,
     ): bool {
+        if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
         let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
         let setting_name = AddressKey(addr);
         if (!per_type_config.exists_with_type<_, _, bool>(setting_name)) return false;
@@ -174,6 +175,7 @@ module sui::deny_list {
         per_type_key: vector<u8>,
         _ctx: &TxContext,
     ): bool {
+        if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
         let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
         let setting_name = GlobalPauseKey();
         if (!per_type_config.exists_with_type<_, _, bool>(setting_name)) return false;

@@ -466,6 +466,7 @@ meaningless to add them to the deny list.
     addr: <b>address</b>,
     _ctx: &TxContext,
 ): bool {
+    <b>if</b> (!<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(per_type_index, per_type_key)) <b>return</b> <b>false</b>;
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
     <b>if</b> (!per_type_config.exists_with_type&lt;_, _, bool&gt;(setting_name)) <b>return</b> <b>false</b>;
@@ -574,6 +575,7 @@ meaningless to add them to the deny list.
     per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     _ctx: &TxContext,
 ): bool {
+    <b>if</b> (!<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(per_type_index, per_type_key)) <b>return</b> <b>false</b>;
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a>();
     <b>if</b> (!per_type_config.exists_with_type&lt;_, _, bool&gt;(setting_name)) <b>return</b> <b>false</b>;
