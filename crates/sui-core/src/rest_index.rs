@@ -209,8 +209,9 @@ impl IndexStoreTables {
         if let Some(highest_executed_checkpint) =
             checkpoint_store.get_highest_executed_checkpoint_seq_number()?
         {
-            let lowest_available_checkpoint =
-                checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
+            let lowest_available_checkpoint = checkpoint_store
+                .get_highest_pruned_checkpoint_seq_number()?
+                .saturating_add(1);
 
             let mut batch = self.transactions.batch();
 
