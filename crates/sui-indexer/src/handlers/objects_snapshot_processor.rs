@@ -8,27 +8,21 @@ use mysten_metrics::get_metrics;
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
-use sui_data_ingestion_core::DataIngestionMetrics;
-use sui_data_ingestion_core::IndexerExecutor;
-use sui_data_ingestion_core::ReaderOptions;
-use sui_data_ingestion_core::ShimProgressStore;
-use sui_data_ingestion_core::Worker;
-use sui_data_ingestion_core::WorkerPool;
-use sui_package_resolver::Resolver;
+use sui_data_ingestion_core::{
+    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimProgressStore, Worker, WorkerPool,
+};
+use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_rest_api::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use tokio::sync::oneshot;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::store::package_resolver::IndexerStorePackageResolver;
-use crate::store::package_resolver::InterimPackageResolver;
+use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::types::IndexerResult;
 use crate::IndexerConfig;
 use crate::{metrics::IndexerMetrics, store::IndexerStore};
 use std::sync::{Arc, Mutex};
-use sui_package_resolver::PackageStoreWithLruCache;
 
 use super::checkpoint_handler::CheckpointHandler;
 use super::tx_processor::IndexingPackageBuffer;
@@ -169,7 +163,7 @@ where
     // Channel for actually communicating indexed object changes between the ingestion pipeline and the committer.
     let (indexed_obj_sender, indexed_obj_receiver) = mysten_metrics::metered_channel::channel(
         // TODO: placeholder for now
-        1800,
+        600,
         &global_metrics
             .channel_inflight
             .with_label_values(&["obj_indexing_for_snapshot"]),
@@ -269,7 +263,7 @@ where
         config: SnapshotLagConfig,
         cancel: CancellationToken,
     ) -> IndexerResult<()> {
-        let batch_size = config.snapshot_max_lag - config.snapshot_min_lag;
+        let batch_size = 100;
         let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(indexed_obj_receiver)
             .ready_chunks(batch_size);
 
@@ -282,22 +276,24 @@ where
                     info!("Shutdown signal received, terminating object snapshot processor");
                     return Ok(());
                 }
-                _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(config.sleep_duration)) => {
                     let latest_indexer_cp = store
                         .get_latest_checkpoint_sequence_number()
                         .await?
                         .unwrap_or_default();
 
-                    // We update the snapshot table when it falls behind the rest of the indexer by more than the max_lag.
-                    while latest_indexer_cp > start_cp + config.snapshot_max_lag as u64 {
-                        // Stream the next 600 checkpoints of object changes to be committed to the store.
+                    // We update the snapshot table when it falls behind the rest of the indexer by more than the min_lag.
+                    while latest_indexer_cp >= start_cp + config.snapshot_min_lag as u64 {
+                        // Stream the next object changes to be committed to the store.
                         if let Some(object_changes_batch) = stream.next().await {
                             let first_checkpoint_seq = object_changes_batch.first().as_ref().unwrap().checkpoint_sequence_number;
                             let last_checkpoint_seq = object_changes_batch.last().as_ref().unwrap().checkpoint_sequence_number;
                             info!("Objects snapshot processor is updating objects snapshot table from {} to {}", first_checkpoint_seq, last_checkpoint_seq);
 
                             let changes_to_commit = object_changes_batch.into_iter().map(|obj| obj.object_changes).collect();
-                            store.backfill_objects_snapshot(changes_to_commit).await.expect("Failed to backfill objects snapshot");
+                            store.backfill_objects_snapshot(changes_to_commit)
+                                .await
+                                .unwrap_or_else(|_| panic!("Failed to backfill objects snapshot from {} to {}", first_checkpoint_seq, last_checkpoint_seq));
                             start_cp = last_checkpoint_seq + 1;
 
                             // Tells the package buffer that this checkpoint has been processed and the corresponding package data can be deleted.
