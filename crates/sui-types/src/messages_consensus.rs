@@ -217,6 +217,7 @@ impl ConsensusTransactionKind {
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum VersionedDkgMessage {
     V0(dkg_v0::Message<bls12381::G2Element, bls12381::G2Element>),
     V1(dkg_v1::Message<bls12381::G2Element, bls12381::G2Element>),
