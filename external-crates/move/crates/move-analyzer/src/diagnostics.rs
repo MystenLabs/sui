@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::utils::get_loc;
+use crate::utils::{loc_end_to_lsp_position_opt, loc_start_to_lsp_position_opt};
 use codespan_reporting::diagnostic::Severity;
 use lsp_types::{Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Range};
 use move_command_line_common::files::FileHash;
@@ -24,8 +24,8 @@ pub fn lsp_diagnostics(
     let mut lsp_diagnostics = BTreeMap::new();
     for (s, _, (loc, msg), labels, _) in diagnostics {
         let fpath = files.file_path(&loc.file_hash());
-        if let Some(start) = get_loc(&loc.file_hash(), loc.start(), files) {
-            if let Some(end) = get_loc(&loc.file_hash(), loc.end(), files) {
+        if let Some(start) = loc_start_to_lsp_position_opt(files, loc) {
+            if let Some(end) = loc_end_to_lsp_position_opt(files, loc) {
                 let range = Range::new(start, end);
                 let related_info_opt = if labels.is_empty() {
                     None
@@ -34,8 +34,8 @@ pub fn lsp_diagnostics(
                         labels
                             .iter()
                             .filter_map(|(lloc, lmsg)| {
-                                let lstart = get_loc(&lloc.file_hash(), lloc.start(), files)?;
-                                let lend = get_loc(&lloc.file_hash(), lloc.end(), files)?;
+                                let lstart = loc_start_to_lsp_position_opt(files, lloc)?;
+                                let lend = loc_end_to_lsp_position_opt(files, lloc)?;
                                 let lpath = files.file_path(&lloc.file_hash());
                                 let lpos = Location::new(
                                     Url::from_file_path(lpath).unwrap(),

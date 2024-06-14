@@ -239,7 +239,24 @@ impl MappedFiles {
         Some(posn)
     }
 
-    /// Given a line number in the file return the `Loc` for the line.
+    /// Given a line number and character number (both 0-indexed) in the file return the `Loc` for
+    /// the line. Note that the end byte is exclusive in the resultant `Loc`.
+    pub fn line_char_offset_to_loc_opt(
+        &self,
+        file_hash: FileHash,
+        line_offset: u32,
+        char_offset: u32,
+    ) -> Option<Loc> {
+        let file_id = self.file_mapping().get(&file_hash)?;
+        let line_range = self
+            .files()
+            .line_range(*file_id, (line_offset + 1) as usize)
+            .ok()?;
+        let offset = line_range.start as u32 + char_offset;
+        Some(Loc::new(file_hash, offset, offset + 1))
+    }
+
+    /// Given a line number (1-indexed) in the file return the `Loc` for the line.
     pub fn line_to_loc_opt(&self, file_hash: &FileHash, line_number: usize) -> Option<Loc> {
         let file_id = self.file_mapping().get(file_hash)?;
         let line_range = self.files().line_range(*file_id, line_number).ok()?;

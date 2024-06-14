@@ -4,16 +4,23 @@
 use lsp_types::Position;
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    shared::files::{self, MappedFiles},
-    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
+    shared::files::MappedFiles, unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 
+//**************************************************************************************************
+// Location Conversions
+//**************************************************************************************************
+
 /// Converts a location from the byte index format to the line/character (Position) format, where
 /// line/character are 0-based.
-pub fn get_loc(fhash: &FileHash, pos: ByteIndex, files: &MappedFiles) -> Option<Position> {
-    let loc_posn = files.byte_index_to_position_opt(fhash, pos)?;
+pub fn offset_to_lsp_position(
+    files: &MappedFiles,
+    file_hash: &FileHash,
+    offset: ByteIndex,
+) -> Option<Position> {
+    let loc_posn = files.byte_index_to_position_opt(file_hash, offset)?;
     let result = Position {
         line: loc_posn.line_offset() as u32,
         character: loc_posn.column_offset() as u32,
@@ -21,37 +28,32 @@ pub fn get_loc(fhash: &FileHash, pos: ByteIndex, files: &MappedFiles) -> Option<
     Some(result)
 }
 
-/// Converts a position (line/column) to byte index in the file.
-pub fn get_byte_idx(
-    pos: Position,
-    fhash: FileHash,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
-) -> Option<ByteIndex> {
-    let Some(file_id) = file_id_mapping.get(&fhash) else {
-        return None;
-    };
-    let Ok(line_range) = files.line_range(*file_id, pos.line as usize) else {
-        return None;
-    };
-    Some(line_range.start as u32 + pos.character)
-}
-
-/// Convert a move_compiler Position into an lsp_types position
-pub fn to_lsp_position(pos: files::Position) -> Position {
-    Position {
-        line: pos.line_offset() as u32,
-        character: pos.column_offset() as u32,
-    }
-}
-
-pub fn get_start_position_opt(pos: &Loc, files: &MappedFiles) -> Option<Position> {
-    let start_loc_posn = files.start_position_opt(pos)?;
+pub fn loc_start_to_lsp_position_opt(files: &MappedFiles, loc: &Loc) -> Option<Position> {
+    let start_loc_posn = files.start_position_opt(loc)?;
     let result = Position {
         line: start_loc_posn.line_offset() as u32,
         character: start_loc_posn.column_offset() as u32,
     };
     Some(result)
+}
+
+pub fn loc_end_to_lsp_position_opt(files: &MappedFiles, loc: &Loc) -> Option<Position> {
+    let end_loc_posn = files.end_position_opt(loc)?;
+    let result = Position {
+        line: end_loc_posn.line_offset() as u32,
+        character: end_loc_posn.column_offset() as u32,
+    };
+    Some(result)
+}
+
+pub fn lsp_position_to_loc(
+    files: &MappedFiles,
+    file_hash: FileHash,
+    pos: &Position,
+) -> Option<Loc> {
+    let line_offset = pos.line;
+    let char_offset = pos.character;
+    files.line_char_offset_to_loc_opt(file_hash, line_offset, char_offset)
 }
 
 /// Some functions defined in a module need to be ignored.

@@ -8,7 +8,7 @@ use crate::{
         expansion_mod_ident_to_map_key, type_def_loc, DefInfo, DefLoc, LocalDef, ModuleDefs,
         UseDef, UseDefMap, UseLoc,
     },
-    utils::{get_start_position_opt, ignored_function},
+    utils::{ignored_function, loc_start_to_lsp_position_opt},
 };
 
 use move_compiler::{
@@ -62,13 +62,13 @@ impl TypingAnalysisContext<'_> {
     /// Returns the `lsp_types::Position` start for a location, but may fail if we didn't see the
     /// definition already.
     fn lsp_start_position_opt(&self, loc: &Loc) -> Option<lsp_types::Position> {
-        get_start_position_opt(loc, self.files)
+        loc_start_to_lsp_position_opt(self.files, loc)
     }
 
     /// Returns the `lsp_types::Position` start for a location, but may fail if we didn't see the
     /// definition already. This should only be used on things we already indexed.
     fn lsp_start_position(&self, loc: &Loc) -> lsp_types::Position {
-        get_start_position_opt(loc, self.files).unwrap()
+        loc_start_to_lsp_position_opt(self.files, loc).unwrap()
     }
 
     fn reset_for_module_member(&mut self) {

@@ -59,7 +59,7 @@ use crate::{
     compiler_info::CompilerInfo,
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
-    utils::get_loc,
+    utils::loc_start_to_lsp_position_opt,
 };
 
 use anyhow::{anyhow, Result};
@@ -1695,7 +1695,7 @@ fn get_mod_outer_defs(
         if let StructFields::Defined(pos_fields, fields) = &def.fields {
             positional = *pos_fields;
             for (fpos, fname, (_, t)) in fields {
-                let start = match get_start_loc(&fpos, files) {
+                let start = match loc_start_to_lsp_position_opt(files, &fpos) {
                     Some(s) => s,
                     None => {
                         debug_assert!(false);
@@ -1721,7 +1721,7 @@ fn get_mod_outer_defs(
         };
 
         // process the struct itself
-        let name_start = match get_start_loc(&pos, files) {
+        let name_start = match loc_start_to_lsp_position_opt(files, &pos) {
             Some(s) => s,
             None => {
                 debug_assert!(false);
@@ -1780,7 +1780,7 @@ fn get_mod_outer_defs(
     }
 
     for (pos, name, c) in &mod_def.constants {
-        let name_start = match get_start_loc(&pos, files) {
+        let name_start = match loc_start_to_lsp_position_opt(files, &pos) {
             Some(s) => s,
             None => {
                 debug_assert!(false);
@@ -1810,7 +1810,7 @@ fn get_mod_outer_defs(
         if ignored_function(*name) {
             continue;
         }
-        let name_start = match get_start_loc(&pos, files) {
+        let name_start = match loc_start_to_lsp_position_opt(files, &pos) {
             Some(s) => s,
             None => {
                 debug_assert!(false);
@@ -1872,7 +1872,7 @@ fn get_mod_outer_defs(
     let mut use_def_map = UseDefMap::new();
 
     let ident = mod_ident.value;
-    let start = match get_start_loc(loc, files) {
+    let start = match loc_start_to_lsp_position_opt(files, loc) {
         Some(s) => s,
         None => {
             debug_assert!(false);
@@ -1907,7 +1907,7 @@ fn get_mod_outer_defs(
 
     // insert use of the module name in the definition itself
     let mod_name = ident.module;
-    if let Some(mod_name_start) = get_start_loc(&mod_name.loc(), files) {
+    if let Some(mod_name_start) = loc_start_to_lsp_position_opt(files, &mod_name.loc()) {
         use_def_map.insert(
             mod_name_start.line,
             UseDef::new(
@@ -1928,10 +1928,6 @@ fn get_mod_outer_defs(
     }
 
     (mod_defs, use_def_map)
-}
-
-fn get_start_loc(pos: &Loc, files: &MappedFiles) -> Option<Position> {
-    get_loc(&pos.file_hash(), pos.start(), files)
 }
 
 impl<'a> ParsingSymbolicator<'a> {
@@ -2256,7 +2252,8 @@ impl<'a> ParsingSymbolicator<'a> {
         let Some(mod_defs) = self.mod_outer_defs.get_mut(mod_ident_str) else {
             return;
         };
-        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files) else {
+        let Some(mod_name_start) = loc_start_to_lsp_position_opt(self.files, &mod_name.loc())
+        else {
             debug_assert!(false);
             return;
         };
@@ -2314,7 +2311,8 @@ impl<'a> ParsingSymbolicator<'a> {
         ) {
             // it's a struct - add it for the alias as well
             if let Some(alias) = alias_opt {
-                let Some(alias_start) = get_start_loc(&alias.loc, self.files) else {
+                let Some(alias_start) = loc_start_to_lsp_position_opt(self.files, &alias.loc)
+                else {
                     debug_assert!(false);
                     return;
                 };
@@ -2343,7 +2341,8 @@ impl<'a> ParsingSymbolicator<'a> {
         ) {
             // it's a function - add it for the alias as well
             if let Some(alias) = alias_opt {
-                let Some(alias_start) = get_start_loc(&alias.loc, self.files) else {
+                let Some(alias_start) = loc_start_to_lsp_position_opt(self.files, &alias.loc)
+                else {
                     debug_assert!(false);
                     return;
                 };
@@ -2410,7 +2409,8 @@ impl<'a> ParsingSymbolicator<'a> {
                     else {
                         return;
                     };
-                    let Some(def_start) = get_start_loc(&var.loc(), self.files) else {
+                    let Some(def_start) = loc_start_to_lsp_position_opt(self.files, &var.loc())
+                    else {
                         return;
                     };
                     mod_defs
@@ -2453,7 +2453,7 @@ impl<'a> ParsingSymbolicator<'a> {
             return;
         };
         let sp!(pos, name) = n;
-        let Some(loc) = get_start_loc(&pos, self.files) else {
+        let Some(loc) = loc_start_to_lsp_position_opt(self.files, &pos) else {
             return;
         };
         self.alias_lengths.insert(loc, name.len());
@@ -2474,7 +2474,7 @@ pub fn add_fun_use_def(
     use_defs: &mut UseDefMap,
     alias_lengths: &BTreeMap<Position, usize>,
 ) -> Option<UseDef> {
-    let Some(name_start) = get_start_loc(use_pos, files) else {
+    let Some(name_start) = loc_start_to_lsp_position_opt(files, use_pos) else {
         debug_assert!(false);
         return None;
     };
@@ -2513,7 +2513,7 @@ pub fn add_struct_use_def(
     use_defs: &mut UseDefMap,
     alias_lengths: &BTreeMap<Position, usize>,
 ) -> Option<UseDef> {
-    let Some(name_start) = get_start_loc(use_pos, files) else {
+    let Some(name_start) = loc_start_to_lsp_position_opt(files, use_pos) else {
         debug_assert!(false);
         return None;
     };
