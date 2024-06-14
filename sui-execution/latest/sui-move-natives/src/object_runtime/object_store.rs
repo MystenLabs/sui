@@ -33,6 +33,14 @@ pub(super) struct ChildObject {
 }
 
 #[derive(Debug)]
+struct ConfigSetting {
+    config: ObjectID,
+    setting: ObjectID,
+    ty: MoveObjectType,
+    contents: Box<[u8]>,
+}
+
+#[derive(Debug)]
 pub(crate) struct ChildObjectEffect {
     pub(super) owner: ObjectID,
     pub(super) ty: Type,
@@ -72,6 +80,7 @@ pub(super) struct ChildObjectStore<'a> {
     // Maps of populated GlobalValues, meaning the child object has been accessed in this
     // transaction
     store: BTreeMap<ObjectID, ChildObject>,
+    config_setting_cache: BTreeMap<ObjectID, ConfigSetting>,
     // whether or not this TX is gas metered
     is_metered: bool,
 }
@@ -371,6 +380,7 @@ impl<'a> ChildObjectStore<'a> {
                 current_epoch_id,
             },
             store: BTreeMap::new(),
+            config_setting_cache: BTreeMap::new(),
             is_metered,
         }
     }
@@ -601,24 +611,82 @@ impl<'a> ChildObjectStore<'a> {
         let parent = config_addr;
         let child = name_df_addr;
 
-        let child_move_type = setting_value_object_type;
-        let obj_opt =
-            self.inner
-                .fetch_child_object_unbounded(parent, child, SequenceNumber::MAX, true)?;
-        let Some(move_obj) = obj_opt.as_ref().map(|obj| obj.data.try_as_move().unwrap()) else {
-            return Ok(ObjectResult::Loaded(None));
-        };
-        // TODO cache and limits
+        let setting = match self.config_setting_cache.entry(child) {
+            btree_map::Entry::Vacant(e) => {
+                let child_move_type = setting_value_object_type;
+                let obj_opt = self.inner.fetch_child_object_unbounded(
+                    parent,
+                    child,
+                    SequenceNumber::MAX,
+                    true,
+                )?;
+                let Some(move_obj) = obj_opt.as_ref().map(|obj| obj.data.try_as_move().unwrap())
+                else {
+                    return Ok(ObjectResult::Loaded(None));
+                };
+                // TODO limits
 
-        let obj_contents = move_obj.contents();
-        match Value::simple_deserialize(obj_contents, setting_value_layout) {
-            Some(v) => Ok(ObjectResult::Loaded(Some(v))),
-            None => Err(
+                let contents = Box::from(move_obj.contents());
+
+                e.insert(ConfigSetting {
+                    config: parent,
+                    setting: child,
+                    ty: child_move_type.clone(),
+                    contents,
+                })
+            }
+            btree_map::Entry::Occupied(e) => {
+                let setting = e.into_mut();
+                if setting.ty != *setting_value_object_type {
+                    return Ok(ObjectResult::MismatchedType);
+                }
+                if setting.config != parent {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!(
+                                "Parent for config setting changed. Potential hash collision?
+                             parent: {parent},
+                             child: {child},
+                             setting_value_object_type: {setting_value_object_type},
+                             setting: {setting:#?},
+                        "
+                            )),
+                    );
+                }
+                setting
+            }
+        };
+        let Some(value) = Value::simple_deserialize(&setting.contents, setting_value_layout) else {
+            return Err(
                 PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
-                    format!("Failed to deserialize object {child} with type {child_move_type}",),
+                    format!(
+                        "Failed to deserialize object {child} with type {setting_value_layout}",
+                    ),
                 ),
-            ),
-        }
+            );
+        };
+        Ok(ObjectResult::Loaded(Some(value)))
+    }
+
+    /// Used by test scenario to insert a config setting into the cache, which replicates the
+    /// behavior of a config already being in the object store.
+    pub(super) fn config_setting_cache_insert(
+        &mut self,
+        config_addr: ObjectID,
+        name_df_addr: ObjectID,
+        setting_value_object_type: MoveObjectType,
+        contents: Box<[u8]>,
+    ) {
+        let child = name_df_addr;
+        let parent = config_addr;
+        let child_move_type = setting_value_object_type;
+        let setting = ConfigSetting {
+            config: parent,
+            setting: child,
+            ty: child_move_type,
+            contents,
+        };
+        self.config_setting_cache.insert(child, setting);
     }
 
     pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<Object>> {

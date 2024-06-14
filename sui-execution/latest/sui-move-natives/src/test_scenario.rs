@@ -30,12 +30,14 @@ use std::{
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
+    config::{self, Config},
     digests::{ObjectDigest, TransactionDigest},
     execution::DynamicallyLoadedObjectMetadata,
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
     storage::ChildObjectResolver,
+    TypeTag,
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -133,6 +135,14 @@ pub fn end_transaction(
             ));
         }
     };
+    let writes: IndexMap<ObjectID, (Owner, Type, Option<TypeTag>, Value)> = writes
+        .into_iter()
+        .map(|(id, (owner, ty, value))| {
+            let tag = context.type_to_type_tag(&ty).ok();
+            (id, (owner, ty, tag, value))
+        })
+        .collect();
+    let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let all_active_child_objects = object_runtime_ref
         .all_active_child_objects()
         .map(|(id, _, _)| *id)
@@ -166,7 +176,11 @@ pub fn end_transaction(
     // handle transfers, inserting transferred/written objects into their respective inventory
     let mut created = vec![];
     let mut written = vec![];
-    for (id, (owner, ty, value)) in writes {
+    for (id, (owner, ty, tag, value)) in writes {
+        // write configs to cache
+        // if matches!(tag, Some(TypeTag::Struct(s)) if config::is_setting(&*s)) {
+        //     ()
+        // }
         new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
         transferred.push((id, owner));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
