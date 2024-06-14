@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use crate::{
     models::display::StoredDisplay,
     types::{
-        IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
-        IndexedPackage, IndexedTransaction, TxIndex,
+        EventIndex, IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent,
+        IndexedObject, IndexedPackage, IndexedTransaction, TxIndex,
     },
 };
 
@@ -21,6 +21,7 @@ pub struct CheckpointDataToCommit {
     pub checkpoint: IndexedCheckpoint,
     pub transactions: Vec<IndexedTransaction>,
     pub events: Vec<IndexedEvent>,
+    pub event_indices: Vec<EventIndex>,
     pub tx_indices: Vec<TxIndex>,
     pub display_updates: BTreeMap<String, StoredDisplay>,
     pub object_changes: TransactionObjectChangesToCommit,

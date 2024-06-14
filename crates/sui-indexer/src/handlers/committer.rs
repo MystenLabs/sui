@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use diesel::r2d2::event;
 use tap::tap::TapFallible;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
@@ -89,6 +90,7 @@ async fn commit_checkpoints<S>(
     let mut tx_batch = vec![];
     let mut events_batch = vec![];
     let mut tx_indices_batch = vec![];
+    let mut event_indices_batch = vec![];
     let mut display_updates_batch = BTreeMap::new();
     let mut object_changes_batch = vec![];
     let mut object_history_changes_batch = vec![];
@@ -99,6 +101,7 @@ async fn commit_checkpoints<S>(
             checkpoint,
             transactions,
             events,
+            event_indices,
             tx_indices,
             display_updates,
             object_changes,
@@ -110,6 +113,7 @@ async fn commit_checkpoints<S>(
         tx_batch.push(transactions);
         events_batch.push(events);
         tx_indices_batch.push(tx_indices);
+        event_indices_batch.push(event_indices);
         display_updates_batch.extend(display_updates.into_iter());
         object_changes_batch.push(object_changes);
         object_history_changes_batch.push(object_history_changes);
@@ -123,6 +127,10 @@ async fn commit_checkpoints<S>(
     let tx_batch = tx_batch.into_iter().flatten().collect::<Vec<_>>();
     let tx_indices_batch = tx_indices_batch.into_iter().flatten().collect::<Vec<_>>();
     let events_batch = events_batch.into_iter().flatten().collect::<Vec<_>>();
+    let event_indices_batch = event_indices_batch
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
     let packages_batch = packages_batch.into_iter().flatten().collect::<Vec<_>>();
     let checkpoint_num = checkpoint_batch.len();
     let tx_count = tx_batch.len();
@@ -133,6 +141,7 @@ async fn commit_checkpoints<S>(
             state.persist_transactions(tx_batch),
             state.persist_tx_indices(tx_indices_batch),
             state.persist_events(events_batch),
+            state.persist_event_indices(event_indices_batch),
             state.persist_displays(display_updates_batch),
             state.persist_packages(packages_batch),
             state.persist_objects(object_changes_batch.clone()),
