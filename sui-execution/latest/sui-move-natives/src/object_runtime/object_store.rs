@@ -35,9 +35,8 @@ pub(super) struct ChildObject {
 #[derive(Debug)]
 struct ConfigSetting {
     config: ObjectID,
-    setting: ObjectID,
     ty: MoveObjectType,
-    contents: Box<[u8]>,
+    value: Value,
 }
 
 #[derive(Debug)]
@@ -602,14 +601,14 @@ impl<'a> ChildObjectStore<'a> {
 
     pub(super) fn config_setting_unsequenced_read(
         &mut self,
-        config_addr: ObjectID,
-        name_df_addr: ObjectID,
+        config_id: ObjectID,
+        name_df_id: ObjectID,
         _setting_value_ty: &Type,
         setting_value_layout: &R::MoveTypeLayout,
         setting_value_object_type: &MoveObjectType,
     ) -> PartialVMResult<ObjectResult<Option<Value>>> {
-        let parent = config_addr;
-        let child = name_df_addr;
+        let parent = config_id;
+        let child = name_df_id;
 
         let setting = match self.config_setting_cache.entry(child) {
             btree_map::Entry::Vacant(e) => {
@@ -624,15 +623,20 @@ impl<'a> ChildObjectStore<'a> {
                 else {
                     return Ok(ObjectResult::Loaded(None));
                 };
-                // TODO limits
-
-                let contents = Box::from(move_obj.contents());
-
+                let Some(value) =
+                    Value::simple_deserialize(move_obj.contents(), setting_value_layout)
+                else {
+                    return Err(
+                        PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE)
+                            .with_message(format!(
+                            "Failed to deserialize object {child} with type {setting_value_layout}",
+                        )),
+                    );
+                };
                 e.insert(ConfigSetting {
                     config: parent,
-                    setting: child,
                     ty: child_move_type.clone(),
-                    contents,
+                    value,
                 })
             }
             btree_map::Entry::Occupied(e) => {
@@ -656,15 +660,11 @@ impl<'a> ChildObjectStore<'a> {
                 setting
             }
         };
-        let Some(value) = Value::simple_deserialize(&setting.contents, setting_value_layout) else {
-            return Err(
-                PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
-                    format!(
-                        "Failed to deserialize object {child} with type {setting_value_layout}",
-                    ),
-                ),
-            );
-        };
+        let value = setting.value.copy_value().map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                format!("Failed to copy value for config setting {child}, with error {e}",),
+            )
+        })?;
         Ok(ObjectResult::Loaded(Some(value)))
     }
 
@@ -672,19 +672,18 @@ impl<'a> ChildObjectStore<'a> {
     /// behavior of a config already being in the object store.
     pub(super) fn config_setting_cache_insert(
         &mut self,
-        config_addr: ObjectID,
-        name_df_addr: ObjectID,
+        config_id: ObjectID,
+        name_df_id: ObjectID,
         setting_value_object_type: MoveObjectType,
-        contents: Box<[u8]>,
+        value: Value,
     ) {
-        let child = name_df_addr;
-        let parent = config_addr;
+        let child = name_df_id;
+        let parent = config_id;
         let child_move_type = setting_value_object_type;
         let setting = ConfigSetting {
             config: parent,
-            setting: child,
             ty: child_move_type,
-            contents,
+            value,
         };
         self.config_setting_cache.insert(child, setting);
     }
