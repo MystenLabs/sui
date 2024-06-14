@@ -7,6 +7,7 @@ use axum::{
 };
 
 pub mod accept;
+mod accounts;
 mod checkpoints;
 pub mod client;
 mod committee;
@@ -116,6 +117,10 @@ impl RestService {
         Router::new()
             .route("/", get(info::node_info))
             .route(health::HEALTH_PATH, get(health::health))
+            .route(
+                accounts::LIST_ACCOUNT_OWNED_OBJECTS_PATH,
+                get(accounts::list_account_owned_objects),
+            )
             .route(
                 transactions::GET_TRANSACTION_PATH,
                 get(transactions::get_transaction),
