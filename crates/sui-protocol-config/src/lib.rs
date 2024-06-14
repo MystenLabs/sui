@@ -2520,6 +2520,10 @@ impl ProtocolConfig {
     pub fn set_random_beacon_for_testing(&mut self, val: bool) {
         self.feature_flags.random_beacon = val
     }
+
+    pub fn set_dkg_version_for_testing(&mut self, val: Option<u64>) {
+        self.random_beacon_dkg_version = val
+    }
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }

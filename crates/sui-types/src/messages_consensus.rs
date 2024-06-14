@@ -216,6 +216,42 @@ impl ConsensusTransactionKind {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VersionedDkgMessage {
+    V0(dkg_v0::Message<bls12381::G2Element, bls12381::G2Element>),
+    V1(dkg_v1::Message<bls12381::G2Element, bls12381::G2Element>),
+}
+
+impl Debug for VersionedDkgMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VersionedDkgMessage::V0(msg) => write!(
+                f,
+                "DKG V0 Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
+                msg.sender,
+                msg.vss_pk.degree(),
+                msg.encrypted_shares.len(),
+            ),
+            VersionedDkgMessage::V1(msg) => write!(
+                f,
+                "DKG V1 Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
+                msg.sender,
+                msg.vss_pk.degree(),
+                msg.encrypted_shares.len(),
+            ),
+        }
+    }
+}
+
+impl VersionedDkgMessage {
+    pub fn sender(&self) -> u16 {
+        match self {
+            VersionedDkgMessage::V0(msg) => msg.sender,
+            VersionedDkgMessage::V1(msg) => msg.sender,
+        }
+    }
+}
+
 impl ConsensusTransaction {
     pub fn new_certificate_message(
         authority: &AuthorityName,
@@ -291,23 +327,15 @@ impl ConsensusTransaction {
 
     pub fn new_randomness_dkg_message(
         authority: AuthorityName,
-        message: &dkg_v0::Message<bls12381::G2Element, bls12381::G2Element>,
+        versioned_message: &VersionedDkgMessage,
     ) -> Self {
-        let message = bcs::to_bytes(message).expect("message serialization should not fail");
-        let mut hasher = DefaultHasher::new();
-        message.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, message),
-        }
-    }
-
-    pub fn new_randomness_dkg_message_v1(
-        authority: AuthorityName,
-        message: &dkg_v1::Message<bls12381::G2Element, bls12381::G2Element>,
-    ) -> Self {
-        let message = bcs::to_bytes(message).expect("message serialization should not fail");
+        let message = match versioned_message {
+            VersionedDkgMessage::V0(msg) => {
+                // Old version does not use the enum, so we need to serialize it separately.
+                bcs::to_bytes(msg).expect("message serialization should not fail")
+            }
+            _ => bcs::to_bytes(versioned_message).expect("message serialization should not fail"),
+        };
         let mut hasher = DefaultHasher::new();
         message.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();

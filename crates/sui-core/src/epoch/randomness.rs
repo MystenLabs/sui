@@ -4,17 +4,20 @@
 use anemo::PeerId;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::error::FastCryptoError;
+use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
+use fastcrypto_tbls::dkg::{Confirmation, Output};
 use fastcrypto_tbls::nodes::PartyId;
-use fastcrypto_tbls::{dkg, dkg_v0, nodes};
+use fastcrypto_tbls::{dkg, dkg_v0, dkg_v1, nodes};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use narwhal_types::{Round, TimestampMs};
 use parking_lot::Mutex;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Weak};
 use std::time::Instant;
@@ -25,6 +28,7 @@ use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::messages_consensus::VersionedDkgMessage;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
@@ -40,6 +44,29 @@ type PkG = bls12381::G2Element;
 type EncG = bls12381::G2Element;
 
 pub const SINGLETON_KEY: u64 = 0;
+
+// Wrappers for DKG messages (to simplify upgrades).
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VersionedProcessedMessage {
+    V0(dkg_v0::ProcessedMessage<PkG, EncG>),
+    V1(dkg_v1::ProcessedMessage<PkG, EncG>),
+}
+
+impl VersionedProcessedMessage {
+    pub fn sender(&self) -> PartyId {
+        match self {
+            VersionedProcessedMessage::V0(msg) => msg.message.sender,
+            VersionedProcessedMessage::V1(msg) => msg.message.sender,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VersionedUsedProcessedMessages {
+    V0(dkg_v0::UsedProcessedMessages<PkG, EncG>),
+    V1(dkg_v1::UsedProcessedMessages<PkG, EncG>),
+}
 
 // State machine for randomness DKG and generation.
 //
@@ -70,9 +97,9 @@ pub struct RandomnessManager {
     // State for DKG.
     dkg_start_time: OnceCell<Instant>,
     party: Arc<dkg::Party<PkG, EncG>>,
-    enqueued_messages: BTreeMap<PartyId, JoinHandle<Option<dkg_v0::ProcessedMessage<PkG, EncG>>>>,
-    processed_messages: BTreeMap<PartyId, dkg_v0::ProcessedMessage<PkG, EncG>>,
-    used_messages: OnceCell<dkg_v0::UsedProcessedMessages<PkG, EncG>>,
+    enqueued_messages: BTreeMap<PartyId, JoinHandle<Option<VersionedProcessedMessage>>>,
+    processed_messages: BTreeMap<PartyId, VersionedProcessedMessage>,
+    used_messages: OnceCell<VersionedUsedProcessedMessages>,
     confirmations: BTreeMap<PartyId, dkg::Confirmation<EncG>>,
     dkg_output: OnceCell<Option<dkg::Output<PkG, EncG>>>,
 
@@ -243,12 +270,12 @@ impl RandomnessManager {
             // Load intermediate data.
             rm.processed_messages.extend(
                 tables
-                    .dkg_processed_messages
+                    .dkg_versioned_processed_messages
                     .safe_iter()
                     .map(|result| result.expect("typed_store should not fail")),
             );
             if let Some(used_messages) = tables
-                .dkg_used_messages
+                .dkg_versioned_used_messages
                 .get(&SINGLETON_KEY)
                 .expect("typed_store should not fail")
             {
@@ -294,6 +321,97 @@ impl RandomnessManager {
         Some(rm)
     }
 
+    fn create_dkg_message(&self, version: u64) -> FastCryptoResult<VersionedDkgMessage> {
+        match version {
+            0 => {
+                let msg = self.party.create_message(&mut rand::thread_rng())?;
+                Ok(VersionedDkgMessage::V0(msg))
+            }
+            1 => {
+                let msg = self.party.create_message_v1(&mut rand::thread_rng())?;
+                Ok(VersionedDkgMessage::V1(msg))
+            }
+            _ => panic!("BUG: invalid DKG version"),
+        }
+    }
+
+    fn merge_dkg_messages(
+        &self,
+        dkg_version: u64,
+    ) -> FastCryptoResult<(Confirmation<EncG>, VersionedUsedProcessedMessages)> {
+        match dkg_version {
+            0 => {
+                let (conf, msgs) = self.party.merge(
+                    &self
+                        .processed_messages
+                        .values()
+                        .filter_map(|vm| {
+                            if let VersionedProcessedMessage::V0(msg) = vm {
+                                Some(msg)
+                            } else {
+                                panic!("BUG: invalid versioned message")
+                            }
+                        })
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                )?;
+                Ok((conf, VersionedUsedProcessedMessages::V0(msgs)))
+            }
+            1 => {
+                let (conf, msgs) = self.party.merge_v1(
+                    &self
+                        .processed_messages
+                        .values()
+                        .filter_map(|vm| {
+                            if let VersionedProcessedMessage::V1(msg) = vm {
+                                Some(msg)
+                            } else {
+                                panic!("BUG: invalid versioned message")
+                            }
+                        })
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                )?;
+                Ok((conf, VersionedUsedProcessedMessages::V1(msgs)))
+            }
+            _ => panic!("BUG: invalid DKG version"),
+        }
+    }
+
+    fn complete_dkg(&self, dkg_version: u64) -> FastCryptoResult<Output<PkG, EncG>> {
+        let confs = &self.confirmations.values().cloned().collect::<Vec<_>>();
+        let rng = &mut StdRng::from_rng(OsRng).expect("RNG construction should not fail");
+        match dkg_version {
+            0 => self.party.complete(
+                if let VersionedUsedProcessedMessages::V0(msg) = self
+                    .used_messages
+                    .get()
+                    .expect("checked above that `used_messages` is initialized")
+                {
+                    msg
+                } else {
+                    panic!("BUG: used_messages should be V0")
+                },
+                confs,
+                rng,
+            ),
+            1 => self.party.complete_v1(
+                if let VersionedUsedProcessedMessages::V1(msg) = self
+                    .used_messages
+                    .get()
+                    .expect("checked above that `used_messages` is initialized")
+                {
+                    msg
+                } else {
+                    panic!("BUG: used_messages should be V1")
+                },
+                confs,
+                rng,
+            ),
+            _ => panic!("BUG: invalid DKG version"),
+        }
+    }
+
     /// Sends the initial dkg::Message to begin the randomness DKG protocol.
     pub fn start_dkg(&mut self) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
@@ -302,7 +420,9 @@ impl RandomnessManager {
         }
         let _ = self.dkg_start_time.set(Instant::now());
 
-        let msg = match self.party.create_message(&mut rand::thread_rng()) {
+        let epoch_store = self.epoch_store()?;
+
+        let msg = match self.create_dkg_message(epoch_store.protocol_config().dkg_version()) {
             Ok(msg) => msg,
             Err(FastCryptoError::IgnoredMessage) => {
                 info!(
@@ -317,14 +437,7 @@ impl RandomnessManager {
             }
         };
 
-        info!(
-            "random beacon: created DKG Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
-            msg.sender,
-            msg.vss_pk.degree(),
-            msg.encrypted_shares.len(),
-        );
-
-        let epoch_store = self.epoch_store()?;
+        info!("random beacon: created {msg:?}");
         let transaction = ConsensusTransaction::new_randomness_dkg_message(epoch_store.name, &msg);
 
         #[allow(unused_mut)]
@@ -365,22 +478,16 @@ impl RandomnessManager {
             while let Some(res) = handles.next().await {
                 if let Ok(Some(processed)) = res {
                     self.processed_messages
-                        .insert(processed.message.sender, processed.clone());
+                        .insert(processed.sender(), processed.clone());
                     batch.insert_batch(
-                        &epoch_store.tables()?.dkg_processed_messages,
-                        std::iter::once((processed.message.sender, processed)),
+                        &epoch_store.tables()?.dkg_versioned_processed_messages,
+                        std::iter::once((processed.sender(), processed)),
                     )?;
                 }
             }
 
             // Attempt to generate the Confirmation.
-            match self.party.merge(
-                &self
-                    .processed_messages
-                    .values()
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            ) {
+            match self.merge_dkg_messages(self.epoch_store()?.protocol_config().dkg_version()) {
                 Ok((conf, used_msgs)) => {
                     info!(
                         "random beacon: sending DKG Confirmation with {} complaints",
@@ -390,7 +497,7 @@ impl RandomnessManager {
                         error!("BUG: used_messages should only ever be set once");
                     }
                     batch.insert_batch(
-                        &epoch_store.tables()?.dkg_used_messages,
+                        &epoch_store.tables()?.dkg_versioned_used_messages,
                         std::iter::once((SINGLETON_KEY, used_msgs)),
                     )?;
 
@@ -425,13 +532,7 @@ impl RandomnessManager {
 
         // Once we have enough Confirmations, process them and update shares.
         if !self.dkg_output.initialized() && self.used_messages.initialized() {
-            match self.party.complete(
-                self.used_messages
-                    .get()
-                    .expect("checked above that `used_messages` is initialized"),
-                &self.confirmations.values().cloned().collect::<Vec<_>>(),
-                &mut StdRng::from_rng(OsRng).expect("RNG construction should not fail"),
-            ) {
+            match self.complete_dkg(self.epoch_store()?.protocol_config().dkg_version()) {
                 Ok(output) => {
                     let num_shares = output.shares.as_ref().map_or(0, |shares| shares.len());
                     let epoch_elapsed = epoch_store.epoch_open_time.elapsed().as_millis();
@@ -494,7 +595,7 @@ impl RandomnessManager {
     pub fn add_message(
         &mut self,
         authority: &AuthorityName,
-        msg: dkg_v0::Message<PkG, EncG>,
+        msg: VersionedDkgMessage,
     ) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // We've already sent a `Confirmation`, so we can't add any more messages.
@@ -504,12 +605,12 @@ impl RandomnessManager {
             error!("random beacon: received DKG Message from unknown authority: {authority:?}");
             return Ok(());
         };
-        if *party_id != msg.sender {
+        if *party_id != msg.sender() {
             warn!("ignoring equivocating DKG Message from authority {authority:?} pretending to be PartyId {party_id:?}");
             return Ok(());
         }
-        if self.enqueued_messages.contains_key(&msg.sender)
-            || self.processed_messages.contains_key(&msg.sender)
+        if self.enqueued_messages.contains_key(&msg.sender())
+            || self.processed_messages.contains_key(&msg.sender())
         {
             info!("ignoring duplicate DKG Message from authority {authority:?}");
             return Ok(());
@@ -518,13 +619,24 @@ impl RandomnessManager {
         let party = self.party.clone();
         // TODO: Could save some CPU by not processing messages if we already have enough to merge.
         self.enqueued_messages.insert(
-            msg.sender,
-            tokio::task::spawn_blocking(move || {
-                match party.process_message(msg, &mut rand::thread_rng()) {
-                    Ok(processed) => Some(processed),
-                    Err(err) => {
-                        debug!("random beacon: error while processing DKG Message: {err:?}");
-                        None
+            msg.sender(),
+            tokio::task::spawn_blocking(move || match msg {
+                VersionedDkgMessage::V0(msg) => {
+                    match party.process_message(msg, &mut rand::thread_rng()) {
+                        Ok(processed) => Some(VersionedProcessedMessage::V0(processed)),
+                        Err(err) => {
+                            debug!("random beacon: error while processing DKG Message: {err:?}");
+                            None
+                        }
+                    }
+                }
+                VersionedDkgMessage::V1(msg) => {
+                    match party.process_message_v1(msg, &mut rand::thread_rng()) {
+                        Ok(processed) => Some(VersionedProcessedMessage::V1(processed)),
+                        Err(err) => {
+                            debug!("random beacon: error while processing DKG Message: {err:?}");
+                            None
+                        }
                     }
                 }
             }),
@@ -725,11 +837,22 @@ mod tests {
         epoch::randomness::*,
     };
     use std::num::NonZeroUsize;
+    use sui_protocol_config::ProtocolConfig;
+    use sui_protocol_config::{Chain, ProtocolVersion};
     use sui_types::messages_consensus::ConsensusTransactionKind;
     use tokio::sync::mpsc;
 
     #[tokio::test]
-    async fn test_dkg() {
+    async fn test_dkg_v0() {
+        test_dkg(0).await;
+    }
+
+    #[tokio::test]
+    async fn test_dkg_v1() {
+        test_dkg(1).await;
+    }
+
+    async fn test_dkg(version: u64) {
         telemetry_subscribers::init_for_testing();
 
         let network_config =
@@ -737,6 +860,14 @@ mod tests {
                 .committee_size(NonZeroUsize::new(4).unwrap())
                 .with_reference_gas_price(500)
                 .build();
+
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.set_dkg_version_for_testing(if version == 0 {
+            None
+        } else {
+            Some(version)
+        });
 
         let mut epoch_stores = Vec::new();
         let mut randomness_managers = Vec::new();
@@ -755,6 +886,7 @@ mod tests {
                 .returning(|_, _| Ok(()));
 
             let state = TestAuthorityBuilder::new()
+                .with_protocol_config(protocol_config.clone())
                 .with_genesis_and_keypair(&network_config.genesis, validator.protocol_key_pair())
                 .build()
                 .await;
@@ -792,9 +924,16 @@ mod tests {
             assert!(dkg_message.len() == 1);
             match dkg_message.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
-                    let msg: fastcrypto_tbls::dkg_v0::Message<PkG, EncG> = bcs::from_bytes(&bytes)
-                        .expect("DKG message deserialization should not fail");
-                    dkg_messages.push(msg);
+                    if version == 0 {
+                        let msg: fastcrypto_tbls::dkg_v0::Message<PkG, EncG> =
+                            bcs::from_bytes(&bytes)
+                                .expect("DKG message deserialization should not fail");
+                        dkg_messages.push(VersionedDkgMessage::V0(msg));
+                    } else {
+                        let msg: VersionedDkgMessage = bcs::from_bytes(&bytes)
+                            .expect("DKG message deserialization should not fail");
+                        dkg_messages.push(msg);
+                    }
                 }
                 _ => panic!("wrong type of message sent"),
             }
@@ -852,7 +991,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_dkg_expiration() {
+    async fn test_dkg_expiration_v0() {
+        test_dkg_expiration(0).await;
+    }
+
+    #[tokio::test]
+    async fn test_dkg_expiration_v1() {
+        test_dkg_expiration(1).await;
+    }
+
+    async fn test_dkg_expiration(version: u64) {
         telemetry_subscribers::init_for_testing();
 
         let network_config =
@@ -864,6 +1012,14 @@ mod tests {
         let mut epoch_stores = Vec::new();
         let mut randomness_managers = Vec::new();
         let (tx_consensus, mut rx_consensus) = mpsc::channel(100);
+
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.set_dkg_version_for_testing(if version == 0 {
+            None
+        } else {
+            Some(version)
+        });
 
         for validator in network_config.validator_configs.iter() {
             // Send consensus messages to channel.
@@ -878,6 +1034,7 @@ mod tests {
                 .returning(|_, _| Ok(()));
 
             let state = TestAuthorityBuilder::new()
+                .with_protocol_config(protocol_config.clone())
                 .with_genesis_and_keypair(&network_config.genesis, validator.protocol_key_pair())
                 .build()
                 .await;
@@ -915,9 +1072,16 @@ mod tests {
             assert!(dkg_message.len() == 1);
             match dkg_message.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
-                    let msg: fastcrypto_tbls::dkg_v0::Message<PkG, EncG> = bcs::from_bytes(&bytes)
-                        .expect("DKG message deserialization should not fail");
-                    dkg_messages.push(msg);
+                    if version == 0 {
+                        let msg: fastcrypto_tbls::dkg_v0::Message<PkG, EncG> =
+                            bcs::from_bytes(&bytes)
+                                .expect("DKG message deserialization should not fail");
+                        dkg_messages.push(VersionedDkgMessage::V0(msg));
+                    } else {
+                        let msg: VersionedDkgMessage = bcs::from_bytes(&bytes)
+                            .expect("DKG message deserialization should not fail");
+                        dkg_messages.push(msg);
+                    }
                 }
                 _ => panic!("wrong type of message sent"),
             }
