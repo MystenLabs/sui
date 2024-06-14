@@ -958,6 +958,29 @@ impl AuthorityPerEpochStore {
         )
     }
 
+    pub fn new_at_next_epoch_for_testing(
+        &self,
+        backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
+        object_store: Arc<dyn ObjectStore + Send + Sync>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+    ) -> Arc<Self> {
+        let next_epoch = self.epoch() + 1;
+        let next_committee = Committee::new(
+            next_epoch,
+            self.committee.voting_rights.iter().cloned().collect(),
+        );
+        self.new_at_next_epoch(
+            self.name,
+            next_committee,
+            self.epoch_start_configuration
+                .new_at_next_epoch_for_testing(),
+            backing_package_store,
+            object_store,
+            expensive_safety_check_config,
+            self.chain_identifier,
+        )
+    }
+
     pub fn committee(&self) -> &Arc<Committee> {
         &self.committee
     }
