@@ -147,7 +147,12 @@ where
             metrics,
         }
     }
+}
 
+impl<A> TransactiondOrchestrator<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
     #[instrument(name = "tx_orchestrator_execute_transaction", level = "debug", skip_all,
     fields(
         tx_digest = ?request.transaction.digest(),
@@ -799,5 +804,22 @@ impl TransactionOrchestratorMetrics {
     pub fn new_for_tests() -> Self {
         let registry = Registry::new();
         Self::new(&registry)
+    }
+}
+
+#[async_trait::async_trait]
+impl<A> sui_rest_api::TransactionExecutor for TransactiondOrchestrator<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    async fn execute_transaction(
+        &self,
+        request: sui_types::quorum_driver_types::ExecuteTransactionRequestV3,
+        client_addr: Option<std::net::SocketAddr>,
+    ) -> Result<
+        sui_types::quorum_driver_types::ExecuteTransactionResponseV3,
+        sui_types::quorum_driver_types::QuorumDriverError,
+    > {
+        self.execute_transaction_v3(request, client_addr).await
     }
 }

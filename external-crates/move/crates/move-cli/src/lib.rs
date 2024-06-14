@@ -90,16 +90,20 @@ pub fn run_cli(
     //         1. It's still using the old CostTable.
     //         2. The CostTable only affects sandbox runs, but not unit tests, which use a unit cost table.
     match cmd {
-        Command::Build(c) => c.execute(move_args.package_path, move_args.build_config),
-        Command::Coverage(c) => c.execute(move_args.package_path, move_args.build_config),
-        Command::Disassemble(c) => c.execute(move_args.package_path, move_args.build_config),
-        Command::Docgen(c) => c.execute(move_args.package_path, move_args.build_config),
-        Command::Errmap(c) => c.execute(move_args.package_path, move_args.build_config),
-        Command::Info(c) => c.execute(move_args.package_path, move_args.build_config),
-        Command::Migrate(c) => c.execute(move_args.package_path, move_args.build_config),
-        Command::New(c) => c.execute_with_defaults(move_args.package_path),
+        Command::Build(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
+        Command::Coverage(c) => {
+            c.execute(move_args.package_path.as_deref(), move_args.build_config)
+        }
+        Command::Disassemble(c) => {
+            c.execute(move_args.package_path.as_deref(), move_args.build_config)
+        }
+        Command::Docgen(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
+        Command::Errmap(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
+        Command::Info(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
+        Command::Migrate(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
+        Command::New(c) => c.execute_with_defaults(move_args.package_path.as_deref()),
         Command::Test(c) => c.execute(
-            move_args.package_path,
+            move_args.package_path.as_deref(),
             move_args.build_config,
             natives,
             Some(cost_table.clone()),

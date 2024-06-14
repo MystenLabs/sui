@@ -159,7 +159,7 @@ impl BuildConfig {
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
         build_from_resolution_graph(
-            path.clone(),
+            path,
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
@@ -259,7 +259,7 @@ pub fn build_from_resolution_graph(
         package,
         published_at,
         dependency_ids,
-        path,
+        path: path.to_owned(),
     })
 }
 
@@ -482,7 +482,7 @@ impl CompiledPackage {
         }
         let mut layout_builder = SerdeLayoutBuilder::new(self);
         for typ in &package_types {
-            layout_builder.build_struct_layout(typ).unwrap();
+            layout_builder.build_data_layout(typ).unwrap();
         }
         layout_builder.into_registry()
     }
@@ -615,7 +615,7 @@ impl PackageHooks for SuiPackageHooks {
         &self,
         manifest: &SourceManifest,
     ) -> anyhow::Result<PackageIdentifier> {
-        if manifest.package.edition == Some(Edition::DEVELOPMENT) {
+        if !cfg!(debug_assertions) && manifest.package.edition == Some(Edition::DEVELOPMENT) {
             return Err(Edition::DEVELOPMENT.unknown_edition_error());
         }
         Ok(manifest.package.name)

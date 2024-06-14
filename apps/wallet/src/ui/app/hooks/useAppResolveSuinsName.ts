@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
-import { normalizeSuiNSName } from '@mysten/sui.js/utils';
+import { normalizeSuiNSName } from '@mysten/sui/utils';
 
 import { useResolveSuiNSName as useResolveSuiNSNameCore } from '../../../../../core';
 

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::exchange_rates_task::TriggerExchangeRatesTask;
 use super::system_package_task::SystemPackageTask;
 use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
@@ -11,6 +12,7 @@ use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::{DataLoader, Db};
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::types::datatype::IMoveDatatype;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -64,6 +66,7 @@ pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
     watermark_task: WatermarkTask,
     system_package_task: SystemPackageTask,
+    trigger_exchange_rates_task: TriggerExchangeRatesTask,
     state: AppState,
 }
 
@@ -90,6 +93,13 @@ impl Server {
             })
         };
 
+        let trigger_exchange_rates_task = {
+            info!("Starting trigger exchange rates task");
+            spawn_monitored_task!(async move {
+                self.trigger_exchange_rates_task.run().await;
+            })
+        };
+
         let server_task = {
             info!("Starting graphql service");
             let cancellation_token = self.state.cancellation_token.clone();
@@ -106,7 +116,12 @@ impl Server {
 
         // Wait for all tasks to complete. This ensures that the service doesn't fully shut down
         // until all tasks and the server have completed their shutdown processes.
-        let _ = join!(watermark_task, system_package_task, server_task);
+        let _ = join!(
+            watermark_task,
+            system_package_task,
+            trigger_exchange_rates_task,
+            server_task
+        );
 
         Ok(())
     }
@@ -304,6 +319,12 @@ impl ServerBuilder {
             state.cancellation_token.clone(),
         );
 
+        let trigger_exchange_rates_task = TriggerExchangeRatesTask::new(
+            db_reader.clone(),
+            watermark_task.epoch_receiver(),
+            state.cancellation_token.clone(),
+        );
+
         let app = router
             .route_layer(middleware::from_fn_with_state(
                 state.version,
@@ -326,6 +347,7 @@ impl ServerBuilder {
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
             watermark_task,
             system_package_task,
+            trigger_exchange_rates_task,
             state,
         })
     }
@@ -456,6 +478,7 @@ fn schema_builder() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
         .register_output_type::<IMoveObject>()
         .register_output_type::<IObject>()
         .register_output_type::<IOwner>()
+        .register_output_type::<IMoveDatatype>()
 }
 
 /// Return the string representation of the schema used by this server.

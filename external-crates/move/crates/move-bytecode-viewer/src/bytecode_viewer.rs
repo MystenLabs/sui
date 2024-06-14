@@ -47,7 +47,10 @@ impl<'a> BytecodeViewer<'a> {
 
     fn build_mapping(&mut self) {
         let regex = Regex::new(r"^(\d+):.*").unwrap();
-        let fun_regex = Regex::new(r"^public\s+([a-zA-Z_]+)\(").unwrap();
+        let fun_regex =
+            Regex::new(r"^(?:public(?:\(\w+\))?|native|entry)?\s*(\w+)\s*(?:<.*>)?\s*\(.*\).*\{")
+                .unwrap();
+
         let mut current_fun = None;
         let mut current_fdef_idx = None;
         let mut line_map = HashMap::new();

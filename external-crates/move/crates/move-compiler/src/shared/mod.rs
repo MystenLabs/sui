@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::ast as G,
-    cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
+    cfgir::{
+        ast as G,
+        visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor, CFGIRVisitorObj},
+    },
     command_line as cli,
     diagnostics::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
@@ -18,9 +20,12 @@ use crate::{
     hlir::ast as H,
     naming::ast as N,
     parser::ast as P,
+    shared::ide::{IDEAnnotation, IDEInfo},
     sui_mode,
-    typing::ast as T,
-    typing::visitor::{TypingVisitor, TypingVisitorObj},
+    typing::{
+        ast as T,
+        visitor::{TypingVisitor, TypingVisitorObj},
+    },
 };
 use clap::*;
 use move_command_line_common::files::FileHash;
@@ -41,6 +46,7 @@ use std::{
 use vfs::{VfsError, VfsPath};
 
 pub mod ast_debug;
+pub mod ide;
 pub mod known_attributes;
 pub mod program_info;
 pub mod remembering_unique_map;
@@ -92,6 +98,10 @@ pub trait TName: Eq + Ord + Clone {
     fn drop_loc(self) -> (Self::Loc, Self::Key);
     fn add_loc(loc: Self::Loc, key: Self::Key) -> Self;
     fn borrow(&self) -> (&Self::Loc, &Self::Key);
+    fn with_loc(self, loc: Self::Loc) -> Self {
+        let (_old_loc, base) = self.drop_loc();
+        Self::add_loc(loc, base)
+    }
 }
 
 pub trait Identifier {
@@ -241,6 +251,7 @@ pub struct CompilationEnv {
     // pub counter: u64,
     mapped_files: MappedFiles,
     save_hooks: Vec<SaveHook>,
+    pub ide_information: IDEInfo,
 }
 
 macro_rules! known_code_filter {
@@ -363,6 +374,7 @@ impl CompilationEnv {
             prim_definers: BTreeMap::new(),
             mapped_files: MappedFiles::empty(),
             save_hooks,
+            ide_information: IDEInfo::new(),
         }
     }
 
@@ -604,10 +616,6 @@ impl CompilationEnv {
         self.prim_definers.get(&t)
     }
 
-    pub fn ide_mode(&self) -> bool {
-        self.flags.ide_mode()
-    }
-
     pub fn save_parser_ast(&self, ast: &P::Program) {
         for hook in &self.save_hooks {
             hook.save_parser_ast(ast)
@@ -648,6 +656,30 @@ impl CompilationEnv {
         for hook in &self.save_hooks {
             hook.save_cfgir_ast(ast)
         }
+    }
+
+    // -- IDE Information --
+
+    pub fn ide_mode(&self) -> bool {
+        self.flags.ide_mode()
+    }
+
+    pub fn extend_ide_info(&mut self, info: IDEInfo) {
+        if self.flags().ide_test_mode() {
+            for entry in info.annotations.iter() {
+                let diag = entry.clone().into();
+                self.diags.add(diag);
+            }
+        }
+        self.ide_information.extend(info);
+    }
+
+    pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+        if self.flags().ide_test_mode() {
+            let diag = (loc, info.clone()).into();
+            self.diags.add(diag);
+        }
+        self.ide_information.add_ide_annotation(loc, info);
     }
 }
 
@@ -741,7 +773,11 @@ pub struct Flags {
     #[clap(skip)]
     keep_testing_functions: bool,
 
-    /// If set, all warnings are silenced
+    /// If set, we are in IDE testing mode. This will report IDE annotations as diagnostics.
+    #[clap(skip = false)]
+    ide_test_mode: bool,
+
+    /// If set, we are in IDE mode.
     #[clap(skip = false)]
     ide_mode: bool,
 }
@@ -757,6 +793,7 @@ impl Flags {
             json_errors: false,
             keep_testing_functions: false,
             ide_mode: false,
+            ide_test_mode: false,
         }
     }
 
@@ -770,6 +807,7 @@ impl Flags {
             silence_warnings: false,
             keep_testing_functions: false,
             ide_mode: false,
+            ide_test_mode: false,
         }
     }
 
@@ -804,6 +842,13 @@ impl Flags {
     pub fn set_json_errors(self, value: bool) -> Self {
         Self {
             json_errors: value,
+            ..self
+        }
+    }
+
+    pub fn set_ide_test_mode(self, value: bool) -> Self {
+        Self {
+            ide_test_mode: value,
             ..self
         }
     }
@@ -847,6 +892,10 @@ impl Flags {
         self.silence_warnings
     }
 
+    pub fn ide_test_mode(&self) -> bool {
+        self.ide_test_mode
+    }
+
     pub fn ide_mode(&self) -> bool {
         self.ide_mode
     }
@@ -882,6 +931,7 @@ impl Default for PackageConfig {
 pub struct Visitors {
     pub typing: Vec<RefCell<TypingVisitorObj>>,
     pub abs_int: Vec<RefCell<AbsIntVisitorObj>>,
+    pub cfgir: Vec<RefCell<CFGIRVisitorObj>>,
 }
 
 impl Visitors {
@@ -890,11 +940,13 @@ impl Visitors {
         let mut vs = Visitors {
             typing: vec![],
             abs_int: vec![],
+            cfgir: vec![],
         };
         for pass in passes {
             match pass {
                 Visitor::AbsIntVisitor(f) => vs.abs_int.push(RefCell::new(f)),
                 Visitor::TypingVisitor(f) => vs.typing.push(RefCell::new(f)),
+                Visitor::CFGIRVisitor(f) => vs.cfgir.push(RefCell::new(f)),
             }
         }
         vs

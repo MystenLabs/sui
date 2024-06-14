@@ -8,23 +8,23 @@ use crate::{
 };
 use move_binary_format::{
     errors::*,
-    file_format::{Constant, SignatureToken},
+    file_format::{Constant, SignatureToken, VariantTag},
 };
 use move_core_types::{
     account_address::AccountAddress,
     effects::Op,
     gas_algebra::AbstractMemorySize,
-    runtime_value::{MoveStructLayout, MoveTypeLayout},
+    runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
     u256,
     vm_status::{sub_status::NFE_VECTOR_ERROR_BASE, StatusCode},
+    VARIANT_COUNT_MAX,
 };
 use std::{
     cell::RefCell,
     fmt::{self, Debug, Display},
     iter,
-    ops::Deref,
+    ops::Add,
     rc::Rc,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
 /***************************************************************************************
@@ -39,7 +39,7 @@ use std::{
 
 /// Runtime representation of a Move value.
 #[derive(Debug)]
-pub enum ValueImpl {
+enum ValueImpl {
     Invalid,
 
     U8(u8),
@@ -57,46 +57,6 @@ pub enum ValueImpl {
     IndexedRef(IndexedRef),
 }
 
-/// This counter is used to give unique ids to containers
-/// So it's possible to cache its values
-static CONTAINER_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-pub type ContainerId = u64;
-
-/// Wrapper type for Rc, also consist the [`ContainerId`]
-#[derive(Debug)]
-pub struct RcId<T>(Rc<T>, ContainerId);
-
-impl<T> RcId<RefCell<T>> {
-    fn new(value: RefCell<T>) -> Self {
-        Self::new_from_rc(Rc::new(value))
-    }
-
-    fn new_from_rc(value: Rc<RefCell<T>>) -> Self {
-        let counter_next = CONTAINER_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-
-        Self(value, counter_next as ContainerId)
-    }
-
-    fn id(&self) -> ContainerId {
-        self.1
-    }
-}
-
-impl<T> Clone for RcId<RefCell<T>> {
-    fn clone(&self) -> Self {
-        Self(Rc::clone(&self.0), self.1)
-    }
-}
-
-impl<T> Deref for RcId<T> {
-    type Target = Rc<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 /// A container is a collection of values. It is used to represent data structures like a
 /// Move vector or struct.
 ///
@@ -107,25 +67,26 @@ impl<T> Deref for RcId<T> {
 /// Except when not owned by the VM stack, a container always lives inside an Rc<RefCell<>>,
 /// making it possible to be shared by references.
 #[derive(Debug, Clone)]
-pub enum Container {
-    Locals(RcId<RefCell<Vec<ValueImpl>>>),
-    Vec(RcId<RefCell<Vec<ValueImpl>>>),
-    Struct(RcId<RefCell<Vec<ValueImpl>>>),
-    VecU8(RcId<RefCell<Vec<u8>>>),
-    VecU64(RcId<RefCell<Vec<u64>>>),
-    VecU128(RcId<RefCell<Vec<u128>>>),
-    VecBool(RcId<RefCell<Vec<bool>>>),
-    VecAddress(RcId<RefCell<Vec<AccountAddress>>>),
-    VecU16(RcId<RefCell<Vec<u16>>>),
-    VecU32(RcId<RefCell<Vec<u32>>>),
-    VecU256(RcId<RefCell<Vec<u256::U256>>>),
+enum Container {
+    Locals(Rc<RefCell<Vec<ValueImpl>>>),
+    Vec(Rc<RefCell<Vec<ValueImpl>>>),
+    Struct(Rc<RefCell<Vec<ValueImpl>>>),
+    VecU8(Rc<RefCell<Vec<u8>>>),
+    VecU64(Rc<RefCell<Vec<u64>>>),
+    VecU128(Rc<RefCell<Vec<u128>>>),
+    VecBool(Rc<RefCell<Vec<bool>>>),
+    VecAddress(Rc<RefCell<Vec<AccountAddress>>>),
+    VecU16(Rc<RefCell<Vec<u16>>>),
+    VecU32(Rc<RefCell<Vec<u32>>>),
+    VecU256(Rc<RefCell<Vec<u256::U256>>>),
+    Variant(Rc<RefCell<(VariantTag, Vec<ValueImpl>)>>),
 }
 
 /// A ContainerRef is a direct reference to a container, which could live either in the frame
 /// or in global storage. In the latter case, it also keeps a status flag indicating whether
 /// the container has been possibly modified.
 #[derive(Debug)]
-pub enum ContainerRef {
+enum ContainerRef {
     Local(Container),
     Global {
         status: Rc<RefCell<GlobalDataStatus>>,
@@ -137,7 +98,7 @@ pub enum ContainerRef {
 /// Clean - the data was only read.
 /// Dirty - the data was possibly modified.
 #[derive(Debug, Clone, Copy)]
-pub enum GlobalDataStatus {
+enum GlobalDataStatus {
     Clean,
     Dirty,
 }
@@ -175,7 +136,7 @@ enum ReferenceImpl {
 /// A Move value -- a wrapper around `ValueImpl` which can be created only through valid
 /// means.
 #[derive(Debug)]
-pub struct Value(pub ValueImpl);
+pub struct Value(ValueImpl);
 
 /// An integer value in Move.
 #[derive(Debug)]
@@ -229,13 +190,11 @@ enum GlobalValueImpl {
     /// No resource resides in this slot or in storage.
     None,
     /// A resource has been published to this slot and it did not previously exist in storage.
-    Fresh {
-        fields: RcId<RefCell<Vec<ValueImpl>>>,
-    },
+    Fresh { fields: Rc<RefCell<Vec<ValueImpl>>> },
     /// A resource resides in this slot and also in storage. The status flag indicates whether
     /// it has potentially been altered.
     Cached {
-        fields: RcId<RefCell<Vec<ValueImpl>>>,
+        fields: Rc<RefCell<Vec<ValueImpl>>>,
         status: Rc<RefCell<GlobalDataStatus>>,
     },
     /// A resource used to exist in storage but has been deleted by the current transaction.
@@ -250,7 +209,17 @@ pub struct GlobalValue(GlobalValueImpl);
 /// The locals for a function frame. It allows values to be read, written or taken
 /// reference from.
 #[derive(Debug)]
-pub struct Locals(RcId<RefCell<Vec<ValueImpl>>>);
+pub struct Locals(Rc<RefCell<Vec<ValueImpl>>>);
+
+/// A Move enum value (aka a variant).
+#[derive(Debug)]
+pub struct Variant {
+    tag: VariantTag,
+    fields: Vec<ValueImpl>,
+}
+
+#[derive(Debug)]
+pub struct VariantRef(ContainerRef);
 
 /***************************************************************************************
  *
@@ -272,6 +241,7 @@ impl Container {
             Self::VecU256(r) => r.borrow().len(),
             Self::VecBool(r) => r.borrow().len(),
             Self::VecAddress(r) => r.borrow().len(),
+            Self::Variant(r) => r.borrow().1.len(),
         }
     }
 
@@ -286,11 +256,12 @@ impl Container {
             Self::VecU256(r) => Rc::strong_count(r),
             Self::VecBool(r) => Rc::strong_count(r),
             Self::VecAddress(r) => Rc::strong_count(r),
+            Self::Variant(r) => Rc::strong_count(r),
         }
     }
 
     fn signer(x: AccountAddress) -> Self {
-        Container::Struct(RcId::new(RefCell::new(vec![ValueImpl::Address(x)])))
+        Container::Struct(Rc::new(RefCell::new(vec![ValueImpl::Address(x)])))
     }
 }
 
@@ -303,8 +274,8 @@ impl Container {
  *
  **************************************************************************************/
 
-fn take_unique_ownership<T: Debug>(r: RcId<RefCell<T>>) -> PartialVMResult<T> {
-    match Rc::try_unwrap(r.0) {
+fn take_unique_ownership<T: Debug>(r: Rc<RefCell<T>>) -> PartialVMResult<T> {
+    match Rc::try_unwrap(r) {
         Ok(cell) => Ok(cell.into_inner()),
         Err(r) => Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -314,20 +285,9 @@ fn take_unique_ownership<T: Debug>(r: RcId<RefCell<T>>) -> PartialVMResult<T> {
 }
 
 impl ContainerRef {
-    pub fn container(&self) -> &Container {
+    fn container(&self) -> &Container {
         match self {
             Self::Local(container) | Self::Global { container, .. } => container,
-        }
-    }
-
-    pub fn is_dirty(&self) -> Option<bool> {
-        if let Self::Global { status, .. } = self {
-            Some(match *status.borrow() {
-                GlobalDataStatus::Dirty => true,
-                GlobalDataStatus::Clean => false,
-            })
-        } else {
-            None
         }
     }
 
@@ -415,34 +375,12 @@ impl ValueImpl {
             Container(c) => Container(c.copy_value()?),
         })
     }
-
-    fn copy_value_by_ref(&self) -> PartialVMResult<Self> {
-        use ValueImpl::*;
-
-        Ok(match self {
-            Invalid => Invalid,
-
-            U8(x) => U8(*x),
-            U16(x) => U16(*x),
-            U32(x) => U32(*x),
-            U64(x) => U64(*x),
-            U128(x) => U128(*x),
-            U256(x) => U256(*x),
-            Bool(x) => Bool(*x),
-            Address(x) => Address(*x),
-
-            ContainerRef(r) => ContainerRef(r.copy_value()),
-            IndexedRef(r) => IndexedRef(r.copy_value()),
-
-            Container(c) => Container(c.copy_by_ref()),
-        })
-    }
 }
 
 impl Container {
     fn copy_value(&self) -> PartialVMResult<Self> {
-        let copy_rc_ref_vec_val = |r: &RcId<RefCell<Vec<ValueImpl>>>| {
-            Ok(RcId::new(RefCell::new(
+        let copy_rc_ref_vec_val = |r: &Rc<RefCell<Vec<ValueImpl>>>| {
+            Ok(Rc::new(RefCell::new(
                 r.borrow()
                     .iter()
                     .map(|v| v.copy_value())
@@ -453,15 +391,23 @@ impl Container {
         Ok(match self {
             Self::Vec(r) => Self::Vec(copy_rc_ref_vec_val(r)?),
             Self::Struct(r) => Self::Struct(copy_rc_ref_vec_val(r)?),
+            Self::Variant(r) => {
+                let (tag, values) = &*r.borrow();
+                let values = values
+                    .iter()
+                    .map(|v| v.copy_value())
+                    .collect::<PartialVMResult<_>>()?;
+                Self::Variant(Rc::new(RefCell::new((*tag, values))))
+            }
 
-            Self::VecU8(r) => Self::VecU8(RcId::new(RefCell::new(r.borrow().clone()))),
-            Self::VecU16(r) => Self::VecU16(RcId::new(RefCell::new(r.borrow().clone()))),
-            Self::VecU32(r) => Self::VecU32(RcId::new(RefCell::new(r.borrow().clone()))),
-            Self::VecU64(r) => Self::VecU64(RcId::new(RefCell::new(r.borrow().clone()))),
-            Self::VecU128(r) => Self::VecU128(RcId::new(RefCell::new(r.borrow().clone()))),
-            Self::VecU256(r) => Self::VecU256(RcId::new(RefCell::new(r.borrow().clone()))),
-            Self::VecBool(r) => Self::VecBool(RcId::new(RefCell::new(r.borrow().clone()))),
-            Self::VecAddress(r) => Self::VecAddress(RcId::new(RefCell::new(r.borrow().clone()))),
+            Self::VecU8(r) => Self::VecU8(Rc::new(RefCell::new(r.borrow().clone()))),
+            Self::VecU16(r) => Self::VecU16(Rc::new(RefCell::new(r.borrow().clone()))),
+            Self::VecU32(r) => Self::VecU32(Rc::new(RefCell::new(r.borrow().clone()))),
+            Self::VecU64(r) => Self::VecU64(Rc::new(RefCell::new(r.borrow().clone()))),
+            Self::VecU128(r) => Self::VecU128(Rc::new(RefCell::new(r.borrow().clone()))),
+            Self::VecU256(r) => Self::VecU256(Rc::new(RefCell::new(r.borrow().clone()))),
+            Self::VecBool(r) => Self::VecBool(Rc::new(RefCell::new(r.borrow().clone()))),
+            Self::VecAddress(r) => Self::VecAddress(Rc::new(RefCell::new(r.borrow().clone()))),
 
             Self::Locals(_) => {
                 return Err(
@@ -474,17 +420,18 @@ impl Container {
 
     fn copy_by_ref(&self) -> Self {
         match self {
-            Self::Vec(r) => Self::Vec(RcId::clone(r)),
-            Self::Struct(r) => Self::Struct(RcId::clone(r)),
-            Self::VecU8(r) => Self::VecU8(RcId::clone(r)),
-            Self::VecU16(r) => Self::VecU16(RcId::clone(r)),
-            Self::VecU32(r) => Self::VecU32(RcId::clone(r)),
-            Self::VecU64(r) => Self::VecU64(RcId::clone(r)),
-            Self::VecU128(r) => Self::VecU128(RcId::clone(r)),
-            Self::VecU256(r) => Self::VecU256(RcId::clone(r)),
-            Self::VecBool(r) => Self::VecBool(RcId::clone(r)),
-            Self::VecAddress(r) => Self::VecAddress(RcId::clone(r)),
-            Self::Locals(r) => Self::Locals(RcId::clone(r)),
+            Self::Vec(r) => Self::Vec(Rc::clone(r)),
+            Self::Struct(r) => Self::Struct(Rc::clone(r)),
+            Self::VecU8(r) => Self::VecU8(Rc::clone(r)),
+            Self::VecU16(r) => Self::VecU16(Rc::clone(r)),
+            Self::VecU32(r) => Self::VecU32(Rc::clone(r)),
+            Self::VecU64(r) => Self::VecU64(Rc::clone(r)),
+            Self::VecU128(r) => Self::VecU128(Rc::clone(r)),
+            Self::VecU256(r) => Self::VecU256(Rc::clone(r)),
+            Self::VecBool(r) => Self::VecBool(Rc::clone(r)),
+            Self::VecAddress(r) => Self::VecAddress(Rc::clone(r)),
+            Self::Locals(r) => Self::Locals(Rc::clone(r)),
+            Self::Variant(r) => Self::Variant(Rc::clone(r)),
         }
     }
 }
@@ -599,6 +546,23 @@ impl Container {
             (VecU256(l), VecU256(r)) => l.borrow().eq(&*r.borrow()),
             (VecBool(l), VecBool(r)) => l.borrow().eq(&*r.borrow()),
             (VecAddress(l), VecAddress(r)) => l.borrow().eq(&*r.borrow()),
+            (Variant(l), Variant(r)) => {
+                let (tagl, valuesl) = &*l.borrow();
+                let (tagr, valuesr) = &*r.borrow();
+                if tagl != tagr {
+                    return Ok(false);
+                }
+
+                if valuesl.len() != valuesr.len() {
+                    return Ok(false);
+                }
+                for (v1, v2) in valuesl.iter().zip(valuesr) {
+                    if !v1.equals(v2)? {
+                        return Ok(false);
+                    }
+                }
+                true
+            }
 
             (Locals(_), _)
             | (Vec(_), _)
@@ -610,7 +574,8 @@ impl Container {
             | (VecU128(_), _)
             | (VecU256(_), _)
             | (VecBool(_), _)
-            | (VecAddress(_), _) => {
+            | (VecAddress(_), _)
+            | (Variant { .. }, _) => {
                 return Err(
                     PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR).with_message(format!(
                         "cannot compare container values: {:?}, {:?}",
@@ -648,6 +613,15 @@ impl IndexedRef {
             | (Locals(r1), Vec(r2))
             | (Locals(r1), Struct(r2))
             | (Locals(r1), Locals(r2)) => r1.borrow()[self.idx].equals(&r2.borrow()[other.idx])?,
+            (Struct(r1), Variant(r2)) | (Locals(r1), Variant(r2)) => {
+                r1.borrow()[self.idx].equals(&r2.borrow().1[other.idx])?
+            }
+            (Variant(r1), Vec(r2)) | (Variant(r1), Struct(r2)) | (Variant(r1), Locals(r2)) => {
+                r1.borrow().1[self.idx].equals(&r2.borrow()[other.idx])?
+            }
+            (Variant(r1), Variant(r2)) => {
+                r1.borrow().1[self.idx].equals(&r2.borrow().1[other.idx])?
+            }
 
             (VecU8(r1), VecU8(r2)) => r1.borrow()[self.idx] == r2.borrow()[other.idx],
             (VecU16(r1), VecU16(r2)) => r1.borrow()[self.idx] == r2.borrow()[other.idx],
@@ -665,12 +639,24 @@ impl IndexedRef {
             (VecU8(r1), Locals(r2)) | (VecU8(r1), Struct(r2)) => {
                 r1.borrow()[self.idx] == *r2.borrow()[other.idx].as_value_ref::<u8>()?
             }
+            (Variant(r1), VecU8(r2)) => {
+                *r1.borrow().1[self.idx].as_value_ref::<u8>()? == r2.borrow()[other.idx]
+            }
+            (VecU8(r1), Variant(r2)) => {
+                r1.borrow()[self.idx] == *r2.borrow().1[other.idx].as_value_ref::<u8>()?
+            }
 
             (Locals(r1), VecU16(r2)) | (Struct(r1), VecU16(r2)) => {
                 *r1.borrow()[self.idx].as_value_ref::<u16>()? == r2.borrow()[other.idx]
             }
             (VecU16(r1), Locals(r2)) | (VecU16(r1), Struct(r2)) => {
                 r1.borrow()[self.idx] == *r2.borrow()[other.idx].as_value_ref::<u16>()?
+            }
+            (Variant(r1), VecU16(r2)) => {
+                *r1.borrow().1[self.idx].as_value_ref::<u16>()? == r2.borrow()[other.idx]
+            }
+            (VecU16(r1), Variant(r2)) => {
+                r1.borrow()[self.idx] == *r2.borrow().1[other.idx].as_value_ref::<u16>()?
             }
 
             (Locals(r1), VecU32(r2)) | (Struct(r1), VecU32(r2)) => {
@@ -679,12 +665,24 @@ impl IndexedRef {
             (VecU32(r1), Locals(r2)) | (VecU32(r1), Struct(r2)) => {
                 r1.borrow()[self.idx] == *r2.borrow()[other.idx].as_value_ref::<u32>()?
             }
+            (Variant(r1), VecU32(r2)) => {
+                *r1.borrow().1[self.idx].as_value_ref::<u32>()? == r2.borrow()[other.idx]
+            }
+            (VecU32(r1), Variant(r2)) => {
+                r1.borrow()[self.idx] == *r2.borrow().1[other.idx].as_value_ref::<u32>()?
+            }
 
             (Locals(r1), VecU64(r2)) | (Struct(r1), VecU64(r2)) => {
                 *r1.borrow()[self.idx].as_value_ref::<u64>()? == r2.borrow()[other.idx]
             }
             (VecU64(r1), Locals(r2)) | (VecU64(r1), Struct(r2)) => {
                 r1.borrow()[self.idx] == *r2.borrow()[other.idx].as_value_ref::<u64>()?
+            }
+            (Variant(r1), VecU64(r2)) => {
+                *r1.borrow().1[self.idx].as_value_ref::<u64>()? == r2.borrow()[other.idx]
+            }
+            (VecU64(r1), Variant(r2)) => {
+                r1.borrow()[self.idx] == *r2.borrow().1[other.idx].as_value_ref::<u64>()?
             }
 
             (Locals(r1), VecU128(r2)) | (Struct(r1), VecU128(r2)) => {
@@ -693,12 +691,24 @@ impl IndexedRef {
             (VecU128(r1), Locals(r2)) | (VecU128(r1), Struct(r2)) => {
                 r1.borrow()[self.idx] == *r2.borrow()[other.idx].as_value_ref::<u128>()?
             }
+            (Variant(r1), VecU128(r2)) => {
+                *r1.borrow().1[self.idx].as_value_ref::<u128>()? == r2.borrow()[other.idx]
+            }
+            (VecU128(r1), Variant(r2)) => {
+                r1.borrow()[self.idx] == *r2.borrow().1[other.idx].as_value_ref::<u128>()?
+            }
 
             (Locals(r1), VecU256(r2)) | (Struct(r1), VecU256(r2)) => {
                 *r1.borrow()[self.idx].as_value_ref::<u256::U256>()? == r2.borrow()[other.idx]
             }
             (VecU256(r1), Locals(r2)) | (VecU256(r1), Struct(r2)) => {
                 r1.borrow()[self.idx] == *r2.borrow()[other.idx].as_value_ref::<u256::U256>()?
+            }
+            (Variant(r1), VecU256(r2)) => {
+                *r1.borrow().1[self.idx].as_value_ref::<u256::U256>()? == r2.borrow()[other.idx]
+            }
+            (VecU256(r1), Variant(r2)) => {
+                r1.borrow()[self.idx] == *r2.borrow().1[other.idx].as_value_ref::<u256::U256>()?
             }
 
             (Locals(r1), VecBool(r2)) | (Struct(r1), VecBool(r2)) => {
@@ -707,12 +717,25 @@ impl IndexedRef {
             (VecBool(r1), Locals(r2)) | (VecBool(r1), Struct(r2)) => {
                 r1.borrow()[self.idx] == *r2.borrow()[other.idx].as_value_ref::<bool>()?
             }
+            (Variant(r1), VecBool(r2)) => {
+                *r1.borrow().1[self.idx].as_value_ref::<bool>()? == r2.borrow()[other.idx]
+            }
+            (VecBool(r1), Variant(r2)) => {
+                r1.borrow()[self.idx] == *r2.borrow().1[other.idx].as_value_ref::<bool>()?
+            }
 
             (Locals(r1), VecAddress(r2)) | (Struct(r1), VecAddress(r2)) => {
                 *r1.borrow()[self.idx].as_value_ref::<AccountAddress>()? == r2.borrow()[other.idx]
             }
             (VecAddress(r1), Locals(r2)) | (VecAddress(r1), Struct(r2)) => {
                 r1.borrow()[self.idx] == *r2.borrow()[other.idx].as_value_ref::<AccountAddress>()?
+            }
+            (Variant(r1), VecAddress(r2)) => {
+                *r1.borrow().1[self.idx].as_value_ref::<AccountAddress>()? == r2.borrow()[other.idx]
+            }
+            (VecAddress(r1), Variant(r2)) => {
+                r1.borrow()[self.idx]
+                    == *r2.borrow().1[other.idx].as_value_ref::<AccountAddress>()?
             }
 
             // All other combinations are illegal.
@@ -759,24 +782,7 @@ impl IndexedRef {
 
         let res = match self.container_ref.container() {
             Locals(r) | Vec(r) | Struct(r) => r.borrow()[self.idx].copy_value()?,
-            VecU8(r) => ValueImpl::U8(r.borrow()[self.idx]),
-            VecU16(r) => ValueImpl::U16(r.borrow()[self.idx]),
-            VecU32(r) => ValueImpl::U32(r.borrow()[self.idx]),
-            VecU64(r) => ValueImpl::U64(r.borrow()[self.idx]),
-            VecU128(r) => ValueImpl::U128(r.borrow()[self.idx]),
-            VecU256(r) => ValueImpl::U256(r.borrow()[self.idx]),
-            VecBool(r) => ValueImpl::Bool(r.borrow()[self.idx]),
-            VecAddress(r) => ValueImpl::Address(r.borrow()[self.idx]),
-        };
-
-        Ok(Value(res))
-    }
-
-    fn copy_by_ref(&self) -> PartialVMResult<Value> {
-        use Container::*;
-
-        let res = match self.container_ref.container() {
-            Locals(r) | Vec(r) | Struct(r) => r.borrow()[self.idx].copy_value_by_ref()?,
+            Variant(r) => r.borrow().1[self.idx].copy_value()?,
             VecU8(r) => ValueImpl::U8(r.borrow()[self.idx]),
             VecU16(r) => ValueImpl::U16(r.borrow()[self.idx]),
             VecU32(r) => ValueImpl::U32(r.borrow()[self.idx]),
@@ -843,6 +849,19 @@ impl ContainerRef {
 
                 match self.container() {
                     Container::Struct(r) => assign!(r, Struct),
+                    Container::Variant(r) => match c {
+                        Container::Variant(new) => {
+                            *r.borrow_mut() = take_unique_ownership(new)?;
+                        }
+                        _ => {
+                            return Err(PartialVMError::new(
+                                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            )
+                            .with_message(
+                                "failed to write_ref: container type mismatch".to_string(),
+                            ))
+                        }
+                    },
                     Container::Vec(r) => assign!(r, Vec),
                     Container::VecU8(r) => assign!(r, VecU8),
                     Container::VecU16(r) => assign!(r, VecU16),
@@ -897,6 +916,9 @@ impl IndexedRef {
             (Container::Locals(r), _) | (Container::Vec(r), _) | (Container::Struct(r), _) => {
                 let mut v = r.borrow_mut();
                 v[self.idx] = x.0;
+            }
+            (Container::Variant(r), _) => {
+                r.borrow_mut().1[self.idx] = x.0;
             }
             (Container::VecU8(r), ValueImpl::U8(x)) => r.borrow_mut()[self.idx] = *x,
             (Container::VecU16(r), ValueImpl::U16(x)) => r.borrow_mut()[self.idx] = *x,
@@ -967,8 +989,23 @@ impl ContainerRef {
         }
 
         let res = match self.container() {
-            Container::Locals(r) | Container::Vec(r) | Container::Struct(r) => {
-                let v = r.borrow();
+            c @ Container::Locals(_)
+            | c @ Container::Vec(_)
+            | c @ Container::Struct(_)
+            | c @ Container::Variant(_) => {
+                let rc_r;
+                let rc_values;
+                let v = match c {
+                    Container::Locals(r) | Container::Vec(r) | Container::Struct(r) => {
+                        rc_r = r.borrow();
+                        &*rc_r
+                    }
+                    Container::Variant(r) => {
+                        rc_values = r.borrow();
+                        &*rc_values.1
+                    }
+                    _ => unreachable!(),
+                };
                 match &v[idx] {
                     // TODO: check for the impossible combinations.
                     ValueImpl::Container(container) => {
@@ -1011,6 +1048,106 @@ impl StructRef {
     }
 }
 
+impl VariantRef {
+    pub fn get_tag(&self) -> PartialVMResult<VariantTag> {
+        match self.0.container() {
+            Container::Variant(r) => Ok(r.borrow().0),
+            Container::Locals(_)
+            | Container::Vec(_)
+            | Container::Struct(_)
+            | Container::VecU8(_)
+            | Container::VecU64(_)
+            | Container::VecU128(_)
+            | Container::VecBool(_)
+            | Container::VecAddress(_)
+            | Container::VecU16(_)
+            | Container::VecU32(_)
+            | Container::VecU256(_) => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!(
+                    "expected variant container, got {:?}",
+                    self.0.container()
+                ))),
+        }
+    }
+    pub fn check_tag(&self, expected_tag: VariantTag) -> PartialVMResult<()> {
+        let tag = self.get_tag()?;
+        if tag != expected_tag {
+            Err(
+                PartialVMError::new(StatusCode::VARIANT_TAG_MISMATCH).with_message(format!(
+                    "Variant tag mismatch: expected {}, got {}",
+                    expected_tag, tag
+                )),
+            )
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn unpack_variant(&self) -> PartialVMResult<Vec<Value>> {
+        match self.0.container() {
+            Container::Variant(r) => {
+                let values = &*r.borrow().1;
+                let mut res = vec![];
+                for (idx, v) in values.iter().enumerate() {
+                    let ref_ = match v {
+                        ValueImpl::Container(container) => {
+                            let r = match &self.0 {
+                                ContainerRef::Local(_) => {
+                                    ContainerRef::Local(container.copy_by_ref())
+                                }
+                                ContainerRef::Global { status, .. } => ContainerRef::Global {
+                                    status: Rc::clone(status),
+                                    container: container.copy_by_ref(),
+                                },
+                            };
+                            ValueImpl::ContainerRef(r)
+                        }
+                        ValueImpl::U8(_)
+                        | ValueImpl::U16(_)
+                        | ValueImpl::U32(_)
+                        | ValueImpl::U64(_)
+                        | ValueImpl::U128(_)
+                        | ValueImpl::U256(_)
+                        | ValueImpl::Bool(_)
+                        | ValueImpl::Address(_) => ValueImpl::IndexedRef(IndexedRef {
+                            idx,
+                            container_ref: self.0.copy_value(),
+                        }),
+                        x @ (ValueImpl::ContainerRef(_)
+                        | ValueImpl::IndexedRef(_)
+                        | ValueImpl::Invalid) => {
+                            return Err(PartialVMError::new(
+                                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            )
+                            .with_message(format!(
+                            "cannot unpack a reference value {:?} held inside a variant ref {:?}",
+                            x, self
+                        )))
+                        }
+                    };
+                    res.push(Value(ref_));
+                }
+                Ok(res)
+            }
+            Container::Locals(_)
+            | Container::Vec(_)
+            | Container::Struct(_)
+            | Container::VecU8(_)
+            | Container::VecU64(_)
+            | Container::VecU128(_)
+            | Container::VecBool(_)
+            | Container::VecAddress(_)
+            | Container::VecU16(_)
+            | Container::VecU32(_)
+            | Container::VecU256(_) => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!(
+                    "expected variant container, got {:?}",
+                    self.0.container()
+                ))),
+        }
+    }
+}
+
 impl Locals {
     pub fn borrow_loc(&self, idx: usize) -> PartialVMResult<Value> {
         // TODO: this is very similar to SharedContainer::borrow_elem. Find a way to
@@ -1042,7 +1179,7 @@ impl Locals {
             | ValueImpl::U256(_)
             | ValueImpl::Bool(_)
             | ValueImpl::Address(_) => Ok(Value(ValueImpl::IndexedRef(IndexedRef {
-                container_ref: ContainerRef::Local(Container::Locals(RcId::clone(&self.0))),
+                container_ref: ContainerRef::Local(Container::Locals(Rc::clone(&self.0))),
                 idx,
             }))),
 
@@ -1069,7 +1206,7 @@ impl SignerRef {
  **************************************************************************************/
 impl Locals {
     pub fn new(n: usize) -> Self {
-        Self(RcId::new(RefCell::new(
+        Self(Rc::new(RefCell::new(
             iter::repeat_with(|| ValueImpl::Invalid).take(n).collect(),
         )))
     }
@@ -1225,65 +1362,71 @@ impl Value {
     }
 
     pub fn struct_(s: Struct) -> Self {
-        Self(ValueImpl::Container(Container::Struct(RcId::new(
+        Self(ValueImpl::Container(Container::Struct(Rc::new(
             RefCell::new(s.fields),
+        ))))
+    }
+
+    pub fn variant(s: Variant) -> Self {
+        Self(ValueImpl::Container(Container::Variant(Rc::new(
+            RefCell::new((s.tag, s.fields)),
         ))))
     }
 
     // TODO: consider whether we want to replace these with fn vector(v: Vec<Value>).
     pub fn vector_u8(it: impl IntoIterator<Item = u8>) -> Self {
-        Self(ValueImpl::Container(Container::VecU8(RcId::new(
+        Self(ValueImpl::Container(Container::VecU8(Rc::new(
             RefCell::new(it.into_iter().collect()),
         ))))
     }
 
     pub fn vector_u16(it: impl IntoIterator<Item = u16>) -> Self {
-        Self(ValueImpl::Container(Container::VecU16(RcId::new(
+        Self(ValueImpl::Container(Container::VecU16(Rc::new(
             RefCell::new(it.into_iter().collect()),
         ))))
     }
 
     pub fn vector_u32(it: impl IntoIterator<Item = u32>) -> Self {
-        Self(ValueImpl::Container(Container::VecU32(RcId::new(
+        Self(ValueImpl::Container(Container::VecU32(Rc::new(
             RefCell::new(it.into_iter().collect()),
         ))))
     }
 
     pub fn vector_u64(it: impl IntoIterator<Item = u64>) -> Self {
-        Self(ValueImpl::Container(Container::VecU64(RcId::new(
+        Self(ValueImpl::Container(Container::VecU64(Rc::new(
             RefCell::new(it.into_iter().collect()),
         ))))
     }
 
     pub fn vector_u128(it: impl IntoIterator<Item = u128>) -> Self {
-        Self(ValueImpl::Container(Container::VecU128(RcId::new(
+        Self(ValueImpl::Container(Container::VecU128(Rc::new(
             RefCell::new(it.into_iter().collect()),
         ))))
     }
 
     pub fn vector_u256(it: impl IntoIterator<Item = u256::U256>) -> Self {
-        Self(ValueImpl::Container(Container::VecU256(RcId::new(
+        Self(ValueImpl::Container(Container::VecU256(Rc::new(
             RefCell::new(it.into_iter().collect()),
         ))))
     }
 
     pub fn vector_bool(it: impl IntoIterator<Item = bool>) -> Self {
-        Self(ValueImpl::Container(Container::VecBool(RcId::new(
+        Self(ValueImpl::Container(Container::VecBool(Rc::new(
             RefCell::new(it.into_iter().collect()),
         ))))
     }
 
     pub fn vector_address(it: impl IntoIterator<Item = AccountAddress>) -> Self {
-        Self(ValueImpl::Container(Container::VecAddress(RcId::new(
+        Self(ValueImpl::Container(Container::VecAddress(Rc::new(
             RefCell::new(it.into_iter().collect()),
         ))))
     }
 
     // REVIEW: This API can break
     pub fn vector_for_testing_only(it: impl IntoIterator<Item = Value>) -> Self {
-        Self(ValueImpl::Container(Container::Vec(RcId::new(
-            RefCell::new(it.into_iter().map(|v| v.0).collect()),
-        ))))
+        Self(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
+            it.into_iter().map(|v| v.0).collect(),
+        )))))
     }
 }
 
@@ -1377,9 +1520,28 @@ impl VMValueCast<Struct> for Value {
     }
 }
 
+impl VMValueCast<Variant> for Value {
+    fn cast(self) -> PartialVMResult<Variant> {
+        match self.0 {
+            ValueImpl::Container(Container::Variant(r)) => {
+                let (tag, fields) = take_unique_ownership(r)?;
+                Ok(Variant { tag, fields })
+            }
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to enum variant", v,))),
+        }
+    }
+}
+
 impl VMValueCast<StructRef> for Value {
     fn cast(self) -> PartialVMResult<StructRef> {
         Ok(StructRef(VMValueCast::cast(self)?))
+    }
+}
+
+impl VMValueCast<VariantRef> for Value {
+    fn cast(self) -> PartialVMResult<VariantRef> {
+        Ok(VariantRef(VMValueCast::cast(self)?))
     }
 }
 
@@ -2061,9 +2223,9 @@ fn check_elem_layout(ty: &Type, v: &Container) -> PartialVMResult<()> {
 
         (Type::Vector(_), Container::Vec(_)) => Ok(()),
 
-        (Type::Struct(_), Container::Vec(_))
+        (Type::Datatype(_), Container::Vec(_))
         | (Type::Signer, Container::Vec(_))
-        | (Type::StructInstantiation(_), Container::Vec(_)) => Ok(()),
+        | (Type::DatatypeInstantiation(_), Container::Vec(_)) => Ok(()),
 
         (Type::Reference(_), _) | (Type::MutableReference(_), _) | (Type::TyParam(_), _) => Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2080,8 +2242,8 @@ fn check_elem_layout(ty: &Type, v: &Container) -> PartialVMResult<()> {
         | (Type::Address, _)
         | (Type::Signer, _)
         | (Type::Vector(_), _)
-        | (Type::Struct(_), _)
-        | (Type::StructInstantiation(_), _) => Err(PartialVMError::new(
+        | (Type::Datatype(_), _)
+        | (Type::DatatypeInstantiation(_), _) => Err(PartialVMError::new(
             StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
         )
         .with_message(format!(
@@ -2106,7 +2268,9 @@ impl VectorRef {
             Container::VecBool(r) => r.borrow().len(),
             Container::VecAddress(r) => r.borrow().len(),
             Container::Vec(r) => r.borrow().len(),
-            Container::Locals(_) | Container::Struct(_) => unreachable!(),
+            Container::Locals(_) | Container::Struct(_) | Container::Variant { .. } => {
+                unreachable!()
+            }
         };
         Ok(Value::u64(len as u64))
     }
@@ -2125,7 +2289,9 @@ impl VectorRef {
             Container::VecBool(r) => r.borrow().len(),
             Container::VecAddress(r) => r.borrow().len(),
             Container::Vec(r) => r.borrow().len(),
-            Container::Locals(_) | Container::Struct(_) => unreachable!(),
+            Container::Locals(_) | Container::Struct(_) | Container::Variant { .. } => {
+                unreachable!()
+            }
         };
         if size >= (capacity as usize) {
             return Err(PartialVMError::new(StatusCode::VECTOR_OPERATION_ERROR)
@@ -2143,7 +2309,9 @@ impl VectorRef {
             Container::VecBool(r) => r.borrow_mut().push(e.value_as()?),
             Container::VecAddress(r) => r.borrow_mut().push(e.value_as()?),
             Container::Vec(r) => r.borrow_mut().push(e.0),
-            Container::Locals(_) | Container::Struct(_) => unreachable!(),
+            Container::Locals(_) | Container::Struct(_) | Container::Variant { .. } => {
+                unreachable!()
+            }
         }
 
         self.0.mark_dirty();
@@ -2217,7 +2385,9 @@ impl VectorRef {
                 Some(x) => Value(x),
                 None => err_pop_empty_vec!(),
             },
-            Container::Locals(_) | Container::Struct(_) => unreachable!(),
+            Container::Locals(_) | Container::Struct(_) | Container::Variant { .. } => {
+                unreachable!()
+            }
         };
 
         self.0.mark_dirty();
@@ -2249,7 +2419,9 @@ impl VectorRef {
             Container::VecBool(r) => swap!(r),
             Container::VecAddress(r) => swap!(r),
             Container::Vec(r) => swap!(r),
-            Container::Locals(_) | Container::Struct(_) => unreachable!(),
+            Container::Locals(_) | Container::Struct(_) | Container::Variant { .. } => {
+                unreachable!()
+            }
         }
 
         self.0.mark_dirty();
@@ -2309,10 +2481,10 @@ impl Vector {
                     .collect::<PartialVMResult<Vec<_>>>()?,
             ),
 
-            Type::Signer | Type::Vector(_) | Type::Struct(_) | Type::StructInstantiation(_) => {
-                Value(ValueImpl::Container(Container::Vec(RcId::new(
-                    RefCell::new(elements.into_iter().map(|v| v.0).collect()),
-                ))))
+            Type::Signer | Type::Vector(_) | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
+                Value(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
+                    elements.into_iter().map(|v| v.0).collect(),
+                )))))
             }
 
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
@@ -2366,7 +2538,9 @@ impl Vector {
                 .map(Value::address)
                 .collect(),
             Container::Vec(r) => take_unique_ownership(r)?.into_iter().map(Value).collect(),
-            Container::Locals(_) | Container::Struct(_) => unreachable!(),
+            Container::Locals(_) | Container::Struct(_) | Container::Variant { .. } => {
+                unreachable!()
+            }
         };
         if expected_num as usize == elements.len() {
             Ok(elements)
@@ -2421,6 +2595,7 @@ impl Container {
             Self::Locals(r) | Self::Vec(r) | Self::Struct(r) => {
                 Struct::legacy_size_impl(&r.borrow())
             }
+            Self::Variant(r) => Variant::legacy_size_impl(&r.borrow().1),
             Self::VecU8(r) => {
                 AbstractMemorySize::new((r.borrow().len() * std::mem::size_of::<u8>()) as u64)
             }
@@ -2478,6 +2653,18 @@ impl ValueImpl {
     }
 }
 
+impl Variant {
+    const TAG_SIZE: AbstractMemorySize = AbstractMemorySize::new(std::mem::size_of::<u16>() as u64);
+
+    fn legacy_size_impl(fields: &[ValueImpl]) -> AbstractMemorySize {
+        fields
+            .iter()
+            .fold(LEGACY_STRUCT_SIZE.add(Self::TAG_SIZE), |acc, v| {
+                acc + v.legacy_size()
+            })
+    }
+}
+
 impl Struct {
     fn legacy_size_impl(fields: &[ValueImpl]) -> AbstractMemorySize {
         fields
@@ -2530,6 +2717,35 @@ impl Struct {
 
     pub fn unpack(self) -> PartialVMResult<impl Iterator<Item = Value>> {
         Ok(self.fields.into_iter().map(Value))
+    }
+}
+
+/***************************************************************************************
+ *
+ * Variant Operations
+ *
+ *   Public APIs for Enums.
+ *
+ **************************************************************************************/
+impl Variant {
+    pub fn pack<I: IntoIterator<Item = Value>>(tag: VariantTag, vals: I) -> Self {
+        Self {
+            tag,
+            fields: vals.into_iter().map(|v| v.0).collect(),
+        }
+    }
+
+    pub fn unpack(self) -> PartialVMResult<impl Iterator<Item = Value>> {
+        Ok(self.fields.into_iter().map(Value))
+    }
+
+    pub fn check_tag(&self, tag: VariantTag) -> PartialVMResult<()> {
+        if tag != self.tag {
+            Err(PartialVMError::new(StatusCode::VARIANT_TAG_MISMATCH)
+                .with_message(format!("tag mismatch: expected {}, got {}", tag, self.tag)))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -2620,10 +2836,10 @@ impl GlobalValueImpl {
         match self {
             Self::None | Self::Deleted => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
             Self::Fresh { fields } => Ok(ValueImpl::ContainerRef(ContainerRef::Local(
-                Container::Struct(RcId::clone(fields)),
+                Container::Struct(Rc::clone(fields)),
             ))),
             Self::Cached { fields, status } => Ok(ValueImpl::ContainerRef(ContainerRef::Global {
-                container: Container::Struct(RcId::clone(fields)),
+                container: Container::Struct(Rc::clone(fields)),
                 status: Rc::clone(status),
             })),
         }
@@ -2744,7 +2960,7 @@ where
 }
 
 impl Container {
-    pub fn raw_address(&self) -> usize {
+    fn raw_address(&self) -> usize {
         use Container::*;
 
         match self {
@@ -2759,24 +2975,7 @@ impl Container {
             VecU256(r) => r.as_ptr() as usize,
             VecBool(r) => r.as_ptr() as usize,
             VecAddress(r) => r.as_ptr() as usize,
-        }
-    }
-
-    pub fn id(&self) -> ContainerId {
-        use Container::*;
-
-        match self {
-            Locals(r) => r.id(),
-            Vec(r) => r.id(),
-            Struct(r) => r.id(),
-            VecU8(r) => r.id(),
-            VecU16(r) => r.id(),
-            VecU32(r) => r.id(),
-            VecU64(r) => r.id(),
-            VecU128(r) => r.id(),
-            VecU256(r) => r.id(),
-            VecBool(r) => r.id(),
-            VecAddress(r) => r.id(),
+            Variant(r) => r.as_ptr() as usize,
         }
     }
 }
@@ -2814,6 +3013,11 @@ impl Display for Container {
         match self {
             Self::Locals(r) | Self::Vec(r) | Self::Struct(r) => {
                 display_list_of_items(r.borrow().iter(), f)
+            }
+            Self::Variant(r) => {
+                let (tag, values) = &*r.borrow();
+                write!(f, "|tag: {}|", tag)?;
+                display_list_of_items(values, f)
             }
             Self::VecU8(r) => display_list_of_items(r.borrow().iter(), f),
             Self::VecU16(r) => display_list_of_items(r.borrow().iter(), f),
@@ -2946,6 +3150,17 @@ pub mod debug {
                 print_list(buf, "{ ", r.borrow().iter(), print_value_impl, " }")
             }
 
+            Container::Variant(r) => {
+                let (tag, values) = &*r.borrow();
+                print_list(
+                    buf,
+                    &format!("|{}|{{ ", tag),
+                    values,
+                    print_value_impl,
+                    " }",
+                )
+            }
+
             Container::VecU8(r) => print_list(buf, "[", r.borrow().iter(), print_u8, "]"),
             Container::VecU16(r) => print_list(buf, "[", r.borrow().iter(), print_u16, "]"),
             Container::VecU32(r) => print_list(buf, "[", r.borrow().iter(), print_u32, "]"),
@@ -2986,6 +3201,11 @@ pub mod debug {
         match r.container_ref.container() {
             Container::Locals(r) | Container::Vec(r) | Container::Struct(r) => {
                 print_slice_elem(buf, &r.borrow(), idx, print_value_impl)
+            }
+            Container::Variant(r) => {
+                let (tag, values) = &*r.borrow();
+                debug_write!(buf, "|{}|", tag)?;
+                print_slice_elem(buf, values, idx, print_value_impl)
             }
 
             Container::VecU8(r) => print_slice_elem(buf, &r.borrow(), idx, print_u8),
@@ -3061,20 +3281,6 @@ impl Value {
     }
 }
 
-impl Struct {
-    pub fn simple_deserialize(blob: &[u8], layout: &MoveStructLayout) -> Option<Struct> {
-        bcs::from_bytes_seed(SeedWrapper { layout }, blob).ok()
-    }
-
-    pub fn simple_serialize(&self, layout: &MoveStructLayout) -> Option<Vec<u8>> {
-        bcs::to_bytes(&AnnotatedValue {
-            layout,
-            val: &self.fields,
-        })
-        .ok()
-    }
-}
-
 struct AnnotatedValue<'a, 'b, T1, T2> {
     layout: &'a T1,
     val: &'b T2,
@@ -3101,6 +3307,14 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueIm
             (MoveTypeLayout::Struct(struct_layout), ValueImpl::Container(Container::Struct(r))) => {
                 (AnnotatedValue {
                     layout: struct_layout,
+                    val: &*r.borrow(),
+                })
+                .serialize(serializer)
+            }
+
+            (MoveTypeLayout::Enum(enum_layout), ValueImpl::Container(Container::Variant(r))) => {
+                (AnnotatedValue {
+                    layout: enum_layout,
                     val: &*r.borrow(),
                 })
                 .serialize(serializer)
@@ -3186,6 +3400,63 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveStructLayout, Vec<V
     }
 }
 
+impl<'a, 'b> serde::Serialize
+    for AnnotatedValue<'a, 'b, MoveEnumLayout, (VariantTag, Vec<ValueImpl>)>
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let (tag, values) = &self.val;
+        let tag = if *tag as u64 > VARIANT_COUNT_MAX {
+            return Err(serde::ser::Error::custom(format!(
+                "Variant tag {} is greater than the maximum allowed value of {}",
+                tag, VARIANT_COUNT_MAX
+            )));
+        } else {
+            *tag as u8
+        };
+
+        let fields = &self.layout.0[tag as usize];
+        if fields.len() != values.len() {
+            return Err(invariant_violation::<S>(format!(
+                "cannot serialize variant value {:?} as {:?} -- number of fields mismatch",
+                self.val, self.layout
+            )));
+        }
+
+        let mut t = serializer.serialize_tuple(2)?;
+        t.serialize_element(&tag)?;
+
+        t.serialize_element(&AnnotatedValue {
+            layout: &VariantFields(fields),
+            val: values,
+        })?;
+
+        t.end()
+    }
+}
+
+struct VariantFields<'a>(&'a [MoveTypeLayout]);
+
+impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, VariantFields<'a>, Vec<ValueImpl>> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let values = self.val;
+        let types = self.layout.0;
+        if types.len() != values.len() {
+            return Err(invariant_violation::<S>(format!(
+                "cannot serialize variant value {:?} as {:?} -- number of fields mismatch",
+                self.val, self.layout.0
+            )));
+        }
+        let mut t = serializer.serialize_tuple(values.len())?;
+        for (field_layout, val) in types.iter().zip(values.iter()) {
+            t.serialize_element(&AnnotatedValue {
+                layout: field_layout,
+                val,
+            })?;
+        }
+        t.end()
+    }
+}
+
 #[derive(Clone)]
 struct SeedWrapper<L> {
     layout: L,
@@ -3211,43 +3482,46 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
             L::Address => AccountAddress::deserialize(deserializer).map(Value::address),
             L::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
 
-            L::Struct(struct_layout) => Ok(Value::struct_(
-                SeedWrapper {
-                    layout: struct_layout,
-                }
-                .deserialize(deserializer)?,
-            )),
+            L::Struct(struct_layout) => Ok(SeedWrapper {
+                layout: struct_layout,
+            }
+            .deserialize(deserializer)?),
+
+            L::Enum(enum_layout) => Ok(SeedWrapper {
+                layout: enum_layout,
+            }
+            .deserialize(deserializer)?),
 
             L::Vector(layout) => {
                 let container = match &**layout {
                     L::U8 => {
-                        Container::VecU8(RcId::new(RefCell::new(Vec::deserialize(deserializer)?)))
+                        Container::VecU8(Rc::new(RefCell::new(Vec::deserialize(deserializer)?)))
                     }
                     L::U16 => {
-                        Container::VecU16(RcId::new(RefCell::new(Vec::deserialize(deserializer)?)))
+                        Container::VecU16(Rc::new(RefCell::new(Vec::deserialize(deserializer)?)))
                     }
                     L::U32 => {
-                        Container::VecU32(RcId::new(RefCell::new(Vec::deserialize(deserializer)?)))
+                        Container::VecU32(Rc::new(RefCell::new(Vec::deserialize(deserializer)?)))
                     }
                     L::U64 => {
-                        Container::VecU64(RcId::new(RefCell::new(Vec::deserialize(deserializer)?)))
+                        Container::VecU64(Rc::new(RefCell::new(Vec::deserialize(deserializer)?)))
                     }
                     L::U128 => {
-                        Container::VecU128(RcId::new(RefCell::new(Vec::deserialize(deserializer)?)))
+                        Container::VecU128(Rc::new(RefCell::new(Vec::deserialize(deserializer)?)))
                     }
                     L::U256 => {
-                        Container::VecU256(RcId::new(RefCell::new(Vec::deserialize(deserializer)?)))
+                        Container::VecU256(Rc::new(RefCell::new(Vec::deserialize(deserializer)?)))
                     }
                     L::Bool => {
-                        Container::VecBool(RcId::new(RefCell::new(Vec::deserialize(deserializer)?)))
+                        Container::VecBool(Rc::new(RefCell::new(Vec::deserialize(deserializer)?)))
                     }
-                    L::Address => Container::VecAddress(RcId::new(RefCell::new(Vec::deserialize(
+                    L::Address => Container::VecAddress(Rc::new(RefCell::new(Vec::deserialize(
                         deserializer,
                     )?))),
                     layout => {
                         let v = deserializer
                             .deserialize_seq(VectorElementVisitor(SeedWrapper { layout }))?;
-                        Container::Vec(RcId::new(RefCell::new(v)))
+                        Container::Vec(Rc::new(RefCell::new(v)))
                     }
                 };
                 Ok(Value(ValueImpl::Container(container)))
@@ -3257,16 +3531,27 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
 }
 
 impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveStructLayout> {
-    type Value = Struct;
+    type Value = Value;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        let field_layouts = self.layout.fields();
         let fields = deserializer
-            .deserialize_tuple(field_layouts.len(), StructFieldVisitor(field_layouts))?;
-        Ok(Struct::pack(fields))
+            .deserialize_tuple(self.layout.0.len(), StructFieldVisitor(&self.layout.0))?;
+        Ok(Value::struct_(Struct::pack(fields)))
+    }
+}
+
+impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveEnumLayout> {
+    type Value = Value;
+
+    fn deserialize<D: serde::de::Deserializer<'d>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        let variant = deserializer.deserialize_tuple(2, EnumFieldVisitor(&self.layout.0))?;
+        Ok(Value::variant(variant))
     }
 }
 
@@ -3318,6 +3603,57 @@ impl<'d, 'a> serde::de::Visitor<'d> for StructFieldVisitor<'a> {
     }
 }
 
+struct EnumFieldVisitor<'a>(&'a Vec<Vec<MoveTypeLayout>>);
+
+impl<'d, 'a> serde::de::Visitor<'d> for EnumFieldVisitor<'a> {
+    type Value = Variant;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Enum")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'d>,
+    {
+        let tag = match seq.next_element_seed(&MoveTypeLayout::U8)? {
+            Some(MoveValue::U8(tag)) if tag as u64 <= VARIANT_COUNT_MAX => tag as u16,
+            Some(MoveValue::U8(tag)) => return Err(A::Error::invalid_length(tag as usize, &self)),
+            Some(val) => {
+                return Err(A::Error::invalid_type(
+                    serde::de::Unexpected::Other(&format!("{val:?}")),
+                    &self,
+                ))
+            }
+            None => return Err(A::Error::invalid_length(0, &self)),
+        };
+
+        let Some(variant_layout) = self.0.get(tag as usize) else {
+            return Err(A::Error::invalid_length(tag as usize, &self));
+        };
+
+        let Some(fields) = seq.next_element_seed(&MoveRuntimeVariantFieldLayout(variant_layout))?
+        else {
+            return Err(A::Error::invalid_length(1, &self));
+        };
+
+        Ok(Variant::pack(tag, fields))
+    }
+}
+
+struct MoveRuntimeVariantFieldLayout<'a>(&'a Vec<MoveTypeLayout>);
+
+impl<'d, 'a> serde::de::DeserializeSeed<'d> for &MoveRuntimeVariantFieldLayout<'a> {
+    type Value = Vec<Value>;
+
+    fn deserialize<D: serde::de::Deserializer<'d>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_tuple(self.0.len(), StructFieldVisitor(self.0))
+    }
+}
+
 /***************************************************************************************
 *
 * Constants
@@ -3343,7 +3679,7 @@ impl Value {
             S::Signer => return None,
             S::Vector(inner) => L::Vector(Box::new(Self::constant_sig_token_to_layout(inner)?)),
             // Not yet supported
-            S::Struct(_) | S::StructInstantiation(_) => return None,
+            S::Datatype(_) | S::DatatypeInstantiation(_) => return None,
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) => return None,
         })
@@ -3395,6 +3731,14 @@ impl Container {
                     }
                 }
             }
+            Variant(r) => {
+                let r = &*r.borrow().1;
+                if visitor.visit_variant(depth, r.len()) {
+                    for val in r.iter() {
+                        val.visit_impl(visitor, depth + 1);
+                    }
+                }
+            }
             VecU8(r) => visitor.visit_vec_u8(depth, &r.borrow()),
             VecU16(r) => visitor.visit_vec_u16(depth, &r.borrow()),
             VecU32(r) => visitor.visit_vec_u32(depth, &r.borrow()),
@@ -3411,6 +3755,7 @@ impl Container {
 
         match self {
             Locals(r) | Vec(r) | Struct(r) => r.borrow()[idx].visit_impl(visitor, depth + 1),
+            Variant(r) => r.borrow().1[idx].visit_impl(visitor, depth + 1),
             VecU8(vals) => visitor.visit_u8(depth + 1, vals.borrow()[idx]),
             VecU16(vals) => visitor.visit_u16(depth + 1, vals.borrow()[idx]),
             VecU32(vals) => visitor.visit_u32(depth + 1, vals.borrow()[idx]),
@@ -3549,9 +3894,22 @@ impl ValueView for SignerRef {
     }
 }
 
+impl ValueView for VariantRef {
+    fn visit(&self, visitor: &mut impl ValueVisitor) {
+        self.0.visit_impl(visitor, 0)
+    }
+}
+
 // Note: We may want to add more helpers to retrieve value views behind references here.
 
 impl Struct {
+    #[allow(clippy::needless_lifetimes)]
+    pub fn field_views<'a>(&'a self) -> impl ExactSizeIterator<Item = impl ValueView + 'a> {
+        self.fields.iter()
+    }
+}
+
+impl Variant {
     #[allow(clippy::needless_lifetimes)]
     pub fn field_views<'a>(&'a self) -> impl ExactSizeIterator<Item = impl ValueView + 'a> {
         self.fields.iter()
@@ -3655,65 +4013,65 @@ pub mod prop {
             L::Vector(layout) => match &**layout {
                 L::U8 => vec(any::<u8>(), 0..10)
                     .prop_map(|vals| {
-                        Value(ValueImpl::Container(Container::VecU8(RcId::new(
+                        Value(ValueImpl::Container(Container::VecU8(Rc::new(
                             RefCell::new(vals),
                         ))))
                     })
                     .boxed(),
                 L::U16 => vec(any::<u16>(), 0..10)
                     .prop_map(|vals| {
-                        Value(ValueImpl::Container(Container::VecU16(RcId::new(
+                        Value(ValueImpl::Container(Container::VecU16(Rc::new(
                             RefCell::new(vals),
                         ))))
                     })
                     .boxed(),
                 L::U32 => vec(any::<u32>(), 0..10)
                     .prop_map(|vals| {
-                        Value(ValueImpl::Container(Container::VecU32(RcId::new(
+                        Value(ValueImpl::Container(Container::VecU32(Rc::new(
                             RefCell::new(vals),
                         ))))
                     })
                     .boxed(),
                 L::U64 => vec(any::<u64>(), 0..10)
                     .prop_map(|vals| {
-                        Value(ValueImpl::Container(Container::VecU64(RcId::new(
+                        Value(ValueImpl::Container(Container::VecU64(Rc::new(
                             RefCell::new(vals),
                         ))))
                     })
                     .boxed(),
                 L::U128 => vec(any::<u128>(), 0..10)
                     .prop_map(|vals| {
-                        Value(ValueImpl::Container(Container::VecU128(RcId::new(
+                        Value(ValueImpl::Container(Container::VecU128(Rc::new(
                             RefCell::new(vals),
                         ))))
                     })
                     .boxed(),
                 L::U256 => vec(any::<u256::U256>(), 0..10)
                     .prop_map(|vals| {
-                        Value(ValueImpl::Container(Container::VecU256(RcId::new(
+                        Value(ValueImpl::Container(Container::VecU256(Rc::new(
                             RefCell::new(vals),
                         ))))
                     })
                     .boxed(),
                 L::Bool => vec(any::<bool>(), 0..10)
                     .prop_map(|vals| {
-                        Value(ValueImpl::Container(Container::VecBool(RcId::new(
+                        Value(ValueImpl::Container(Container::VecBool(Rc::new(
                             RefCell::new(vals),
                         ))))
                     })
                     .boxed(),
                 L::Address => vec(any::<AccountAddress>(), 0..10)
                     .prop_map(|vals| {
-                        Value(ValueImpl::Container(Container::VecAddress(RcId::new(
+                        Value(ValueImpl::Container(Container::VecAddress(Rc::new(
                             RefCell::new(vals),
                         ))))
                     })
                     .boxed(),
                 layout => vec(value_strategy_with_layout(layout), 0..10)
                     .prop_map(|vals| {
-                        Value(ValueImpl::Container(Container::Vec(RcId::new(
-                            RefCell::new(vals.into_iter().map(|val| val.0).collect()),
-                        ))))
+                        Value(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
+                            vals.into_iter().map(|val| val.0).collect(),
+                        )))))
                     })
                     .boxed(),
             },
@@ -3760,10 +4118,7 @@ pub mod prop {
     }
 }
 
-use move_core_types::annotated_value::{
-    MoveTypeLayout as AnnotatedMoveTypeLayout, MoveValue as AnnotatedMoveValue,
-};
-use move_core_types::runtime_value::{MoveStruct, MoveValue};
+use move_core_types::runtime_value::{MoveStruct, MoveValue, MoveVariant};
 
 impl ValueImpl {
     pub fn as_move_value(&self, layout: &MoveTypeLayout) -> MoveValue {
@@ -3778,6 +4133,17 @@ impl ValueImpl {
             (L::U256, ValueImpl::U256(x)) => MoveValue::U256(*x),
             (L::Bool, ValueImpl::Bool(x)) => MoveValue::Bool(*x),
             (L::Address, ValueImpl::Address(x)) => MoveValue::Address(*x),
+
+            (L::Enum(MoveEnumLayout(variants)), ValueImpl::Container(Container::Variant(r))) => {
+                let (tag, values) = &*r.borrow();
+                let tag = *tag;
+                let field_layouts = &variants[tag as usize];
+                let mut fields = vec![];
+                for (v, field_layout) in values.iter().zip(field_layouts) {
+                    fields.push(v.as_move_value(field_layout));
+                }
+                MoveValue::Variant(MoveVariant { tag, fields })
+            }
 
             (L::Struct(struct_layout), ValueImpl::Container(Container::Struct(r))) => {
                 let mut fields = vec![];
@@ -3806,6 +4172,9 @@ impl ValueImpl {
                 Container::Struct(_) => {
                     panic!("got struct container when converting vec")
                 }
+                Container::Variant { .. } => {
+                    panic!("got variant container when converting vec")
+                }
                 Container::Locals(_) => panic!("got locals container when converting vec"),
             }),
 
@@ -3823,135 +4192,10 @@ impl ValueImpl {
             (layout, val) => panic!("Cannot convert value {:?} as {:?}", val, layout),
         }
     }
-
-    pub fn try_as_move_value(
-        &self,
-        layout: &AnnotatedMoveTypeLayout,
-    ) -> PartialVMResult<AnnotatedMoveValue> {
-        use AnnotatedMoveTypeLayout as L;
-
-        match (layout, &self) {
-            (L::U8, ValueImpl::U8(x)) => Ok(AnnotatedMoveValue::U8(*x)),
-            (L::U16, ValueImpl::U16(x)) => Ok(AnnotatedMoveValue::U16(*x)),
-            (L::U32, ValueImpl::U32(x)) => Ok(AnnotatedMoveValue::U32(*x)),
-            (L::U64, ValueImpl::U64(x)) => Ok(AnnotatedMoveValue::U64(*x)),
-            (L::U128, ValueImpl::U128(x)) => Ok(AnnotatedMoveValue::U128(*x)),
-            (L::U256, ValueImpl::U256(x)) => Ok(AnnotatedMoveValue::U256(*x)),
-            (L::Bool, ValueImpl::Bool(x)) => Ok(AnnotatedMoveValue::Bool(*x)),
-            (L::Address, ValueImpl::Address(x)) => Ok(AnnotatedMoveValue::Address(*x)),
-            (L::Struct(struct_layout), ValueImpl::Container(Container::Struct(r))) => {
-                let mut fields = vec![];
-                let field_layouts = struct_layout.clone().into_fields();
-                for (v, field_layout) in r.borrow().iter().zip(field_layouts.iter()) {
-                    fields.push(v.try_as_move_value(field_layout)?.undecorate());
-                }
-
-                Ok(AnnotatedMoveValue::Struct(
-                    MoveStruct::new(fields).decorate(struct_layout),
-                ))
-            }
-
-            (L::Vector(inner_layout), ValueImpl::Container(c)) => {
-                Ok(AnnotatedMoveValue::Vector(match c {
-                    Container::VecU8(r) => r
-                        .borrow()
-                        .iter()
-                        .map(|u| AnnotatedMoveValue::U8(*u))
-                        .collect(),
-                    Container::VecU16(r) => r
-                        .borrow()
-                        .iter()
-                        .map(|u| AnnotatedMoveValue::U16(*u))
-                        .collect(),
-                    Container::VecU32(r) => r
-                        .borrow()
-                        .iter()
-                        .map(|u| AnnotatedMoveValue::U32(*u))
-                        .collect(),
-                    Container::VecU64(r) => r
-                        .borrow()
-                        .iter()
-                        .map(|u| AnnotatedMoveValue::U64(*u))
-                        .collect(),
-                    Container::VecU128(r) => r
-                        .borrow()
-                        .iter()
-                        .map(|u| AnnotatedMoveValue::U128(*u))
-                        .collect(),
-                    Container::VecU256(r) => r
-                        .borrow()
-                        .iter()
-                        .map(|u| AnnotatedMoveValue::U256(*u))
-                        .collect(),
-                    Container::VecBool(r) => r
-                        .borrow()
-                        .iter()
-                        .map(|u| AnnotatedMoveValue::Bool(*u))
-                        .collect(),
-                    Container::VecAddress(r) => r
-                        .borrow()
-                        .iter()
-                        .map(|u| AnnotatedMoveValue::Address(*u))
-                        .collect(),
-                    Container::Vec(r) => r
-                        .borrow()
-                        .iter()
-                        .map(|v| v.try_as_move_value(inner_layout))
-                        .collect::<PartialVMResult<_>>()?,
-                    Container::Struct(_) => self.err("got struct container when converting vec")?,
-                    Container::Locals(_) => self.err("got locals container when converting vec")?,
-                }))
-            }
-
-            (L::Signer, ValueImpl::Container(Container::Struct(r))) => {
-                let v = r.borrow();
-                if v.len() != 1 {
-                    self.err(format!("Unexpected signer layout: {:?}", v))?;
-                }
-                match &v[0] {
-                    ValueImpl::Address(a) => Ok(AnnotatedMoveValue::Signer(*a)),
-                    v => self.err(format!(
-                        "Unexpected non-address while converting signer: {:?}",
-                        v
-                    )),
-                }
-            }
-
-            (layout, ValueImpl::ContainerRef(r)) => {
-                // Do not perform deep copy, just copy by reference
-                // it does not cause VM borrowing issue, as the value lives short
-                let container = ValueImpl::Container(r.container().copy_by_ref());
-
-                container.try_as_move_value(layout)
-            }
-
-            (layout, ValueImpl::IndexedRef(r)) => {
-                let value = r.copy_by_ref()?;
-
-                value.0.try_as_move_value(layout)
-            }
-
-            (layout, val) => self.err(format!("Cannot convert value {:?} as {:?}", val, layout)),
-        }
-    }
-
-    fn err<T>(&self, message: impl Into<String>) -> PartialVMResult<T> {
-        Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message(message.into()),
-        )
-    }
 }
 
 impl Value {
     pub fn as_move_value(&self, layout: &MoveTypeLayout) -> MoveValue {
         self.0.as_move_value(layout)
-    }
-
-    pub fn try_as_move_value(
-        &self,
-        layout: &AnnotatedMoveTypeLayout,
-    ) -> PartialVMResult<AnnotatedMoveValue> {
-        self.0.try_as_move_value(layout)
     }
 }

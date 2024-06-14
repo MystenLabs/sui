@@ -39,7 +39,7 @@ use crate::consensus_adapter::ConsensusAdapter;
 type PkG = bls12381::G2Element;
 type EncG = bls12381::G2Element;
 
-const SINGLETON_KEY: u64 = 0;
+pub const SINGLETON_KEY: u64 = 0;
 
 // State machine for randomness DKG and generation.
 //

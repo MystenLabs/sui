@@ -9,8 +9,8 @@ import type {
 	SuiMoveNormalizedModule,
 	SuiMoveNormalizedStruct,
 	SuiMoveNormalizedType,
-} from '@mysten/sui.js/client';
-import { normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
+} from '@mysten/sui/client';
+import { normalizeSuiAddress, parseStructTag } from '@mysten/sui/utils';
 
 import type {
 	Rpc_Move_Function_FieldsFragment,

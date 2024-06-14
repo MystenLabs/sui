@@ -9,6 +9,7 @@ use axum::{
 use reqwest::StatusCode;
 
 use crate::{
+    content_type::ContentType,
     types::{
         X_SUI_CHAIN_ID, X_SUI_CHECKPOINT_HEIGHT, X_SUI_EPOCH, X_SUI_OLDEST_CHECKPOINT_HEIGHT,
         X_SUI_TIMESTAMP_MS,
@@ -50,6 +51,66 @@ where
     }
 }
 
+#[axum::async_trait]
+impl<T, S, B> axum::extract::FromRequest<S, B> for Bcs<T>
+where
+    T: serde::de::DeserializeOwned,
+    S: Send + Sync,
+    B: axum::body::HttpBody + Send + 'static,
+    B::Data: Send,
+    B::Error: Into<axum::BoxError>,
+{
+    type Rejection = BcsRejection;
+
+    async fn from_request(req: axum::http::Request<B>, state: &S) -> Result<Self, Self::Rejection> {
+        if bcs_content_type(req.headers()) {
+            let bytes = axum::body::Bytes::from_request(req, state)
+                .await
+                .map_err(BcsRejection::BytesRejection)?;
+            bcs::from_bytes(&bytes)
+                .map(Self)
+                .map_err(BcsRejection::DeserializationError)
+        } else {
+            Err(BcsRejection::MissingBcsContentType)
+        }
+    }
+}
+
+fn bcs_content_type(headers: &HeaderMap) -> bool {
+    let Some(ContentType(mime)) = ContentType::from_headers(headers) else {
+        return false;
+    };
+
+    let is_bcs_content_type = mime.type_() == "application"
+        && (mime.subtype() == "bcs" || mime.suffix().map_or(false, |name| name == "bcs"));
+
+    is_bcs_content_type
+}
+
+pub enum BcsRejection {
+    MissingBcsContentType,
+    DeserializationError(bcs::Error),
+    BytesRejection(axum::extract::rejection::BytesRejection),
+}
+
+impl axum::response::IntoResponse for BcsRejection {
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            BcsRejection::MissingBcsContentType => (
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "Expected request with `Content-Type: application/bcs`",
+            )
+                .into_response(),
+            BcsRejection::DeserializationError(_) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Failed to deserialize the BCS body into the target type",
+            )
+                .into_response(),
+            BcsRejection::BytesRejection(bytes_rejection) => bytes_rejection.into_response(),
+        }
+    }
+}
+
 impl<T, J> axum::response::IntoResponse for ResponseContent<T, J>
 where
     T: serde::Serialize,
@@ -67,8 +128,12 @@ pub async fn append_info_headers(
     State(state): State<RestService>,
     response: Response,
 ) -> impl IntoResponse {
-    let latest_checkpoint = state.store.get_latest_checkpoint().unwrap();
-    let oldest_checkpoint = state.store.get_lowest_available_checkpoint().unwrap();
+    let latest_checkpoint = state.reader.inner().get_latest_checkpoint().unwrap();
+    let oldest_checkpoint = state
+        .reader
+        .inner()
+        .get_lowest_available_checkpoint()
+        .unwrap();
 
     let mut headers = HeaderMap::new();
 

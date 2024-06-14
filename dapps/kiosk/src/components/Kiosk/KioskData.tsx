@@ -3,7 +3,7 @@
 
 import { Tab } from '@headlessui/react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 

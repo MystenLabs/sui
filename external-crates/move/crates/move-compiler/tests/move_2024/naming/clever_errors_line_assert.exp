@@ -2,10 +2,9 @@ warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_2024/naming/clever_errors_line_assert.move:3:9
   │
 3 │         assert(false);
-  │         ^^^^^^
-  │         │
-  │         'assert' function syntax has been deprecated and will be removed
-  │         Replace with 'assert!'. 'assert' has been replaced with a 'assert!' built-in macro so that arguments are no longer eagerly evaluated
+  │         ^^^^^^^^^^^^^ 'assert' function syntax has been deprecated and will be removed
+  │
+  = Replace with 'assert!'. 'assert' has been replaced with a 'assert!' built-in macro so that arguments are no longer eagerly evaluated
 
 error[E04016]: too few arguments
   ┌─ tests/move_2024/naming/clever_errors_line_assert.move:3:9

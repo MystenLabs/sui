@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
+import { bcs } from '@mysten/sui/bcs';
 
 import {
 	KIOSK_PURCHASE_CAP,
@@ -11,31 +11,29 @@ import {
 } from './types/index.js';
 
 // Register the `Kiosk` struct for faster queries.
-bcs.registerStructType(KIOSK_TYPE, {
-	id: 'address',
-	profits: 'u64',
-	owner: 'address',
-	itemCount: 'u32',
-	allowExtensions: 'bool',
+export const KioskType = bcs.struct(KIOSK_TYPE, {
+	id: bcs.Address,
+	profits: bcs.u64(),
+	owner: bcs.Address,
+	itemCount: bcs.u32(),
+	allowExtensions: bcs.bool(),
 });
 
 // Register the `PurchaseCap` for faster queries.
-bcs.registerStructType(KIOSK_PURCHASE_CAP, {
-	id: 'address',
-	kioskId: 'address',
-	itemId: 'address',
-	minPrice: 'u64',
+export const KioskPurchaseCap = bcs.struct(KIOSK_PURCHASE_CAP, {
+	id: bcs.Address,
+	kioskId: bcs.Address,
+	itemId: bcs.Address,
+	minPrice: bcs.u64(),
 });
 
 // Register the `TransferPolicyCreated` event data.
-bcs.registerStructType(TRANSFER_POLICY_CREATED_EVENT, {
-	id: 'address',
+export const TransferPolicyCreatedEvent = bcs.struct(TRANSFER_POLICY_CREATED_EVENT, {
+	id: bcs.Address,
 });
 
-bcs.registerStructType(TRANSFER_POLICY_TYPE, {
-	id: 'address',
-	balance: 'u64',
-	rules: ['vector', 'string'],
+export const TransferPolicyType = bcs.struct(TRANSFER_POLICY_TYPE, {
+	id: bcs.Address,
+	balance: bcs.u64(),
+	rules: bcs.vector(bcs.string()),
 });
-
-export { bcs };

@@ -23,10 +23,10 @@ const KEEP_TMP: &str = "KEEP";
 const TEST_EXT: &str = "unit_test";
 const UNUSED_EXT: &str = "unused";
 const MIGRATION_EXT: &str = "migration";
+const IDE_EXT: &str = "ide";
 
 const LINTER_DIR: &str = "linter";
 const SUI_MODE_DIR: &str = "sui_mode";
-const IDE_MODE_DIR: &str = "ide_mode";
 const MOVE_2024_DIR: &str = "move_2024";
 const DEV_DIR: &str = "development";
 
@@ -54,7 +54,6 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
 fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
     let path_contains = |s| path.components().any(|c| c.as_os_str() == s);
     let lint = path_contains(LINTER_DIR);
-    let ide_mode = path_contains(IDE_MODE_DIR);
     let flavor = if path_contains(SUI_MODE_DIR) {
         Flavor::Sui
     } else {
@@ -72,27 +71,20 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
         edition,
         ..PackageConfig::default()
     };
-    testsuite(path, config, lint, ide_mode)
+    testsuite(path, config, lint)
 }
 
-fn testsuite(
-    path: &Path,
-    mut config: PackageConfig,
-    lint: bool,
-    ide_mode: bool,
-) -> datatest_stable::Result<()> {
+fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_stable::Result<()> {
     // A test is marked that it should also be compiled in test mode by having a `path.unit_test`
     // file.
     if path.with_extension(TEST_EXT).exists() {
         let test_exp_path = format!(
-            "{}.unit_test.{}",
+            "{}.{TEST_EXT}.{EXP_EXT}",
             path.with_extension("").to_string_lossy(),
-            EXP_EXT
         );
         let test_out_path = format!(
-            "{}.unit_test.{}",
+            "{}.{TEST_EXT}.{OUT_EXT}",
             path.with_extension("").to_string_lossy(),
-            OUT_EXT
         );
         let mut config = config.clone();
         config
@@ -112,16 +104,12 @@ fn testsuite(
     // `path.migration` file.
     if path.with_extension(MIGRATION_EXT).exists() {
         let migration_exp_path = format!(
-            "{}.{}.{}",
+            "{}.{MIGRATION_EXT}.{EXP_EXT}",
             path.with_extension("").to_string_lossy(),
-            MIGRATION_EXT,
-            EXP_EXT
         );
         let migration_out_path = format!(
-            "{}.{}.{}",
+            "{}.{MIGRATION_EXT}.{OUT_EXT}",
             path.with_extension("").to_string_lossy(),
-            MIGRATION_EXT,
-            OUT_EXT
         );
         let mut config = config.clone();
         config
@@ -141,14 +129,12 @@ fn testsuite(
     // A cross-module unused case that should run without unused warnings suppression
     if path.with_extension(UNUSED_EXT).exists() {
         let unused_exp_path = format!(
-            "{}.unused.{}",
+            "{}.{UNUSED_EXT}.{EXP_EXT}",
             path.with_extension("").to_string_lossy(),
-            EXP_EXT
         );
         let unused_out_path = format!(
-            "{}.unused.{}",
+            "{}.{UNUSED_EXT}.{OUT_EXT}",
             path.with_extension("").to_string_lossy(),
-            OUT_EXT
         );
         run_test(
             path,
@@ -160,15 +146,33 @@ fn testsuite(
         )?;
     }
 
+    // A cross-module unused case that should run without unused warnings suppression
+    if path.with_extension(IDE_EXT).exists() {
+        let ide_exp_path = format!(
+            "{}.{IDE_EXT}.{EXP_EXT}",
+            path.with_extension("").to_string_lossy(),
+        );
+        let ide_out_path = format!(
+            "{}.{IDE_EXT}.{OUT_EXT}",
+            path.with_extension("").to_string_lossy(),
+        );
+        run_test(
+            path,
+            Path::new(&ide_exp_path),
+            Path::new(&ide_out_path),
+            Flags::testing().set_ide_test_mode(true).set_ide_mode(true),
+            config.clone(),
+            lint,
+        )?;
+    }
+
     let exp_path = path.with_extension(EXP_EXT);
     let out_path = path.with_extension(OUT_EXT);
-
-    let flags = Flags::empty().set_ide_mode(ide_mode);
 
     config
         .warning_filter
         .union(&WarningFilters::unused_warnings_filter_for_test());
-    run_test(path, &exp_path, &out_path, flags, config, lint)?;
+    run_test(path, &exp_path, &out_path, Flags::empty(), config, lint)?;
     Ok(())
 }
 

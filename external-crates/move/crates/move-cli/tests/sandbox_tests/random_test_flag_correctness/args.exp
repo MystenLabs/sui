@@ -1,0 +1,17 @@
+Command `test --seed 1 --rand-num-iters 10`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING random_test_flag_correctness
+Error: Invalid arguments -- 'rand-num-iters' and 'seed' both set. You can only set one or the other at a time.
+Command `test --seed 2 --rand-num-iters 0`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING random_test_flag_correctness
+Error: Invalid arguments -- 'rand-num-iters' and 'seed' both set. You can only set one or the other at a time.
+Command `test --rand-num-iters 0`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING random_test_flag_correctness
+Error: Invalid argument -- 'rand-num-iters' set to zero. 'rand-num-iters' must set be a positive integer.
+Command `test --rand-num-iters 100`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING random_test_flag_correctness
+Running Move unit tests
+Test result: OK. Total tests: 0; passed: 0; failed: 0

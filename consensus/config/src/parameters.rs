@@ -182,9 +182,17 @@ pub struct TonicParameters {
     #[serde(default = "TonicParameters::default_connection_buffer_size")]
     pub connection_buffer_size: usize,
 
-    /// Message size limits for both requests and responses.
+    /// Messages over this size threshold will increment a counter.
     ///
-    /// If unspecified, this will default to 8MiB.
+    /// If unspecified, this will default to 16MiB.
+    #[serde(default = "TonicParameters::default_excessive_message_size")]
+    pub excessive_message_size: usize,
+
+    /// Hard message size limit for both requests and responses.
+    /// This value is higher than strictly necessary, to allow overheads.
+    /// Message size targets and soft limits are computed based on this value.
+    ///
+    /// If unspecified, this will default to 1GiB.
     #[serde(default = "TonicParameters::default_message_size_limit")]
     pub message_size_limit: usize,
 }
@@ -198,8 +206,12 @@ impl TonicParameters {
         32 << 20
     }
 
+    fn default_excessive_message_size() -> usize {
+        16 << 20
+    }
+
     fn default_message_size_limit() -> usize {
-        8 << 20
+        64 << 20
     }
 }
 
@@ -208,6 +220,7 @@ impl Default for TonicParameters {
         Self {
             keepalive_interval: TonicParameters::default_keepalive_interval(),
             connection_buffer_size: TonicParameters::default_connection_buffer_size(),
+            excessive_message_size: TonicParameters::default_excessive_message_size(),
             message_size_limit: TonicParameters::default_message_size_limit(),
         }
     }

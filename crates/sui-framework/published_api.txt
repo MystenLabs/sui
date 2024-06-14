@@ -1033,6 +1033,18 @@ blake2b256
 keccak256
 	public fun
 	0x2::hash
+hash_to_input
+	public fun
+	0x2::vdf
+hash_to_input_internal
+	fun
+	0x2::vdf
+vdf_verify
+	public fun
+	0x2::vdf
+vdf_verify_internal
+	fun
+	0x2::vdf
 encode
 	public fun
 	0x2::hex
@@ -3988,6 +4000,9 @@ get_current_seq_num_and_increment
 get_parsed_token_transfer_message
 	fun
 	0xb::bridge
+to_bytes
+	public fun
+	0x1::bcs
 print
 	public fun
 	0x1::debug
@@ -4270,6 +4285,3 @@ get_module
 into_string
 	public fun
 	0x1::type_name
-to_bytes
-	public fun
-	0x1::bcs

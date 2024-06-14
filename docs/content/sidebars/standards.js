@@ -20,21 +20,7 @@ const standards = [
 		],
 	},
 	'standards/kiosk',
-	{
-		type: 'category',
-		label: 'Kiosk Apps',
-		link: {
-			type: 'doc',
-			id: 'standards/kiosk-apps',
-		},
-		items: [
-			{
-				type: 'doc',
-				label: 'NFT Rental Example',
-				id: 'standards/kiosk-apps/nft-rental',
-			},
-		],
-	},
+	'standards/kiosk-apps',
 	{
 		type: 'category',
 		label: 'DeepBook',

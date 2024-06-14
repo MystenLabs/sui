@@ -10,7 +10,7 @@ use crate::{
         self as N, BlockLabel, Color, MatchArm_, TParamID, Type, Type_, UseFuns, Var, Var_,
     },
     parser::ast::FunctionName,
-    shared::{program_info::FunctionInfo, unique_map::UniqueMap},
+    shared::{ide::IDEAnnotation, program_info::FunctionInfo, unique_map::UniqueMap},
     typing::{
         ast as T,
         core::{self, TParamSubst},
@@ -44,6 +44,7 @@ pub struct ExpandedMacro {
     pub body: Box<N::Exp>,
 }
 
+#[derive(Debug)]
 pub enum EvalStrategy<ByValue, ByName> {
     ByValue(ByValue),
     ByName(ByName),
@@ -613,7 +614,6 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             }
             recolor_seq(ctx, s);
         }
-        N::Exp_::IDEAnnotation(_, e) => recolor_exp(ctx, e),
         N::Exp_::FieldMutate(ed, e) => {
             recolor_exp_dotted(ctx, ed);
             recolor_exp(ctx, e)
@@ -898,7 +898,6 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             from_macro_argument: _,
             seq: s,
         }) => seq(context, s),
-        N::Exp_::IDEAnnotation(_, e) => exp(context, e),
         N::Exp_::FieldMutate(ed, e) => {
             exp_dotted(context, ed);
             exp(context, e)
@@ -1056,11 +1055,13 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 from_macro_argument: None,
                 seq: (N::UseFuns::new(context.macro_color), result),
             });
-            *e_ = if context.core.env.ide_mode() {
-                N::Exp_::IDEAnnotation(N::IDEInfo::ExpandedLambda, Box::new(sp(*eloc, block)))
-            } else {
-                block
-            };
+            if context.core.env.ide_mode() {
+                context
+                    .core
+                    .env
+                    .add_ide_annotation(*eloc, IDEAnnotation::ExpandedLambda);
+            }
+            *e_ = block;
         }
 
         ///////

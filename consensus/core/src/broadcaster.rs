@@ -197,6 +197,7 @@ mod test {
     use super::*;
     use crate::{
         block::{BlockRef, TestBlock},
+        commit::CommitRange,
         core::CoreSignals,
         network::BlockStream,
         Round,
@@ -259,8 +260,7 @@ mod test {
         async fn fetch_commits(
             &self,
             _peer: AuthorityIndex,
-            _start: Round,
-            _end: Round,
+            _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")

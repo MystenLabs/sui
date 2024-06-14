@@ -1499,6 +1499,7 @@ dependencies = [
 name = "move-abstract-interpreter"
 version = "0.1.0"
 dependencies = [
+ "itertools",
  "move-binary-format",
  "move-bytecode-verifier-meter",
 ]
@@ -2222,6 +2223,7 @@ dependencies = [
  "move-vm-test-utils",
  "move-vm-types",
  "once_cell",
+ "rand 0.8.5",
  "rayon",
  "regex",
 ]
@@ -2245,6 +2247,7 @@ dependencies = [
  "move-bytecode-verifier",
  "move-compiler",
  "move-core-types",
+ "move-ir-to-bytecode",
  "move-stdlib",
  "move-stdlib-natives",
  "move-vm-config",
