@@ -25,6 +25,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use either::Either;
 use futures::stream::FuturesOrdered;
 use itertools::izip;
 use mysten_metrics::spawn_monitored_task;
@@ -84,8 +85,8 @@ const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
 
 #[derive(Debug, Clone, Copy)]
 pub struct CheckpointTimeoutConfig {
-    pub timeout: Duration,
-    pub panic_on_timeout: bool,
+    pub panic_timeout: Option<Duration>,
+    pub warning_timeout: Duration,
 }
 
 // We use a thread local so that the config can be overridden on a per-test basis. This means
@@ -105,21 +106,24 @@ pub fn init_checkpoint_timeout_config(config: CheckpointTimeoutConfig) {
 
 fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
     fn inner() -> CheckpointTimeoutConfig {
-        let panic_on_timeout = cfg!(msim)
-            || std::env::var("PANIC_ON_NEW_CHECKPOINT_TIMEOUT")
-                .map_or(false, |s| s == "true" || s == "1");
-
-        // if we are panicking on timeout default to a longer timeout than if we are simply logging.
-        let timeout = Duration::from_millis(
-            std::env::var("NEW_CHECKPOINT_TIMEOUT_MS")
+        let panic_timeout: Option<Duration> = if cfg!(msim) {
+            Some(Duration::from_secs(45))
+        } else {
+            std::env::var("PANIC_ON_NEW_CHECKPOINT_TIMEOUT_MS")
                 .ok()
                 .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(if panic_on_timeout { 45000 } else { 2000 }),
-        );
+                .map(Duration::from_millis)
+        };
+
+        let warning_timeout: Duration = std::env::var("NEW_CHECKPOINT_WARNING_TIMEOUT_MS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(Duration::from_millis)
+            .unwrap_or(Duration::from_secs(5));
 
         CheckpointTimeoutConfig {
-            timeout,
-            panic_on_timeout,
+            panic_timeout,
+            warning_timeout,
         }
     }
 
@@ -250,7 +254,6 @@ impl CheckpointExecutor {
             .map(|c| c.network_total_transactions)
             .unwrap_or(0);
         let scheduling_timeout_config = get_scheduling_timeout();
-        let scheduling_timeout = scheduling_timeout_config.timeout;
 
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
@@ -290,6 +293,9 @@ impl CheckpointExecutor {
                 .checkpoint_exec_inflight
                 .set(pending.len() as i64);
 
+            let panic_timeout = scheduling_timeout_config.panic_timeout;
+            let warning_timeout = scheduling_timeout_config.warning_timeout;
+
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
@@ -317,36 +323,37 @@ impl CheckpointExecutor {
                         return StopReason::RunWithRangeCondition;
                     }
                 }
-                // Check for newly synced checkpoints from StateSync.
-                received = timeout(scheduling_timeout, self.mailbox.recv()) => match received {
-                    Err(_elapsed) => {
-                        warn!(
-                            "Received no new synced checkpoints for {scheduling_timeout:?}. Next checkpoint to be scheduled: {next_to_schedule}",
-                        );
-                        if scheduling_timeout_config.panic_on_timeout {
-                            panic!("No new synced checkpoints received for {scheduling_timeout:?} on node {:?}", self.state.name);
-                        }
-                        fail_point!("cp_exec_scheduling_timeout_reached");
-                    },
-                    Ok(Ok(checkpoint)) => {
+
+                received = self.mailbox.recv() => match received {
+                    Ok(checkpoint) => {
                         info!(
                             sequence_number = ?checkpoint.sequence_number,
                             "Received checkpoint summary from state sync"
                         );
                         checkpoint.report_checkpoint_age_ms(&self.metrics.checkpoint_contents_age_ms);
                     },
-                    // In this case, messages in the mailbox have been overwritten
-                    // as a result of lagging too far behind.
-                    Ok(Err(RecvError::Lagged(num_skipped))) => {
+                    Err(RecvError::Lagged(num_skipped)) => {
                         debug!(
-                            "Checkpoint Execution Recv channel overflowed {:?} messages",
+                            "Checkpoint Execution Recv channel overflowed with {:?} messages",
                             num_skipped,
                         );
                     }
-                    Ok(Err(RecvError::Closed)) => {
+                    Err(RecvError::Closed) => {
                         panic!("Checkpoint Execution Sender (StateSync) closed channel unexpectedly");
-                    }
+                    },
+                },
+
+                _ = tokio::time::sleep(warning_timeout) => {
+                    warn!(
+                        "Received no new synced checkpoints for {warning_timeout:?}. Next checkpoint to be scheduled: {next_to_schedule}",
+                    );
                 }
+
+                _ = panic_timeout
+                            .map(|d| Either::Left(tokio::time::sleep(d)))
+                            .unwrap_or_else(|| Either::Right(futures::future::pending())) => {
+                    panic!("No new synced checkpoints received for {panic_timeout:?} on node {:?}", self.state.name);
+                },
             }
         }
     }

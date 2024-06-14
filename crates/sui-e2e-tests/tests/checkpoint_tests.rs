@@ -50,8 +50,8 @@ async fn test_checkpoint_split_brain() {
         // loss of liveness
         use sui_core::authority::{init_checkpoint_timeout_config, CheckpointTimeoutConfig};
         init_checkpoint_timeout_config(CheckpointTimeoutConfig {
-            timeout: Duration::from_secs(2),
-            panic_on_timeout: false,
+            warning_timeout: Duration::from_secs(2),
+            panic_timeout: None,
         });
     }
     let committee_size = 9;
