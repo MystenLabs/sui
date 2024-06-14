@@ -35,7 +35,8 @@ pub use write_store::WriteStore;
 
 pub use read_store::AccountOwnedObjectInfo;
 pub use read_store::CoinInfo;
-pub use read_store::RestDynamicFieldInfo;
+pub use read_store::DynamicFieldIndexInfo;
+pub use read_store::DynamicFieldKey;
 
 /// A potential input to a transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

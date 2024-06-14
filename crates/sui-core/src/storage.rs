@@ -24,8 +24,9 @@ use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result;
 use sui_types::storage::AccountOwnedObjectInfo;
 use sui_types::storage::CoinInfo;
+use sui_types::storage::DynamicFieldIndexInfo;
+use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::ObjectStore;
-use sui_types::storage::RestDynamicFieldInfo;
 use sui_types::storage::RestStateReader;
 use sui_types::storage::WriteStore;
 use sui_types::storage::{ObjectKey, ReadStore};
@@ -37,8 +38,6 @@ use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::rest_index::CoinIndexInfo;
-use crate::rest_index::DynamicFieldIndexInfo;
-use crate::rest_index::DynamicFieldKey;
 use crate::rest_index::OwnerIndexInfo;
 use crate::rest_index::OwnerIndexKey;
 use crate::rest_index::RestIndexStore;
@@ -546,28 +545,10 @@ impl RestStateReader for RestReadStore {
         &self,
         parent: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> sui_types::storage::error::Result<Box<dyn Iterator<Item = RestDynamicFieldInfo> + '_>>
-    {
-        let iter = self.index()?.dynamic_field_iter(parent, cursor)?.map(
-            |(
-                DynamicFieldKey { parent, field_id },
-                DynamicFieldIndexInfo {
-                    dynamic_field_type,
-                    name_type,
-                    name_value,
-                    dynamic_object_id,
-                },
-            )| {
-                RestDynamicFieldInfo {
-                    parent,
-                    field_id,
-                    dynamic_field_type,
-                    name_type,
-                    name_value,
-                    dynamic_object_id,
-                }
-            },
-        );
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = (DynamicFieldKey, DynamicFieldIndexInfo)> + '_>,
+    > {
+        let iter = self.index()?.dynamic_field_iter(parent, cursor)?;
 
         Ok(Box::new(iter) as _)
     }
