@@ -582,7 +582,7 @@ impl TestResults {
                             "│ {}",
                             format!(
                                 "This test uses randomly generated inputs. Rerun with `{}` to recreate this test failure.\n",
-                                format!("test {} --seed {}", 
+                                format!("test {} --seed {}",
                                     test_name,
                                     seed
                                 ).bright_red().bold()
