@@ -1197,24 +1197,15 @@ pub fn get_symbols(
         None
     };
 
-    // get source files to be able to correlate positions (in terms of byte offsets) with actual
-    // file locations (in terms of line/column numbers)
-    let source_files = file_sources(&resolution_graph, overlay_fs_root.clone());
     let mut mapped_files: MappedFiles = MappedFiles::empty();
-    // let mut file_name_mapping = BTreeMap::new();
+
+    // Hash dependencies so we can check if something has changed.
+    let source_files = file_sources(&resolution_graph, overlay_fs_root.clone());
     let mut hasher = Sha256::new();
-    for (fhash, (_fname, _source, is_dep)) in &source_files {
-        if *is_dep {
-            hasher.update(fhash.0);
-        }
-    }
-    //     let id = files.add(*fname, source.clone());
-    //     file_id_mapping.insert(*fhash, id);
-    //     file_name_mapping.insert(*fhash, PathBuf::from(fname.as_str()));
-    // let mut file_id_to_lines = HashMap::new();
-    //     let lines: Vec<String> = source.lines().map(String::from).collect();
-    //     file_id_to_lines.insert(id, lines);
-    // }
+    source_files
+        .iter()
+        .filter(|(_, (_, _, is_dep))| *is_dep)
+        .for_each(|(fhash, _)| hasher.update(fhash.0));
     let deps_hash = format!("{:X}", hasher.finalize());
 
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();

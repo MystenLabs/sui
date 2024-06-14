@@ -19,9 +19,9 @@ use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics},
-    shared::files::MappedFiles,
     editions::Edition,
     linters::LINT_WARNING_PREFIX,
+    shared::files::MappedFiles,
 };
 use move_core_types::{
     account_address::AccountAddress,
