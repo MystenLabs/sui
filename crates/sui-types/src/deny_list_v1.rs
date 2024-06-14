@@ -55,20 +55,7 @@ pub fn check_coin_deny_list_v1(
     receiving_objects: &ReceivingObjects,
     object_store: &dyn ObjectStore,
 ) -> UserInputResult {
-    let all_objects = input_objects
-        .inner()
-        .iter_objects()
-        .chain(receiving_objects.iter_objects());
-    let coin_types = all_objects
-        .filter_map(|obj| {
-            if obj.is_gas_coin() {
-                None
-            } else {
-                obj.coin_type_maybe()
-                    .map(|type_tag| type_tag.to_canonical_string(false))
-            }
-        })
-        .collect::<BTreeSet<_>>();
+    let coin_types = input_object_coin_types_for_denylist_check(input_objects, receiving_objects);
 
     let Some(deny_list) = get_coin_deny_list(object_store) else {
         // TODO: This is where we should fire an invariant violation metric.
@@ -79,6 +66,28 @@ pub fn check_coin_deny_list_v1(
         }
     };
     check_deny_list_v1_impl(deny_list, sender, coin_types, object_store)
+}
+
+/// Returns all unique coin types in canonical string form from the input objects and receiving objects.
+/// It filters out SUI coins since it's known that it's not a regulated coin.
+pub(crate) fn input_object_coin_types_for_denylist_check(
+    input_objects: &CheckedInputObjects,
+    receiving_objects: &ReceivingObjects,
+) -> BTreeSet<String> {
+    let all_objects = input_objects
+        .inner()
+        .iter_objects()
+        .chain(receiving_objects.iter_objects());
+    all_objects
+        .filter_map(|obj| {
+            if obj.is_gas_coin() {
+                None
+            } else {
+                obj.coin_type_maybe()
+                    .map(|type_tag| type_tag.to_canonical_string(false))
+            }
+        })
+        .collect()
 }
 
 fn check_deny_list_v1_impl(

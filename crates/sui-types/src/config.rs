@@ -31,7 +31,6 @@ pub struct Config {
 /// Rust representation of the Move type 0x2::config::Setting.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Setting<V> {
-    pub id: UID,
     pub data: Option<SettingData<V>>,
 }
 

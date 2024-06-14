@@ -507,6 +507,10 @@ struct FeatureFlags {
     // Enable Soft Bundle (SIP-19).
     #[serde(skip_serializing_if = "is_false")]
     soft_bundle: bool,
+
+    // If true, enable the coin deny list V2.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_deny_list_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1396,6 +1400,10 @@ impl ProtocolConfig {
 
     pub fn enable_coin_deny_list_v1(&self) -> bool {
         self.feature_flags.enable_coin_deny_list
+    }
+
+    pub fn enable_coin_deny_list_v2(&self) -> bool {
+        self.feature_flags.enable_coin_deny_list_v2
     }
 
     pub fn enable_group_ops_native_functions(&self) -> bool {
@@ -2418,6 +2426,10 @@ impl ProtocolConfig {
                 }
                 51 => {
                     cfg.random_beacon_dkg_version = Some(1);
+
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_coin_deny_list_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

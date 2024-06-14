@@ -13,7 +13,7 @@ use sui_types::base_types::{dbg_addr, ObjectID, SuiAddress};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::deny_list_v1::{CoinDenyCap, RegulatedCoinMetadata};
 use sui_types::deny_list_v2::{
-    check_address_denied_by_coin, get_per_type_coin_deny_list_v2, DenyCapV2,
+    check_address_denied_by_config, get_per_type_coin_deny_list_v2, DenyCapV2,
 };
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::object::Object;
@@ -170,35 +170,43 @@ async fn test_regulated_coin_v2_types() {
         .await
         .unwrap();
     let coin_deny_config = get_per_type_coin_deny_list_v2(
-        regulated_coin_type.to_canonical_string(false),
+        &regulated_coin_type.to_canonical_string(false),
         &env.authority.get_object_store(),
     )
     .unwrap();
     // Updates from the current epoch will not be read.
-    assert!(!check_address_denied_by_coin(
+    assert!(!check_address_denied_by_config(
         &coin_deny_config,
         deny_address,
         &env.authority.get_object_store(),
         Some(0),
     ));
     // If no epoch is specified, we always read the latest value, and it should be denied.
-    assert!(check_address_denied_by_coin(
+    assert!(check_address_denied_by_config(
         &coin_deny_config,
         deny_address,
         &env.authority.get_object_store(),
         None,
     ));
+    // If no epoch is specified, we always read the latest value, and it should be denied.
+    assert!(check_address_denied_by_config(
+        &coin_deny_config,
+        deny_address,
+        &env.authority.get_object_store(),
+        None,
+    ));
+
     // If we change the current epoch to be 1, the change from epoch 0
     // would be considered as from previous epoch, and hence will be
     // used.
-    assert!(check_address_denied_by_coin(
+    assert!(check_address_denied_by_config(
         &coin_deny_config,
         deny_address,
         &env.authority.get_object_store(),
         Some(1),
     ));
     // Check a different address, and it should not be denied.
-    assert!(!check_address_denied_by_coin(
+    assert!(!check_address_denied_by_config(
         &coin_deny_config,
         dbg_addr(3),
         &env.authority.get_object_store(),
