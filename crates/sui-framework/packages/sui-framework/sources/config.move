@@ -1,3 +1,5 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 module sui::config {
 
@@ -90,7 +92,7 @@ module sui::config {
         config: &Config<WriteCap>,
         name: Name,
     ): bool {
-        field::exists_with_type<_, Value>(&config.id, name)
+        field::exists_with_type<_, Setting<Value>>(&config.id, name)
     }
 
     #[allow(unused_mut_parameter)]
@@ -103,7 +105,7 @@ module sui::config {
         name: Name,
         ctx: &TxContext,
     ): bool {
-        field::exists_with_type<_, Value>(&config.id, name) && {
+        field::exists_with_type<_, Setting<Value>>(&config.id, name) && {
             let epoch = ctx.epoch();
             let sobj: &Setting<Value> = field::borrow(&config.id, name);
             epoch == sobj.data.borrow().newer_value_epoch
@@ -224,4 +226,9 @@ module sui::config {
     }
     */
 
+    #[test_only]
+    public(package) fun destroy<WriteCap>(config: Config<WriteCap>) {
+        let Config { id } = config;
+        object::delete(id);
+    }
 }

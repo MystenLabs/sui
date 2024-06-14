@@ -290,7 +290,7 @@ title: Module `0x2::config`
     <a href="../sui-framework/config.md#0x2_config">config</a>: &<a href="../sui-framework/config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
     name: Name,
 ): bool {
-    field::exists_with_type&lt;_, Value&gt;(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name)
+    field::exists_with_type&lt;_, <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name)
 }
 </code></pre>
 
@@ -322,7 +322,7 @@ title: Module `0x2::config`
     name: Name,
     ctx: &TxContext,
 ): bool {
-    field::exists_with_type&lt;_, Value&gt;(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name) && {
+    field::exists_with_type&lt;_, <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name) && {
         <b>let</b> epoch = ctx.epoch();
         <b>let</b> sobj: &<a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt; = field::borrow(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name);
         epoch == sobj.data.borrow().newer_value_epoch
