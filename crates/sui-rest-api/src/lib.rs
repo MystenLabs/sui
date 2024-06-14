@@ -166,6 +166,10 @@ impl RestService {
                 objects::GET_OBJECT_WITH_VERSION_PATH,
                 get(objects::get_object_with_version),
             )
+            .route(
+                objects::LIST_DYNAMIC_FIELDS_PATH,
+                get(objects::list_dynamic_fields),
+            )
             .with_state(self.clone())
             .pipe(|router| {
                 if let Some(executor) = executor {

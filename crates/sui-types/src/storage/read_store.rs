@@ -670,7 +670,7 @@ pub trait RestStateReader: ObjectStore + ReadStore + Send + Sync {
         &self,
         parent: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> Result<Box<dyn Iterator<Item = RestDynamicFieldInfo> + '_>>;
+    ) -> Result<Box<dyn Iterator<Item = (DynamicFieldKey, DynamicFieldIndexInfo)> + '_>>;
 
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
 }
@@ -682,13 +682,33 @@ pub struct AccountOwnedObjectInfo {
     pub type_: MoveObjectType,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
-pub struct RestDynamicFieldInfo {
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct DynamicFieldKey {
     pub parent: ObjectID,
     pub field_id: ObjectID,
+}
+
+impl DynamicFieldKey {
+    pub fn new<P: Into<ObjectID>>(parent: P, field_id: ObjectID) -> Self {
+        Self {
+            parent: parent.into(),
+            field_id,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub struct DynamicFieldIndexInfo {
+    // field_id of this dynamic field is a part of the Key
     pub dynamic_field_type: DynamicFieldType,
     pub name_type: TypeTag,
     pub name_value: Vec<u8>,
+    // TODO do we want to also store the type of the value? We can get this for free for
+    // DynamicFields, but for DynamicObjects it would require a lookup in the DB on init, or
+    // scanning the transaction's output objects for the coorisponding Object to retreive its type
+    // information.
+    //
+    // pub value_type: TypeTag,
     /// ObjectId of the child object when `dynamic_field_type == DynamicFieldType::DynamicObject`
     pub dynamic_object_id: Option<ObjectID>,
 }

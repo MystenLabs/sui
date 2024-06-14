@@ -6,7 +6,6 @@ use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use move_core_types::language_storage::StructTag;
-use move_core_types::language_storage::TypeTag;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use serde::Deserialize;
@@ -28,6 +27,8 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::BackingPackageStore;
+use sui_types::storage::DynamicFieldIndexInfo;
+use sui_types::storage::DynamicFieldKey;
 use sui_types::type_resolver::LayoutResolver;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
@@ -70,37 +71,6 @@ impl OwnerIndexInfo {
             type_: object.type_().expect("packages cannot be owned").to_owned(),
         }
     }
-}
-
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct DynamicFieldKey {
-    pub parent: ObjectID,
-    pub field_id: ObjectID,
-}
-
-impl DynamicFieldKey {
-    fn new<P: Into<ObjectID>>(parent: P, field_id: ObjectID) -> Self {
-        Self {
-            parent: parent.into(),
-            field_id,
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
-pub struct DynamicFieldIndexInfo {
-    // field_id of this dynamic field is a part of the Key
-    pub dynamic_field_type: DynamicFieldType,
-    pub name_type: TypeTag,
-    pub name_value: Vec<u8>,
-    // TODO do we want to also store the type of the value? We can get this for free for
-    // DynamicFields, but for DynamicObjects it would require a lookup in the DB on init, or
-    // scanning the transaction's output objects for the coorisponding Object to retreive its type
-    // information.
-    //
-    // pub value_type: TypeTag,
-    /// ObjectId of the child object when `dynamic_field_type == DynamicFieldType::DynamicObject`
-    pub dynamic_object_id: Option<ObjectID>,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Debug)]
