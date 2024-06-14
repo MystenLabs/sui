@@ -48,6 +48,7 @@ pub const SINGLETON_KEY: u64 = 0;
 // Wrappers for DKG messages (to simplify upgrades).
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum VersionedProcessedMessage {
     V0(dkg_v0::ProcessedMessage<PkG, EncG>),
     V1(dkg_v1::ProcessedMessage<PkG, EncG>),
@@ -345,9 +346,9 @@ impl RandomnessManager {
                     &self
                         .processed_messages
                         .values()
-                        .filter_map(|vm| {
+                        .map(|vm| {
                             if let VersionedProcessedMessage::V0(msg) = vm {
-                                Some(msg)
+                                msg
                             } else {
                                 panic!("BUG: invalid versioned message")
                             }
@@ -365,9 +366,9 @@ impl RandomnessManager {
                     &self
                         .processed_messages
                         .values()
-                        .filter_map(|vm| {
+                        .map(|vm| {
                             if let VersionedProcessedMessage::V1(msg) = vm {
-                                Some(msg)
+                                msg
                             } else {
                                 panic!("BUG: invalid versioned message")
                             }
@@ -400,9 +401,9 @@ impl RandomnessManager {
                 &self
                     .confirmations
                     .values()
-                    .filter_map(|vm| {
+                    .map(|vm| {
                         if let VersionedDkgConfimation::V0(msg) = vm {
-                            Some(msg)
+                            msg
                         } else {
                             panic!("BUG: invalid versioned message")
                         }
@@ -424,9 +425,9 @@ impl RandomnessManager {
                 &self
                     .confirmations
                     .values()
-                    .filter_map(|vm| {
+                    .map(|vm| {
                         if let VersionedDkgConfimation::V1(msg) = vm {
-                            Some(msg)
+                            msg
                         } else {
                             panic!("BUG: invalid versioned message")
                         }
