@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.1.2
+
+### Patch Changes
+
+- 0dfff33b95: Fix bug that prevents coinWithBalance intent from being resolved
+
 ## 1.1.1
 
 ### Patch Changes
