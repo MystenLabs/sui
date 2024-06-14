@@ -1,33 +1,23 @@
-use std::{collections::BTreeMap, fs, io::BufReader, path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use super::agents::*;
-use crate::{
-    metrics::{Measurement, Metrics},
-    types::*,
-};
+use crate::{metrics::Metrics, types::*};
 use async_trait::async_trait;
-use futures::future;
+
 use tokio::{
-    sync::{mpsc, watch},
-    time::{MissedTickBehavior, sleep},
-    task::JoinHandle,
+    sync::mpsc,
+    time::{sleep, MissedTickBehavior},
 };
-use std::sync::Arc;
 
 use sui_single_node_benchmark::{
     benchmark_context::BenchmarkContext,
     command::{Component, WorkloadKind},
-    mock_account::Account,
     workload::Workload,
 };
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    object::Object,
-    transaction::{Transaction, CertifiedTransaction},
-};
+use sui_types::transaction::CertifiedTransaction;
 
-pub const WORKLOAD: WorkloadKind = WorkloadKind::PTB{
-    num_transfers: 0, 
+pub const WORKLOAD: WorkloadKind = WorkloadKind::PTB {
+    num_transfers: 0,
     num_dynamic_fields: 0,
     use_batch_mint: false,
     computation: 0,
@@ -91,15 +81,14 @@ pub struct TxnGenAgent {
 }
 
 impl TxnGenAgent {
-    pub async fn run_inner
-    (
+    pub async fn run_inner(
         out_to_network: &mpsc::Sender<NetworkMessage>,
         tx_count: u64,
-        duration: Duration,) 
-    {
+        duration: Duration,
+    ) {
         let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
         let (_, transactions) = generate_benchmark_txs(workload, ctx).await;
-        
+
         const PRECISION: u64 = 20;
         let burst_duration = 1000 / PRECISION;
         let chunks_size = (tx_count / PRECISION) as usize;
@@ -129,7 +118,7 @@ impl TxnGenAgent {
                 out_to_network
                     .send(NetworkMessage {
                         src: 0,
-                        dst: vec![1,2],//get_ews_for_tx(&full_tx, &ew_ids).into_iter().collect(),
+                        dst: vec![1, 2], //get_ews_for_tx(&full_tx, &ew_ids).into_iter().collect(),
                         payload: RemoraMessage::ProposeExec(full_tx.clone()),
                     })
                     .await
@@ -158,14 +147,13 @@ impl Agent<RemoraMessage> for TxnGenAgent {
         }
     }
 
-    async fn run(&mut self)
-    {
+    async fn run(&mut self) {
         println!("Starting TxnGen agent {}", self.id);
 
         // Periodically print metrics
-        let configs = self.attrs.clone();
-        let workload = "default".to_string();
-        let print_period = Duration::from_secs(10);
+        let _configs = self.attrs.clone();
+        let _workload = "default".to_string();
+        let _print_period = Duration::from_secs(10);
         // let _handle = Self::periodically_print_metrics(configs, workload, print_period);
 
         // Run Sequence Worker asynchronously
@@ -178,17 +166,11 @@ impl Agent<RemoraMessage> for TxnGenAgent {
         //     .map_or("", String::as_str)
         //     .parse::<PathBuf>()
         //     .unwrap();
-        TxnGenAgent::run_inner(
-            &self.out_channel,
-            tx_count,
-            duration,
-        )
-        .await;
+        TxnGenAgent::run_inner(&self.out_channel, tx_count, duration).await;
         println!("Txn Gen finished");
 
         loop {
             sleep(Duration::from_millis(1_000)).await;
         }
     }
-  
 }

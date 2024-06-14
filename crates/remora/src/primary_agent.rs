@@ -1,35 +1,22 @@
-use std::{collections::BTreeMap, fs, time::Duration};
+use std::time::Duration;
 
 use super::agents::*;
 use crate::{
-    metrics::{Measurement, Metrics},
-    pre_exec_worker::{self},
-    primary_worker::{self},
+    input_traffic_manager::input_traffic_manager_run,
     mock_consensus_worker::{self},
+    primary_worker::{self},
     tx_gen_agent::WORKLOAD,
-    types::*, input_traffic_manager::{self, input_traffic_manager_run},
+    types::*,
 };
 use async_trait::async_trait;
-use futures::future;
-use tokio::{
-    sync::{mpsc, watch},
-    time::{MissedTickBehavior, sleep},
-    task::JoinHandle,
-};
-use std::sync::{Arc, Mutex};
+
+use std::sync::Arc;
+use tokio::sync::mpsc;
 
 use sui_single_node_benchmark::{
-    benchmark_context::BenchmarkContext,
-    command::{Component, WorkloadKind},
-    mock_account::Account,
-    workload::Workload,
+    benchmark_context::BenchmarkContext, command::Component, workload::Workload,
 };
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    object::Object,
-    transaction::Transaction,
-    messages_checkpoint::CheckpointDigest,
-};
+use sui_types::messages_checkpoint::CheckpointDigest;
 
 pub struct PrimaryAgent {
     id: UniqueId,
@@ -58,16 +45,15 @@ impl Agent<RemoraMessage> for PrimaryAgent {
         }
     }
 
-    async fn run(&mut self)
-    {
+    async fn run(&mut self) {
         println!("Starting Primary agent {}", self.id);
-        
+
         let my_attrs = &self.attrs.get(&self.id).unwrap().attrs;
         let tx_count = my_attrs.get("tx_count").unwrap().parse().unwrap();
 
         let duration_secs = my_attrs["duration"].parse::<u64>().unwrap();
         let duration = Duration::from_secs(duration_secs);
-        
+
         let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
         let context: Arc<BenchmarkContext> = {
             let ctx = BenchmarkContext::new(workload.clone(), COMPONENT, true).await;
@@ -76,38 +62,46 @@ impl Agent<RemoraMessage> for PrimaryAgent {
 
         let store = context.validator().create_in_memory_store();
 
-        let (input_consensus_sender, mut input_consensus_receiver) = mpsc::unbounded_channel::<RemoraMessage>();
-        let (input_executor_sender, mut input_executor_receiver) = mpsc::unbounded_channel::<RemoraMessage>();
-        let (consensus_executor_sender, mut consensus_executor_receiver) = mpsc::unbounded_channel::<Vec<TransactionWithEffects>>();
+        let (input_consensus_sender, mut input_consensus_receiver) =
+            mpsc::unbounded_channel::<RemoraMessage>();
+        let (input_executor_sender, mut input_executor_receiver) =
+            mpsc::unbounded_channel::<RemoraMessage>();
+        let (consensus_executor_sender, mut consensus_executor_receiver) =
+            mpsc::unbounded_channel::<Vec<TransactionWithEffects>>();
 
-        let mut primary_worker_state =
-            primary_worker::PrimaryWorkerState::new(store, CheckpointDigest::random(), context.clone());
+        let mut primary_worker_state = primary_worker::PrimaryWorkerState::new(
+            store,
+            CheckpointDigest::random(),
+            context.clone(),
+        );
 
-        let mut mock_consensus_worker_state = 
+        let mut mock_consensus_worker_state =
             mock_consensus_worker::MockConsensusWorkerState::new();
-        
+
         let id = self.id.clone();
         let out_channel = self.out_channel.clone();
 
-        tokio::spawn(async move { 
-            primary_worker_state.run(
-                tx_count,
-                duration,
-                &mut input_executor_receiver,
-                &mut consensus_executor_receiver,
-                &out_channel,
-                id,
-            )
-            .await;
+        tokio::spawn(async move {
+            primary_worker_state
+                .run(
+                    tx_count,
+                    duration,
+                    &mut input_executor_receiver,
+                    &mut consensus_executor_receiver,
+                    &out_channel,
+                    id,
+                )
+                .await;
         });
 
         tokio::spawn(async move {
-            mock_consensus_worker_state.run(
-                &mut input_consensus_receiver,
-                &consensus_executor_sender,
-                id,
-            )
-            .await;           
+            mock_consensus_worker_state
+                .run(
+                    &mut input_consensus_receiver,
+                    &consensus_executor_sender,
+                    id,
+                )
+                .await;
         });
 
         {
@@ -117,9 +111,7 @@ impl Agent<RemoraMessage> for PrimaryAgent {
                 &input_executor_sender,
                 id,
             )
-            .await;           
+            .await;
         }
-
     }
-  
 }

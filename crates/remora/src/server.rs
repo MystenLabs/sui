@@ -2,16 +2,14 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{stream::FuturesUnordered, SinkExt, StreamExt};
 use network::{MessageHandler, Receiver, ReliableSender, Writer};
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
-use std::{collections::HashMap, sync::Arc};
 use std::{error::Error, net::IpAddr};
 use std::{fmt::Debug, net::Ipv4Addr};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio::time::{sleep, Duration};
-
-use crate::metrics::Metrics;
 
 use super::agents::*;
 use super::types::*;
@@ -46,12 +44,12 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
     ) {
         let (in_send, in_recv) = mpsc::channel(1_000);
         let (out_send, out_recv) = mpsc::channel(1_000);
-        let agent = T::new(id, in_recv, out_send, conf, /*metrics*/);
+        let agent = T::new(id, in_recv, out_send, conf /*metrics*/);
         return (agent, in_send, out_recv);
     }
 
     // Server main function
-    pub async fn run(&mut self, /*metrics: Arc<Metrics>*/) {
+    pub async fn run(&mut self /*metrics: Arc<Metrics>*/) {
         // Initialize map from id to address
         let mut addr_table: HashMap<UniqueId, SocketAddr> = HashMap::new();
         for (id, entry) in self.global_config.iter() {
@@ -64,7 +62,7 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
         // Network manager connects to agent through channels
         // initialize agent with global_config
         let (mut agent, in_sender, out_receiver) =
-            Self::init_agent(self.my_id, self.global_config.clone(), /*metrics*/);
+            Self::init_agent(self.my_id, self.global_config.clone() /*metrics*/);
 
         let network_manager = NetworkManager::new(self.my_id, addr_table, in_sender, out_receiver);
 

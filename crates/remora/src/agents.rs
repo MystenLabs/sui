@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
+use std::fmt::Debug;
 use tokio::sync::mpsc;
 
 // use crate::metrics::Metrics;

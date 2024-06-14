@@ -1,33 +1,19 @@
-use std::{collections::BTreeMap, fs, time::Duration};
-
 use super::agents::*;
 use crate::{
-    metrics::{Measurement, Metrics},
     pre_exec_worker::{self},
     tx_gen_agent::WORKLOAD,
     types::*,
 };
 use async_trait::async_trait;
-use futures::future;
-use tokio::{
-    sync::{mpsc, watch},
-    time::{MissedTickBehavior, sleep},
-    task::JoinHandle,
-};
+use std::time::Duration;
+
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 use sui_single_node_benchmark::{
-    benchmark_context::BenchmarkContext,
-    command::{Component, WorkloadKind},
-    mock_account::Account,
-    workload::Workload,
+    benchmark_context::BenchmarkContext, command::Component, workload::Workload,
 };
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    object::Object,
-    transaction::Transaction,
-    messages_checkpoint::CheckpointDigest,
-};
+use sui_types::messages_checkpoint::CheckpointDigest;
 
 pub struct PreExecAgent {
     id: UniqueId,
@@ -56,16 +42,15 @@ impl Agent<RemoraMessage> for PreExecAgent {
         }
     }
 
-    async fn run(&mut self)
-    {
+    async fn run(&mut self) {
         println!("Starting PreExec agent {}", self.id);
-        
+
         let my_attrs = &self.attrs.get(&self.id).unwrap().attrs;
         let tx_count = my_attrs.get("tx_count").unwrap().parse().unwrap();
 
         let duration_secs = my_attrs["duration"].parse::<u64>().unwrap();
         let duration = Duration::from_secs(duration_secs);
-        
+
         let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
         let context: Arc<BenchmarkContext> = {
             let ctx = BenchmarkContext::new(workload.clone(), COMPONENT, true).await;
@@ -74,16 +59,19 @@ impl Agent<RemoraMessage> for PreExecAgent {
 
         let store = context.validator().create_in_memory_store();
 
-        let mut pre_exec_state =
-            pre_exec_worker::PreExecWorkerState::new(store, CheckpointDigest::random(), context.clone());
-        pre_exec_state.run(
-            tx_count,
-            duration,
-            &mut self.in_channel,
-            &self.out_channel,
-            self.id,
-        )
-        .await;
+        let mut pre_exec_state = pre_exec_worker::PreExecWorkerState::new(
+            store,
+            CheckpointDigest::random(),
+            context.clone(),
+        );
+        pre_exec_state
+            .run(
+                tx_count,
+                duration,
+                &mut self.in_channel,
+                &self.out_channel,
+                self.id,
+            )
+            .await;
     }
-  
 }

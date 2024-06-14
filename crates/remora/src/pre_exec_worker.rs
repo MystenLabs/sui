@@ -1,50 +1,22 @@
+use super::types::*;
 use core::panic;
 use dashmap::DashMap;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
-use move_vm_runtime::move_vm::MoveVM;
-use prometheus::proto;
-use sui_types::in_memory_storage::InMemoryStorage;
-use sui_types::inner_temporary_store::InnerTemporaryStore;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
-use sui_adapter_latest::programmable_transactions::context;
-use sui_adapter_latest::{adapter, execution_engine};
-use sui_config::genesis::Genesis;
-use sui_core::authority::authority_store_tables::LiveObject;
-use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
-use sui_move_natives;
 use sui_protocol_config::ProtocolConfig;
 use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
 use sui_single_node_benchmark::mock_storage::InMemoryObjectStore;
+use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::transaction::{
-    CertifiedTransaction, Transaction, TransactionDataAPI, VerifiedCertificate,
-    VerifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE,
-};
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
-use sui_types::digests::{ChainIdentifier, ObjectDigest, TransactionDigest};
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::epoch_data::EpochData;
-use sui_types::error::SuiError;
-use sui_types::execution_mode;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointDigest;
-use sui_types::metrics::LimitsMetrics;
 use sui_types::object::Object;
-use sui_types::storage::{
-    BackingPackageStore, ChildObjectResolver, DeleteKind, GetSharedLocks, ObjectStore, ParentSync,
-    WriteKind,
-};
-use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
+use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::transaction::{TransactionDataAPI, VerifiedCertificate};
 use tokio::sync::mpsc;
-use tokio::task::JoinSet;
-use tokio::time::{sleep, Duration};
-
-use super::types::*;
-use crate::tx_gen_agent::{generate_benchmark_ctx_workload, WORKLOAD, COMPONENT};
-use crate::tx_gen_agent::generate_benchmark_txs;
-use crate::{metrics::Metrics, types::WritableObjectStore};
+use tokio::time::Duration;
 
 /*****************************************************************************************
  *                                    PreExec Worker                                   *
@@ -61,9 +33,12 @@ pub struct PreExecWorkerState {
     pub genesis_digest: CheckpointDigest,
 }
 
-impl PreExecWorkerState
-{
-    pub fn new(new_store: InMemoryObjectStore, genesis_digest: CheckpointDigest, ctx: Arc<BenchmarkContext>) -> Self {
+impl PreExecWorkerState {
+    pub fn new(
+        new_store: InMemoryObjectStore,
+        genesis_digest: CheckpointDigest,
+        ctx: Arc<BenchmarkContext>,
+    ) -> Self {
         Self {
             memory_store: Arc::new(new_store),
             context: ctx,
@@ -87,20 +62,24 @@ impl PreExecWorkerState
         let tx = full_tx.tx.clone();
 
         // let effect = ctx.validator().execute_raw_transaction(tx).await;
-             
+
         //ctx.validator().execute_dry_run(tx).await
-        
+
         let input_objects = tx.transaction_data().input_objects().unwrap();
         // FIXME: ugly deref
         let objects = memstore
-            .read_objects_for_execution(&**(ctx.validator().get_epoch_store()), &tx.key(), &input_objects)
+            .read_objects_for_execution(
+                &**(ctx.validator().get_epoch_store()),
+                &tx.key(),
+                &input_objects,
+            )
             .unwrap();
 
         let executable = VerifiedExecutableTransaction::new_from_certificate(
             VerifiedCertificate::new_unchecked(tx),
         );
-       
-        let validator = ctx.validator();
+
+        let _validator = ctx.validator();
         let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
             &executable,
             objects,
@@ -109,11 +88,18 @@ impl PreExecWorkerState
         )
         .unwrap();
         let (kind, signer, gas) = executable.transaction_data().execution_parts();
-        let (inner_temp_store, _, effects, _) =
-            ctx.validator().get_epoch_store().executor().execute_transaction_to_effects(
+        let (inner_temp_store, _, effects, _) = ctx
+            .validator()
+            .get_epoch_store()
+            .executor()
+            .execute_transaction_to_effects(
                 &memstore,
                 protocol_config,
-                ctx.validator().get_validator().metrics.limits_metrics.clone(),
+                ctx.validator()
+                    .get_validator()
+                    .metrics
+                    .limits_metrics
+                    .clone(),
                 false,
                 &HashSet::new(),
                 &ctx.validator().get_epoch_store().epoch(),
@@ -131,18 +117,19 @@ impl PreExecWorkerState
             tx_effects: effects,
             written: inner_temp_store.written.clone(),
         };
-   
+
         memstore.commit_objects(inner_temp_store);
         println!("finish exec a txn");
 
         if let Err(e) = in_buffer.send(tx_res) {
             eprintln!("PRE failed to forward in-channel exec res: {:?}", e);
-        } 
+        }
     }
 
-    pub async fn run(&mut self,
-        tx_count: u64,
-        duration: Duration,
+    pub async fn run(
+        &mut self,
+        _tx_count: u64,
+        _duration: Duration,
         in_channel: &mut mpsc::Receiver<NetworkMessage>,
         out_channel: &mpsc::Sender<NetworkMessage>,
         my_id: u16,
@@ -159,14 +146,14 @@ impl PreExecWorkerState
                         let memstore = self.memory_store.clone();
                         let context = self.context.clone();
                         let in_buffer = in_buffer.clone();
-                        tokio::spawn(async move { 
-                            Self::async_exec(full_tx.clone(), 
+                        tokio::spawn(async move {
+                            Self::async_exec(full_tx.clone(),
                                              memstore,
-                                             context.validator().get_epoch_store().protocol_config(), 
-                                             context.validator().get_epoch_store().reference_gas_price(), 
+                                             context.validator().get_epoch_store().protocol_config(),
+                                             context.validator().get_epoch_store().reference_gas_price(),
                                              context,
                                              &in_buffer,
-                            ).await 
+                            ).await
                         });
                     } else {
                         eprintln!("EW {} received unexpected message from: {:?}", my_id, msg);
@@ -184,11 +171,10 @@ impl PreExecWorkerState
                         })
                         .await
                         .expect("sending failed");
-                    } 
+                    }
 
                 },
             }
         }
-
     }
 }

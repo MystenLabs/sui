@@ -6,7 +6,7 @@ use std::{
 use std::{fmt::Debug, path::Path};
 use std::{fs, net::IpAddr};
 use sui_protocol_config::ProtocolVersion;
-use sui_types::transaction::{Transaction, CertifiedTransaction};
+use sui_types::transaction::CertifiedTransaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::TransactionDigest,
@@ -44,7 +44,7 @@ impl GlobalConfig {
         self.0.iter()
     }
 
-    /// Create a new global config for benchmarking. 
+    /// Create a new global config for benchmarking.
     /// 1 txn generator, 1 primary worker, and variable pre-executor
     pub fn new_for_benchmark(ips: Vec<IpAddr>, pre_exec_workers: usize) -> Self {
         assert!(ips.len() - 2 >= pre_exec_workers && pre_exec_workers > 0);
@@ -57,7 +57,8 @@ impl GlobalConfig {
                 0 => "GEN",
                 //1 => "PRI", // FIXME
                 _ => "PRE",
-            }.to_string();
+            }
+            .to_string();
             let metrics_address = SocketAddr::new(ip, metrics_port);
             let legacy_metrics = SocketAddr::new(ip, benchmark_port_offset + metrics_port);
             let config = ServerConfig {
@@ -247,7 +248,9 @@ impl TransactionWithEffects {
     pub fn get_write_set(&self) -> HashSet<ObjectID> {
         match &self.ground_truth_effects {
             Some(fx) => {
-                let TransactionEffects::V1(tx_effects) = fx else { todo!() };
+                let TransactionEffects::V1(tx_effects) = fx else {
+                    todo!()
+                };
                 let total_writes = tx_effects.created.len()
                     + tx_effects.mutated.len()
                     + tx_effects.unwrapped.len()
@@ -301,7 +304,7 @@ impl TransactionWithEffects {
     }
 }
 
-#[derive(Debug,Deserialize,Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct TransactionWithResults {
     // pub full_tx: TransactionWithEffects,
     pub tx_effects: TransactionEffects, // determined after execution
