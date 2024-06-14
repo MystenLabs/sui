@@ -63,7 +63,6 @@ use crate::{
 };
 
 use anyhow::{anyhow, Result};
-use codespan_reporting::files::SimpleFiles;
 use crossbeam::channel::Sender;
 use derivative::*;
 use im::ordmap::OrdMap;
@@ -98,7 +97,10 @@ use move_compiler::{
     linters::LintLevel,
     naming::ast::{StructFields, Type, TypeName_, Type_},
     parser::ast::{self as P},
-    shared::{unique_map::UniqueMap, Identifier, Name, NamedAddressMap, NamedAddressMaps},
+    shared::{
+        files::MappedFiles, unique_map::UniqueMap, Identifier, Name, NamedAddressMap,
+        NamedAddressMaps,
+    },
     typing::{
         ast::{Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
         visitor::TypingVisitorContext,
@@ -342,10 +344,8 @@ pub struct ParsingSymbolicator<'a> {
     /// string so that we can access it regardless of the ModuleIdent representation
     /// (e.g., in the parsing AST or in the typing AST)
     mod_outer_defs: &'a mut BTreeMap<String, ModuleDefs>,
-    /// A mapping from file names to file content (used to obtain source file locations)
-    files: &'a SimpleFiles<Symbol, String>,
-    /// A mapping from file hashes to file IDs (used to obtain source file locations)
-    file_id_mapping: &'a HashMap<FileHash, usize>,
+    /// Mapped file information for translating locations into positions
+    files: &'a MappedFiles,
     /// Associates uses for a given definition to allow displaying all references
     references: &'a mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     /// Additional information about definitions
@@ -1200,21 +1200,21 @@ pub fn get_symbols(
     // get source files to be able to correlate positions (in terms of byte offsets) with actual
     // file locations (in terms of line/column numbers)
     let source_files = file_sources(&resolution_graph, overlay_fs_root.clone());
-    let mut files = SimpleFiles::new();
-    let mut file_id_mapping = HashMap::new();
-    let mut file_id_to_lines = HashMap::new();
-    let mut file_name_mapping = BTreeMap::new();
+    let mut mapped_files: MappedFiles = MappedFiles::empty();
+    // let mut file_name_mapping = BTreeMap::new();
     let mut hasher = Sha256::new();
-    for (fhash, (fname, source, is_dep)) in &source_files {
+    for (fhash, (_fname, _source, is_dep)) in &source_files {
         if *is_dep {
             hasher.update(fhash.0);
         }
-        let id = files.add(*fname, source.clone());
-        file_id_mapping.insert(*fhash, id);
-        file_name_mapping.insert(*fhash, PathBuf::from(fname.as_str()));
-        let lines: Vec<String> = source.lines().map(String::from).collect();
-        file_id_to_lines.insert(id, lines);
     }
+    //     let id = files.add(*fname, source.clone());
+    //     file_id_mapping.insert(*fhash, id);
+    //     file_name_mapping.insert(*fhash, PathBuf::from(fname.as_str()));
+    // let mut file_id_to_lines = HashMap::new();
+    //     let lines: Vec<String> = source.lines().map(String::from).collect();
+    //     file_id_to_lines.insert(id, lines);
+    // }
     let deps_hash = format!("{:X}", hasher.finalize());
 
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
@@ -1264,6 +1264,7 @@ pub fn get_symbols(
             .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
             .map(|libs| {
                 eprintln!("created pre-compiled libs for {:?}", pkg_path);
+                mapped_files.append(libs.files.clone());
                 let deps = Arc::new(libs);
                 pkg_deps.insert(
                     pkg_path.to_path_buf(),
@@ -1305,6 +1306,7 @@ pub fn get_symbols(
         eprintln!("compiled to parsed AST");
         let (compiler, parsed_program) = compiler.into_ast();
         parsed_ast = Some(parsed_program.clone());
+        mapped_files.append(compiler.compilation_env_ref().mapped_files().clone());
 
         // extract typed AST
         let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
@@ -1344,14 +1346,10 @@ pub fn get_symbols(
         Ok((files, vec![]))
     })?;
 
-    let mut ide_diagnostics = lsp_empty_diagnostics(&file_name_mapping);
+    let mut ide_diagnostics = lsp_empty_diagnostics(mapped_files.file_name_mapping());
     if let Some((compiler_diagnostics, failure)) = diagnostics {
-        let lsp_diagnostics = lsp_diagnostics(
-            &compiler_diagnostics.into_codespan_format(),
-            &files,
-            &file_id_mapping,
-            &file_name_mapping,
-        );
+        let lsp_diagnostics =
+            lsp_diagnostics(&compiler_diagnostics.into_codespan_format(), &mapped_files);
         // start with empty diagnostics for all files and replace them with actual diagnostics
         // only for files that have failures/warnings so that diagnostics for all other files
         // (that no longer have failures/warnings) are reset
@@ -1374,10 +1372,20 @@ pub fn get_symbols(
     let mut references = BTreeMap::new();
     let mut def_info = BTreeMap::new();
 
+    let mut file_id_to_lines = HashMap::new();
+    for file_id in mapped_files.file_mapping().values() {
+        let Ok(file) = mapped_files.files().get(*file_id) else {
+            eprintln!("file id without source code");
+            continue;
+        };
+        let source = file.source();
+        let lines: Vec<String> = source.lines().map(String::from).collect();
+        file_id_to_lines.insert(*file_id, lines);
+    }
+
     pre_process_typed_modules(
         &typed_modules,
-        &files,
-        &file_id_mapping,
+        &mapped_files,
         &file_id_to_lines,
         &mut mod_outer_defs,
         &mut mod_use_defs,
@@ -1389,8 +1397,7 @@ pub fn get_symbols(
     if let Some(libs) = compiled_libs.clone() {
         pre_process_typed_modules(
             &libs.typing.modules,
-            &files,
-            &file_id_mapping,
+            &mapped_files,
             &file_id_to_lines,
             &mut mod_outer_defs,
             &mut mod_use_defs,
@@ -1407,8 +1414,7 @@ pub fn get_symbols(
 
     let mut parsing_symbolicator = ParsingSymbolicator {
         mod_outer_defs: &mut mod_outer_defs,
-        files: &files,
-        file_id_mapping: &file_id_mapping,
+        files: &mapped_files,
         references: &mut references,
         def_info: &mut def_info,
         use_defs: UseDefMap::new(),
@@ -1433,8 +1439,7 @@ pub fn get_symbols(
     let mut compiler_info = compiler_info.unwrap();
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
         mod_outer_defs: &mod_outer_defs,
-        files: &files,
-        file_id_mapping: &file_id_mapping,
+        files: &mapped_files,
         references: &mut references,
         def_info: &mut def_info,
         use_defs: UseDefMap::new(),
@@ -1466,14 +1471,14 @@ pub fn get_symbols(
 
     let mut file_mods: BTreeMap<PathBuf, BTreeSet<ModuleDefs>> = BTreeMap::new();
     for d in mod_outer_defs.into_values() {
-        let path = file_name_mapping.get(&d.fhash.clone()).unwrap();
+        let path = mapped_files.file_path(&d.fhash.clone());
         file_mods.entry(path.to_path_buf()).or_default().insert(d);
     }
 
     let symbols = Symbols {
         references,
         file_use_defs,
-        file_name_mapping,
+        file_name_mapping: mapped_files.file_name_mapping().clone(),
         file_mods,
         def_info,
         files,
@@ -1488,8 +1493,7 @@ pub fn get_symbols(
 
 fn pre_process_typed_modules(
     typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
+    files: &MappedFiles,
     file_id_to_lines: &HashMap<usize, Vec<String>>,
     mod_outer_defs: &mut BTreeMap<String, ModuleDefs>,
     mod_use_defs: &mut BTreeMap<String, UseDefMap>,
@@ -1504,7 +1508,6 @@ fn pre_process_typed_modules(
             &sp(pos, *module_ident),
             module_def,
             files,
-            file_id_mapping,
             file_id_to_lines,
             references,
             def_info,
@@ -1681,8 +1684,7 @@ fn get_mod_outer_defs(
     loc: &Loc,
     mod_ident: &ModuleIdent,
     mod_def: &ModuleDefinition,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
+    files: &MappedFiles,
     file_id_to_lines: &HashMap<usize, Vec<String>>,
     references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     def_info: &mut BTreeMap<DefLoc, DefInfo>,
@@ -1702,7 +1704,7 @@ fn get_mod_outer_defs(
         if let StructFields::Defined(pos_fields, fields) = &def.fields {
             positional = *pos_fields;
             for (fpos, fname, (_, t)) in fields {
-                let start = match get_start_loc(&fpos, files, file_id_mapping) {
+                let start = match get_start_loc(&fpos, files) {
                     Some(s) => s,
                     None => {
                         debug_assert!(false);
@@ -1714,7 +1716,7 @@ fn get_mod_outer_defs(
                     start,
                 });
                 let doc_string = extract_doc_string(
-                    file_id_mapping,
+                    files.file_mapping(),
                     file_id_to_lines,
                     &start,
                     &fpos.file_hash(),
@@ -1728,7 +1730,7 @@ fn get_mod_outer_defs(
         };
 
         // process the struct itself
-        let name_start = match get_start_loc(&pos, files, file_id_mapping) {
+        let name_start = match get_start_loc(&pos, files) {
             Some(s) => s,
             None => {
                 debug_assert!(false);
@@ -1755,7 +1757,7 @@ fn get_mod_outer_defs(
             Visibility::Internal
         };
         let doc_string = extract_doc_string(
-            file_id_mapping,
+            files.file_mapping(),
             file_id_to_lines,
             &name_start,
             &pos.file_hash(),
@@ -1787,7 +1789,7 @@ fn get_mod_outer_defs(
     }
 
     for (pos, name, c) in &mod_def.constants {
-        let name_start = match get_start_loc(&pos, files, file_id_mapping) {
+        let name_start = match get_start_loc(&pos, files) {
             Some(s) => s,
             None => {
                 debug_assert!(false);
@@ -1796,7 +1798,7 @@ fn get_mod_outer_defs(
         };
         constants.insert(*name, ConstDef { name_start });
         let doc_string = extract_doc_string(
-            file_id_mapping,
+            files.file_mapping(),
             file_id_to_lines,
             &name_start,
             &pos.file_hash(),
@@ -1817,7 +1819,7 @@ fn get_mod_outer_defs(
         if ignored_function(*name) {
             continue;
         }
-        let name_start = match get_start_loc(&pos, files, file_id_mapping) {
+        let name_start = match get_start_loc(&pos, files) {
             Some(s) => s,
             None => {
                 debug_assert!(false);
@@ -1832,7 +1834,7 @@ fn get_mod_outer_defs(
             FunType::Regular
         };
         let doc_string = extract_doc_string(
-            file_id_mapping,
+            files.file_mapping(),
             file_id_to_lines,
             &name_start,
             &pos.file_hash(),
@@ -1879,7 +1881,7 @@ fn get_mod_outer_defs(
     let mut use_def_map = UseDefMap::new();
 
     let ident = mod_ident.value;
-    let start = match get_start_loc(loc, files, file_id_mapping) {
+    let start = match get_start_loc(loc, files) {
         Some(s) => s,
         None => {
             debug_assert!(false);
@@ -1901,7 +1903,7 @@ fn get_mod_outer_defs(
         }
     };
 
-    let doc_comment = extract_doc_string(file_id_mapping, file_id_to_lines, &start, &fhash);
+    let doc_comment = extract_doc_string(files.file_mapping(), file_id_to_lines, &start, &fhash);
     let mod_defs = ModuleDefs {
         fhash,
         ident,
@@ -1914,7 +1916,7 @@ fn get_mod_outer_defs(
 
     // insert use of the module name in the definition itself
     let mod_name = ident.module;
-    if let Some(mod_name_start) = get_start_loc(&mod_name.loc(), files, file_id_mapping) {
+    if let Some(mod_name_start) = get_start_loc(&mod_name.loc(), files) {
         use_def_map.insert(
             mod_name_start.line,
             UseDef::new(
@@ -1937,12 +1939,8 @@ fn get_mod_outer_defs(
     (mod_defs, use_def_map)
 }
 
-fn get_start_loc(
-    pos: &Loc,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
-) -> Option<Position> {
-    get_loc(&pos.file_hash(), pos.start(), files, file_id_mapping)
+fn get_start_loc(pos: &Loc, files: &MappedFiles) -> Option<Position> {
+    get_loc(&pos.file_hash(), pos.start(), files)
 }
 
 impl<'a> ParsingSymbolicator<'a> {
@@ -2267,8 +2265,7 @@ impl<'a> ParsingSymbolicator<'a> {
         let Some(mod_defs) = self.mod_outer_defs.get_mut(mod_ident_str) else {
             return;
         };
-        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
-        else {
+        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files) else {
             debug_assert!(false);
             return;
         };
@@ -2315,7 +2312,6 @@ impl<'a> ParsingSymbolicator<'a> {
         if let Some(mut ud) = add_struct_use_def(
             self.mod_outer_defs,
             self.files,
-            self.file_id_mapping,
             mod_ident_str.clone(),
             mod_defs,
             &name.value,
@@ -2327,8 +2323,7 @@ impl<'a> ParsingSymbolicator<'a> {
         ) {
             // it's a struct - add it for the alias as well
             if let Some(alias) = alias_opt {
-                let Some(alias_start) = get_start_loc(&alias.loc, self.files, self.file_id_mapping)
-                else {
+                let Some(alias_start) = get_start_loc(&alias.loc, self.files) else {
                     debug_assert!(false);
                     return;
                 };
@@ -2346,7 +2341,6 @@ impl<'a> ParsingSymbolicator<'a> {
             &name.value,
             self.mod_outer_defs,
             self.files,
-            self.file_id_mapping,
             mod_ident_str.clone(),
             mod_defs,
             &name.value,
@@ -2358,8 +2352,7 @@ impl<'a> ParsingSymbolicator<'a> {
         ) {
             // it's a function - add it for the alias as well
             if let Some(alias) = alias_opt {
-                let Some(alias_start) = get_start_loc(&alias.loc, self.files, self.file_id_mapping)
-                else {
+                let Some(alias_start) = get_start_loc(&alias.loc, self.files) else {
                     debug_assert!(false);
                     return;
                 };
@@ -2426,9 +2419,7 @@ impl<'a> ParsingSymbolicator<'a> {
                     else {
                         return;
                     };
-                    let Some(def_start) =
-                        get_start_loc(&var.loc(), self.files, self.file_id_mapping)
-                    else {
+                    let Some(def_start) = get_start_loc(&var.loc(), self.files) else {
                         return;
                     };
                     mod_defs
@@ -2471,7 +2462,7 @@ impl<'a> ParsingSymbolicator<'a> {
             return;
         };
         let sp!(pos, name) = n;
-        let Some(loc) = get_start_loc(&pos, self.files, self.file_id_mapping) else {
+        let Some(loc) = get_start_loc(&pos, self.files) else {
             return;
         };
         self.alias_lengths.insert(loc, name.len());
@@ -2482,8 +2473,7 @@ impl<'a> ParsingSymbolicator<'a> {
 pub fn add_fun_use_def(
     fun_def_name: &Symbol, // may be different from use_name for methods
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
+    files: &MappedFiles,
     mod_ident_str: String,
     mod_defs: &ModuleDefs,
     use_name: &Symbol,
@@ -2493,7 +2483,7 @@ pub fn add_fun_use_def(
     use_defs: &mut UseDefMap,
     alias_lengths: &BTreeMap<Position, usize>,
 ) -> Option<UseDef> {
-    let Some(name_start) = get_start_loc(use_pos, files, file_id_mapping) else {
+    let Some(name_start) = get_start_loc(use_pos, files) else {
         debug_assert!(false);
         return None;
     };
@@ -2522,8 +2512,7 @@ pub fn add_fun_use_def(
 /// Add use of a struct identifier
 pub fn add_struct_use_def(
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
+    files: &MappedFiles,
     mod_ident_str: String,
     mod_defs: &ModuleDefs,
     use_name: &Symbol,
@@ -2533,7 +2522,7 @@ pub fn add_struct_use_def(
     use_defs: &mut UseDefMap,
     alias_lengths: &BTreeMap<Position, usize>,
 ) -> Option<UseDef> {
-    let Some(name_start) = get_start_loc(use_pos, files, file_id_mapping) else {
+    let Some(name_start) = get_start_loc(use_pos, files) else {
         debug_assert!(false);
         return None;
     };

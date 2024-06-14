@@ -2,15 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::utils::get_loc;
-use codespan_reporting::{diagnostic::Severity, files::SimpleFiles};
+use codespan_reporting::diagnostic::Severity;
 use lsp_types::{Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Range};
 use move_command_line_common::files::FileHash;
+use move_compiler::shared::files::MappedFiles;
 use move_ir_types::location::Loc;
-use move_symbol_pool::Symbol;
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 use url::Url;
 
 /// Converts diagnostics from the codespan format to the format understood by the language server.
@@ -22,15 +19,13 @@ pub fn lsp_diagnostics(
         Vec<(Loc, String)>,
         Vec<String>,
     )>,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
-    file_name_mapping: &BTreeMap<FileHash, PathBuf>,
+    files: &MappedFiles,
 ) -> BTreeMap<PathBuf, Vec<Diagnostic>> {
     let mut lsp_diagnostics = BTreeMap::new();
     for (s, _, (loc, msg), labels, _) in diagnostics {
-        let fpath = file_name_mapping.get(&loc.file_hash()).unwrap();
-        if let Some(start) = get_loc(&loc.file_hash(), loc.start(), files, file_id_mapping) {
-            if let Some(end) = get_loc(&loc.file_hash(), loc.end(), files, file_id_mapping) {
+        let fpath = files.file_path(&loc.file_hash());
+        if let Some(start) = get_loc(&loc.file_hash(), loc.start(), files) {
+            if let Some(end) = get_loc(&loc.file_hash(), loc.end(), files) {
                 let range = Range::new(start, end);
                 let related_info_opt = if labels.is_empty() {
                     None
@@ -39,15 +34,9 @@ pub fn lsp_diagnostics(
                         labels
                             .iter()
                             .filter_map(|(lloc, lmsg)| {
-                                let lstart = get_loc(
-                                    &lloc.file_hash(),
-                                    lloc.start(),
-                                    files,
-                                    file_id_mapping,
-                                )?;
-                                let lend =
-                                    get_loc(&lloc.file_hash(), lloc.end(), files, file_id_mapping)?;
-                                let lpath = file_name_mapping.get(&lloc.file_hash()).unwrap();
+                                let lstart = get_loc(&lloc.file_hash(), lloc.start(), files)?;
+                                let lend = get_loc(&lloc.file_hash(), lloc.end(), files)?;
+                                let lpath = files.file_path(&lloc.file_hash());
                                 let lpos = Location::new(
                                     Url::from_file_path(lpath).unwrap(),
                                     Range::new(lstart, lend),

@@ -18,7 +18,8 @@ use move_binary_format::{
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
-    diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics, FilesSourceText},
+    diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics},
+    shared::files::MappedFiles,
     editions::Edition,
     linters::LINT_WARNING_PREFIX,
 };
@@ -184,7 +185,7 @@ impl BuildConfig {
 
 /// There may be additional information that needs to be displayed after diagnostics are reported
 /// (optionally report diagnostics themselves if files argument is provided).
-pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceText>) {
+pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&MappedFiles>) {
     let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
     let (filtered_diags_num, unique) =
         warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);

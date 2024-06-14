@@ -6,7 +6,8 @@ use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::HashMap,
+    collections::{hash_map, BTreeMap, HashMap},
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -20,9 +21,11 @@ pub type FileName = Symbol;
 pub type FilesSourceText = HashMap<FileHash, (FileName, Arc<str>)>;
 
 /// A mapping from file ids to file contents along with the mapping of filehash to fileID.
+#[derive(Debug, Clone)]
 pub struct MappedFiles {
-    pub files: SimpleFiles<Symbol, Arc<str>>,
-    pub file_mapping: HashMap<FileHash, FileId>,
+    files: SimpleFiles<Symbol, Arc<str>>,
+    file_mapping: HashMap<FileHash, FileId>,
+    file_name_mapping: BTreeMap<FileHash, PathBuf>,
 }
 
 /// A file, and the line:column start, and line:column end that corresponds to a `Loc`
@@ -36,9 +39,12 @@ pub struct FilePosition {
 /// A position holds the byte offset along with the line and column location in a file.
 /// Both are zero-indexed.
 pub struct Position {
-    pub line: usize,
-    pub column: usize,
-    pub byte: usize,
+    // zero-indexed line offset
+    line_offset: usize,
+    // zero-indexed column offset
+    column_offset: usize,
+    // zero-indexed byte offset
+    byte_offset: usize,
 }
 
 /// A file, and the usize start and usize end that corresponds to a `Loc`
@@ -56,18 +62,47 @@ pub struct ByteSpan {
 //**************************************************************************************************
 // Traits and Impls
 //**************************************************************************************************
+impl Position {
+    /// User-facing (1-indexed) line
+    pub fn user_line(&self) -> usize {
+        self.line_offset + 1
+    }
+
+    /// User-facing (1-indexed) coulmn
+    pub fn user_column(&self) -> usize {
+        self.column_offset + 1
+    }
+
+    /// Line offset (0-indexed)
+    pub fn line_offset(&self) -> usize {
+        self.line_offset
+    }
+
+    /// Column offset (0-indexed)
+    pub fn column_offset(&self) -> usize {
+        self.column_offset
+    }
+
+    /// Btye offset for position (0-indexed)
+    pub fn byte_offset(&self) -> usize {
+        self.byte_offset
+    }
+}
 
 impl MappedFiles {
     pub fn new(files: FilesSourceText) -> Self {
         let mut simple_files = SimpleFiles::new();
         let mut file_mapping = HashMap::new();
+        let mut file_name_mapping = BTreeMap::new();
         for (fhash, (fname, source)) in files {
             let id = simple_files.add(fname, source);
             file_mapping.insert(fhash, id);
+            file_name_mapping.insert(fhash, PathBuf::from(fname.as_str()));
         }
         Self {
             files: simple_files,
             file_mapping,
+            file_name_mapping,
         }
     }
 
@@ -75,12 +110,47 @@ impl MappedFiles {
         Self {
             files: SimpleFiles::new(),
             file_mapping: HashMap::new(),
+            file_name_mapping: BTreeMap::new(),
+        }
+    }
+
+    pub fn append(&mut self, other: Self) {
+        for (file_hash, file_id) in other.file_mapping {
+            let Ok(file) = other.files.get(file_id) else {
+                debug_assert!(false, "Found a file without a file entry");
+                continue;
+            };
+            let Some(path) = other.file_name_mapping.get(&file_hash) else {
+                debug_assert!(false, "Found a file without a path entry");
+                continue;
+            };
+            debug_assert!(
+                !self.file_mapping.contains_key(&file_hash),
+                "Found a repeat file hash"
+            );
+            let fname = format!("{}", path.to_string_lossy());
+            self.add(file_hash, fname.into(), file.source().clone());
         }
     }
 
     pub fn add(&mut self, fhash: FileHash, fname: FileName, source: Arc<str>) {
         let id = self.files.add(fname, source);
         self.file_mapping.insert(fhash, id);
+        self.file_name_mapping
+            .insert(fhash, PathBuf::from(fname.as_str()));
+    }
+
+    pub fn get(&self, fhash: &FileHash) -> Option<(Symbol, Arc<str>)> {
+        let file_id = self.file_mapping.get(fhash)?;
+        self.files
+            .get(*file_id)
+            .ok()
+            .map(|file| (*file.name(), file.source().clone()))
+    }
+
+    /// Returns the FileHashes for iteration
+    pub fn keys(&self) -> hash_map::Keys<'_, FileHash, FileId> {
+        self.file_mapping.keys()
     }
 
     pub fn files(&self) -> &SimpleFiles<Symbol, Arc<str>> {
@@ -91,9 +161,17 @@ impl MappedFiles {
         &self.file_mapping
     }
 
+    pub fn file_name_mapping(&self) -> &BTreeMap<FileHash, PathBuf> {
+        &self.file_name_mapping
+    }
+
     pub fn filename(&self, fhash: &FileHash) -> &str {
         let file_id = self.file_mapping().get(fhash).unwrap();
         self.files().get(*file_id).unwrap().name()
+    }
+
+    pub fn file_path(&self, fhash: &FileHash) -> &PathBuf {
+        self.file_name_mapping.get(fhash).unwrap()
     }
 
     pub fn file_hash_to_file_id(&self, fhash: &FileHash) -> Option<FileId> {
@@ -137,14 +215,14 @@ impl MappedFiles {
         let posn = FilePosition {
             file_id,
             start: Position {
-                line: start_file_loc.line_number - 1,
-                column: start_file_loc.column_number - 1,
-                byte: start_loc,
+                line_offset: start_file_loc.line_number - 1,
+                column_offset: start_file_loc.column_number - 1,
+                byte_offset: start_loc,
             },
             end: Position {
-                line: end_file_loc.line_number - 1,
-                column: end_file_loc.column_number - 1,
-                byte: end_loc,
+                line_offset: end_file_loc.line_number - 1,
+                column_offset: end_file_loc.column_number - 1,
+                byte_offset: end_loc,
             },
         };
         Some(posn)
@@ -162,7 +240,7 @@ impl MappedFiles {
     }
 
     /// Given a line number in the file return the `Loc` for the line.
-    fn line_to_loc_opt(&self, file_hash: &FileHash, line_number: usize) -> Option<Loc> {
+    pub fn line_to_loc_opt(&self, file_hash: &FileHash, line_number: usize) -> Option<Loc> {
         let file_id = self.file_mapping().get(file_hash)?;
         let line_range = self.files().line_range(*file_id, line_number).ok()?;
         Some(Loc::new(
@@ -174,7 +252,7 @@ impl MappedFiles {
 
     /// Given a location `Loc` return a new loc only for source with leading and trailing
     /// whitespace removed.
-    fn trimmed_loc_opt(&self, loc: &Loc) -> Option<Loc> {
+    pub fn trimmed_loc_opt(&self, loc: &Loc) -> Option<Loc> {
         let source_str = self.source_of_loc_opt(loc)?;
         let trimmed_front = source_str.trim_start();
         let new_start = loc.start() as usize + (source_str.len() - trimmed_front.len());
@@ -185,8 +263,67 @@ impl MappedFiles {
 
     /// Given a location `Loc` return the source for the location. This include any leading and
     /// trailing whitespace.
-    fn source_of_loc_opt(&self, loc: &Loc) -> Option<&str> {
+    pub fn source_of_loc_opt(&self, loc: &Loc) -> Option<&str> {
         let file_id = *self.file_mapping().get(&loc.file_hash())?;
         Some(&self.files().source(file_id).ok()?[loc.usize_range()])
+    }
+
+    /// Given a file_hash `file` and a byte index `byte_index`, compute its `Position`.
+    pub fn byte_index_to_position_opt(
+        &self,
+        file: &FileHash,
+        byte_index: ByteIndex,
+    ) -> Option<Position> {
+        let file_id = self.file_hash_to_file_id(file)?;
+        let byte_position = self.files().location(file_id, byte_index as usize).ok()?;
+        let result = Position {
+            line_offset: byte_position.line_number - 1,
+            column_offset: byte_position.column_number - 1,
+            byte_offset: byte_index as usize,
+        };
+        Some(result)
+    }
+}
+
+impl From<FilesSourceText> for MappedFiles {
+    fn from(value: FilesSourceText) -> Self {
+        MappedFiles::new(value)
+    }
+}
+
+/// Iterator for MappedFiles
+pub struct MappedFilesIter<'a> {
+    mapped_files: &'a MappedFiles,
+    keys_iter: hash_map::Iter<'a, FileHash, FileId>,
+}
+
+impl<'a> MappedFilesIter<'a> {
+    fn new(mapped_files: &'a MappedFiles) -> Self {
+        MappedFilesIter {
+            mapped_files,
+            keys_iter: mapped_files.file_mapping.iter(),
+        }
+    }
+}
+
+impl<'a> Iterator for MappedFilesIter<'a> {
+    type Item = (&'a FileHash, (&'a Symbol, &'a Arc<str>));
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (file_hash, file_id) = self.keys_iter.next()?;
+        let Some(file) = self.mapped_files.files.get(*file_id).ok() else {
+            eprintln!("Files went wrong.");
+            return None;
+        };
+        Some((file_hash, (file.name(), file.source())))
+    }
+}
+
+impl<'a> IntoIterator for &'a MappedFiles {
+    type Item = (&'a FileHash, (&'a Symbol, &'a Arc<str>));
+    type IntoIter = MappedFilesIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        MappedFilesIter::new(self)
     }
 }
