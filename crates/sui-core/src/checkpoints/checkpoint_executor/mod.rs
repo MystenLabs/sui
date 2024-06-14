@@ -109,7 +109,7 @@ fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
         let panic_timeout: Option<Duration> = if cfg!(msim) {
             Some(Duration::from_secs(45))
         } else {
-            std::env::var("PANIC_ON_NEW_CHECKPOINT_TIMEOUT_MS")
+            std::env::var("NEW_CHECKPOINT_PANIC_TIMEOUT_MS")
                 .ok()
                 .and_then(|s| s.parse::<u64>().ok())
                 .map(Duration::from_millis)
