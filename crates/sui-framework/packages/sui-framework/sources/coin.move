@@ -236,7 +236,7 @@ module sui::coin {
         )
     }
 
-    public(package) fun create_regulated_currency_v2<T: drop>(
+    public fun create_regulated_currency_v2<T: drop>(
         witness: T,
         decimals: u8,
         symbol: vector<u8>,
@@ -295,7 +295,7 @@ module sui::coin {
         cap.total_supply.decrease_supply(balance)
     }
 
-    public(package) fun deny_list_v2_add<T>(
+    public fun deny_list_v2_add<T>(
         deny_list: &mut DenyList,
         _deny_cap: &mut DenyCapV2<T>,
         addr: address,
@@ -324,7 +324,7 @@ module sui::coin {
         deny_list.v2_most_recent_contains(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
-    public(package) fun deny_list_v2_enable_global_pause<T>(
+    public fun deny_list_v2_enable_global_pause<T>(
         deny_list: &mut DenyList,
         _deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
