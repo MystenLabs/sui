@@ -26,6 +26,7 @@ use tokio_util::sync::CancellationToken;
 use tokio::sync::watch;
 
 use diesel::r2d2::R2D2Connection;
+use mysten_metrics::metered_channel::Sender;
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use sui_data_ingestion_core::Worker;
@@ -46,8 +47,9 @@ use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 
 use crate::db::ConnectionPool;
+use crate::handlers::objects_snapshot_processor::CheckpointObjectChanges;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
-use crate::store::{IndexerStore, PgIndexerStore};
+use crate::store::{IndexerStore, ObjectChangeToCommit, PgIndexerStore};
 use crate::types::{
     IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
     IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
@@ -64,9 +66,11 @@ const CHECKPOINT_QUEUE_SIZE: usize = 100;
 pub async fn new_handlers<S, T>(
     state: S,
     client: Client,
+    object_change_sender: Sender<CheckpointObjectChanges>,
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
+    backfill_cancel: CancellationToken,
 ) -> Result<CheckpointHandler<S, T>, IndexerError>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
@@ -92,11 +96,13 @@ where
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
         client_clone,
+        object_change_sender,
         metrics_clone,
         indexed_checkpoint_receiver,
         tx,
         next_checkpoint_sequence_number,
-        cancel.clone()
+        cancel.clone(),
+        backfill_cancel,
     ));
     Ok(CheckpointHandler::new(
         state,

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::env;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use diesel::r2d2::R2D2Connection;
@@ -10,7 +11,7 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimProgressStore, WorkerPool,
 };
@@ -69,9 +70,9 @@ impl Indexer {
         );
 
         let watermark = store
-            .get_latest_checkpoint_sequence_number()
+            .get_latest_object_snapshot_checkpoint_sequence_number()
             .await
-            .expect("Failed to get latest tx checkpoint sequence number from DB")
+            .expect("Failed to get latest object snapshot checkpoint sequence number from DB")
             .map(|seq| seq + 1)
             .unwrap_or_default();
         let download_queue_size = env::var("DOWNLOAD_QUEUE_SIZE")
@@ -86,8 +87,24 @@ impl Indexer {
             .unwrap_or(CHECKPOINT_PROCESSING_BATCH_DATA_LIMIT.to_string())
             .parse::<usize>()
             .unwrap();
+        let object_change_buffer_size = std::env::var("OBJECT_CHANGE_BUFFER_SIZE")
+            .unwrap_or(
+                crate::handlers::objects_snapshot_processor::OBJECT_CHANGE_BUFFER_SIZE.to_string(),
+            )
+            .parse::<usize>()
+            .unwrap();
+        let global_metrics = get_metrics().unwrap();
 
         let rest_client = sui_rest_api::Client::new(format!("{}/rest", config.rpc_client_url));
+        let (object_change_sender, object_change_receiver) =
+            mysten_metrics::metered_channel::channel(
+                object_change_buffer_size,
+                &global_metrics
+                    .channels
+                    .with_label_values(&["object_change_buffering"]),
+            );
+
+        let backfill_cancel = CancellationToken::new();
 
         let objects_snapshot_processor = ObjectsSnapshotProcessor::new_with_config(
             rest_client.clone(),
@@ -95,8 +112,9 @@ impl Indexer {
             metrics.clone(),
             snapshot_config,
             cancel.clone(),
+            backfill_cancel.clone(),
         );
-        spawn_monitored_task!(objects_snapshot_processor.start());
+        spawn_monitored_task!(objects_snapshot_processor.start(object_change_receiver));
 
         let cancel_clone = cancel.clone();
         let (exit_sender, exit_receiver) = oneshot::channel();
@@ -111,8 +129,16 @@ impl Indexer {
             1,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker =
-            new_handlers::<S, T>(store, rest_client, metrics, watermark, cancel.clone()).await?;
+        let worker = new_handlers::<S, T>(
+            store,
+            rest_client,
+            object_change_sender,
+            metrics,
+            watermark,
+            cancel.clone(),
+            backfill_cancel,
+        )
+        .await?;
         let worker_pool = WorkerPool::new(worker, "workflow".to_string(), download_queue_size);
         let extra_reader_options = ReaderOptions {
             batch_size: download_queue_size,

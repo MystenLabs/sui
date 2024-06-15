@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::TryFutureExt;
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
+use mysten_metrics::metered_channel::Sender;
 use tap::tap::TapFallible;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 use tracing::{error, info};
 
+use crate::handlers::objects_snapshot_processor::CheckpointObjectChanges;
 use sui_rest_api::Client;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
@@ -24,11 +28,13 @@ const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: u64 = 900;
 pub async fn start_tx_checkpoint_commit_task<S>(
     state: S,
     client: Client,
+    object_change_sender: Sender<CheckpointObjectChanges>,
     metrics: IndexerMetrics,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
     commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
     mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
+    backfill_cancel: CancellationToken,
 ) -> IndexerResult<()>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
@@ -49,10 +55,11 @@ where
     let latest_object_snapshot_seq = state
         .get_latest_object_snapshot_checkpoint_sequence_number()
         .await?;
-    let latest_cp_seq = state.get_latest_checkpoint_sequence_number().await?;
+    let latest_cp_seq = latest_object_snapshot_seq;
     if latest_object_snapshot_seq != latest_cp_seq {
         info!("Flipping object_snapshot_backfill_mode to false because objects_snapshot is behind already!");
         object_snapshot_backfill_mode = false;
+        backfill_cancel.cancel();
     }
 
     let mut unprocessed = HashMap::new();
@@ -91,6 +98,7 @@ where
                     &state,
                     batch,
                     epoch,
+                    object_change_sender.clone(),
                     &metrics,
                     &commit_notifier,
                     object_snapshot_backfill_mode,
@@ -104,6 +112,7 @@ where
                 &state,
                 batch,
                 None,
+                object_change_sender.clone(),
                 &metrics,
                 &commit_notifier,
                 object_snapshot_backfill_mode,
@@ -113,9 +122,12 @@ where
         }
         // this is a one-way flip in case indexer falls behind again, so that the objects snapshot
         // table will not be populated by both committer and async snapshot processor at the same time.
-        if latest_committed_cp + OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG > latest_fn_cp {
+        if object_snapshot_backfill_mode
+            && latest_committed_cp + OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG > latest_fn_cp
+        {
             info!("Flipping object_snapshot_backfill_mode to false because objects_snapshot is close to up-to-date.");
             object_snapshot_backfill_mode = false;
+            backfill_cancel.cancel();
         }
     }
     Ok(())
@@ -130,6 +142,7 @@ async fn commit_checkpoints<S>(
     state: &S,
     indexed_checkpoint_batch: Vec<CheckpointDataToCommit>,
     epoch: Option<EpochToCommit>,
+    object_change_sender: Sender<CheckpointObjectChanges>,
     metrics: &IndexerMetrics,
     commit_notifier: &watch::Sender<Option<CheckpointSequenceNumber>>,
     object_snapshot_backfill_mode: bool,
@@ -144,6 +157,7 @@ async fn commit_checkpoints<S>(
     let mut object_changes_batch = vec![];
     let mut object_history_changes_batch = vec![];
     let mut packages_batch = vec![];
+    let mut buffered_object_changes = vec![];
 
     for indexed_checkpoint in indexed_checkpoint_batch {
         let CheckpointDataToCommit {
@@ -157,14 +171,19 @@ async fn commit_checkpoints<S>(
             packages,
             epoch: _,
         } = indexed_checkpoint;
+        let sequence_number = checkpoint.sequence_number;
         checkpoint_batch.push(checkpoint);
         tx_batch.push(transactions);
         events_batch.push(events);
         tx_indices_batch.push(tx_indices);
         display_updates_batch.extend(display_updates.into_iter());
-        object_changes_batch.push(object_changes);
+        object_changes_batch.push(object_changes.clone());
         object_history_changes_batch.push(object_history_changes);
         packages_batch.push(packages);
+        buffered_object_changes.push(CheckpointObjectChanges {
+            checkpoint: sequence_number,
+            object_changes,
+        });
     }
 
     let first_checkpoint_seq = checkpoint_batch.first().as_ref().unwrap().sequence_number;
@@ -189,9 +208,24 @@ async fn commit_checkpoints<S>(
             state.persist_objects(object_changes_batch.clone()),
             state.persist_object_history(object_history_changes_batch.clone()),
         ];
+
         if object_snapshot_backfill_mode {
             persist_tasks.push(state.backfill_objects_snapshot(object_changes_batch));
+        } else {
+            // Fill up the buffer otherwise
+            for object_changes in buffered_object_changes {
+                let _ = object_change_sender
+                    .send(object_changes)
+                    .await
+                    .map_err(|e| {
+                        error!(
+                            "Failed to send object changes to buffer with error: {}",
+                            e.to_string()
+                        );
+                    });
+            }
         }
+
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));
         }
