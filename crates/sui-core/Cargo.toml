@@ -36,6 +36,7 @@ parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 roaring.workspace = true
+rayon.workspace = true
 rocksdb.workspace = true
 reqwest.workspace = true
 scopeguard.workspace = true
