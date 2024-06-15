@@ -5,7 +5,7 @@ title: Module `0x2::config`
 
 
 -  [Resource `Config`](#0x2_config_Config)
--  [Resource `Setting`](#0x2_config_Setting)
+-  [Struct `Setting`](#0x2_config_Setting)
 -  [Struct `SettingData`](#0x2_config_SettingData)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_config_new)
@@ -57,11 +57,11 @@ title: Module `0x2::config`
 
 <a name="0x2_config_Setting"></a>
 
-## Resource `Setting`
+## Struct `Setting`
 
 
 
-<pre><code><b>struct</b> <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value: <b>copy</b>, drop, store&gt; <b>has</b> store, key
+<pre><code><b>struct</b> <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value: <b>copy</b>, drop, store&gt; <b>has</b> store
 </code></pre>
 
 
@@ -71,12 +71,6 @@ title: Module `0x2::config`
 
 
 <dl>
-<dt>
-<code>id: <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a></code>
-</dt>
-<dd>
-
-</dd>
 <dt>
 <code>data: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../sui-framework/config.md#0x2_config_SettingData">config::SettingData</a>&lt;Value&gt;&gt;</code>
 </dt>
@@ -213,7 +207,7 @@ title: Module `0x2::config`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_new_for_epoch">new_for_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_new_for_epoch">new_for_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, _ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -231,12 +225,11 @@ title: Module `0x2::config`
     _cap: &<b>mut</b> WriteCap,
     name: Name,
     value: Value,
-    ctx: &<b>mut</b> TxContext,
+    _ctx: &<b>mut</b> TxContext,
 ): Option&lt;Value&gt; {
-    <b>let</b> epoch = ctx.epoch();
+    <b>let</b> epoch = _ctx.epoch();
     <b>if</b> (!field::exists_(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name)) {
         <b>let</b> sobj = <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a> {
-            id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
             data: <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="../sui-framework/config.md#0x2_config_SettingData">SettingData</a> {
                 newer_value_epoch: epoch,
                 newer_value: value,
@@ -423,9 +416,10 @@ title: Module `0x2::config`
     name: Name,
     ctx: &TxContext,
 ): Option&lt;Value&gt; {
+    <b>use</b> sui::dynamic_field::Field;
     <b>let</b> config_id = <a href="../sui-framework/config.md#0x2_config">config</a>.to_address();
     <b>let</b> setting_df = field::hash_type_and_key(config_id, name);
-    <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;<a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;, <a href="../sui-framework/config.md#0x2_config_SettingData">SettingData</a>&lt;Value&gt;, Value&gt;(
+    <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;Field&lt;Name, <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;, <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;, <a href="../sui-framework/config.md#0x2_config_SettingData">SettingData</a>&lt;Value&gt;, Value&gt;(
         config_id,
         setting_df,
         ctx.epoch(),
@@ -443,7 +437,7 @@ title: Module `0x2::config`
 
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;SettingValue: store, key, SettingDataValue: store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;FieldSettingValue: key, SettingValue: store, SettingDataValue: store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <b>address</b>, name: <b>address</b>, current_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -453,7 +447,8 @@ title: Module `0x2::config`
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_impl">read_setting_impl</a>&lt;
-    SettingValue: key + store,
+    FieldSettingValue: key,
+    SettingValue: store,
     SettingDataValue: store,
     Value: <b>copy</b> + drop + store,
 &gt;(

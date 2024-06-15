@@ -22,7 +22,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, Value},
 };
-use object_store::ChildObjectStore;
+use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -405,16 +405,16 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         config_id: ObjectID,
         name_df_id: ObjectID,
-        setting_value_ty: &Type,
-        setting_value_layout: &R::MoveTypeLayout,
-        setting_value_object_type: &MoveObjectType,
+        field_setting_ty: &Type,
+        field_setting_layout: &R::MoveTypeLayout,
+        field_setting_object_type: &MoveObjectType,
     ) -> Option<Value> {
         match self.child_object_store.config_setting_unsequenced_read(
             config_id,
             name_df_id,
-            setting_value_ty,
-            setting_value_layout,
-            setting_value_object_type,
+            field_setting_ty,
+            field_setting_layout,
+            field_setting_object_type,
         ) {
             Err(_e) => {
                 // TODO logging
@@ -451,9 +451,7 @@ impl<'a> ObjectRuntime<'a> {
         self.state.finish(loaded_child_objects, child_effects)
     }
 
-    pub(crate) fn all_active_child_objects(
-        &self,
-    ) -> impl Iterator<Item = (&ObjectID, &Type, Value)> {
+    pub(crate) fn all_active_child_objects(&self) -> impl Iterator<Item = ActiveChildObject<'_>> {
         self.child_object_store.all_active_objects()
     }
 

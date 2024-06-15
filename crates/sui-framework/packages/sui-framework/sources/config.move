@@ -24,8 +24,7 @@ module sui::config {
         id: UID,
     }
 
-    public struct Setting<Value: copy + drop + store> has key, store {
-        id: UID,
+    public struct Setting<Value: copy + drop + store> has store {
         data: Option<SettingData<Value>>,
     }
 
@@ -53,12 +52,11 @@ module sui::config {
         _cap: &mut WriteCap,
         name: Name,
         value: Value,
-        ctx: &mut TxContext,
+        _ctx: &mut TxContext,
     ): Option<Value> {
-        let epoch = ctx.epoch();
+        let epoch = _ctx.epoch();
         if (!field::exists_(&config.id, name)) {
             let sobj = Setting {
-                id: object::new(ctx),
                 data: option::some(SettingData {
                     newer_value_epoch: epoch,
                     newer_value: value,
@@ -194,9 +192,10 @@ module sui::config {
         name: Name,
         ctx: &TxContext,
     ): Option<Value> {
+        use sui::dynamic_field::Field;
         let config_id = config.to_address();
         let setting_df = field::hash_type_and_key(config_id, name);
-        read_setting_impl<Setting<Value>, SettingData<Value>, Value>(
+        read_setting_impl<Field<Name, Setting<Value>>, Setting<Value>, SettingData<Value>, Value>(
             config_id,
             setting_df,
             ctx.epoch(),
@@ -207,7 +206,8 @@ module sui::config {
     This is kept native to keep gas costing consistent.
     */
     native fun read_setting_impl<
-        SettingValue: key + store,
+        FieldSettingValue: key,
+        SettingValue: store,
         SettingDataValue: store,
         Value: copy + drop + store,
     >(
@@ -226,9 +226,4 @@ module sui::config {
     }
     */
 
-    #[test_only]
-    public(package) fun destroy<WriteCap>(config: Config<WriteCap>) {
-        let Config { id } = config;
-        object::delete(id);
-    }
 }
