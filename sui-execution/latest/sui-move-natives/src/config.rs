@@ -34,7 +34,7 @@ pub fn read_setting_impl(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert_eq!(ty_args.len(), 3);
+    assert_eq!(ty_args.len(), 4);
     assert_eq!(args.len(), 3);
 
     let ConfigReadSettingImplCostParams {
@@ -62,12 +62,13 @@ pub fn read_setting_impl(
     let value_ty = ty_args.pop().unwrap();
     let setting_data_value_ty = ty_args.pop().unwrap();
     let setting_value_ty = ty_args.pop().unwrap();
+    let field_setting_ty = ty_args.pop().unwrap();
 
     let current_epoch = pop_arg!(args, u64);
     let name_df_addr = pop_arg!(args, AccountAddress);
     let config_addr = pop_arg!(args, AccountAddress);
 
-    let setting_value_tag: StructTag = match context.type_to_type_tag(&setting_value_ty)? {
+    let field_setting_tag: StructTag = match context.type_to_type_tag(&field_setting_ty)? {
         TypeTag::Struct(s) => *s,
         _ => {
             return Err(
@@ -76,7 +77,7 @@ pub fn read_setting_impl(
             )
         }
     };
-    let Some(setting_value_layout_opt) = context.type_to_type_layout(&setting_value_ty)? else {
+    let Some(field_setting_layout_opt) = context.type_to_type_layout(&field_setting_ty)? else {
         return Ok(NativeResult::err(
             context.gas_used(),
             E_BCS_SERIALIZATION_FAILURE,
@@ -86,9 +87,10 @@ pub fn read_setting_impl(
 
     let read_value_opt = consistent_value_before_current_epoch(
         object_runtime,
+        &field_setting_ty,
+        field_setting_tag,
+        &field_setting_layout_opt,
         &setting_value_ty,
-        setting_value_tag,
-        &setting_value_layout_opt,
         &setting_data_value_ty,
         &value_ty,
         config_addr,
@@ -109,26 +111,28 @@ pub fn read_setting_impl(
 
 fn consistent_value_before_current_epoch(
     object_runtime: &mut ObjectRuntime,
-    setting_value_ty: &Type,
-    setting_value_tag: StructTag,
-    setting_value_layout: &R::MoveTypeLayout,
+    field_setting_ty: &Type,
+    field_setting_tag: StructTag,
+    field_setting_layout: &R::MoveTypeLayout,
+    _setting_value_ty: &Type,
     setting_data_value_ty: &Type,
     value_ty: &Type,
     config_addr: AccountAddress,
     name_df_addr: AccountAddress,
     current_epoch: u64,
 ) -> PartialVMResult<Value> {
-    let Some(setting) = object_runtime.config_setting_unsequenced_read(
+    let Some(field) = object_runtime.config_setting_unsequenced_read(
         config_addr.into(),
         name_df_addr.into(),
-        setting_value_ty,
-        setting_value_layout,
-        &MoveObjectType::from(setting_value_tag),
+        field_setting_ty,
+        field_setting_layout,
+        &MoveObjectType::from(field_setting_tag),
     ) else {
         return option_none(&value_ty);
     };
 
-    let [_id, data_opt]: [Value; 2] = unpack_struct(setting)?;
+    let [_id, _name, setting]: [Value; 3] = unpack_struct(field)?;
+    let [data_opt]: [Value; 1] = unpack_struct(setting)?;
     let data = match unpack_option(data_opt, &setting_data_value_ty)? {
         None => {
             // invariant violation?

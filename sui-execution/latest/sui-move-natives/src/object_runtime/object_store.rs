@@ -32,6 +32,14 @@ pub(super) struct ChildObject {
     pub(super) value: GlobalValue,
 }
 
+pub(crate) struct ActiveChildObject<'a> {
+    pub(crate) id: &'a ObjectID,
+    pub(crate) owner: &'a ObjectID,
+    pub(crate) ty: &'a Type,
+    pub(crate) move_type: &'a MoveObjectType,
+    pub(crate) copied_value: Value,
+}
+
 #[derive(Debug)]
 struct ConfigSetting {
     config: ObjectID,
@@ -603,16 +611,16 @@ impl<'a> ChildObjectStore<'a> {
         &mut self,
         config_id: ObjectID,
         name_df_id: ObjectID,
-        _setting_value_ty: &Type,
-        setting_value_layout: &R::MoveTypeLayout,
-        setting_value_object_type: &MoveObjectType,
+        _field_setting_ty: &Type,
+        field_setting_layout: &R::MoveTypeLayout,
+        field_setting_object_type: &MoveObjectType,
     ) -> PartialVMResult<ObjectResult<Option<Value>>> {
         let parent = config_id;
         let child = name_df_id;
 
         let setting = match self.config_setting_cache.entry(child) {
             btree_map::Entry::Vacant(e) => {
-                let child_move_type = setting_value_object_type;
+                let child_move_type = field_setting_object_type;
                 let obj_opt = self.inner.fetch_child_object_unbounded(
                     parent,
                     child,
@@ -624,12 +632,12 @@ impl<'a> ChildObjectStore<'a> {
                     return Ok(ObjectResult::Loaded(None));
                 };
                 let Some(value) =
-                    Value::simple_deserialize(move_obj.contents(), setting_value_layout)
+                    Value::simple_deserialize(move_obj.contents(), field_setting_layout)
                 else {
                     return Err(
                         PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE)
                             .with_message(format!(
-                            "Failed to deserialize object {child} with type {setting_value_layout}",
+                            "Failed to deserialize object {child} with type {field_setting_layout}",
                         )),
                     );
                 };
@@ -641,7 +649,7 @@ impl<'a> ChildObjectStore<'a> {
             }
             btree_map::Entry::Occupied(e) => {
                 let setting = e.into_mut();
-                if setting.ty != *setting_value_object_type {
+                if setting.ty != *field_setting_object_type {
                     return Ok(ObjectResult::MismatchedType);
                 }
                 if setting.config != parent {
@@ -651,7 +659,7 @@ impl<'a> ChildObjectStore<'a> {
                                 "Parent for config setting changed. Potential hash collision?
                              parent: {parent},
                              child: {child},
-                             setting_value_object_type: {setting_value_object_type},
+                             setting_value_object_type: {field_setting_object_type},
                              setting: {setting:#?},
                         "
                             )),
@@ -677,15 +685,13 @@ impl<'a> ChildObjectStore<'a> {
         setting_value_object_type: MoveObjectType,
         value: Value,
     ) {
-        let child = name_df_id;
-        let parent = config_id;
         let child_move_type = setting_value_object_type;
         let setting = ConfigSetting {
-            config: parent,
+            config: config_id,
             ty: child_move_type,
             value,
         };
-        self.config_setting_cache.insert(child, setting);
+        self.config_setting_cache.insert(name_df_id, setting);
     }
 
     pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<Object>> {
@@ -714,7 +720,7 @@ impl<'a> ChildObjectStore<'a> {
             .collect()
     }
 
-    pub(super) fn all_active_objects(&self) -> impl Iterator<Item = (&ObjectID, &Type, Value)> {
+    pub(super) fn all_active_objects(&self) -> impl Iterator<Item = ActiveChildObject<'_>> {
         self.store.iter().filter_map(|(id, child_object)| {
             let child_exists = child_object.value.exists().unwrap();
             if !child_exists {
@@ -728,7 +734,13 @@ impl<'a> ChildObjectStore<'a> {
                     .unwrap()
                     .read_ref()
                     .unwrap();
-                Some((id, &child_object.ty, copied_child_value))
+                Some(ActiveChildObject {
+                    id,
+                    owner: &child_object.owner,
+                    ty: &child_object.ty,
+                    move_type: &child_object.move_type,
+                    copied_value: copied_child_value,
+                })
             }
         })
     }

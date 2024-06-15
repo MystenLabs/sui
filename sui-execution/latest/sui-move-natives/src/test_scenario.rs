@@ -29,9 +29,10 @@ use std::{
     sync::RwLock,
 };
 use sui_types::{
-    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     config,
     digests::{ObjectDigest, TransactionDigest},
+    dynamic_field::DynamicFieldInfo,
     execution::DynamicallyLoadedObjectMetadata,
     id::UID,
     in_memory_storage::InMemoryStorage,
@@ -135,17 +136,10 @@ pub fn end_transaction(
             ));
         }
     };
-    let writes: IndexMap<ObjectID, (Owner, Type, Option<TypeTag>, Value)> = writes
-        .into_iter()
-        .map(|(id, (owner, ty, value))| {
-            let tag = context.type_to_type_tag(&ty).ok();
-            (id, (owner, ty, tag, value))
-        })
-        .collect();
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let all_active_child_objects = object_runtime_ref
         .all_active_child_objects()
-        .map(|(id, _, _)| *id)
+        .map(|child| *child.id)
         .collect::<BTreeSet<_>>();
     let inventories = &mut object_runtime_ref.test_inventories;
     let mut new_object_values = IndexMap::new();
@@ -174,12 +168,10 @@ pub fn end_transaction(
         inventories.taken.remove(id);
     }
     // handle transfers, inserting transferred/written objects into their respective inventory
-    let mut config_settings = vec![];
     let mut created = vec![];
     let mut written = vec![];
-    for (id, (owner, ty, tag, value)) in writes {
+    for (id, (owner, ty, value)) in writes {
         // write configs to cache
-        maybe_save_config_setting(&mut config_settings, id, owner, tag, &value);
         new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
         transferred.push((id, owner));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
@@ -242,7 +234,9 @@ pub fn end_transaction(
     find_all_wrapped_objects(
         context,
         &mut all_wrapped,
-        object_runtime_ref.all_active_child_objects(),
+        object_runtime_ref
+            .all_active_child_objects()
+            .map(|child| (child.id, child.ty, child.copied_value)),
     );
     // mark as "incorrect" if a shared/imm object was wrapped or is a child object
     incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
@@ -264,6 +258,20 @@ pub fn end_transaction(
 
     // new input objects are remaining taken objects not written/deleted
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let mut config_settings = vec![];
+    for child in object_runtime_ref.all_active_child_objects() {
+        let s: StructTag = child.move_type.clone().into();
+        let is_setting = DynamicFieldInfo::is_dynamic_field(&s)
+            && matches!(&s.type_params[1], TypeTag::Struct(s) if config::is_setting(s));
+        if is_setting {
+            config_settings.push((
+                *child.owner,
+                *child.id,
+                child.move_type.clone(),
+                child.copied_value,
+            ));
+        }
+    }
     for (config, setting, ty, value) in config_settings {
         object_runtime_ref.config_setting_cache_insert(config, setting, ty, value)
     }
@@ -312,31 +320,6 @@ pub fn end_transaction(
         user_events.len() as u64,
     );
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![effects]))
-}
-
-fn maybe_save_config_setting(
-    config_settings: &mut Vec<(ObjectID, ObjectID, MoveObjectType, Value)>,
-    id: ObjectID,
-    owner: Owner,
-    tag: Option<TypeTag>,
-    value: &Value,
-) {
-    let Some(TypeTag::Struct(s)) = tag else {
-        return;
-    };
-    let s = *s;
-    if !config::is_setting(&s) {
-        return;
-    }
-    let Owner::ObjectOwner(config_id) = owner else {
-        return;
-    };
-    config_settings.push((
-        config_id.into(),
-        id,
-        MoveObjectType::from(s),
-        value.copy_value().unwrap(),
-    ));
 }
 
 // native fun take_from_address_by_id<T: key>(account: address, id: ID): T;
