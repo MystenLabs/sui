@@ -294,7 +294,7 @@ macro_rules! for_all_tables {
             tx_recipients,
             tx_senders
         );
-    }
+    };
 }
 pub use for_all_tables;
 

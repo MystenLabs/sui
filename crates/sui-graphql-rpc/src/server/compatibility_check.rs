@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data::{Db, DbConnection, QueryExecutor, DieselConn, DieselBackend};
+use crate::data::{Db, DbConnection, DieselBackend, DieselConn, QueryExecutor};
 use crate::error::Error;
-use diesel::query_builder::{QueryId, Query, QueryFragment, AstPass};
+use diesel::query_builder::{AstPass, Query, QueryFragment, QueryId};
 use diesel::sql_types::Bool;
-use diesel::{QueryDsl, RunQueryDsl, QueryResult};
+use diesel::{QueryDsl, QueryResult, RunQueryDsl};
 
 /// Generates a function: `check_all_tables` that runs a query against every table this GraphQL
 /// service is aware of, to test for schema compatibility. Each query is of the form:
