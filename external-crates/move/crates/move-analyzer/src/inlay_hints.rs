@@ -26,7 +26,7 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
     let mut hints: Vec<InlayHint> = vec![];
 
     if context.inlay_type_hints {
-        if let Some(file_defs) = symbols.file_mods().get(&fpath) {
+        if let Some(file_defs) = symbols.file_mods.get(&fpath) {
             for mod_defs in file_defs {
                 for untyped_def_loc in mod_defs.untyped_defs() {
                     if let Some(DefInfo::Local(n, t, _, _)) = symbols.def_info(untyped_def_loc) {
@@ -41,7 +41,7 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
                             command: None,
                         };
                         let type_label = InlayHintLabelPart {
-                            value: type_to_ide_string(t),
+                            value: type_to_ide_string(t, /* verbose */ true),
                             tooltip: None,
                             location: None,
                             command: None,
@@ -94,7 +94,7 @@ fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayH
     };
 
     let Some(mod_defs) = symbols
-        .file_mods()
+        .file_mods
         .values()
         .flatten()
         .find(|m| m.ident() == &mod_ident.value)

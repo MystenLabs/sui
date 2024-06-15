@@ -59,7 +59,7 @@ pub struct TypingAnalysisContext<'a> {
     /// Current expression scope, for use when traversing expressions and recording usage.
     pub expression_scope: OrdMap<Symbol, LocalDef>,
     /// IDE Annotation Information from the Compiler
-    pub compiler_info: CompilerInfo,
+    pub compiler_info: &'a mut CompilerInfo,
 }
 
 impl TypingAnalysisContext<'_> {
