@@ -893,9 +893,10 @@ type DynamicField {
 	"""
 	name: MoveValue
 	"""
-	The actual data stored in the dynamic field.
-	The returned dynamic field is an object if its return type is MoveObject,
-	in which case it is also accessible off-chain via its address.
+	The returned dynamic field is an object if its return type is `MoveObject`,
+	and its contents will be from the latest version that is at most equal to
+	its parent object's version. Otherwise, it is also accessible off-chain
+	via its address.
 	"""
 	value: DynamicFieldValue
 }
@@ -4386,4 +4387,3 @@ schema {
 	query: Query
 	mutation: Mutation
 }
-

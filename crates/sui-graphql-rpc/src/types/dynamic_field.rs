@@ -94,9 +94,10 @@ impl DynamicField {
         Ok(Some(MoveValue::new(type_tag, Base64::from(bcs))))
     }
 
-    /// The actual data stored in the dynamic field.
-    /// The returned dynamic field is an object if its return type is MoveObject,
-    /// in which case it is also accessible off-chain via its address.
+    /// The returned dynamic field is an object if its return type is `MoveObject`,
+    /// and its contents will be from the latest version that is at most equal to
+    /// its parent object's version. Otherwise, it is also accessible off-chain
+    /// via its address.
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
         if self.df_kind == DynamicFieldType::DynamicObject {
             // If `df_kind` is a DynamicObject, the object we are currently on is the field object,
