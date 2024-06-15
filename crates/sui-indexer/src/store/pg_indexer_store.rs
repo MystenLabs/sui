@@ -33,15 +33,16 @@ use crate::models::epoch::StoredEpochInfo;
 use crate::models::events::StoredEvent;
 use crate::models::objects::{
     StoredDeletedHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
-    StoredObjectSnapshot,
+    StoredObjectSnapshot, StoredObjectVersion,
 };
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::schema::{
-    checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
-    transactions, tx_calls, tx_changed_objects, tx_digests, tx_input_objects, tx_recipients,
-    tx_senders,
+    checkpoints, display, epochs, events, objects, objects_history, objects_snapshot,
+    objects_version, packages, transactions, tx_calls, tx_changed_objects, tx_digests,
+    tx_input_objects, tx_recipients, tx_senders,
 };
+use crate::types::IndexedObjectVersion;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
     insert_or_ignore_into, on_conflict_do_update, read_only_blocking,
@@ -482,6 +483,39 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object history with error: {}", e);
+        })
+    }
+
+    fn persist_objects_version_chunk(
+        &self,
+        object_versions: Vec<StoredObjectVersion>,
+    ) -> Result<(), IndexerError> {
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_version_chunks
+            .start_timer();
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    insert_or_ignore_into!(objects_version::table, object_version_chunk, conn);
+                }
+
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(
+                elapsed,
+                "Persisted {} chunked objects version",
+                object_versions.len(),
+            );
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist objects version with error: {}", e);
         })
     }
 
@@ -1252,6 +1286,51 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             })?;
         let elapsed = guard.stop_and_record();
         info!(elapsed, "Persisted {} objects history", len);
+        Ok(())
+    }
+
+    async fn persist_objects_version(
+        &self,
+        object_versions: Vec<IndexedObjectVersion>,
+    ) -> Result<(), IndexerError> {
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_version
+            .start_timer();
+        let object_versions_to_commit = object_versions
+            .into_iter()
+            .map(|v| v.into())
+            .collect::<Vec<StoredObjectVersion>>();
+        let len = object_versions_to_commit.len();
+        let object_versions_to_commit_chunks =
+            chunk!(object_versions_to_commit, self.config.parallel_chunk_size);
+
+        let futures = object_versions_to_commit_chunks
+            .into_iter()
+            .map(|c| self.spawn_blocking_task(move |this| this.persist_objects_version_chunk(c)))
+            .collect::<Vec<_>>();
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to join persist_objects_version_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all objects history chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} objects version", len);
         Ok(())
     }
 

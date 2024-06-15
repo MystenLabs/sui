@@ -7,7 +7,7 @@ use crate::{
     models::display::StoredDisplay,
     types::{
         IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
-        IndexedPackage, IndexedTransaction, TxIndex,
+        IndexedObjectVersion, IndexedPackage, IndexedTransaction, TxIndex,
     },
 };
 
@@ -25,6 +25,7 @@ pub struct CheckpointDataToCommit {
     pub display_updates: BTreeMap<String, StoredDisplay>,
     pub object_changes: TransactionObjectChangesToCommit,
     pub object_history_changes: TransactionObjectChangesToCommit,
+    pub object_versions: Vec<IndexedObjectVersion>,
     pub packages: Vec<IndexedPackage>,
     pub epoch: Option<EpochToCommit>,
 }

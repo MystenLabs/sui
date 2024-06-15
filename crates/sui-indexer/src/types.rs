@@ -287,6 +287,14 @@ pub struct IndexedObject {
     pub df_info: Option<DynamicFieldInfo>,
 }
 
+#[derive(Clone, Debug)]
+pub struct IndexedObjectVersion {
+    pub object_id: Vec<u8>,
+    pub input_version: Option<u64>,
+    pub output_version: u64,
+    pub checkpoint_sequence_number: u64,
+}
+
 impl IndexedObject {
     pub fn from_object(
         checkpoint_sequence_number: u64,

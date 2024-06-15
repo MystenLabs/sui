@@ -19,6 +19,7 @@ mod inner {
     pub use crate::schema::pg::objects;
     pub use crate::schema::pg::objects_history;
     pub use crate::schema::pg::objects_snapshot;
+    pub use crate::schema::pg::objects_version;
     pub use crate::schema::pg::packages;
     pub use crate::schema::pg::transactions;
     pub use crate::schema::pg::tx_calls;
@@ -56,6 +57,7 @@ pub use inner::events;
 pub use inner::objects;
 pub use inner::objects_history;
 pub use inner::objects_snapshot;
+pub use inner::objects_version;
 pub use inner::packages;
 pub use inner::transactions;
 pub use inner::tx_calls;
