@@ -3,14 +3,11 @@
 
 use anemo::PeerId;
 use fastcrypto::encoding::{Encoding, Hex};
-use fastcrypto::error::FastCryptoError;
-use fastcrypto::error::FastCryptoResult;
+use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::bls12381;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
-use fastcrypto_tbls::dkg::Output;
-use fastcrypto_tbls::nodes::PartyId;
-use fastcrypto_tbls::{dkg, dkg_v0, dkg_v1, nodes};
+use fastcrypto_tbls::{dkg, dkg_v0, dkg_v1, nodes, nodes::PartyId, dkg::Output};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use narwhal_types::{Round, TimestampMs};
@@ -70,14 +67,14 @@ impl VersionedProcessedMessage {
         match message {
             VersionedDkgMessage::V0(msg) => {
                 if dkg_version != 0 {
-                    panic!("BUG: invalid versioned message")
+                    panic!("BUG: message version is 0, expected is {dkg_version}")
                 }
                 let processed = party.process_message(msg, &mut rand::thread_rng())?;
                 Ok(VersionedProcessedMessage::V0(processed))
             }
             VersionedDkgMessage::V1(msg) => {
                 if dkg_version != 1 {
-                    panic!("BUG: invalid versioned message")
+                    panic!("BUG: message version is 1, expected is {dkg_version}")
                 }
                 let processed = party.process_message_v1(msg, &mut rand::thread_rng())?;
                 Ok(VersionedProcessedMessage::V1(processed))
@@ -99,15 +96,12 @@ impl VersionedProcessedMessage {
                             if let VersionedProcessedMessage::V0(msg) = vm {
                                 msg
                             } else {
-                                panic!("BUG: invalid versioned message")
+                                panic!("BUG: expected message version is 0")
                             }
                         })
                         .collect::<Vec<_>>(),
                 )?;
-                Ok((
-                    VersionedDkgConfimation::V0(conf),
-                    VersionedUsedProcessedMessages::V0(msgs),
-                ))
+                Ok((VersionedDkgConfimation::V0(conf), VersionedUsedProcessedMessages::V0(msgs)))
             }
             1 => {
                 let (conf, msgs) = party.merge_v1(
@@ -117,17 +111,14 @@ impl VersionedProcessedMessage {
                             if let VersionedProcessedMessage::V1(msg) = vm {
                                 msg
                             } else {
-                                panic!("BUG: invalid versioned message")
+                                panic!("BUG: expected message version is 1")
                             }
                         })
                         .collect::<Vec<_>>(),
                 )?;
-                Ok((
-                    VersionedDkgConfimation::V1(conf),
-                    VersionedUsedProcessedMessages::V1(msgs),
-                ))
+                Ok((VersionedDkgConfimation::V1(conf), VersionedUsedProcessedMessages::V1(msgs)))
             }
-            _ => panic!("BUG: invalid DKG version"),
+            _ => panic!("BUG: invalid DKG version {dkg_version}"),
         }
     }
 }
@@ -400,11 +391,9 @@ impl RandomnessManager {
         let _ = self.dkg_start_time.set(Instant::now());
 
         let epoch_store = self.epoch_store()?;
+        let dkg_version = epoch_store.protocol_config().dkg_version();
 
-        let msg = match VersionedDkgMessage::create(
-            epoch_store.protocol_config().dkg_version(),
-            self.party.clone(),
-        ) {
+        let msg = match VersionedDkgMessage::create(dkg_version, self.party.clone()) {
             Ok(msg) => msg,
             Err(FastCryptoError::IgnoredMessage) => {
                 info!(
@@ -419,7 +408,7 @@ impl RandomnessManager {
             }
         };
 
-        info!("random beacon: created {msg:?}");
+        info!("random beacon: created {msg:?} with dkg version {dkg_version}");
         let transaction = ConsensusTransaction::new_randomness_dkg_message(epoch_store.name, &msg);
 
         #[allow(unused_mut)]
@@ -446,11 +435,7 @@ impl RandomnessManager {
         Ok(())
     }
 
-    fn complete_dkg(&self, dkg_version: u64) -> FastCryptoResult<Output<PkG, EncG>> {
-        let used_processed_messages = self
-            .used_messages
-            .get()
-            .expect("checked above that `used_messages` is initialized");
+    fn complete_dkg(&self, dkg_version: u64, used_processed_messages: &VersionedUsedProcessedMessages) -> FastCryptoResult<Output<PkG, EncG>> {
         let confirmations = self.confirmations.values();
         let rng = &mut StdRng::from_rng(OsRng).expect("RNG construction should not fail");
 
@@ -459,14 +444,14 @@ impl RandomnessManager {
                 if let VersionedUsedProcessedMessages::V0(msg) = used_processed_messages {
                     msg
                 } else {
-                    panic!("BUG: used_messages should be V0")
+                    panic!("BUG: expected message version is 0")
                 },
                 &confirmations
                     .map(|vm| {
                         if let VersionedDkgConfimation::V0(msg) = vm {
                             msg
                         } else {
-                            panic!("BUG: invalid versioned message")
+                            panic!("BUG: expected confirmation message version is 0")
                         }
                     })
                     .cloned()
@@ -477,14 +462,14 @@ impl RandomnessManager {
                 if let VersionedUsedProcessedMessages::V1(msg) = used_processed_messages {
                     msg
                 } else {
-                    panic!("BUG: used_messages should be V1")
+                    panic!("BUG: expected message version is 1")
                 },
                 &confirmations
                     .map(|vm| {
                         if let VersionedDkgConfimation::V1(msg) = vm {
                             msg
                         } else {
-                            panic!("BUG: invalid versioned message")
+                            panic!("BUG: expected confirmation message version is 1")
                         }
                     })
                     .cloned()
@@ -571,7 +556,12 @@ impl RandomnessManager {
 
         // Once we have enough Confirmations, process them and update shares.
         if !self.dkg_output.initialized() && self.used_messages.initialized() {
-            match self.complete_dkg(dkg_version) {
+            match self.complete_dkg(
+                dkg_version,
+                self.used_messages
+                    .get()
+                    .expect("checked above that `used_messages` is initialized"),
+            ) {
                 Ok(output) => {
                     let num_shares = output.shares.as_ref().map_or(0, |shares| shares.len());
                     let epoch_elapsed = epoch_store.epoch_open_time.elapsed().as_millis();

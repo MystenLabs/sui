@@ -230,6 +230,7 @@ pub enum VersionedDkgConfimation {
     V0(dkg::Confirmation<bls12381::G2Element>),
     V1(dkg::Confirmation<bls12381::G2Element>),
 }
+
 impl Debug for VersionedDkgMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
