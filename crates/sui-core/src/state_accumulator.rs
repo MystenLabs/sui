@@ -3,6 +3,7 @@
 
 use itertools::Itertools;
 use mysten_metrics::monitored_scope;
+use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use serde::Serialize;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber};
@@ -25,6 +26,24 @@ use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSet
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_tables::LiveObject;
 
+pub struct StateAccumulatorMetrics {
+    inconsistent_state: IntGauge,
+}
+
+impl StateAccumulatorMetrics {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        let this = Self {
+            inconsistent_state: register_int_gauge_with_registry!(
+                "accumulator_inconsistent_state",
+                "1 if accumulated live object set differs from StateAccumulator root state hash for the previous epoch",
+                registry
+            )
+            .unwrap(),
+        };
+        Arc::new(this)
+    }
+}
+
 pub enum StateAccumulator {
     V1(StateAccumulatorV1),
     V2(StateAccumulatorV2),
@@ -32,10 +51,12 @@ pub enum StateAccumulator {
 
 pub struct StateAccumulatorV1 {
     store: Arc<dyn AccumulatorStore>,
+    metrics: Arc<StateAccumulatorMetrics>,
 }
 
 pub struct StateAccumulatorV2 {
     store: Arc<dyn AccumulatorStore>,
+    metrics: Arc<StateAccumulatorMetrics>,
 }
 
 pub trait AccumulatorStore: ObjectStore + Send + Sync {
@@ -366,16 +387,37 @@ impl StateAccumulator {
     pub fn new(
         store: Arc<dyn AccumulatorStore>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        metrics: Arc<StateAccumulatorMetrics>,
     ) -> Self {
         if cfg!(msim) {
             if epoch_store.state_accumulator_v2_enabled() {
-                return StateAccumulator::V2(StateAccumulatorV2::new(store));
+                return StateAccumulator::V2(StateAccumulatorV2::new(store, metrics));
             } else {
-                return StateAccumulator::V1(StateAccumulatorV1::new(store));
+                return StateAccumulator::V1(StateAccumulatorV1::new(store, metrics));
             }
         }
 
-        StateAccumulator::V1(StateAccumulatorV1::new(store))
+        StateAccumulator::V1(StateAccumulatorV1::new(store, metrics))
+    }
+
+    pub fn new_for_tests(
+        store: Arc<dyn AccumulatorStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Self {
+        Self::new(
+            store,
+            epoch_store,
+            StateAccumulatorMetrics::new(&Registry::new()),
+        )
+    }
+
+    pub fn set_inconsistent_state(&self, is_inconsistent_state: bool) {
+        match self {
+            StateAccumulator::V1(impl_v1) => &impl_v1.metrics,
+            StateAccumulator::V2(impl_v2) => &impl_v2.metrics,
+        }
+        .inconsistent_state
+        .set(is_inconsistent_state as i64);
     }
 
     /// Accumulates the effects of a single checkpoint and persists the accumulator.
@@ -528,8 +570,8 @@ impl StateAccumulator {
 }
 
 impl StateAccumulatorV1 {
-    pub fn new(store: Arc<dyn AccumulatorStore>) -> Self {
-        Self { store }
+    pub fn new(store: Arc<dyn AccumulatorStore>, metrics: Arc<StateAccumulatorMetrics>) -> Self {
+        Self { store, metrics }
     }
 
     /// Unions all checkpoint accumulators at the end of the epoch to generate the
@@ -618,8 +660,8 @@ impl StateAccumulatorV1 {
 }
 
 impl StateAccumulatorV2 {
-    pub fn new(store: Arc<dyn AccumulatorStore>) -> Self {
-        Self { store }
+    pub fn new(store: Arc<dyn AccumulatorStore>, metrics: Arc<StateAccumulatorMetrics>) -> Self {
+        Self { store, metrics }
     }
 
     pub async fn accumulate_running_root(

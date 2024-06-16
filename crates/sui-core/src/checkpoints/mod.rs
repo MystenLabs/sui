@@ -2504,7 +2504,7 @@ mod tests {
         let epoch_store = state.epoch_store_for_testing();
 
         let accumulator =
-            StateAccumulator::new(state.get_accumulator_store().clone(), &epoch_store);
+            StateAccumulator::new_for_tests(state.get_accumulator_store().clone(), &epoch_store);
 
         let (checkpoint_service, _exit) = CheckpointService::spawn(
             state.clone(),

@@ -29,6 +29,7 @@ use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::consensus_manager::ConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
+use sui_core::state_accumulator::StateAccumulatorMetrics;
 use sui_core::storage::RestReadStore;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
@@ -67,6 +68,7 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
+use sui_core::checkpoints::checkpoint_executor::metrics::CheckpointExecutorMetrics;
 use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, StopReason};
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
@@ -225,7 +227,7 @@ pub struct SuiNode {
     state_sync_handle: state_sync::Handle,
     randomness_handle: randomness::Handle,
     checkpoint_store: Arc<CheckpointStore>,
-    accumulator: Arc<StateAccumulator>,
+    accumulator_components: Mutex<Option<(Arc<StateAccumulator>, Arc<StateAccumulatorMetrics>)>>,
     connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
     /// Broadcast channel to send the starting system state for the next epoch.
@@ -711,9 +713,11 @@ impl SuiNode {
         )
         .await?;
 
+        let accumulator_metrics = StateAccumulatorMetrics::new(&prometheus_registry);
         let accumulator = Arc::new(StateAccumulator::new(
             cache_traits.accumulator_store.clone(),
             &epoch_store,
+            accumulator_metrics.clone(),
         ));
 
         let authority_names_to_peer_ids = epoch_store
@@ -780,7 +784,7 @@ impl SuiNode {
             state_sync_handle,
             randomness_handle,
             checkpoint_store,
-            accumulator,
+            accumulator_components: Mutex::new(Some((accumulator, accumulator_metrics))),
             end_of_epoch_channel,
             connection_monitor_status,
             trusted_peer_change_tx,
@@ -1456,17 +1460,23 @@ impl SuiNode {
     /// This function awaits the completion of checkpoint execution of the current epoch,
     /// after which it iniitiates reconfiguration of the entire system.
     pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
-        let mut checkpoint_executor = CheckpointExecutor::new(
-            self.state_sync_handle.subscribe_to_synced_checkpoints(),
-            self.checkpoint_store.clone(),
-            self.state.clone(),
-            self.accumulator.clone(),
-            self.config.checkpoint_executor_config.clone(),
-            &self.registry_service.default_registry(),
-        );
+        let checkpoint_executor_metrics =
+            CheckpointExecutorMetrics::new(&self.registry_service.default_registry());
 
-        let run_with_range = self.config.run_with_range;
         loop {
+            let mut accum_components_guard = self.accumulator_components.lock().await;
+            let (accumulator, accumulator_metrics) = accum_components_guard.take().unwrap();
+            let mut checkpoint_executor = CheckpointExecutor::new(
+                self.state_sync_handle.subscribe_to_synced_checkpoints(),
+                self.checkpoint_store.clone(),
+                self.state.clone(),
+                accumulator.clone(),
+                self.config.checkpoint_executor_config.clone(),
+                checkpoint_executor_metrics.clone(),
+            );
+
+            let run_with_range = self.config.run_with_range;
+
             let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
 
             // Advertise capabilities to committee, if we are a validator.
@@ -1495,6 +1505,7 @@ impl SuiNode {
             let stop_condition = checkpoint_executor
                 .run_epoch(cur_epoch_store.clone(), run_with_range)
                 .await;
+            drop(checkpoint_executor);
 
             if stop_condition == StopReason::RunWithRangeCondition {
                 SuiNode::shutdown(&self).await;
@@ -1565,6 +1576,7 @@ impl SuiNode {
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
             // in the new epoch.
+
             let new_validator_components = if let Some(ValidatorComponents {
                 validator_server_handle,
                 validator_overload_monitor_handle,
@@ -1588,9 +1600,21 @@ impl SuiNode {
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
-                        &checkpoint_executor,
+                        accumulator.clone(),
                     )
                     .await;
+
+                // No other components should be holding a reference to state accumulator
+                // at this point. Confirm here before we swap in the new accumulator.
+                let _ = Arc::into_inner(accumulator)
+                    .expect("Accumulator should have no references at this point");
+                let new_accumulator = Arc::new(StateAccumulator::new(
+                    self.state.get_accumulator_store().clone(),
+                    &new_epoch_store,
+                    accumulator_metrics.clone(),
+                ));
+                *accum_components_guard =
+                    Some((new_accumulator.clone(), accumulator_metrics.clone()));
 
                 consensus_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
@@ -1609,7 +1633,7 @@ impl SuiNode {
                             self.randomness_handle.clone(),
                             consensus_manager,
                             consensus_epoch_data_remover,
-                            self.accumulator.clone(),
+                            new_accumulator,
                             validator_server_handle,
                             validator_overload_monitor_handle,
                             checkpoint_metrics,
@@ -1629,9 +1653,21 @@ impl SuiNode {
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
-                        &checkpoint_executor,
+                        accumulator.clone(),
                     )
                     .await;
+
+                // No other components should be holding a reference to state accumulator
+                // at this point. Confirm here before we swap in the new accumulator.
+                let _ = Arc::into_inner(accumulator)
+                    .expect("Accumulator should have no references at this point");
+                let new_accumulator = Arc::new(StateAccumulator::new(
+                    self.state.get_accumulator_store().clone(),
+                    &new_epoch_store,
+                    accumulator_metrics.clone(),
+                ));
+                *accum_components_guard =
+                    Some((new_accumulator.clone(), accumulator_metrics.clone()));
 
                 if self.state.is_validator(&new_epoch_store) {
                     info!("Promoting the node from fullnode to validator, starting grpc server");
@@ -1645,7 +1681,7 @@ impl SuiNode {
                             self.checkpoint_store.clone(),
                             self.state_sync_handle.clone(),
                             self.randomness_handle.clone(),
-                            self.accumulator.clone(),
+                            new_accumulator,
                             self.connection_monitor_status.clone(),
                             &self.registry_service,
                             self.metrics.clone(),
@@ -1694,7 +1730,7 @@ impl SuiNode {
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
         next_epoch_start_system_state: EpochStartSystemState,
-        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
 
@@ -1719,8 +1755,7 @@ impl SuiNode {
                 self.config.supported_protocol_versions.unwrap(),
                 next_epoch_committee,
                 epoch_start_configuration,
-                checkpoint_executor,
-                self.accumulator.clone(),
+                accumulator,
                 &self.config.expensive_safety_check_config,
             )
             .await

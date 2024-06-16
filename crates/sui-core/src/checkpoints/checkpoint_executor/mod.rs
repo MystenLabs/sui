@@ -29,7 +29,6 @@ use either::Either;
 use futures::stream::FuturesOrdered;
 use itertools::izip;
 use mysten_metrics::spawn_monitored_task;
-use prometheus::Registry;
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::{fail_point, fail_point_async};
 use sui_types::accumulator::Accumulator;
@@ -68,7 +67,8 @@ use crate::{
 };
 
 mod data_ingestion_handler;
-mod metrics;
+pub mod metrics;
+
 #[cfg(test)]
 pub(crate) mod tests;
 
@@ -157,7 +157,7 @@ impl CheckpointExecutor {
         state: Arc<AuthorityState>,
         accumulator: Arc<StateAccumulator>,
         config: CheckpointExecutorConfig,
-        prometheus_registry: &Registry,
+        metrics: Arc<CheckpointExecutorMetrics>,
     ) -> Self {
         Self {
             mailbox,
@@ -168,7 +168,7 @@ impl CheckpointExecutor {
             tx_manager: state.transaction_manager().clone(),
             accumulator,
             config,
-            metrics: CheckpointExecutorMetrics::new(prometheus_registry),
+            metrics,
         }
     }
 
@@ -178,17 +178,14 @@ impl CheckpointExecutor {
         state: Arc<AuthorityState>,
         accumulator: Arc<StateAccumulator>,
     ) -> Self {
-        Self {
+        Self::new(
             mailbox,
-            state: state.clone(),
             checkpoint_store,
-            object_cache_reader: state.get_object_cache_reader().clone(),
-            transaction_cache_reader: state.get_transaction_cache_reader().clone(),
-            tx_manager: state.transaction_manager().clone(),
+            state,
             accumulator,
-            config: Default::default(),
-            metrics: CheckpointExecutorMetrics::new_for_tests(),
-        }
+            Default::default(),
+            CheckpointExecutorMetrics::new_for_tests(),
+        )
     }
 
     /// Ensure that all checkpoints in the current epoch will be executed.
@@ -356,12 +353,6 @@ impl CheckpointExecutor {
                 },
             }
         }
-    }
-
-    pub fn set_inconsistent_state(&self, is_inconsistent_state: bool) {
-        self.metrics
-            .accumulator_inconsistent_state
-            .set(is_inconsistent_state as i64);
     }
 
     fn bump_highest_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
