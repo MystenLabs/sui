@@ -199,7 +199,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.27.1"
+version = "1.27.2"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -228,9 +228,9 @@ strip = 'none'
 opt-level = 2
 
 [profile.simulator]
-inherits = "test"
 debug = true
 debug-assertions = true
+inherits = "test"
 overflow-checks = true
 # opt-level 1 gives >5x speedup for simulator tests without slowing down build times very much.
 opt-level = 1
@@ -238,8 +238,8 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 anyhow = "1.0.71"
+arc-swap = {version = "1.5.1", features = ["serde"]}
 arrow-array = "50.0.0"
-arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
 async-graphql = "6.0.7"
 async-graphql-axum = "6.0.7"
@@ -248,12 +248,12 @@ async-recursion = "1.0.4"
 async-trait = "0.1.61"
 atomic_float = "0.1"
 aws-config = "0.56"
-aws-sdk-ec2 = "0.29.0"
 aws-sdk-dynamodb = "0.29.0"
+aws-sdk-ec2 = "0.29.0"
 aws-sdk-s3 = "0.29.0"
 aws-smithy-http = "0.56"
 aws-smithy-runtime-api = "0.56"
-axum = { version = "0.6.6", default-features = false, features = [
+axum = {version = "0.6.6", default-features = false, features = [
   "headers",
   "tokio",
   "http1",
@@ -264,18 +264,18 @@ axum = { version = "0.6.6", default-features = false, features = [
   "form",
   "query",
   "ws",
-] }
+]}
 axum-extra = "0.4.2"
-axum-server = { version = "0.5.1", default-features = false, features = [
+axum-server = {version = "0.5.1", default-features = false, features = [
   "tls-rustls",
-] }
-backoff = { version = "0.4.0", features = [
+]}
+backoff = {version = "0.4.0", features = [
   "futures",
   "futures-core",
   "pin-project-lite",
   "tokio",
   "tokio_1",
-] }
+]}
 base64 = "0.21.2"
 base64-url = "2"
 bcs = "0.1.4"
@@ -284,48 +284,47 @@ bimap = "0.6.2"
 bincode = "1.3.3"
 bip32 = "0.4.0"
 byteorder = "1.4.3"
-bytes = { version = "1.5.0", features = ["serde"] }
+bytes = {version = "1.5.0", features = ["serde"]}
 cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
-chrono = { version = "0.4.26", features = ["clock", "serde"] }
-clap = { version = "4.4", features = ["derive", "wrap_help"] }
+chrono = {version = "0.4.26", features = ["clock", "serde"]}
+clap = {version = "4.4", features = ["derive", "wrap_help"]}
 collectable = "0.0.2"
-colored = "2.0.0"
 color-eyre = "0.6.2"
+colored = "2.0.0"
 comfy-table = "6.1.3"
 console-subscriber = "0.2"
 const-str = "0.5.3"
 count-min-sketch = "0.1.7"
-criterion = { version = "0.5.0", features = [
+criterion = {version = "0.5.0", features = [
   "async",
   "async_tokio",
   "html_reports",
-] }
+]}
 crossterm = "0.25.0"
 csv = "1.2.1"
 dashmap = "5.5.3"
 # datatest-stable = "0.1.2"
-datatest-stable = { git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f" }
+datatest-stable = {git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f"}
 derivative = "2.2.0"
 derive-syn-parse = "0.1.5"
 derive_builder = "0.12.0"
 derive_more = "0.99.17"
-diesel = { version = "2.1.0", features = [
+diesel = {version = "2.1.0", features = [
   "chrono",
   "r2d2",
   "serde_json",
   "64-column-tables",
   "i-implement-a-third-party-backend-and-opt-into-breaking-changes",
-] }
-diesel-derive-enum = { version = "2.0.1" }
-diesel_migrations = { version = "2.0.0" }
+]}
+diesel-derive-enum = {version = "2.0.1"}
+diesel_migrations = {version = "2.0.0"}
 dirs = "4.0.0"
 duration-str = "0.5.0"
-ed25519 = { version = "1.5.0", features = ["pkcs8", "alloc", "zeroize"] }
-ed25519-consensus = { version = "2.0.1", features = ["serde"] }
+ed25519 = {version = "1.5.0", features = ["pkcs8", "alloc", "zeroize"]}
+ed25519-consensus = {version = "2.0.1", features = ["serde"]}
 either = "1.8.0"
-petgraph = "0.5.1"
 enum_dispatch = "^0.3"
 expect-test = "1.4.0"
 eyre = "0.6.8"
@@ -346,68 +345,69 @@ http = "0.2.8"
 http-body = "0.4.5"
 humantime = "2.1.0"
 hyper = "0.14.20"
-hyper-rustls = { version = "0.24", features = ["webpki-roots", "http2"] }
+hyper-rustls = {version = "0.24", features = ["webpki-roots", "http2"]}
 im = "15"
 impl-trait-for-tuples = "0.2.0"
-indexmap = { version = "2.1.0", features = ["serde"] }
+indexmap = {version = "2.1.0", features = ["serde"]}
 indicatif = "0.17.2"
 inquire = "0.6.0"
-insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
+insta = {version = "1.21.1", features = ["redactions", "yaml", "json"]}
 integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
 itertools = "0.10.5"
 jemalloc-ctl = "^0.5"
-jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
+json_to_table = {git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4"}
+jsonrpsee = {git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
   "server",
   "macros",
   "ws-client",
   "http-client",
   "jsonrpsee-core",
-] }
-json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
+]}
 leb128 = "0.2.5"
 lru = "0.10"
 markdown-gen = "1.2.1"
 match_opt = "0.1.2"
-miette = { version = "7", features = ["fancy"] }
+miette = {version = "7", features = ["fancy"]}
 mime = "0.3"
 mockall = "0.11.4"
-moka = { version = "0.12", default-features = false, features = [
+moka = {version = "0.12", default-features = false, features = [
   "sync",
   "atomic64",
-] }
+]}
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "077b735b484cf33e79f9d621db1d0c3a5827b81e", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "077b735b484cf33e79f9d621db1d0c3a5827b81e", package = "msim-macros" }
+msim = {git = "https://github.com/MystenLabs/mysten-sim.git", rev = "077b735b484cf33e79f9d621db1d0c3a5827b81e", package = "msim"}
+msim-macros = {git = "https://github.com/MystenLabs/mysten-sim.git", rev = "077b735b484cf33e79f9d621db1d0c3a5827b81e", package = "msim-macros"}
 multiaddr = "0.17.0"
-nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
-nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
+nexlint = {git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5"}
+nexlint-lints = {git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5"}
 nonempty = "0.9.0"
 notify = "6.1.1"
 ntest = "0.9.0"
 num-bigint = "0.4.4"
 num_cpus = "1.15.0"
 num_enum = "0.6.1"
-object_store = { version = "0.7", features = ["aws", "gcp", "azure", "http"] }
+object_store = {version = "0.7", features = ["aws", "gcp", "azure", "http"]}
 once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = "0.12.1"
 parquet = "50.0.0"
-pkcs8 = { version = "0.9.0", features = ["std"] }
-pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
+petgraph = "0.5.1"
+pkcs8 = {version = "0.9.0", features = ["std"]}
+pprof = {version = "0.11.0", features = ["cpp", "frame-pointer"]}
 pretty_assertions = "1.3.0"
 prettytable-rs = "0.10.0"
 proc-macro2 = "1.0.47"
 prometheus = "0.13.3"
-prometheus-http-query = { version = "0.6.6", default_features = false, features = [
+prometheus-http-query = {version = "0.6.6", default_features = false, features = [
   "rustls-tls",
-] }
-prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
+]}
+prometheus-parse = {git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db"}
 proptest = "1.1.0"
 proptest-derive = "0.3.0"
 prost = "0.12.3"
 prost-build = "0.12.3"
-protobuf = { version = "2.28", features = ["with-bytes"] }
+protobuf = {version = "2.28", features = ["with-bytes"]}
 protobuf-src = "1.1.0"
 quinn-proto = "^0.10.5"
 quote = "1.0.23"
@@ -415,48 +415,48 @@ rand = "0.8.5"
 rayon = "1.5.3"
 rcgen = "0.9.2"
 regex = "1.7.1"
-reqwest = { version = "0.11.20", default_features = false, features = [
+reqwest = {version = "0.11.20", default_features = false, features = [
   "blocking",
   "json",
   "rustls-tls",
-] }
+]}
 roaring = "=0.10.3"
-rocksdb = { version = "0.21.0", features = [
+rocksdb = {version = "0.21.0", features = [
   "snappy",
   "lz4",
   "zstd",
   "zlib",
   "multi-threaded-cf",
-], default-features = false }
+], default-features = false}
 ron = "0.8.0"
 rstest = "0.16.0"
-rusoto_core = { version = "0.48.0", default_features = false, features = [
+rusoto_core = {version = "0.48.0", default_features = false, features = [
   "rustls",
-] }
-rusoto_kms = { version = "0.48.0", default_features = false, features = [
+]}
+rusoto_kms = {version = "0.48.0", default_features = false, features = [
   "rustls",
-] }
+]}
 russh = "0.38.0"
 russh-keys = "0.38.0"
 rust-version = "1.56.1"
-rustls = { version = "0.21.12", features = ["dangerous_configuration"] }
+rustls = {version = "0.21.12", features = ["dangerous_configuration"]}
 rustls-pemfile = "1.0.2"
 rustversion = "1.0.9"
 rustyline = "9.1.2"
 rustyline-derive = "0.7.0"
-schemars = { version = "0.8.10", features = ["either"] }
+schemars = {version = "0.8.10", features = ["either"]}
 scopeguard = "1.1"
-serial_test = "2.0.0"
-serde = { version = "1.0.144", features = ["derive", "rc"] }
+serde = {version = "1.0.144", features = ["derive", "rc"]}
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
-serde_json = { version = "1.0.95", features = [
+serde_json = {version = "1.0.95", features = [
   "preserve_order",
   "arbitrary_precision",
-] }
+]}
 serde_repr = "0.1"
 serde_test = "1.0.147"
-serde_with = { version = "2.1.0", features = ["hex"] }
+serde_with = {version = "2.1.0", features = ["hex"]}
+serial_test = "2.0.0"
 # serde_yaml = "0.9.21"
 serde_yaml = "0.8.26"
 shell-words = "1.1.0"
@@ -467,13 +467,13 @@ slip10_ed25519 = "0.1.3"
 smallvec = "1.10.0"
 snap = "1.1.0"
 static_assertions = "1.1.0"
-strum = { version = "0.24", features = ["derive"] }
+strum = {version = "0.24", features = ["derive"]}
 strum_macros = "0.24.3"
-syn = { version = "1.0.104", features = ["full", "derive", "extra-traits"] }
+syn = {version = "1.0.104", features = ["full", "derive", "extra-traits"]}
 # syn = { version = "2", features = ["full", "fold", "extra-traits"] }
 synstructure = "0.12"
 sysinfo = "0.27.5"
-tabled = { version = "0.12" }
+tabled = {version = "0.12"}
 tap = "1.0.1"
 tar = "0.4.40"
 tempfile = "3.3.0"
@@ -483,36 +483,37 @@ tiny-bip39 = "1.0.0"
 tokio = "1.36.0"
 tokio-retry = "0.3"
 tokio-rustls = "0.24"
-tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
+tokio-stream = {version = "0.1.14", features = ["sync", "net"]}
 tokio-util = "0.7.10"
-toml = { version = "0.7.4", features = ["preserve_order"] }
-toml_edit = { version = "0.19.10" }
+toml = {version = "0.7.4", features = ["preserve_order"]}
+toml_edit = {version = "0.19.10"}
 # NOTE: do not enable the `tls` feature on tonic. It will break custom TLS handling
 # for self signed certificates. Unit tests under consensus/core and other integration
 # tests will fail.
-tonic = { version = "0.11", features = ["transport"] }
-tonic-build = { version = "0.11", features = ["prost", "transport"] }
+tonic = {version = "0.11", features = ["transport"]}
+tonic-build = {version = "0.11", features = ["prost", "transport"]}
 tonic-health = "0.11"
-tower = { version = "0.4.12", features = [
+tower = {version = "0.4.12", features = [
   "full",
   "util",
   "timeout",
   "load-shed",
   "limit",
-] }
-tower-http = { version = "0.3.4", features = [
+]}
+tower-http = {version = "0.3.4", features = [
   "cors",
   "full",
   "trace",
   "set-header",
   "propagate-header",
-] }
+]}
 # tower-http = { version="0.4", features = ["trace"] }
+linked-hash-map = "0.5.6"
+shlex = "1.3.0"
 tower-layer = "0.3.2"
-twox-hash = "1.6.3"
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
-tracing-subscriber = { version = "0.3.15", default-features = false, features = [
+tracing-subscriber = {version = "0.3.15", default-features = false, features = [
   "std",
   "smallvec",
   "fmt",
@@ -521,170 +522,169 @@ tracing-subscriber = { version = "0.3.15", default-features = false, features = 
   "json",
   "registry",
   "env-filter",
-] }
+]}
 ttl_cache = "0.5.1"
+twox-hash = "1.6.3"
 uint = "0.9.4"
 unescape = "0.1.0"
 ureq = "2.9.1"
 url = "2.3.1"
-uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
-webpki = { version = "0.101.0", package = "rustls-webpki", features = [
+uuid = {version = "1.1.2", features = ["v4", "fast-rng"]}
+versions = "4.1.0"
+webpki = {version = "0.101.0", package = "rustls-webpki", features = [
   "alloc",
   "std",
-] }
+]}
 x509-parser = "0.14.0"
-zstd = "0.12.3"
 zeroize = "1.6.0"
-versions = "4.1.0"
-linked-hash-map = "0.5.6"
-shlex = "1.3.0"
+zstd = "0.12.3"
 
 # Move dependencies
-move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
-move-bytecode-utils = { path = "external-crates/move/crates/move-bytecode-utils" }
-move-bytecode-source-map = { path = "external-crates/move/crates/move-bytecode-source-map" }
-move-bytecode-verifier-meter = { path = "external-crates/move/crates/move-bytecode-verifier-meter" }
-move-cli = { path = "external-crates/move/crates/move-cli" }
-move-compiler = { path = "external-crates/move/crates/move-compiler" }
-move-core-types = { path = "external-crates/move/crates/move-core-types" }
-move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
-move-package = { path = "external-crates/move/crates/move-package" }
-move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
-move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
-move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
+move-abstract-interpreter = {path = "external-crates/move/crates/move-abstract-interpreter"}
+move-abstract-stack = {path = "external-crates/move/crates/move-abstract-stack"}
+move-analyzer = {path = "external-crates/move/crates/move-analyzer"}
+move-binary-format = {path = "external-crates/move/crates/move-binary-format"}
+move-bytecode-source-map = {path = "external-crates/move/crates/move-bytecode-source-map"}
+move-bytecode-utils = {path = "external-crates/move/crates/move-bytecode-utils"}
+move-bytecode-verifier-meter = {path = "external-crates/move/crates/move-bytecode-verifier-meter"}
+move-cli = {path = "external-crates/move/crates/move-cli"}
+move-command-line-common = {path = "external-crates/move/crates/move-command-line-common"}
+move-compiler = {path = "external-crates/move/crates/move-compiler"}
+move-core-types = {path = "external-crates/move/crates/move-core-types"}
+move-disassembler = {path = "external-crates/move/crates/move-disassembler"}
+move-ir-types = {path = "external-crates/move/crates/move-ir-types"}
+move-package = {path = "external-crates/move/crates/move-package"}
+move-prover = {path = "external-crates/move/crates/move-prover"}
+move-stackless-bytecode = {path = "external-crates/move/crates/move-stackless-bytecode"}
+move-symbol-pool = {path = "external-crates/move/crates/move-symbol-pool"}
+move-transactional-test-runner = {path = "external-crates/move/crates/move-transactional-test-runner"}
+move-unit-test = {path = "external-crates/move/crates/move-unit-test"}
+move-vm-config = {path = "external-crates/move/crates/move-vm-config"}
+move-vm-profiler = {path = "external-crates/move/crates/move-vm-profiler"}
+move-vm-test-utils = {path = "external-crates/move/crates/move-vm-test-utils/", features = [
   "tiered-gas",
-] }
-move-vm-types = { path = "external-crates/move/crates/move-vm-types" }
-move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
-move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
-move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
-move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
-move-prover = { path = "external-crates/move/crates/move-prover" }
-move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
-move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
-move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
-move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
-move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
+]}
+move-vm-types = {path = "external-crates/move/crates/move-vm-types"}
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291", features = ["experimental"] }
+fastcrypto = {git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291"}
+fastcrypto-tbls = {git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291"}
+fastcrypto-vdf = {git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291", features = ["experimental"]}
+fastcrypto-zkp = {git = "https://github.com/MystenLabs/fastcrypto", rev = "c101a5176799db3eb9c801b844e7add92153d291", package = "fastcrypto-zkp"}
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
+anemo = {git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7"}
+anemo-build = {git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7"}
+anemo-cli = {git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7"}
+anemo-tower = {git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7"}
 
 # core-types with json format for REST api
-sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "bb224b9e6b6edf5eeedcdf71c750a30b68073057", features = ["serde"] }
+sui-sdk2 = {package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "bb224b9e6b6edf5eeedcdf71c750a30b68073057", features = ["serde"]}
 
 ### Workspace Members ###
-anemo-benchmark = { path = "crates/anemo-benchmark" }
-bin-version = { path = "crates/bin-version" }
-mysten-common = { path = "crates/mysten-common" }
-mysten-metrics = { path = "crates/mysten-metrics" }
-mysten-network = { path = "crates/mysten-network" }
-mysten-service = { path = "crates/mysten-service" }
-mysten-util-mem = { path = "crates/mysten-util-mem" }
-mysten-util-mem-derive = { path = "crates/mysten-util-mem-derive" }
-prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
-shared-crypto = { path = "crates/shared-crypto" }
-simulacrum = { path = "crates/simulacrum" }
-sui = { path = "crates/sui" }
-sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
-sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
-sui-analytics-indexer-derive = { path = "crates/sui-analytics-indexer-derive" }
-sui-archival = { path = "crates/sui-archival" }
-sui-authority-aggregation = { path = "crates/sui-authority-aggregation" }
-sui-benchmark = { path = "crates/sui-benchmark" }
-sui-bridge = { path = "crates/sui-bridge" }
-sui-cluster-test = { path = "crates/sui-cluster-test" }
-sui-common = { path = "crates/sui-common" }
-sui-config = { path = "crates/sui-config" }
-sui-core = { path = "crates/sui-core" }
-sui-cost = { path = "crates/sui-cost" }
-sui-data-ingestion = { path = "crates/sui-data-ingestion" }
-sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
-sui-e2e-tests = { path = "crates/sui-e2e-tests" }
-sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
-sui-faucet = { path = "crates/sui-faucet" }
-sui-framework = { path = "crates/sui-framework" }
-sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
-sui-framework-tests = { path = "crates/sui-framework-tests" }
-sui-graphql-rpc = { path = "crates/sui-graphql-rpc" }
-sui-graphql-rpc-client = { path = "crates/sui-graphql-rpc-client" }
-sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
-sui-genesis-builder = { path = "crates/sui-genesis-builder" }
-sui-indexer = { path = "crates/sui-indexer" }
-sui-json = { path = "crates/sui-json" }
-sui-json-rpc = { path = "crates/sui-json-rpc" }
-sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
-sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
-sui-keys = { path = "crates/sui-keys" }
-sui-macros = { path = "crates/sui-macros" }
-sui-metric-checker = { path = "crates/sui-metric-checker" }
-sui-move = { path = "crates/sui-move" }
-sui-move-build = { path = "crates/sui-move-build" }
-sui-move-lsp = { path = "crates/sui-move-lsp" }
-sui-network = { path = "crates/sui-network" }
-sui-node = { path = "crates/sui-node" }
-sui-open-rpc = { path = "crates/sui-open-rpc" }
-sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
-sui-package-management = { path = "crates/sui-package-management" }
-sui-package-resolver = { path = "crates/sui-package-resolver" }
-sui-proc-macros = { path = "crates/sui-proc-macros" }
-sui-protocol-config = { path = "crates/sui-protocol-config" }
-sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }
-sui-proxy = { path = "crates/sui-proxy" }
-sui-replay = { path = "crates/sui-replay" }
-sui-rosetta = { path = "crates/sui-rosetta" }
-sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }
-sui-sdk = { path = "crates/sui-sdk" }
-sui-simulator = { path = "crates/sui-simulator" }
-sui-snapshot = { path = "crates/sui-snapshot" }
-sui-source-validation = { path = "crates/sui-source-validation" }
-sui-source-validation-service = { path = "crates/sui-source-validation-service" }
-sui-storage = { path = "crates/sui-storage" }
-sui-surfer = { path = "crates/sui-surfer" }
-sui-swarm = { path = "crates/sui-swarm" }
-sui-swarm-config = { path = "crates/sui-swarm-config" }
-sui-telemetry = { path = "crates/sui-telemetry" }
-sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
-sui-test-validator = { path = "crates/sui-test-validator" }
-sui-tls = { path = "crates/sui-tls" }
-sui-rest-api = { path = "crates/sui-rest-api" }
-sui-tool = { path = "crates/sui-tool" }
-sui-transaction-builder = { path = "crates/sui-transaction-builder" }
-sui-transaction-checks = { path = "crates/sui-transaction-checks" }
-sui-transactional-test-runner = { path = "crates/sui-transactional-test-runner" }
-sui-types = { path = "crates/sui-types" }
-sui-upgrade-compatibility-transactional-tests = { path = "crates/sui-upgrade-compatibility-transactional-tests" }
-sui-verifier-transactional-tests = { path = "crates/sui-verifier-transactional-tests" }
-telemetry-subscribers = { path = "crates/telemetry-subscribers" }
-test-cluster = { path = "crates/test-cluster" }
-transaction-fuzzer = { path = "crates/transaction-fuzzer" }
-typed-store = { path = "crates/typed-store" }
-typed-store-derive = { path = "crates/typed-store-derive" }
-typed-store-error = { path = "crates/typed-store-error" }
-x = { path = "crates/x" }
+anemo-benchmark = {path = "crates/anemo-benchmark"}
+bin-version = {path = "crates/bin-version"}
+mysten-common = {path = "crates/mysten-common"}
+mysten-metrics = {path = "crates/mysten-metrics"}
+mysten-network = {path = "crates/mysten-network"}
+mysten-service = {path = "crates/mysten-service"}
+mysten-util-mem = {path = "crates/mysten-util-mem"}
+mysten-util-mem-derive = {path = "crates/mysten-util-mem-derive"}
+prometheus-closure-metric = {path = "crates/prometheus-closure-metric"}
+shared-crypto = {path = "crates/shared-crypto"}
+simulacrum = {path = "crates/simulacrum"}
+sui = {path = "crates/sui"}
+sui-adapter-transactional-tests = {path = "crates/sui-adapter-transactional-tests"}
+sui-analytics-indexer = {path = "crates/sui-analytics-indexer"}
+sui-analytics-indexer-derive = {path = "crates/sui-analytics-indexer-derive"}
+sui-archival = {path = "crates/sui-archival"}
+sui-authority-aggregation = {path = "crates/sui-authority-aggregation"}
+sui-benchmark = {path = "crates/sui-benchmark"}
+sui-bridge = {path = "crates/sui-bridge"}
+sui-cluster-test = {path = "crates/sui-cluster-test"}
+sui-common = {path = "crates/sui-common"}
+sui-config = {path = "crates/sui-config"}
+sui-core = {path = "crates/sui-core"}
+sui-cost = {path = "crates/sui-cost"}
+sui-data-ingestion = {path = "crates/sui-data-ingestion"}
+sui-data-ingestion-core = {path = "crates/sui-data-ingestion-core"}
+sui-e2e-tests = {path = "crates/sui-e2e-tests"}
+sui-enum-compat-util = {path = "crates/sui-enum-compat-util"}
+sui-faucet = {path = "crates/sui-faucet"}
+sui-framework = {path = "crates/sui-framework"}
+sui-framework-snapshot = {path = "crates/sui-framework-snapshot"}
+sui-framework-tests = {path = "crates/sui-framework-tests"}
+sui-genesis-builder = {path = "crates/sui-genesis-builder"}
+sui-graphql-rpc = {path = "crates/sui-graphql-rpc"}
+sui-graphql-rpc-client = {path = "crates/sui-graphql-rpc-client"}
+sui-graphql-rpc-headers = {path = "crates/sui-graphql-rpc-headers"}
+sui-indexer = {path = "crates/sui-indexer"}
+sui-json = {path = "crates/sui-json"}
+sui-json-rpc = {path = "crates/sui-json-rpc"}
+sui-json-rpc-api = {path = "crates/sui-json-rpc-api"}
+sui-json-rpc-types = {path = "crates/sui-json-rpc-types"}
+sui-keys = {path = "crates/sui-keys"}
+sui-macros = {path = "crates/sui-macros"}
+sui-metric-checker = {path = "crates/sui-metric-checker"}
+sui-move = {path = "crates/sui-move"}
+sui-move-build = {path = "crates/sui-move-build"}
+sui-move-lsp = {path = "crates/sui-move-lsp"}
+sui-network = {path = "crates/sui-network"}
+sui-node = {path = "crates/sui-node"}
+sui-open-rpc = {path = "crates/sui-open-rpc"}
+sui-open-rpc-macros = {path = "crates/sui-open-rpc-macros"}
+sui-package-management = {path = "crates/sui-package-management"}
+sui-package-resolver = {path = "crates/sui-package-resolver"}
+sui-proc-macros = {path = "crates/sui-proc-macros"}
+sui-protocol-config = {path = "crates/sui-protocol-config"}
+sui-protocol-config-macros = {path = "crates/sui-protocol-config-macros"}
+sui-proxy = {path = "crates/sui-proxy"}
+sui-replay = {path = "crates/sui-replay"}
+sui-rest-api = {path = "crates/sui-rest-api"}
+sui-rosetta = {path = "crates/sui-rosetta"}
+sui-rpc-loadgen = {path = "crates/sui-rpc-loadgen"}
+sui-sdk = {path = "crates/sui-sdk"}
+sui-simulator = {path = "crates/sui-simulator"}
+sui-snapshot = {path = "crates/sui-snapshot"}
+sui-source-validation = {path = "crates/sui-source-validation"}
+sui-source-validation-service = {path = "crates/sui-source-validation-service"}
+sui-storage = {path = "crates/sui-storage"}
+sui-surfer = {path = "crates/sui-surfer"}
+sui-swarm = {path = "crates/sui-swarm"}
+sui-swarm-config = {path = "crates/sui-swarm-config"}
+sui-telemetry = {path = "crates/sui-telemetry"}
+sui-test-transaction-builder = {path = "crates/sui-test-transaction-builder"}
+sui-test-validator = {path = "crates/sui-test-validator"}
+sui-tls = {path = "crates/sui-tls"}
+sui-tool = {path = "crates/sui-tool"}
+sui-transaction-builder = {path = "crates/sui-transaction-builder"}
+sui-transaction-checks = {path = "crates/sui-transaction-checks"}
+sui-transactional-test-runner = {path = "crates/sui-transactional-test-runner"}
+sui-types = {path = "crates/sui-types"}
+sui-upgrade-compatibility-transactional-tests = {path = "crates/sui-upgrade-compatibility-transactional-tests"}
+sui-verifier-transactional-tests = {path = "crates/sui-verifier-transactional-tests"}
+telemetry-subscribers = {path = "crates/telemetry-subscribers"}
+test-cluster = {path = "crates/test-cluster"}
+transaction-fuzzer = {path = "crates/transaction-fuzzer"}
+typed-store = {path = "crates/typed-store"}
+typed-store-derive = {path = "crates/typed-store-derive"}
+typed-store-error = {path = "crates/typed-store-error"}
+x = {path = "crates/x"}
 
-consensus-config = { path = "consensus/config" }
-consensus-core = { path = "consensus/core" }
+consensus-config = {path = "consensus/config"}
+consensus-core = {path = "consensus/core"}
 
-narwhal-config = { path = "narwhal/config" }
-narwhal-crypto = { path = "narwhal/crypto" }
-narwhal-executor = { path = "narwhal/executor" }
-narwhal-network = { path = "narwhal/network" }
-narwhal-node = { path = "narwhal/node" }
-narwhal-primary = { path = "narwhal/primary" }
-narwhal-storage = { path = "narwhal/storage" }
-narwhal-test-utils = { path = "narwhal/test-utils" }
-narwhal-types = { path = "narwhal/types" }
-narwhal-worker = { path = "narwhal/worker" }
+narwhal-config = {path = "narwhal/config"}
+narwhal-crypto = {path = "narwhal/crypto"}
+narwhal-executor = {path = "narwhal/executor"}
+narwhal-network = {path = "narwhal/network"}
+narwhal-node = {path = "narwhal/node"}
+narwhal-primary = {path = "narwhal/primary"}
+narwhal-storage = {path = "narwhal/storage"}
+narwhal-test-utils = {path = "narwhal/test-utils"}
+narwhal-types = {path = "narwhal/types"}
+narwhal-worker = {path = "narwhal/worker"}
 
-sui-execution = { path = "sui-execution" }
+sui-execution = {path = "sui-execution"}
 # sui-move-natives = { path = "sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 # sui-adapter = { path = "sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 # sui-verifier = { path = "sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
@@ -695,6 +695,6 @@ sui-execution = { path = "sui-execution" }
 # suiop dependencies
 docker-api = "0.12.2"
 field_names = "0.2.0"
+include_dir = "0.7.3"
 semver = "1.0.16"
 spinners = "4.1.0"
-include_dir = "0.7.3"
