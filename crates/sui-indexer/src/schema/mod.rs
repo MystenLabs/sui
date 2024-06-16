@@ -64,3 +64,11 @@ pub use inner::tx_digests;
 pub use inner::tx_input_objects;
 pub use inner::tx_recipients;
 pub use inner::tx_senders;
+
+// Postgres only tables
+#[cfg(feature = "postgres-feature")]
+pub use crate::schema::pg::events_partition_0;
+#[cfg(feature = "postgres-feature")]
+pub use crate::schema::pg::objects_history_partition_0;
+#[cfg(feature = "postgres-feature")]
+pub use crate::schema::pg::transactions_partition_0;
