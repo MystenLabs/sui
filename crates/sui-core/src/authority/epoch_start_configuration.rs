@@ -57,7 +57,7 @@ impl EpochFlag {
 
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
     pub fn default_for_no_config() -> Vec<Self> {
-        Self::default_flags_impl(&Default::default(), true)
+        Self::default_flags_impl(&Default::default(), false)
     }
 
     fn default_flags_impl(
