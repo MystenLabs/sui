@@ -368,7 +368,7 @@ impl StateAccumulator {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Self {
         let chain = epoch_store.get_chain_identifier().chain();
-        if epoch_store.state_accumulator_v2_enabled() && chain != Chain::Mainnet {
+        if epoch_store.state_accumulator_v2_enabled() && chain == Chain::Unknown {
             StateAccumulator::V2(StateAccumulatorV2::new(store))
         } else {
             StateAccumulator::V1(StateAccumulatorV1::new(store))
