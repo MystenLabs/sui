@@ -10,7 +10,7 @@
         }
     },
     "1" : {
-        "kind" : "PRE",
+        "kind" : "PRI",
         "ip_addr" : "127.0.0.1", 
         "port" : 5002,
         "metrics_address": "0.0.0.0:9055",

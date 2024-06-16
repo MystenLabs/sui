@@ -1,22 +1,18 @@
 use std::time::Duration;
-
 use super::agents::*;
 use crate::{
     input_traffic_manager::input_traffic_manager_run,
-    mock_consensus_worker::{self},
+    mock_consensus_worker::mock_consensus_worker_run, 
     primary_worker::{self},
     tx_gen_agent::WORKLOAD,
     types::*,
 };
 use async_trait::async_trait;
-
 use std::sync::Arc;
 use tokio::sync::mpsc;
-
 use sui_single_node_benchmark::{
     benchmark_context::BenchmarkContext, command::Component, workload::Workload,
 };
-use sui_types::messages_checkpoint::CheckpointDigest;
 
 pub struct PrimaryAgent {
     id: UniqueId,
@@ -71,12 +67,8 @@ impl Agent<RemoraMessage> for PrimaryAgent {
 
         let mut primary_worker_state = primary_worker::PrimaryWorkerState::new(
             store,
-            CheckpointDigest::random(),
             context.clone(),
         );
-
-        let mut mock_consensus_worker_state =
-            mock_consensus_worker::MockConsensusWorkerState::new();
 
         let id = self.id.clone();
         let out_channel = self.out_channel.clone();
@@ -95,13 +87,12 @@ impl Agent<RemoraMessage> for PrimaryAgent {
         });
 
         tokio::spawn(async move {
-            mock_consensus_worker_state
-                .run(
-                    &mut input_consensus_receiver,
-                    &consensus_executor_sender,
-                    id,
-                )
-                .await;
+            mock_consensus_worker_run(
+                &mut input_consensus_receiver,
+                &consensus_executor_sender,
+                id,
+            )
+            .await;
         });
 
         {

@@ -1,14 +1,11 @@
 use std::time::Duration;
-
 use super::agents::*;
 use crate::{metrics::Metrics, types::*};
 use async_trait::async_trait;
-
 use tokio::{
     sync::mpsc,
     time::{sleep, MissedTickBehavior},
 };
-
 use sui_single_node_benchmark::{
     benchmark_context::BenchmarkContext,
     command::{Component, WorkloadKind},

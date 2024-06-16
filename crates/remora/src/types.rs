@@ -1,3 +1,4 @@
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -55,7 +56,7 @@ impl GlobalConfig {
             let metrics_port = benchmark_port_offset + network_port;
             let kind = match i {
                 0 => "GEN",
-                //1 => "PRI", // FIXME
+                1 => "PRI",
                 _ => "PRE",
             }
             .to_string();
@@ -381,3 +382,5 @@ pub trait WritableObjectStore {
 
     fn remove(&self, k: ObjectID) -> Option<(ObjectRef, Object)>;
 }
+
+pub type PreResType = DashMap<TransactionDigest, TransactionWithResults>;

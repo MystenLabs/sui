@@ -1,5 +1,6 @@
 use clap::Parser;
 use remora::pre_exec_agent::PreExecAgent;
+use remora::primary_agent::PrimaryAgent;
 use tokio::task::{JoinHandle, JoinError};
 use futures::future;
 use remora::types::{GlobalConfig, RemoraMessage, UniqueId};
@@ -23,6 +24,9 @@ impl ExecutorShard {
         let kind = configs.kind.as_str();
         let main_handle = if kind == "GEN" {
             let mut server = Server::<TxnGenAgent, RemoraMessage>::new(global_configs, id);
+            tokio::spawn(async move { server.run().await })
+        } else if kind == "PRI" {
+            let mut server = Server::<PrimaryAgent, RemoraMessage>::new(global_configs, id);
             tokio::spawn(async move { server.run().await })
         } else if kind == "PRE" {
             let mut server = Server::<PreExecAgent, RemoraMessage>::new(global_configs, id);
@@ -111,19 +115,6 @@ async fn deploy_testbed(tx_count: u64, duration: u64, pre_exec_workers: usize) -
         }
     });
     future::join_all(handles).await;    
-
-    // Spawn primary worker
-
-    // Spawn pre_exec workers.
-    // let handles = (1..pre_exec_workers + 1).map(|id| {
-    //     let configs = global_configs.clone();
-    //     async move {
-    //         let worker = ExecutorShard::start(configs, id as UniqueId);
-    //         worker.await_completion().await.unwrap()
-    //     }
-    // });
-    // future::join_all(handles).await;
-
     global_configs
 }
 

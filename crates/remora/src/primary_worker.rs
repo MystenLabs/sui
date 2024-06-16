@@ -18,7 +18,6 @@ use sui_types::transaction::{
     CertifiedTransaction, InputObjectKind, TransactionDataAPI, VerifiedCertificate,
 };
 use tokio::sync::mpsc;
-
 use super::types::*;
 use tokio::time::Duration;
 
@@ -29,30 +28,17 @@ use tokio::time::Duration;
 pub struct PrimaryWorkerState {
     pub memory_store: Arc<InMemoryObjectStore>,
     pub context: Arc<BenchmarkContext>,
-    pub ready_txs: DashMap<TransactionDigest, ()>,
-    pub waiting_child_objs: DashMap<TransactionDigest, HashSet<ObjectID>>,
-    pub received_objs: DashMap<TransactionDigest, Vec<Option<(ObjectRef, Object)>>>,
-    pub received_child_objs: DashMap<TransactionDigest, Vec<Option<(ObjectRef, Object)>>>,
-    pub locked_exec_count: DashMap<TransactionDigest, u8>,
-    pub genesis_digest: CheckpointDigest,
     pub pending_transactions: Vec<TransactionWithEffects>,
 }
 
 impl PrimaryWorkerState {
     pub fn new(
         new_store: InMemoryObjectStore,
-        genesis_digest: CheckpointDigest,
         ctx: Arc<BenchmarkContext>,
     ) -> Self {
         Self {
             memory_store: Arc::new(new_store),
             context: ctx,
-            ready_txs: DashMap::new(),
-            waiting_child_objs: DashMap::new(),
-            received_objs: DashMap::new(),
-            received_child_objs: DashMap::new(),
-            locked_exec_count: DashMap::new(),
-            genesis_digest,
             pending_transactions: Vec::new(),
         }
     }
@@ -113,7 +99,7 @@ impl PrimaryWorkerState {
             );
         assert!(effects.status().is_ok());
         memstore.commit_objects(inner_temp_store);
-        println!("finish exec a txn");
+        println!("PRI finish re-exec a txn");
     }
 
     // Helper: Returns Input objects by reading from the memory_store
@@ -139,9 +125,9 @@ impl PrimaryWorkerState {
         }
 
         let mut res = HashMap::new();
-        let _ = input_object_data
-            .into_iter()
-            .map(|obj| res.insert(obj.id(), obj.compute_object_reference()));
+        for obj in input_object_data {
+            res.insert(obj.id(), obj.compute_object_reference());
+        }
         res
     }
 
@@ -150,7 +136,7 @@ impl PrimaryWorkerState {
         memstore: Arc<InMemoryObjectStore>,
         context: Arc<BenchmarkContext>,
         pending_txns: Vec<TransactionWithEffects>,
-        pre_exec_res: Arc<DashMap<TransactionDigest, TransactionWithResults>>,
+        pre_exec_res: Arc<PreResType>,
     ) {
         for full_tx in pending_txns {
             let txid = full_tx.tx.digest();
@@ -161,41 +147,43 @@ impl PrimaryWorkerState {
                 Self::read_input_objects_from_store(memstore.clone(), &full_tx.tx).await;
 
             // check if the stale state where pre-exec occurs matches
-            if let tx_result = pre_exec_res.get(txid).unwrap() {
-                //.map(|r| r.clone()) {
-                let TransactionEffects::V1(ref tx_effect) = tx_result.tx_effects else {
-                    todo!()
-                };
-                for (id, vid) in tx_effect.modified_at_versions() {
-                    let (_, v, _) = *init_state.get(&id).unwrap();
-                    if v != vid {
-                        skip = false;
+            match pre_exec_res.get(txid) {
+                Some(tx_result) => {
+                    let TransactionEffects::V2(ref tx_effect) = tx_result.tx_effects else { // FIXME
+                        todo!()
+                    };
+                    for (id, vid) in tx_effect.modified_at_versions() {
+                        let (_, v, _) = *init_state.get(&id).unwrap();
+                        if v != vid {
+                            skip = false;
+                        }
                     }
-                }
-                if skip {
                     // apply the effect directly
-                    memstore
-                        .commit_effects(tx_result.tx_effects.clone(), tx_result.written.clone());
-                }
-            }
+                    if skip {
+                        memstore
+                            .commit_effects(tx_result.tx_effects.clone(), tx_result.written.clone());
+                        println!("PRI Applied the PRE effect");
+                    }
+                },
+                None => skip = false,
+            }; 
 
             if !skip {
                 // re-run the transaction
                 // FIXME: need to track dependency btw apply-effects and async_exec
                 // so that the effect is visible to the next txn which has
                 // overlapping objects (inter-dependency)
-                {
-                    Self::async_exec(
-                        full_tx.clone(),
-                        memstore.clone(),
-                        context.validator().get_epoch_store().protocol_config(),
-                        context.validator().get_epoch_store().reference_gas_price(),
-                        context.clone(),
-                    )
-                    .await
-                }
+                Self::async_exec(
+                    full_tx.clone(),
+                    memstore.clone(),
+                    context.validator().get_epoch_store().protocol_config(),
+                    context.validator().get_epoch_store().reference_gas_price(),
+                    context.clone(),
+                )
+                .await
             }
         }
+        // TODO: update to PRE
     }
 
     pub async fn run(
@@ -207,8 +195,7 @@ impl PrimaryWorkerState {
         _out_channel: &mpsc::Sender<NetworkMessage>,
         _my_id: u16,
     ) {
-        let pre_exec_res: Arc<DashMap<TransactionDigest, TransactionWithResults>> =
-            Arc::new(DashMap::new());
+        let pre_exec_res: Arc<PreResType> = Arc::new(DashMap::new());
 
         loop {
             tokio::select! {
@@ -219,7 +206,6 @@ impl PrimaryWorkerState {
                     // receive a stream of sequenced txn from consensus until the channel is empty
                     self.pending_transactions = msg;
                     println!("PRI recv from consensus channel done");
-
 
                     // trigger a main execution
                     let context = self.context.clone();
@@ -234,7 +220,7 @@ impl PrimaryWorkerState {
 
                 // Merge pre-exec results
                 Some(msg) = in_traffic_manager.recv() => {
-                   if let RemoraMessage::PreExecResult(tx_res) = msg {
+                    if let RemoraMessage::PreExecResult(tx_res) = msg {
                         pre_exec_res.insert(*tx_res.tx_effects.transaction_digest(), tx_res);
                     }
                 }

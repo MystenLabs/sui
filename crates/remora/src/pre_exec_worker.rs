@@ -19,35 +19,24 @@ use tokio::sync::mpsc;
 use tokio::time::Duration;
 
 /*****************************************************************************************
- *                                    PreExec Worker                                   *
+ *                                    PreExec Worker                                     *
  *****************************************************************************************/
+pub const PRI_ID: u16 = 1;
+pub const INTERVAL: u64 = 2;
 
 pub struct PreExecWorkerState {
     pub memory_store: Arc<InMemoryObjectStore>,
     pub context: Arc<BenchmarkContext>,
-    pub ready_txs: DashMap<TransactionDigest, ()>,
-    pub waiting_child_objs: DashMap<TransactionDigest, HashSet<ObjectID>>,
-    pub received_objs: DashMap<TransactionDigest, Vec<Option<(ObjectRef, Object)>>>,
-    pub received_child_objs: DashMap<TransactionDigest, Vec<Option<(ObjectRef, Object)>>>,
-    pub locked_exec_count: DashMap<TransactionDigest, u8>,
-    pub genesis_digest: CheckpointDigest,
 }
 
 impl PreExecWorkerState {
     pub fn new(
         new_store: InMemoryObjectStore,
-        genesis_digest: CheckpointDigest,
         ctx: Arc<BenchmarkContext>,
     ) -> Self {
         Self {
             memory_store: Arc::new(new_store),
             context: ctx,
-            ready_txs: DashMap::new(),
-            waiting_child_objs: DashMap::new(),
-            received_objs: DashMap::new(),
-            received_child_objs: DashMap::new(),
-            locked_exec_count: DashMap::new(),
-            genesis_digest,
         }
     }
 
@@ -60,10 +49,6 @@ impl PreExecWorkerState {
         in_buffer: &mpsc::UnboundedSender<TransactionWithResults>,
     ) {
         let tx = full_tx.tx.clone();
-
-        // let effect = ctx.validator().execute_raw_transaction(tx).await;
-
-        //ctx.validator().execute_dry_run(tx).await
 
         let input_objects = tx.transaction_data().input_objects().unwrap();
         // FIXME: ugly deref
@@ -119,7 +104,7 @@ impl PreExecWorkerState {
         };
 
         memstore.commit_objects(inner_temp_store);
-        println!("finish exec a txn");
+        // println!("PRE finish exec a txn");
 
         if let Err(e) = in_buffer.send(tx_res) {
             eprintln!("PRE failed to forward in-channel exec res: {:?}", e);
@@ -134,25 +119,26 @@ impl PreExecWorkerState {
         out_channel: &mpsc::Sender<NetworkMessage>,
         my_id: u16,
     ) {
-        let mut consensus_interval = tokio::time::interval(Duration::from_millis(100));
+        let mut consensus_interval = tokio::time::interval(Duration::from_millis(INTERVAL));
         let (in_buffer, mut out_buffer) = mpsc::unbounded_channel::<TransactionWithResults>();
 
         loop {
             tokio::select! {
                 Some(msg) = in_channel.recv() => {
-                    println!("{} receive a txn", my_id);
+                    println!("PRE {} receive a txn", my_id);
                     let msg = msg.payload;
                     if let RemoraMessage::ProposeExec(full_tx) = msg {
                         let memstore = self.memory_store.clone();
                         let context = self.context.clone();
                         let in_buffer = in_buffer.clone();
                         tokio::spawn(async move {
-                            Self::async_exec(full_tx.clone(),
-                                             memstore,
-                                             context.validator().get_epoch_store().protocol_config(),
-                                             context.validator().get_epoch_store().reference_gas_price(),
-                                             context,
-                                             &in_buffer,
+                            Self::async_exec(
+                                full_tx.clone(),
+                                memstore,
+                                context.validator().get_epoch_store().protocol_config(),
+                                context.validator().get_epoch_store().reference_gas_price(),
+                                context,
+                                &in_buffer,
                             ).await
                         });
                     } else {
@@ -166,7 +152,7 @@ impl PreExecWorkerState {
                     while let Ok(msg) = out_buffer.try_recv() {
                         out_channel.send(NetworkMessage {
                         src: my_id,
-                        dst: vec![1],
+                        dst: vec![PRI_ID], // Primary worker ID
                         payload: RemoraMessage::PreExecResult(msg),
                         })
                         .await

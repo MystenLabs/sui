@@ -6,10 +6,8 @@ use crate::{
 };
 use async_trait::async_trait;
 use std::time::Duration;
-
 use std::sync::Arc;
 use tokio::sync::mpsc;
-
 use sui_single_node_benchmark::{
     benchmark_context::BenchmarkContext, command::Component, workload::Workload,
 };
@@ -61,7 +59,6 @@ impl Agent<RemoraMessage> for PreExecAgent {
 
         let mut pre_exec_state = pre_exec_worker::PreExecWorkerState::new(
             store,
-            CheckpointDigest::random(),
             context.clone(),
         );
         pre_exec_state
