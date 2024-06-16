@@ -18,13 +18,15 @@ use sui_data_ingestion_core::{
 use crate::build_json_rpc_server;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
-use crate::handlers::objects_snapshot_processor::{ObjectsSnapshotProcessor, SnapshotLagConfig};
+use crate::handlers::objects_snapshot_processor::{
+    start_objects_snapshot_processor, SnapshotLagConfig,
+};
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
 use crate::IndexerConfig;
 
-const DOWNLOAD_QUEUE_SIZE: usize = 200;
+pub(crate) const DOWNLOAD_QUEUE_SIZE: usize = 200;
 const INGESTION_READER_TIMEOUT_SECS: u64 = 20;
 // Limit indexing parallelism on big checkpoints to avoid OOM,
 // by limiting the total size of batch checkpoints to ~20MB.
@@ -86,17 +88,23 @@ impl Indexer {
             .unwrap_or(CHECKPOINT_PROCESSING_BATCH_DATA_LIMIT.to_string())
             .parse::<usize>()
             .unwrap();
+        let extra_reader_options = ReaderOptions {
+            batch_size: download_queue_size,
+            timeout_secs: ingestion_reader_timeout_secs,
+            data_limit,
+            ..Default::default()
+        };
 
-        let rest_client = sui_rest_api::Client::new(format!("{}/rest", config.rpc_client_url));
-
-        let objects_snapshot_processor = ObjectsSnapshotProcessor::new_with_config(
-            rest_client.clone(),
+        // Start objects snapshot processor, which is a separate pipeline with its ingestion pipeline.
+        start_objects_snapshot_processor::<S, T>(
             store.clone(),
             metrics.clone(),
+            config.clone(),
             snapshot_config,
+            extra_reader_options.clone(),
             cancel.clone(),
-        );
-        spawn_monitored_task!(objects_snapshot_processor.start());
+        )
+        .await?;
 
         let cancel_clone = cancel.clone();
         let (exit_sender, exit_receiver) = oneshot::channel();
@@ -111,15 +119,9 @@ impl Indexer {
             1,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker =
-            new_handlers::<S, T>(store, rest_client, metrics, watermark, cancel.clone()).await?;
+        let worker = new_handlers::<S, T>(store, metrics, watermark, cancel.clone()).await?;
         let worker_pool = WorkerPool::new(worker, "workflow".to_string(), download_queue_size);
-        let extra_reader_options = ReaderOptions {
-            batch_size: download_queue_size,
-            timeout_secs: ingestion_reader_timeout_secs,
-            data_limit,
-            ..Default::default()
-        };
+
         executor.register(worker_pool).await?;
         info!("Starting data ingestion executor...");
         executor

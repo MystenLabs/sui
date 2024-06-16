@@ -12,7 +12,7 @@ use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use sui_package_resolver::{PackageStore, PackageStoreWithLruCache, Resolver};
-use sui_rest_api::{CheckpointData, CheckpointTransaction, Client};
+use sui_rest_api::{CheckpointData, CheckpointTransaction};
 use sui_types::base_types::ObjectRef;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::dynamic_field::DynamicFieldName;
@@ -63,7 +63,6 @@ const CHECKPOINT_QUEUE_SIZE: usize = 100;
 
 pub async fn new_handlers<S, T>(
     state: S,
-    client: Client,
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
@@ -86,12 +85,10 @@ where
         );
 
     let state_clone = state.clone();
-    let client_clone = client.clone();
     let metrics_clone = metrics.clone();
     let (tx, package_tx) = watch::channel(None);
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
-        client_clone,
         metrics_clone,
         indexed_checkpoint_receiver,
         tx,
@@ -507,7 +504,7 @@ where
         Ok((db_transactions, db_events, db_indices, db_displays))
     }
 
-    async fn index_objects(
+    pub(crate) async fn index_objects(
         data: CheckpointData,
         metrics: &IndexerMetrics,
         package_resolver: Arc<Resolver<impl PackageStore>>,
@@ -680,7 +677,9 @@ where
             .collect()
     }
 
-    fn get_package_objects(checkpoint_data: &[CheckpointData]) -> Vec<(IndexedPackage, Object)> {
+    pub(crate) fn get_package_objects(
+        checkpoint_data: &[CheckpointData],
+    ) -> Vec<(IndexedPackage, Object)> {
         checkpoint_data
             .iter()
             .flat_map(|data| {
@@ -704,7 +703,7 @@ where
             .collect()
     }
 
-    fn pg_blocking_cp(state: S) -> Result<ConnectionPool<T>, IndexerError> {
+    pub(crate) fn pg_blocking_cp(state: S) -> Result<ConnectionPool<T>, IndexerError> {
         let state_as_any = state.as_any();
         if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStore<T>>() {
             return Ok(pg_state.blocking_cp());
