@@ -151,6 +151,7 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 //             std::config native functions.
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
 //             Enable soft bundle in devnet and testnet.
+//             Core macro visibility in sui core framework.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);

@@ -4,28 +4,28 @@
 
 /// This module holds shared implementation of macros used in `std`
 module std::macros {
-    public(package) macro fun num_max($x: _, $y: _): _ {
+    public macro fun num_max($x: _, $y: _): _ {
         let x = $x;
         let y = $y;
         if (x > y) x
         else y
     }
 
-    public(package) macro fun num_min($x: _, $y: _): _ {
+    public macro fun num_min($x: _, $y: _): _ {
         let x = $x;
         let y = $y;
         if (x < y) x
         else y
     }
 
-    public(package) macro fun num_diff($x: _, $y: _): _ {
+    public macro fun num_diff($x: _, $y: _): _ {
         let x = $x;
         let y = $y;
         if (x > y) x - y
         else y - x
     }
 
-    public(package) macro fun num_divide_and_round_up($x: _, $y: _): _ {
+    public macro fun num_divide_and_round_up($x: _, $y: _): _ {
         let x = $x;
         let y = $y;
         if (x % y == 0) x / y
@@ -33,7 +33,7 @@ module std::macros {
     }
 
 
-    public(package) macro fun num_pow($base: _, $exponent: u8): _ {
+    public macro fun num_pow($base: _, $exponent: u8): _ {
         let mut base = $base;
         let mut exponent = $exponent;
         let mut res = 1;
@@ -50,7 +50,7 @@ module std::macros {
         res
     }
 
-    public(package) macro fun num_sqrt<$T, $U>($x: $T, $bitsize: u8): $T {
+    public macro fun num_sqrt<$T, $U>($x: $T, $bitsize: u8): $T {
         let x = $x;
         let mut bit = (1: $U) << $bitsize;
         let mut res = (0: $U);
@@ -69,7 +69,7 @@ module std::macros {
         res as $T
     }
 
-    public(package) macro fun range_do($start: _, $stop: _, $f: |_|) {
+    public macro fun range_do($start: _, $stop: _, $f: |_|) {
         let mut i = $start;
         let stop = $stop;
         while (i < stop) {
@@ -78,7 +78,7 @@ module std::macros {
         }
     }
 
-    public(package) macro fun range_do_eq($start: _, $stop: _, $f: |_|) {
+    public macro fun range_do_eq($start: _, $stop: _, $f: |_|) {
         let mut i = $start;
         let stop = $stop;
         // we check `i >= stop` inside the loop instead of `i <= stop` as `while` condition to avoid
@@ -93,11 +93,11 @@ module std::macros {
         }
     }
 
-    public(package) macro fun do($stop: _, $f: |_|) {
+    public macro fun do($stop: _, $f: |_|) {
         range_do!(0, $stop, $f)
     }
 
-    public(package) macro fun do_eq($stop: _, $f: |_|) {
+    public macro fun do_eq($stop: _, $f: |_|) {
         range_do_eq!(0, $stop, $f)
     }
 }
