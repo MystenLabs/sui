@@ -3452,9 +3452,8 @@ impl AuthorityPerEpochStore {
                         if self.protocol_config.dkg_version() == 0 {
                             // old message was not an enum
                             match bcs::from_bytes(bytes) {
-                                Ok(message) => {
-                                    randomness_manager.add_message(authority, VersionedDkgMessage::V0(message))?
-                                }
+                                Ok(message) => randomness_manager
+                                    .add_message(authority, VersionedDkgMessage::V0(message))?,
                                 Err(e) => {
                                     warn!(
                                         "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
@@ -3517,11 +3516,8 @@ impl AuthorityPerEpochStore {
                             }
                         } else {
                             match bcs::from_bytes(bytes) {
-                                Ok(message) => randomness_manager.add_confirmation(
-                                    batch,
-                                    authority,
-                                    message,
-                                )?,
+                                Ok(message) => randomness_manager
+                                    .add_confirmation(batch, authority, message)?,
                                 Err(e) => {
                                     warn!(
                                         "Failed to deserialize versioned RandomnessDkgMessage from {:?}: {e:?}",

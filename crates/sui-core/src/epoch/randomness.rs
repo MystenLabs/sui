@@ -7,7 +7,7 @@ use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::bls12381;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
-use fastcrypto_tbls::{dkg, dkg_v0, dkg_v1, nodes, nodes::PartyId, dkg::Output};
+use fastcrypto_tbls::{dkg, dkg::Output, dkg_v0, dkg_v1, nodes, nodes::PartyId};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use narwhal_types::{Round, TimestampMs};
@@ -101,7 +101,10 @@ impl VersionedProcessedMessage {
                         })
                         .collect::<Vec<_>>(),
                 )?;
-                Ok((VersionedDkgConfimation::V0(conf), VersionedUsedProcessedMessages::V0(msgs)))
+                Ok((
+                    VersionedDkgConfimation::V0(conf),
+                    VersionedUsedProcessedMessages::V0(msgs),
+                ))
             }
             1 => {
                 let (conf, msgs) = party.merge_v1(
@@ -116,7 +119,10 @@ impl VersionedProcessedMessage {
                         })
                         .collect::<Vec<_>>(),
                 )?;
-                Ok((VersionedDkgConfimation::V1(conf), VersionedUsedProcessedMessages::V1(msgs)))
+                Ok((
+                    VersionedDkgConfimation::V1(conf),
+                    VersionedUsedProcessedMessages::V1(msgs),
+                ))
             }
             _ => panic!("BUG: invalid DKG version {dkg_version}"),
         }
@@ -435,7 +441,11 @@ impl RandomnessManager {
         Ok(())
     }
 
-    fn complete_dkg(&self, dkg_version: u64, used_processed_messages: &VersionedUsedProcessedMessages) -> FastCryptoResult<Output<PkG, EncG>> {
+    fn complete_dkg(
+        &self,
+        dkg_version: u64,
+        used_processed_messages: &VersionedUsedProcessedMessages,
+    ) -> FastCryptoResult<Output<PkG, EncG>> {
         let confirmations = self.confirmations.values();
         let rng = &mut StdRng::from_rng(OsRng).expect("RNG construction should not fail");
 
