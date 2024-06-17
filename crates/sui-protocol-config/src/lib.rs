@@ -501,6 +501,10 @@ struct FeatureFlags {
     // Set number of leaders per round for Mysticeti commits.
     #[serde(skip_serializing_if = "Option::is_none")]
     mysticeti_num_leaders_per_round: Option<usize>,
+
+    // Enable Soft Bundle (SIP-19).
+    #[serde(skip_serializing_if = "is_false")]
+    soft_bundle: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1149,6 +1153,9 @@ pub struct ProtocolConfig {
 
     /// Version number to use for version_specific_data in `CheckpointSummary`.
     checkpoint_summary_version_specific_data: Option<u64>,
+
+    /// The max number of transactions that can be included in a single Soft Bundle.
+    max_soft_bundle_size: Option<u64>,
 }
 
 // feature flags
@@ -1432,6 +1439,10 @@ impl ProtocolConfig {
 
     pub fn mysticeti_num_leaders_per_round(&self) -> Option<usize> {
         self.feature_flags.mysticeti_num_leaders_per_round
+    }
+
+    pub fn soft_bundle(&self) -> bool {
+        self.feature_flags.soft_bundle
     }
 }
 
@@ -1889,6 +1900,8 @@ impl ProtocolConfig {
             min_checkpoint_interval_ms: None,
 
             checkpoint_summary_version_specific_data: None,
+
+            max_soft_bundle_size: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };

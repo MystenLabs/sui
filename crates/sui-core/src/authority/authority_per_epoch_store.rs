@@ -1845,6 +1845,40 @@ impl AuthorityPerEpochStore {
         ))
     }
 
+    /// Check whether any certificates were processed by consensus.
+    /// This handles multiple certificates at once.
+    pub fn is_any_tx_certs_consensus_message_processed<'a>(
+        &self,
+        certificates: impl Iterator<Item = &'a CertifiedTransaction>,
+    ) -> SuiResult<bool> {
+        let keys = certificates.map(|cert| {
+            SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                *cert.digest(),
+            ))
+        });
+        Ok(self
+            .check_consensus_messages_processed(keys)?
+            .into_iter()
+            .any(|processed| processed))
+    }
+
+    /// Check whether any certificates were processed by consensus.
+    /// This handles multiple certificates at once.
+    pub fn is_all_tx_certs_consensus_message_processed<'a>(
+        &self,
+        certificates: impl Iterator<Item = &'a VerifiedCertificate>,
+    ) -> SuiResult<bool> {
+        let keys = certificates.map(|cert| {
+            SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                *cert.digest(),
+            ))
+        });
+        Ok(self
+            .check_consensus_messages_processed(keys)?
+            .into_iter()
+            .all(|processed| processed))
+    }
+
     pub fn is_consensus_message_processed(
         &self,
         key: &SequencedConsensusTransactionKey,
@@ -1855,9 +1889,9 @@ impl AuthorityPerEpochStore {
             .contains_key(key)?)
     }
 
-    pub fn check_consensus_messages_processed<'a>(
+    pub fn check_consensus_messages_processed(
         &self,
-        keys: impl Iterator<Item = &'a SequencedConsensusTransactionKey>,
+        keys: impl Iterator<Item = SequencedConsensusTransactionKey>,
     ) -> SuiResult<Vec<bool>> {
         Ok(self
             .tables()?
@@ -1873,7 +1907,7 @@ impl AuthorityPerEpochStore {
 
         let unprocessed_keys_registrations = registrations
             .into_iter()
-            .zip(self.check_consensus_messages_processed(keys.iter())?)
+            .zip(self.check_consensus_messages_processed(keys.into_iter())?)
             .filter(|(_, processed)| !processed)
             .map(|(registration, _)| registration);
 
