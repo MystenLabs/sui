@@ -551,13 +551,15 @@ impl TypingAnalysisContext<'_> {
                 self.add_variant_use_def(mident, name, vname);
                 tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
                 for (fpos, fname, (_, (_, pat))) in fields.iter_mut() {
-                    self.add_variant_field_use_def(
-                        &mident.value,
-                        &name.value(),
-                        &vname.value(),
-                        fname,
-                        &fpos,
-                    );
+                    if self.compiler_info.ellipsis_binders.get(&fpos).is_none() {
+                        self.add_variant_field_use_def(
+                            &mident.value,
+                            &name.value(),
+                            &vname.value(),
+                            fname,
+                            &fpos,
+                        );
+                    }
                     self.process_match_patterm(pat);
                 }
             }
@@ -566,7 +568,9 @@ impl TypingAnalysisContext<'_> {
                 self.add_datatype_use_def(mident, name);
                 tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
                 for (fpos, fname, (_, (_, pat))) in fields.iter_mut() {
-                    self.add_struct_field_use_def(&mident.value, &name.value(), fname, &fpos);
+                    if self.compiler_info.ellipsis_binders.get(&fpos).is_none() {
+                        self.add_struct_field_use_def(&mident.value, &name.value(), fname, &fpos);
+                    }
                     self.process_match_patterm(pat);
                 }
             }
@@ -998,14 +1002,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                         .for_each(|t| visitor.visit_type(Some(exp_loc), t));
                     true
                 }
-                TE::VariantMatch(e, (mident, enum_name), v) => {
-                    // visitor.visit_exp(e);
-                    // visitor.add_datatype_use_def(mident, enum_name);
-                    // v.iter_mut().for_each(|(vname, e)| {
-                    //     visitor.add_variant_use_def(mident, enum_name, vname);
-                    //     visitor.visit_exp(e);
-                    // });
-
+                TE::VariantMatch(..) => {
                     // These should not be available before match compilation.
                     debug_assert!(false);
                     true
