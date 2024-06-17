@@ -2866,6 +2866,25 @@ impl AuthorityPerEpochStore {
         .await
     }
 
+    #[cfg(any(test, feature = "test-utils"))]
+    pub async fn assign_shared_object_versions_for_tests(
+        self: &Arc<Self>,
+        cache_reader: &dyn ObjectCacheRead,
+        transactions: &[VerifiedExecutableTransaction],
+    ) -> SuiResult {
+        let mut batch = self.db_batch()?;
+        self.process_consensus_transaction_shared_object_versions(
+            cache_reader,
+            &transactions,
+            None,
+            &BTreeMap::new(),
+            &mut batch,
+        )
+        .await?;
+        batch.write()?;
+        Ok(())
+    }
+
     fn process_notifications(
         &self,
         notifications: &[SequencedConsensusTransactionKey],
