@@ -1,36 +1,43 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_macros::sim_test;
-use sui_types::deny_list_v1::CoinDenyCap;
-use sui_types::deny_list_v1::RegulatedCoinMetadata;
-use test_cluster::TestClusterBuilder;
+use crate::authority::move_integration_tests::build_and_try_publish_test_package;
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
+use sui_types::crypto::get_account_key_pair;
+use sui_types::deny_list_v1::{CoinDenyCap, RegulatedCoinMetadata};
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Object;
+use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
 
-#[sim_test]
+// Test that a regulated coin can be created and all the necessary objects are created with the right types.
+// Make sure that these types can be converted to Rust types.
+#[tokio::test]
 async fn test_regulated_coin_v1_creation() {
-    let test_cluster = TestClusterBuilder::new().build().await;
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("tests/move_test_code");
-    let tx_data = test_cluster
-        .test_transaction_builder()
-        .await
-        .publish(path)
-        .build();
-    let effects = test_cluster
-        .sign_and_execute_transaction(&tx_data)
-        .await
-        .effects
-        .unwrap();
+    let (sender, keypair) = get_account_key_pair();
+    let gas_object = Object::with_owner_for_testing(sender);
+    let gas_object_id = gas_object.id();
+    let authority = TestAuthorityBuilder::new()
+        .with_starting_objects(&[gas_object])
+        .build()
+        .await;
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+    let (_, effects) = build_and_try_publish_test_package(
+        &authority,
+        &sender,
+        &keypair,
+        &gas_object_id,
+        "coin_deny_list_v1",
+        TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
+        rgp,
+        false,
+    )
+    .await;
+
     let mut deny_cap_object = None;
     let mut metadata_object = None;
     let mut regulated_metadata_object = None;
-    for created in effects.created() {
-        let object = test_cluster
-            .get_object_from_fullnode_store(&created.object_id())
-            .await
-            .unwrap();
+    for (oref, _owner) in effects.created() {
+        let object = authority.get_object(&oref.0).await.unwrap().unwrap();
         if object.is_package() {
             continue;
         }
