@@ -54,7 +54,7 @@ const config = {
       "@graphql-markdown/docusaurus",
       {
         schema:
-          "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
+          "../../crates/sui-graphql-rpc/schema.graphql",
         rootPath: "../content", // docs will be generated under rootPath/baseURL
         baseURL: "references/sui-api/sui-graphql/reference",
         loaders: {

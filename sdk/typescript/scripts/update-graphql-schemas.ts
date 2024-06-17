@@ -29,7 +29,7 @@ const result = execSync(`git branch --remote --list "origin/releases/sui-graphql
 					minor,
 					patch,
 					branch,
-					schema: `https://raw.githubusercontent.com/MystenLabs/sui/${branch}/crates/sui-graphql-rpc/schema/current_progress_schema.graphql`,
+					schema: `https://raw.githubusercontent.com/MystenLabs/sui/${branch}/crates/sui-graphql-rpc/schema.graphql`,
 			  }
 			: null;
 	})
