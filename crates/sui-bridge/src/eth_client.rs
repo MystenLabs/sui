@@ -146,19 +146,26 @@ where
         }
         // Safeguard check that all events are emitted from requested contract address
         assert!(logs.iter().all(|log| log.address == address));
+        // println!("logs: {:?}", logs);
+        Ok(logs.into_iter().map(|log| EthLog {
+            block_number: log.block_number.unwrap().as_u64(),
+            tx_hash: log.transaction_hash.unwrap(),
+            log_index_in_tx: 0, // does not matter
+            log,
+        }).collect::<Vec<_>>())
 
-        let tasks = logs.into_iter().map(|log| self.get_log_tx_details(log));
-        futures::future::join_all(tasks)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .tap_err(|e| {
-                tracing::error!(
-                    "get_log_tx_details failed. Filter: {:?}. Error {:?}",
-                    filter,
-                    e
-                )
-            })
+        // let tasks = logs.into_iter().map(|log| self.get_log_tx_details(log));
+        // futures::future::join_all(tasks)
+        //     .await
+        //     .into_iter()
+        //     .collect::<Result<Vec<_>, _>>()
+        //     .tap_err(|e| {
+        //         tracing::error!(
+        //             "get_log_tx_details failed. Filter: {:?}. Error {:?}",
+        //             filter,
+        //             e
+        //         )
+        //     })
     }
 
     /// This function converts a `Log` to `EthLog`, to make sure the `block_num`, `tx_hash` and `log_index_in_tx`

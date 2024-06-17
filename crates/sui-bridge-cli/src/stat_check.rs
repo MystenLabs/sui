@@ -9,7 +9,9 @@ use ethers::types::Address as EthAddress;
 use ethers::types::H256;
 use ethers::types::U256;
 use move_core_types::ident_str;
+use sui_types::event::EventID;
 use tokio::time::sleep;
+use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -24,26 +26,45 @@ use sui_types::bridge::BridgeChainId;
 use sui_types::digests::TransactionDigest;
 use sui_types::BRIDGE_PACKAGE_ID;
 use tokio::time::Instant;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const ETH_START_BLOCK: u64 = 5997013; // contract creation block
 const BRIDGE_PROXY: &str = "0xAE68F87938439afEEDd6552B0E83D2CbC2473623";
 
 pub async fn foo(eth_rpc_url: String, sui_rpc_url: String) {
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     let eth_task = tokio::spawn(query_eth(eth_rpc_url));
     let sui_task = tokio::spawn(query_sui(sui_rpc_url));
     let (eth_deposits, eth_claims) = eth_task.await.unwrap();
-    let (sui_deposit, sui_claims) = sui_task.await.unwrap();
-    // FIXME: file path
-    let mut wtr = csv::Writer::from_path("bridge_stat").unwrap();
+    let (sui_deposits, sui_claims) = sui_task.await.unwrap();
+    let file_name_eth_tx = format!("bridge_stat_{}.eth_tx.csv", since_the_epoch);
+    let file_name_sui_tx = format!("bridge_stat_{}.sui_tx.csv", since_the_epoch);
+    let file_name_eth_addr  = format!("bridge_stat_{}.eth_addr.csv", since_the_epoch);
+    let file_name_sui_addr = format!("bridge_stat_{}.sui_addr.csv", since_the_epoch);
+    println!("Writing to file {file_name_eth_tx} & {file_name_sui_tx}");
+
+    let mut sui_address_sent_and_received: HashMap<SuiAddress, (u64, u64)> = HashMap::new();
+    let mut eth_address_sent_and_received: HashMap<EthAddress, (u64, u64)> = HashMap::new();
+
+    let mut wtr = csv::Writer::from_path(file_name_eth_tx).unwrap();
     for (nonce, deposit) in eth_deposits {
+        let (_sui_sent, sui_received) = sui_address_sent_and_received
+            .entry(deposit.recipient_address)
+            .or_insert((0, 0));
+        *sui_received += 1;
+        let (eth_sent, _eth_received) = eth_address_sent_and_received
+            .entry(deposit.sender_address)
+            .or_insert((0, 0));
+        *eth_sent += 1;
         let sui_claim = sui_claims.get(&nonce);
-        println!(
-            "eth deposit ({nonce}): {:?}. sui claim: {:?}",
-            deposit, sui_claim
-        );
         wtr.write_record(&[
             nonce.to_string(),
-            deposit.sender_address.encode_hex(),
+            format!("0x{:x}", deposit.sender_address),
+            // deposit.sender_address.encode_hex(),
             deposit.recipient_address.to_string(),
             deposit.token_id.to_string(),
             deposit.sui_adjusted_amount.to_string(),
@@ -55,20 +76,72 @@ pub async fn foo(eth_rpc_url: String, sui_rpc_url: String) {
         .unwrap();
     }
     wtr.flush().unwrap();
+
+    let mut wtr = csv::Writer::from_path(file_name_sui_tx).unwrap();
+    for (nonce, deposit) in sui_deposits {
+        let (sui_sent, _sui_received) = sui_address_sent_and_received
+            .entry(deposit.sender_address)
+            .or_insert((0, 0));
+        *sui_sent += 1;
+        let (_eth_sent, eth_received) = eth_address_sent_and_received
+            .entry(deposit.recipient_address)
+            .or_insert((0, 0));
+        *eth_received += 1;
+        let eth_claim = eth_claims.get(&nonce);
+        wtr.write_record(&[
+            nonce.to_string(),
+            deposit.sender_address.to_string(),
+            format!("0x{:x}", deposit.recipient_address),
+            // deposit.recipient_address.encode_hex(),
+            deposit.token_id.to_string(),
+            deposit.sui_adjusted_amount.to_string(),
+            deposit.tx_digest.to_string(),
+            eth_claim
+                .map(|c| c.transaction_hash.encode_hex())
+                .unwrap_or_default(),
+        ])
+        .unwrap();
+    }
+    wtr.flush().unwrap();
+
+    let mut wtr = csv::Writer::from_path(file_name_sui_addr).unwrap();
+    for (addr, (sent, received)) in sui_address_sent_and_received {
+        wtr.write_record(&[
+            addr.to_string(),
+            sent.to_string(),
+            received.to_string(),
+        ])
+        .unwrap();
+    }
+    wtr.flush().unwrap();
 }
 
-async fn query_sui(sui_rpc_url: String) -> (HashMap<u64, SuiDeposit>, HashMap<u64, SuiClaim>) {
+async fn query_sui(sui_rpc_url: String) -> (BTreeMap<u64, SuiDeposit>, BTreeMap<u64, SuiClaim>) {
     let sui_bridge_client = SuiClient::new(&sui_rpc_url).await.unwrap();
     let mut cursor = None;
-    let mut all_deposits = HashMap::new();
-    let mut all_claims = HashMap::new();
+    // let mut cursor = Some(EventID {
+    //     // tx_digest: TransactionDigest::from_str("GMM4mA9CPPVQY2eTAaxhiX3wqS4aHXQKcAqgfucvMeoH").unwrap(),
+    //     tx_digest: TransactionDigest::from_str("DCqBC9N1RUxj72hNj2ZbysHmu7pX6fGpwsYh2yS6Upuu").unwrap(),
+    //     event_seq: 0,
+    // });
+    let mut all_deposits = BTreeMap::new();
+    let mut all_claims = BTreeMap::new();
     let timer = Instant::now();
+    let mut print_counter = 0;
     loop {
-        println!("querying sui from {:?}", cursor);
-        let sui_events = sui_bridge_client
+        if print_counter % 50 == 0 {
+            println!("querying sui from {:?}", cursor);
+        }
+        let sui_events = match sui_bridge_client
             .query_events_by_module(BRIDGE_PACKAGE_ID, ident_str!("bridge").to_owned(), cursor)
-            .await
-            .unwrap();
+            .await {
+            Ok(sui_events) => sui_events,
+            Err(e) => {
+                println!("ERROR: {:?}. Sleeping for 5s", e);
+                sleep(tokio::time::Duration::from_secs(5)).await;
+                continue;
+            }
+        };
         cursor = sui_events.next_cursor;
         let has_next_page = sui_events.has_next_page;
         let sui_events = sui_events.data;
@@ -116,6 +189,7 @@ async fn query_sui(sui_rpc_url: String) -> (HashMap<u64, SuiDeposit>, HashMap<u6
                 _ => (),
             }
         }
+        print_counter += 1;
         if !has_next_page {
             break;
         }
@@ -124,7 +198,7 @@ async fn query_sui(sui_rpc_url: String) -> (HashMap<u64, SuiDeposit>, HashMap<u6
     (all_deposits, all_claims)
 }
 
-async fn query_eth(eth_rpc_url: String) -> (HashMap<u64, EthDeposit>, HashMap<u64, EthClaim>) {
+async fn query_eth(eth_rpc_url: String) -> (BTreeMap<u64, EthDeposit>, BTreeMap<u64, EthClaim>) {
     let timer = Instant::now();
     let provider = Arc::new(
         ethers::prelude::Provider::<ethers::providers::Http>::try_from(eth_rpc_url.clone())
@@ -139,8 +213,8 @@ async fn query_eth(eth_rpc_url: String) -> (HashMap<u64, EthDeposit>, HashMap<u6
     .await
     .unwrap();
     let mut start_block = ETH_START_BLOCK;
-    let mut all_claims = HashMap::new();
-    let mut all_deposits = HashMap::new();
+    let mut all_claims = BTreeMap::new();
+    let mut all_deposits = BTreeMap::new();
     loop {
         if start_block > latest_block_num {
             break;
