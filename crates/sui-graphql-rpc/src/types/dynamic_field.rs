@@ -95,9 +95,9 @@ impl DynamicField {
     }
 
     /// The returned dynamic field is an object if its return type is `MoveObject`,
-    /// and its contents will be from the latest version that is at most equal to
-    /// its parent object's version. Otherwise, it is also accessible off-chain
-    /// via its address.
+    /// in which case it is also accessible off-chain via its address. Its contents
+    /// will be from the latest version that is at most equal to its parent object's
+    /// version
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
         if self.df_kind == DynamicFieldType::DynamicObject {
             // If `df_kind` is a DynamicObject, the object we are currently on is the field object,

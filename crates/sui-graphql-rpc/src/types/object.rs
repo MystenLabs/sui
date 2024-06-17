@@ -1221,9 +1221,7 @@ impl Loader<HistoricalKey> for Db {
             let object = Object::try_from_stored_history_object(
                 stored.clone(),
                 key.checkpoint_viewed_at,
-                // This conversion will use the object's own version as the `Object::root_version`
-                // if it's not a child object, but if it is, it will be set to `None`, since we do
-                // not have any information on the `root_version` of the fetched dynamic object.
+                // This conversion will use the object's own version as the `Object::root_version`.
                 None,
             )?;
             result.insert(*key, object);
