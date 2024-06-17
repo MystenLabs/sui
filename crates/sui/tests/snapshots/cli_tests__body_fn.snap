@@ -1,21 +1,21 @@
 ---
 source: crates/sui/tests/cli_tests.rs
-expression: "format!(\"Non-clever-abort\\n---\\n{}\\n---\\nLine-only-abort\\n---\\n{}\\n---\\nClever-error-utf8\\n---\\n{}\\n---\\nClever-error-non-utf8\\n---\\n{}\\n---\\n\",\n    non_clever_abort, line_only_abort, clever_error_utf8,\n    clever_error_non_utf8)"
+expression: error_string
 ---
 Non-clever-abort
 ---
-Error executing transaction 'BQaYuRVbz7BjpjmDXUmFYyxADDK4WySrg1AfTqTao1jo': 1st command aborted within function '0xb691b7e8d182a5d5c8dd834b234a2bd55d9c42210cba8e852cd134586a74390e::clever_errors::aborter' at instruction 1 with code 0
+Error executing transaction '<ELIDED_TRANSACTION_DIGEST>': 1st command aborted within function '0x04becddebc3ae9e7e48c3f31144860e0f99a7414e533716a16db14a831ac4be6::clever_errors::aborter' at instruction 1 with code 0
 ---
 Line-only-abort
 ---
-Error executing transaction '3w3diTUzG3ryjpMA3WPrfx9eLNArYqRn1dMDWyTggKGA': 1st command aborted within function '0xb691b7e8d182a5d5c8dd834b234a2bd55d9c42210cba8e852cd134586a74390e::clever_errors::aborter_line_no' at line 15
+Error executing transaction '<ELIDED_TRANSACTION_DIGEST>': 1st command aborted within function '0x04becddebc3ae9e7e48c3f31144860e0f99a7414e533716a16db14a831ac4be6::clever_errors::aborter_line_no' at line 18
 ---
 Clever-error-utf8
 ---
-Error executing transaction '7YmFWxA3WKzKF7Bp3sJisD83EZTGXFosD4TKmq8ughLY': 1st command aborted within function '0xb691b7e8d182a5d5c8dd834b234a2bd55d9c42210cba8e852cd134586a74390e::clever_errors::clever_aborter' at line 19. Aborted with 'ENotFound' -- 'Element not found in vector 💥 🚀 🌠'
+Error executing transaction '<ELIDED_TRANSACTION_DIGEST>': 1st command aborted within function '0x04becddebc3ae9e7e48c3f31144860e0f99a7414e533716a16db14a831ac4be6::clever_errors::clever_aborter' at line 22. Aborted with 'ENotFound' -- 'Element not found in vector 💥 🚀 🌠'
 ---
 Clever-error-non-utf8
 ---
-Error executing transaction 'FK7UrheD4TWakAnK5j5tC3LySXd9obtixumbE9ZS5UYp': 1st command aborted within function '0xb691b7e8d182a5d5c8dd834b234a2bd55d9c42210cba8e852cd134586a74390e::clever_errors::clever_aborter_not_a_string' at line 23. Aborted with 'ENotAString' -- 'BAEAAAAAAAAAAgAAAAAAAAADAAAAAAAAAAQAAAAAAAAA'
+Error executing transaction '<ELIDED_TRANSACTION_DIGEST>': 1st command aborted within function '0x04becddebc3ae9e7e48c3f31144860e0f99a7414e533716a16db14a831ac4be6::clever_errors::clever_aborter_not_a_string' at line 26. Aborted with 'ENotAString' -- 'BAEAAAAAAAAAAgAAAAAAAAADAAAAAAAAAAQAAAAAAAAA'
 ---
 

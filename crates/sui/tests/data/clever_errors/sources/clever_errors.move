@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Do _not_ edit this file (yes, even whitespace!). Editing this file will
 // cause the tests that use this module to fail.
 module clever_errors::clever_errors {

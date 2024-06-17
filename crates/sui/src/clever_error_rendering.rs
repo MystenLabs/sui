@@ -1,6 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module provides a function to render a Move abort status string into a more human-readable
+//! error message using the clever error rendering logic.
+//!
+//! The logic in this file is largely a stop-gap to provide Clever Error rendering in the CLI while
+//! it still uses the JSON-RPC API. The new GraphQL API already renderd Clever Errors on the server
+//! side in a much more robust and efficient way.
+//!
+//! Once the CLI is updated to use the GraphQL API, this file can be removed, and the GraphQL-based
+//! rendering logic for Clever Errors should be used instead.
+
 use fastcrypto::encoding::{Base64, Encoding};
 use move_binary_format::{
     binary_config::BinaryConfig, file_format::SignatureToken, CompiledModule,
@@ -14,7 +24,18 @@ use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_sdk::apis::ReadApi;
 use sui_types::{base_types::ObjectID, Identifier};
 
-pub async fn render_clever_error_opt(error_string: &str, read_api: &ReadApi) -> Option<String> {
+/// Take a Move abort status string and render it into a more human-readable error message using
+/// by parsing the string (as best we can) and seeing if the abort code is a Clever Error abort
+/// code. If it is, we attempt to render the error in a more huma-readable manner using the Read
+/// API and decoding the Clever Error encoding in the abort code.
+///
+/// This function is used to render Clever Errors for on-chain errors only within the Sui CLI. This
+/// function is _not_ used at all for off-chain errors or Move unit tests. You should only use this
+/// function within this crate.
+pub(crate) async fn render_clever_error_opt(
+    error_string: &str,
+    read_api: &ReadApi,
+) -> Option<String> {
     let (address, module_name, function_name, instruction, abort_code, command_index) =
         parse_abort_status_string(error_string).ok()?;
 
@@ -107,6 +128,16 @@ pub async fn render_clever_error_opt(error_string: &str, read_api: &ReadApi) -> 
     Some(format!("{command}{suffix} command aborted within {error}"))
 }
 
+/// Parsing the error with a regex is not great, but it's the best we can do with the current
+/// JSON-RPC API since we only get error messages as strings. This function attempts to parse a
+/// Move abort status string into its different parts, and then parses it back into the structured
+/// format that we can then use to render a Clever Error.
+///
+/// If we are able to parse the string, we return a tuple with the address, module name, function
+/// name, instruction, abort code, and command index. If we are unable to parse the string, we
+/// return `Err`.
+///
+/// You should delete this function with glee once the CLI is updated to use the GraphQL API.
 fn parse_abort_status_string(
     s: &str,
 ) -> Result<(AccountAddress, Identifier, Identifier, u16, u64, u16), anyhow::Error> {

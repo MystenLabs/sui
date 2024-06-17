@@ -3729,6 +3729,12 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
         .find(|refe| matches!(refe.owner, Owner::Immutable))
         .unwrap();
 
+    let elide_transaction_digest = |s: String| -> String {
+        let mut x = s.splitn(3, '\'').collect::<Vec<_>>();
+        x[1] = "<ELIDED_TRANSACTION_DIGEST>";
+        x.join("'")
+    };
+
     // Normal abort
     let non_clever_abort = SuiClientCommands::Call {
         package: package.reference.object_id,
@@ -3785,11 +3791,14 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
     .await
     .unwrap_err();
 
-    insta::assert_snapshot!(
-        format!(
-            "Non-clever-abort\n---\n{}\n---\nLine-only-abort\n---\n{}\n---\nClever-error-utf8\n---\n{}\n---\nClever-error-non-utf8\n---\n{}\n---\n",
-             non_clever_abort, line_only_abort, clever_error_utf8, clever_error_non_utf8
-        )
+    let error_string = format!(
+        "Non-clever-abort\n---\n{}\n---\nLine-only-abort\n---\n{}\n---\nClever-error-utf8\n---\n{}\n---\nClever-error-non-utf8\n---\n{}\n---\n",
+        elide_transaction_digest(non_clever_abort.to_string()), 
+        elide_transaction_digest(line_only_abort.to_string()),
+        elide_transaction_digest(clever_error_utf8.to_string()),
+        elide_transaction_digest(clever_error_non_utf8.to_string())
     );
+
+    insta::assert_snapshot!(error_string);
     Ok(())
 }
