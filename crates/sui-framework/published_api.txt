@@ -1792,6 +1792,45 @@ drop
 emit
 	public fun
 	0x2::event
+Wrapper
+	public struct
+	0x2::dynamic_object_field
+add
+	public fun
+	0x2::dynamic_object_field
+borrow
+	public fun
+	0x2::dynamic_object_field
+borrow_mut
+	public fun
+	0x2::dynamic_object_field
+remove
+	public fun
+	0x2::dynamic_object_field
+exists_
+	public fun
+	0x2::dynamic_object_field
+exists_with_type
+	public fun
+	0x2::dynamic_object_field
+id
+	public fun
+	0x2::dynamic_object_field
+internal_add
+	public(package) fun
+	0x2::dynamic_object_field
+internal_borrow
+	public(package) fun
+	0x2::dynamic_object_field
+internal_borrow_mut
+	public(package) fun
+	0x2::dynamic_object_field
+internal_remove
+	public(package) fun
+	0x2::dynamic_object_field
+internal_exists_with_type
+	public(package) fun
+	0x2::dynamic_object_field
 Config
 	public struct
 	0x2::config
@@ -1837,9 +1876,6 @@ ConfigWriteCap
 ConfigKey
 	public struct
 	0x2::deny_list
-MarkerKey
-	public struct
-	0x2::deny_list
 AddressKey
 	public struct
 	0x2::deny_list
@@ -1869,9 +1905,6 @@ v2_disable_global_pause
 	0x2::deny_list
 v2_most_recent_is_global_pause_enabled
 	public(package) fun
-	0x2::deny_list
-maybe_create_deny_list_v2_marker
-	fun
 	0x2::deny_list
 add_per_type_config
 	public(package) fun
@@ -2251,30 +2284,6 @@ create_internal
 add_internal
 	fun
 	0x2::display
-Wrapper
-	public struct
-	0x2::dynamic_object_field
-add
-	public fun
-	0x2::dynamic_object_field
-borrow
-	public fun
-	0x2::dynamic_object_field
-borrow_mut
-	public fun
-	0x2::dynamic_object_field
-remove
-	public fun
-	0x2::dynamic_object_field
-exists_
-	public fun
-	0x2::dynamic_object_field
-exists_with_type
-	public fun
-	0x2::dynamic_object_field
-id
-	public fun
-	0x2::dynamic_object_field
 SUI
 	public struct
 	0x2::sui
