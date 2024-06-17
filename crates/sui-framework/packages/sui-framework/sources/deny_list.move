@@ -7,6 +7,7 @@
 module sui::deny_list {
     use sui::config::{Self, Config};
     use sui::dynamic_field as field;
+    use sui::dynamic_object_field as ofield;
     use sui::table::{Self, Table};
     use sui::bag::{Self, Bag};
     use sui::vec_set::{Self, VecSet};
@@ -188,12 +189,10 @@ module sui::deny_list {
         per_type_key: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        let config = config::new(&mut ConfigWriteCap(), ctx);
         let key = ConfigKey { per_type_index, per_type_key };
+        let config = config::new(&mut ConfigWriteCap(), ctx);
         let config_id = object::id(&config);
-        field::add(&mut deny_list.id, key, config_id);
-        let (field, _) = field::field_info<ConfigKey>(&deny_list.id, key);
-        field::add_child_object(field.to_address(), config);
+        ofield::internal_add(&mut deny_list.id, key, config);
         sui::event::emit(PerTypeConfigCreated {
             per_type_index,
             per_type_key,
@@ -207,8 +206,7 @@ module sui::deny_list {
         per_type_key: vector<u8>,
     ): &mut Config<ConfigWriteCap> {
         let key = ConfigKey { per_type_index, per_type_key };
-        let (field, value_id) = field::field_info_mut<ConfigKey>(&mut deny_list.id, key);
-        field::borrow_child_object_mut<Config<ConfigWriteCap>>(field, value_id)
+        ofield::internal_borrow_mut(&mut deny_list.id, key)
     }
 
     public(package) fun borrow_per_type_config(
@@ -217,8 +215,7 @@ module sui::deny_list {
         per_type_key: vector<u8>,
     ): &Config<ConfigWriteCap> {
         let key = ConfigKey { per_type_index, per_type_key };
-        let (field, value_id) = field::field_info<ConfigKey>(&deny_list.id, key);
-        field::borrow_child_object<Config<ConfigWriteCap>>(field, value_id)
+        ofield::internal_borrow(&deny_list.id, key)
     }
 
     public(package) fun per_type_exists(
