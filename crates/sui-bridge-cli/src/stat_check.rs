@@ -156,7 +156,7 @@ async fn query_eth(eth_rpc_url: String) -> (HashMap<u64, EthDeposit>, HashMap<u6
             Ok(logs) => logs,
             Err(e) => {
                 println!("ERROR: {:?}. Sleeping for 30s", e);
-                sleep(tokio::time::Duration::from_secs(10)).await;
+                sleep(tokio::time::Duration::from_secs(30)).await;
                 continue;
             }
         };
