@@ -89,7 +89,11 @@ enum Operation {
 }
 
 /// Deploy a local testbed of executor shards.
-async fn deploy_testbed(tx_count: u64, duration: u64, pre_exec_workers: usize) -> GlobalConfig {
+async fn deploy_testbed(
+    tx_count: u64,
+    duration: u64,
+    pre_exec_workers: usize,
+) -> (GlobalConfig, ExecutorShard) {
     let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); pre_exec_workers + 2];
     let mut global_configs = GlobalConfig::new_for_benchmark(ips, pre_exec_workers);
 
