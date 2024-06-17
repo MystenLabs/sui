@@ -1604,10 +1604,10 @@ impl SuiNode {
                     )
                     .await;
 
-                // No other components should be holding a reference to state accumulator
-                // at this point. Confirm here before we swap in the new accumulator.
-                let _ = Arc::into_inner(accumulator)
-                    .expect("Accumulator should have no references at this point");
+                // No other components should be referencing state accumulator at this point.
+                // However, since checkpoint_service shutdown is asynchronous, we can't trust
+                // strong reference count. However it should still be safe to swap out state
+                // accumulator since we know we have already reached EndOfPublish
                 let new_accumulator = Arc::new(StateAccumulator::new(
                     self.state.get_accumulator_store().clone(),
                     &new_epoch_store,
@@ -1660,7 +1660,7 @@ impl SuiNode {
                 // No other components should be holding a reference to state accumulator
                 // at this point. Confirm here before we swap in the new accumulator.
                 let _ = Arc::into_inner(accumulator)
-                    .expect("Accumulator should have no references at this point");
+                    .expect("Accumulator should have no other references at this point");
                 let new_accumulator = Arc::new(StateAccumulator::new(
                     self.state.get_accumulator_store().clone(),
                     &new_epoch_store,
