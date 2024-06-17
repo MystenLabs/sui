@@ -156,4 +156,51 @@ module sui::config_tests {
         config.borrow_for_epoch_mut<_, _, vector<u8>>(&mut WriteCap(), n, ts.ctx());
         abort 0
     }
+
+    #[test]
+    fun read_setting_none() {
+        let mut ts = ts::begin(SENDER);
+        config::create(&mut WriteCap(), ts.ctx());
+        ts.next_tx(SENDER);
+        let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
+        let n = b"hello";
+        let w = Wrapped(n);
+
+        // none when not set
+        assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+        assert!(config::read_setting<_, bool>(id, n, ts.ctx()).is_none());
+        assert!(config::read_setting<_, u64>(id, n, ts.ctx()).is_none());
+        assert!(config::read_setting<_, u8>(id, w, ts.ctx()).is_none());
+
+        ts.next_tx(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.new_for_epoch(&mut WriteCap(), n, 0u8, ts.ctx());
+            ts::return_shared(config);
+        };
+
+        // none when the epoch is not advanced
+        // but advancing the transaction should populate the cache
+        ts.next_tx(SENDER);
+        {
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, bool>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, u64>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, u8>(id, w, ts.ctx()).is_none());
+        };
+
+        // should be readable when the epoch is advanced
+        // none for type mismatch
+        ts.next_epoch(SENDER);
+        {
+            // now some
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_some());
+            // still none
+            assert!(config::read_setting<_, bool>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, u64>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, u8>(id, w, ts.ctx()).is_none());
+        };
+
+        ts.end();
+    }
 }
