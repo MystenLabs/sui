@@ -15,7 +15,7 @@ use move_compiler::{
     diagnostics as diag,
     expansion::ast::{self as E, ModuleIdent},
     naming::ast as N,
-    parser::ast as P,
+    parser::ast::{self as P, ConstantName},
     shared::{files::MappedFiles, ide::MacroCallInfo, Identifier, Name},
     typing::{
         ast as T,
@@ -114,15 +114,12 @@ impl TypingAnalysisContext<'_> {
     }
 
     /// Add use of a const identifier
-    fn add_const_use_def(
-        &mut self,
-        module_ident: &E::ModuleIdent,
-        use_name: &Symbol,
-        use_pos: &Loc,
-    ) {
+    fn add_const_use_def(&mut self, module_ident: &E::ModuleIdent, name: &ConstantName) {
         if self.traverse_only {
             return;
         }
+        let use_pos = name.loc();
+        let use_name = name.value();
         let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
@@ -145,11 +142,11 @@ impl TypingAnalysisContext<'_> {
             );
         }
 
-        let Some(name_start) = self.file_start_position_opt(use_pos) else {
+        let Some(name_start) = self.file_start_position_opt(&use_pos) else {
             debug_assert!(false);
             return;
         };
-        if let Some(const_def) = mod_defs.constants.get(use_name) {
+        if let Some(const_def) = mod_defs.constants.get(&use_name) {
             let const_info = self.def_info.get(&const_def.name_loc).unwrap();
             let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
             self.use_defs.insert(
@@ -160,7 +157,7 @@ impl TypingAnalysisContext<'_> {
                     use_pos.file_hash(),
                     name_start.into(),
                     const_def.name_loc,
-                    use_name,
+                    &use_name,
                     ident_type_def_loc,
                 ),
             );
@@ -542,6 +539,73 @@ impl TypingAnalysisContext<'_> {
             self.visit_exp(args);
         }
     }
+
+    fn process_match_patterm(&mut self, match_pat: &mut T::MatchPattern) {
+        use T::UnannotatedPat_ as UA;
+
+        self.visit_type(None, &mut match_pat.ty);
+        match &mut match_pat.pat.value {
+            UA::Variant(mident, name, vname, tyargs, fields)
+            | UA::BorrowVariant(_, mident, name, vname, tyargs, fields) => {
+                self.add_datatype_use_def(mident, name);
+                self.add_variant_use_def(mident, name, vname);
+                tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
+                for (fpos, fname, (_, (_, pat))) in fields.iter_mut() {
+                    self.add_variant_field_use_def(
+                        &mident.value,
+                        &name.value(),
+                        &vname.value(),
+                        fname,
+                        &fpos,
+                    );
+                    self.process_match_patterm(pat);
+                }
+            }
+            UA::Struct(mident, name, tyargs, fields)
+            | UA::BorrowStruct(_, mident, name, tyargs, fields) => {
+                self.add_datatype_use_def(mident, name);
+                tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
+                for (fpos, fname, (_, (_, pat))) in fields.iter_mut() {
+                    self.add_struct_field_use_def(&mident.value, &name.value(), fname, &fpos);
+                    self.process_match_patterm(pat);
+                }
+            }
+            UA::Constant(mod_ident, name) => self.add_const_use_def(mod_ident, name),
+            UA::Binder(mut_, var) => self.add_local_def(
+                &var.loc,
+                &var.value.name,
+                match_pat.ty.clone(),
+                false,
+                matches!(mut_, E::Mutability::Mut(_)),
+            ),
+            UA::Or(pat1, pat2) => {
+                self.process_match_patterm(pat1);
+                self.process_match_patterm(pat2);
+            }
+            UA::At(var, pat) => {
+                self.add_local_def(
+                    &var.loc,
+                    &var.value.name,
+                    match_pat.ty.clone(),
+                    false,
+                    false,
+                );
+                self.process_match_patterm(pat);
+            }
+            UA::Literal(_) | UA::Wildcard | UA::ErrorPat => (),
+        }
+    }
+
+    fn process_match_arm(&mut self, sp!(_, arm): &mut T::MatchArm) {
+        self.process_match_patterm(&mut arm.pattern);
+        arm.binders.iter_mut().for_each(|(var, ty)| {
+            self.add_local_def(&var.loc, &var.value.name, ty.clone(), false, false)
+        });
+        if let Some(exp) = &mut arm.guard {
+            self.visit_exp(exp);
+        }
+        self.visit_exp(&mut arm.rhs);
+    }
 }
 
 impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
@@ -882,7 +946,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     true
                 }
                 TE::Constant(mod_ident, name) => {
-                    visitor.add_const_use_def(mod_ident, &name.value(), &name.loc());
+                    visitor.add_const_use_def(mod_ident, &name);
                     true
                 }
                 TE::ModuleCall(mod_call) => {
@@ -897,20 +961,16 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     true
                 }
                 TE::Pack(mident, name, tyargs, fields) => {
-                    // add use of the datatype name
                     visitor.add_datatype_use_def(mident, name);
                     for (fpos, fname, (_, (_, init_exp))) in fields.iter_mut() {
-                        // add use of the field name
                         visitor.add_struct_field_use_def(
                             &mident.value,
                             &name.value(),
                             fname,
                             &fpos,
                         );
-                        // add field initialization expression
                         visitor.visit_exp(init_exp);
                     }
-                    // add type params
                     tyargs
                         .iter_mut()
                         .for_each(|t| visitor.visit_type(Some(exp_loc), t));
@@ -922,10 +982,8 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     true
                 }
                 TE::PackVariant(mident, name, vname, tyargs, fields) => {
-                    // add use of the datatype name
                     visitor.add_datatype_use_def(mident, name);
                     for (fpos, fname, (_, (_, init_exp))) in fields.iter_mut() {
-                        // add use of the field name
                         visitor.add_variant_field_use_def(
                             &mident.value,
                             &name.value(),
@@ -933,27 +991,28 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                             fname,
                             &fpos,
                         );
-                        // add field initialization expression
                         visitor.visit_exp(init_exp);
                     }
-                    // add type params
                     tyargs
                         .iter_mut()
                         .for_each(|t| visitor.visit_type(Some(exp_loc), t));
                     true
                 }
                 TE::VariantMatch(e, (mident, enum_name), v) => {
-                    visitor.visit_exp(e);
-                    visitor.add_datatype_use_def(mident, enum_name);
-                    v.iter_mut().for_each(|(vname, e)| {
-                        visitor.add_variant_use_def(mident, enum_name, vname);
-                        visitor.visit_exp(e);
-                    });
+                    // visitor.visit_exp(e);
+                    // visitor.add_datatype_use_def(mident, enum_name);
+                    // v.iter_mut().for_each(|(vname, e)| {
+                    //     visitor.add_variant_use_def(mident, enum_name, vname);
+                    //     visitor.visit_exp(e);
+                    // });
+
+                    // These should not be available before match compilation.
+                    debug_assert!(false);
                     true
                 }
-                TE::Match(_, _) => {
-                    // These should be gone after match compilation.
-                    debug_assert!(false);
+                TE::Match(exp, sp!(_, v)) => {
+                    visitor.visit_exp(exp);
+                    v.iter_mut().for_each(|arm| visitor.process_match_arm(arm));
                     true
                 }
                 TE::Unit { .. }

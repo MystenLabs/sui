@@ -31,10 +31,6 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
                 for untyped_def_loc in mod_defs.untyped_defs() {
                     let start_position = symbols.files.start_position(untyped_def_loc);
                     if let Some(DefInfo::Local(n, t, _, _)) = symbols.def_info(untyped_def_loc) {
-                        let position = Position {
-                            line: start_position.line_offset() as u32,
-                            character: start_position.column_offset() as u32 + n.len() as u32,
-                        };
                         let colon_label = InlayHintLabelPart {
                             value: ": ".to_string(),
                             tooltip: None,
@@ -48,7 +44,7 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
                             command: None,
                         };
                         let h = InlayHint {
-                            position,
+                            position: start_position.into(),
                             label: InlayHintLabel::LabelParts(vec![colon_label, type_label]),
                             kind: Some(InlayHintKind::TYPE),
                             text_edits: None,
