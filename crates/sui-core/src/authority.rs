@@ -188,6 +188,10 @@ mod gas_tests;
 #[path = "unit_tests/batch_verification_tests.rs"]
 mod batch_verification_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/coin_deny_list_tests.rs"]
+mod coin_deny_list_tests;
+
 #[cfg(any(test, feature = "test-utils"))]
 pub mod authority_test_utils;
 

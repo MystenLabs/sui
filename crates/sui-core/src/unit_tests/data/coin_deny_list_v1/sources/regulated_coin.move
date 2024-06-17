@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module move_test_code::regulated_coin {
+module coin_deny_list_v1::regulated_coin {
     use std::option;
     use sui::coin;
     use sui::object::UID;
