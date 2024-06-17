@@ -43,9 +43,13 @@ pub trait EpochStartConfigTrait {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum EpochFlag {
-    InMemoryCheckpointRoots,
-    PerEpochFinalizedTransactions,
-    ObjectLockSplitTables,
+    // The deprecated flags have all been in production for long enough that
+    // we can have deleted the old code paths they were guarding.
+    // We retain them here in order not to break deserialization.
+    _InMemoryCheckpointRootsDeprecated,
+    _PerEpochFinalizedTransactionsDeprecated,
+    _ObjectLockSplitTablesDeprecated,
+
     WritebackCacheEnabled,
     StateAccumulatorV2Enabled,
 }
@@ -64,11 +68,7 @@ impl EpochFlag {
         cache_config: &ExecutionCacheConfig,
         enable_state_accumulator_v2: bool,
     ) -> Vec<Self> {
-        let mut new_flags = vec![
-            EpochFlag::InMemoryCheckpointRoots,
-            EpochFlag::PerEpochFinalizedTransactions,
-            EpochFlag::ObjectLockSplitTables,
-        ];
+        let mut new_flags = vec![];
 
         if matches!(
             choose_execution_cache(cache_config),
@@ -89,9 +89,15 @@ impl fmt::Display for EpochFlag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Important - implementation should return low cardinality values because this is used as metric key
         match self {
-            EpochFlag::InMemoryCheckpointRoots => write!(f, "InMemoryCheckpointRoots"),
-            EpochFlag::PerEpochFinalizedTransactions => write!(f, "PerEpochFinalizedTransactions"),
-            EpochFlag::ObjectLockSplitTables => write!(f, "ObjectLockSplitTables"),
+            EpochFlag::_InMemoryCheckpointRootsDeprecated => {
+                write!(f, "InMemoryCheckpointRoots (DEPRECATED)")
+            }
+            EpochFlag::_PerEpochFinalizedTransactionsDeprecated => {
+                write!(f, "PerEpochFinalizedTransactions (DEPRECATED)")
+            }
+            EpochFlag::_ObjectLockSplitTablesDeprecated => {
+                write!(f, "ObjectLockSplitTables (DEPRECATED)")
+            }
             EpochFlag::WritebackCacheEnabled => write!(f, "WritebackCacheEnabled"),
             EpochFlag::StateAccumulatorV2Enabled => write!(f, "StateAccumulatorV2Enabled"),
         }
@@ -168,10 +174,6 @@ impl EpochStartConfiguration {
 
     pub fn epoch_start_timestamp_ms(&self) -> CheckpointTimestamp {
         self.epoch_start_state().epoch_start_timestamp_ms()
-    }
-
-    pub fn object_lock_split_tables_enabled(&self) -> bool {
-        self.flags().contains(&EpochFlag::ObjectLockSplitTables)
     }
 }
 

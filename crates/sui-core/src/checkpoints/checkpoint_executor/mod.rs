@@ -1311,9 +1311,8 @@ async fn finalize_checkpoint(
     data_ingestion_dir: Option<PathBuf>,
 ) -> SuiResult<Accumulator> {
     debug!("finalizing checkpoint");
-    if epoch_store.per_epoch_finalized_txns_enabled() {
-        epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
-    }
+    epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
+
     // TODO remove once we no longer need to support this table for read RPC
     state
         .get_checkpoint_cache()

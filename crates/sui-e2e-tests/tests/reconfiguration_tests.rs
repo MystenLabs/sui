@@ -6,10 +6,9 @@ use rand::rngs::OsRng;
 use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_macros::{register_fail_point_arg, sim_test};
+use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
@@ -301,21 +300,6 @@ async fn do_test_passive_reconfig() {
 // Test for syncing a node to an authority that already has many txes.
 #[sim_test]
 async fn test_expired_locks() {
-    do_test_lock_table_upgrade().await
-}
-
-#[sim_test]
-async fn test_expired_locks_with_lock_table_upgrade() {
-    register_fail_point_arg("initial_epoch_flags", || {
-        Some(vec![
-            EpochFlag::InMemoryCheckpointRoots,
-            EpochFlag::PerEpochFinalizedTransactions,
-        ])
-    });
-    do_test_lock_table_upgrade().await
-}
-
-async fn do_test_lock_table_upgrade() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .build()

@@ -774,13 +774,6 @@ impl AuthorityPerEpochStore {
             info!("authenticator_state disabled");
         }
 
-        let is_validator = committee.authority_index(&name).is_some();
-        if is_validator {
-            assert!(epoch_start_configuration
-                .flags()
-                .contains(&EpochFlag::InMemoryCheckpointRoots));
-        }
-
         let mut jwk_aggregator = JwkAggregator::new(committee.clone());
 
         for ((authority, id, jwk), _) in tables.pending_jwks.unbounded_iter().seek_to_first() {
@@ -1424,17 +1417,6 @@ impl AuthorityPerEpochStore {
             .multi_get(digests)?
             .into_iter()
             .collect())
-    }
-
-    pub fn per_epoch_finalized_txns_enabled(&self) -> bool {
-        self.epoch_start_configuration
-            .flags()
-            .contains(&EpochFlag::PerEpochFinalizedTransactions)
-    }
-
-    pub fn object_lock_split_tables_enabled(&self) -> bool {
-        self.epoch_start_configuration
-            .object_lock_split_tables_enabled()
     }
 
     // For each id in objects_to_init, return the next version for that id as recorded in the
