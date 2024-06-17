@@ -70,8 +70,10 @@ async fn send_transactions(
 pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
     let (output, _result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
     let epoch_store = state.epoch_store_for_testing();
-    let accumulator =
-        StateAccumulator::new_for_tests(state.get_accumulator_store().clone(), &epoch_store);
+    let accumulator = Arc::new(StateAccumulator::new_for_tests(
+        state.get_accumulator_store().clone(),
+        &epoch_store,
+    ));
     let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
 
     let (checkpoint_service, _) = CheckpointService::spawn(
@@ -79,7 +81,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
         state.get_checkpoint_store().clone(),
         epoch_store.clone(),
         state.get_transaction_cache_reader().clone(),
-        Arc::new(accumulator),
+        Arc::downgrade(&accumulator),
         Box::new(output),
         Box::new(certified_output),
         CheckpointMetrics::new_for_tests(),

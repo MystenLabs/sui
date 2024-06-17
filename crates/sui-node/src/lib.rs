@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
@@ -754,7 +754,7 @@ impl SuiNode {
                 checkpoint_store.clone(),
                 state_sync_handle.clone(),
                 randomness_handle.clone(),
-                accumulator.clone(),
+                Arc::downgrade(&accumulator),
                 connection_monitor_status.clone(),
                 &registry_service,
                 sui_node_metrics.clone(),
@@ -1116,7 +1116,7 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
         randomness_handle: randomness::Handle,
-        accumulator: Arc<StateAccumulator>,
+        accumulator: Weak<StateAccumulator>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
@@ -1206,7 +1206,7 @@ impl SuiNode {
         randomness_handle: randomness::Handle,
         consensus_manager: ConsensusManager,
         consensus_epoch_data_remover: EpochDataRemover,
-        accumulator: Arc<StateAccumulator>,
+        accumulator: Weak<StateAccumulator>,
         validator_server_handle: JoinHandle<Result<()>>,
         validator_overload_monitor_handle: Option<JoinHandle<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
@@ -1310,7 +1310,7 @@ impl SuiNode {
         epoch_store: Arc<AuthorityPerEpochStore>,
         state: Arc<AuthorityState>,
         state_sync_handle: state_sync::Handle,
-        accumulator: Arc<StateAccumulator>,
+        accumulator: Weak<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
     ) -> (Arc<CheckpointService>, watch::Sender<()>) {
         let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
@@ -1604,17 +1604,17 @@ impl SuiNode {
                     )
                     .await;
 
-                // No other components should be referencing state accumulator at this point.
-                // However, since checkpoint_service shutdown is asynchronous, we can't trust
-                // strong reference count. However it should still be safe to swap out state
-                // accumulator since we know we have already reached EndOfPublish
+                // No other components should be holding a strong reference to state accumulator
+                // at this point. Confirm here before we swap in the new accumulator.
+                Arc::into_inner(accumulator)
+                    .expect("Accumulator should have no other references at this point");
                 let new_accumulator = Arc::new(StateAccumulator::new(
                     self.state.get_accumulator_store().clone(),
                     &new_epoch_store,
                     accumulator_metrics.clone(),
                 ));
-                *accum_components_guard =
-                    Some((new_accumulator.clone(), accumulator_metrics.clone()));
+                let weak_accumulator = Arc::downgrade(&new_accumulator);
+                *accum_components_guard = Some((new_accumulator, accumulator_metrics.clone()));
 
                 consensus_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
@@ -1633,7 +1633,7 @@ impl SuiNode {
                             self.randomness_handle.clone(),
                             consensus_manager,
                             consensus_epoch_data_remover,
-                            new_accumulator,
+                            weak_accumulator,
                             validator_server_handle,
                             validator_overload_monitor_handle,
                             checkpoint_metrics,
@@ -1657,17 +1657,17 @@ impl SuiNode {
                     )
                     .await;
 
-                // No other components should be holding a reference to state accumulator
+                // No other components should be holding a strong reference to state accumulator
                 // at this point. Confirm here before we swap in the new accumulator.
-                let _ = Arc::into_inner(accumulator)
+                Arc::into_inner(accumulator)
                     .expect("Accumulator should have no other references at this point");
                 let new_accumulator = Arc::new(StateAccumulator::new(
                     self.state.get_accumulator_store().clone(),
                     &new_epoch_store,
                     accumulator_metrics.clone(),
                 ));
-                *accum_components_guard =
-                    Some((new_accumulator.clone(), accumulator_metrics.clone()));
+                let weak_accumulator = Arc::downgrade(&new_accumulator);
+                *accum_components_guard = Some((new_accumulator, accumulator_metrics.clone()));
 
                 if self.state.is_validator(&new_epoch_store) {
                     info!("Promoting the node from fullnode to validator, starting grpc server");
@@ -1681,7 +1681,7 @@ impl SuiNode {
                             self.checkpoint_store.clone(),
                             self.state_sync_handle.clone(),
                             self.randomness_handle.clone(),
-                            new_accumulator,
+                            weak_accumulator,
                             self.connection_monitor_status.clone(),
                             &self.registry_service,
                             self.metrics.clone(),
