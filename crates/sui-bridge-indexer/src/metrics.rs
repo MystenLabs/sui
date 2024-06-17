@@ -10,10 +10,6 @@ pub struct BridgeIndexerMetrics {
     pub(crate) total_sui_token_transfer_approved: IntCounter,
     pub(crate) total_sui_token_transfer_claimed: IntCounter,
     pub(crate) total_sui_bridge_txn_other: IntCounter,
-    pub(crate) total_eth_bridge_transactions: IntCounter,
-    pub(crate) total_eth_token_deposited: IntCounter,
-    pub(crate) total_eth_token_transfer_claimed: IntCounter,
-    pub(crate) total_eth_bridge_txn_other: IntCounter,
 }
 
 impl BridgeIndexerMetrics {
@@ -46,30 +42,6 @@ impl BridgeIndexerMetrics {
             total_sui_bridge_txn_other: register_int_counter_with_registry!(
                 "total_sui_bridge_txn_other",
                 "Total number of other sui bridge transactions",
-                registry,
-            )
-            .unwrap(),
-            total_eth_bridge_transactions: register_int_counter_with_registry!(
-                "total_eth_bridge_transactions",
-                "Total number of eth bridge transactions",
-                registry,
-            )
-            .unwrap(),
-            total_eth_token_deposited: register_int_counter_with_registry!(
-                "total_eth_token_deposited",
-                "Total number of eth token deposited transactions",
-                registry,
-            )
-            .unwrap(),
-            total_eth_token_transfer_claimed: register_int_counter_with_registry!(
-                "total_eth_token_transfer_claimed",
-                "Total number of eth token claimed transactions",
-                registry,
-            )
-            .unwrap(),
-            total_eth_bridge_txn_other: register_int_counter_with_registry!(
-                "total_eth_bridge_txn_other",
-                "Total number of other eth bridge transactions",
                 registry,
             )
             .unwrap(),
