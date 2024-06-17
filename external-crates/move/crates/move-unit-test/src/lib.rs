@@ -172,7 +172,7 @@ impl UnitTestingConfig {
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let test_plan = unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
-        let mapped_files = compilation_env.file_mapping().clone();
+        let mapped_files = compilation_env.mapped_files().clone();
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =

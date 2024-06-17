@@ -36,7 +36,7 @@ use move_symbol_pool::Symbol as MoveSymbol;
 use crate::{
     ast::ModuleName,
     builder::model_builder::ModelBuilder,
-    model::{FunId, FunctionData, GlobalEnv, Loc, ModuleData, ModuleId, DatatypeId},
+    model::{DatatypeId, FunId, FunctionData, GlobalEnv, Loc, ModuleData, ModuleId},
     options::ModelBuilderOptions,
 };
 
@@ -155,7 +155,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
             .iter()
             .map(|(symbol, addr)| (env.symbol_pool().make(symbol.as_str()), *addr))
             .collect();
-        env.add_source(fhash, Rc::new(aliases), fname.as_str(), fsrc, is_dep);
+        env.add_source(fhash, Rc::new(aliases), fname.as_str(), &fsrc, is_dep);
     }
 
     // If a move file does not contain any definition, it will not appear in `parsed_prog`. Add them explicitly.
@@ -167,7 +167,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
                 *fhash,
                 Rc::new(BTreeMap::new()),
                 fname.as_str(),
-                fsrc,
+                &fsrc,
                 is_dep,
             );
         }

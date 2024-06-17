@@ -8,16 +8,15 @@ use crate::{
         expansion_mod_ident_to_map_key, type_def_loc, DefInfo, DefLoc, LocalDef, ModuleDefs,
         UseDef, UseDefMap, UseLoc,
     },
-    utils::{get_start_position_opt, ignored_function, to_lsp_position},
+    utils::{ignored_function, loc_start_to_lsp_position_opt},
 };
 
-use move_command_line_common::files::FileHash;
 use move_compiler::{
-    diagnostics::{self as diag, PositionInfo},
+    diagnostics as diag,
     expansion::ast::{self as E, ModuleIdent},
     naming::ast as N,
     parser::ast as P,
-    shared::{ide::MacroCallInfo, Identifier, Name},
+    shared::{files::MappedFiles, ide::MacroCallInfo, Identifier, Name},
     typing::{
         ast as T,
         visitor::{LValueKind, TypingVisitorContext},
@@ -26,10 +25,9 @@ use move_compiler::{
 use move_ir_types::location::{sp, Loc};
 use move_symbol_pool::Symbol;
 
-use codespan_reporting::files::SimpleFiles;
 use im::OrdMap;
 use lsp_types::Position;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Data used during anlysis over typed AST
 pub struct TypingAnalysisContext<'a> {
@@ -37,10 +35,8 @@ pub struct TypingAnalysisContext<'a> {
     /// string so that we can access it regardless of the ModuleIdent representation
     /// (e.g., in the parsing AST or in the typing AST)
     pub mod_outer_defs: &'a BTreeMap<String, ModuleDefs>,
-    /// A mapping from file names to file content (used to obtain source file locations)
-    pub files: &'a SimpleFiles<Symbol, String>,
-    /// A mapping from file hashes to file IDs (used to obtain source file locations)
-    pub file_id_mapping: &'a HashMap<FileHash, usize>,
+    /// Mapped file information for translating locations into positions
+    pub files: &'a MappedFiles,
     pub references: &'a mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     /// Additional information about definitions
     pub def_info: &'a mut BTreeMap<DefLoc, DefInfo>,
@@ -66,13 +62,13 @@ impl TypingAnalysisContext<'_> {
     /// Returns the `lsp_types::Position` start for a location, but may fail if we didn't see the
     /// definition already.
     fn lsp_start_position_opt(&self, loc: &Loc) -> Option<lsp_types::Position> {
-        get_start_position_opt(loc, self.files(), self.file_mapping())
+        loc_start_to_lsp_position_opt(self.files, loc)
     }
 
     /// Returns the `lsp_types::Position` start for a location, but may fail if we didn't see the
     /// definition already. This should only be used on things we already indexed.
     fn lsp_start_position(&self, loc: &Loc) -> lsp_types::Position {
-        to_lsp_position(self.start_position(loc))
+        loc_start_to_lsp_position_opt(self.files, loc).unwrap()
     }
 
     fn reset_for_module_member(&mut self) {
@@ -289,8 +285,7 @@ impl TypingAnalysisContext<'_> {
         let result = add_fun_use_def(
             fun_def_name,
             self.mod_outer_defs,
-            self.files(),
-            self.file_mapping(),
+            self.files,
             mod_ident_str,
             mod_defs,
             use_name,
@@ -345,8 +340,7 @@ impl TypingAnalysisContext<'_> {
         let mut refs = std::mem::take(self.references);
         add_struct_use_def(
             self.mod_outer_defs,
-            self.files(),
-            self.file_mapping(),
+            self.files,
             mod_ident_str,
             mod_defs,
             &use_name.value(),
@@ -607,7 +601,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         }
         let loc = function_name.loc();
         // first, enter self-definition for function name (unwrap safe - done when inserting def)
-        let name_start = to_lsp_position(self.start_position(&loc));
+        let name_start = self.lsp_start_position(&loc);
         let fun_info = self
             .def_info
             .get(&DefLoc::new(loc.file_hash(), name_start))
@@ -913,17 +907,5 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 self.add_fun_use_def(&module_ident, &fun_def_name, &fun_def_name, &fun_def_loc);
             }
         }
-    }
-}
-
-impl diag::PositionInfo for TypingAnalysisContext<'_> {
-    type FileContents = String;
-
-    fn files(&self) -> &SimpleFiles<Symbol, Self::FileContents> {
-        self.files
-    }
-
-    fn file_mapping(&self) -> &HashMap<FileHash, move_compiler::diagnostics::FileId> {
-        self.file_id_mapping
     }
 }
