@@ -62,8 +62,6 @@ module sui::deny_list {
         per_type_key: vector<u8>,
     }
 
-    public struct MarkerKey() has copy, drop, store;
-
     public struct AddressKey(address) has copy, drop, store;
 
     public struct GlobalPauseKey() has copy, drop, store;
@@ -82,7 +80,6 @@ module sui::deny_list {
         ctx: &mut TxContext,
     ) {
         let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
-        maybe_create_deny_list_v2_marker(per_type_config, ctx);
         let setting_name = AddressKey(addr);
         let next_epoch_entry = per_type_config.entry!<_,AddressKey, bool>(
             &mut ConfigWriteCap(),
@@ -101,7 +98,6 @@ module sui::deny_list {
         ctx: &mut TxContext,
     ) {
         let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
-        maybe_create_deny_list_v2_marker(per_type_config, ctx);
         let setting_name = AddressKey(addr);
         let next_epoch_entry = per_type_config.entry!<_, AddressKey, bool>(
             &mut ConfigWriteCap(),
@@ -140,7 +136,6 @@ module sui::deny_list {
         ctx: &mut TxContext,
     ) {
         let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
-        maybe_create_deny_list_v2_marker(per_type_config, ctx);
         let setting_name = GlobalPauseKey();
         let next_epoch_entry = per_type_config.entry!<_, GlobalPauseKey, bool>(
             &mut ConfigWriteCap(),
@@ -158,7 +153,6 @@ module sui::deny_list {
         ctx: &mut TxContext,
     ) {
         let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
-        maybe_create_deny_list_v2_marker(per_type_config, ctx);
         let setting_name = GlobalPauseKey();
         let next_epoch_entry = per_type_config.entry!<_, GlobalPauseKey, bool>(
             &mut ConfigWriteCap(),
@@ -187,17 +181,6 @@ module sui::deny_list {
     // ): bool {
     //    // TODO can read from the config directly once the ID is set
     // }
-
-    fun maybe_create_deny_list_v2_marker(
-        per_type_config: &mut Config<ConfigWriteCap>,
-        ctx: &mut TxContext,
-    ) {
-        let setting_name = MarkerKey();
-        if (per_type_config.exists_with_type<_, MarkerKey, bool>(setting_name)) return;
-        let cap = &mut ConfigWriteCap();
-        per_type_config.new_for_epoch<_, MarkerKey, bool>(cap, setting_name, true, ctx);
-    }
-
 
     public(package) fun add_per_type_config(
         deny_list: &mut DenyList,
