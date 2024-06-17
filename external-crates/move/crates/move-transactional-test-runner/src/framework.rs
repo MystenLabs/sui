@@ -658,7 +658,7 @@ pub fn compile_source_units(
     match units_or_diags {
         Err((_pass, diags)) => {
             if let Some(pcd) = state.pre_compiled_deps.clone() {
-                files.append(pcd.files.clone());
+                files.extend(pcd.files.clone());
             }
             Err(anyhow!(rendered_diags(&files, diags).unwrap()))
         }

@@ -375,16 +375,12 @@ pub struct Symbols {
     references: BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     /// A mapping from uses to definitions in a file
     file_use_defs: BTreeMap<PathBuf, UseDefMap>,
-    /// A mapping from file hashes to file names
-    file_name_mapping: BTreeMap<FileHash, PathBuf>,
     /// A mapping from filePath to ModuleDefs
     pub file_mods: BTreeMap<PathBuf, BTreeSet<ModuleDefs>>,
+    /// Mapped file information for translating locations into positions
+    pub files: MappedFiles,
     /// Additional information about definitions
     def_info: BTreeMap<DefLoc, DefInfo>,
-    /// A mapping from file names to file content (used to obtain source file locations)
-    pub files: SimpleFiles<Symbol, String>,
-    /// A mapping from file hashes to file IDs (used to obtain source file locations)
-    pub file_id_mapping: HashMap<FileHash, usize>,
     /// IDE Annotation Information from the Compiler
     pub compiler_info: CompilerInfo,
 }
@@ -1109,9 +1105,7 @@ impl Symbols {
         for (k, v) in other.references {
             self.references.entry(k).or_default().extend(v);
         }
-        self.file_use_defs.extend(other.file_use_defs);
-        self.file_name_mapping.extend(other.file_name_mapping);
-        self.file_mods.extend(other.file_mods);
+        self.files.extend(other.files);
         self.def_info.extend(other.def_info);
     }
 
@@ -1127,7 +1121,7 @@ impl Symbols {
     }
 
     pub fn mod_defs(&self, fhash: &FileHash, mod_ident: ModuleIdent_) -> Option<&ModuleDefs> {
-        let Some(fpath) = self.file_name_mapping.get(fhash) else {
+        let Some(fpath) = self.files.file_name_mapping().get(fhash) else {
             return None;
         };
         let Some(mod_defs) = self.file_mods.get(fpath) else {
@@ -1255,7 +1249,7 @@ pub fn get_symbols(
             .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
             .map(|libs| {
                 eprintln!("created pre-compiled libs for {:?}", pkg_path);
-                mapped_files.append(libs.files.clone());
+                mapped_files.extend(libs.files.clone());
                 let deps = Arc::new(libs);
                 pkg_deps.insert(
                     pkg_path.to_path_buf(),
@@ -1297,7 +1291,7 @@ pub fn get_symbols(
         eprintln!("compiled to parsed AST");
         let (compiler, parsed_program) = compiler.into_ast();
         parsed_ast = Some(parsed_program.clone());
-        mapped_files.append(compiler.compilation_env_ref().mapped_files().clone());
+        mapped_files.extend(compiler.compilation_env_ref().mapped_files().clone());
 
         // extract typed AST
         let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
@@ -1469,11 +1463,9 @@ pub fn get_symbols(
     let symbols = Symbols {
         references,
         file_use_defs,
-        file_name_mapping: mapped_files.file_name_mapping().clone(),
         file_mods,
         def_info,
-        files,
-        file_id_mapping,
+        files: mapped_files,
         compiler_info,
     };
 
@@ -1649,11 +1641,9 @@ pub fn empty_symbols() -> Symbols {
     Symbols {
         file_use_defs: BTreeMap::new(),
         references: BTreeMap::new(),
-        file_name_mapping: BTreeMap::new(),
         file_mods: BTreeMap::new(),
         def_info: BTreeMap::new(),
-        files: SimpleFiles::new(),
-        file_id_mapping: HashMap::new(),
+        files: MappedFiles::empty(),
         compiler_info: CompilerInfo::new(),
     }
 }
@@ -2709,7 +2699,7 @@ pub fn def_ide_location(def_loc: &DefLoc, symbols: &Symbols) -> Location {
         start: def_loc.start,
         end: def_loc.start,
     };
-    let path = symbols.file_name_mapping.get(&def_loc.fhash).unwrap();
+    let path = symbols.files.file_path(&def_loc.fhash);
     Location {
         uri: Url::from_file_path(path).unwrap(),
         range,
@@ -2744,7 +2734,7 @@ pub fn on_go_to_type_def_request(context: &Context, request: &Request, symbols: 
                     start: def_loc.start,
                     end: def_loc.start,
                 };
-                let path = symbols.file_name_mapping.get(&u.def_loc.fhash).unwrap();
+                let path = symbols.files.file_path(&u.def_loc.fhash);
                 let loc = Location {
                     uri: Url::from_file_path(path).unwrap(),
                     range,
@@ -2794,7 +2784,7 @@ pub fn on_references_request(context: &Context, request: &Request, symbols: &Sym
                             start: ref_loc.start,
                             end: end_pos,
                         };
-                        let path = symbols.file_name_mapping.get(&ref_loc.fhash).unwrap();
+                        let path = symbols.files.file_path(&ref_loc.fhash);
                         locs.push(Location {
                             uri: Url::from_file_path(path).unwrap(),
                             range,
@@ -3052,7 +3042,7 @@ fn assert_use_def_with_doc_string(
     type_def: Option<(u32, u32, &str)>,
     doc_string: Option<&str>,
 ) {
-    let file_name_mapping = &symbols.file_name_mapping;
+    let file_name_mapping = &symbols.files.file_name_mapping();
     let def_info = &symbols.def_info;
 
     let Some(uses) = mod_symbols.get(use_line) else {

@@ -114,7 +114,7 @@ impl MappedFiles {
         }
     }
 
-    pub fn append(&mut self, other: Self) {
+    pub fn extend(&mut self, other: Self) {
         for (file_hash, file_id) in other.file_mapping {
             let Ok(file) = other.files.get(file_id) else {
                 debug_assert!(false, "Found a file without a file entry");
@@ -250,7 +250,7 @@ impl MappedFiles {
         let file_id = self.file_mapping().get(&file_hash)?;
         let line_range = self
             .files()
-            .line_range(*file_id, (line_offset + 1) as usize)
+            .line_range(*file_id, line_offset as usize)
             .ok()?;
         let offset = line_range.start as u32 + char_offset;
         Some(Loc::new(file_hash, offset, offset + 1))

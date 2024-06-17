@@ -27,7 +27,7 @@ use move_compiler::{
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
     },
-    shared::{ide::AutocompleteMethod, Identifier},
+    shared::{Identifier, ide::AutocompleteMethod},
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
@@ -285,7 +285,7 @@ fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<Completi
         return completions;
     };
     let Some(byte_idx) =
-        utils::get_byte_idx(*position, fhash, &symbols.files, &symbols.file_id_mapping)
+        utils::lsp_position_to_byte_index(&symbols.files, fhash, position)
     else {
         return completions;
     };
@@ -547,17 +547,17 @@ fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<Comple
     let Some(fhash) = symbols.file_hash(path) else {
         return items;
     };
-    let Some(file_id) = symbols.file_id_mapping.get(&fhash) else {
+    let Some(file_id) = symbols.files.file_mapping().get(&fhash) else {
         return items;
     };
-    let Ok(file) = symbols.files.get(*file_id) else {
+    let Ok(file) = symbols.files.files().get(*file_id) else {
         return items;
     };
 
     let buffer = file.source().clone();
     if !buffer.is_empty() {
         let mut only_custom_items = false;
-        let cursor = get_cursor_token(buffer.as_str(), &pos);
+        let cursor = get_cursor_token(&buffer, &pos);
         match cursor {
             Some(Tok::Colon) => {
                 items.extend_from_slice(&primitive_types());
@@ -585,7 +585,7 @@ fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<Comple
                 // offer them context-specific autocompletion items as well as
                 // Move's keywords, operators, and builtins.
                 let (custom_items, custom) =
-                    context_specific_no_trigger(symbols, path, buffer.as_str(), &pos);
+                    context_specific_no_trigger(symbols, path, &buffer, &pos);
                 only_custom_items = custom;
                 items.extend_from_slice(&custom_items);
                 if !only_custom_items {
@@ -595,7 +595,7 @@ fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<Comple
             }
         }
         if !only_custom_items {
-            let identifiers = identifiers(buffer.as_str(), symbols, path);
+            let identifiers = identifiers(&buffer, symbols, path);
             items.extend_from_slice(&identifiers);
         }
     } else {
@@ -682,8 +682,8 @@ fn completion_dot_test() {
         character: 10,
     };
     let items = completion_items(pos, &cpath, &symbols);
-    let loc = format!("{:?} (line: {}, col: {}", cpath, pos.line, pos.character);
-    assert!(items.len() == 3, "wrong number of items at {}", loc.clone());
+    let loc = format!("{:?} (line: {}, col: {})", cpath, pos.line, pos.character);
+    assert!(items.len() == 3, "wrong number of items at {} (3 vs {})", loc.clone(), items.len());
     validate_item(
         loc.clone(),
         &items,
