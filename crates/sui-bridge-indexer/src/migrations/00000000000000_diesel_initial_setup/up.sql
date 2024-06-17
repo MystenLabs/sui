@@ -33,3 +33,9 @@ CREATE TABLE token_transfer
 );
 CREATE INDEX token_transfer_block_height ON token_transfer (block_height);
 CREATE INDEX token_transfer_timestamp_ms ON token_transfer (timestamp_ms);
+
+CREATE TABLE progress_store
+(
+    task_name                   TEXT          PRIMARY KEY,
+    checkpoint                  BIGINT        NOT NULL
+);

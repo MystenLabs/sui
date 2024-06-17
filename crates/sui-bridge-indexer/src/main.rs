@@ -13,15 +13,17 @@ use std::env;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use sui_bridge::{eth_client::EthClient, eth_syncer::EthSyncer};
-use sui_bridge_indexer::latest_eth_syncer::LatestEthSyncer;
-use sui_bridge_indexer::postgres_manager::get_connection_pool;
-use sui_bridge_indexer::postgres_manager::get_latest_eth_token_transfer;
-use sui_bridge_indexer::sui_worker::SuiBridgeWorker;
-use sui_bridge_indexer::{config::load_config, metrics::BridgeIndexerMetrics};
-use sui_data_ingestion_core::{
-    DataIngestionMetrics, FileProgressStore, IndexerExecutor, ReaderOptions, WorkerPool,
+use sui_bridge::{
+    abi::{EthBridgeCommittee, EthSuiBridge},
+    eth_client::EthClient,
+    eth_syncer::EthSyncer,
 };
+use sui_bridge_indexer::postgres_writer::PgProgressStore;
+use sui_bridge_indexer::{
+    config::load_config, metrics::BridgeIndexerMetrics, postgres_writer::get_connection_pool,
+    worker::process_eth_transaction, worker::BridgeWorker,
+};
+use sui_data_ingestion_core::{DataIngestionMetrics, IndexerExecutor, ReaderOptions, WorkerPool};
 use tokio::sync::oneshot;
 use tracing::info;
 
@@ -84,7 +86,8 @@ async fn start_processing_sui_checkpoints(
     let (_exit_sender, exit_receiver) = oneshot::channel();
     let metrics = DataIngestionMetrics::new(&Registry::new());
 
-    let progress_store = FileProgressStore::new(config.progress_store_file.clone().into());
+    let pg_pool = get_connection_pool(config.db_url.clone());
+    let progress_store = PgProgressStore::new(pg_pool, config.bridge_genesis_checkpoint);
     let mut executor = IndexerExecutor::new(progress_store, 1 /* workflow types */, metrics);
 
     let indexer_metrics_cloned = indexer_meterics.clone();
