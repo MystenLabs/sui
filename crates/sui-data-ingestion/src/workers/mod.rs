@@ -3,7 +3,9 @@
 
 mod archival;
 mod blob;
+mod flask;
 mod kv_store;
 pub use archival::{ArchivalConfig, ArchivalWorker};
 pub use blob::{BlobTaskConfig, BlobWorker};
+pub use flask::FlaskWorker;
 pub use kv_store::{KVStoreTaskConfig, KVStoreWorker};

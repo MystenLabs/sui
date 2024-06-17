@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
 use sui_data_ingestion::{
-    ArchivalConfig, ArchivalWorker, BlobTaskConfig, BlobWorker, DynamoDBProgressStore,
+    ArchivalConfig, ArchivalWorker, BlobTaskConfig, BlobWorker, DynamoDBProgressStore, FlaskWorker,
     KVStoreTaskConfig, KVStoreWorker,
 };
 use sui_data_ingestion_core::{DataIngestionMetrics, ReaderOptions};
@@ -21,6 +21,7 @@ enum Task {
     Archival(ArchivalConfig),
     Blob(BlobTaskConfig),
     KV(KVStoreTaskConfig),
+    Flask,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -139,6 +140,11 @@ async fn main() -> Result<()> {
                     task_config.name,
                     task_config.concurrency,
                 );
+                executor.register(worker_pool).await?;
+            }
+            Task::Flask => {
+                let worker_pool =
+                    WorkerPool::new(FlaskWorker, task_config.name, task_config.concurrency);
                 executor.register(worker_pool).await?;
             }
         };
