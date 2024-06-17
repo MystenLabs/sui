@@ -217,7 +217,9 @@ impl TransactionalAdapter for ValidatorWithFullnode {
     }
 
     async fn advance_epoch(&mut self, _create_random_state: bool) -> anyhow::Result<()> {
-        unimplemented!("advance_epoch not supported")
+        self.validator.reconfigure_for_testing().await;
+        // self.fullnode.reconfigure_for_testing().await;
+        Ok(())
     }
 
     async fn request_gas(
