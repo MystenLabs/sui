@@ -92,6 +92,7 @@ use vfs::{
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     command_line::compiler::{construct_pre_compiled_lib, FullyCompiledProgram},
+    diagnostics::MappedFiles,
     editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
     linters::LintLevel,
@@ -401,32 +402,6 @@ impl ModuleDefs {
 
     pub fn ident(&self) -> &ModuleIdent_ {
         &self.ident
-    }
-}
-
-impl fmt::Display for UseDef {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        let UseDef {
-            col_start,
-            col_end,
-            def_loc,
-            type_def_loc,
-        } = self;
-        write!(f, "start: {col_start}, end: {col_end}, ")?;
-        let DefLoc {
-            fhash: _,
-            start: Position { line, character },
-        } = def_loc;
-        write!(f, "def line: {line}, def char: {character}, ")?;
-        if let Some(ty_info) = type_def_loc {
-            let DefLoc {
-                fhash: _,
-                start: Position { line, character },
-            } = ty_info;
-            write!(f, "ty def line: {line}, ty def char: {character}, ")
-        } else {
-            write!(f, "no ty info")
-        }
     }
 }
 
@@ -1058,6 +1033,36 @@ impl UseDef {
 
     pub fn def_loc(&self) -> Loc {
         self.def_loc
+    }
+
+    // use_line is zero-indexed
+    pub fn render<Writer: std::io::Write>(
+        &self,
+        f: &mut Writer,
+        _mapping: MappedFiles,
+        _use_line: u32,
+    ) -> std::io::Result<()> {
+        let UseDef {
+            col_start,
+            col_end,
+            def_loc,
+            type_def_loc,
+        } = self;
+        write!(f, "start: {col_start}, end: {col_end}, ")?;
+        let DefLoc {
+            fhash: _,
+            start: Position { line, character },
+        } = def_loc;
+        write!(f, "def line: {line}, def char: {character}, ")?;
+        if let Some(ty_info) = type_def_loc {
+            let DefLoc {
+                fhash: _,
+                start: Position { line, character },
+            } = ty_info;
+            write!(f, "type def line: {line}, ty def char: {character}, ")
+        } else {
+            write!(f, "no type info")
+        }
     }
 }
 

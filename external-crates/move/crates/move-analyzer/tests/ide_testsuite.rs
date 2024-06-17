@@ -41,12 +41,11 @@ impl UseDefTest {
         symbols: &Symbols,
         output: &mut dyn std::io::Write,
         use_file: &str,
-        ndx: usize,
     ) -> anyhow::Result<()> {
         // let file_name_mapping = &symbols.file_name_mapping;
         let def_info = &symbols.def_info;
         let UseDefTest { use_ndx, use_line } = self;
-        writeln!(output, "-- test {ndx} -------------------")?;
+        writeln!(output, "-- test entry -------------------")?;
         writeln!(output, "use line: {use_line}, use_ndx: {use_ndx}")?;
         let Some(uses) = mod_symbols.get(*use_line) else {
             writeln!(
@@ -62,7 +61,7 @@ impl UseDefTest {
             )?;
             return Ok(());
         };
-        writeln!(output, "Use Def: {}", use_def)?;
+        use_def.render(output, symbols.files, use_line)?;
         let Some(def) = def_info.get(&use_def.def_loc()) else {
             writeln!(output, "ERROR: No def loc found")?;
             return Ok(());
@@ -118,11 +117,12 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
     let writer: &mut dyn io::Write = output.get_mut();
 
     for (file, tests) in suite.file_tests {
-        writeln!(writer, "== {file} ========================================================")?;
+        writeln!(
+            writer,
+            "== {file} ========================================================"
+        )?;
 
         let mut fpath = project_path.clone();
-
-        let mut ndx = 0;
 
         fpath.push(format!("sources/{file}"));
         let cpath = dunce::canonicalize(&fpath).unwrap();
@@ -134,10 +134,9 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
         for test in tests.iter() {
             match test {
                 TestEntry::UseDefTest(use_def_test) => {
-                    use_def_test.test(mod_symbols, &symbols, writer, &file, ndx)?
+                    use_def_test.test(mod_symbols, &symbols, writer, &file)?
                 }
             };
-            ndx = ndx + 1;
             writeln!(writer, "")?;
         }
     }
