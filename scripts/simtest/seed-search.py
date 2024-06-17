@@ -10,8 +10,8 @@ import random
 import argparse
 
 parser = argparse.ArgumentParser(description='Run the simulator with different seeds')
-parser.add_argument('binary', type=str, help='Name of simulator binary, or full path to binary')
-parser.add_argument('--test', type=str, help='Name of the test to run', required=True)
+parser.add_argument('testname', type=str, help='Name of test to run')
+parser.add_argument('--test', type=str, help='Name of the test binary run', required=True)
 parser.add_argument('--exact', action='store_true', help='Use exact matching for test name', default=False)
 parser.add_argument('--num-seeds', type=int, help='Number of seeds to run', default=200)
 parser.add_argument(
@@ -73,21 +73,21 @@ if __name__ == "__main__":
 
     if not args.no_build:
         os.chdir(repo_root)
-        subprocess.run(["cargo", "simtest", "build", "--test", args.binary], check=True)
+        subprocess.run(["cargo", "simtest", "build", "--test", args.test], check=True)
 
     # if binary contains no slashes, search for it in <repo_root>/target/simulator/deps/
     # otherwise, use the pathname as is
-    if "/" not in args.binary:
-        binary = os.path.join(repo_root, "target/simulator/deps", args.binary)
+    if "/" not in args.test:
+        binary = os.path.join(repo_root, "target/simulator/deps", args.test)
         # binary is a prefix of some test file, find the most recent one that matches the prefix
         if not os.path.isfile(binary):
-            path = os.path.join(repo_root, "target/simulator/deps", args.binary + "*")
+            path = os.path.join(repo_root, "target/simulator/deps", args.test + "*")
             binary = subprocess.getstatusoutput(f"ls -ltr {path} | tail -n 1")[1].split()[-1]
             print(f"Found binary: {binary}")
 
     # check that binary is an executable file
     if not os.path.isfile(binary) or not os.access(binary, os.X_OK):
-        print(f"Error: {args.binary} is not an executable file")
+        print(f"Error: {args.test} is not an executable file")
         print(f"run: `$ ls -ltr target/simulator/deps/ | tail` to find recent test binaries");
         sys.exit(1)
 
@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
     for i in range(1, args.num_seeds + 1):
         next_seed = args.seed_start + i
-        commands.append(("%s %s %s" % (binary, '--exact' if args.exact else '', args.test), {
+        commands.append(("%s %s %s" % (binary, '--exact' if args.exact else '', args.testname), {
           "MSIM_TEST_SEED": "%d" % next_seed,
           "RUST_LOG": "off",
         }))
