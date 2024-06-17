@@ -367,7 +367,6 @@ jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b3007847
 json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 leb128 = "0.2.5"
 lru = "0.10"
-markdown-gen = "1.2.1"
 match_opt = "0.1.2"
 miette = { version = "7", features = ["fancy"] }
 mime = "0.3"

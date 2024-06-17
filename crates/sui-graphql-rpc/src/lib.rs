@@ -8,7 +8,6 @@ pub(crate) mod consistency;
 pub mod context_data;
 pub(crate) mod data;
 mod error;
-pub mod examples;
 pub mod extensions;
 pub(crate) mod functional_group;
 mod metrics;

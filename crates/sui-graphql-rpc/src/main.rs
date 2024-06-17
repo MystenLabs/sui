@@ -9,7 +9,6 @@ use sui_graphql_rpc::commands::Command;
 use sui_graphql_rpc::config::{
     ConnectionConfig, Ide, ServerConfig, ServiceConfig, TxExecFullNodeConfig, Version,
 };
-use sui_graphql_rpc::server::builder::export_schema;
 use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -38,39 +37,6 @@ static VERSION: Version = Version {
 async fn main() {
     let cmd: Command = Command::parse();
     match cmd {
-        Command::GenerateDocsExamples => {
-            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            // we are looking to put examples content in
-            // sui/docs/content/references/sui-graphql/examples.mdx
-            let filename = "docs/content/references/sui-graphql/examples.mdx";
-            buf.pop();
-            buf.pop();
-            buf.push(filename);
-            let content = sui_graphql_rpc::examples::generate_examples_for_docs()
-                .expect("Generating examples markdown file for docs failed");
-            std::fs::write(buf, content).expect("Writing examples markdown failed");
-            println!("Generated the docs example.mdx file and copied it to {filename}.");
-        }
-        Command::GenerateSchema { file } => {
-            let out = export_schema();
-            if let Some(file) = file {
-                println!("Write schema to file: {:?}", file);
-                std::fs::write(file, &out).unwrap();
-            } else {
-                println!("{}", &out);
-            }
-        }
-        Command::GenerateExamples { file } => {
-            let new_content: String = sui_graphql_rpc::examples::generate_markdown()
-                .expect("Generating examples markdown failed");
-            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            buf.push("docs");
-            buf.push("examples.md");
-            let file = file.unwrap_or(buf);
-
-            std::fs::write(file.clone(), new_content).expect("Writing examples markdown failed");
-            println!("Written examples to file: {:?}", file);
-        }
         Command::StartServer {
             ide_title,
             db_url,

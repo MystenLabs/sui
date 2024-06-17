@@ -3,105 +3,147 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
+    use anyhow::{anyhow, Context, Result};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serial_test::serial;
     use simulacrum::Simulacrum;
     use std::cmp::max;
+    use std::collections::BTreeMap;
+    use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_graphql_rpc::config::{ConnectionConfig, Limits};
-    use sui_graphql_rpc::examples::{load_examples, ExampleQuery, ExampleQueryGroup};
     use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use tempfile::tempdir;
 
-    fn bad_examples() -> ExampleQueryGroup {
-        ExampleQueryGroup {
-            name: "bad_examples".to_string(),
-            queries: vec![
-                ExampleQuery {
-                    name: "multiple_queries".to_string(),
-                    contents: "{ chainIdentifier } { chainIdentifier }".to_string(),
-                    path: PathBuf::from("multiple_queries.graphql"),
-                },
-                ExampleQuery {
-                    name: "malformed".to_string(),
-                    contents: "query { }}".to_string(),
-                    path: PathBuf::from("malformed.graphql"),
-                },
-                ExampleQuery {
-                    name: "invalid".to_string(),
-                    contents: "djewfbfo".to_string(),
-                    path: PathBuf::from("invalid.graphql"),
-                },
-                ExampleQuery {
-                    name: "empty".to_string(),
-                    contents: "     ".to_string(),
-                    path: PathBuf::from("empty.graphql"),
-                },
-            ],
-            _path: PathBuf::from("bad_examples"),
-        }
+    struct Example {
+        contents: String,
+        path: Option<PathBuf>,
     }
 
-    async fn validate_example_query_group(
+    fn good_examples() -> Result<BTreeMap<String, Example>> {
+        let examples = PathBuf::from(&env!("CARGO_MANIFEST_DIR")).join("examples");
+
+        let mut dirs = vec![examples.clone()];
+        let mut queries = BTreeMap::new();
+        while let Some(dir) = dirs.pop() {
+            let entries =
+                fs::read_dir(&dir).with_context(|| format!("Looking in {}", dir.display()))?;
+
+            for entry in entries {
+                let entry = entry.with_context(|| format!("Entry in {}", dir.display()))?;
+                let path = entry.path();
+                let typ_ = entry
+                    .file_type()
+                    .with_context(|| format!("Metadata for {}", path.display()))?;
+
+                if typ_.is_dir() {
+                    dirs.push(entry.path());
+                    continue;
+                }
+
+                if path.ends_with(".graphql") {
+                    let contents = fs::read_to_string(&path)
+                        .with_context(|| format!("Reading {}", path.display()))?;
+
+                    let rel_path = path
+                        .strip_prefix(&examples)
+                        .with_context(|| format!("Generating name from {}", path.display()))?
+                        .with_extension("");
+
+                    let name = rel_path
+                        .to_str()
+                        .ok_or_else(|| anyhow!("Generating name from {}", path.display()))?;
+
+                    queries.insert(
+                        name.to_string(),
+                        Example {
+                            contents,
+                            path: Some(path),
+                        },
+                    );
+                }
+            }
+        }
+
+        Ok(queries)
+    }
+
+    fn bad_examples() -> BTreeMap<String, Example> {
+        BTreeMap::from_iter([
+            (
+                "multiple_queries".to_string(),
+                Example {
+                    contents: "{ chainIdentifier } { chainIdentifier }".to_string(),
+                    path: None,
+                },
+            ),
+            (
+                "malformed".to_string(),
+                Example {
+                    contents: "query { }}".to_string(),
+                    path: None,
+                },
+            ),
+            (
+                "invalid".to_string(),
+                Example {
+                    contents: "djewfbfo".to_string(),
+                    path: None,
+                },
+            ),
+            (
+                "empty".to_string(),
+                Example {
+                    contents: "     ".to_string(),
+                    path: None,
+                },
+            ),
+        ])
+    }
+
+    async fn test_query(
         cluster: &ExecutorCluster,
-        group: &ExampleQueryGroup,
+        name: &str,
+        query: &Example,
         max_nodes: &mut u64,
         max_output_nodes: &mut u64,
         max_depth: &mut u64,
         max_payload: &mut u64,
     ) -> Vec<String> {
-        let mut errors = vec![];
-        for query in &group.queries {
-            let resp = cluster
-                .graphql_client
-                .execute_to_graphql(query.contents.clone(), true, vec![], vec![])
-                .await
-                .unwrap();
-            resp.errors().iter().for_each(|err| {
-                errors.push(format!(
-                    "Query failed: {}: {} at: {}\nError: {}",
-                    group.name,
-                    query.name,
-                    query.path.display(),
-                    err
-                ))
-            });
-            if resp.errors().is_empty() {
-                let usage = resp
-                    .usage()
-                    .expect("Usage fetch should succeed")
-                    .unwrap_or_else(|| panic!("Usage should be present for query: {}", query.name));
+        let resp = cluster
+            .graphql_client
+            .execute_to_graphql(query.contents.clone(), true, vec![], vec![])
+            .await
+            .unwrap();
 
-                let nodes = *usage.get("inputNodes").unwrap_or_else(|| {
-                    panic!("Node usage should be present for query: {}", query.name)
-                });
-                let output_nodes = *usage.get("outputNodes").unwrap_or_else(|| {
-                    panic!(
-                        "Output node usage should be present for query: {}",
-                        query.name
-                    )
-                });
-                let depth = *usage.get("depth").unwrap_or_else(|| {
-                    panic!("Depth usage should be present for query: {}", query.name)
-                });
-                let payload = *usage.get("queryPayload").unwrap_or_else(|| {
-                    panic!("Payload usage should be present for query: {}", query.name)
-                });
-                *max_nodes = max(*max_nodes, nodes);
-                *max_output_nodes = max(*max_output_nodes, output_nodes);
-                *max_depth = max(*max_depth, depth);
-                *max_payload = max(*max_payload, payload);
-            }
+        let errors = resp.errors();
+        if errors.is_empty() {
+            let usage = resp
+                .usage()
+                .expect("Usage not found")
+                .expect("Usage not found");
+            *max_nodes = max(*max_nodes, usage["inputNodes"]);
+            *max_output_nodes = max(*max_output_nodes, usage["outputNodes"]);
+            *max_depth = max(*max_depth, usage["depth"]);
+            *max_payload = max(*max_payload, usage["queryPayload"]);
+            return vec![];
         }
+
         errors
+            .into_iter()
+            .map(|e| match &query.path {
+                Some(p) => format!("Query {name:?} at {} failed: {e}", p.display()),
+                None => format!("Query {name:?} failed: {e}"),
+            })
+            .collect()
     }
 
     #[tokio::test]
     #[serial]
-    async fn test_single_all_examples_structure_valid() {
+    async fn good_examples_within_limits() {
         let rng = StdRng::from_seed([12; 32]);
         let data_ingestion_path = tempdir().unwrap().into_path();
         let mut sim = Simulacrum::new_with_rng(rng);
@@ -121,20 +163,17 @@ mod tests {
         )
         .await;
 
-        let groups = load_examples().expect("Could not load examples");
-
         let mut errors = vec![];
-        for group in groups {
-            let group_errors = validate_example_query_group(
+        for (name, example) in good_examples().expect("Could not load examples") {
+            errors.extend(test_query(
                 &cluster,
-                &group,
+                &name,
+                &example,
                 &mut max_nodes,
                 &mut max_output_nodes,
                 &mut max_depth,
                 &mut max_payload,
-            )
-            .await;
-            errors.extend(group_errors);
+            ).await);
         }
 
         // Check that our examples can run with our usage limits
@@ -169,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_bad_examples_fail() {
+    async fn bad_examples_fail() {
         let rng = StdRng::from_seed([12; 32]);
         let data_ingestion_path = tempdir().unwrap().into_path();
         let mut sim = Simulacrum::new_with_rng(rng);
@@ -189,21 +228,19 @@ mod tests {
         )
         .await;
 
-        let bad_examples = bad_examples();
-        let errors = validate_example_query_group(
-            &cluster,
-            &bad_examples,
-            &mut max_nodes,
-            &mut max_output_nodes,
-            &mut max_depth,
-            &mut max_payload,
-        )
-        .await;
+        for (name, example) in bad_examples() {
+            let errors = test_query(
+                &cluster,
+                &name,
+                &example,
+                &mut max_nodes,
+                &mut max_output_nodes,
+                &mut max_depth,
+                &mut max_payload,
+            )
+            .await;
 
-        assert_eq!(
-            errors.len(),
-            bad_examples.queries.len(),
-            "all examples should fail"
-        );
+            assert!(!errors.is_empty(), "Query {name:?} should have failed");
+        }
     }
 }

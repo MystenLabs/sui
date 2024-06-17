@@ -30,7 +30,6 @@ lru.workspace = true
 move-binary-format.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
-markdown-gen.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true
 move-core-types.workspace = true
