@@ -1,13 +1,14 @@
-use dashmap::DashMap;
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    net::SocketAddr,
+    fmt::Debug,
+    fs,
+    net::{IpAddr, SocketAddr},
+    path::Path,
 };
-use std::{fmt::Debug, path::Path};
-use std::{fs, net::IpAddr};
+
+use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
-use sui_types::transaction::CertifiedTransaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::TransactionDigest,
@@ -16,7 +17,7 @@ use sui_types::{
     object::Object,
     storage::{DeleteKind, WriteKind},
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
-    transaction::{InputObjectKind, TransactionDataAPI, TransactionKind},
+    transaction::{CertifiedTransaction, InputObjectKind, TransactionDataAPI, TransactionKind},
 };
 
 pub type UniqueId = u16;
@@ -209,7 +210,7 @@ impl TransactionWithEffects {
         }
     }
 
-    /// Returns the read set of a transction.
+    /// Returns the read set of a transaction.
     /// Specifically, this is the set of input objects to the transaction.
     /// It excludes child objects that are determined at runtime,
     /// but includes all owned objects inputs that must have their version numbers bumped.
@@ -245,7 +246,7 @@ impl TransactionWithEffects {
 
     /// TODO: This makes use of ground_truth_effects, which is illegal for validators;
     /// it is not something that is known a-priori before execution.
-    /// Returns the write set of a transction.
+    /// Returns the write set of a transaction.
     pub fn get_write_set(&self) -> HashSet<ObjectID> {
         match &self.ground_truth_effects {
             Some(fx) => {

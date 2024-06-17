@@ -1,22 +1,19 @@
-use super::types::*;
 use core::panic;
-use dashmap::DashMap;
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
+
 use sui_protocol_config::ProtocolConfig;
-use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
-use sui_single_node_benchmark::mock_storage::InMemoryObjectStore;
-use sui_types::base_types::{ObjectID, ObjectRef};
-use sui_types::digests::TransactionDigest;
-use sui_types::effects::TransactionEffectsAPI;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::message_envelope::Message;
-use sui_types::messages_checkpoint::CheckpointDigest;
-use sui_types::object::Object;
-use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::{TransactionDataAPI, VerifiedCertificate};
-use tokio::sync::mpsc;
-use tokio::time::Duration;
+use sui_single_node_benchmark::{
+    benchmark_context::BenchmarkContext,
+    mock_storage::InMemoryObjectStore,
+};
+use sui_types::{
+    effects::TransactionEffectsAPI,
+    executable_transaction::VerifiedExecutableTransaction,
+    transaction::{TransactionDataAPI, VerifiedCertificate},
+};
+use tokio::{sync::mpsc, time::Duration};
+
+use super::types::*;
 
 /*****************************************************************************************
  *                                    PreExec Worker                                     *
@@ -30,10 +27,7 @@ pub struct PreExecWorkerState {
 }
 
 impl PreExecWorkerState {
-    pub fn new(
-        new_store: InMemoryObjectStore,
-        ctx: Arc<BenchmarkContext>,
-    ) -> Self {
+    pub fn new(new_store: InMemoryObjectStore, ctx: Arc<BenchmarkContext>) -> Self {
         Self {
             memory_store: Arc::new(new_store),
             context: ctx,

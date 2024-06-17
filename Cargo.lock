@@ -13898,6 +13898,7 @@ dependencies = [
  "move-package",
  "once_cell",
  "prometheus",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "strum 0.24.1",

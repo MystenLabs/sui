@@ -1,6 +1,7 @@
 use core::panic;
-use tokio::sync::mpsc;
-use tokio::time::Duration;
+
+use tokio::{sync::mpsc, time::Duration};
+
 use super::types::*;
 
 /*****************************************************************************************
@@ -11,7 +12,7 @@ const DURATION: u64 = 10000;
 pub async fn mock_consensus_worker_run(
     in_channel: &mut mpsc::UnboundedReceiver<RemoraMessage>,
     out_channel: &mpsc::UnboundedSender<Vec<TransactionWithEffects>>,
-    my_id: u16,
+    _my_id: u16,
 ) {
     let mut consensus_interval = tokio::time::interval(Duration::from_millis(DURATION));
     let mut tx_vec: Vec<TransactionWithEffects> = Vec::new();
