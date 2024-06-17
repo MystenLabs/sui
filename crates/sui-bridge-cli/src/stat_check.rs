@@ -7,6 +7,7 @@ use ethers::abi::AbiEncode;
 use ethers::providers::Middleware;
 use ethers::types::Address as EthAddress;
 use ethers::types::H256;
+use ethers::types::U256;
 use move_core_types::ident_str;
 use tokio::time::sleep;
 use std::collections::{HashMap, HashSet};
@@ -179,7 +180,7 @@ async fn query_eth(eth_rpc_url: String) -> (HashMap<u64, EthDeposit>, HashMap<u6
                     all_claims.insert(
                         nonce,
                         EthClaim {
-                            erc_20_adjusted_amount: erc_20_adjusted_amount.as_u64(),
+                            erc_20_adjusted_amount,
                             sender_address: SuiAddress::from_bytes(&sender_address.0).unwrap(),
                             token_id,
                             recipient_address,
@@ -231,7 +232,7 @@ async fn query_eth(eth_rpc_url: String) -> (HashMap<u64, EthDeposit>, HashMap<u6
 
 #[derive(Debug)]
 struct EthClaim {
-    erc_20_adjusted_amount: u64,
+    erc_20_adjusted_amount: U256,
     sender_address: SuiAddress,
     token_id: u8,
     recipient_address: EthAddress,
