@@ -3730,8 +3730,10 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
         .unwrap();
 
     let elide_transaction_digest = |s: String| -> String {
-        let mut x = s.splitn(3, '\'').collect::<Vec<_>>();
-        x[1] = "<ELIDED_TRANSACTION_DIGEST>";
+        let mut x = s.splitn(5, '\'').collect::<Vec<_>>();
+        x[1] = "ELIDED_TRANSACTION_DIGEST";
+        let tmp = format!("ELIDED_ADDRESS{}", &x[3][66..]);
+        x[3] = &tmp;
         x.join("'")
     };
 
@@ -3793,7 +3795,7 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
 
     let error_string = format!(
         "Non-clever-abort\n---\n{}\n---\nLine-only-abort\n---\n{}\n---\nClever-error-utf8\n---\n{}\n---\nClever-error-non-utf8\n---\n{}\n---\n",
-        elide_transaction_digest(non_clever_abort.to_string()), 
+        elide_transaction_digest(non_clever_abort.to_string()),
         elide_transaction_digest(line_only_abort.to_string()),
         elide_transaction_digest(clever_error_utf8.to_string()),
         elide_transaction_digest(clever_error_non_utf8.to_string())

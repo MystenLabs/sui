@@ -28,6 +28,8 @@ use move_core_types::{identifier::IdentStr, language_storage::ModuleId};
 use move_coverage::coverage_map::{ExecCoverageMap, FunctionCoverage};
 use move_ir_types::location::Loc;
 
+const PREVIEW_LEN: usize = 4;
+
 /// Holds the various options that we support while disassembling code.
 #[derive(Debug, Default, Parser)]
 pub struct DisassemblerOptions {
@@ -438,18 +440,19 @@ impl<'a> Disassembler<'a> {
     }
 
     fn preview_const(slice: &[u8]) -> String {
-        if slice.len() <= 4 {
+        // Account for the .. in the preview
+        if slice.len() <= PREVIEW_LEN + 2 {
             hex::encode(slice)
         } else {
-            format!("{}..", hex::encode(&slice[..4]))
+            format!("{}..", hex::encode(&slice[..PREVIEW_LEN]))
         }
     }
 
     fn preview_string(s: &str) -> String {
-        if s.len() <= 4 {
+        if s.len() <= PREVIEW_LEN + 2 {
             s.to_string()
         } else {
-            format!("{}..", &s[..4])
+            format!("{}..", &s[..PREVIEW_LEN])
         }
     }
 
