@@ -42,6 +42,8 @@ use sui_types::transaction::{ObjectArg, Transaction, TransactionData};
 use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
 use tracing::info;
 
+pub mod stat_check;
+
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub struct Args {
@@ -114,6 +116,14 @@ pub enum BridgeCommand {
         config_path: PathBuf,
         #[clap(subcommand)]
         cmd: BridgeClientCommands,
+    },
+    /// Given proxy address of SuiBridge contract, print other contract addresses
+    #[clap(name = "bridge-stat-check")]
+    BridgeStatCheck {
+        #[clap(long = "eth-rpc-url")]
+        eth_rpc_url: String,
+        #[clap(long = "sui-rpc-url")]
+        sui_rpc_url: String,
     },
 }
 

@@ -6,6 +6,7 @@ use ethers::providers::Middleware;
 use fastcrypto::encoding::{Encoding, Hex};
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
+use sui_bridge_cli::stat_check::foo;
 use std::collections::HashMap;
 use std::str::from_utf8;
 use std::sync::Arc;
@@ -406,6 +407,14 @@ async fn main() -> anyhow::Result<()> {
             let config = LoadedBridgeCliConfig::load(config).await?;
             let sui_bridge_client = SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url).await?;
             cmd.handle(&config, sui_bridge_client).await?;
+            return Ok(());
+        }
+
+        BridgeCommand::BridgeStatCheck {
+            eth_rpc_url,
+            sui_rpc_url,
+        } => {
+            foo(eth_rpc_url, sui_rpc_url).await;
             return Ok(());
         }
     }
