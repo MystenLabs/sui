@@ -53,7 +53,7 @@ pub(crate) struct Object {
     pub kind: ObjectKind,
     /// The checkpoint sequence number at which this was viewed at.
     pub checkpoint_viewed_at: u64,
-    /// Optional root parent object version for dynamic fields.
+    /// Root parent object version for dynamic fields.
     ///
     /// This enables consistent dynamic field reads in the case of chained dynamic object fields,
     /// e.g., `Parent -> DOF1 -> DOF2`. In such cases, the object versions may end up like
@@ -64,7 +64,7 @@ pub(crate) struct Object {
     /// provided as inputs to a transaction as well as any mutated dynamic child objects. However,
     /// any dynamic child objects that were loaded but not actually mutated don't end up having
     /// their versions updated.
-    root_version: Option<u64>,
+    root_version: u64,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
@@ -474,7 +474,7 @@ impl Object {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_field(ctx, name, self.root_version())
+            .dynamic_field(ctx, name, Some(self.root_version()))
             .await
     }
 
@@ -491,7 +491,7 @@ impl Object {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_object_field(ctx, name, self.root_version())
+            .dynamic_object_field(ctx, name, Some(self.root_version()))
             .await
     }
 
@@ -508,7 +508,7 @@ impl Object {
         before: Option<Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_fields(ctx, first, after, last, before, self.root_version())
+            .dynamic_fields(ctx, first, after, last, before, Some(self.root_version()))
             .await
     }
 
@@ -696,7 +696,7 @@ impl Object {
         checkpoint_viewed_at: u64,
         root_version: Option<u64>,
     ) -> Object {
-        let root_version = root_version.or_else(|| version_for_dynamic_fields(&native));
+        let root_version = root_version.unwrap_or_else(|| version_for_dynamic_fields(&native));
         Object {
             address,
             kind: ObjectKind::NotIndexed(native),
@@ -723,11 +723,10 @@ impl Object {
         }
     }
 
-    /// Optional root parent object version for dynamic fields.
+    /// Root parent object version for dynamic fields.
     ///
-    /// It may be `None` if the GQL query is rooted in this object and it is a child object /
-    /// dynamic field. Check [`Object::root_version`] for details.
-    pub(crate) fn root_version(&self) -> Option<u64> {
+    /// Check [`Object::root_version`] for details.
+    pub(crate) fn root_version(&self) -> u64 {
         self.root_version
     }
 
@@ -919,7 +918,7 @@ impl Object {
                 })?;
 
                 let root_version =
-                    root_version.or_else(|| version_for_dynamic_fields(&native_object));
+                    root_version.unwrap_or_else(|| version_for_dynamic_fields(&native_object));
                 Ok(Self {
                     address,
                     kind: ObjectKind::Indexed(native_object, history_object),
@@ -936,7 +935,7 @@ impl Object {
                     checkpoint_sequence_number: history_object.checkpoint_sequence_number,
                 }),
                 checkpoint_viewed_at,
-                root_version: None,
+                root_version: history_object.object_version as u64,
             }),
         }
     }
@@ -949,14 +948,8 @@ impl Object {
 /// under this object at the state resulting from the transaction that produced this version.
 ///
 /// See [`Object::root_version`] for more details on parent/child object version mechanics.
-fn version_for_dynamic_fields(native: &NativeObject) -> Option<u64> {
-    use NativeOwner::*;
-    match native.as_inner().owner {
-        AddressOwner(_) | Shared { .. } | ObjectOwner(_) => {
-            Some(native.as_inner().version().into())
-        }
-        Immutable => None,
-    }
+fn version_for_dynamic_fields(native: &NativeObject) -> u64 {
+    native.as_inner().version().into()
 }
 
 impl ObjectFilter {

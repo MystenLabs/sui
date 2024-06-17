@@ -312,7 +312,7 @@ impl MoveObject {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_)
-            .dynamic_field(ctx, name, self.root_version())
+            .dynamic_field(ctx, name, Some(self.root_version()))
             .await
     }
 
@@ -329,7 +329,7 @@ impl MoveObject {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_)
-            .dynamic_object_field(ctx, name, self.root_version())
+            .dynamic_object_field(ctx, name, Some(self.root_version()))
             .await
     }
 
@@ -346,7 +346,7 @@ impl MoveObject {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(&self.super_)
-            .dynamic_fields(ctx, first, after, last, before, self.root_version())
+            .dynamic_fields(ctx, first, after, last, before, Some(self.root_version()))
             .await
     }
 
@@ -455,11 +455,10 @@ impl MoveObject {
         .await
     }
 
-    /// Optional root parent object version if this is a dynamic field.
+    /// Root parent object version for dynamic fields.
     ///
-    /// It may be `None` if the GQL query is rooted in this object and it is a child object /
-    /// dynamic field. Check [`Object::root_version`] for details.
-    pub(crate) fn root_version(&self) -> Option<u64> {
+    /// Check [`Object::root_version`] for details.
+    pub(crate) fn root_version(&self) -> u64 {
         self.super_.root_version()
     }
 }

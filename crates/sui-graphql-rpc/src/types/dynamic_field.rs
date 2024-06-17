@@ -108,11 +108,7 @@ impl DynamicField {
             let obj = MoveObject::query(
                 ctx,
                 self.df_object_id,
-                if let Some(parent_version) = self.root_version() {
-                    Object::under_parent(parent_version, self.super_.super_.checkpoint_viewed_at)
-                } else {
-                    Object::latest_at(self.super_.super_.checkpoint_viewed_at)
-                },
+                Object::under_parent(self.root_version(), self.super_.super_.checkpoint_viewed_at),
             )
             .await
             .extend()?;
@@ -248,7 +244,7 @@ impl DynamicField {
         Ok(conn)
     }
 
-    pub(crate) fn root_version(&self) -> Option<u64> {
+    pub(crate) fn root_version(&self) -> u64 {
         self.super_.root_version()
     }
 }
