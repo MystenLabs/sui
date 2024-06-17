@@ -6151,3 +6151,11 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         panic!("First scheduled transaction must be a ConsensusCommitPrologueV3 transaction.");
     }
 }
+
+#[tokio::test]
+async fn test_single_authority_reconfigure() {
+    let state = TestAuthorityBuilder::new().build().await;
+    assert_eq!(state.epoch_store_for_testing().epoch(), 0);
+    state.reconfigure_for_testing().await;
+    assert_eq!(state.epoch_store_for_testing().epoch(), 1);
+}
