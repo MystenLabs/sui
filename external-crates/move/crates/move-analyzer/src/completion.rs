@@ -27,7 +27,7 @@ use move_compiler::{
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
     },
-    shared::{Identifier, ide::AutocompleteMethod},
+    shared::{ide::AutocompleteMethod, Identifier},
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
@@ -284,9 +284,7 @@ fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<Completi
     let Some(fhash) = symbols.file_hash(use_fpath) else {
         return completions;
     };
-    let Some(byte_idx) =
-        utils::lsp_position_to_byte_index(&symbols.files, fhash, position)
-    else {
+    let Some(byte_idx) = utils::lsp_position_to_byte_index(&symbols.files, fhash, position) else {
         return completions;
     };
     let loc = Loc::new(fhash, byte_idx, byte_idx);
@@ -683,7 +681,12 @@ fn completion_dot_test() {
     };
     let items = completion_items(pos, &cpath, &symbols);
     let loc = format!("{:?} (line: {}, col: {})", cpath, pos.line, pos.character);
-    assert!(items.len() == 3, "wrong number of items at {} (3 vs {})", loc.clone(), items.len());
+    assert!(
+        items.len() == 3,
+        "wrong number of items at {} (3 vs {})",
+        loc.clone(),
+        items.len()
+    );
     validate_item(
         loc.clone(),
         &items,

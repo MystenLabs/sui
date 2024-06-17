@@ -62,7 +62,9 @@ pub fn lsp_position_to_byte_index(
     file_hash: FileHash,
     pos: &Position,
 ) -> Option<ByteIndex> {
-    files.line_char_offset_to_loc_opt(file_hash, pos.line, pos.character).map(|loc| loc.start())
+    files
+        .line_char_offset_to_loc_opt(file_hash, pos.line, pos.character)
+        .map(|loc| loc.start())
 }
 
 /// Some functions defined in a module need to be ignored.
