@@ -6,7 +6,6 @@
 /// list.
 module sui::deny_list {
     use sui::config::{Self, Config};
-    use sui::dynamic_field as field;
     use sui::dynamic_object_field as ofield;
     use sui::table::{Self, Table};
     use sui::bag::{Self, Bag};
@@ -224,7 +223,7 @@ module sui::deny_list {
         per_type_key: vector<u8>,
     ): bool {
         let key = ConfigKey { per_type_index, per_type_key };
-        field::exists_(&deny_list.id, key)
+        ofield::exists_(&deny_list.id, key)
     }
 
     public(package) macro fun per_type_config_entry(
