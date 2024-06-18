@@ -18,15 +18,15 @@ module test::m {
         })
     }
 
-    public fun check(s: &S, ctx: &TxContext) {
-        assert!(s.value == ctx.epoch() + 1, 0);
+    public fun check(s: &S, epoch_diff: u64, ctx: &TxContext) {
+        assert!(s.value + epoch_diff == ctx.epoch());
     }
 }
 
 //# run test::m::create
 
-//# run test::m::check --args object(2,0)
+//# run test::m::check --args object(2,0) 0
 
 //# advance-epoch
 
-//# run test::m::check --args object(2,0)
+//# run test::m::check --args object(2,0) 1
