@@ -506,24 +506,18 @@ pub struct AuthorityEpochTables {
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.
     pub(crate) dkg_processed_messages_v2: DBMap<PartyId, VersionedProcessedMessage>,
-    /// This table is no longer used (can be removed when DBMap supports removing tables)
-    #[allow(dead_code)]
     #[deprecated]
     pub(crate) dkg_processed_messages: DBMap<PartyId, dkg_v0::ProcessedMessage<PkG, EncG>>,
 
     /// Records messages used to generate a DKG confirmation. Updated when enough DKG
     /// messages are received to progress to the next phase.
     pub(crate) dkg_used_messages_v2: DBMap<u64, VersionedUsedProcessedMessages>,
-    /// This table is no longer used (can be removed when DBMap supports removing tables)
-    #[allow(dead_code)]
     #[deprecated]
     pub(crate) dkg_used_messages: DBMap<u64, dkg_v0::UsedProcessedMessages<PkG, EncG>>,
 
     /// Records confirmations received from other nodes. Updated when receiving a new
     /// dkg::Confirmation via consensus.
     pub(crate) dkg_confirmations_v2: DBMap<PartyId, VersionedDkgConfimation>,
-    /// This table is no longer used (can be removed when DBMap supports removing tables)
-    #[allow(dead_code)]
     #[deprecated]
     pub(crate) dkg_confirmations: DBMap<PartyId, dkg::Confirmation<EncG>>,
     /// Records the final output of DKG after completion, including the public VSS key and
@@ -3451,8 +3445,7 @@ impl AuthorityPerEpochStore {
                         );
                         let versioned_dkg_message = match self.protocol_config.dkg_version() {
                             // old message was not an enum
-                            0 => bcs::from_bytes(bytes)
-                                .and_then(|message| Ok(VersionedDkgMessage::V0(message))),
+                            0 => bcs::from_bytes(bytes).map(VersionedDkgMessage::V0),
                             _ => bcs::from_bytes(bytes),
                         };
                         match versioned_dkg_message {
@@ -3491,8 +3484,7 @@ impl AuthorityPerEpochStore {
 
                         let versioned_dkg_confirmation = match self.protocol_config.dkg_version() {
                             // old message was not an enum
-                            0 => bcs::from_bytes(bytes)
-                                .and_then(|message| Ok(VersionedDkgConfimation::V0(message))),
+                            0 => bcs::from_bytes(bytes).map(VersionedDkgConfimation::V0),
                             _ => bcs::from_bytes(bytes),
                         };
 
