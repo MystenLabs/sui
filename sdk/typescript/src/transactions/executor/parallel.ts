@@ -48,6 +48,8 @@ export class ParallelTransactionExecutor {
 	#objectIdQueues = new Map<string, (() => void)[]>();
 	#buildQueue = new SerialQueue();
 	#executeQueue: ParallelQueue;
+	#lastDigest: string | null = null;
+	#cacheLock: Promise<void> | null = null;
 
 	constructor(options: ParallelTransactionExecutorOptions) {
 		this.#signer = options.signer;
@@ -145,6 +147,7 @@ export class ParallelTransactionExecutor {
 	async #execute(transaction: Transaction, usedObjects: Set<string>) {
 		let gasCoin!: CoinWithBalance;
 		try {
+			await this.#updateCache();
 			const bytes = await this.#buildQueue.runTask(async () => {
 				gasCoin = await this.#getGasCoin();
 				transaction.setGasPayment([
@@ -197,6 +200,8 @@ export class ParallelTransactionExecutor {
 				}
 			}
 
+			this.#lastDigest = results.digest;
+
 			return {
 				digest: results.digest,
 				effects: toB64(effectsBytes),
@@ -210,7 +215,13 @@ export class ParallelTransactionExecutor {
 				this.#sourceCoins.set(gasCoin.id, null);
 			}
 
-			await this.#cache.cache.deleteObjects([...usedObjects]);
+			this.#updateCache(async () => {
+				await Promise.all([
+					this.#cache.cache.deleteObjects([...usedObjects]),
+					this.#waitForLastDigest(),
+				]);
+			});
+
 			throw error;
 		} finally {
 			usedObjects.forEach((objectId) => {
@@ -221,6 +232,28 @@ export class ParallelTransactionExecutor {
 					this.#objectIdQueues.delete(objectId);
 				}
 			});
+		}
+	}
+
+	async #updateCache(fn?: () => Promise<void>) {
+		if (this.#cacheLock) {
+			await this.#cacheLock;
+		}
+
+		this.#cacheLock =
+			fn?.().then(
+				() => {
+					this.#cacheLock = null;
+				},
+				() => {},
+			) ?? null;
+	}
+
+	async #waitForLastDigest() {
+		const digest = this.#lastDigest;
+		if (digest) {
+			this.#lastDigest = null;
+			await this.#client.waitForTransaction({ digest });
 		}
 	}
 
@@ -288,6 +321,8 @@ export class ParallelTransactionExecutor {
 			coinResults.push(results[i]);
 		}
 		txb.transferObjects(coinResults, address);
+
+		await this.#updateCache(() => this.#waitForLastDigest());
 
 		const result = await this.#client.signAndExecuteTransaction({
 			transaction: txb,
