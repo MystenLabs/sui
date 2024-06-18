@@ -630,6 +630,24 @@ impl StateAccumulatorV2 {
     ) -> SuiResult {
         let _scope = monitored_scope("AccumulateRunningRoot");
 
+        // For the last checkpoint of the epoch, this function will be called once by the
+        // checkpoint builder, and again by checkpoint executor.
+        //
+        // Normally this is fine, since the notify_read_running_root(checkpoint_seq_num - 1) will
+        // work normally. But if there is only one checkpoint in the epoch, that call will hang
+        // forever, since the previous checkpoint belongs to the previous epoch.
+        if epoch_store
+            .get_running_root_accumulator(&checkpoint_seq_num)?
+            .is_some()
+        {
+            debug!(
+                "accumulate_running_root {:?} {:?} already exists",
+                epoch_store.epoch(),
+                checkpoint_seq_num
+            );
+            return Ok(());
+        }
+
         let mut running_root = if checkpoint_seq_num == 0 {
             // we're at genesis and need to start from scratch
             Accumulator::default()
