@@ -26,7 +26,7 @@ pub struct PreExecAgent {
 pub const COMPONENT: Component = Component::Baseline;
 
 #[async_trait]
-impl Agent<RemoraMessage> for PreExecAgent {
+impl Agent for PreExecAgent {
     fn new(
         id: UniqueId,
         in_channel: mpsc::Receiver<NetworkMessage>,

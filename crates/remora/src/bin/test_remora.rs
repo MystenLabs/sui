@@ -11,7 +11,7 @@ use remora::{
     primary_agent::PrimaryAgent,
     server::Server,
     tx_gen_agent::TxnGenAgent,
-    types::{GlobalConfig, RemoraMessage, UniqueId},
+    types::{GlobalConfig, UniqueId},
 };
 use tokio::task::{JoinError, JoinHandle};
 
@@ -28,13 +28,13 @@ impl ExecutorShard {
         // Initialize and run the worker server.
         let kind = configs.kind.as_str();
         let main_handle = if kind == "GEN" {
-            let mut server = Server::<TxnGenAgent, RemoraMessage>::new(global_configs, id);
+            let mut server = Server::<TxnGenAgent>::new(global_configs, id);
             tokio::spawn(async move { server.run().await })
         } else if kind == "PRI" {
-            let mut server = Server::<PrimaryAgent, RemoraMessage>::new(global_configs, id);
+            let mut server = Server::<PrimaryAgent>::new(global_configs, id);
             tokio::spawn(async move { server.run().await })
         } else if kind == "PRE" {
-            let mut server = Server::<PreExecAgent, RemoraMessage>::new(global_configs, id);
+            let mut server = Server::<PreExecAgent>::new(global_configs, id);
             tokio::spawn(async move { server.run().await })
         } else {
             panic!("Unexpected agent kind: {kind}");
@@ -89,11 +89,7 @@ enum Operation {
 }
 
 /// Deploy a local testbed of executor shards.
-async fn deploy_testbed(
-    tx_count: u64,
-    duration: u64,
-    pre_exec_workers: usize,
-) -> (GlobalConfig, ExecutorShard) {
+async fn deploy_testbed(tx_count: u64, duration: u64, pre_exec_workers: usize) -> GlobalConfig {
     let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); pre_exec_workers + 2];
     let mut global_configs = GlobalConfig::new_for_benchmark(ips, pre_exec_workers);
 

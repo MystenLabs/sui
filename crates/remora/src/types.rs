@@ -105,21 +105,6 @@ impl GlobalConfig {
     }
 }
 
-pub trait Message {
-    fn serialize(&self) -> String;
-    fn deserialize(string: String) -> Self;
-}
-
-impl Message for std::string::String {
-    fn serialize(&self) -> String {
-        self.to_string()
-    }
-
-    fn deserialize(string: String) -> Self {
-        string
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NetworkMessage {
     pub src: UniqueId,
@@ -181,16 +166,6 @@ pub enum RemoraMessage {
 
     // For connection setup
     Handshake(),
-}
-
-impl Message for RemoraMessage {
-    fn serialize(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
-
-    fn deserialize(string: String) -> Self {
-        serde_json::from_str(&string).unwrap()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

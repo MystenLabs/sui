@@ -1,13 +1,11 @@
 use async_trait::async_trait;
-use std::fmt::Debug;
 use tokio::sync::mpsc;
 
 // use crate::metrics::Metrics;
-
 use super::types::*;
 
 #[async_trait]
-pub trait Agent<M: Debug + Message> {
+pub trait Agent {
     fn new(
         id: UniqueId,
         in_channel: mpsc::Receiver<NetworkMessage>,

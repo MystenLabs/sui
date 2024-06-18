@@ -1,17 +1,20 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
+
+use async_trait::async_trait;
+use sui_single_node_benchmark::{
+    benchmark_context::BenchmarkContext,
+    command::Component,
+    workload::Workload,
+};
+use tokio::sync::mpsc;
+
 use super::agents::*;
 use crate::{
     input_traffic_manager::input_traffic_manager_run,
-    mock_consensus_worker::mock_consensus_worker_run, 
+    mock_consensus_worker::mock_consensus_worker_run,
     primary_worker::{self},
     tx_gen_agent::WORKLOAD,
     types::*,
-};
-use async_trait::async_trait;
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use sui_single_node_benchmark::{
-    benchmark_context::BenchmarkContext, command::Component, workload::Workload,
 };
 
 pub struct PrimaryAgent {
@@ -25,7 +28,7 @@ pub struct PrimaryAgent {
 pub const COMPONENT: Component = Component::Baseline;
 
 #[async_trait]
-impl Agent<RemoraMessage> for PrimaryAgent {
+impl Agent for PrimaryAgent {
     fn new(
         id: UniqueId,
         in_channel: mpsc::Receiver<NetworkMessage>,
@@ -65,10 +68,8 @@ impl Agent<RemoraMessage> for PrimaryAgent {
         let (consensus_executor_sender, mut consensus_executor_receiver) =
             mpsc::unbounded_channel::<Vec<TransactionWithEffects>>();
 
-        let mut primary_worker_state = primary_worker::PrimaryWorkerState::new(
-            store,
-            context.clone(),
-        );
+        let mut primary_worker_state =
+            primary_worker::PrimaryWorkerState::new(store, context.clone());
 
         let id = self.id.clone();
         let out_channel = self.out_channel.clone();
