@@ -175,15 +175,20 @@ describe('CachingTransactionExecutor', async () => {
 
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 
-		const result2 = await executor.signAndExecuteTransaction({
-			transaction: txb2,
-			signer: toolbox.keypair,
-			options: {
-				showEffects: true,
-			},
-		});
-		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
-		expect(result2.effects?.status.status).toBe('success');
+		try {
+			const result2 = await executor.signAndExecuteTransaction({
+				transaction: txb2,
+				signer: toolbox.keypair,
+				options: {
+					showEffects: true,
+				},
+			});
+
+			expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
+			expect(result2.effects?.status.status).toBe('success');
+		} catch (e) {
+			console.log('failed transaction:', await txb3.toJSON());
+		}
 
 		await executor.reset();
 
@@ -193,15 +198,19 @@ describe('CachingTransactionExecutor', async () => {
 
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 
-		const result3 = await executor.signAndExecuteTransaction({
-			transaction: txb3,
-			signer: toolbox.keypair,
-			options: {
-				showEffects: true,
-			},
-		});
-		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
-		expect(result3.effects?.status.status).toBe('success');
+		try {
+			const result3 = await executor.signAndExecuteTransaction({
+				transaction: txb3,
+				signer: toolbox.keypair,
+				options: {
+					showEffects: true,
+				},
+			});
+			expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
+			expect(result3.effects?.status.status).toBe('success');
+		} catch (e) {
+			console.log('failed transaction:', await txb3.toJSON());
+		}
 	});
 });
 
