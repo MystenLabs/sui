@@ -411,6 +411,13 @@ impl StateAccumulator {
         )
     }
 
+    pub fn metrics(&self) -> Arc<StateAccumulatorMetrics> {
+        match self {
+            StateAccumulator::V1(impl_v1) => impl_v1.metrics.clone(),
+            StateAccumulator::V2(impl_v2) => impl_v2.metrics.clone(),
+        }
+    }
+
     pub fn set_inconsistent_state(&self, is_inconsistent_state: bool) {
         match self {
             StateAccumulator::V1(impl_v1) => &impl_v1.metrics,

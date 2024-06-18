@@ -227,7 +227,7 @@ pub struct SuiNode {
     state_sync_handle: state_sync::Handle,
     randomness_handle: randomness::Handle,
     checkpoint_store: Arc<CheckpointStore>,
-    accumulator_components: Mutex<Option<(Arc<StateAccumulator>, Arc<StateAccumulatorMetrics>)>>,
+    accumulator: Mutex<Option<Arc<StateAccumulator>>>,
     connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
     /// Broadcast channel to send the starting system state for the next epoch.
@@ -713,11 +713,10 @@ impl SuiNode {
         )
         .await?;
 
-        let accumulator_metrics = StateAccumulatorMetrics::new(&prometheus_registry);
         let accumulator = Arc::new(StateAccumulator::new(
             cache_traits.accumulator_store.clone(),
             &epoch_store,
-            accumulator_metrics.clone(),
+            StateAccumulatorMetrics::new(&prometheus_registry),
         ));
 
         let authority_names_to_peer_ids = epoch_store
@@ -784,7 +783,7 @@ impl SuiNode {
             state_sync_handle,
             randomness_handle,
             checkpoint_store,
-            accumulator_components: Mutex::new(Some((accumulator, accumulator_metrics))),
+            accumulator: Mutex::new(Some(accumulator)),
             end_of_epoch_channel,
             connection_monitor_status,
             trusted_peer_change_tx,
@@ -1464,8 +1463,8 @@ impl SuiNode {
             CheckpointExecutorMetrics::new(&self.registry_service.default_registry());
 
         loop {
-            let mut accum_components_guard = self.accumulator_components.lock().await;
-            let (accumulator, accumulator_metrics) = accum_components_guard.take().unwrap();
+            let mut accumulator_guard = self.accumulator.lock().await;
+            let accumulator = accumulator_guard.take().unwrap();
             let mut checkpoint_executor = CheckpointExecutor::new(
                 self.state_sync_handle.subscribe_to_synced_checkpoints(),
                 self.checkpoint_store.clone(),
@@ -1606,15 +1605,16 @@ impl SuiNode {
 
                 // No other components should be holding a strong reference to state accumulator
                 // at this point. Confirm here before we swap in the new accumulator.
-                Arc::into_inner(accumulator)
-                    .expect("Accumulator should have no other references at this point");
+                let accumulator_metrics = Arc::into_inner(accumulator)
+                    .expect("Accumulator should have no other references at this point")
+                    .metrics();
                 let new_accumulator = Arc::new(StateAccumulator::new(
                     self.state.get_accumulator_store().clone(),
                     &new_epoch_store,
-                    accumulator_metrics.clone(),
+                    accumulator_metrics,
                 ));
                 let weak_accumulator = Arc::downgrade(&new_accumulator);
-                *accum_components_guard = Some((new_accumulator, accumulator_metrics.clone()));
+                *accumulator_guard = Some(new_accumulator);
 
                 consensus_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
@@ -1659,15 +1659,16 @@ impl SuiNode {
 
                 // No other components should be holding a strong reference to state accumulator
                 // at this point. Confirm here before we swap in the new accumulator.
-                Arc::into_inner(accumulator)
-                    .expect("Accumulator should have no other references at this point");
+                let accumulator_metrics = Arc::into_inner(accumulator)
+                    .expect("Accumulator should have no other references at this point")
+                    .metrics();
                 let new_accumulator = Arc::new(StateAccumulator::new(
                     self.state.get_accumulator_store().clone(),
                     &new_epoch_store,
-                    accumulator_metrics.clone(),
+                    accumulator_metrics,
                 ));
                 let weak_accumulator = Arc::downgrade(&new_accumulator);
-                *accum_components_guard = Some((new_accumulator, accumulator_metrics.clone()));
+                *accumulator_guard = Some(new_accumulator);
 
                 if self.state.is_validator(&new_epoch_store) {
                     info!("Promoting the node from fullnode to validator, starting grpc server");
