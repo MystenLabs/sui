@@ -2644,6 +2644,10 @@ fn lvalue(
             );
             TL::Ignore
         }
+        NL::Error => {
+            assert!(context.env.has_errors());
+            TL::Ignore
+        }
         NL::Var {
             mut_,
             var,

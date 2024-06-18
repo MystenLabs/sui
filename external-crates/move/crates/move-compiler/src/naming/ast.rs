@@ -343,6 +343,7 @@ pub enum LValue_ {
         unused_binding: bool,
     },
     Unpack(ModuleIdent, DatatypeName, Option<Vec<Type>>, Fields<LValue>),
+    Error,
 }
 pub type LValue = Spanned<LValue_>;
 pub type LValueList_ = Vec<LValue>;
@@ -1996,6 +1997,7 @@ impl AstDebug for LValue_ {
         use LValue_ as L;
         match self {
             L::Ignore => w.write("_"),
+            L::Error => w.write("<_error>"),
             L::Var {
                 mut_,
                 var,
