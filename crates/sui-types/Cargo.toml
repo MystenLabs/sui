@@ -84,6 +84,12 @@ proptest-derive.workspace = true
 serde_yaml.workspace = true
 expect-test.workspace = true
 
+coset.workspace = true
+url.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+p256.workspace = true
+
 [[bench]]
 name = "accumulator_bench"
 harness = false
