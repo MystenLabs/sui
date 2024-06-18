@@ -246,7 +246,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     ProtocolConfig::get_for_max_version_UNSAFE()
                 };
                 if let Some(enable) = shared_object_deletion {
-                    protocol_config.set_shared_object_deletion(enable);
+                    protocol_config.set_shared_object_deletion_for_testing(enable);
                 }
                 if let Some(mx_tx_gas_override) = max_gas {
                     if simulator {

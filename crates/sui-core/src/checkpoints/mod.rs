@@ -980,7 +980,7 @@ impl CheckpointBuilder {
                     continue;
                 }
 
-                // Min interval has elasped, we can now coalesce and build a checkpoint.
+                // Min interval has elapsed, we can now coalesce and build a checkpoint.
                 last_height = Some(height);
                 last_timestamp = Some(current_timestamp);
                 debug!(
@@ -2398,7 +2398,7 @@ mod tests {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_min_checkpoint_interval_ms(100);
+        protocol_config.set_min_checkpoint_interval_ms_for_testing(100);
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
             .build()
