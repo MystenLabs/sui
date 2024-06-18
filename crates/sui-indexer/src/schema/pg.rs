@@ -292,7 +292,6 @@ diesel::table! {
     }
 }
 
-<<<<<<< HEAD
 diesel::table! {
     tx_recipients (recipient, tx_sequence_number) {
         recipient -> Bytea,
@@ -340,26 +339,3 @@ macro_rules! for_all_tables {
 pub use for_all_tables;
 
 for_all_tables!(diesel::allow_tables_to_appear_in_same_query);
-=======
-diesel::allow_tables_to_appear_in_same_query!(
-    checkpoints,
-    display,
-    epochs,
-    events,
-    events_partition_0,
-    objects,
-    objects_history,
-    objects_history_partition_0,
-    objects_snapshot,
-    objects_version,
-    packages,
-    transactions,
-    transactions_partition_0,
-    tx_calls,
-    tx_changed_objects,
-    tx_digests,
-    tx_input_objects,
-    tx_recipients,
-    tx_senders,
-);
->>>>>>> 749b7e143f ([Indexer] Create `objects_version` table. (#17542))
