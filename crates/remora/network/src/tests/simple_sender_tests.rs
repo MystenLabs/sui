@@ -1,7 +1,8 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
+use futures::future::try_join_all;
+
 use super::*;
 use crate::common::listener;
-use futures::future::try_join_all;
 
 #[tokio::test]
 async fn simple_send() {

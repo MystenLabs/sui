@@ -1,10 +1,9 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use bytes::Bytes;
-use futures::sink::SinkExt as _;
-use futures::stream::StreamExt as _;
 use std::net::SocketAddr;
-use tokio::net::TcpListener;
-use tokio::task::JoinHandle;
+
+use bytes::Bytes;
+use futures::{sink::SinkExt as _, stream::StreamExt as _};
+use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 pub fn listener(address: SocketAddr, expected: String) -> JoinHandle<()> {

@@ -26,6 +26,7 @@ hyper = "0.14.27"
 reqwest = "0.11.22"
 sha3 = "0.10.8"
 better_any = "0.2.0"
+itertools = "0.13.0"
 
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
 
