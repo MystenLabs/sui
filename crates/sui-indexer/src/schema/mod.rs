@@ -24,10 +24,13 @@ mod inner {
     pub use crate::schema::pg::packages;
     pub use crate::schema::pg::pruner_cp_watermark;
     pub use crate::schema::pg::transactions;
-    pub use crate::schema::pg::tx_calls;
+    pub use crate::schema::pg::tx_calls_fun;
+    pub use crate::schema::pg::tx_calls_mod;
+    pub use crate::schema::pg::tx_calls_pkg;
     pub use crate::schema::pg::tx_changed_objects;
     pub use crate::schema::pg::tx_digests;
     pub use crate::schema::pg::tx_input_objects;
+    pub use crate::schema::pg::tx_kinds;
     pub use crate::schema::pg::tx_recipients;
     pub use crate::schema::pg::tx_senders;
 }
@@ -67,10 +70,13 @@ pub use inner::objects_version;
 pub use inner::packages;
 pub use inner::pruner_cp_watermark;
 pub use inner::transactions;
-pub use inner::tx_calls;
+pub use inner::tx_calls_fun;
+pub use inner::tx_calls_mod;
+pub use inner::tx_calls_pkg;
 pub use inner::tx_changed_objects;
 pub use inner::tx_digests;
 pub use inner::tx_input_objects;
+pub use inner::tx_kinds;
 pub use inner::tx_recipients;
 pub use inner::tx_senders;
 
