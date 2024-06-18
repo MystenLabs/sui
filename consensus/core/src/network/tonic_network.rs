@@ -279,6 +279,7 @@ impl ChannelPool {
         peer: AuthorityIndex,
         timeout: Duration,
     ) -> ConsensusResult<Channel> {
+        const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
         {
             let channels = self.channels.read();
             if let Some(channel) = channels.get(&peer) {
@@ -295,7 +296,7 @@ impl ChannelPool {
         let buffer_size = config.connection_buffer_size;
         let endpoint = tonic::transport::Channel::from_shared(address.clone())
             .unwrap()
-            .connect_timeout(timeout)
+            .connect_timeout(CONNECT_TIMEOUT)
             .initial_connection_window_size(Some(buffer_size as u32))
             .initial_stream_window_size(Some(buffer_size as u32 / 2))
             .keep_alive_while_idle(true)
