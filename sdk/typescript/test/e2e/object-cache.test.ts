@@ -188,6 +188,7 @@ describe('CachingTransactionExecutor', async () => {
 			expect(result2.effects?.status.status).toBe('success');
 		} catch (e) {
 			console.log('failed transaction:', await txb2.toJSON());
+			throw e;
 		}
 
 		await executor.reset();
@@ -210,6 +211,7 @@ describe('CachingTransactionExecutor', async () => {
 			expect(result3.effects?.status.status).toBe('success');
 		} catch (e) {
 			console.log('failed transaction:', await txb3.toJSON());
+			throw e;
 		}
 	});
 });
