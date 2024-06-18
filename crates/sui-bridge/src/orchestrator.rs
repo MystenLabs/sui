@@ -205,7 +205,7 @@ where
                 continue;
             }
 
-            info!("Received {} Eth events: {:?}", logs.len(), logs);
+            info!("Received {} Eth events", logs.len());
             metrics
                 .eth_watcher_received_events
                 .inc_by(logs.len() as u64);

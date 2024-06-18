@@ -94,7 +94,7 @@ where
             interval.tick().await;
             let Ok(Ok(new_value)) = retry_with_max_elapsed_time!(
                 eth_client.get_last_finalized_block_id(),
-                time::Duration::from_secs(10)
+                time::Duration::from_secs(600)
             ) else {
                 error!("Failed to get last finalized block from eth client after retry");
                 continue;
@@ -149,7 +149,7 @@ where
             more_blocks = end_block < new_finalized_block;
             let Ok(Ok(events)) = retry_with_max_elapsed_time!(
                 eth_client.get_events_in_range(contract_address, start_block, end_block),
-                Duration::from_secs(30)
+                Duration::from_secs(600)
             ) else {
                 error!("Failed to get events from eth client after retry");
                 continue;

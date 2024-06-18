@@ -93,7 +93,7 @@ where
             interval.tick().await;
             let Ok(Ok(events)) = retry_with_max_elapsed_time!(
                 sui_client.query_events_by_module(BRIDGE_PACKAGE_ID, module.clone(), cursor),
-                Duration::from_secs(10)
+                Duration::from_secs(120)
             ) else {
                 tracing::error!("Failed to query events from sui client after retry");
                 continue;

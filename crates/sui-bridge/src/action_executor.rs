@@ -36,9 +36,11 @@ use crate::{
 };
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::Semaphore;
 use tracing::{error, info, instrument, warn, Instrument};
 
 pub const CHANNEL_SIZE: usize = 1000;
+pub const SIGNING_CONCURRENCY: usize = 10;
 
 // delay schedule: at most 16 times including the initial attempt
 // 0.1s, 0.2s, 0.4s, 0.8s, 1.6s, 3.2s, 6.4s, 12.8s, 25.6s, 51.2s, 102.4s, 204.8s, 409.6s, 819.2s, 1638.4s
@@ -197,8 +199,10 @@ where
         metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting run_signature_aggregation_loop");
+        let semaphore = Arc::new(Semaphore::new(SIGNING_CONCURRENCY));
         while let Some(action) = signing_queue_receiver.recv().await {
             Self::handle_signing_task(
+                &semaphore,
                 &auth_agg,
                 &signing_queue_sender,
                 &execution_queue_sender,
@@ -213,6 +217,7 @@ where
 
     #[instrument(level = "error", skip_all, fields(action_key=?action.0.key(), attempt_times=?action.1))]
     async fn handle_signing_task(
+        semaphore: &Arc<Semaphore>,
         auth_agg: &Arc<BridgeAuthorityAggregator>,
         signing_queue_sender: &mysten_metrics::metered_channel::Sender<
             BridgeActionExecutionWrapper,
@@ -235,16 +240,21 @@ where
         let sui_client_clone = sui_client.clone();
         let store_clone = store.clone();
         let metrics_clone = metrics.clone();
-        spawn_logged_monitored_task!(Self::request_signature(
-            sui_client_clone,
-            auth_agg_clone,
-            action,
-            store_clone,
-            signing_queue_sender_clone,
-            execution_queue_sender_clone,
-            metrics_clone,
-        )
-        .instrument(tracing::debug_span!("request_signature", action_key=?action_key)));
+        let semaphore_clone = semaphore.clone();
+        spawn_logged_monitored_task!(
+            Self::request_signatures(
+                semaphore_clone,
+                sui_client_clone,
+                auth_agg_clone,
+                action,
+                store_clone,
+                signing_queue_sender_clone,
+                execution_queue_sender_clone,
+                metrics_clone,
+            )
+            .instrument(tracing::debug_span!("request_signatures", action_key=?action_key)),
+            "request_signatures"
+        );
     }
 
     // Checks if the action is already processed on chain.
@@ -280,7 +290,8 @@ where
         }
     }
 
-    async fn request_signature(
+    async fn request_signatures(
+        semaphore: Arc<Semaphore>,
         sui_client: Arc<SuiClient<C>>,
         auth_agg: Arc<BridgeAuthorityAggregator>,
         action: BridgeActionExecutionWrapper,
@@ -291,6 +302,11 @@ where
         >,
         metrics: Arc<BridgeMetrics>,
     ) {
+        let _permit = semaphore
+            .acquire()
+            .await
+            .expect("semaphore should not be closed");
+        info!("requesting signatures");
         let BridgeActionExecutionWrapper(action, attempt_times) = action;
 
         // Only token transfer action should reach here
