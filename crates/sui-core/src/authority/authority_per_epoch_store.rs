@@ -505,7 +505,7 @@ pub struct AuthorityEpochTables {
 
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.
-    pub(crate) dkg_versioned_processed_messages: DBMap<PartyId, VersionedProcessedMessage>,
+    pub(crate) dkg_processed_messages_v2: DBMap<PartyId, VersionedProcessedMessage>,
     /// This table is no longer used (can be removed when DBMap supports removing tables)
     #[allow(dead_code)]
     #[deprecated]
@@ -513,7 +513,7 @@ pub struct AuthorityEpochTables {
 
     /// Records messages used to generate a DKG confirmation. Updated when enough DKG
     /// messages are received to progress to the next phase.
-    pub(crate) dkg_versioned_used_messages: DBMap<u64, VersionedUsedProcessedMessages>,
+    pub(crate) dkg_used_messages_v2: DBMap<u64, VersionedUsedProcessedMessages>,
     /// This table is no longer used (can be removed when DBMap supports removing tables)
     #[allow(dead_code)]
     #[deprecated]
@@ -521,7 +521,7 @@ pub struct AuthorityEpochTables {
 
     /// Records confirmations received from other nodes. Updated when receiving a new
     /// dkg::Confirmation via consensus.
-    pub(crate) dkg_versioned_confirmations: DBMap<PartyId, VersionedDkgConfimation>,
+    pub(crate) dkg_confirmations_v2: DBMap<PartyId, VersionedDkgConfimation>,
     /// This table is no longer used (can be removed when DBMap supports removing tables)
     #[allow(dead_code)]
     #[deprecated]
@@ -3449,29 +3449,19 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgMessage from {:?}",
                             authority.concise()
                         );
-                        if self.protocol_config.dkg_version() == 0 {
+                        let versioned_dkg_message = match self.protocol_config.dkg_version() {
                             // old message was not an enum
-                            match bcs::from_bytes(bytes) {
-                                Ok(message) => randomness_manager
-                                    .add_message(authority, VersionedDkgMessage::V0(message))?,
-                                Err(e) => {
-                                    warn!(
-                                        "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
-                                        authority.concise()
-                                    );
-                                }
-                            }
-                        } else {
-                            match bcs::from_bytes(bytes) {
-                                Ok(message) => {
-                                    randomness_manager.add_message(authority, message)?
-                                }
-                                Err(e) => {
-                                    warn!(
-                                        "Failed to deserialize versioned RandomnessDkgMessage from {:?}: {e:?}",
-                                        authority.concise()
-                                    );
-                                }
+                            0 => bcs::from_bytes(bytes)
+                                .and_then(|message| Ok(VersionedDkgMessage::V0(message))),
+                            _ => bcs::from_bytes(bytes),
+                        };
+                        match versioned_dkg_message {
+                            Ok(message) => randomness_manager.add_message(authority, message)?,
+                            Err(e) => {
+                                warn!(
+                                    "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
+                                    authority.concise()
+                                );
                             }
                         }
                     } else {
@@ -3499,31 +3489,22 @@ impl AuthorityPerEpochStore {
                             authority.concise()
                         );
 
-                        if self.protocol_config.dkg_version() == 0 {
+                        let versioned_dkg_confirmation = match self.protocol_config.dkg_version() {
                             // old message was not an enum
-                            match bcs::from_bytes(bytes) {
-                                Ok(message) => randomness_manager.add_confirmation(
-                                    batch,
-                                    authority,
-                                    VersionedDkgConfimation::V0(message),
-                                )?,
-                                Err(e) => {
-                                    warn!(
+                            0 => bcs::from_bytes(bytes)
+                                .and_then(|message| Ok(VersionedDkgConfimation::V0(message))),
+                            _ => bcs::from_bytes(bytes),
+                        };
+
+                        match versioned_dkg_confirmation {
+                            Ok(message) => {
+                                randomness_manager.add_confirmation(batch, authority, message)?
+                            }
+                            Err(e) => {
+                                warn!(
                                         "Failed to deserialize RandomnessDkgConfirmation from {:?}: {e:?}",
                                         authority.concise(),
                                     );
-                                }
-                            }
-                        } else {
-                            match bcs::from_bytes(bytes) {
-                                Ok(message) => randomness_manager
-                                    .add_confirmation(batch, authority, message)?,
-                                Err(e) => {
-                                    warn!(
-                                        "Failed to deserialize versioned RandomnessDkgMessage from {:?}: {e:?}",
-                                        authority.concise(),
-                                    );
-                                }
                             }
                         }
                     } else {

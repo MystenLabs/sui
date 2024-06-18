@@ -276,6 +276,20 @@ impl VersionedDkgMessage {
             _ => panic!("BUG: invalid DKG version"),
         }
     }
+
+    pub fn unwrap_v0(self) -> dkg_v0::Message<bls12381::G2Element, bls12381::G2Element> {
+        match self {
+            VersionedDkgMessage::V0(msg) => msg,
+            _ => panic!("BUG: expected V0 message"),
+        }
+    }
+
+    pub fn unwrap_v1(self) -> dkg_v1::Message<bls12381::G2Element, bls12381::G2Element> {
+        match self {
+            VersionedDkgMessage::V1(msg) => msg,
+            _ => panic!("BUG: expected V1 message"),
+        }
+    }
 }
 
 impl VersionedDkgConfimation {
@@ -290,6 +304,20 @@ impl VersionedDkgConfimation {
         match self {
             VersionedDkgConfimation::V0(msg) => msg.complaints.len(),
             VersionedDkgConfimation::V1(msg) => msg.complaints.len(),
+        }
+    }
+
+    pub fn unwrap_v0(&self) -> &dkg::Confirmation<bls12381::G2Element> {
+        match self {
+            VersionedDkgConfimation::V0(msg) => msg,
+            _ => panic!("BUG: expected V0 confirmation"),
+        }
+    }
+
+    pub fn unwrap_v1(&self) -> &dkg::Confirmation<bls12381::G2Element> {
+        match self {
+            VersionedDkgConfimation::V1(msg) => msg,
+            _ => panic!("BUG: expected V1 confirmation"),
         }
     }
 }
