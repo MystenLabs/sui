@@ -62,6 +62,7 @@ use sui_storage::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
+use sui_types::committee::EpochId;
 use sui_types::crypto::{get_authority_key_pair, RandomnessRound};
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
@@ -2257,6 +2258,10 @@ impl ObjectStore for SuiTestAdapter {
 }
 
 impl ReadStore for SuiTestAdapter {
+    fn get_latest_epoch_id(&self) -> sui_types::storage::error::Result<EpochId> {
+        self.executor.get_latest_epoch_id()
+    }
+
     fn get_committee(
         &self,
         epoch: sui_types::committee::EpochId,

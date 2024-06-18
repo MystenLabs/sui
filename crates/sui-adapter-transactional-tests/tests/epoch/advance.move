@@ -28,3 +28,5 @@ module test::m {
 //# run test::m::check --args object(2,0)
 
 //# advance-epoch
+
+//# run test::m::check --args object(2,0)
