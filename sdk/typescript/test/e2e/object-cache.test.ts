@@ -187,7 +187,7 @@ describe('CachingTransactionExecutor', async () => {
 			expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 			expect(result2.effects?.status.status).toBe('success');
 		} catch (e) {
-			console.log('failed transaction:', await txb3.toJSON());
+			console.log('failed transaction:', await txb2.toJSON());
 		}
 
 		await executor.reset();
