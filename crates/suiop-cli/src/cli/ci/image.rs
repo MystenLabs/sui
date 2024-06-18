@@ -158,7 +158,10 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 let json_resp = resp.json::<JobStatus>().await?;
                 println!("Build Job Status: {}", json_resp.status.green());
                 println!("Build Job Name: {}", json_resp.name.green());
-                println!("Build Job Start Time: {}", json_resp.start_time.green());
+                println!(
+                    "Build Job Start Time: {}",
+                    utc_to_local_time(json_resp.start_time).green()
+                );
             }
             ImageAction::Query {
                 repo_name,
@@ -195,17 +198,17 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
     }
 }
 
-fn utc_to_local_time(utc_time_str: String) -> String {
-    let utc_time_result = DateTime::<Utc>::from_str(&format!(
-        "{}T{}Z",
-        &utc_time_str[..10],
-        &utc_time_str[11..19]
-    ));
+fn utc_to_local_time(utc_time: String) -> String {
+    if utc_time.is_empty() {
+        return utc_time;
+    }
+    let utc_time_result =
+        DateTime::<Utc>::from_str(&format!("{}T{}Z", &utc_time[..10], &utc_time[11..19]));
     if let Ok(utc_time) = utc_time_result {
         let local_time = utc_time.with_timezone(&Local);
         local_time.format("%Y-%m-%d %H:%M:%S").to_string()
     } else {
-        utc_time_str.to_string()
+        utc_time.to_string()
     }
 }
 
