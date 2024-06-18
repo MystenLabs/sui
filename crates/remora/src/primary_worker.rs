@@ -1,25 +1,25 @@
 use core::panic;
-use dashmap::DashMap;
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use sui_protocol_config::ProtocolConfig;
-use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
-use sui_single_node_benchmark::mock_storage::InMemoryObjectStore;
-use sui_types::base_types::{ObjectID, ObjectRef};
-use sui_types::digests::TransactionDigest;
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::message_envelope::Message;
-use sui_types::messages_checkpoint::CheckpointDigest;
-use sui_types::object::Object;
-use sui_types::storage::ObjectStore;
-use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::{
-    CertifiedTransaction, InputObjectKind, TransactionDataAPI, VerifiedCertificate,
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
 };
-use tokio::sync::mpsc;
+
+use dashmap::DashMap;
+use sui_protocol_config::ProtocolConfig;
+use sui_single_node_benchmark::{
+    benchmark_context::BenchmarkContext,
+    mock_storage::InMemoryObjectStore,
+};
+use sui_types::{
+    base_types::{ObjectID, ObjectRef},
+    effects::{TransactionEffects, TransactionEffectsAPI},
+    executable_transaction::VerifiedExecutableTransaction,
+    storage::ObjectStore,
+    transaction::{CertifiedTransaction, InputObjectKind, TransactionDataAPI, VerifiedCertificate},
+};
+use tokio::{sync::mpsc, time::Duration};
+
 use super::types::*;
-use tokio::time::Duration;
 
 /*****************************************************************************************
  *                                    Primary Worker                                   *
@@ -32,10 +32,7 @@ pub struct PrimaryWorkerState {
 }
 
 impl PrimaryWorkerState {
-    pub fn new(
-        new_store: InMemoryObjectStore,
-        ctx: Arc<BenchmarkContext>,
-    ) -> Self {
+    pub fn new(new_store: InMemoryObjectStore, ctx: Arc<BenchmarkContext>) -> Self {
         Self {
             memory_store: Arc::new(new_store),
             context: ctx,
@@ -149,7 +146,8 @@ impl PrimaryWorkerState {
             // check if the stale state where pre-exec occurs matches
             match pre_exec_res.get(txid) {
                 Some(tx_result) => {
-                    let TransactionEffects::V2(ref tx_effect) = tx_result.tx_effects else { // FIXME
+                    let TransactionEffects::V2(ref tx_effect) = tx_result.tx_effects else {
+                        // FIXME
                         todo!()
                     };
                     for (id, vid) in tx_effect.modified_at_versions() {
@@ -160,13 +158,15 @@ impl PrimaryWorkerState {
                     }
                     // apply the effect directly
                     if skip {
-                        memstore
-                            .commit_effects(tx_result.tx_effects.clone(), tx_result.written.clone());
+                        memstore.commit_effects(
+                            tx_result.tx_effects.clone(),
+                            tx_result.written.clone(),
+                        );
                         println!("PRI Applied the PRE effect");
                     }
-                },
+                }
                 None => skip = false,
-            }; 
+            };
 
             if !skip {
                 // re-run the transaction

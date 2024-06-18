@@ -1,33 +1,33 @@
+use std::{
+    collections::HashMap,
+    error::Error,
+    marker::PhantomData,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+};
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{stream::FuturesUnordered, SinkExt, StreamExt};
 use network::{MessageHandler, Receiver, ReliableSender, Writer};
-use std::collections::HashMap;
-use std::marker::PhantomData;
-use std::net::SocketAddr;
-use std::{error::Error, net::IpAddr};
-use std::{fmt::Debug, net::Ipv4Addr};
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Sender;
-use tokio::time::{sleep, Duration};
+use tokio::{
+    sync::{mpsc, mpsc::Sender},
+    time::{sleep, Duration},
+};
 
-use super::agents::*;
-use super::types::*;
+use super::{agents::*, types::*};
 
-pub struct Server<T: Agent<M>, M: Debug + Message + Send + 'static> {
+pub struct Server<T: Agent> {
     global_config: GlobalConfig, // global configuration from parsing json
     my_id: UniqueId,
     agent_type: PhantomData<T>, // type of agent living on this server
-    msg_type: PhantomData<M>,   // type of message used by agent
 }
 
-impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
+impl<T: Agent> Server<T> {
     pub fn new(global_config: GlobalConfig, my_id: UniqueId) -> Self {
         Server {
             global_config,
             my_id,
             agent_type: PhantomData,
-            msg_type: PhantomData,
         }
     }
 

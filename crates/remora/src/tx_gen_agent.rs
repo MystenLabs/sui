@@ -1,17 +1,19 @@
 use std::time::Duration;
-use super::agents::*;
-use crate::{metrics::Metrics, types::*};
+
 use async_trait::async_trait;
-use tokio::{
-    sync::mpsc,
-    time::{sleep, MissedTickBehavior},
-};
 use sui_single_node_benchmark::{
     benchmark_context::BenchmarkContext,
     command::{Component, WorkloadKind},
     workload::Workload,
 };
 use sui_types::transaction::CertifiedTransaction;
+use tokio::{
+    sync::mpsc,
+    time::{sleep, MissedTickBehavior},
+};
+
+use super::agents::*;
+use crate::{metrics::Metrics, types::*};
 
 pub const WORKLOAD: WorkloadKind = WorkloadKind::PTB {
     num_transfers: 0,
@@ -129,7 +131,7 @@ impl TxnGenAgent {
 }
 
 #[async_trait]
-impl Agent<RemoraMessage> for TxnGenAgent {
+impl Agent for TxnGenAgent {
     fn new(
         id: UniqueId,
         _in_channel: mpsc::Receiver<NetworkMessage>,

@@ -1,14 +1,19 @@
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    path::PathBuf,
+    time::Duration,
+};
+
 use clap::Parser;
-use remora::pre_exec_agent::PreExecAgent;
-use remora::primary_agent::PrimaryAgent;
-use tokio::task::{JoinHandle, JoinError};
 use futures::future;
-use remora::types::{GlobalConfig, RemoraMessage, UniqueId};
-use remora::server::Server;
-use remora::tx_gen_agent::TxnGenAgent;
-use std::net::{IpAddr, Ipv4Addr};
-use std::path::PathBuf;
-use std::time::Duration;
+use remora::{
+    pre_exec_agent::PreExecAgent,
+    primary_agent::PrimaryAgent,
+    server::Server,
+    tx_gen_agent::TxnGenAgent,
+    types::{GlobalConfig, UniqueId},
+};
+use tokio::task::{JoinError, JoinHandle};
 
 /// Top-level executor shard structure.
 pub struct ExecutorShard {
@@ -23,21 +28,19 @@ impl ExecutorShard {
         // Initialize and run the worker server.
         let kind = configs.kind.as_str();
         let main_handle = if kind == "GEN" {
-            let mut server = Server::<TxnGenAgent, RemoraMessage>::new(global_configs, id);
+            let mut server = Server::<TxnGenAgent>::new(global_configs, id);
             tokio::spawn(async move { server.run().await })
         } else if kind == "PRI" {
-            let mut server = Server::<PrimaryAgent, RemoraMessage>::new(global_configs, id);
+            let mut server = Server::<PrimaryAgent>::new(global_configs, id);
             tokio::spawn(async move { server.run().await })
         } else if kind == "PRE" {
-            let mut server = Server::<PreExecAgent, RemoraMessage>::new(global_configs, id);
+            let mut server = Server::<PreExecAgent>::new(global_configs, id);
             tokio::spawn(async move { server.run().await })
         } else {
             panic!("Unexpected agent kind: {kind}");
         };
 
-        Self {
-            main_handle,
-        }
+        Self { main_handle }
     }
 
     /// Await completion of the executor shard.
@@ -84,7 +87,7 @@ enum Operation {
         pre_exec_workers: usize,
     },
 }
- 
+
 /// Deploy a local testbed of executor shards.
 async fn deploy_testbed(tx_count: u64, duration: u64, pre_exec_workers: usize) -> GlobalConfig {
     let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); pre_exec_workers + 2];
@@ -103,7 +106,7 @@ async fn deploy_testbed(tx_count: u64, duration: u64, pre_exec_workers: usize) -
     // Spawn txn generator.
     let configs = global_configs.clone();
     let id = 0;
-    let txn_generator = ExecutorShard::start(configs, id);
+    let _txn_generator = ExecutorShard::start(configs, id);
     // txn_generator.await_completion().await.unwrap();
 
     // FIXME: testing
@@ -114,7 +117,7 @@ async fn deploy_testbed(tx_count: u64, duration: u64, pre_exec_workers: usize) -
             worker.await_completion().await.unwrap()
         }
     });
-    future::join_all(handles).await;    
+    future::join_all(handles).await;
     global_configs
 }
 
@@ -129,4 +132,4 @@ async fn main() {
             deploy_testbed(tx_count, duration.as_secs(), pre_exec_workers).await;
         }
     }
-} 
+}

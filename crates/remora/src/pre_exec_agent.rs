@@ -1,17 +1,19 @@
+use std::{sync::Arc, time::Duration};
+
+use async_trait::async_trait;
+use sui_single_node_benchmark::{
+    benchmark_context::BenchmarkContext,
+    command::Component,
+    workload::Workload,
+};
+use tokio::sync::mpsc;
+
 use super::agents::*;
 use crate::{
     pre_exec_worker::{self},
     tx_gen_agent::WORKLOAD,
     types::*,
 };
-use async_trait::async_trait;
-use std::time::Duration;
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use sui_single_node_benchmark::{
-    benchmark_context::BenchmarkContext, command::Component, workload::Workload,
-};
-use sui_types::messages_checkpoint::CheckpointDigest;
 
 pub struct PreExecAgent {
     id: UniqueId,
@@ -24,7 +26,7 @@ pub struct PreExecAgent {
 pub const COMPONENT: Component = Component::Baseline;
 
 #[async_trait]
-impl Agent<RemoraMessage> for PreExecAgent {
+impl Agent for PreExecAgent {
     fn new(
         id: UniqueId,
         in_channel: mpsc::Receiver<NetworkMessage>,
@@ -57,10 +59,7 @@ impl Agent<RemoraMessage> for PreExecAgent {
 
         let store = context.validator().create_in_memory_store();
 
-        let mut pre_exec_state = pre_exec_worker::PreExecWorkerState::new(
-            store,
-            context.clone(),
-        );
+        let mut pre_exec_state = pre_exec_worker::PreExecWorkerState::new(store, context.clone());
         pre_exec_state
             .run(
                 tx_count,

@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{collections::BTreeMap, sync::Arc};
+
 use futures::stream::FuturesUnordered;
-use rand::rngs::StdRng;
-use rand::SeedableRng;
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH};
-use sui_types::crypto::{get_account_key_pair, AccountKeyPair, get_key_pair_from_bytes, get_key_pair_from_rng};
-use sui_types::object::Object;
+use rand::{rngs::StdRng, SeedableRng};
+use sui_types::{
+    base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
+    crypto::{get_key_pair_from_rng, AccountKeyPair},
+    object::Object,
+};
 
 #[derive(Clone)]
 pub struct Account {
