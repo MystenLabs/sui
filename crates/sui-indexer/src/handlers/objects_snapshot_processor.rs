@@ -7,20 +7,16 @@ use futures::StreamExt;
 use mysten_metrics::get_metrics;
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_monitored_task;
-use prometheus::Registry;
-use sui_data_ingestion_core::{
-    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimProgressStore, Worker, WorkerPool,
-};
+use sui_data_ingestion_core::Worker;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_rest_api::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use tokio::sync::{oneshot, watch};
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::types::IndexerResult;
-use crate::IndexerConfig;
 use crate::{metrics::IndexerMetrics, store::IndexerStore};
 use std::sync::{Arc, Mutex};
 
@@ -125,11 +121,9 @@ where
 pub async fn start_objects_snapshot_processor<S, T>(
     store: S,
     metrics: IndexerMetrics,
-    config: IndexerConfig,
     snapshot_config: SnapshotLagConfig,
-    reader_options: ReaderOptions,
     cancel: CancellationToken,
-) -> IndexerResult<()>
+) -> IndexerResult<(ObjectsSnapshotProcessor<S, T>, u64)>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
     T: R2D2Connection + 'static,
@@ -142,21 +136,7 @@ where
         .expect("Failed to get latest snapshot checkpoint sequence number from DB")
         .map(|seq| seq + 1)
         .unwrap_or_default();
-    let download_queue_size = std::env::var("DOWNLOAD_QUEUE_SIZE")
-        .unwrap_or_else(|_| crate::indexer::DOWNLOAD_QUEUE_SIZE.to_string())
-        .parse::<usize>()
-        .expect("Invalid DOWNLOAD_QUEUE_SIZE");
 
-    // Set up exit sender and receiver. Sender signals the ingestion executor to exit when
-    // the cancel token is triggered.
-    let (exit_sender, exit_receiver) = oneshot::channel();
-    let cancel_clone = cancel.clone();
-    spawn_monitored_task!(async move {
-        cancel_clone.cancelled().await;
-        let _ = exit_sender.send(());
-    });
-
-    // Commit notifier to to signal the package buffer that a checkpoint has been committed.
     let (commit_notifier, commit_receiver) = watch::channel(None);
 
     let global_metrics = get_metrics().unwrap();
@@ -176,34 +156,6 @@ where
         commit_receiver,
         metrics.clone(),
     );
-    let mut executor = IndexerExecutor::new(
-        ShimProgressStore(watermark),
-        1,
-        DataIngestionMetrics::new(&Registry::new()),
-    );
-    let worker_pool = WorkerPool::new(
-        worker,
-        "objects_snapshot_worker".to_string(),
-        download_queue_size,
-    );
-
-    executor.register(worker_pool).await?;
-
-    spawn_monitored_task!(async move {
-        info!("Starting data ingestion executor for processing objects snapshot...");
-        let _ = executor
-            .run(
-                config
-                    .data_ingestion_path
-                    .clone()
-                    .unwrap_or(tempfile::tempdir().unwrap().into_path()),
-                config.remote_store_url.clone(),
-                vec![],
-                reader_options,
-                exit_receiver,
-            )
-            .await;
-    });
 
     // Now start the task that will commit the indexed object changes to the store.
     spawn_monitored_task!(ObjectsSnapshotProcessor::<S, T>::commit_objects_snapshot(
@@ -215,7 +167,7 @@ where
         snapshot_config,
         cancel,
     ));
-    Ok(())
+    Ok((worker, watermark))
 }
 
 impl<S, T> ObjectsSnapshotProcessor<S, T>
