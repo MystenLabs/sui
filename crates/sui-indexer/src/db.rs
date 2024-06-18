@@ -23,8 +23,8 @@ pub struct ConnectionPoolConfig {
 
 impl ConnectionPoolConfig {
     const DEFAULT_POOL_SIZE: u32 = 100;
-    const DEFAULT_CONNECTION_TIMEOUT: u64 = 3600;
-    const DEFAULT_STATEMENT_TIMEOUT: u64 = 3600;
+    const DEFAULT_CONNECTION_TIMEOUT: u64 = 10;
+    const DEFAULT_STATEMENT_TIMEOUT: u64 = 10;
 
     fn connection_config(&self) -> ConnectionConfig {
         ConnectionConfig {

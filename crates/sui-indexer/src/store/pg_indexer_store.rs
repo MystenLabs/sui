@@ -80,7 +80,7 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
 const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;
-const PG_DB_COMMIT_SLEEP_DURATION: Duration = Duration::from_secs(3600);
+const PG_DB_COMMIT_SLEEP_DURATION: Duration = Duration::from_secs(10);
 
 // with rn = 1, we only select the latest version of each object,
 // so that we don't have to update the same object multiple times.
@@ -968,12 +968,30 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             .checkpoint_db_commit_latency_epoch
             .start_timer();
         let epoch_id = epoch.new_epoch.epoch;
+
+        // Overwrites the `epoch_total_transactions` field on `epoch.last_epoch` because we are not
+        // guaranteed to have the lastest data in db when this is set on indexer's chain-reading
+        // side. However, when we `persist_epoch`, the checkpoints from an epoch ago must have been
+        // indexed.
+        let previous_epoch_network_total_transactions = match epoch_id {
+            0 | 1 => 0,
+            _ => {
+                let epoch_id = epoch_id - 2;
+                self.get_network_total_transactions_by_end_of_epoch(epoch_id)?
+            }
+        };
+
+        let epoch_total_transactions =
+            epoch.network_total_transactions - previous_epoch_network_total_transactions;
+
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
                 if let Some(last_epoch) = &epoch.last_epoch {
                     let last_epoch_id = last_epoch.epoch;
-                    let last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
+
+                    let mut last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
+                    last_epoch.epoch_total_transactions = Some(epoch_total_transactions as i64);
                     info!(last_epoch_id, "Persisting epoch end data: {:?}", last_epoch);
                     on_conflict_do_update!(
                         epochs::table,
@@ -1038,11 +1056,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         })
     }
 
-    fn advance_epoch(
-        &self,
-        epoch_to_commit: EpochToCommit,
-        network_total_transactions: u64,
-    ) -> Result<(), IndexerError> {
+    fn advance_epoch(&self, epoch_to_commit: EpochToCommit) -> Result<(), IndexerError> {
         let last_epoch_id = epoch_to_commit.last_epoch.as_ref().map(|e| e.epoch);
         // partition_0 has been created, so no need to advance it.
         if let Some(last_epoch_id) = last_epoch_id {
@@ -1055,11 +1069,18 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 })
                 .context("Failed to read last epoch from PostgresDB")?;
             if let Some(last_epoch) = last_db_epoch {
-                let epoch_partition_data = EpochPartitionData::compose_data(
-                    epoch_to_commit,
-                    last_epoch,
-                    network_total_transactions,
-                );
+                if last_epoch.epoch_total_transactions.is_none() {
+                    tracing::error!(
+                        "Epoch total transactions is None for epoch: {}",
+                        last_epoch_id
+                    );
+                    return Err(IndexerError::PostgresReadError(format!(
+                        "Epoch total transactions is None for epoch {}",
+                        last_epoch_id
+                    )));
+                }
+                let epoch_partition_data =
+                    EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
 
                 let table_partitions = self.partition_manager.get_table_partitions()?;
                 for (table, (first_partition, last_partition)) in table_partitions {
@@ -1526,15 +1547,9 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .await
     }
 
-    async fn advance_epoch(
-        &self,
-        epoch: EpochToCommit,
-        network_total_transactions: u64,
-    ) -> Result<(), IndexerError> {
-        self.execute_in_blocking_worker(move |this| {
-            this.advance_epoch(epoch, network_total_transactions)
-        })
-        .await
+    async fn advance_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
+        self.execute_in_blocking_worker(move |this| this.advance_epoch(epoch))
+            .await
     }
 
     async fn get_network_total_transactions_by_end_of_epoch(

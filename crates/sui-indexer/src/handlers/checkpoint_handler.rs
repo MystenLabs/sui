@@ -199,6 +199,7 @@ where
                     0, //first_checkpoint_id
                     None,
                 ),
+                network_total_transactions: 0,
             }));
         }
 
@@ -249,6 +250,7 @@ where
                 checkpoint_summary.sequence_number + 1, // first_checkpoint_id
                 Some(&event),
             ),
+            network_total_transactions: checkpoint_summary.network_total_transactions,
         }))
     }
 
