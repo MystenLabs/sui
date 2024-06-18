@@ -414,7 +414,7 @@ where
                 object_changes,
                 balance_change,
                 events,
-                transaction_kind,
+                transaction_kind: transaction_kind.clone(),
                 successful_tx_num: if fx.status().is_ok() {
                     tx.kind().tx_count() as u64
                 } else {
@@ -442,8 +442,8 @@ where
             // Payers
             let payers = vec![tx.gas_owner()];
 
-            // Senders
-            let senders = vec![tx.sender()];
+            // Sender
+            let sender = tx.sender();
 
             // Recipients
             let recipients = fx
@@ -469,10 +469,11 @@ where
                 checkpoint_sequence_number: *checkpoint_seq,
                 input_objects,
                 changed_objects,
-                senders,
+                sender,
                 payers,
                 recipients,
                 move_calls,
+                tx_kind: transaction_kind,
             });
         }
         Ok((db_transactions, db_events, db_indices, db_displays))

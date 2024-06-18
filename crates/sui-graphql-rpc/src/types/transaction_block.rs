@@ -8,14 +8,14 @@ use async_graphql::{
     dataloader::Loader,
     *,
 };
-use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, SelectableHelper};
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
 use sui_indexer::{
     models::transactions::StoredTransaction,
     schema::{
-        transactions, tx_calls, tx_changed_objects, tx_digests, tx_input_objects, tx_recipients,
-        tx_senders,
+        transactions, tx_calls_fun, tx_changed_objects, tx_digests, tx_input_objects,
+        tx_recipients, tx_senders,
     },
 };
 use sui_types::{
@@ -317,15 +317,15 @@ impl TransactionBlock {
                         let mut query = tx::dsl::transactions.into_boxed();
 
                         if let Some(f) = &filter.function {
-                            let sub_query = tx_calls::dsl::tx_calls
-                                .select(tx_calls::dsl::tx_sequence_number)
+                            let sub_query = tx_calls_fun::dsl::tx_calls_fun
+                                .select(tx_calls_fun::dsl::tx_sequence_number)
                                 .into_boxed();
 
                             query = query.filter(tx::dsl::tx_sequence_number.eq_any(f.apply(
                                 sub_query,
-                                tx_calls::dsl::package,
-                                tx_calls::dsl::module,
-                                tx_calls::dsl::func,
+                                tx_calls_fun::dsl::package,
+                                tx_calls_fun::dsl::module,
+                                tx_calls_fun::dsl::func,
                             )));
                         }
 
@@ -504,9 +504,7 @@ impl Loader<DigestKey> for Db {
         let transactions: Vec<StoredTransaction> = self
             .execute(move |conn| {
                 conn.results(move || {
-                    let join = ds::cp_sequence_number
-                        .eq(tx::checkpoint_sequence_number)
-                        .and(ds::tx_sequence_number.eq(tx::tx_sequence_number));
+                    let join = ds::tx_sequence_number.eq(tx::tx_sequence_number);
 
                     tx::transactions
                         .inner_join(ds::tx_digests.on(join))
