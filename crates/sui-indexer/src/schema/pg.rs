@@ -202,7 +202,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    transactions (tx_sequence_number, checkpoint_sequence_number) {
+    transactions (tx_sequence_number) {
         tx_sequence_number -> Int8,
         transaction_digest -> Bytea,
         raw_transaction -> Bytea,
@@ -218,7 +218,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    transactions_partition_0 (tx_sequence_number, checkpoint_sequence_number) {
+    transactions_partition_0 (tx_sequence_number) {
         tx_sequence_number -> Int8,
         transaction_digest -> Bytea,
         raw_transaction -> Bytea,
@@ -234,52 +234,75 @@ diesel::table! {
 }
 
 diesel::table! {
-    tx_calls (package, module, func, tx_sequence_number, cp_sequence_number) {
-        cp_sequence_number -> Int8,
+    tx_calls_pkg (package, tx_sequence_number) {
+        package -> Bytea,
         tx_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_calls_mod (package, module, tx_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        tx_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_calls_fun (package, module, func, tx_sequence_number) {
         package -> Bytea,
         module -> Text,
         func -> Text,
+        tx_sequence_number -> Int8,
+        sender -> Bytea
     }
 }
 
 diesel::table! {
-    tx_changed_objects (object_id, tx_sequence_number, cp_sequence_number) {
-        cp_sequence_number -> Int8,
-        tx_sequence_number -> Int8,
+    tx_changed_objects (object_id, tx_sequence_number) {
         object_id -> Bytea,
+        tx_sequence_number -> Int8,
+        sender -> Bytea
     }
 }
 
 diesel::table! {
     tx_digests (tx_digest) {
         tx_digest -> Bytea,
-        cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
     }
 }
 
 diesel::table! {
-    tx_input_objects (object_id, tx_sequence_number, cp_sequence_number) {
-        cp_sequence_number -> Int8,
-        tx_sequence_number -> Int8,
+    tx_input_objects (object_id, tx_sequence_number) {
         object_id -> Bytea,
+        tx_sequence_number -> Int8,
+        sender -> Bytea
     }
 }
 
 diesel::table! {
-    tx_recipients (recipient, tx_sequence_number, cp_sequence_number) {
-        cp_sequence_number -> Int8,
-        tx_sequence_number -> Int8,
-        recipient -> Bytea,
-    }
-}
-
-diesel::table! {
-    tx_senders (sender, tx_sequence_number, cp_sequence_number) {
-        cp_sequence_number -> Int8,
-        tx_sequence_number -> Int8,
+    tx_senders (sender, tx_sequence_number) {
         sender -> Bytea,
+        tx_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    tx_recipients (recipient, tx_sequence_number) {
+        recipient -> Bytea,
+        tx_sequence_number -> Int8,
+        sender -> Bytea
+    }
+
+}
+
+diesel::table! {
+    tx_kinds (tx_kind, tx_sequence_number) {
+        tx_kind -> Int2,
+        tx_sequence_number -> Int8,
     }
 }
 
