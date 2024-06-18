@@ -2619,7 +2619,6 @@ pub fn estimate_gas_budget_from_gas_cost(
     let gas_usage = gas_cost_summary.net_gas_usage() + safe_overhead as i64;
     let estimated_gas_budget =
         computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 });
-    tracing::info!("Estimated gas budget: {}", estimated_gas_budget);
     estimated_gas_budget
 }
 

@@ -97,7 +97,7 @@ impl<'a> Display for Pretty<'a, DryRunTransactionBlockResponse> {
         )?;
         writeln!(
             f,
-            "Estimated gas cost needed: {} MIST",
+            "Estimated gas cost (includes a small buffer): {} MIST",
             estimate_gas_budget_from_gas_cost(
                 response.effects.gas_cost_summary(),
                 response.input.gas_data().price
