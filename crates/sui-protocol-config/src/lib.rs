@@ -2446,10 +2446,6 @@ impl ProtocolConfig {
 
                     // Set max transaction deferral to 10 consensus rounds.
                     cfg.max_deferral_rounds_for_congestion_control = Some(10);
-
-                    if chain != Chain::Testnet && chain != Chain::Mainnet {
-                        cfg.feature_flags.passkey_auth = true;
-                    }
                 }
                 51 => {
                     cfg.random_beacon_dkg_version = Some(1);
@@ -2472,6 +2468,9 @@ impl ProtocolConfig {
                         cfg.max_accumulated_txn_cost_per_object_in_checkpoint = Some(100);
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::TotalTxCount;
+                    
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.passkey_auth = true;
                     }
                 }
                 // Use this template when making changes:
@@ -2631,11 +2630,15 @@ impl ProtocolConfig {
         self.feature_flags.mysticeti_num_leaders_per_round = val;
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
 
     pub fn set_enable_soft_bundle_for_testing(&mut self, val: bool) {
         self.feature_flags.soft_bundle = val;
 =======
     
+=======
+
+>>>>>>> e34f564cb8 (serde checks, added tests)
     pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.passkey_auth = val
 >>>>>>> a29ccd3f47 (add protocol config, simtest)

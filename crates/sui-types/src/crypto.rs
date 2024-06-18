@@ -267,6 +267,7 @@ pub enum PublicKey {
     Secp256k1(Secp256k1PublicKeyAsBytes),
     Secp256r1(Secp256r1PublicKeyAsBytes),
     ZkLogin(ZkLoginPublicIdentifier),
+    Passkey(Secp256r1PublicKeyAsBytes),
 }
 
 /// A wrapper struct to retrofit in [enum PublicKey] for zkLogin.
@@ -293,6 +294,7 @@ impl AsRef<[u8]> for PublicKey {
             PublicKey::Secp256k1(pk) => &pk.0,
             PublicKey::Secp256r1(pk) => &pk.0,
             PublicKey::ZkLogin(z) => &z.0,
+            PublicKey::Passkey(pk) => &pk.0,
         }
     }
 }
@@ -325,6 +327,11 @@ impl EncodeDecodeBase64 for PublicKey {
                         FastCryptoError::InputLengthWrong(Secp256r1PublicKey::LENGTH + 1),
                     )?)?;
                     Ok(PublicKey::Secp256r1((&pk).into()))
+                } else if x == &SignatureScheme::PasskeyAuthenticator.flag() {
+                    let pk = Secp256r1PublicKey::from_bytes(bytes.get(1..).ok_or(
+                        FastCryptoError::InputLengthWrong(Secp256r1PublicKey::LENGTH + 1),
+                    )?)?;
+                    Ok(PublicKey::Passkey((&pk).into()))
                 } else {
                     Err(FastCryptoError::InvalidInput)
                 }
@@ -353,6 +360,9 @@ impl PublicKey {
             SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(
                 (&Secp256r1PublicKey::from_bytes(key_bytes)?).into(),
             )),
+            SignatureScheme::PasskeyAuthenticator => Ok(PublicKey::Passkey(
+                (&Secp256r1PublicKey::from_bytes(key_bytes)?).into(),
+            )),
             _ => Err(eyre!("Unsupported curve")),
         }
     }
@@ -363,6 +373,7 @@ impl PublicKey {
             PublicKey::Secp256k1(_) => Secp256k1SuiSignature::SCHEME,
             PublicKey::Secp256r1(_) => Secp256r1SuiSignature::SCHEME,
             PublicKey::ZkLogin(_) => SignatureScheme::ZkLoginAuthenticator,
+            PublicKey::Passkey(_) => SignatureScheme::PasskeyAuthenticator,
         }
     }
 
@@ -1629,7 +1640,16 @@ pub mod bcs_signable_test {
 }
 
 #[derive(
-    Clone, Copy, Deserialize, Serialize, JsonSchema, Debug, EnumString, strum_macros::Display,
+    Clone,
+    Copy,
+    Deserialize,
+    Serialize,
+    JsonSchema,
+    Debug,
+    EnumString,
+    strum_macros::Display,
+    PartialEq,
+    Eq,
 )]
 #[strum(serialize_all = "lowercase")]
 pub enum SignatureScheme {

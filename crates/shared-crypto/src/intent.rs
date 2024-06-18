@@ -88,6 +88,14 @@ pub struct Intent {
     pub app_id: AppId,
 }
 
+impl Intent {
+    pub fn to_bytes(&self) -> [u8; INTENT_PREFIX_LENGTH] {
+        bcs::to_bytes(self)
+            .expect("Intent serialization should not fail")
+            .try_into()
+            .unwrap()
+    }
+}
 impl FromStr for Intent {
     type Err = eyre::Report;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
