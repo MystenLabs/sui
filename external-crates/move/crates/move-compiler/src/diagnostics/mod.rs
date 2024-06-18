@@ -248,7 +248,6 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: &MappedFiles, diags:
 fn convert_loc(mapped_files: &MappedFiles, loc: Loc) -> Option<(FileId, Range<usize>)> {
     let fname = loc.file_hash();
     let id = mapped_files.file_hash_to_file_id(&fname)?;
-    // .unwrap_or_else(|| panic!("ICE Couldn't find filename hash {:?} in mapping", fname));
     let range = loc.usize_range();
     Some((id, range))
 }
