@@ -609,7 +609,13 @@ impl WritebackCache {
                         .unwrap_or(false);
 
                 if highest != cache_entry && !tombstone_possibly_pruned {
-                    tracing::error!("object_by_id cache is incoherent for {:?}", object_id);
+                    tracing::error!(
+                        ?highest,
+                        ?cache_entry,
+                        ?tombstone_possibly_pruned,
+                        "object_by_id cache is incoherent for {:?}",
+                        object_id
+                    );
                     panic!("object_by_id cache is incoherent for {:?}", object_id);
                 }
             }
@@ -1142,6 +1148,10 @@ impl WritebackCache {
                 info!("removing non-finalized package from cache: {:?}", object_id);
                 self.packages.invalidate(object_id);
             }
+            self.cached.object_by_id_cache.invalidate(object_id);
+        }
+
+        for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
             self.cached.object_by_id_cache.invalidate(object_id);
         }
 
