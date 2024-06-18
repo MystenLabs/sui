@@ -75,6 +75,14 @@ impl VersionedProcessedMessage {
         }
     }
 
+    fn expect_v1(self) -> Self {
+        if let VersionedProcessedMessage::V1(_) = self {
+            self
+        } else {
+            panic!("BUG: expected message version is 1")
+        }
+    }
+
     pub fn process(
         dkg_version: u64,
         party: Arc<dkg::Party<PkG, EncG>>,
@@ -160,6 +168,22 @@ impl VersionedUsedProcessedMessages {
                     .collect::<Vec<_>>(),
                 rng,
             ),
+        }
+    }
+
+    fn unwrap_v0(self) -> dkg_v0::UsedProcessedMessages<PkG, EncG> {
+        if let VersionedUsedProcessedMessages::V0(msg) = self {
+            msg
+        } else {
+            panic!("BUG: expected message version is 0")
+        }
+    }
+
+    fn expect_v1(self) -> Self {
+        if let VersionedUsedProcessedMessages::V1(_) = self {
+            self
+        } else {
+            panic!("BUG: expected message version is 1")
         }
     }
 }
@@ -505,6 +529,7 @@ impl RandomnessManager {
     /// sending out a dkg::Confirmation and generating final output.
     pub async fn advance_dkg(&mut self, batch: &mut DBBatch, round: Round) -> SuiResult {
         let epoch_store = self.epoch_store()?;
+        let dkg_version = epoch_store.protocol_config().dkg_version();
 
         // Once we have enough Messages, send a Confirmation.
         if !self.dkg_output.initialized() && !self.used_messages.initialized() {
@@ -516,20 +541,21 @@ impl RandomnessManager {
                 if let Ok(Some(processed)) = res {
                     self.processed_messages
                         .insert(processed.sender(), processed.clone());
-                    match processed {
-                        VersionedProcessedMessage::V0(msg) => {
+                    match dkg_version {
+                        0 => {
                             #[allow(deprecated)]
                             batch.insert_batch(
                                 &epoch_store.tables()?.dkg_processed_messages,
-                                std::iter::once((msg.message.sender, msg)),
+                                std::iter::once((processed.sender(), processed.unwrap_v0())),
                             )?;
                         }
-                        VersionedProcessedMessage::V1(_) => {
+                        1 => {
                             batch.insert_batch(
                                 &epoch_store.tables()?.dkg_processed_messages_v2,
-                                std::iter::once((processed.sender(), processed)),
+                                std::iter::once((processed.sender(), processed.expect_v1())),
                             )?;
                         }
+                        _ => panic!("BUG: invalid DKG version {dkg_version}"),
                     }
                 }
             }
@@ -551,20 +577,21 @@ impl RandomnessManager {
                     if self.used_messages.set(used_msgs.clone()).is_err() {
                         error!("BUG: used_messages should only ever be set once");
                     }
-                    match used_msgs {
-                        VersionedUsedProcessedMessages::V0(msg) => {
+                    match dkg_version {
+                        0 => {
                             #[allow(deprecated)]
                             batch.insert_batch(
                                 &epoch_store.tables()?.dkg_used_messages,
-                                std::iter::once((SINGLETON_KEY, msg)),
+                                std::iter::once((SINGLETON_KEY, used_msgs.unwrap_v0())),
                             )?;
                         }
-                        VersionedUsedProcessedMessages::V1(_) => {
+                        1 => {
                             batch.insert_batch(
                                 &epoch_store.tables()?.dkg_used_messages_v2,
-                                std::iter::once((SINGLETON_KEY, used_msgs)),
+                                std::iter::once((SINGLETON_KEY, used_msgs.expect_v1())),
                             )?;
                         }
+                        _ => panic!("BUG: invalid DKG version {dkg_version}"),
                     };
 
                     let transaction = ConsensusTransaction::new_randomness_dkg_confirmation(
@@ -727,20 +754,22 @@ impl RandomnessManager {
             return Ok(());
         }
         self.confirmations.insert(conf.sender(), conf.clone());
-        match conf {
-            VersionedDkgConfimation::V0(msg) => {
+        let dkg_version = self.epoch_store()?.protocol_config().dkg_version();
+        match dkg_version {
+            0 => {
                 #[allow(deprecated)]
                 batch.insert_batch(
                     &self.tables()?.dkg_confirmations,
-                    std::iter::once((msg.sender, msg)),
+                    std::iter::once((conf.sender(), conf.unwrap_v0())),
                 )?;
             }
-            VersionedDkgConfimation::V1(_) => {
+            1 => {
                 batch.insert_batch(
                     &self.tables()?.dkg_confirmations_v2,
-                    std::iter::once((conf.sender(), conf)),
+                    std::iter::once((conf.sender(), conf.expect_v1())),
                 )?;
             }
+            _ => panic!("BUG: invalid DKG version {dkg_version}"),
         }
         Ok(())
     }

@@ -320,6 +320,13 @@ impl VersionedDkgConfimation {
             _ => panic!("BUG: expected V1 confirmation"),
         }
     }
+
+    pub fn expect_v1(self) -> Self {
+        match self {
+            VersionedDkgConfimation::V1(_) => self,
+            _ => panic!("BUG: expected V1 confirmation"),
+        }
+    }
 }
 
 impl ConsensusTransaction {
