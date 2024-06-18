@@ -179,7 +179,7 @@ async function resolveObjectReferences(
 
 	const invalidObjects = Array.from(responsesById)
 		.filter(([_, obj]) => obj.error)
-		.map(([id, _obj]) => id);
+		.map(([_, obj]) => JSON.stringify(obj.error));
 
 	if (invalidObjects.length) {
 		throw new Error(`The following input objects are invalid: ${invalidObjects.join(', ')}`);

@@ -89,12 +89,13 @@ describe('SerialExecutor', () => {
 		const txb3 = new Transaction();
 		txb3.transferObjects([newCoinId], new Ed25519Keypair().toSuiAddress());
 
-		await toolbox.client.signAndExecuteTransaction({
+		const { digest } = await toolbox.client.signAndExecuteTransaction({
 			signer: toolbox.keypair,
 			transaction: txb2,
 		});
 
 		await expect(() => executor.executeTransaction(txb3)).rejects.toThrowError();
+		await toolbox.client.waitForTransaction({ digest });
 
 		// // Transaction should succeed after cache reset/error
 		const result2 = await executor.executeTransaction(txb3);
