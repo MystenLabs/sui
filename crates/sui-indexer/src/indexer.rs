@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::env;
 
 use anyhow::Result;
@@ -10,10 +11,12 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_data_ingestion_core::{
-    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimProgressStore, WorkerPool,
+    DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, WorkerPool,
 };
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::build_json_rpc_server;
 use crate::errors::IndexerError;
@@ -70,7 +73,7 @@ impl Indexer {
             env!("CARGO_PKG_VERSION")
         );
 
-        let watermark = store
+        let primary_watermark = store
             .get_latest_checkpoint_sequence_number()
             .await
             .expect("Failed to get latest tx checkpoint sequence number from DB")
@@ -96,15 +99,14 @@ impl Indexer {
         };
 
         // Start objects snapshot processor, which is a separate pipeline with its ingestion pipeline.
-        start_objects_snapshot_processor::<S, T>(
-            store.clone(),
-            metrics.clone(),
-            config.clone(),
-            snapshot_config,
-            extra_reader_options.clone(),
-            cancel.clone(),
-        )
-        .await?;
+        let (object_snapshot_worker, object_snapshot_watermark) =
+            start_objects_snapshot_processor::<S, T>(
+                store.clone(),
+                metrics.clone(),
+                snapshot_config,
+                cancel.clone(),
+            )
+            .await?;
 
         let cancel_clone = cancel.clone();
         let (exit_sender, exit_receiver) = oneshot::channel();
@@ -115,13 +117,24 @@ impl Indexer {
         });
 
         let mut executor = IndexerExecutor::new(
-            ShimProgressStore(watermark),
+            ShimIndexerProgressStore::new(vec![
+                ("primary".to_string(), primary_watermark),
+                ("object_snapshot".to_string(), object_snapshot_watermark),
+            ]),
             1,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker = new_handlers::<S, T>(store, metrics, watermark, cancel.clone()).await?;
-        let worker_pool = WorkerPool::new(worker, "workflow".to_string(), download_queue_size);
+        let worker =
+            new_handlers::<S, T>(store, metrics, primary_watermark, cancel.clone()).await?;
+        let worker_pool = WorkerPool::new(worker, "primary".to_string(), download_queue_size);
 
+        executor.register(worker_pool).await?;
+
+        let worker_pool = WorkerPool::new(
+            object_snapshot_worker,
+            "object_snapshot".to_string(),
+            download_queue_size,
+        );
         executor.register(worker_pool).await?;
         info!("Starting data ingestion executor...");
         executor
@@ -156,6 +169,29 @@ impl Indexer {
             .await
             .expect("Rpc server task failed");
 
+        Ok(())
+    }
+}
+
+struct ShimIndexerProgressStore {
+    watermarks: HashMap<String, CheckpointSequenceNumber>,
+}
+
+impl ShimIndexerProgressStore {
+    fn new(watermarks: Vec<(String, CheckpointSequenceNumber)>) -> Self {
+        Self {
+            watermarks: watermarks.into_iter().collect(),
+        }
+    }
+}
+
+#[async_trait]
+impl ProgressStore for ShimIndexerProgressStore {
+    async fn load(&mut self, task_name: String) -> Result<CheckpointSequenceNumber> {
+        Ok(*self.watermarks.get(&task_name).expect("missing watermark"))
+    }
+
+    async fn save(&mut self, _: String, _: CheckpointSequenceNumber) -> Result<()> {
         Ok(())
     }
 }
