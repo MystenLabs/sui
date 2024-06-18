@@ -95,8 +95,8 @@ export async function setupWithFundedAddress(
 			}
 		},
 		{
-			backoff: () => 1000,
-			timeout: 30 * 1000,
+			backoff: () => 3000,
+			timeout: 60 * 1000,
 			retryIf: () => true,
 		},
 	);

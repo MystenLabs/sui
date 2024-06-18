@@ -9,8 +9,13 @@ import { SerialTransactionExecutor, Transaction } from '../../src/transactions';
 import { setup, TestToolbox } from './utils/setup';
 
 let toolbox: TestToolbox;
+let executor: SerialTransactionExecutor;
 beforeAll(async () => {
 	toolbox = await setup();
+	executor = new SerialTransactionExecutor({
+		client: toolbox.client,
+		signer: toolbox.keypair,
+	});
 
 	vi.spyOn(toolbox.client, 'multiGetObjects');
 	vi.spyOn(toolbox.client, 'getCoins');
@@ -21,15 +26,12 @@ afterAll(() => {
 });
 
 describe('SerialExecutor', () => {
-	beforeEach(() => {
+	beforeEach(async () => {
 		vi.clearAllMocks();
+		await executor.resetCache();
 	});
 
 	it('Executes multiple transactions using the same objects', async () => {
-		const executor = new SerialTransactionExecutor({
-			client: toolbox.client,
-			signer: toolbox.keypair,
-		});
 		const txb = new Transaction();
 		const [coin] = txb.splitCoins(txb.gas, [1]);
 		txb.transferObjects([coin], toolbox.address());
@@ -66,16 +68,14 @@ describe('SerialExecutor', () => {
 	});
 
 	it('Resets cache on errors', async () => {
-		const executor = new SerialTransactionExecutor({
-			client: toolbox.client,
-			signer: toolbox.keypair,
-		});
 		const txb = new Transaction();
 		const [coin] = txb.splitCoins(txb.gas, [1]);
 		txb.transferObjects([coin], toolbox.address());
 
 		const result = await executor.executeTransaction(txb);
 		const effects = bcs.TransactionEffects.fromBase64(result.effects);
+
+		await toolbox.client.waitForTransaction({ digest: result.digest });
 
 		const newCoinId = effects.V2?.changedObjects.find(
 			([_id, { outputState }], index) =>
@@ -89,12 +89,13 @@ describe('SerialExecutor', () => {
 		const txb3 = new Transaction();
 		txb3.transferObjects([newCoinId], new Ed25519Keypair().toSuiAddress());
 
-		await toolbox.client.signAndExecuteTransaction({
+		const { digest } = await toolbox.client.signAndExecuteTransaction({
 			signer: toolbox.keypair,
 			transaction: txb2,
 		});
 
 		await expect(() => executor.executeTransaction(txb3)).rejects.toThrowError();
+		await toolbox.client.waitForTransaction({ digest });
 
 		// // Transaction should succeed after cache reset/error
 		const result2 = await executor.executeTransaction(txb3);
