@@ -149,6 +149,7 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 // Version 51: Switch to DKG V1.
 // Version 52: Emit `CommitteeMemberUrlUpdateEvent` when updating bridge node url.
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
+//             Enable soft bundle in devnet and testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2433,7 +2434,12 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_coin_deny_list_v2 = true;
                     }
                 }
-                52 => {}
+                52 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.soft_bundle = true;
+                        cfg.max_soft_bundle_size = Some(5);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2589,6 +2595,14 @@ impl ProtocolConfig {
 
     pub fn set_mysticeti_num_leaders_per_round_for_testing(&mut self, val: Option<usize>) {
         self.feature_flags.mysticeti_num_leaders_per_round = val;
+    }
+
+    pub fn set_enable_soft_bundle(&mut self, val: bool) {
+        self.feature_flags.soft_bundle = val;
+    }
+
+    pub fn set_max_soft_bundle_size(&mut self, val: u64) {
+        self.max_soft_bundle_size = Some(val);
     }
 }
 
