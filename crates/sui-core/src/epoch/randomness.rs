@@ -363,60 +363,60 @@ impl RandomnessManager {
                 "random beacon: no existing DKG output found for epoch {}",
                 committee.epoch()
             );
+
             // Load intermediate data.
-
-            // load from the deprecated table if the binary was changed during dkg.
-            #[allow(deprecated)]
-            rm.processed_messages
-                .extend(tables.dkg_processed_messages.safe_iter().map(|result| {
-                    let (pid, msg) = result.expect("typed_store should not fail");
-                    (pid, VersionedProcessedMessage::V0(msg))
-                }));
-            rm.processed_messages.extend(
-                tables
-                    .dkg_processed_messages_v2
-                    .safe_iter()
-                    .map(|result| result.expect("typed_store should not fail")),
-            );
-
-            if let Some(used_messages) = tables
-                .dkg_used_messages_v2
-                .get(&SINGLETON_KEY)
-                .expect("typed_store should not fail")
-            {
-                rm.used_messages
-                    .set(used_messages.clone())
-                    .expect("setting new OnceCell should succeed");
-            } else {
-                // load from the deprecated table if the binary was changed during dkg
+            match epoch_store.protocol_config().dkg_version() {
                 #[allow(deprecated)]
-                if let Some(used_messages) = tables
-                    .dkg_used_messages
-                    .get(&SINGLETON_KEY)
-                    .expect("typed_store should not fail")
-                {
-                    rm.used_messages
-                        .set(VersionedUsedProcessedMessages::V0(used_messages.clone()))
-                        .expect("setting new OnceCell should succeed");
+                0 => {
+                    rm.processed_messages
+                        .extend(tables.dkg_processed_messages.safe_iter().map(|result| {
+                            let (pid, msg) = result.expect("typed_store should not fail");
+                            (pid, VersionedProcessedMessage::V0(msg))
+                        }));
+                    if let Some(used_messages) = tables
+                        .dkg_used_messages
+                        .get(&SINGLETON_KEY)
+                        .expect("typed_store should not fail")
+                    {
+                        rm.used_messages
+                            .set(VersionedUsedProcessedMessages::V0(used_messages.clone()))
+                            .expect("setting new OnceCell should succeed");
+                    }
+                    rm.confirmations
+                        .extend(tables.dkg_confirmations.safe_iter().map(|result| {
+                            let (pid, msg) = result.expect("typed_store should not fail");
+                            (pid, VersionedDkgConfimation::V0(msg))
+                        }));
                 }
+                1 => {
+                    rm.processed_messages.extend(
+                        tables
+                            .dkg_processed_messages_v2
+                            .safe_iter()
+                            .map(|result| result.expect("typed_store should not fail")),
+                    );
+                    if let Some(used_messages) = tables
+                        .dkg_used_messages_v2
+                        .get(&SINGLETON_KEY)
+                        .expect("typed_store should not fail")
+                    {
+                        rm.used_messages
+                            .set(used_messages.clone())
+                            .expect("setting new OnceCell should succeed");
+                    }
+                    rm.confirmations.extend(
+                        tables
+                            .dkg_confirmations_v2
+                            .safe_iter()
+                            .map(|result| result.expect("typed_store should not fail")),
+                    );
+                }
+                _ => panic!(
+                    "BUG: invalid DKG version {}",
+                    epoch_store.protocol_config().dkg_version()
+                ),
             }
-
-            // load from the deprecated table if the binary was changed during dkg.
-            #[allow(deprecated)]
-            rm.confirmations
-                .extend(tables.dkg_confirmations.safe_iter().map(|result| {
-                    let (pid, msg) = result.expect("typed_store should not fail");
-                    (pid, VersionedDkgConfimation::V0(msg))
-                }));
-            rm.confirmations.extend(
-                tables
-                    .dkg_confirmations_v2
-                    .safe_iter()
-                    .map(|result| result.expect("typed_store should not fail")),
-            );
         }
-
-        // TODO: Should we call advance_dkg here?
 
         // Resume randomness generation from where we left off.
         // This must be loaded regardless of whether DKG has finished yet, since the
@@ -516,10 +516,21 @@ impl RandomnessManager {
                 if let Ok(Some(processed)) = res {
                     self.processed_messages
                         .insert(processed.sender(), processed.clone());
-                    batch.insert_batch(
-                        &epoch_store.tables()?.dkg_processed_messages_v2,
-                        std::iter::once((processed.sender(), processed)),
-                    )?;
+                    match processed {
+                        VersionedProcessedMessage::V0(msg) => {
+                            #[allow(deprecated)]
+                            batch.insert_batch(
+                                &epoch_store.tables()?.dkg_processed_messages,
+                                std::iter::once((msg.message.sender, msg)),
+                            )?;
+                        }
+                        VersionedProcessedMessage::V1(_) => {
+                            batch.insert_batch(
+                                &epoch_store.tables()?.dkg_processed_messages_v2,
+                                std::iter::once((processed.sender(), processed)),
+                            )?;
+                        }
+                    }
                 }
             }
 
@@ -540,10 +551,21 @@ impl RandomnessManager {
                     if self.used_messages.set(used_msgs.clone()).is_err() {
                         error!("BUG: used_messages should only ever be set once");
                     }
-                    batch.insert_batch(
-                        &epoch_store.tables()?.dkg_used_messages_v2,
-                        std::iter::once((SINGLETON_KEY, used_msgs)),
-                    )?;
+                    match used_msgs {
+                        VersionedUsedProcessedMessages::V0(msg) => {
+                            #[allow(deprecated)]
+                            batch.insert_batch(
+                                &epoch_store.tables()?.dkg_used_messages,
+                                std::iter::once((SINGLETON_KEY, msg)),
+                            )?;
+                        }
+                        VersionedUsedProcessedMessages::V1(_) => {
+                            batch.insert_batch(
+                                &epoch_store.tables()?.dkg_used_messages_v2,
+                                std::iter::once((SINGLETON_KEY, used_msgs)),
+                            )?;
+                        }
+                    };
 
                     let transaction = ConsensusTransaction::new_randomness_dkg_confirmation(
                         epoch_store.name,
@@ -705,10 +727,21 @@ impl RandomnessManager {
             return Ok(());
         }
         self.confirmations.insert(conf.sender(), conf.clone());
-        batch.insert_batch(
-            &self.tables()?.dkg_confirmations_v2,
-            std::iter::once((conf.sender(), conf)),
-        )?;
+        match conf {
+            VersionedDkgConfimation::V0(msg) => {
+                #[allow(deprecated)]
+                batch.insert_batch(
+                    &self.tables()?.dkg_confirmations,
+                    std::iter::once((msg.sender, msg)),
+                )?;
+            }
+            VersionedDkgConfimation::V1(_) => {
+                batch.insert_batch(
+                    &self.tables()?.dkg_confirmations_v2,
+                    std::iter::once((conf.sender(), conf)),
+                )?;
+            }
+        }
         Ok(())
     }
 
@@ -978,11 +1011,7 @@ mod tests {
             }
         }
         for i in 0..randomness_managers.len() {
-            let mut batch = epoch_stores[i]
-                .tables()
-                .unwrap()
-                .dkg_processed_messages_v2
-                .batch();
+            let mut batch = epoch_stores[i].db_batch_for_test();
             for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
                 randomness_managers[i]
                     .add_message(&epoch_stores[j].name, dkg_message)
@@ -1016,11 +1045,7 @@ mod tests {
             }
         }
         for i in 0..randomness_managers.len() {
-            let mut batch = epoch_stores[i]
-                .tables()
-                .unwrap()
-                .dkg_confirmations_v2
-                .batch();
+            let mut batch = epoch_stores[i].db_batch_for_test();
             for (j, dkg_confirmation) in dkg_confirmations.iter().cloned().enumerate() {
                 randomness_managers[i]
                     .add_confirmation(&mut batch, &epoch_stores[j].name, dkg_confirmation)
@@ -1136,11 +1161,7 @@ mod tests {
             }
         }
         for i in 0..randomness_managers.len() {
-            let mut batch = epoch_stores[i]
-                .tables()
-                .unwrap()
-                .dkg_processed_messages_v2
-                .batch();
+            let mut batch = epoch_stores[i].db_batch_for_test();
             for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
                 randomness_managers[i]
                     .add_message(&epoch_stores[j].name, dkg_message)
