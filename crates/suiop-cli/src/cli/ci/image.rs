@@ -9,14 +9,16 @@ use clap::{Parser, ValueEnum};
 use colored::Colorize;
 use serde::{self, Serialize};
 use std::{fmt::Display, str::FromStr};
-use tabled::{Table, Tabled};
+use tabled::{settings::Style, Table, Tabled};
 use tracing::debug;
 
 #[derive(Tabled)]
 struct BuildInfo {
     name: String,
     status: String,
+    #[tabled(rename = "Start Time (Local Time)")]
     start_time: String,
+    #[tabled(rename = "End Time")]
     end_time: String,
 }
 
@@ -176,7 +178,10 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                         end_time,
                     }
                 });
-                let tabled_str = Table::new(job_statuses).to_string();
+                let mut tabled = Table::new(job_statuses);
+                tabled.with(Style::rounded());
+
+                let tabled_str = tabled.to_string();
                 println!("{}", tabled_str);
             }
         }
@@ -191,12 +196,16 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
 }
 
 fn utc_to_local_time(utc_time_str: String) -> String {
-    let utc_time_result = DateTime::<Utc>::from_str(utc_time_str);
+    let utc_time_result = DateTime::<Utc>::from_str(&format!(
+        "{}T{}Z",
+        &utc_time_str[..10],
+        &utc_time_str[11..19]
+    ));
     if let Ok(utc_time) = utc_time_result {
         let local_time = utc_time.with_timezone(&Local);
-        local_time.format("%Y-%m-%d %H:%M:%S %Z").to_string()
+        local_time.format("%Y-%m-%d %H:%M:%S").to_string()
     } else {
-        return utc_time_str;
+        utc_time_str.to_string()
     }
 }
 
