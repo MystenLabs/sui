@@ -252,10 +252,16 @@ impl ReadStore for RocksDbStore {
 
     fn get_checkpoint_contents_by_sequence_number(
         &self,
-        _sequence_number: CheckpointSequenceNumber,
+        sequence_number: CheckpointSequenceNumber,
     ) -> sui_types::storage::error::Result<Option<sui_types::messages_checkpoint::CheckpointContents>>
     {
-        todo!()
+        match self.get_checkpoint_by_sequence_number(sequence_number) {
+            Ok(Some(checkpoint)) => {
+                self.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 }
 
