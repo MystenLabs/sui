@@ -726,7 +726,7 @@ impl CoreSignals {
 }
 
 /// Receivers of signals from Core.
-/// Intentially un-clonable. Comonents should only subscribe to channels they need.
+/// Intentionally un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
     rx_block_broadcast: broadcast::Receiver<VerifiedBlock>,
     new_round_receiver: watch::Receiver<Round>,
@@ -994,8 +994,8 @@ mod test {
     async fn test_core_propose_after_genesis() {
         telemetry_subscribers::init_for_testing();
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes(2_000);
-            config.set_consensus_max_transactions_in_block_bytes(2_000);
+            config.set_consensus_max_transaction_size_bytes_for_testing(2_000);
+            config.set_consensus_max_transactions_in_block_bytes_for_testing(2_000);
             config
         });
 
@@ -1279,7 +1279,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_core_set_consumer_availablity() {
+    async fn test_core_set_consumer_availability() {
         telemetry_subscribers::init_for_testing();
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -1449,7 +1449,7 @@ mod test {
         let (mut context, _) = Context::new_for_test(4);
         context
             .protocol_config
-            .set_mysticeti_leader_scoring_and_schedule(false);
+            .set_mysticeti_leader_scoring_and_schedule_for_testing(false);
         // create the cores and their signals for all the authorities
         let mut cores = create_cores(context, vec![1, 1, 1, 1]);
 
@@ -1562,7 +1562,7 @@ mod test {
         let (mut context, _) = Context::new_for_test(6);
         context
             .protocol_config
-            .set_mysticeti_num_leaders_per_round(num_leaders_per_round);
+            .set_mysticeti_num_leaders_per_round_for_testing(num_leaders_per_round);
         // create the cores and their signals for all the authorities
         let mut cores = create_cores(context, vec![1, 1, 1, 1, 1, 1]);
 
@@ -1633,7 +1633,7 @@ mod test {
             // Meaning with multi leader per round explicitly set to 1 we will have 60,
             // otherwise 61.
             // NOTE: We used 61 leader rounds to specifically trigger the scenario
-            // where the leader schedule boundary occured AND we had a swap to a new
+            // where the leader schedule boundary occurred AND we had a swap to a new
             // leader for the same round
             let expected_commit_count = match num_leaders_per_round {
                 Some(1) => 60,
@@ -1842,7 +1842,7 @@ mod test {
                 .with_authority_index(AuthorityIndex::new_for_test(index as u32));
             context
                 .protocol_config
-                .set_consensus_bad_nodes_stake_threshold(33);
+                .set_consensus_bad_nodes_stake_threshold_for_testing(33);
 
             let context = Arc::new(context);
             let store = Arc::new(MemStore::new());

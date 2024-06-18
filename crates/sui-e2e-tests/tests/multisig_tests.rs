@@ -673,7 +673,7 @@ async fn test_expired_epoch_zklogin_in_multisig() {
 async fn test_max_epoch_too_large_fail_zklogin_in_multisig() {
     use sui_protocol_config::ProtocolConfig;
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_zklogin_max_epoch_upper_bound_delta(Some(1));
+        config.set_zklogin_max_epoch_upper_bound_delta_for_testing(Some(1));
         config
     });
 

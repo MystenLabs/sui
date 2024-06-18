@@ -264,7 +264,7 @@ async fn test_passive_reconfig_determinism() {
 async fn do_test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
     let _commit_root_state_digest = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_commit_root_state_digest_supported(true);
+        config.set_commit_root_state_digest_supported_for_testing(true);
         config
     });
     ProtocolConfig::poison_get_for_min_version();
