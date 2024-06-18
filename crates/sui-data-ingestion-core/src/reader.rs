@@ -329,7 +329,9 @@ impl CheckpointReader {
             tokio::select! {
                 _ = &mut self.exit_receiver => break,
                 Some(gc_checkpoint_number) = self.processed_receiver.recv() => {
-                    self.gc_processed_files(gc_checkpoint_number).expect("Failed to clean the directory");
+                    if let Err(err) = self.gc_processed_files(gc_checkpoint_number) {
+                        error!("error during cleaning up the local directory {:?}", err);
+                    }
                 }
                 Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(self.options.tick_interal_ms), inotify_recv.recv())  => {
                     self.sync().await.expect("Failed to read checkpoint files");
