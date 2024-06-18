@@ -226,7 +226,12 @@ where
         let event = bcs::from_bytes::<SystemEpochInfoEvent>(&epoch_event.contents)?;
 
         // Now we just entered epoch X, we want to calculate the diff between
-        // TotalTransactionsByEndOfEpoch(X-1) and TotalTransactionsByEndOfEpoch(X-2)
+        // TotalTransactionsByEndOfEpoch(X-1) and TotalTransactionsByEndOfEpoch(X-2). Note that on
+        // the indexer's chain-reading side, this is not guaranteed to have the latest data. Rather
+        // than impose a wait on the reading side, however, we overwrite this on the persisting
+        // side, where we can guarantee that the previous epoch's checkpoints have been written to
+        // db.
+
         let network_tx_count_prev_epoch = match system_state.epoch {
             // If first epoch change, this number is 0
             1 => Ok(0),
