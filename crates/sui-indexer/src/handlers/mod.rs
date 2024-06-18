@@ -39,4 +39,5 @@ pub struct TransactionObjectChangesToCommit {
 pub struct EpochToCommit {
     pub last_epoch: Option<IndexedEpochInfo>,
     pub new_epoch: IndexedEpochInfo,
+    pub network_total_transactions: u64,
 }
