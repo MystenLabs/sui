@@ -44,6 +44,7 @@ serde_yaml.workspace = true
 sha2 = "0.10.6"
 spinners.workspace = true
 strum.workspace = true
+tabled.workspace = true
 tokio = {workspace = true, features = ["full"]}
 toml_edit.workspace = true
 tracing-subscriber.workspace = true

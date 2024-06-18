@@ -4,10 +4,21 @@
 use crate::cli::lib::{get_api_server, get_oauth_token};
 use anyhow::Result;
 
+use chrono::{DateTime, Local, Utc};
 use clap::{Parser, ValueEnum};
 use colored::Colorize;
 use serde::{self, Serialize};
+use std::{fmt::Display, str::FromStr};
+use tabled::{Table, Tabled};
 use tracing::debug;
+
+#[derive(Tabled)]
+struct BuildInfo {
+    name: String,
+    status: String,
+    start_time: String,
+    end_time: String,
+}
 
 #[derive(Parser, Debug)]
 pub struct ImageArgs {
@@ -36,7 +47,7 @@ impl Serialize for RefType {
     }
 }
 
-impl std::fmt::Display for RefType {
+impl Display for RefType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RefType::Branch => write!(f, "branch"),
@@ -153,24 +164,20 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
             } => {
                 println!("Requested query for repo: {}", repo_name.green());
                 let json_resp = resp.json::<QueryBuildResponse>().await?;
-                for pod in json_resp.pods {
-                    if let Some(end_time) = pod.end_time {
-                        println!(
-                            "Job Name: {}, Status: {}, Start Time: {}, End Time: {}",
-                            pod.name.green(),
-                            pod.status.green(),
-                            pod.start_time.green(),
-                            end_time.green()
-                        );
-                    } else {
-                        println!(
-                            "Job Name: {}, Status: {}, Start Time: {}",
-                            pod.name.green(),
-                            pod.status.green(),
-                            pod.start_time.green()
-                        );
+                let job_statuses = json_resp.pods.into_iter().map(|pod| {
+                    // Parse the string into a NaiveDateTime
+                    let start_time = utc_to_local_time(pod.start_time);
+                    let end_time = utc_to_local_time(pod.end_time.unwrap_or("".to_string()));
+
+                    BuildInfo {
+                        name: pod.name,
+                        status: pod.status,
+                        start_time,
+                        end_time,
                     }
-                }
+                });
+                let tabled_str = Table::new(job_statuses).to_string();
+                println!("{}", tabled_str);
             }
         }
         Ok(())
@@ -180,6 +187,16 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
             status,
             resp.text().await?
         ))
+    }
+}
+
+fn utc_to_local_time(utc_time_str: String) -> String {
+    let utc_time_result = DateTime::<Utc>::from_str(utc_time_str);
+    if let Ok(utc_time) = utc_time_result {
+        let local_time = utc_time.with_timezone(&Local);
+        local_time.format("%Y-%m-%d %H:%M:%S %Z").to_string()
+    } else {
+        return utc_time_str;
     }
 }
 
