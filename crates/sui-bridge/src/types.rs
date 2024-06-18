@@ -116,18 +116,19 @@ impl BridgeCommittee {
 }
 
 impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
-    // Note:
-    // 1. preference is not supported today.
-    // 2. blocklisted members are always excluded.
+    // Note: blocklisted members are always excluded.
     fn shuffle_by_stake_with_rng(
         &self,
-        // preference is not supported today
-        _preferences: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
+        // `preferences` is used as a flag here to influence the order of validators to be requested
+        //  if `Some(_)`, then we will request validators in the order of the voting power
+        //  if `None`, we still refer to voting power, but they are shuffled by randomness.
+        //  to save gas cost.
+        preferences: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
         // only attempt from these authorities.
         restrict_to: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
         rng: &mut impl Rng,
     ) -> Vec<BridgeAuthorityPublicKeyBytes> {
-        let candidates = self
+        let mut candidates = self
             .members
             .iter()
             .filter_map(|(name, a)| {
@@ -146,14 +147,18 @@ impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
                 }
             })
             .collect::<Vec<_>>();
-
-        candidates
-            .choose_multiple_weighted(rng, candidates.len(), |(_, weight)| *weight as f64)
-            // Unwrap safe: it panics when the third parameter is larger than the size of the slice
-            .unwrap()
-            .map(|(name, _)| name)
-            .cloned()
-            .collect()
+        if preferences.is_some() {
+            candidates.sort_by(|(_, a), (_, b)| b.cmp(a));
+            candidates.iter().map(|(name, _)| name.clone()).collect()
+        } else {
+            candidates
+                .choose_multiple_weighted(rng, candidates.len(), |(_, weight)| *weight as f64)
+                // Unwrap safe: it panics when the third parameter is larger than the size of the slice
+                .unwrap()
+                .map(|(name, _)| name)
+                .cloned()
+                .collect()
+        }
     }
 
     fn weight(&self, author: &BridgeAuthorityPublicKeyBytes) -> StakeUnit {
