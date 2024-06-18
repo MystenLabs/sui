@@ -148,8 +148,8 @@ async function resolveObjectReferences(
 	// We keep the input by-reference to avoid needing to re-resolve it:
 	const objectsToResolve = transactionData.inputs.filter((input) => {
 		return (
-			(input.UnresolvedObject && !input.UnresolvedObject.version) ||
-			input.UnresolvedObject?.initialSharedVersion
+			input.UnresolvedObject &&
+			!(input.UnresolvedObject.version || input.UnresolvedObject?.initialSharedVersion)
 		);
 	}) as Extract<CallArg, { UnresolvedObject: unknown }>[];
 
@@ -218,10 +218,11 @@ async function resolveObjectReferences(
 		const id = normalizeSuiAddress(input.UnresolvedObject.objectId);
 		const object = objectsById.get(id);
 
-		if (object?.initialSharedVersion) {
+		if (input.UnresolvedObject.initialSharedVersion ?? object?.initialSharedVersion) {
 			updated = Inputs.SharedObjectRef({
 				objectId: id,
-				initialSharedVersion: object.initialSharedVersion,
+				initialSharedVersion:
+					input.UnresolvedObject.initialSharedVersion || object?.initialSharedVersion!,
 				mutable: isUsedAsMutable(transactionData, index),
 			});
 		} else if (isUsedAsReceiving(transactionData, index)) {
@@ -232,6 +233,11 @@ async function resolveObjectReferences(
 					version: input.UnresolvedObject.version ?? object?.version!,
 				}!,
 			);
+		}
+
+		if (!input.UnresolvedObject.version && !object?.version) {
+			console.log(input);
+			throw new Error(`Object version not found for object ${id}`);
 		}
 
 		transactionData.inputs[transactionData.inputs.indexOf(input)] =
