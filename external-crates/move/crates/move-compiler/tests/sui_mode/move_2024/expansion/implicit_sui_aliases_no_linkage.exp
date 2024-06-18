@@ -1,0 +1,4 @@
+error[E03002]: unbound module
+ = Compiler Error -- no location information for error:
+     Unbound module 'sui::tx_context'
+
