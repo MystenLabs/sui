@@ -6,7 +6,7 @@ use crate::{
     context::Context,
     symbols::{
         self, mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
-        type_list_to_ide_string, type_to_ide_string, DefInfo, DefLoc, PrecompiledPkgDeps,
+        type_list_to_ide_string, type_to_ide_string, DefInfo, PrecompiledPkgDeps,
         SymbolicatorRunner, Symbols,
     },
     utils,
@@ -27,7 +27,7 @@ use move_compiler::{
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
     },
-    shared::{ide::AutocompleteMethod, Identifier},
+    shared::{files::FilePosition, ide::AutocompleteMethod, Identifier},
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
@@ -188,6 +188,7 @@ fn context_specific_lbrace(
             continue;
         };
         if !is_definition(
+            symbols,
             position.line,
             u.col_start(),
             use_file_mod_def.fhash(),
@@ -232,8 +233,7 @@ fn fun_def_info(
     let Some(fdef) = mdef.functions.get(&name) else {
         return None;
     };
-    let def_loc = DefLoc::new(fhash, fdef.start);
-    symbols.def_info(&def_loc)
+    symbols.def_info(&fdef.name_loc)
 }
 
 fn fun_completion_item(
@@ -376,6 +376,7 @@ fn context_specific_no_trigger(
                 break;
             };
             if is_definition(
+                symbols,
                 position.line,
                 u.col_start(),
                 use_file_mod_def.fhash(),
@@ -402,7 +403,7 @@ fn context_specific_no_trigger(
             }
 
             // get module info containing the init function
-            let Some(mdef) = symbols.mod_defs(&u.def_loc().fhash(), *mod_ident) else {
+            let Some(mdef) = symbols.mod_defs(&u.def_loc().file_hash(), *mod_ident) else {
                 break;
             };
 
@@ -440,10 +441,13 @@ fn context_specific_no_trigger(
 }
 
 /// Checks if a use at a given position is also a definition.
-fn is_definition(use_line: u32, use_col: u32, use_fhash: FileHash, def_loc: DefLoc) -> bool {
-    use_fhash == def_loc.fhash()
-        && use_line == def_loc.start().line
-        && use_col == def_loc.start().character
+fn is_definition(symbols: &Symbols, use_line: u32, use_col: u32, use_fhash: FileHash, def_loc: Loc) -> bool {
+    if let Some(use_loc) = symbols.files.line_char_offset_to_loc_opt(use_fhash, use_line, use_col) {
+        // TODO: is overlapping better?
+        def_loc.contains(&use_loc)
+    } else {
+        false
+    }
 }
 
 /// Finds white-space separated strings on the line containing auto-completion request and their
