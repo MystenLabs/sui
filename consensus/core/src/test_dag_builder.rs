@@ -11,13 +11,12 @@ use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
-use crate::commit::{sort_sub_dag_blocks, CommitDigest, TrustedCommit};
 use crate::{
     block::{
         genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot, TestBlock,
         VerifiedBlock,
     },
-    commit::DEFAULT_WAVE_LENGTH,
+    commit::{sort_sub_dag_blocks, CommitDigest, TrustedCommit, DEFAULT_WAVE_LENGTH},
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
@@ -525,7 +524,6 @@ impl<'a> LayerBuilder<'a> {
 
     // Layer round is minimally and randomly connected with ancestors.
     pub fn configure_min_parent_links(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
-        // TODO: handle quroum threshold properly with stake
         let quorum_threshold = self.dag_builder.context.committee.quorum_threshold() as usize;
         let mut authorities: Vec<AuthorityIndex> = self
             .dag_builder
@@ -543,14 +541,14 @@ impl<'a> LayerBuilder<'a> {
         let mut authorities_to_shuffle = authorities.clone();
 
         let mut leaders = vec![];
-        if self.leader_round.is_some() {
+        if let Some(leader_round) = self.leader_round {
             let leader_offsets = (0..self.dag_builder.number_of_leaders).collect::<Vec<_>>();
 
             for leader_offset in leader_offsets {
                 leaders.push(
                     self.dag_builder
                         .leader_schedule
-                        .elect_leader(self.leader_round.unwrap(), leader_offset),
+                        .elect_leader(leader_round, leader_offset),
                 );
             }
         }
@@ -560,6 +558,7 @@ impl<'a> LayerBuilder<'a> {
             .map(|authority| {
                 authorities_to_shuffle.shuffle(&mut rng);
 
+                // TODO: handle quroum threshold properly with stake
                 let min_ancestors: HashSet<AuthorityIndex> = authorities_to_shuffle
                     .iter()
                     .take(quorum_threshold)

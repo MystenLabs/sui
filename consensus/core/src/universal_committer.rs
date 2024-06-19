@@ -31,7 +31,7 @@ pub(crate) struct UniversalCommitter {
     /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
     /// The list of committers for multi-leader or pipelining
-    pub committers: Vec<BaseCommitter>,
+    committers: Vec<BaseCommitter>,
 }
 
 impl UniversalCommitter {

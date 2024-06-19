@@ -11,7 +11,7 @@ use crate::{
     block::{BlockAPI, Slot},
     block_manager::BlockManager,
     block_verifier::NoopBlockVerifier,
-    commit::{DecidedLeader, DEFAULT_WAVE_LENGTH},
+    commit::DecidedLeader,
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
@@ -22,53 +22,55 @@ use crate::{
     },
 };
 
+const NUM_RUNS: u32 = 100;
+const NUM_ROUNDS: u32 = 200;
+
 /// Test builds a randomized dag with the following conditions:
 /// - Links to 2f+1 minimum ancestors
 /// - Links to leader of previous round.
 ///
 /// Should result in a direct commit for every round.
-#[test]
-fn test_randomized_dag_all_direct_commit() {
-    let random_test_setup = random_test_setup();
-    let authority = authority_setup(random_test_setup.num_authorities);
+#[tokio::test]
+async fn test_randomized_dag_all_direct_commit() {
+    let mut random_test_setup = random_test_setup();
 
-    let pipeline = random_test_setup.num_waves % DEFAULT_WAVE_LENGTH as usize;
-    let wave_number =
-        authority.committer.committers[pipeline].wave_number(random_test_setup.num_waves as u32);
-    let num_rounds = authority.committer.committers[pipeline].decision_round(wave_number);
-    let include_leader_percentage = 100;
-    let dag_builder = create_random_dag(
-        random_test_setup.seed,
-        include_leader_percentage,
-        num_rounds,
-        authority.context.clone(),
-    );
+    for _ in 0..NUM_RUNS {
+        let seed = random_test_setup.seeded_rng.gen_range(0..10000);
+        let num_authorities = random_test_setup.seeded_rng.gen_range(4..10);
+        let authority = authority_setup(num_authorities, 0);
 
-    dag_builder.persist_all_blocks(authority.dag_state.clone());
+        let include_leader_percentage = 100;
+        let dag_builder = create_random_dag(
+            seed,
+            include_leader_percentage,
+            NUM_ROUNDS,
+            authority.context.clone(),
+        );
 
-    tracing::info!(
-        "Running test with committee size {} & {} completed waves in the DAG...",
-        random_test_setup.num_authorities,
-        random_test_setup.num_waves
-    );
+        dag_builder.persist_all_blocks(authority.dag_state.clone());
 
-    let last_decided = Slot::new_for_test(0, 0);
-    let sequence = authority.committer.try_decide(last_decided);
-    tracing::debug!("Commit sequence: {sequence:#?}");
+        tracing::info!(
+            "Running test with committee size {num_authorities} & {NUM_ROUNDS} rounds in the DAG..."
+        );
 
-    assert_eq!(sequence.len(), random_test_setup.num_waves);
-    for (i, leader_block) in sequence.iter().enumerate() {
-        // First sequenced leader should be in round 1.
-        let leader_round = i as u32 + 1;
-        if let DecidedLeader::Commit(ref block) = leader_block {
-            assert_eq!(block.round(), leader_round);
-            assert_eq!(
-                block.author(),
-                authority.committer.get_leaders(leader_round)[0]
-            );
-        } else {
-            panic!("Expected a committed leader")
-        };
+        let last_decided = Slot::new_for_test(0, 0);
+        let sequence = authority.committer.try_decide(last_decided);
+        tracing::debug!("Commit sequence: {sequence:#?}");
+
+        assert_eq!(sequence.len(), (NUM_ROUNDS - 2) as usize);
+        for (i, leader_block) in sequence.iter().enumerate() {
+            // First sequenced leader should be in round 1.
+            let leader_round = i as u32 + 1;
+            if let DecidedLeader::Commit(ref block) = leader_block {
+                assert_eq!(block.round(), leader_round);
+                assert_eq!(
+                    block.author(),
+                    authority.committer.get_leaders(leader_round)[0]
+                );
+            } else {
+                panic!("Expected a committed leader")
+            };
+        }
     }
 }
 
@@ -83,77 +85,88 @@ fn test_randomized_dag_all_direct_commit() {
 /// sequence is the same for both authorities. The resulting sequence will include
 /// Commit & Skip decisions and potentially will stop before coming to a decision
 /// on all waves as we may have an Undecided leader somewhere early in the sequence.
-#[test]
-fn test_randomized_dag_and_decision_sequence() {
+#[tokio::test]
+async fn test_randomized_dag_and_decision_sequence() {
     let mut random_test_setup = random_test_setup();
 
-    // Setup for Authority 1
-    let mut authority_1 = authority_setup(random_test_setup.num_authorities);
+    for _ in 0..NUM_RUNS {
+        let seed = random_test_setup.seeded_rng.gen_range(0..10000);
+        let num_authorities = random_test_setup.seeded_rng.gen_range(4..10);
 
-    let pipeline = random_test_setup.num_waves % DEFAULT_WAVE_LENGTH as usize;
-    let wave_number =
-        authority_1.committer.committers[pipeline].wave_number(random_test_setup.num_waves as u32);
-    let num_rounds = authority_1.committer.committers[pipeline].decision_round(wave_number);
-    let include_leader_percentage = 50;
-    let dag_builder = create_random_dag(
-        random_test_setup.seed,
-        include_leader_percentage,
-        num_rounds,
-        authority_1.context.clone(),
-    );
+        // Setup for Authority 1
+        let mut authority_1 = authority_setup(num_authorities, 1);
 
-    tracing::info!(
-        "Running test with committee size {} & {} completed waves in the DAG...",
-        random_test_setup.num_authorities,
-        random_test_setup.num_waves
-    );
+        let include_leader_percentage = 50;
+        let dag_builder = create_random_dag(
+            seed,
+            include_leader_percentage,
+            NUM_ROUNDS,
+            authority_1.context.clone(),
+        );
 
-    let mut all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
-    all_blocks.shuffle(&mut random_test_setup.seeded_rng);
+        tracing::info!(
+        "Running test with committee size {num_authorities} & {NUM_ROUNDS} rounds in the DAG..."
+        );
 
-    let mut sequenced_leaders_1 = vec![];
-    let mut last_decided = Slot::new_for_test(0, 0);
-    for block in &all_blocks {
-        let _ = authority_1
-            .block_manager
-            .try_accept_blocks(vec![block.clone()]);
-        let sequence = authority_1.committer.try_decide(last_decided);
+        let mut all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
+        all_blocks.shuffle(&mut random_test_setup.seeded_rng);
 
-        if !sequence.is_empty() {
-            sequenced_leaders_1.extend(sequence.clone());
-            let leader_status = sequence.last().unwrap();
-            last_decided = Slot::new(leader_status.round(), leader_status.authority());
+        let mut sequenced_leaders_1 = vec![];
+        let mut last_decided = Slot::new_for_test(0, 0);
+        let mut i = 0;
+        while i < all_blocks.len() {
+            let chunk_size = random_test_setup
+                .seeded_rng
+                .gen_range(1..=(all_blocks.len() - i));
+            let chunk = &all_blocks[i..i + chunk_size];
+
+            let _ = authority_1.block_manager.try_accept_blocks(chunk.to_vec());
+            let sequence = authority_1.committer.try_decide(last_decided);
+
+            if !sequence.is_empty() {
+                sequenced_leaders_1.extend(sequence.clone());
+                let leader_status = sequence.last().unwrap();
+                last_decided = Slot::new(leader_status.round(), leader_status.authority());
+            }
+
+            i += chunk_size;
         }
-    }
 
-    assert!(authority_1.block_manager.is_empty());
+        assert!(authority_1.block_manager.is_empty());
 
-    // Setup for Authority 2
-    let mut authority_2 = authority_setup(random_test_setup.num_authorities);
+        // Setup for Authority 2
+        let mut authority_2 = authority_setup(num_authorities, 2);
 
-    let mut all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
-    all_blocks.shuffle(&mut random_test_setup.seeded_rng);
+        let mut all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
+        all_blocks.shuffle(&mut random_test_setup.seeded_rng);
 
-    let mut sequenced_leaders_2 = vec![];
-    let mut last_decided = Slot::new_for_test(0, 0);
-    for block in &all_blocks {
-        let _ = authority_2
-            .block_manager
-            .try_accept_blocks(vec![block.clone()]);
-        let sequence = authority_2.committer.try_decide(last_decided);
+        let mut sequenced_leaders_2 = vec![];
+        let mut last_decided = Slot::new_for_test(0, 0);
+        let mut i = 0;
+        while i < all_blocks.len() {
+            let chunk_size = random_test_setup
+                .seeded_rng
+                .gen_range(1..=(all_blocks.len() - i));
+            let chunk = &all_blocks[i..i + chunk_size];
 
-        if !sequence.is_empty() {
-            sequenced_leaders_2.extend(sequence.clone());
-            let leader_status = sequence.last().unwrap();
-            last_decided = Slot::new(leader_status.round(), leader_status.authority());
+            let _ = authority_2.block_manager.try_accept_blocks(chunk.to_vec());
+            let sequence = authority_2.committer.try_decide(last_decided);
+
+            if !sequence.is_empty() {
+                sequenced_leaders_2.extend(sequence.clone());
+                let leader_status = sequence.last().unwrap();
+                last_decided = Slot::new(leader_status.round(), leader_status.authority());
+            }
+
+            i += chunk_size;
         }
+
+        assert!(authority_2.block_manager.is_empty());
+
+        // Ensure despite the difference in when blocks were received eventually after
+        // receiving all blocks both authorities should return the same sequence of blocks.
+        assert_eq!(sequenced_leaders_1, sequenced_leaders_2);
     }
-
-    assert!(authority_2.block_manager.is_empty());
-
-    // Ensure despite the difference in when blocks were received eventually after
-    // receiving all blocks both authorities should return the same sequence of blocks.
-    assert_eq!(sequenced_leaders_1, sequenced_leaders_2);
 }
 
 struct AuthorityTestFixture {
@@ -163,11 +176,11 @@ struct AuthorityTestFixture {
     block_manager: BlockManager,
 }
 
-fn authority_setup(num_authorities: usize) -> AuthorityTestFixture {
+fn authority_setup(num_authorities: usize, authority_index: u32) -> AuthorityTestFixture {
     let context = Arc::new(
         Context::new_for_test(num_authorities)
             .0
-            .with_authority_index(AuthorityIndex::new_for_test(1)),
+            .with_authority_index(AuthorityIndex::new_for_test(authority_index)),
     );
     let leader_schedule = Arc::new(LeaderSchedule::new(
         context.clone(),
@@ -199,10 +212,7 @@ fn authority_setup(num_authorities: usize) -> AuthorityTestFixture {
 }
 
 struct RandomTestFixture {
-    seed: u64,
     seeded_rng: StdRng,
-    num_authorities: usize,
-    num_waves: usize,
 }
 
 fn random_test_setup() -> RandomTestFixture {
@@ -221,13 +231,6 @@ fn random_test_setup() -> RandomTestFixture {
     };
     tracing::warn!("Using Random Seed: {seed}");
 
-    let mut seeded_rng = StdRng::seed_from_u64(seed);
-    let num_waves = seeded_rng.gen_range(0..100);
-    let num_authorities = seeded_rng.gen_range(4..10);
-    RandomTestFixture {
-        seed,
-        seeded_rng,
-        num_authorities,
-        num_waves,
-    }
+    let seeded_rng = StdRng::seed_from_u64(seed);
+    RandomTestFixture { seeded_rng }
 }

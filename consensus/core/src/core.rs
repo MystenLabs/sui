@@ -3,8 +3,12 @@
 
 use std::{collections::BTreeSet, iter, sync::Arc, time::Duration, vec};
 
+#[cfg(test)]
+use consensus_config::{local_committee_and_keys, Stake};
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
 use itertools::Itertools as _;
+#[cfg(test)]
+use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_macros::fail_point;
@@ -32,6 +36,11 @@ use crate::{
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
+};
+#[cfg(test)]
+use crate::{
+    block_verifier::NoopBlockVerifier, storage::mem_store::MemStore, CommitConsumer,
+    TransactionClient,
 };
 
 // Maximum number of commit votes to include in a block.
@@ -742,12 +751,100 @@ impl CoreSignalsReceivers {
     }
 }
 
+/// Creates cores for the specified number of authorities for their corresponding stakes. The method returns the
+/// cores and their respective signal receivers are returned in `AuthorityIndex` order asc.
 #[cfg(test)]
-pub(crate) mod test {
+pub(crate) fn create_cores(context: Context, authorities: Vec<Stake>) -> Vec<CoreTextFixture> {
+    let mut cores = Vec::new();
+
+    for index in 0..authorities.len() {
+        let own_index = AuthorityIndex::new_for_test(index as u32);
+        let core = CoreTextFixture::new(context.clone(), authorities.clone(), own_index);
+        cores.push(core);
+    }
+    cores
+}
+
+#[cfg(test)]
+pub(crate) struct CoreTextFixture {
+    pub core: Core,
+    pub signal_receivers: CoreSignalsReceivers,
+    pub block_receiver: broadcast::Receiver<VerifiedBlock>,
+    #[allow(unused)]
+    pub commit_receiver: UnboundedReceiver<CommittedSubDag>,
+    pub store: Arc<MemStore>,
+}
+
+#[cfg(test)]
+impl CoreTextFixture {
+    fn new(context: Context, authorities: Vec<Stake>, own_index: AuthorityIndex) -> Self {
+        let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
+        let mut context = context.clone();
+        context = context
+            .with_committee(committee)
+            .with_authority_index(own_index);
+        context
+            .protocol_config
+            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
+        let leader_schedule = Arc::new(
+            LeaderSchedule::from_store(context.clone(), dag_state.clone())
+                .with_num_commits_per_schedule(10),
+        );
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        // Need at least one subscriber to the block broadcast channel.
+        let block_receiver = signal_receivers.block_broadcast_receiver();
+
+        let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            CommitConsumer::new(commit_sender.clone(), 0, 0),
+            dag_state.clone(),
+            store.clone(),
+            leader_schedule.clone(),
+        );
+
+        let block_signer = signers.remove(own_index.value()).1;
+
+        let core = Core::new(
+            context,
+            leader_schedule,
+            transaction_consumer,
+            block_manager,
+            true,
+            commit_observer,
+            signals,
+            block_signer,
+            dag_state,
+        );
+
+        Self {
+            core,
+            signal_receivers,
+            block_receiver,
+            commit_receiver,
+            store,
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
     use std::{collections::BTreeSet, time::Duration};
 
-    use consensus_config::{local_committee_and_keys, AuthorityIndex, Parameters, Stake};
-    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
+    use consensus_config::{AuthorityIndex, Parameters};
+    use mysten_metrics::monitored_mpsc::unbounded_channel;
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::sleep;
 
@@ -759,7 +856,7 @@ pub(crate) mod test {
         leader_scoring::ReputationScores,
         storage::{mem_store::MemStore, Store, WriteBatch},
         transaction::TransactionClient,
-        CommitConsumer, CommitIndex, CommittedSubDag,
+        CommitConsumer, CommitIndex,
     };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
@@ -1910,96 +2007,11 @@ pub(crate) mod test {
         assert_eq!(all_stored_commits.len(), 6);
     }
 
-    /// Creates cores for the specified number of authorities for their corresponding stakes. The method returns the
-    /// cores and their respective signal receivers are returned in `AuthorityIndex` order asc.
-    pub(crate) fn create_cores(context: Context, authorities: Vec<Stake>) -> Vec<CoreTextFixture> {
-        let mut cores = Vec::new();
-
-        for index in 0..authorities.len() {
-            let own_index = AuthorityIndex::new_for_test(index as u32);
-            let core = CoreTextFixture::new(context.clone(), authorities.clone(), own_index);
-            cores.push(core);
-        }
-        cores
-    }
-
     pub(crate) async fn receive<T: Copy>(timeout: Duration, mut receiver: watch::Receiver<T>) -> T {
         tokio::time::timeout(timeout, receiver.changed())
             .await
             .expect("Timeout while waiting to read from receiver")
             .expect("Signal receive channel shouldn't be closed");
         *receiver.borrow_and_update()
-    }
-
-    pub(crate) struct CoreTextFixture {
-        pub core: Core,
-        pub signal_receivers: CoreSignalsReceivers,
-        pub block_receiver: broadcast::Receiver<VerifiedBlock>,
-        #[allow(unused)]
-        pub commit_receiver: UnboundedReceiver<CommittedSubDag>,
-        pub store: Arc<MemStore>,
-    }
-
-    impl CoreTextFixture {
-        fn new(context: Context, authorities: Vec<Stake>, own_index: AuthorityIndex) -> Self {
-            let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
-            let mut context = context.clone();
-            context = context
-                .with_committee(committee)
-                .with_authority_index(own_index);
-            context
-                .protocol_config
-                .set_consensus_bad_nodes_stake_threshold_for_testing(33);
-
-            let context = Arc::new(context);
-            let store = Arc::new(MemStore::new());
-            let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-
-            let block_manager = BlockManager::new(
-                context.clone(),
-                dag_state.clone(),
-                Arc::new(NoopBlockVerifier),
-            );
-            let leader_schedule = Arc::new(
-                LeaderSchedule::from_store(context.clone(), dag_state.clone())
-                    .with_num_commits_per_schedule(10),
-            );
-            let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-            let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-            let (signals, signal_receivers) = CoreSignals::new(context.clone());
-            // Need at least one subscriber to the block broadcast channel.
-            let block_receiver = signal_receivers.block_broadcast_receiver();
-
-            let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
-            let commit_observer = CommitObserver::new(
-                context.clone(),
-                CommitConsumer::new(commit_sender.clone(), 0, 0),
-                dag_state.clone(),
-                store.clone(),
-                leader_schedule.clone(),
-            );
-
-            let block_signer = signers.remove(own_index.value()).1;
-
-            let core = Core::new(
-                context,
-                leader_schedule,
-                transaction_consumer,
-                block_manager,
-                true,
-                commit_observer,
-                signals,
-                block_signer,
-                dag_state,
-            );
-
-            Self {
-                core,
-                signal_receivers,
-                block_receiver,
-                commit_receiver,
-                store,
-            }
-        }
     }
 }
