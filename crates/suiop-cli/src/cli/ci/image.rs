@@ -66,14 +66,19 @@ pub enum ImageAction {
         /// The name of the git repository within the mystenlabs org
         #[arg(short, long)]
         repo_name: String,
+        /// The path to the dockerfile within the source code repository given by `--repo_name`
         #[arg(short, long)]
         dockerfile: String,
+        /// Optional image tag to use, by default the image is tagged with commit SHA
         #[arg(long)]
         image_tag: Option<String>,
+        /// Optional image name, default to "app", only used if multiple images are built within one repo
         #[arg(long)]
         image_name: Option<String>,
+        /// Optioanl reference type, default to "branch"
         #[arg(long)]
         ref_type: Option<RefType>,
+        /// Optional reference value, default to "main"
         #[arg(long)]
         ref_val: Option<String>,
     },
@@ -146,8 +151,8 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 let ref_type = ref_type.clone().unwrap_or(RefType::Branch);
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
                 let ref_name = format!("{}:{}", ref_type, ref_val);
-                let image_name = image_name.clone().unwrap_or(repo_name.clone());
-                let image_tag = image_tag.clone().unwrap_or("latest".to_string());
+                let image_name = image_name.clone().unwrap_or("app".to_string());
+                let image_tag = image_tag.clone().unwrap_or("".to_string());
                 let image_info = format!("{}:{}", image_name, image_tag);
                 println!(
                     "Requested built image for repo: {}, ref: {}, dockerfile: {}, image: {}",
