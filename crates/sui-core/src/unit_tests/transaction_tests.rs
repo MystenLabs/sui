@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
+use move_core_types::ident_str;
 use mysten_network::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
 use sui_types::crypto::{PublicKey, SuiSignature, ToFromBytes, ZkLoginPublicIdentifier};
+use sui_types::messages_grpc::HandleSoftBundleCertificatesRequestV3;
 use sui_types::utils::get_one_zklogin_inputs;
 use sui_types::{
     authenticator_state::ActiveJwk,
@@ -25,6 +28,11 @@ use sui_types::{
     zk_login_authenticator::ZkLoginAuthenticator,
     zk_login_util::DEFAULT_JWK_BYTES,
 };
+
+use crate::authority::authority_test_utils::send_batch_consensus_no_execution;
+use crate::authority::authority_tests::{call_move_, create_gas_objects, publish_object_basics};
+use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 
 use sui_macros::sim_test;
 macro_rules! assert_matches {
@@ -1570,6 +1578,551 @@ async fn test_handle_certificate_errors() {
         .unwrap_err();
 
     assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
+}
+
+#[sim_test]
+async fn test_handle_soft_bundle_certificates() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.set_enable_soft_bundle(true);
+    protocol_config.set_max_soft_bundle_size(10);
+
+    let authority = TestAuthorityBuilder::new()
+        .with_reference_gas_price(1000)
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+
+    let mut senders = Vec::new();
+    let mut gas_object_ids = Vec::new();
+    for _i in 0..4 {
+        let (address, keypair): (_, AccountKeyPair) = get_key_pair();
+        let gas_object_id = ObjectID::random();
+        gas_object_ids.push(gas_object_id.clone());
+
+        let obj = Object::with_id_owner_for_testing(gas_object_id, address);
+        authority.insert_genesis_object(obj).await;
+
+        senders.push((address, keypair));
+    }
+
+    let (authority, package) = publish_object_basics(authority).await;
+
+    let shared_object = {
+        let effects = call_move_(
+            &authority,
+            None,
+            &gas_object_ids[0],
+            &senders[0].0,
+            &senders[0].1,
+            &package.0,
+            "object_basics",
+            "share",
+            vec![],
+            vec![],
+            true,
+        )
+        .await
+        .unwrap();
+        effects.status().unwrap();
+        let shared_object_id = effects.created()[0].0 .0;
+        authority
+            .get_object(&shared_object_id)
+            .await
+            .unwrap()
+            .unwrap()
+    };
+    let initial_shared_version = shared_object.version();
+
+    // Create a server with mocked consensus.
+    // This ensures transactions submitted to consensus will get processed.
+    let adapter = make_consensus_adapter_for_test(authority.clone(), true);
+    let server = AuthorityServer::new_for_test_with_consensus_adapter(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority.clone(),
+        adapter,
+    );
+    let _metrics = server.metrics.clone();
+    let server_handle = server.spawn_for_test().await.unwrap();
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    let signed_tx_into_certificate = |transaction: Transaction| async {
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
+        let committee = authority.clone_committee_for_testing();
+        let mut sigs = vec![];
+
+        let transaction = epoch_store.verify_transaction(transaction).unwrap();
+        let response = authority
+            .handle_transaction(&epoch_store, transaction.clone())
+            .await
+            .unwrap();
+        let vote = response.status.into_signed_for_testing();
+        sigs.push(vote.clone());
+        if let Ok(cert) =
+            CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
+        {
+            return cert
+                .try_into_verified_for_testing(&committee, &Default::default())
+                .unwrap();
+        }
+        panic!("Failed to create certificate");
+    };
+
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+    let mut certificates: Vec<CertifiedTransaction> = Vec::new();
+    for i in 0..4 {
+        let cert = {
+            let gas_object_ref = authority
+                .get_object(&gas_object_ids[i])
+                .await
+                .unwrap()
+                .unwrap()
+                .compute_object_reference();
+            let data = TransactionData::new_move_call(
+                senders[i].0,
+                package.0,
+                ident_str!("object_basics").to_owned(),
+                ident_str!("set_value").to_owned(),
+                /* type_args */ vec![],
+                gas_object_ref,
+                /* args */
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: shared_object.id(),
+                        initial_shared_version,
+                        mutable: true,
+                    }),
+                    CallArg::Pure((i as u64).to_le_bytes().to_vec()),
+                ],
+                TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+                rgp,
+            )
+            .unwrap();
+            let signed = to_sender_signed_transaction(data, &senders[i].1);
+            signed_tx_into_certificate(signed).await
+        };
+        certificates.push(cert.into());
+    }
+    let responses = client
+        .handle_soft_bundle_certificates_v3(
+            HandleSoftBundleCertificatesRequestV3 {
+                certificates,
+                wait_for_effects: true,
+                include_events: false,
+                include_auxiliary_data: false,
+                include_input_objects: true,
+                include_output_objects: true,
+            },
+            None,
+        )
+        .await
+        .unwrap()
+        .responses;
+
+    // Verify if transactions have been executed in the correct order.
+    // This is done by checking if each tx's input object version matches the previous tx's output object version.
+    assert_eq!(responses.len(), 4);
+    let mut expected_object_version = initial_shared_version;
+    for response in responses {
+        let input_objects = response.input_objects.unwrap();
+        assert!(input_objects
+            .iter()
+            .any(|obj| obj.id() == shared_object.id() && obj.version() == expected_object_version));
+
+        let output_objects = response.output_objects.unwrap();
+        let output_object = output_objects
+            .iter()
+            .find(|obj| obj.id() == shared_object.id())
+            .unwrap();
+        expected_object_version = output_object.version();
+    }
+}
+
+#[tokio::test]
+async fn test_handle_soft_bundle_certificates_errors() {
+    let mut senders = Vec::new();
+    let mut gas_objects = Vec::new();
+    let mut owned_objects = Vec::new();
+    for _i in 0..10 {
+        let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+        let mut objects = create_gas_objects(2, sender);
+        senders.push((sender, keypair));
+        gas_objects.push(objects.remove(0));
+        owned_objects.push(objects.remove(0));
+    }
+
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.set_enable_soft_bundle(true);
+    protocol_config.set_max_soft_bundle_size(3);
+    let authority = TestAuthorityBuilder::new()
+        .with_reference_gas_price(1000)
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+
+    authority.insert_genesis_objects(&gas_objects).await;
+    authority.insert_genesis_objects(&owned_objects).await;
+
+    let (authority, package) = publish_object_basics(authority).await;
+
+    let shared_object = {
+        let effects = call_move_(
+            &authority,
+            None,
+            &gas_objects[3].id(),
+            &senders[3].0,
+            &senders[3].1,
+            &package.0,
+            "object_basics",
+            "share",
+            vec![],
+            vec![],
+            true,
+        )
+        .await
+        .unwrap();
+        effects.status().unwrap();
+        let shared_object_id = effects.created()[0].0 .0;
+        authority
+            .get_object(&shared_object_id)
+            .await
+            .unwrap()
+            .unwrap()
+    };
+    let initial_shared_version = shared_object.version();
+
+    // Create a single validator cluster.
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority,
+        consensus_address,
+    );
+    let authority = server.state.clone();
+    let _metrics = server.metrics.clone();
+    let server_handle = server.spawn_for_test().await.unwrap();
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    let signed_tx_into_certificate = |transaction: Transaction| async {
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
+        let committee = authority.clone_committee_for_testing();
+        let mut sigs = vec![];
+
+        let transaction = epoch_store.verify_transaction(transaction).unwrap();
+        let response = authority
+            .handle_transaction(&epoch_store, transaction.clone())
+            .await
+            .unwrap();
+        let vote = response.status.into_signed_for_testing();
+        sigs.push(vote.clone());
+        if let Ok(cert) =
+            CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
+        {
+            return cert
+                .try_into_verified_for_testing(&committee, &Default::default())
+                .unwrap();
+        }
+        panic!("Failed to create certificate");
+    };
+
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+
+    // Case 0: submit an empty soft bundle.
+    {
+        let response = client
+            .handle_soft_bundle_certificates_v3(
+                HandleSoftBundleCertificatesRequestV3 {
+                    certificates: vec![],
+                    wait_for_effects: true,
+                    include_events: false,
+                    include_auxiliary_data: false,
+                    include_input_objects: false,
+                    include_output_objects: false,
+                },
+                None,
+            )
+            .await;
+        assert!(response.is_err());
+        assert!(match response.unwrap_err() {
+            SuiError::NoCertificateProvidedError { .. } => true,
+            _ => false,
+        })
+    }
+
+    // Case 1: submit a soft bundle with more txs than the limit.
+    // The bundle should be rejected.
+    {
+        let mut certificates: Vec<CertifiedTransaction> = vec![];
+        for i in 0..5 {
+            let owned_object_ref = authority
+                .get_object(&owned_objects[i].id())
+                .await
+                .unwrap()
+                .unwrap()
+                .compute_object_reference();
+            let gas_object_ref = authority
+                .get_object(&gas_objects[i].id())
+                .await
+                .unwrap()
+                .unwrap()
+                .compute_object_reference();
+            let data = TransactionData::new_transfer(
+                senders[i + 1].0,
+                owned_object_ref,
+                senders[i].0,
+                gas_object_ref,
+                rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+                rgp,
+            );
+            let signed = to_sender_signed_transaction(data, &senders[i].1);
+            certificates.push(signed_tx_into_certificate(signed).await.into());
+        }
+        let response = client
+            .handle_soft_bundle_certificates_v3(
+                HandleSoftBundleCertificatesRequestV3 {
+                    certificates,
+                    wait_for_effects: true,
+                    include_events: false,
+                    include_auxiliary_data: false,
+                    include_input_objects: false,
+                    include_output_objects: false,
+                },
+                None,
+            )
+            .await;
+        assert!(response.is_err());
+        assert!(match response.unwrap_err() {
+            SuiError::UserInputError {
+                error: UserInputError::TooManyTransactionsInSoftBundle { .. },
+            } => true,
+            _ => false,
+        })
+    }
+
+    // Case 2: submit a soft bundle with tx containing no shared object.
+    // The bundle should be rejected.
+    {
+        let owned_object_ref = authority
+            .get_object(&owned_objects[5].id())
+            .await
+            .unwrap()
+            .unwrap()
+            .compute_object_reference();
+        let gas_object_ref = authority
+            .get_object(&gas_objects[5].id())
+            .await
+            .unwrap()
+            .unwrap()
+            .compute_object_reference();
+        let data = TransactionData::new_transfer(
+            senders[6].0,
+            owned_object_ref,
+            senders[5].0,
+            gas_object_ref,
+            rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+            rgp,
+        );
+        let signed = to_sender_signed_transaction(data, &senders[5].1);
+        let response = client
+            .handle_soft_bundle_certificates_v3(
+                HandleSoftBundleCertificatesRequestV3 {
+                    certificates: vec![signed_tx_into_certificate(signed).await.into()],
+                    wait_for_effects: true,
+                    include_events: false,
+                    include_auxiliary_data: false,
+                    include_input_objects: false,
+                    include_output_objects: false,
+                },
+                None,
+            )
+            .await;
+        assert!(response.is_err());
+        assert!(match response.unwrap_err() {
+            SuiError::UserInputError {
+                error: UserInputError::NoSharedObjectError { .. },
+            } => true,
+            _ => false,
+        })
+    }
+
+    // Case 3: submit a soft bundle with txs of different gas prices.
+    // The bundle should be rejected.
+    {
+        let cert0 = {
+            let gas_object_ref = authority
+                .get_object(&gas_objects[6].id())
+                .await
+                .unwrap()
+                .unwrap()
+                .compute_object_reference();
+            let data = TransactionData::new_move_call(
+                senders[6].0,
+                package.0,
+                ident_str!("object_basics").to_owned(),
+                ident_str!("set_value").to_owned(),
+                /* type_args */ vec![],
+                gas_object_ref,
+                /* args */
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: shared_object.id(),
+                        initial_shared_version,
+                        mutable: true,
+                    }),
+                    CallArg::Pure(11u64.to_le_bytes().to_vec()),
+                ],
+                TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+                rgp,
+            )
+            .unwrap();
+            let signed = to_sender_signed_transaction(data, &senders[6].1);
+            signed_tx_into_certificate(signed).await
+        };
+        let cert1 = {
+            let gas_object_ref = authority
+                .get_object(&gas_objects[7].id())
+                .await
+                .unwrap()
+                .unwrap()
+                .compute_object_reference();
+            let data = TransactionData::new_move_call(
+                senders[7].0,
+                package.0,
+                ident_str!("object_basics").to_owned(),
+                ident_str!("set_value").to_owned(),
+                /* type_args */ vec![],
+                gas_object_ref,
+                /* args */
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: shared_object.id(),
+                        initial_shared_version,
+                        mutable: true,
+                    }),
+                    CallArg::Pure(12u64.to_le_bytes().to_vec()),
+                ],
+                TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+                rgp + 1,
+            )
+            .unwrap();
+            let signed = to_sender_signed_transaction(data, &senders[7].1);
+            signed_tx_into_certificate(signed).await
+        };
+        let response = client
+            .handle_soft_bundle_certificates_v3(
+                HandleSoftBundleCertificatesRequestV3 {
+                    certificates: vec![cert0.into(), cert1.into()],
+                    wait_for_effects: true,
+                    include_events: false,
+                    include_auxiliary_data: false,
+                    include_input_objects: false,
+                    include_output_objects: false,
+                },
+                None,
+            )
+            .await;
+        assert!(response.is_err());
+        assert!(match response.unwrap_err() {
+            SuiError::UserInputError {
+                error: UserInputError::GasPriceMismatchError { .. },
+            } => true,
+            _ => false,
+        })
+    }
+
+    // Case 4: submit a soft bundle with txs whose consensus message has been processed.
+    // The bundle should be rejected.
+    {
+        let cert0 = {
+            let gas_object_ref = authority
+                .get_object(&gas_objects[8].id())
+                .await
+                .unwrap()
+                .unwrap()
+                .compute_object_reference();
+            let data = TransactionData::new_move_call(
+                senders[8].0,
+                package.0,
+                ident_str!("object_basics").to_owned(),
+                ident_str!("set_value").to_owned(),
+                /* type_args */ vec![],
+                gas_object_ref,
+                /* args */
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: shared_object.id(),
+                        initial_shared_version,
+                        mutable: true,
+                    }),
+                    CallArg::Pure(11u64.to_le_bytes().to_vec()),
+                ],
+                TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+                rgp,
+            )
+            .unwrap();
+            let signed = to_sender_signed_transaction(data, &senders[8].1);
+            signed_tx_into_certificate(signed).await
+        };
+        let cert1 = {
+            let gas_object_ref = authority
+                .get_object(&gas_objects[9].id())
+                .await
+                .unwrap()
+                .unwrap()
+                .compute_object_reference();
+            let data = TransactionData::new_move_call(
+                senders[9].0,
+                package.0,
+                ident_str!("object_basics").to_owned(),
+                ident_str!("set_value").to_owned(),
+                /* type_args */ vec![],
+                gas_object_ref,
+                /* args */
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: shared_object.id(),
+                        initial_shared_version,
+                        mutable: true,
+                    }),
+                    CallArg::Pure(12u64.to_le_bytes().to_vec()),
+                ],
+                TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+                rgp,
+            )
+            .unwrap();
+            let signed = to_sender_signed_transaction(data, &senders[9].1);
+            signed_tx_into_certificate(signed).await
+        };
+        send_batch_consensus_no_execution(&authority, &vec![cert0.clone(), cert1.clone()], true)
+            .await;
+        let response = client
+            .handle_soft_bundle_certificates_v3(
+                HandleSoftBundleCertificatesRequestV3 {
+                    certificates: vec![cert0.into(), cert1.into()],
+                    wait_for_effects: true,
+                    include_events: false,
+                    include_auxiliary_data: false,
+                    include_input_objects: false,
+                    include_output_objects: false,
+                },
+                None,
+            )
+            .await;
+        assert!(response.is_err());
+        assert!(match response.unwrap_err() {
+            SuiError::UserInputError {
+                error: UserInputError::CeritificateAlreadyProcessed { .. },
+            } => true,
+            _ => false,
+        })
+    }
 }
 
 #[test]

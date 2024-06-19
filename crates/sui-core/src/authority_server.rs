@@ -101,6 +101,21 @@ pub struct AuthorityServer {
 }
 
 impl AuthorityServer {
+    pub fn new_for_test_with_consensus_adapter(
+        address: Multiaddr,
+        state: Arc<AuthorityState>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+    ) -> Self {
+        let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
+
+        Self {
+            address,
+            state,
+            consensus_adapter,
+            metrics,
+        }
+    }
+
     pub fn new_for_test(
         address: Multiaddr,
         state: Arc<AuthorityState>,
@@ -117,15 +132,7 @@ impl AuthorityServer {
             ConsensusAdapterMetrics::new_test(),
             state.epoch_store_for_testing().protocol_config().clone(),
         ));
-
-        let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
-
-        Self {
-            address,
-            state,
-            consensus_adapter,
-            metrics,
-        }
+        Self::new_for_test_with_consensus_adapter(address, state, consensus_adapter)
     }
 
     pub async fn spawn_for_test(self) -> Result<AuthorityServerHandle, io::Error> {
