@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    clever_error_rendering::render_clever_error_opt,
     client_ptb::ptb::PTB,
     displays::Pretty,
     key_identity::{get_identity_address, KeyIdentity},
@@ -42,7 +43,8 @@ use sui_json_rpc_types::{
     Coin, DryRunTransactionBlockResponse, DynamicFieldPage, SuiCoinMetadata, SuiData,
     SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
     SuiObjectResponseQuery, SuiParsedData, SuiProtocolConfigValue, SuiRawData,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
@@ -663,7 +665,7 @@ impl SuiClientCommands {
         self,
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
-        let ret = Ok(match self {
+        let ret = match self {
             SuiClientCommands::ProfileTransaction {
                 tx_digest,
                 profile_output,
@@ -1583,8 +1585,9 @@ impl SuiClientCommands {
                 ptb.execute(context).await?;
                 SuiClientCommandResult::NoOutput
             }
-        });
-        ret
+        };
+        let client = context.get_client().await?;
+        Ok(ret.prerender_clever_errors(client.read_api()).await)
     }
 
     pub fn switch_env(config: &mut SuiClientConfig, env: &str) -> Result<(), anyhow::Error> {
@@ -2204,6 +2207,42 @@ impl SuiClientCommandResult {
             _ => None,
         }
     }
+
+    pub async fn prerender_clever_errors(mut self, read_api: &ReadApi) -> Self {
+        match &mut self {
+            SuiClientCommandResult::DryRun(DryRunTransactionBlockResponse { effects, .. })
+            | SuiClientCommandResult::TransactionBlock(SuiTransactionBlockResponse {
+                effects: Some(effects),
+                ..
+            }) => prerender_clever_errors(effects, read_api).await,
+
+            SuiClientCommandResult::TransactionBlock(SuiTransactionBlockResponse {
+                effects: None,
+                ..
+            }) => (),
+            SuiClientCommandResult::ActiveAddress(_)
+            | SuiClientCommandResult::ActiveEnv(_)
+            | SuiClientCommandResult::Addresses(_)
+            | SuiClientCommandResult::Balance(_, _)
+            | SuiClientCommandResult::ChainIdentifier(_)
+            | SuiClientCommandResult::DynamicFieldQuery(_)
+            | SuiClientCommandResult::Envs(_, _)
+            | SuiClientCommandResult::Gas(_)
+            | SuiClientCommandResult::NewAddress(_)
+            | SuiClientCommandResult::NewEnv(_)
+            | SuiClientCommandResult::NoOutput
+            | SuiClientCommandResult::Object(_)
+            | SuiClientCommandResult::Objects(_)
+            | SuiClientCommandResult::RawObject(_)
+            | SuiClientCommandResult::SerializedSignedTransaction(_)
+            | SuiClientCommandResult::SerializedUnsignedTransaction(_)
+            | SuiClientCommandResult::Switch(_)
+            | SuiClientCommandResult::SyncClientState
+            | SuiClientCommandResult::VerifyBytecodeMeter { .. }
+            | SuiClientCommandResult::VerifySource => (),
+        }
+        self
+    }
 }
 
 #[derive(Serialize)]
@@ -2568,7 +2607,10 @@ pub async fn execute_dry_run(
         .dry_run_transaction_block(dry_run_tx_data)
         .await
         .map_err(|e| anyhow!("Dry run failed: {e}"))?;
-    Ok(SuiClientCommandResult::DryRun(response))
+    let resp = SuiClientCommandResult::DryRun(response)
+        .prerender_clever_errors(client.read_api())
+        .await;
+    Ok(resp)
 }
 
 /// Call a dry run with the transaction data to estimate the gas budget.
@@ -2718,17 +2760,32 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             ))
         } else {
             let transaction = Transaction::new(sender_signed_data);
-            let response = context.execute_transaction_may_fail(transaction).await?;
+            let mut response = context.execute_transaction_may_fail(transaction).await?;
+            if let Some(effects) = response.effects.as_mut() {
+                prerender_clever_errors(effects, client.read_api()).await;
+            }
             let effects = response.effects.as_ref().ok_or_else(|| {
                 anyhow!("Effects from SuiTransactionBlockResult should not be empty")
             })?;
-            if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+            if let SuiExecutionStatus::Failure { error } = effects.status() {
                 return Err(anyhow!(
-                    "Error executing transaction: {:#?}",
-                    effects.status()
+                    "Error executing transaction '{}': {error}",
+                    response.digest
                 ));
             }
             Ok(SuiClientCommandResult::TransactionBlock(response))
+        }
+    }
+}
+
+pub(crate) async fn prerender_clever_errors(
+    effects: &mut SuiTransactionBlockEffects,
+    read_api: &ReadApi,
+) {
+    let SuiTransactionBlockEffects::V1(effects) = effects;
+    if let SuiExecutionStatus::Failure { error } = &mut effects.status {
+        if let Some(rendered) = render_clever_error_opt(error, read_api).await {
+            *error = rendered;
         }
     }
 }
