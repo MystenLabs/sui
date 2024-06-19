@@ -13,7 +13,7 @@ use lsp_types::{
 
 use move_compiler::{
     naming::ast as N,
-    shared::{files::FilePosition, Identifier},
+    shared::Identifier,
 };
 
 /// Handles inlay hints request of the language server

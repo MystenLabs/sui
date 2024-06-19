@@ -98,7 +98,7 @@ use move_compiler::{
     naming::ast::{StructFields, Type, TypeName_, Type_},
     parser::ast::{self as P},
     shared::{
-        files::{self, FileId, FilePosition, MappedFiles},
+        files::{FileId, MappedFiles},
         unique_map::UniqueMap,
         Identifier, Name, NamedAddressMap, NamedAddressMaps,
     },
@@ -354,7 +354,7 @@ pub type FileUseDefs = BTreeMap<PathBuf, UseDefMap>;
 pub type FileModules = BTreeMap<PathBuf, BTreeSet<ModuleDefs>>;
 
 /// Result of the symbolication process
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Symbols {
     /// A map from def locations to all the references (uses)
     references: References,
@@ -1076,11 +1076,22 @@ impl UseDefMap {
         self.0
     }
 
-    pub fn extend(&mut self, use_defs: BTreeMap<u32, BTreeSet<UseDef>>) {
+    pub fn count(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn extend_inner(&mut self, use_defs: BTreeMap<u32, BTreeSet<UseDef>>) {
         for (k, v) in use_defs {
             self.0.entry(k).or_default().extend(v);
         }
     }
+
+    pub fn extend(&mut self, use_defs: Self) {
+        for (k, v) in use_defs.0 {
+            self.0.entry(k).or_default().extend(v);
+        }
+    }
+
 }
 
 impl Symbols {
@@ -1089,7 +1100,7 @@ impl Symbols {
             self.references.entry(k).or_default().extend(v);
         }
         self.file_use_defs.extend(other.file_use_defs);
-        mapped_files_extend(&mut self.files, other.files);
+        self.files.extend(other.files);
         self.def_info.extend(other.def_info);
     }
 
@@ -1448,6 +1459,7 @@ pub fn get_symbols(
         &mut file_use_defs,
         &mut mod_use_defs,
     );
+
     if let Some(libs) = compiled_libs {
         process_typed_modules(
             &mut libs.typing.modules.clone(),
@@ -1532,7 +1544,7 @@ fn process_typed_modules<'a>(
         file_use_defs
             .entry(fpath_buffer)
             .or_default()
-            .extend(use_defs.elements());
+            .extend_inner(use_defs.elements());
     }
 }
 
@@ -1819,7 +1831,7 @@ fn get_mod_outer_defs(
 
     let ident = mod_ident.value;
 
-    let doc_comment = extract_doc_string(files, file_id_to_lines, &loc);
+    let doc_comment = extract_doc_string(files, file_id_to_lines, loc);
     let mod_defs = ModuleDefs {
         fhash,
         ident,
@@ -2223,7 +2235,6 @@ impl<'a> ParsingSymbolicator<'a> {
         if let Some(mut ud) = add_struct_use_def(
             self.mod_outer_defs,
             self.files,
-            mod_ident_str.clone(),
             mod_defs,
             &name.value,
             &name.loc,
@@ -2253,7 +2264,6 @@ impl<'a> ParsingSymbolicator<'a> {
             &name.value,
             self.mod_outer_defs,
             self.files,
-            mod_ident_str.clone(),
             mod_defs,
             &name.value,
             &name.loc,
@@ -2299,7 +2309,7 @@ impl<'a> ParsingSymbolicator<'a> {
     }
 
     /// Get symbols for a bind statement
-    fn bind_symbols(&mut self, sp!(loc, bind): &P::Bind, explicitly_typed: bool) {
+    fn bind_symbols(&mut self, sp!(_, bind): &P::Bind, explicitly_typed: bool) {
         use P::Bind_ as B;
         match bind {
             B::Unpack(chain, bindings) => {
@@ -2382,7 +2392,6 @@ pub fn add_fun_use_def(
     fun_def_name: &Symbol, // may be different from use_name for methods
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
     files: &MappedFiles,
-    mod_ident_str: String,
     mod_defs: &ModuleDefs,
     use_name: &Symbol,
     use_pos: &Loc,
@@ -2396,7 +2405,6 @@ pub fn add_fun_use_def(
         return None;
     };
     if let Some(func_def) = mod_defs.functions.get(fun_def_name) {
-        let def_fhash = mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
         let fun_info = def_info.get(&func_def.name_loc).unwrap();
         let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, fun_info);
         let ud = UseDef::new(
@@ -2418,7 +2426,6 @@ pub fn add_fun_use_def(
 pub fn add_struct_use_def(
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
     files: &MappedFiles,
-    mod_ident_str: String,
     mod_defs: &ModuleDefs,
     use_name: &Symbol,
     use_pos: &Loc,
@@ -2432,7 +2439,6 @@ pub fn add_struct_use_def(
         return None;
     };
     if let Some(def) = mod_defs.structs.get(use_name) {
-        let def_fhash = mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
         let struct_info = def_info.get(&def.name_loc).unwrap();
         let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, struct_info);
         let ud = UseDef::new(
@@ -2518,7 +2524,7 @@ fn extract_doc_string(
         return None;
     }
 
-    let mut iter = (start_position.line_offset() - 1) as usize;
+    let mut iter = start_position.line_offset() - 1;
     let mut line_before = file_lines[iter].trim();
 
     let mut doc_string = String::new();
@@ -2772,6 +2778,7 @@ pub fn on_use_request(
     let mut result = None;
 
     let mut use_def_found = false;
+
     if let Some(mod_symbols) = symbols.file_use_defs.get(use_fpath) {
         if let Some(uses) = mod_symbols.get(use_line) {
             for u in uses {
@@ -2786,7 +2793,7 @@ pub fn on_use_request(
         result = Some(serde_json::to_value(Option::<lsp_types::Location>::None).unwrap());
     }
 
-    eprintln!("about to send use response");
+    eprintln!("about to send use response (symbols found: {use_def_found})");
     // unwrap will succeed based on the logic above which the compiler is unable to figure out
     // without using Option
     let response = lsp_server::Response::new_ok(id, result.unwrap());

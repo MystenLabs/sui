@@ -27,7 +27,7 @@ use move_compiler::{
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
     },
-    shared::{files::FilePosition, ide::AutocompleteMethod, Identifier},
+    shared::{ide::AutocompleteMethod, Identifier},
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;

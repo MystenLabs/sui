@@ -6,7 +6,7 @@ use crate::{
     symbols::{
         add_fun_use_def, add_struct_use_def, def_info_to_type_def_loc,
         expansion_mod_ident_to_map_key, type_def_loc, DefInfo, DefMap, LocalDef, ModuleDefs,
-        References, UseDef, UseDefMap, UseLoc,
+        References, UseDef, UseDefMap,
     },
     utils::{ignored_function, loc_start_to_lsp_position_opt},
 };
@@ -17,7 +17,7 @@ use move_compiler::{
     naming::ast as N,
     parser::ast as P,
     shared::{
-        files::{self, FilePosition, MappedFiles},
+        files::{self, MappedFiles},
         ide::MacroCallInfo,
         Identifier, Name,
     },
@@ -31,7 +31,7 @@ use move_symbol_pool::Symbol;
 
 use im::OrdMap;
 use lsp_types::Position;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 /// Data used during anlysis over typed AST
 pub struct TypingAnalysisContext<'a> {
@@ -148,7 +148,6 @@ impl TypingAnalysisContext<'_> {
             return;
         };
         if let Some(const_def) = mod_defs.constants.get(use_name) {
-            let def_fhash = self.mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
             let const_info = self.def_info.get(&const_def.name_loc).unwrap();
             let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
             self.use_defs.insert(
@@ -277,7 +276,6 @@ impl TypingAnalysisContext<'_> {
             fun_def_name,
             self.mod_outer_defs,
             self.files,
-            mod_ident_str,
             mod_defs,
             use_name,
             use_pos,
@@ -331,7 +329,6 @@ impl TypingAnalysisContext<'_> {
         add_struct_use_def(
             self.mod_outer_defs,
             self.files,
-            mod_ident_str,
             mod_defs,
             &use_name.value(),
             use_pos,
@@ -382,7 +379,6 @@ impl TypingAnalysisContext<'_> {
         if let Some(def) = mod_defs.structs.get(struct_name) {
             for fdef in &def.field_defs {
                 if fdef.name == *use_name {
-                    let def_fhash = self.mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
                     let field_info = self.def_info.get(&fdef.loc).unwrap();
                     let ident_type_def_loc =
                         def_info_to_type_def_loc(self.mod_outer_defs, field_info);
@@ -477,7 +473,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 self.references,
                 self.alias_lengths,
                 file_hash,
-                name_start.into(),
+                name_start,
                 struct_name.loc(),
                 &struct_name.value(),
                 struct_type_def,

@@ -407,6 +407,7 @@ impl Position {
 // LSP Conversions
 //**************************************************************************************************
 
+#[allow(clippy::from_over_into)]
 impl Into<lsp_types::Position> for FilePosition {
     fn into(self) -> lsp_types::Position {
         lsp_types::Position::new(
@@ -416,6 +417,7 @@ impl Into<lsp_types::Position> for FilePosition {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<lsp_types::Position> for Position {
     fn into(self) -> lsp_types::Position {
         lsp_types::Position::new(self.line_offset() as u32, self.column_offset() as u32)
