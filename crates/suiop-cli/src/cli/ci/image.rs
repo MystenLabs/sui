@@ -153,7 +153,7 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 let ref_name = format!("{}:{}", ref_type, ref_val);
                 let image_name = image_name.clone().unwrap_or("app".to_string());
                 let image_tag = image_tag.clone().unwrap_or("".to_string());
-                let mut image_info = format!("{}", image_name);
+                let mut image_info = image_name;
                 if !image_tag.is_empty() {
                     image_info += &format!(":{}", image_tag);
                 }
