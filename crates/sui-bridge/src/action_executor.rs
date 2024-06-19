@@ -955,7 +955,6 @@ mod tests {
             _handles,
             _gas_object_ref,
             _sui_address,
-            // _id_token_map,
             _token_tx,
         ) = setup().await;
 
@@ -1214,7 +1213,6 @@ mod tests {
         Vec<tokio::task::JoinHandle<()>>,
         ObjectRef,
         SuiAddress,
-        // HashMap<u8, TypeTag>,
         tokio::sync::watch::Sender<HashMap<u8, TypeTag>>,
     ) {
         telemetry_subscribers::init_for_testing();

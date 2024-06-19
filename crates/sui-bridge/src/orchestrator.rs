@@ -136,13 +136,6 @@ where
                 let bridge_event: SuiBridgeEvent = opt_bridge_event.unwrap();
                 info!("Observed Sui bridge event: {:?}", bridge_event);
 
-                if let Some(action) = bridge_event
-                    .clone()
-                    .try_into_bridge_action(sui_event.id.tx_digest, sui_event.id.event_seq as u16)
-                {
-                    actions.push(action);
-                }
-
                 // Handle NewTokenEvent
                 if let SuiBridgeEvent::NewTokenEvent(e) = &bridge_event {
                     if let std::collections::hash_map::Entry::Vacant(entry) =
@@ -156,6 +149,13 @@ where
                         // invariant
                         assert_eq!(e.type_name, latest_token_config[&e.token_id]);
                     }
+                    continue;
+                }
+
+                if let Some(action) = bridge_event
+                    .try_into_bridge_action(sui_event.id.tx_digest, sui_event.id.event_seq as u16)
+                {
+                    actions.push(action);
                 }
 
                 // TODO: handle non Action events
