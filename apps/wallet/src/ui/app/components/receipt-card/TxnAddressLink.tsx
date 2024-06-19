@@ -3,6 +3,7 @@
 
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
+import { useResolveSuiNSAddress } from '@mysten/core';
 import { formatAddress, isValidSuiNSName } from '@mysten/sui/utils';
 
 type TxnAddressLinkProps = {
@@ -10,10 +11,11 @@ type TxnAddressLinkProps = {
 };
 
 export function TxnAddressLink({ address }: TxnAddressLinkProps) {
+	const { data: resolvedAddress } = useResolveSuiNSAddress(address);
 	return (
 		<ExplorerLink
 			type={ExplorerLinkType.address}
-			address={address}
+			address={isValidSuiNSName(address) && resolvedAddress ? resolvedAddress : address}
 			title="View on Sui Explorer"
 			showIcon={false}
 		>
