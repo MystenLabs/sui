@@ -71,7 +71,6 @@ use typed_store::rocks::MetricConf;
 
 pub mod commands;
 pub mod db_tool;
-pub mod pkg_dump;
 
 #[derive(
     Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
