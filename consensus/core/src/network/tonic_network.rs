@@ -139,19 +139,19 @@ impl NetworkClient for TonicClient {
         let response = client.subscribe_blocks(request).await.map_err(|e| {
             ConsensusError::NetworkRequest(format!("subscribe_blocks failed: {e:?}"))
         })?;
-        let stream = response.into_inner().filter_map(move |b| async move {
-            match b {
-                Ok(response) => Some(response.block),
-                Err(e) => {
-                    debug!("Network error received from {}: {e:?}", peer);
-                    None
+        let stream = response
+            .into_inner()
+            .filter_map(move |b| async move {
+                match b {
+                    Ok(response) => Some(response.block),
+                    Err(e) => {
+                        debug!("Network error received from {}: {e:?}", peer);
+                        None
+                    }
                 }
-            }
-        });
-        let rate_limited_stream =
-            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
-                .boxed();
-        Ok(rate_limited_stream)
+            })
+            .boxed();
+        Ok(stream)
     }
 
     async fn fetch_blocks(
@@ -354,13 +354,13 @@ impl ChannelPool {
 
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
 struct TonicServiceProxy<S: NetworkService> {
-    context: Arc<Context>,
+    _context: Arc<Context>,
     service: Arc<S>,
 }
 
 impl<S: NetworkService> TonicServiceProxy<S> {
-    fn new(context: Arc<Context>, service: Arc<S>) -> Self {
-        Self { context, service }
+    fn new(_context: Arc<Context>, service: Arc<S>) -> Self {
+        Self { _context, service }
     }
 }
 
@@ -399,8 +399,8 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         else {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
-        let mut request_stream = request.into_inner();
-        let first_request = match request_stream.next().await {
+        let mut reuqest_stream = request.into_inner();
+        let first_request = match reuqest_stream.next().await {
             Some(Ok(r)) => r,
             Some(Err(e)) => {
                 debug!(
@@ -418,11 +418,9 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             .handle_subscribe_blocks(peer_index, first_request.last_received_round)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
-            .map(|block| Ok(SubscribeBlocksResponse { block }));
-        let rate_limited_stream =
-            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
-                .boxed();
-        Ok(Response::new(rate_limited_stream))
+            .map(|block| Ok(SubscribeBlocksResponse { block }))
+            .boxed();
+        Ok(Response::new(stream))
     }
 
     type FetchBlocksStream = Iter<std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>>>;
