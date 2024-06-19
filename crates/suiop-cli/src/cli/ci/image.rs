@@ -152,7 +152,7 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
                 let ref_name = format!("{}:{}", ref_type, ref_val);
                 let image_name = image_name.clone().unwrap_or("app".to_string());
-                let image_tag = image_tag.clone().unwrap_or("".to_string());
+                let image_tag = image_tag.clone().unwrap_or("latest".to_string());
                 let image_info = format!("{}:{}", image_name, image_tag);
                 println!(
                     "Requested built image for repo: {}, ref: {}, dockerfile: {}, image: {}",
