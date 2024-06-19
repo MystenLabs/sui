@@ -63,6 +63,7 @@ impl Display for RefType {
 pub enum ImageAction {
     #[command(name = "build")]
     Build {
+        /// The name of the git repository within the mystenlabs org
         #[arg(short, long)]
         repo_name: String,
         #[arg(short, long)]
