@@ -69,7 +69,7 @@ pub enum ImageAction {
         /// The path to the dockerfile within the source code repository given by `--repo_name`
         #[arg(short, long)]
         dockerfile: String,
-        /// Optional image tag to use, by default the image is tagged with commit SHA
+        /// Optional image tag to use, by default the image is tagged with code repo commit SHA & "latest"
         #[arg(long)]
         image_tag: Option<String>,
         /// Optional image name, default to "app", only used if multiple images are built within one repo
@@ -152,8 +152,11 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
                 let ref_name = format!("{}:{}", ref_type, ref_val);
                 let image_name = image_name.clone().unwrap_or("app".to_string());
-                let image_tag = image_tag.clone().unwrap_or("latest".to_string());
-                let image_info = format!("{}:{}", image_name, image_tag);
+                let image_tag = image_tag.clone().unwrap_or("".to_string());
+                let mut image_info = format!("{}", image_name);
+                if !image_tag.is_empty() {
+                    image_info += &format!(":{}", image_tag);
+                }
                 println!(
                     "Requested built image for repo: {}, ref: {}, dockerfile: {}, image: {}",
                     repo_name.green(),
