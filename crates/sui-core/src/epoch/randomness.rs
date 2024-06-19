@@ -964,11 +964,7 @@ mod tests {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_dkg_version_for_testing(if version == 0 {
-            None
-        } else {
-            Some(version)
-        });
+        protocol_config.set_random_beacon_dkg_version_for_testing(version);
 
         let mut epoch_stores = Vec::new();
         let mut randomness_managers = Vec::new();
@@ -1118,11 +1114,7 @@ mod tests {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_dkg_version_for_testing(if version == 0 {
-            None
-        } else {
-            Some(version)
-        });
+        protocol_config.set_random_beacon_dkg_version_for_testing(version);
 
         for validator in network_config.validator_configs.iter() {
             // Send consensus messages to channel.
