@@ -13,6 +13,7 @@ use axum::Json;
 use ethers::providers::JsonRpcClient;
 use ethers::types::TxHash;
 use lru::LruCache;
+use std::fmt::Debug;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -99,7 +100,7 @@ struct SignerWithCache<K> {
 
 impl<K> SignerWithCache<K>
 where
-    K: std::hash::Hash + Eq + Clone + Send + Sync + 'static,
+    K: std::hash::Hash + Eq + Clone + Send + Sync + 'static + Debug,
 {
     fn new(
         signer: Arc<BridgeAuthorityKeyPair>,
@@ -146,22 +147,26 @@ where
     }
 
     async fn sign(&mut self, key: K) -> BridgeResult<SignedBridgeAction> {
+        info!("Signing action: {:?}", key);
         let signer = self.signer.clone();
         let verifier = self.verifier.clone();
         let entry = self.get_cache_entry(key.clone()).await;
         let mut guard = entry.lock().await;
         if let Some(result) = &*guard {
+            info!("Found cached result for key {:?}", key);
             return result.clone();
         }
         match verifier.verify(key.clone()).await {
             Ok(bridge_action) => {
                 let sig = BridgeAuthoritySignInfo::new(&bridge_action, &signer);
                 let result = SignedBridgeAction::new_from_data_and_sig(bridge_action, sig);
+                info!("Cache signed action for key {:?}", key);
                 // Cache result if Ok
                 *guard = Some(Ok(result.clone()));
                 Ok(result)
             }
             Err(e) => {
+                info!("Error signing action for key {:?}: {:?}", key, e);
                 match e {
                     // Only cache non-transient errors
                     BridgeError::GovernanceActionIsNotApproved { .. }
