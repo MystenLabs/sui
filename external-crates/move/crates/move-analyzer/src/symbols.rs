@@ -98,8 +98,9 @@ use move_compiler::{
     naming::ast::{StructFields, Type, TypeName_, Type_},
     parser::ast::{self as P},
     shared::{
-        files::{self, FilePosition, MappedFiles, FileId}, unique_map::UniqueMap, Identifier, Name, NamedAddressMap,
-        NamedAddressMaps,
+        files::{self, FileId, FilePosition, MappedFiles},
+        unique_map::UniqueMap,
+        Identifier, Name, NamedAddressMap, NamedAddressMaps,
     },
     typing::{
         ast::{Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
@@ -1721,7 +1722,7 @@ fn get_mod_outer_defs(
         } else {
             Visibility::Internal
         };
-        let doc_string = extract_doc_string( files, file_id_to_lines, &name_loc);
+        let doc_string = extract_doc_string(files, file_id_to_lines, &name_loc);
         def_info.insert(
             name_loc,
             DefInfo::Struct(
@@ -1750,7 +1751,7 @@ fn get_mod_outer_defs(
 
     for (name_loc, name, c) in &mod_def.constants {
         constants.insert(*name, ConstDef { name_loc });
-        let doc_string = extract_doc_string( files, file_id_to_lines, &name_loc,);
+        let doc_string = extract_doc_string(files, file_id_to_lines, &name_loc);
         def_info.insert(
             name_loc,
             DefInfo::Const(
@@ -1774,7 +1775,7 @@ fn get_mod_outer_defs(
         } else {
             FunType::Regular
         };
-        let doc_string = extract_doc_string( files, file_id_to_lines, &name_loc);
+        let doc_string = extract_doc_string(files, file_id_to_lines, &name_loc);
         let fun_info = DefInfo::Function(
             mod_ident.value,
             fun.visibility,
@@ -2396,9 +2397,7 @@ pub fn add_fun_use_def(
     };
     if let Some(func_def) = mod_defs.functions.get(fun_def_name) {
         let def_fhash = mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
-        let fun_info = def_info
-            .get(&func_def.name_loc)
-            .unwrap();
+        let fun_info = def_info.get(&func_def.name_loc).unwrap();
         let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, fun_info);
         let ud = UseDef::new(
             references,
@@ -2434,9 +2433,7 @@ pub fn add_struct_use_def(
     };
     if let Some(def) = mod_defs.structs.get(use_name) {
         let def_fhash = mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
-        let struct_info = def_info
-            .get(&def.name_loc)
-            .unwrap();
+        let struct_info = def_info.get(&def.name_loc).unwrap();
         let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, struct_info);
         let ud = UseDef::new(
             references,
@@ -2681,36 +2678,37 @@ pub fn on_references_request(context: &Context, request: &Request, symbols: &Sym
         |u| {
             let def_posn = symbols.files.file_start_position_opt(&u.def_loc)?;
             match symbols.references.get(&u.def_loc) {
-            Some(s) => {
-                let mut locs = vec![];
+                Some(s) => {
+                    let mut locs = vec![];
 
-                for ref_loc in s {
-                    if include_decl
-                        || !(Into::<Position>::into(def_posn.position) == ref_loc.start && def_posn.file_hash == ref_loc.fhash)
-                    {
-                        let end_pos = Position {
-                            line: ref_loc.start.line,
-                            character: ref_loc.col_end,
-                        };
-                        let range = Range {
-                            start: ref_loc.start,
-                            end: end_pos,
-                        };
-                        let path = symbols.files.file_path(&ref_loc.fhash);
-                        locs.push(Location {
-                            uri: Url::from_file_path(path).unwrap(),
-                            range,
-                        });
+                    for ref_loc in s {
+                        if include_decl
+                            || !(Into::<Position>::into(def_posn.position) == ref_loc.start
+                                && def_posn.file_hash == ref_loc.fhash)
+                        {
+                            let end_pos = Position {
+                                line: ref_loc.start.line,
+                                character: ref_loc.col_end,
+                            };
+                            let range = Range {
+                                start: ref_loc.start,
+                                end: end_pos,
+                            };
+                            let path = symbols.files.file_path(&ref_loc.fhash);
+                            locs.push(Location {
+                                uri: Url::from_file_path(path).unwrap(),
+                                range,
+                            });
+                        }
+                    }
+                    if locs.is_empty() {
+                        Some(serde_json::to_value(Option::<lsp_types::Location>::None).unwrap())
+                    } else {
+                        Some(serde_json::to_value(locs).unwrap())
                     }
                 }
-                if locs.is_empty() {
-                    Some(serde_json::to_value(Option::<lsp_types::Location>::None).unwrap())
-                } else {
-                    Some(serde_json::to_value(locs).unwrap())
-                }
+                None => Some(serde_json::to_value(Option::<lsp_types::Location>::None).unwrap()),
             }
-            None => Some(serde_json::to_value(Option::<lsp_types::Location>::None).unwrap()),
-        }
         },
     );
 }
@@ -2913,7 +2911,11 @@ pub fn on_document_symbol_request(context: &Context, request: &Request, symbols:
 
 /// Helper function to handle struct fields
 #[allow(deprecated)]
-fn handle_struct_fields(struct_def: StructDef, fields: &mut Vec<DocumentSymbol>, symbols: &Symbols) {
+fn handle_struct_fields(
+    struct_def: StructDef,
+    fields: &mut Vec<DocumentSymbol>,
+    symbols: &Symbols,
+) {
     let cloned_fileds = struct_def.field_defs;
 
     for field_def in cloned_fileds {
@@ -2971,9 +2973,16 @@ fn assert_use_def_with_doc_string(
         def_line
     );
     assert!(
-        symbols.files.start_position(&use_def.def_loc).column_offset() as u32 == def_col,
+        symbols
+            .files
+            .start_position(&use_def.def_loc)
+            .column_offset() as u32
+            == def_col,
         "'{}' != '{}' for use in column {use_col} of line {use_line} in file {use_file}",
-        symbols.files.start_position(&use_def.def_loc).column_offset(),
+        symbols
+            .files
+            .start_position(&use_def.def_loc)
+            .column_offset(),
         def_col
     );
     assert!(

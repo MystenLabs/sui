@@ -11,7 +11,10 @@ use lsp_types::{
     InlayHintTooltip, Position,
 };
 
-use move_compiler::{naming::ast as N, shared::{files::FilePosition, Identifier}};
+use move_compiler::{
+    naming::ast as N,
+    shared::{files::FilePosition, Identifier},
+};
 
 /// Handles inlay hints request of the language server
 pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Symbols) {
@@ -33,7 +36,7 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
                     if let Some(DefInfo::Local(n, t, _, _)) = symbols.def_info(untyped_def_loc) {
                         let position = Position {
                             line: start_position.line_offset() as u32,
-                            character: start_position.column_offset()  as u32 + n.len() as u32,
+                            character: start_position.column_offset() as u32 + n.len() as u32,
                         };
                         let colon_label = InlayHintLabelPart {
                             value: ": ".to_string(),

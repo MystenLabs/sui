@@ -441,8 +441,17 @@ fn context_specific_no_trigger(
 }
 
 /// Checks if a use at a given position is also a definition.
-fn is_definition(symbols: &Symbols, use_line: u32, use_col: u32, use_fhash: FileHash, def_loc: Loc) -> bool {
-    if let Some(use_loc) = symbols.files.line_char_offset_to_loc_opt(use_fhash, use_line, use_col) {
+fn is_definition(
+    symbols: &Symbols,
+    use_line: u32,
+    use_col: u32,
+    use_fhash: FileHash,
+    def_loc: Loc,
+) -> bool {
+    if let Some(use_loc) = symbols
+        .files
+        .line_char_offset_to_loc_opt(use_fhash, use_line, use_col)
+    {
         // TODO: is overlapping better?
         def_loc.contains(&use_loc)
     } else {

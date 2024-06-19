@@ -5,8 +5,8 @@ use crate::{
     compiler_info::CompilerInfo,
     symbols::{
         add_fun_use_def, add_struct_use_def, def_info_to_type_def_loc,
-        expansion_mod_ident_to_map_key, type_def_loc, DefInfo, LocalDef, ModuleDefs,
-        UseDef, UseDefMap, UseLoc, References, DefMap,
+        expansion_mod_ident_to_map_key, type_def_loc, DefInfo, DefMap, LocalDef, ModuleDefs,
+        References, UseDef, UseDefMap, UseLoc,
     },
     utils::{ignored_function, loc_start_to_lsp_position_opt},
 };
@@ -16,7 +16,11 @@ use move_compiler::{
     expansion::ast::{self as E, ModuleIdent},
     naming::ast as N,
     parser::ast as P,
-    shared::{files::{self, FilePosition, MappedFiles}, ide::MacroCallInfo, Identifier, Name},
+    shared::{
+        files::{self, FilePosition, MappedFiles},
+        ide::MacroCallInfo,
+        Identifier, Name,
+    },
     typing::{
         ast as T,
         visitor::{LValueKind, TypingVisitorContext},
@@ -145,10 +149,7 @@ impl TypingAnalysisContext<'_> {
         };
         if let Some(const_def) = mod_defs.constants.get(use_name) {
             let def_fhash = self.mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
-            let const_info = self
-                .def_info
-                .get(&const_def.name_loc)
-                .unwrap();
+            let const_info = self.def_info.get(&const_def.name_loc).unwrap();
             let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
             self.use_defs.insert(
                 name_start.position.line_offset() as u32,
@@ -206,10 +207,8 @@ impl TypingAnalysisContext<'_> {
                 ident_type_def_loc,
             ),
         );
-        self.def_info.insert(
-            *loc,
-            DefInfo::Local(*name, def_type, with_let, mutable),
-        );
+        self.def_info
+            .insert(*loc, DefInfo::Local(*name, def_type, with_let, mutable));
     }
 
     /// Add a use for and identifier whose definition is expected to be local to a function, and
@@ -384,10 +383,7 @@ impl TypingAnalysisContext<'_> {
             for fdef in &def.field_defs {
                 if fdef.name == *use_name {
                     let def_fhash = self.mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
-                    let field_info = self
-                        .def_info
-                        .get(&fdef.loc)
-                        .unwrap();
+                    let field_info = self.def_info.get(&fdef.loc).unwrap();
                     let ident_type_def_loc =
                         def_info_to_type_def_loc(self.mod_outer_defs, field_info);
                     self.use_defs.insert(
@@ -473,10 +469,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         let file_hash = struct_name.loc().file_hash();
         // enter self-definition for struct name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&struct_name.loc());
-        let struct_info = self
-            .def_info
-            .get(&struct_name.loc())
-            .unwrap();
+        let struct_info = self.def_info.get(&struct_name.loc()).unwrap();
         let struct_type_def = def_info_to_type_def_loc(self.mod_outer_defs, struct_info);
         self.use_defs.insert(
             name_start.line,
@@ -556,10 +549,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         let loc = constant_name.loc();
         // enter self-definition for const name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&loc);
-        let const_info = self
-            .def_info
-            .get(&loc)
-            .unwrap();
+        let const_info = self.def_info.get(&loc).unwrap();
         let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
         self.use_defs.insert(
             name_start.line,
@@ -589,10 +579,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         let loc = function_name.loc();
         // first, enter self-definition for function name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&loc);
-        let fun_info = self
-            .def_info
-            .get(&loc)
-            .unwrap();
+        let fun_info = self.def_info.get(&loc).unwrap();
         let fun_type_def = def_info_to_type_def_loc(self.mod_outer_defs, fun_info);
         let use_def = UseDef::new(
             self.references,
