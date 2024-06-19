@@ -364,7 +364,7 @@ async fn handle_spam_tally(
     metrics: Arc<TrafficControllerMetrics>,
     mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
-    if !policy_config.spam_sample_rate.is_sampled().await {
+    if tally.tally_spam && !policy_config.spam_sample_rate.is_sampled().await {
         return Ok(());
     }
     let resp = policy.handle_tally(tally.clone());
@@ -651,6 +651,7 @@ impl TrafficSim {
                     None,
                     // TODO add weight adjustment
                     Weight::one(),
+                    true,
                 ));
             } else {
                 if !currently_blocked {

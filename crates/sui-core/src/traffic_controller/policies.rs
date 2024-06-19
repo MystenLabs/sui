@@ -137,6 +137,7 @@ pub struct TrafficTally {
     pub direct: Option<IpAddr>,
     pub through_fullnode: Option<IpAddr>,
     pub error_weight: Weight,
+    pub tally_spam: bool,
     pub timestamp: SystemTime,
 }
 
@@ -145,11 +146,13 @@ impl TrafficTally {
         direct: Option<IpAddr>,
         through_fullnode: Option<IpAddr>,
         error_weight: Weight,
+        tally_spam: bool,
     ) -> Self {
         Self {
             direct,
             through_fullnode,
             error_weight,
+            tally_spam,
             timestamp: SystemTime::now(),
         }
     }
@@ -418,18 +421,21 @@ mod tests {
             direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
             through_fullnode: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
             error_weight: Weight::zero(),
+            tally_spam: true,
             timestamp: SystemTime::now(),
         };
         let bob = TrafficTally {
             direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
             through_fullnode: Some(IpAddr::V4(Ipv4Addr::new(4, 3, 2, 1))),
             error_weight: Weight::zero(),
+            tally_spam: true,
             timestamp: SystemTime::now(),
         };
         let charlie = TrafficTally {
             direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
             through_fullnode: Some(IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8))),
             error_weight: Weight::zero(),
+            tally_spam: true,
             timestamp: SystemTime::now(),
         };
 
