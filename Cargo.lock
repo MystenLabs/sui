@@ -14398,7 +14398,7 @@ dependencies = [
 
 [[package]]
 name = "suiop-cli"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "axum",
@@ -14423,6 +14423,7 @@ dependencies = [
  "sha2 0.10.6",
  "spinners",
  "strum 0.24.1",
+ "tabled",
  "tempfile",
  "tokio",
  "toml_edit 0.19.10",
