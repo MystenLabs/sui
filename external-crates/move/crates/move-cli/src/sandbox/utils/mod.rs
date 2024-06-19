@@ -13,7 +13,10 @@ use move_binary_format::{
 };
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{FileHash, MOVE_COMPILED_EXTENSION};
-use move_compiler::diagnostics::{self, report_diagnostics, Diagnostic, Diagnostics, FileName};
+use move_compiler::{
+    diagnostics::{self, report_diagnostics, Diagnostic, Diagnostics},
+    shared::files::FileName,
+};
 use move_core_types::{
     account_address::AccountAddress,
     effects::{ChangeSet, Op},
@@ -267,7 +270,7 @@ pub(crate) fn explain_publish_error(
                     }
                 }
             }
-            report_diagnostics(&files, diags)
+            report_diagnostics(&files.into(), diags)
         }
         status_code => {
             println!("Publishing failed with unexpected error {:?}", status_code)

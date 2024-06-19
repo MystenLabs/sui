@@ -34,9 +34,6 @@ use crate::{
     },
 };
 
-// TODO: Move to protocol config once initial value is finalized.
-const NUM_LEADERS_PER_ROUND: usize = 1;
-
 // Maximum number of commit votes to include in a block.
 // TODO: Move to protocol config, and verify in BlockVerifier.
 const MAX_COMMIT_VOTES_PER_BLOCK: usize = 100;
@@ -92,12 +89,16 @@ impl Core {
         dag_state: Arc<RwLock<DagState>>,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
+        let number_of_leaders = context
+            .protocol_config
+            .mysticeti_num_leaders_per_round()
+            .unwrap_or(1);
         let committer = UniversalCommitterBuilder::new(
             context.clone(),
             leader_schedule.clone(),
             dag_state.clone(),
         )
-        .with_number_of_leaders(NUM_LEADERS_PER_ROUND)
+        .with_number_of_leaders(number_of_leaders)
         .with_pipeline(true)
         .build();
 
@@ -429,7 +430,7 @@ impl Core {
         self.last_proposed_block = verified_block.clone();
 
         // Now acknowledge the transactions for their inclusion to block
-        ack_transactions();
+        ack_transactions(verified_block.reference());
 
         info!("Created block {:?}", verified_block);
 
@@ -725,7 +726,7 @@ impl CoreSignals {
 }
 
 /// Receivers of signals from Core.
-/// Intentially un-clonable. Comonents should only subscribe to channels they need.
+/// Intentionally un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
     rx_block_broadcast: broadcast::Receiver<VerifiedBlock>,
     new_round_receiver: watch::Receiver<Round>,
@@ -993,8 +994,8 @@ mod test {
     async fn test_core_propose_after_genesis() {
         telemetry_subscribers::init_for_testing();
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes(2_000);
-            config.set_consensus_max_transactions_in_block_bytes(2_000);
+            config.set_consensus_max_transaction_size_bytes_for_testing(2_000);
+            config.set_consensus_max_transactions_in_block_bytes_for_testing(2_000);
             config
         });
 
@@ -1278,7 +1279,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_core_set_consumer_availablity() {
+    async fn test_core_set_consumer_availability() {
         telemetry_subscribers::init_for_testing();
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -1448,7 +1449,7 @@ mod test {
         let (mut context, _) = Context::new_for_test(4);
         context
             .protocol_config
-            .set_mysticeti_leader_scoring_and_schedule(false);
+            .set_mysticeti_leader_scoring_and_schedule_for_testing(false);
         // create the cores and their signals for all the authorities
         let mut cores = create_cores(context, vec![1, 1, 1, 1]);
 
@@ -1532,6 +1533,133 @@ mod test {
                 0
             );
             let expected_reputation_scores = ReputationScores::new(CommitRange::default(), vec![]);
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .reputation_scores,
+                expected_reputation_scores
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_commit_on_leader_schedule_change_boundary_without_multileader() {
+        parameterized_test_commit_on_leader_schedule_change_boundary(Some(1)).await;
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_commit_on_leader_schedule_change_boundary_with_multileader() {
+        parameterized_test_commit_on_leader_schedule_change_boundary(None).await;
+    }
+
+    async fn parameterized_test_commit_on_leader_schedule_change_boundary(
+        num_leaders_per_round: Option<usize>,
+    ) {
+        telemetry_subscribers::init_for_testing();
+        let default_params = Parameters::default();
+
+        let (mut context, _) = Context::new_for_test(6);
+        context
+            .protocol_config
+            .set_mysticeti_num_leaders_per_round_for_testing(num_leaders_per_round);
+        // create the cores and their signals for all the authorities
+        let mut cores = create_cores(context, vec![1, 1, 1, 1, 1, 1]);
+
+        // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
+        let mut last_round_blocks = Vec::new();
+        for round in 1..=63 {
+            let mut this_round_blocks = Vec::new();
+
+            // Wait for min round delay to allow blocks to be proposed.
+            sleep(default_params.min_round_delay).await;
+
+            for (core, signal_receivers, block_receiver, _, _) in &mut cores {
+                // add the blocks from last round
+                // this will trigger a block creation for the round and a signal should be emitted
+                core.add_blocks(last_round_blocks.clone()).unwrap();
+
+                // A "new round" signal should be received given that all the blocks of previous round have been processed
+                let new_round = receive(
+                    Duration::from_secs(1),
+                    signal_receivers.new_round_receiver(),
+                )
+                .await;
+                assert_eq!(new_round, round);
+
+                // Check that a new block has been proposed.
+                let block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(block.round(), round);
+                assert_eq!(block.author(), core.context.own_index);
+
+                // append the new block to this round blocks
+                this_round_blocks.push(core.last_proposed_block().clone());
+
+                let block = core.last_proposed_block();
+
+                // ensure that produced block is referring to the blocks of last_round
+                assert_eq!(block.ancestors().len(), core.context.committee.size());
+                for ancestor in block.ancestors() {
+                    if block.round() > 1 {
+                        // don't bother with round 1 block which just contains the genesis blocks.
+                        assert!(
+                            last_round_blocks
+                                .iter()
+                                .any(|block| block.reference() == *ancestor),
+                            "Reference from previous round should be added"
+                        );
+                    }
+                }
+            }
+
+            last_round_blocks = this_round_blocks;
+        }
+
+        for (core, _, _, _, store) in cores {
+            // Check commits have been persisted to store
+            let last_commit = store
+                .read_last_commit()
+                .unwrap()
+                .expect("last commit should be set");
+            // There are 61 leader rounds with rounds completed up to and including
+            // round 63. Round 63 blocks will only include their own blocks, so there
+            // should only be 60 commits.
+            // However on a leader schedule change boundary its is possible for a
+            // new leader to get selected for the same round if the leader elected
+            // gets swapped allowing for multiple leaders to be committed at a round.
+            // Meaning with multi leader per round explicitly set to 1 we will have 60,
+            // otherwise 61.
+            // NOTE: We used 61 leader rounds to specifically trigger the scenario
+            // where the leader schedule boundary occurred AND we had a swap to a new
+            // leader for the same round
+            let expected_commit_count = match num_leaders_per_round {
+                Some(1) => 60,
+                _ => 61,
+            };
+            assert_eq!(last_commit.index(), expected_commit_count);
+            let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
+            assert_eq!(all_stored_commits.len(), expected_commit_count as usize);
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .bad_nodes
+                    .len(),
+                1
+            );
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .good_nodes
+                    .len(),
+                1
+            );
+            let expected_reputation_scores =
+                ReputationScores::new((51..=60).into(), vec![8, 8, 9, 8, 8, 8]);
             assert_eq!(
                 core.leader_schedule
                     .leader_swap_table
@@ -1714,7 +1842,7 @@ mod test {
                 .with_authority_index(AuthorityIndex::new_for_test(index as u32));
             context
                 .protocol_config
-                .set_consensus_bad_nodes_stake_threshold(33);
+                .set_consensus_bad_nodes_stake_threshold_for_testing(33);
 
             let context = Arc::new(context);
             let store = Arc::new(MemStore::new());

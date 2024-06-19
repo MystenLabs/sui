@@ -12,7 +12,8 @@ use crate::{
     content_type::ContentType,
     types::{
         X_SUI_CHAIN, X_SUI_CHAIN_ID, X_SUI_CHECKPOINT_HEIGHT, X_SUI_EPOCH,
-        X_SUI_OLDEST_CHECKPOINT_HEIGHT, X_SUI_TIMESTAMP_MS,
+        X_SUI_LOWEST_AVAILABLE_CHECKPOINT, X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS,
+        X_SUI_TIMESTAMP_MS,
     },
     RestService, APPLICATION_BCS, TEXT_PLAIN_UTF_8,
 };
@@ -129,10 +130,16 @@ pub async fn append_info_headers(
     response: Response,
 ) -> impl IntoResponse {
     let latest_checkpoint = state.reader.inner().get_latest_checkpoint().unwrap();
-    let oldest_checkpoint = state
+    let lowest_available_checkpoint = state
         .reader
         .inner()
         .get_lowest_available_checkpoint()
+        .unwrap();
+
+    let lowest_available_checkpoint_objects = state
+        .reader
+        .inner()
+        .get_lowest_available_checkpoint_objects()
         .unwrap();
 
     let mut headers = HeaderMap::new();
@@ -166,8 +173,16 @@ pub async fn append_info_headers(
             .unwrap(),
     );
     headers.insert(
-        X_SUI_OLDEST_CHECKPOINT_HEIGHT,
-        oldest_checkpoint.to_string().try_into().unwrap(),
+        X_SUI_LOWEST_AVAILABLE_CHECKPOINT,
+        lowest_available_checkpoint.to_string().try_into().unwrap(),
+    );
+
+    headers.insert(
+        X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS,
+        lowest_available_checkpoint_objects
+            .to_string()
+            .try_into()
+            .unwrap(),
     );
 
     (headers, response)

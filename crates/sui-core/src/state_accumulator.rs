@@ -4,7 +4,7 @@
 use itertools::Itertools;
 use mysten_metrics::monitored_scope;
 use serde::Serialize;
-use sui_protocol_config::{Chain, ProtocolConfig};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -367,12 +367,15 @@ impl StateAccumulator {
         store: Arc<dyn AccumulatorStore>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Self {
-        let chain = epoch_store.get_chain_identifier().chain();
-        if epoch_store.state_accumulator_v2_enabled() && chain != Chain::Mainnet {
-            StateAccumulator::V2(StateAccumulatorV2::new(store))
-        } else {
-            StateAccumulator::V1(StateAccumulatorV1::new(store))
+        if cfg!(msim) {
+            if epoch_store.state_accumulator_v2_enabled() {
+                return StateAccumulator::V2(StateAccumulatorV2::new(store));
+            } else {
+                return StateAccumulator::V1(StateAccumulatorV1::new(store));
+            }
         }
+
+        StateAccumulator::V1(StateAccumulatorV1::new(store))
     }
 
     /// Accumulates the effects of a single checkpoint and persists the accumulator.
@@ -626,6 +629,24 @@ impl StateAccumulatorV2 {
         checkpoint_acc: Option<Accumulator>,
     ) -> SuiResult {
         let _scope = monitored_scope("AccumulateRunningRoot");
+
+        // For the last checkpoint of the epoch, this function will be called once by the
+        // checkpoint builder, and again by checkpoint executor.
+        //
+        // Normally this is fine, since the notify_read_running_root(checkpoint_seq_num - 1) will
+        // work normally. But if there is only one checkpoint in the epoch, that call will hang
+        // forever, since the previous checkpoint belongs to the previous epoch.
+        if epoch_store
+            .get_running_root_accumulator(&checkpoint_seq_num)?
+            .is_some()
+        {
+            debug!(
+                "accumulate_running_root {:?} {:?} already exists",
+                epoch_store.epoch(),
+                checkpoint_seq_num
+            );
+            return Ok(());
+        }
 
         let mut running_root = if checkpoint_seq_num == 0 {
             // we're at genesis and need to start from scratch

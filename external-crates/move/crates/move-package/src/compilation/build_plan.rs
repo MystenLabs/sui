@@ -14,11 +14,9 @@ use crate::{
 use anyhow::Result;
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{
-        report_diagnostics_to_buffer_with_env_color, report_warnings, FilesSourceText, Migration,
-    },
+    diagnostics::{report_diagnostics_to_buffer_with_env_color, report_warnings, Migration},
     editions::Edition,
-    shared::PackagePaths,
+    shared::{files::MappedFiles, PackagePaths},
     Compiler,
 };
 use move_symbol_pool::Symbol;
@@ -212,7 +210,7 @@ impl BuildPlan {
         compiler_driver: impl FnMut(
             Compiler,
         )
-            -> anyhow::Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
+            -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
         let dependencies = self.compute_dependencies();
         self.compile_with_driver_and_deps(dependencies, writer, compiler_driver)
@@ -225,7 +223,7 @@ impl BuildPlan {
         mut compiler_driver: impl FnMut(
             Compiler,
         )
-            -> anyhow::Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
+            -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
         let CompilationDependencies {
             root_package,

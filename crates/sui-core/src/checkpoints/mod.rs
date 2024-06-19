@@ -48,7 +48,7 @@ use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::SuiResult;
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -980,7 +980,7 @@ impl CheckpointBuilder {
                     continue;
                 }
 
-                // Min interval has elasped, we can now coalesce and build a checkpoint.
+                // Min interval has elapsed, we can now coalesce and build a checkpoint.
                 last_height = Some(height);
                 last_timestamp = Some(current_timestamp);
                 debug!(
@@ -1919,6 +1919,14 @@ impl CheckpointSignatureAggregator {
         let envelope =
             SignedCheckpointSummary::new_from_data_and_sig(self.summary.clone(), signature);
         match self.signatures_by_digest.insert(their_digest, envelope) {
+            // ignore repeated signatures
+            InsertResult::Failed {
+                error:
+                    SuiError::StakeAggregatorRepeatedSigner {
+                        conflicting_sig: false,
+                        ..
+                    },
+            } => Err(()),
             InsertResult::Failed { error } => {
                 warn!(
                     checkpoint_seq = self.summary.sequence_number,
@@ -2390,7 +2398,7 @@ mod tests {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_min_checkpoint_interval_ms(100);
+        protocol_config.set_min_checkpoint_interval_ms_for_testing(100);
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
             .build()

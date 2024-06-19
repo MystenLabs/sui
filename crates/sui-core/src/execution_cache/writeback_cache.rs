@@ -609,7 +609,13 @@ impl WritebackCache {
                         .unwrap_or(false);
 
                 if highest != cache_entry && !tombstone_possibly_pruned {
-                    tracing::error!("object_by_id cache is incoherent for {:?}", object_id);
+                    tracing::error!(
+                        ?highest,
+                        ?cache_entry,
+                        ?tombstone_possibly_pruned,
+                        "object_by_id cache is incoherent for {:?}",
+                        object_id
+                    );
                     panic!("object_by_id cache is incoherent for {:?}", object_id);
                 }
             }
@@ -1145,6 +1151,10 @@ impl WritebackCache {
             self.cached.object_by_id_cache.invalidate(object_id);
         }
 
+        for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
+            self.cached.object_by_id_cache.invalidate(object_id);
+        }
+
         // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
         Ok(())
     }
@@ -1604,6 +1614,10 @@ impl ObjectCacheRead for WritebackCache {
             },
         )?;
         Ok(())
+    }
+
+    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        self.store.perpetual_tables.get_highest_pruned_checkpoint()
     }
 }
 

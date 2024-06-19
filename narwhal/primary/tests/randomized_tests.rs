@@ -110,7 +110,7 @@ async fn bullshark_randomised_tests() {
     ];
 
     let mut config: ProtocolConfig = latest_protocol_version();
-    config.set_consensus_bad_nodes_stake_threshold(33);
+    config.set_consensus_bad_nodes_stake_threshold_for_testing(33);
 
     let mut test_execution_list = FuturesUnordered::new();
     let (tx, mut rx) = channel(1000);

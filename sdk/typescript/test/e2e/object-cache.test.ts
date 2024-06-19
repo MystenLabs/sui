@@ -12,13 +12,15 @@ import { publishPackage, setup, TestToolbox } from './utils/setup';
 describe('CachingTransactionExecutor', async () => {
 	let toolbox: TestToolbox;
 	let packageId: string;
+	let rawPackageId: string;
 	let executor: CachingTransactionExecutor;
 	let parentObjectId: OwnedObjectRef;
 	let receiveObjectId: OwnedObjectRef;
 
 	beforeAll(async () => {
 		const packagePath = __dirname + '/./data/tto';
-		packageId = normalizeSuiAddress((await publishPackage(packagePath)).packageId);
+		rawPackageId = (await publishPackage(packagePath)).packageId;
+		packageId = normalizeSuiAddress(rawPackageId);
 	});
 
 	beforeEach(async () => {
@@ -103,7 +105,7 @@ describe('CachingTransactionExecutor', async () => {
 					body: {
 						datatype: {
 							module: 'tto',
-							package: packageId,
+							package: rawPackageId,
 							type: 'A',
 							typeParameters: [],
 						},
@@ -120,7 +122,7 @@ describe('CachingTransactionExecutor', async () => {
 								{
 									datatype: {
 										module: 'tto',
-										package: packageId,
+										package: rawPackageId,
 										type: 'B',
 										typeParameters: [],
 									},

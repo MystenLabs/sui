@@ -235,11 +235,6 @@ pub trait StateRead: Send + Sync {
 
     fn get_latest_checkpoint_sequence_number(&self) -> StateReadResult<CheckpointSequenceNumber>;
 
-    fn loaded_child_object_versions(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> StateReadResult<Option<Vec<(ObjectID, SequenceNumber)>>>;
-
     fn get_chain_identifier(&self) -> StateReadResult<ChainIdentifier>;
 }
 
@@ -564,13 +559,6 @@ impl StateRead for AuthorityState {
 
     fn get_latest_checkpoint_sequence_number(&self) -> StateReadResult<CheckpointSequenceNumber> {
         Ok(self.get_latest_checkpoint_sequence_number()?)
-    }
-
-    fn loaded_child_object_versions(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> StateReadResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
-        Ok(self.loaded_child_object_versions(transaction_digest)?)
     }
 
     fn get_chain_identifier(&self) -> StateReadResult<ChainIdentifier> {

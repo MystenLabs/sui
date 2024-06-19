@@ -774,13 +774,6 @@ impl AuthorityPerEpochStore {
             info!("authenticator_state disabled");
         }
 
-        let is_validator = committee.authority_index(&name).is_some();
-        if is_validator {
-            assert!(epoch_start_configuration
-                .flags()
-                .contains(&EpochFlag::InMemoryCheckpointRoots));
-        }
-
         let mut jwk_aggregator = JwkAggregator::new(committee.clone());
 
         for ((authority, id, jwk), _) in tables.pending_jwks.unbounded_iter().seek_to_first() {
@@ -891,8 +884,8 @@ impl AuthorityPerEpochStore {
             .is_some()
     }
 
-    pub fn coin_deny_list_state_enabled(&self) -> bool {
-        self.protocol_config().enable_coin_deny_list() && self.coin_deny_list_state_exists()
+    pub fn coin_deny_list_v1_enabled(&self) -> bool {
+        self.protocol_config().enable_coin_deny_list_v1() && self.coin_deny_list_state_exists()
     }
 
     pub fn bridge_exists(&self) -> bool {
@@ -955,6 +948,29 @@ impl AuthorityPerEpochStore {
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
             chain_identifier,
+        )
+    }
+
+    pub fn new_at_next_epoch_for_testing(
+        &self,
+        backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
+        object_store: Arc<dyn ObjectStore + Send + Sync>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+    ) -> Arc<Self> {
+        let next_epoch = self.epoch() + 1;
+        let next_committee = Committee::new(
+            next_epoch,
+            self.committee.voting_rights.iter().cloned().collect(),
+        );
+        self.new_at_next_epoch(
+            self.name,
+            next_committee,
+            self.epoch_start_configuration
+                .new_at_next_epoch_for_testing(),
+            backing_package_store,
+            object_store,
+            expensive_safety_check_config,
+            self.chain_identifier,
         )
     }
 
@@ -1403,17 +1419,6 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    pub fn per_epoch_finalized_txns_enabled(&self) -> bool {
-        self.epoch_start_configuration
-            .flags()
-            .contains(&EpochFlag::PerEpochFinalizedTransactions)
-    }
-
-    pub fn object_lock_split_tables_enabled(&self) -> bool {
-        self.epoch_start_configuration
-            .object_lock_split_tables_enabled()
-    }
-
     // For each id in objects_to_init, return the next version for that id as recorded in the
     // next_shared_object_versions table.
     //
@@ -1822,6 +1827,40 @@ impl AuthorityPerEpochStore {
         ))
     }
 
+    /// Check whether any certificates were processed by consensus.
+    /// This handles multiple certificates at once.
+    pub fn is_any_tx_certs_consensus_message_processed<'a>(
+        &self,
+        certificates: impl Iterator<Item = &'a CertifiedTransaction>,
+    ) -> SuiResult<bool> {
+        let keys = certificates.map(|cert| {
+            SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                *cert.digest(),
+            ))
+        });
+        Ok(self
+            .check_consensus_messages_processed(keys)?
+            .into_iter()
+            .any(|processed| processed))
+    }
+
+    /// Check whether any certificates were processed by consensus.
+    /// This handles multiple certificates at once.
+    pub fn is_all_tx_certs_consensus_message_processed<'a>(
+        &self,
+        certificates: impl Iterator<Item = &'a VerifiedCertificate>,
+    ) -> SuiResult<bool> {
+        let keys = certificates.map(|cert| {
+            SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                *cert.digest(),
+            ))
+        });
+        Ok(self
+            .check_consensus_messages_processed(keys)?
+            .into_iter()
+            .all(|processed| processed))
+    }
+
     pub fn is_consensus_message_processed(
         &self,
         key: &SequencedConsensusTransactionKey,
@@ -1832,9 +1871,9 @@ impl AuthorityPerEpochStore {
             .contains_key(key)?)
     }
 
-    pub fn check_consensus_messages_processed<'a>(
+    pub fn check_consensus_messages_processed(
         &self,
-        keys: impl Iterator<Item = &'a SequencedConsensusTransactionKey>,
+        keys: impl Iterator<Item = SequencedConsensusTransactionKey>,
     ) -> SuiResult<Vec<bool>> {
         Ok(self
             .tables()?
@@ -1850,7 +1889,7 @@ impl AuthorityPerEpochStore {
 
         let unprocessed_keys_registrations = registrations
             .into_iter()
-            .zip(self.check_consensus_messages_processed(keys.iter())?)
+            .zip(self.check_consensus_messages_processed(keys.into_iter())?)
             .filter(|(_, processed)| !processed)
             .map(|(registration, _)| registration);
 

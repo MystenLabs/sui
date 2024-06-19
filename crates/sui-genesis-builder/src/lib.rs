@@ -28,7 +28,7 @@ use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
     AuthoritySignature, DefaultHash, SuiAuthoritySignature,
 };
-use sui_types::deny_list::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
+use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::epoch_data::EpochData;
@@ -331,7 +331,7 @@ impl Builder {
         );
 
         assert_eq!(
-            protocol_config.enable_coin_deny_list(),
+            protocol_config.enable_coin_deny_list_v1(),
             unsigned_genesis.coin_deny_list_state().is_some(),
         );
 
@@ -1131,7 +1131,7 @@ pub fn generate_genesis_system_object(
                 vec![],
             )?;
         }
-        if protocol_config.enable_coin_deny_list() {
+        if protocol_config.enable_coin_deny_list_v1() {
             builder.move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 DENY_LIST_MODULE.to_owned(),

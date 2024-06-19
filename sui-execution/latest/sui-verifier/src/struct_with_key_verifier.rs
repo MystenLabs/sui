@@ -16,7 +16,8 @@ use sui_types::{
 };
 
 pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
-    verify_key_structs(module)
+    verify_key_structs(module)?;
+    verify_no_key_enums(module)
 }
 
 fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
@@ -77,6 +78,19 @@ fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
                 uid_type_struct_name
             ))
         );
+    }
+    Ok(())
+}
+
+fn verify_no_key_enums(module: &CompiledModule) -> Result<(), ExecutionError> {
+    for def in &module.enum_defs {
+        let handle = module.datatype_handle_at(def.enum_handle);
+        if handle.abilities.has_key() {
+            return Err(verification_failure(format!(
+                "Enum {} cannot have the 'key' ability. Enums cannot have the 'key' ability.",
+                module.identifier_at(handle.name)
+            )));
+        }
     }
     Ok(())
 }

@@ -529,7 +529,7 @@ export class Transaction {
 	async prepareForSerialization(options: SerializeTransactionOptions) {
 		const intents = new Set<string>();
 		for (const command of this.#data.commands) {
-			if (command.$Intent && options.supportedIntents) {
+			if (command.$Intent) {
 				intents.add(command.$Intent.name);
 			}
 		}

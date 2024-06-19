@@ -80,12 +80,7 @@ impl Server {
 
         // Compatibility check
         info!("Starting compatibility check");
-        let result = check_all_tables(&self.db_reader).await?;
-
-        if !result {
-            return Err(Error::Internal("Compatibility check failed".to_string()));
-        }
-
+        check_all_tables(&self.db_reader).await?;
         info!("Compatibility check passed");
 
         // A handle that spawns a background task to periodically update the `Watermark`, which

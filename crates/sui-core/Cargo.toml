@@ -36,6 +36,7 @@ parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 roaring.workspace = true
+rayon.workspace = true
 rocksdb.workspace = true
 reqwest.workspace = true
 scopeguard.workspace = true
@@ -96,6 +97,7 @@ sui-simulator.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 zeroize.workspace = true
+nonempty.workspace = true
 
 [dev-dependencies]
 clap.workspace = true

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ampli } from '_src/shared/analytics/ampli';
 import { type PermissionType } from '_src/shared/messaging/messages/payloads/permissions';
 import cn from 'clsx';
 import { useCallback, useMemo, useState } from 'react';
@@ -64,19 +63,11 @@ export function UserApproveContainer({
 		isOpen,
 		isPending: isDomainCheckLoading,
 		isError,
-		bypass,
 	} = useShowScamWarning({ hostname: parsedOrigin.hostname });
 
 	return (
 		<>
-			<ScamOverlay
-				open={isOpen}
-				onDismiss={() => handleOnResponse(false)}
-				onContinue={() => {
-					ampli.bypassedScamWarning({ hostname: parsedOrigin.hostname });
-					bypass();
-				}}
-			/>
+			<ScamOverlay open={isOpen} onDismiss={() => handleOnResponse(false)} />
 			<div className="flex flex-1 flex-col flex-nowrap h-full">
 				<div className="flex-1 pb-0 flex flex-col">
 					<DAppInfoCard

@@ -59,11 +59,10 @@ use crate::{
     compiler_info::CompilerInfo,
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
-    utils::get_loc,
+    utils::loc_start_to_lsp_position_opt,
 };
 
 use anyhow::{anyhow, Result};
-use codespan_reporting::files::SimpleFiles;
 use crossbeam::channel::Sender;
 use derivative::*;
 use im::ordmap::OrdMap;
@@ -98,7 +97,10 @@ use move_compiler::{
     linters::LintLevel,
     naming::ast::{StructFields, Type, TypeName_, Type_},
     parser::ast::{self as P},
-    shared::{unique_map::UniqueMap, Identifier, Name, NamedAddressMap, NamedAddressMaps},
+    shared::{
+        files::MappedFiles, unique_map::UniqueMap, Identifier, Name, NamedAddressMap,
+        NamedAddressMaps,
+    },
     typing::{
         ast::{Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
         visitor::TypingVisitorContext,
@@ -342,10 +344,8 @@ pub struct ParsingSymbolicator<'a> {
     /// string so that we can access it regardless of the ModuleIdent representation
     /// (e.g., in the parsing AST or in the typing AST)
     mod_outer_defs: &'a mut BTreeMap<String, ModuleDefs>,
-    /// A mapping from file names to file content (used to obtain source file locations)
-    files: &'a SimpleFiles<Symbol, String>,
-    /// A mapping from file hashes to file IDs (used to obtain source file locations)
-    file_id_mapping: &'a HashMap<FileHash, usize>,
+    /// Mapped file information for translating locations into positions
+    files: &'a MappedFiles,
     /// Associates uses for a given definition to allow displaying all references
     references: &'a mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     /// Additional information about definitions
@@ -375,12 +375,14 @@ pub struct Symbols {
     references: BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     /// A mapping from uses to definitions in a file
     file_use_defs: BTreeMap<PathBuf, UseDefMap>,
-    /// A mapping from file hashes to file names
-    file_name_mapping: BTreeMap<FileHash, PathBuf>,
     /// A mapping from filePath to ModuleDefs
-    file_mods: BTreeMap<PathBuf, BTreeSet<ModuleDefs>>,
+    pub file_mods: BTreeMap<PathBuf, BTreeSet<ModuleDefs>>,
+    /// Mapped file information for translating locations into positions
+    pub files: MappedFiles,
     /// Additional information about definitions
     def_info: BTreeMap<DefLoc, DefInfo>,
+    /// IDE Annotation Information from the Compiler
+    pub compiler_info: CompilerInfo,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -428,7 +430,7 @@ impl fmt::Display for DefInfo {
                 //
                 // It also seems like a reasonable idea to be able to tune user experience in the
                 // IDE independently on how compiler error messages are generated.
-                write!(f, "{}", type_to_ide_string(t))
+                write!(f, "{}", type_to_ide_string(t, /* verbose */ true))
             }
             Self::Function(
                 mod_ident,
@@ -438,14 +440,11 @@ impl fmt::Display for DefInfo {
                 type_args,
                 arg_names,
                 arg_types,
-                ret,
+                ret_type,
                 _,
             ) => {
-                let type_args_str = type_args_to_ide_string(type_args);
-                let ret_str = match ret {
-                    sp!(_, Type_::Unit) => "".to_string(),
-                    _ => format!(": {}", type_to_ide_string(ret)),
-                };
+                let type_args_str = type_args_to_ide_string(type_args, /* verbose */ true);
+                let ret_type_str = ret_type_to_ide_str(ret_type, /* verbose */ true);
                 write!(
                     f,
                     "{}{}fun {}::{}{}({}){}",
@@ -454,8 +453,11 @@ impl fmt::Display for DefInfo {
                     mod_ident_to_ide_string(mod_ident),
                     name,
                     type_args_str,
-                    typed_id_list_to_ide_string(arg_names, arg_types, false),
-                    ret_str,
+                    typed_id_list_to_ide_string(
+                        arg_names, arg_types, /* separate_lines */ false,
+                        /* verbose */ true
+                    ),
+                    ret_type_str,
                 )
             }
             Self::Struct(
@@ -468,7 +470,8 @@ impl fmt::Display for DefInfo {
                 field_types,
                 _,
             ) => {
-                let type_args_str = struct_type_args_to_ide_string(type_args);
+                let type_args_str =
+                    struct_type_args_to_ide_string(type_args, /* verbose */ true);
                 let abilities_str = if abilities.is_empty() {
                     "".to_string()
                 } else {
@@ -502,7 +505,12 @@ impl fmt::Display for DefInfo {
                         name,
                         type_args_str,
                         abilities_str,
-                        typed_id_list_to_ide_string(field_names, field_types, true),
+                        typed_id_list_to_ide_string(
+                            field_names,
+                            field_types,
+                            /* separate_lines */ true,
+                            /* verbose */ true
+                        ),
                     )
                 }
             }
@@ -513,15 +521,27 @@ impl fmt::Display for DefInfo {
                     mod_ident,
                     struct_name,
                     name,
-                    type_to_ide_string(t)
+                    type_to_ide_string(t, /* verbose */ true)
                 )
             }
             Self::Local(name, t, is_decl, is_mut) => {
                 let mut_str = if *is_mut { "mut " } else { "" };
                 if *is_decl {
-                    write!(f, "let {}{}: {}", mut_str, name, type_to_ide_string(t))
+                    write!(
+                        f,
+                        "let {}{}: {}",
+                        mut_str,
+                        name,
+                        type_to_ide_string(t, /* verbose */ true)
+                    )
                 } else {
-                    write!(f, "{}{}: {}", mut_str, name, type_to_ide_string(t))
+                    write!(
+                        f,
+                        "{}{}: {}",
+                        mut_str,
+                        name,
+                        type_to_ide_string(t, /* verbose */ true)
+                    )
                 }
             }
             Self::Const(mod_ident, name, t, value, _) => {
@@ -531,7 +551,7 @@ impl fmt::Display for DefInfo {
                         "const {}::{}: {} = {}",
                         mod_ident,
                         name,
-                        type_to_ide_string(t),
+                        type_to_ide_string(t, /* verbose */ true),
                         v
                     )
                 } else {
@@ -540,7 +560,7 @@ impl fmt::Display for DefInfo {
                         "const {}::{}: {}",
                         mod_ident,
                         name,
-                        type_to_ide_string(t)
+                        type_to_ide_string(t, /* verbose */ true)
                     )
                 }
             }
@@ -558,77 +578,86 @@ fn visibility_to_ide_string(visibility: &Visibility) -> String {
     visibility_str
 }
 
-fn type_args_to_ide_string(type_args: &Vec<Type>) -> String {
+pub fn type_args_to_ide_string(type_args: &[Type], verbose: bool) -> String {
     let mut type_args_str = "".to_string();
     if !type_args.is_empty() {
         type_args_str.push('<');
-        type_args_str.push_str(&type_list_to_ide_string(type_args));
+        type_args_str.push_str(&type_list_to_ide_string(type_args, verbose));
         type_args_str.push('>');
     }
     type_args_str
 }
 
-fn struct_type_args_to_ide_string(type_args: &Vec<(Type, bool)>) -> String {
+fn struct_type_args_to_ide_string(type_args: &[(Type, bool)], verbose: bool) -> String {
     let mut type_args_str = "".to_string();
     if !type_args.is_empty() {
         type_args_str.push('<');
-        type_args_str.push_str(&struct_type_list_to_ide_string(type_args));
+        type_args_str.push_str(&struct_type_list_to_ide_string(type_args, verbose));
         type_args_str.push('>');
     }
     type_args_str
 }
 
-fn typed_id_list_to_ide_string(names: &[Symbol], types: &[Type], separate_lines: bool) -> String {
+fn typed_id_list_to_ide_string(
+    names: &[Symbol],
+    types: &[Type],
+    separate_lines: bool,
+    verbose: bool,
+) -> String {
     names
         .iter()
         .zip(types.iter())
         .map(|(n, t)| {
             if separate_lines {
-                format!("\t{}: {}", n, type_to_ide_string(t))
+                format!("\t{}: {}", n, type_to_ide_string(t, verbose))
             } else {
-                format!("{}: {}", n, type_to_ide_string(t))
+                format!("{}: {}", n, type_to_ide_string(t, verbose))
             }
         })
         .collect::<Vec<_>>()
         .join(if separate_lines { ",\n" } else { ", " })
 }
 
-pub fn type_to_ide_string(sp!(_, t): &Type) -> String {
+pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
     match t {
         Type_::Unit => "()".to_string(),
-        Type_::Ref(m, r) => format!("&{}{}", if *m { "mut " } else { "" }, type_to_ide_string(r)),
+        Type_::Ref(m, r) => format!(
+            "&{}{}",
+            if *m { "mut " } else { "" },
+            type_to_ide_string(r, verbose)
+        ),
         Type_::Param(tp) => {
             format!("{}", tp.user_specified_name)
         }
         Type_::Apply(_, sp!(_, type_name), ss) => match type_name {
             TypeName_::Multiple(_) => {
-                format!("({})", type_list_to_ide_string(ss))
+                format!("({})", type_list_to_ide_string(ss, verbose))
             }
             TypeName_::Builtin(name) => {
                 if ss.is_empty() {
                     format!("{}", name)
                 } else {
-                    format!("{}<{}>", name, type_list_to_ide_string(ss))
+                    format!("{}<{}>", name, type_list_to_ide_string(ss, verbose))
                 }
             }
             TypeName_::ModuleType(sp!(_, module_ident), struct_name) => {
-                format!(
-                    "{}::{}{}",
-                    module_ident,
-                    struct_name,
-                    if ss.is_empty() {
-                        "".to_string()
-                    } else {
-                        format!("<{}>", type_list_to_ide_string(ss))
-                    }
-                )
+                let type_args = if ss.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("<{}>", type_list_to_ide_string(ss, verbose))
+                };
+                if verbose {
+                    format!("{}::{}{}", module_ident, struct_name, type_args,)
+                } else {
+                    struct_name.to_string()
+                }
             }
         },
         Type_::Fun(args, ret) => {
             format!(
                 "|{}| -> {}",
-                type_list_to_ide_string(args),
-                type_to_ide_string(ret)
+                type_list_to_ide_string(args, verbose),
+                type_to_ide_string(ret, verbose)
             )
         }
         Type_::Anything => "_".to_string(),
@@ -637,28 +666,34 @@ pub fn type_to_ide_string(sp!(_, t): &Type) -> String {
     }
 }
 
-fn type_list_to_ide_string(types: &[Type]) -> String {
+pub fn type_list_to_ide_string(types: &[Type], verbose: bool) -> String {
     types
         .iter()
-        .map(type_to_ide_string)
+        .map(|t| type_to_ide_string(t, verbose))
         .collect::<Vec<_>>()
         .join(", ")
 }
 
-fn struct_type_list_to_ide_string(types: &[(Type, bool)]) -> String {
+fn struct_type_list_to_ide_string(types: &[(Type, bool)], verbose: bool) -> String {
     types
         .iter()
         .map(|(t, phantom)| {
             if *phantom {
-                format!("phantom {}", type_to_ide_string(t))
+                format!("phantom {}", type_to_ide_string(t, verbose))
             } else {
-                type_to_ide_string(t)
+                type_to_ide_string(t, verbose)
             }
         })
         .collect::<Vec<_>>()
         .join(", ")
 }
 
+pub fn ret_type_to_ide_str(ret_type: &Type, verbose: bool) -> String {
+    match ret_type {
+        sp!(_, Type_::Unit) => "".to_string(),
+        _ => format!(": {}", type_to_ide_string(ret_type, verbose)),
+    }
+}
 /// Conversions of constant values to strings is currently best-effort which is why this function
 /// returns an Option (in the worst case we will display constant name and type but no value).
 fn const_val_to_ide_string(exp: &Exp) -> Option<String> {
@@ -754,7 +789,7 @@ fn ast_value_to_ide_string(sp!(_, val): &Value) -> String {
     }
 }
 
-fn mod_ident_to_ide_string(mod_ident: &E::ModuleIdent_) -> String {
+pub fn mod_ident_to_ide_string(mod_ident: &E::ModuleIdent_) -> String {
     use E::Address as A;
     match mod_ident.address {
         A::Numerical {
@@ -1070,14 +1105,8 @@ impl Symbols {
         for (k, v) in other.references {
             self.references.entry(k).or_default().extend(v);
         }
-        self.file_use_defs.extend(other.file_use_defs);
-        self.file_name_mapping.extend(other.file_name_mapping);
-        self.file_mods.extend(other.file_mods);
+        self.files.extend(other.files);
         self.def_info.extend(other.def_info);
-    }
-
-    pub fn file_mods(&self) -> &BTreeMap<PathBuf, BTreeSet<ModuleDefs>> {
-        &self.file_mods
     }
 
     pub fn line_uses(&self, use_fpath: &Path, use_line: u32) -> BTreeSet<UseDef> {
@@ -1092,13 +1121,20 @@ impl Symbols {
     }
 
     pub fn mod_defs(&self, fhash: &FileHash, mod_ident: ModuleIdent_) -> Option<&ModuleDefs> {
-        let Some(fpath) = self.file_name_mapping.get(fhash) else {
+        let Some(fpath) = self.files.file_name_mapping().get(fhash) else {
             return None;
         };
         let Some(mod_defs) = self.file_mods.get(fpath) else {
             return None;
         };
         mod_defs.iter().find(|d| d.ident == mod_ident)
+    }
+
+    pub fn file_hash(&self, path: &Path) -> Option<FileHash> {
+        let Some(mod_defs) = self.file_mods.get(path) else {
+            return None;
+        };
+        Some(mod_defs.first().unwrap().fhash)
     }
 }
 
@@ -1155,24 +1191,15 @@ pub fn get_symbols(
         None
     };
 
-    // get source files to be able to correlate positions (in terms of byte offsets) with actual
-    // file locations (in terms of line/column numbers)
+    let mut mapped_files: MappedFiles = MappedFiles::empty();
+
+    // Hash dependencies so we can check if something has changed.
     let source_files = file_sources(&resolution_graph, overlay_fs_root.clone());
-    let mut files = SimpleFiles::new();
-    let mut file_id_mapping = HashMap::new();
-    let mut file_id_to_lines = HashMap::new();
-    let mut file_name_mapping = BTreeMap::new();
     let mut hasher = Sha256::new();
-    for (fhash, (fname, source, is_dep)) in &source_files {
-        if *is_dep {
-            hasher.update(fhash.0);
-        }
-        let id = files.add(*fname, source.clone());
-        file_id_mapping.insert(*fhash, id);
-        file_name_mapping.insert(*fhash, PathBuf::from(fname.as_str()));
-        let lines: Vec<String> = source.lines().map(String::from).collect();
-        file_id_to_lines.insert(id, lines);
-    }
+    source_files
+        .iter()
+        .filter(|(_, (_, _, is_dep))| *is_dep)
+        .for_each(|(fhash, _)| hasher.update(fhash.0));
     let deps_hash = format!("{:X}", hasher.finalize());
 
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
@@ -1222,6 +1249,7 @@ pub fn get_symbols(
             .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
             .map(|libs| {
                 eprintln!("created pre-compiled libs for {:?}", pkg_path);
+                mapped_files.extend(libs.files.clone());
                 let deps = Arc::new(libs);
                 pkg_deps.insert(
                     pkg_path.to_path_buf(),
@@ -1263,6 +1291,7 @@ pub fn get_symbols(
         eprintln!("compiled to parsed AST");
         let (compiler, parsed_program) = compiler.into_ast();
         parsed_ast = Some(parsed_program.clone());
+        mapped_files.extend(compiler.compilation_env_ref().mapped_files().clone());
 
         // extract typed AST
         let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
@@ -1302,14 +1331,10 @@ pub fn get_symbols(
         Ok((files, vec![]))
     })?;
 
-    let mut ide_diagnostics = lsp_empty_diagnostics(&file_name_mapping);
+    let mut ide_diagnostics = lsp_empty_diagnostics(mapped_files.file_name_mapping());
     if let Some((compiler_diagnostics, failure)) = diagnostics {
-        let lsp_diagnostics = lsp_diagnostics(
-            &compiler_diagnostics.into_codespan_format(),
-            &files,
-            &file_id_mapping,
-            &file_name_mapping,
-        );
+        let lsp_diagnostics =
+            lsp_diagnostics(&compiler_diagnostics.into_codespan_format(), &mapped_files);
         // start with empty diagnostics for all files and replace them with actual diagnostics
         // only for files that have failures/warnings so that diagnostics for all other files
         // (that no longer have failures/warnings) are reset
@@ -1332,10 +1357,20 @@ pub fn get_symbols(
     let mut references = BTreeMap::new();
     let mut def_info = BTreeMap::new();
 
+    let mut file_id_to_lines = HashMap::new();
+    for file_id in mapped_files.file_mapping().values() {
+        let Ok(file) = mapped_files.files().get(*file_id) else {
+            eprintln!("file id without source code");
+            continue;
+        };
+        let source = file.source();
+        let lines: Vec<String> = source.lines().map(String::from).collect();
+        file_id_to_lines.insert(*file_id, lines);
+    }
+
     pre_process_typed_modules(
         &typed_modules,
-        &files,
-        &file_id_mapping,
+        &mapped_files,
         &file_id_to_lines,
         &mut mod_outer_defs,
         &mut mod_use_defs,
@@ -1347,8 +1382,7 @@ pub fn get_symbols(
     if let Some(libs) = compiled_libs.clone() {
         pre_process_typed_modules(
             &libs.typing.modules,
-            &files,
-            &file_id_mapping,
+            &mapped_files,
             &file_id_to_lines,
             &mut mod_outer_defs,
             &mut mod_use_defs,
@@ -1365,8 +1399,7 @@ pub fn get_symbols(
 
     let mut parsing_symbolicator = ParsingSymbolicator {
         mod_outer_defs: &mut mod_outer_defs,
-        files: &files,
-        file_id_mapping: &file_id_mapping,
+        files: &mapped_files,
         references: &mut references,
         def_info: &mut def_info,
         use_defs: UseDefMap::new(),
@@ -1388,16 +1421,16 @@ pub fn get_symbols(
         );
     }
 
+    let mut compiler_info = compiler_info.unwrap();
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
         mod_outer_defs: &mod_outer_defs,
-        files: &files,
-        file_id_mapping: &file_id_mapping,
+        files: &mapped_files,
         references: &mut references,
         def_info: &mut def_info,
         use_defs: UseDefMap::new(),
         alias_lengths: &BTreeMap::new(),
         traverse_only: false,
-        compiler_info: compiler_info.unwrap(),
+        compiler_info: &mut compiler_info,
         type_params: BTreeMap::new(),
         expression_scope: OrdMap::new(),
     };
@@ -1423,16 +1456,17 @@ pub fn get_symbols(
 
     let mut file_mods: BTreeMap<PathBuf, BTreeSet<ModuleDefs>> = BTreeMap::new();
     for d in mod_outer_defs.into_values() {
-        let path = file_name_mapping.get(&d.fhash.clone()).unwrap();
+        let path = mapped_files.file_path(&d.fhash.clone());
         file_mods.entry(path.to_path_buf()).or_default().insert(d);
     }
 
     let symbols = Symbols {
         references,
         file_use_defs,
-        file_name_mapping,
         file_mods,
         def_info,
+        files: mapped_files,
+        compiler_info,
     };
 
     eprintln!("get_symbols load complete");
@@ -1442,8 +1476,7 @@ pub fn get_symbols(
 
 fn pre_process_typed_modules(
     typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
+    files: &MappedFiles,
     file_id_to_lines: &HashMap<usize, Vec<String>>,
     mod_outer_defs: &mut BTreeMap<String, ModuleDefs>,
     mod_use_defs: &mut BTreeMap<String, UseDefMap>,
@@ -1458,7 +1491,6 @@ fn pre_process_typed_modules(
             &sp(pos, *module_ident),
             module_def,
             files,
-            file_id_mapping,
             file_id_to_lines,
             references,
             def_info,
@@ -1609,9 +1641,10 @@ pub fn empty_symbols() -> Symbols {
     Symbols {
         file_use_defs: BTreeMap::new(),
         references: BTreeMap::new(),
-        file_name_mapping: BTreeMap::new(),
         file_mods: BTreeMap::new(),
         def_info: BTreeMap::new(),
+        files: MappedFiles::empty(),
+        compiler_info: CompilerInfo::new(),
     }
 }
 
@@ -1632,8 +1665,7 @@ fn get_mod_outer_defs(
     loc: &Loc,
     mod_ident: &ModuleIdent,
     mod_def: &ModuleDefinition,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
+    files: &MappedFiles,
     file_id_to_lines: &HashMap<usize, Vec<String>>,
     references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     def_info: &mut BTreeMap<DefLoc, DefInfo>,
@@ -1653,7 +1685,7 @@ fn get_mod_outer_defs(
         if let StructFields::Defined(pos_fields, fields) = &def.fields {
             positional = *pos_fields;
             for (fpos, fname, (_, t)) in fields {
-                let start = match get_start_loc(&fpos, files, file_id_mapping) {
+                let start = match loc_start_to_lsp_position_opt(files, &fpos) {
                     Some(s) => s,
                     None => {
                         debug_assert!(false);
@@ -1665,7 +1697,7 @@ fn get_mod_outer_defs(
                     start,
                 });
                 let doc_string = extract_doc_string(
-                    file_id_mapping,
+                    files.file_mapping(),
                     file_id_to_lines,
                     &start,
                     &fpos.file_hash(),
@@ -1679,7 +1711,7 @@ fn get_mod_outer_defs(
         };
 
         // process the struct itself
-        let name_start = match get_start_loc(&pos, files, file_id_mapping) {
+        let name_start = match loc_start_to_lsp_position_opt(files, &pos) {
             Some(s) => s,
             None => {
                 debug_assert!(false);
@@ -1706,7 +1738,7 @@ fn get_mod_outer_defs(
             Visibility::Internal
         };
         let doc_string = extract_doc_string(
-            file_id_mapping,
+            files.file_mapping(),
             file_id_to_lines,
             &name_start,
             &pos.file_hash(),
@@ -1738,7 +1770,7 @@ fn get_mod_outer_defs(
     }
 
     for (pos, name, c) in &mod_def.constants {
-        let name_start = match get_start_loc(&pos, files, file_id_mapping) {
+        let name_start = match loc_start_to_lsp_position_opt(files, &pos) {
             Some(s) => s,
             None => {
                 debug_assert!(false);
@@ -1747,7 +1779,7 @@ fn get_mod_outer_defs(
         };
         constants.insert(*name, ConstDef { name_start });
         let doc_string = extract_doc_string(
-            file_id_mapping,
+            files.file_mapping(),
             file_id_to_lines,
             &name_start,
             &pos.file_hash(),
@@ -1768,7 +1800,7 @@ fn get_mod_outer_defs(
         if ignored_function(*name) {
             continue;
         }
-        let name_start = match get_start_loc(&pos, files, file_id_mapping) {
+        let name_start = match loc_start_to_lsp_position_opt(files, &pos) {
             Some(s) => s,
             None => {
                 debug_assert!(false);
@@ -1783,7 +1815,7 @@ fn get_mod_outer_defs(
             FunType::Regular
         };
         let doc_string = extract_doc_string(
-            file_id_mapping,
+            files.file_mapping(),
             file_id_to_lines,
             &name_start,
             &pos.file_hash(),
@@ -1830,7 +1862,7 @@ fn get_mod_outer_defs(
     let mut use_def_map = UseDefMap::new();
 
     let ident = mod_ident.value;
-    let start = match get_start_loc(loc, files, file_id_mapping) {
+    let start = match loc_start_to_lsp_position_opt(files, loc) {
         Some(s) => s,
         None => {
             debug_assert!(false);
@@ -1852,7 +1884,7 @@ fn get_mod_outer_defs(
         }
     };
 
-    let doc_comment = extract_doc_string(file_id_mapping, file_id_to_lines, &start, &fhash);
+    let doc_comment = extract_doc_string(files.file_mapping(), file_id_to_lines, &start, &fhash);
     let mod_defs = ModuleDefs {
         fhash,
         ident,
@@ -1865,7 +1897,7 @@ fn get_mod_outer_defs(
 
     // insert use of the module name in the definition itself
     let mod_name = ident.module;
-    if let Some(mod_name_start) = get_start_loc(&mod_name.loc(), files, file_id_mapping) {
+    if let Some(mod_name_start) = loc_start_to_lsp_position_opt(files, &mod_name.loc()) {
         use_def_map.insert(
             mod_name_start.line,
             UseDef::new(
@@ -1886,14 +1918,6 @@ fn get_mod_outer_defs(
     }
 
     (mod_defs, use_def_map)
-}
-
-fn get_start_loc(
-    pos: &Loc,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
-) -> Option<Position> {
-    get_loc(&pos.file_hash(), pos.start(), files, file_id_mapping)
 }
 
 impl<'a> ParsingSymbolicator<'a> {
@@ -2218,7 +2242,7 @@ impl<'a> ParsingSymbolicator<'a> {
         let Some(mod_defs) = self.mod_outer_defs.get_mut(mod_ident_str) else {
             return;
         };
-        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
+        let Some(mod_name_start) = loc_start_to_lsp_position_opt(self.files, &mod_name.loc())
         else {
             debug_assert!(false);
             return;
@@ -2266,7 +2290,6 @@ impl<'a> ParsingSymbolicator<'a> {
         if let Some(mut ud) = add_struct_use_def(
             self.mod_outer_defs,
             self.files,
-            self.file_id_mapping,
             mod_ident_str.clone(),
             mod_defs,
             &name.value,
@@ -2278,7 +2301,7 @@ impl<'a> ParsingSymbolicator<'a> {
         ) {
             // it's a struct - add it for the alias as well
             if let Some(alias) = alias_opt {
-                let Some(alias_start) = get_start_loc(&alias.loc, self.files, self.file_id_mapping)
+                let Some(alias_start) = loc_start_to_lsp_position_opt(self.files, &alias.loc)
                 else {
                     debug_assert!(false);
                     return;
@@ -2297,7 +2320,6 @@ impl<'a> ParsingSymbolicator<'a> {
             &name.value,
             self.mod_outer_defs,
             self.files,
-            self.file_id_mapping,
             mod_ident_str.clone(),
             mod_defs,
             &name.value,
@@ -2309,7 +2331,7 @@ impl<'a> ParsingSymbolicator<'a> {
         ) {
             // it's a function - add it for the alias as well
             if let Some(alias) = alias_opt {
-                let Some(alias_start) = get_start_loc(&alias.loc, self.files, self.file_id_mapping)
+                let Some(alias_start) = loc_start_to_lsp_position_opt(self.files, &alias.loc)
                 else {
                     debug_assert!(false);
                     return;
@@ -2377,8 +2399,7 @@ impl<'a> ParsingSymbolicator<'a> {
                     else {
                         return;
                     };
-                    let Some(def_start) =
-                        get_start_loc(&var.loc(), self.files, self.file_id_mapping)
+                    let Some(def_start) = loc_start_to_lsp_position_opt(self.files, &var.loc())
                     else {
                         return;
                     };
@@ -2422,7 +2443,7 @@ impl<'a> ParsingSymbolicator<'a> {
             return;
         };
         let sp!(pos, name) = n;
-        let Some(loc) = get_start_loc(&pos, self.files, self.file_id_mapping) else {
+        let Some(loc) = loc_start_to_lsp_position_opt(self.files, &pos) else {
             return;
         };
         self.alias_lengths.insert(loc, name.len());
@@ -2433,8 +2454,7 @@ impl<'a> ParsingSymbolicator<'a> {
 pub fn add_fun_use_def(
     fun_def_name: &Symbol, // may be different from use_name for methods
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
+    files: &MappedFiles,
     mod_ident_str: String,
     mod_defs: &ModuleDefs,
     use_name: &Symbol,
@@ -2444,7 +2464,7 @@ pub fn add_fun_use_def(
     use_defs: &mut UseDefMap,
     alias_lengths: &BTreeMap<Position, usize>,
 ) -> Option<UseDef> {
-    let Some(name_start) = get_start_loc(use_pos, files, file_id_mapping) else {
+    let Some(name_start) = loc_start_to_lsp_position_opt(files, use_pos) else {
         debug_assert!(false);
         return None;
     };
@@ -2473,8 +2493,7 @@ pub fn add_fun_use_def(
 /// Add use of a struct identifier
 pub fn add_struct_use_def(
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
-    files: &SimpleFiles<Symbol, String>,
-    file_id_mapping: &HashMap<FileHash, usize>,
+    files: &MappedFiles,
     mod_ident_str: String,
     mod_defs: &ModuleDefs,
     use_name: &Symbol,
@@ -2484,7 +2503,7 @@ pub fn add_struct_use_def(
     use_defs: &mut UseDefMap,
     alias_lengths: &BTreeMap<Position, usize>,
 ) -> Option<UseDef> {
-    let Some(name_start) = get_start_loc(use_pos, files, file_id_mapping) else {
+    let Some(name_start) = loc_start_to_lsp_position_opt(files, use_pos) else {
         debug_assert!(false);
         return None;
     };
@@ -2680,7 +2699,7 @@ pub fn def_ide_location(def_loc: &DefLoc, symbols: &Symbols) -> Location {
         start: def_loc.start,
         end: def_loc.start,
     };
-    let path = symbols.file_name_mapping.get(&def_loc.fhash).unwrap();
+    let path = symbols.files.file_path(&def_loc.fhash);
     Location {
         uri: Url::from_file_path(path).unwrap(),
         range,
@@ -2715,7 +2734,7 @@ pub fn on_go_to_type_def_request(context: &Context, request: &Request, symbols: 
                     start: def_loc.start,
                     end: def_loc.start,
                 };
-                let path = symbols.file_name_mapping.get(&u.def_loc.fhash).unwrap();
+                let path = symbols.files.file_path(&u.def_loc.fhash);
                 let loc = Location {
                     uri: Url::from_file_path(path).unwrap(),
                     range,
@@ -2765,7 +2784,7 @@ pub fn on_references_request(context: &Context, request: &Request, symbols: &Sym
                             start: ref_loc.start,
                             end: end_pos,
                         };
-                        let path = symbols.file_name_mapping.get(&ref_loc.fhash).unwrap();
+                        let path = symbols.files.file_path(&ref_loc.fhash);
                         locs.push(Location {
                             uri: Url::from_file_path(path).unwrap(),
                             range,
@@ -3023,7 +3042,7 @@ fn assert_use_def_with_doc_string(
     type_def: Option<(u32, u32, &str)>,
     doc_string: Option<&str>,
 ) {
-    let file_name_mapping = &symbols.file_name_mapping;
+    let file_name_mapping = &symbols.files.file_name_mapping();
     let def_info = &symbols.def_info;
 
     let Some(uses) = mod_symbols.get(use_line) else {

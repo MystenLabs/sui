@@ -23,9 +23,9 @@ use move_command_line_common::{
 };
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{Diagnostics, FilesSourceText, WarningFilters},
+    diagnostics::{Diagnostics, WarningFilters},
     editions::{Edition, Flavor},
-    shared::{NumericalAddress, PackageConfig},
+    shared::{files::MappedFiles, NumericalAddress, PackageConfig},
     FullyCompiledProgram,
 };
 use move_core_types::{
@@ -618,14 +618,16 @@ pub fn compile_source_units(
     state: &CompiledState,
     file_name: impl AsRef<Path>,
 ) -> Result<(Vec<AnnotatedCompiledUnit>, Option<String>)> {
-    fn rendered_diags(files: &FilesSourceText, diags: Diagnostics) -> Option<String> {
+    fn rendered_diags(files: &MappedFiles, diags: Diagnostics) -> Option<String> {
         if diags.is_empty() {
             return None;
         }
 
         let ansi_color = read_bool_env_var(move_command_line_common::testing::PRETTY);
         let error_buffer =
-            move_compiler::diagnostics::report_diagnostics_to_buffer(files, diags, ansi_color);
+            move_compiler::diagnostics::report_diagnostics_to_buffer_with_mapped_files(
+                files, diags, ansi_color,
+            );
         Some(String::from_utf8(error_buffer).unwrap())
     }
 
@@ -656,14 +658,8 @@ pub fn compile_source_units(
     match units_or_diags {
         Err((_pass, diags)) => {
             if let Some(pcd) = state.pre_compiled_deps.clone() {
-                for (file_name, text) in &pcd.files {
-                    // TODO This is bad. Rethink this when errors are redone
-                    if !files.contains_key(file_name) {
-                        files.insert(*file_name, text.clone());
-                    }
-                }
+                files.extend(pcd.files.clone());
             }
-
             Err(anyhow!(rendered_diags(&files, diags).unwrap()))
         }
         Ok((units, warnings)) => Ok((units, rendered_diags(&files, warnings))),

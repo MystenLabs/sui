@@ -29,7 +29,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -80,7 +80,7 @@ use sui_storage::IndexStore;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
-use sui_types::deny_list::DenyList;
+use sui_types::deny_list_v1::check_coin_deny_list_v1;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
@@ -187,6 +187,10 @@ mod gas_tests;
 #[cfg(test)]
 #[path = "unit_tests/batch_verification_tests.rs"]
 mod batch_verification_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/coin_deny_list_tests.rs"]
+mod coin_deny_list_tests;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod authority_test_utils;
@@ -860,8 +864,13 @@ impl AuthorityState {
             &self.metrics.bytecode_verifier_metrics,
         )?;
 
-        if epoch_store.coin_deny_list_state_enabled() {
-            self.check_coin_deny(tx_data.sender(), &checked_input_objects, &receiving_objects)?;
+        if epoch_store.coin_deny_list_v1_enabled() {
+            check_coin_deny_list_v1(
+                tx_data.sender(),
+                &checked_input_objects,
+                &receiving_objects,
+                &self.get_object_store(),
+            )?;
         }
 
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
@@ -2067,7 +2076,6 @@ impl AuthorityState {
                 digest,
                 timestamp_ms,
                 tx_coins,
-                &inner_temporary_store.loaded_runtime_objects,
             )
             .await
     }
@@ -2905,6 +2913,32 @@ impl AuthorityState {
         Ok(new_epoch_store)
     }
 
+    /// Advance the epoch store to the next epoch for testing only.
+    /// This only manually sets all the places where we have the epoch number.
+    /// It doesn't properly reconfigure the node, hence should be only used for testing.
+    pub async fn reconfigure_for_testing(&self) {
+        let mut execution_lock = self.execution_lock_for_reconfiguration().await;
+        let epoch_store = self.epoch_store_for_testing().clone();
+        let protocol_config = epoch_store.protocol_config().clone();
+        // The current protocol config used in the epoch store may have been overridden and diverged from
+        // the protocol config definitions. That override may have now been dropped when the initial guard was dropped.
+        // We reapply the override before creating the new epoch store, to make sure that
+        // the new epoch store has the same protocol config as the current one.
+        // Since this is for testing only, we mostly like to keep the protocol config the same
+        // across epochs.
+        let _guard =
+            ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone());
+        let new_epoch_store = epoch_store.new_at_next_epoch_for_testing(
+            self.get_backing_package_store().clone(),
+            self.get_object_store().clone(),
+            &self.config.expensive_safety_check_config,
+        );
+        let new_epoch = new_epoch_store.epoch();
+        self.transaction_manager.reconfigure(new_epoch);
+        self.epoch_store.store(new_epoch_store);
+        *execution_lock = new_epoch;
+    }
+
     /// This is a temporary method to be used when we enable simplified_unwrap_then_delete.
     /// It re-accumulates state hash for the new epoch if simplified_unwrap_then_delete is enabled.
     #[instrument(level = "error", skip_all)]
@@ -3531,15 +3565,6 @@ impl AuthorityState {
                 error: "extended object indexing is not enabled on this server".into(),
             }),
         }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn loaded_child_object_versions(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
-        self.get_indexes()?
-            .loaded_child_object_versions(transaction_digest)
     }
 
     pub async fn get_transactions_for_tests(
@@ -4460,7 +4485,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Option<EndOfEpochTransactionKind> {
-        if !epoch_store.protocol_config().enable_coin_deny_list() {
+        if !epoch_store.protocol_config().enable_coin_deny_list_v1() {
             return None;
         }
 
@@ -4692,30 +4717,6 @@ impl AuthorityState {
             self.get_reconfig_api().revert_state_update(&digest)?;
         }
         info!("All uncommitted local transactions reverted");
-        Ok(())
-    }
-
-    fn check_coin_deny(
-        &self,
-        sender: SuiAddress,
-        input_objects: &CheckedInputObjects,
-        receiving_objects: &ReceivingObjects,
-    ) -> SuiResult {
-        let all_objects = input_objects
-            .inner()
-            .iter_objects()
-            .chain(receiving_objects.iter_objects());
-        let coin_types = all_objects
-            .filter_map(|obj| {
-                if obj.is_gas_coin() {
-                    None
-                } else {
-                    obj.coin_type_maybe()
-                        .map(|type_tag| type_tag.to_canonical_string(false))
-                }
-            })
-            .collect::<BTreeSet<_>>();
-        DenyList::check_coin_deny_list(sender, coin_types, &self.get_object_store())?;
         Ok(())
     }
 

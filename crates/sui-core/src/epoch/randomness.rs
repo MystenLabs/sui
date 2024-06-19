@@ -78,7 +78,7 @@ pub struct RandomnessManager {
 
     // State for randomness generation.
     next_randomness_round: RandomnessRound,
-    highest_completed_round: Arc<Mutex<RandomnessRound>>,
+    highest_completed_round: Arc<Mutex<Option<RandomnessRound>>>,
 }
 
 impl RandomnessManager {
@@ -195,8 +195,7 @@ impl RandomnessManager {
         let highest_completed_round = tables
             .randomness_highest_completed_round
             .get(&SINGLETON_KEY)
-            .expect("typed_store should not fail")
-            .unwrap_or(RandomnessRound(0));
+            .expect("typed_store should not fail");
         let mut rm = RandomnessManager {
             epoch_store: epoch_store_weak,
             epoch: committee.epoch(),
@@ -234,7 +233,7 @@ impl RandomnessManager {
                 rm.authority_info.clone(),
                 dkg_output,
                 rm.party.t(),
-                Some(highest_completed_round),
+                highest_completed_round,
             );
         } else {
             info!(
@@ -278,13 +277,16 @@ impl RandomnessManager {
             "random beacon: starting from next_randomness_round={}",
             rm.next_randomness_round.0
         );
-        if highest_completed_round + 1 < rm.next_randomness_round {
+        let first_incomplete_round = highest_completed_round
+            .map(|r| r + 1)
+            .unwrap_or(RandomnessRound(0));
+        if first_incomplete_round < rm.next_randomness_round {
             info!(
                 "random beacon: resuming generation for randomness rounds from {} to {}",
-                highest_completed_round + 1,
+                first_incomplete_round,
                 rm.next_randomness_round - 1,
             );
-            for r in highest_completed_round.0 + 1..rm.next_randomness_round.0 {
+            for r in first_incomplete_round.0..rm.next_randomness_round.0 {
                 network_handle.send_partial_signatures(committee.epoch(), RandomnessRound(r));
             }
         }
@@ -679,7 +681,7 @@ pub struct RandomnessReporter {
     epoch_store: Weak<AuthorityPerEpochStore>,
     epoch: EpochId,
     network_handle: randomness::Handle,
-    highest_completed_round: Arc<Mutex<RandomnessRound>>,
+    highest_completed_round: Arc<Mutex<Option<RandomnessRound>>>,
 }
 
 impl RandomnessReporter {
@@ -692,12 +694,12 @@ impl RandomnessReporter {
             .upgrade()
             .ok_or(SuiError::EpochEnded(self.epoch))?;
         let mut highest_completed_round = self.highest_completed_round.lock();
-        if round > *highest_completed_round {
-            *highest_completed_round = round;
+        if Some(round) > *highest_completed_round {
+            *highest_completed_round = Some(round);
             epoch_store
                 .tables()?
                 .randomness_highest_completed_round
-                .insert(&SINGLETON_KEY, &highest_completed_round)?;
+                .insert(&SINGLETON_KEY, &round)?;
             self.network_handle
                 .complete_round(epoch_store.committee().epoch(), round);
         }

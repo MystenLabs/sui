@@ -36,7 +36,7 @@ mod checked {
     };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
-    use sui_types::deny_list::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
+    use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
@@ -649,7 +649,7 @@ mod checked {
                             builder = setup_randomness_state_create(builder);
                         }
                         EndOfEpochTransactionKind::DenyListStateCreate => {
-                            assert!(protocol_config.enable_coin_deny_list());
+                            assert!(protocol_config.enable_coin_deny_list_v1());
                             builder = setup_coin_deny_list_state_create(builder);
                         }
                         EndOfEpochTransactionKind::BridgeStateCreate(_) => {

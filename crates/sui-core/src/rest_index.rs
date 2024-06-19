@@ -1,16 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
-use crate::state_accumulator::AccumulatorStore;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Instant;
 use sui_rest_api::CheckpointData;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
@@ -22,6 +27,7 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::storage::error::Error as StorageError;
+use sui_types::storage::BackingPackageStore;
 use sui_types::type_resolver::LayoutResolver;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
@@ -200,7 +206,8 @@ impl IndexStoreTables {
         &mut self,
         authority_store: &AuthorityStore,
         checkpoint_store: &CheckpointStore,
-        resolver: &mut dyn LayoutResolver,
+        epoch_store: &AuthorityPerEpochStore,
+        package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
     ) -> Result<(), StorageError> {
         info!("Initializing REST indexes");
 
@@ -209,12 +216,19 @@ impl IndexStoreTables {
         if let Some(highest_executed_checkpint) =
             checkpoint_store.get_highest_executed_checkpoint_seq_number()?
         {
-            let lowest_available_checkpoint =
-                checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
+            let lowest_available_checkpoint = checkpoint_store
+                .get_highest_pruned_checkpoint_seq_number()?
+                .saturating_add(1);
 
-            let mut batch = self.transactions.batch();
+            let checkpoint_range = lowest_available_checkpoint..=highest_executed_checkpint;
 
-            for seq in lowest_available_checkpoint..=highest_executed_checkpint {
+            info!(
+                "Indexing {} checkpoints in range {checkpoint_range:?}",
+                checkpoint_range.size_hint().0
+            );
+            let start_time = Instant::now();
+
+            checkpoint_range.into_par_iter().try_for_each(|seq| {
                 let checkpoint = checkpoint_store
                     .get_checkpoint_by_sequence_number(seq)?
                     .ok_or_else(|| StorageError::missing(format!("missing checkpoint {seq}")))?;
@@ -226,24 +240,102 @@ impl IndexStoreTables {
                     checkpoint: checkpoint.sequence_number,
                 };
 
-                batch.insert_batch(
-                    &self.transactions,
-                    contents.iter().map(|digests| (digests.transaction, info)),
-                )?;
-            }
+                self.transactions
+                    .multi_insert(contents.iter().map(|digests| (digests.transaction, info)))
+                    .map_err(StorageError::from)
+            })?;
 
-            batch.write()?;
+            info!(
+                "Indexing checkpoints took {} seconds",
+                start_time.elapsed().as_secs()
+            );
         }
 
+        let coin_index = Mutex::new(HashMap::new());
+
+        info!("Indexing Live Object Set");
+        let start_time = Instant::now();
+        std::thread::scope(|s| -> Result<(), StorageError> {
+            let mut threads = Vec::new();
+            const BITS: u8 = 5;
+            for index in 0u8..(1 << BITS) {
+                let this = &self;
+                let coin_index = &coin_index;
+                threads.push(s.spawn(move || {
+                    this.live_object_set_index_task(
+                        index,
+                        BITS,
+                        authority_store,
+                        coin_index,
+                        epoch_store,
+                        package_store,
+                    )
+                }));
+            }
+
+            // join threads
+            for thread in threads {
+                thread.join().unwrap()?;
+            }
+
+            Ok(())
+        })?;
+
+        self.coin.multi_insert(coin_index.into_inner().unwrap())?;
+
+        info!(
+            "Indexing Live Object Set took {} seconds",
+            start_time.elapsed().as_secs()
+        );
+
+        self.meta.insert(
+            &(),
+            &MetadataInfo {
+                version: CURRENT_DB_VERSION,
+            },
+        )?;
+
+        info!("Finished initializing REST indexes");
+
+        Ok(())
+    }
+
+    fn live_object_set_index_task(
+        &self,
+        task_id: u8,
+        bits: u8,
+        authority_store: &AuthorityStore,
+        coin_index: &Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
+        epoch_store: &AuthorityPerEpochStore,
+        package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+    ) -> Result<(), StorageError> {
+        let mut id_bytes = [0; ObjectID::LENGTH];
+        id_bytes[0] = task_id << (8 - bits);
+        let start_id = ObjectID::new(id_bytes);
+
+        id_bytes[0] |= (1 << (8 - bits)) - 1;
+        for element in id_bytes.iter_mut().skip(1) {
+            *element = u8::MAX;
+        }
+        let end_id = ObjectID::new(id_bytes);
+
+        let mut resolver = epoch_store
+            .executor()
+            .type_layout_resolver(Box::new(package_store));
         let mut batch = self.owner.batch();
-
-        let mut coin_index = HashMap::new();
-
-        // Iterate through live object set to initialize object-based indexes
+        let mut object_scanned: u64 = 0;
         for object in authority_store
-            .iter_live_object_set(false)
+            .perpetual_tables
+            .range_iter_live_object_set(Some(start_id), Some(end_id), false)
             .filter_map(LiveObject::to_normal)
         {
+            object_scanned += 1;
+            if object_scanned % 2_000_000 == 0 {
+                info!(
+                    "[Index] Task {}: object scanned: {}",
+                    task_id, object_scanned
+                );
+            }
             match object.owner {
                 // Owner Index
                 Owner::AddressOwner(owner) => {
@@ -254,7 +346,9 @@ impl IndexStoreTables {
 
                 // Dynamic Field Index
                 Owner::ObjectOwner(parent) => {
-                    if let Some(field_info) = try_create_dynamic_field_info(&object, resolver)? {
+                    if let Some(field_info) =
+                        try_create_dynamic_field_info(&object, resolver.as_mut())?
+                    {
                         let field_key = DynamicFieldKey::new(parent, object.id());
 
                         batch.insert_batch(&self.dynamic_field, [(field_key, field_info)])?;
@@ -268,7 +362,7 @@ impl IndexStoreTables {
             if let Some((key, value)) = try_create_coin_index_info(&object) {
                 use std::collections::hash_map::Entry;
 
-                match coin_index.entry(key) {
+                match coin_index.lock().unwrap().entry(key) {
                     Entry::Occupied(o) => {
                         let (key, v) = o.remove_entry();
                         let value = value.merge(v);
@@ -289,18 +383,6 @@ impl IndexStoreTables {
         }
 
         batch.write()?;
-
-        self.coin.multi_insert(coin_index)?;
-
-        self.meta.insert(
-            &(),
-            &MetadataInfo {
-                version: CURRENT_DB_VERSION,
-            },
-        )?;
-
-        info!("Finished initializing REST indexes");
-
         Ok(())
     }
 
@@ -509,7 +591,8 @@ impl RestIndexStore {
         path: PathBuf,
         authority_store: &AuthorityStore,
         checkpoint_store: &CheckpointStore,
-        resolver: &mut dyn LayoutResolver,
+        epoch_store: &AuthorityPerEpochStore,
+        package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
     ) -> Self {
         let tables = {
             let tables = IndexStoreTables::open(&path);
@@ -527,7 +610,12 @@ impl RestIndexStore {
                 };
 
                 tables
-                    .init(authority_store, checkpoint_store, resolver)
+                    .init(
+                        authority_store,
+                        checkpoint_store,
+                        epoch_store,
+                        package_store,
+                    )
                     .expect("unable to initialize rest index from live object set");
                 tables
             } else {

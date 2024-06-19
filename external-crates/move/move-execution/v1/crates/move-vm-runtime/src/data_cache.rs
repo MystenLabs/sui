@@ -7,7 +7,7 @@ use crate::loader::Loader;
 use move_binary_format::errors::*;
 use move_core_types::{
     account_address::AccountAddress,
-    effects::{AccountChangeSet, ChangeSet, Event, Op},
+    effects::{AccountChangeSet, ChangeSet, Op},
     gas_algebra::NumBytes,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
@@ -53,7 +53,6 @@ pub(crate) struct TransactionDataCache<'l, S> {
     remote: S,
     loader: &'l Loader,
     account_map: BTreeMap<AccountAddress, AccountDataCache>,
-    event_data: Vec<(Vec<u8>, u64, Type, MoveTypeLayout, Value)>,
 }
 
 impl<'l, S: MoveResolver> TransactionDataCache<'l, S> {
@@ -64,7 +63,6 @@ impl<'l, S: MoveResolver> TransactionDataCache<'l, S> {
             remote,
             loader,
             account_map: BTreeMap::new(),
-            event_data: vec![],
         }
     }
 
@@ -72,10 +70,10 @@ impl<'l, S: MoveResolver> TransactionDataCache<'l, S> {
     /// published modules.
     ///
     /// Gives all proper guarantees on lifetime of global data as well.
-    pub(crate) fn into_effects(mut self) -> (PartialVMResult<(ChangeSet, Vec<Event>)>, S) {
+    pub(crate) fn into_effects(mut self) -> (PartialVMResult<ChangeSet>, S) {
         (self.impl_into_effects(), self.remote)
     }
-    fn impl_into_effects(&mut self) -> PartialVMResult<(ChangeSet, Vec<Event>)> {
+    fn impl_into_effects(&mut self) -> PartialVMResult<ChangeSet> {
         let mut change_set = ChangeSet::new();
         for (addr, account_data_cache) in std::mem::take(&mut self.account_map).into_iter() {
             let mut modules = BTreeMap::new();
@@ -123,16 +121,7 @@ impl<'l, S: MoveResolver> TransactionDataCache<'l, S> {
             }
         }
 
-        let mut events = vec![];
-        for (guid, seq_num, ty, ty_layout, val) in std::mem::take(&mut self.event_data) {
-            let ty_tag = self.loader.type_to_type_tag(&ty)?;
-            let blob = val
-                .simple_serialize(&ty_layout)
-                .ok_or_else(|| PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR))?;
-            events.push((guid, seq_num, ty_tag, blob))
-        }
-
-        Ok((change_set, events))
+        Ok(change_set)
     }
 
     pub(crate) fn num_mutated_accounts(&self, sender: &AccountAddress) -> u64 {
