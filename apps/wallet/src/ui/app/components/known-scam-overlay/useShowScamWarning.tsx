@@ -2,22 +2,40 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ampli } from '_src/shared/analytics/ampli';
+import { type Transaction } from '@mysten/sui/transactions';
 import { useEffect } from 'react';
 
-import { useCheckBlocklist } from '../../hooks/useDomainBlocklist';
+import { type RequestType } from './types';
+import { useDappPreflight } from './useDappPreflight';
 
-export function useShowScamWarning({ hostname }: { hostname?: string }) {
-	const { data, isPending, isError } = useCheckBlocklist(hostname);
+export function useShowScamWarning({
+	url,
+	requestType,
+	transaction,
+	message,
+}: {
+	url?: URL;
+	requestType: RequestType;
+	transaction?: Transaction;
+	message?: string;
+}) {
+	const { data, isPending, isError } = useDappPreflight({
+		requestType,
+		origin: url?.origin,
+		transaction,
+		message,
+	});
 
 	useEffect(() => {
-		if (data?.block && hostname) {
-			ampli.interactedWithMaliciousDomain({ hostname });
+		if (data?.block.enabled && url?.hostname) {
+			ampli.interactedWithMaliciousDomain({ hostname: url.hostname });
 		}
-	}, [data, hostname]);
+	}, [data, url]);
 
 	return {
-		isOpen: !!data?.block,
-		isPending: isPending,
+		data,
+		isOpen: !!data?.block.enabled,
+		isPending,
 		isError,
 	};
 }
