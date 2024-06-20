@@ -777,14 +777,14 @@ impl<U: R2D2Connection> IndexerReader<U> {
                 let package = Hex::encode(package.to_vec());
                 match (module, function) {
                     (Some(module), Some(function)) => (
-                        "tx_calls".into(),
+                        "tx_calls_fun".into(),
                         format!(
                             "package = '\\x{}'::bytea AND module = '{}' AND func = '{}'",
                             package, module, function
                         ),
                     ),
                     (Some(module), None) => (
-                        "tx_calls".into(),
+                        "tx_calls_mod".into(),
                         format!(
                             "package = '\\x{}'::bytea AND module = '{}'",
                             package, module
@@ -792,11 +792,11 @@ impl<U: R2D2Connection> IndexerReader<U> {
                     ),
                     (None, Some(_)) => {
                         return Err(IndexerError::InvalidArgumentError(
-                            "Function cannot be present wihtout Module.".into(),
+                            "Function cannot be present without Module.".into(),
                         ));
                     }
                     (None, None) => (
-                        "tx_calls".into(),
+                        "tx_calls_pkg".into(),
                         format!("package = '\\x{}'::bytea", package),
                     ),
                 }
