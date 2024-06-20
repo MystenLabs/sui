@@ -15,14 +15,15 @@ use std::time::{Instant, SystemTime};
 use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, Weight};
 use tracing::info;
 
+/// The type of request client.
 #[derive(Hash, Eq, PartialEq, Debug)]
-enum IpType {
-    Connection,
-    Proxy,
+enum ClientType {
+    Direct,
+    ThroughFullnode,
 }
 
 #[derive(Hash, Eq, PartialEq, Debug)]
-struct SketchKey(IpAddr, IpType);
+struct SketchKey(IpAddr, ClientType);
 
 pub struct TrafficSketch {
     /// Circular buffer Count Min Sketches representing a sliding window
@@ -133,21 +134,21 @@ impl TrafficSketch {
 
 #[derive(Clone, Debug)]
 pub struct TrafficTally {
-    pub connection_ip: Option<IpAddr>,
-    pub proxy_ip: Option<IpAddr>,
+    pub direct: Option<IpAddr>,
+    pub through_fullnode: Option<IpAddr>,
     pub error_weight: Weight,
     pub timestamp: SystemTime,
 }
 
 impl TrafficTally {
     pub fn new(
-        connection_ip: Option<IpAddr>,
-        proxy_ip: Option<IpAddr>,
+        direct: Option<IpAddr>,
+        through_fullnode: Option<IpAddr>,
         error_weight: Weight,
     ) -> Self {
         Self {
-            connection_ip,
-            proxy_ip,
+            direct,
+            through_fullnode,
             error_weight,
             timestamp: SystemTime::now(),
         }
@@ -156,8 +157,8 @@ impl TrafficTally {
 
 #[derive(Clone, Debug, Default)]
 pub struct PolicyResponse {
-    pub block_connection_ip: Option<IpAddr>,
-    pub block_proxy_ip: Option<IpAddr>,
+    pub block_client: Option<IpAddr>,
+    pub block_proxied_client: Option<IpAddr>,
 }
 
 pub trait Policy {
@@ -225,16 +226,16 @@ impl TrafficControlPolicy {
 pub struct FreqThresholdPolicy {
     config: PolicyConfig,
     sketch: TrafficSketch,
-    connection_threshold: u64,
-    proxy_threshold: u64,
+    client_threshold: u64,
+    proxied_client_threshold: u64,
 }
 
 impl FreqThresholdPolicy {
     pub fn new(
         config: PolicyConfig,
         FreqThresholdConfig {
-            connection_threshold,
-            proxy_threshold,
+            client_threshold,
+            proxied_client_threshold,
             window_size_secs,
             update_interval_secs,
             sketch_capacity,
@@ -252,28 +253,28 @@ impl FreqThresholdPolicy {
         Self {
             config,
             sketch,
-            connection_threshold,
-            proxy_threshold,
+            client_threshold,
+            proxied_client_threshold,
         }
     }
 
     fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
-        let block_connection_ip = if let Some(ip) = tally.connection_ip {
-            let key = SketchKey(ip, IpType::Connection);
+        let block_client = if let Some(source) = tally.direct {
+            let key = SketchKey(source, ClientType::Direct);
             self.sketch.increment_count(&key);
-            if self.sketch.get_request_rate(&key) >= self.connection_threshold as f64 {
-                Some(ip)
+            if self.sketch.get_request_rate(&key) >= self.client_threshold as f64 {
+                Some(source)
             } else {
                 None
             }
         } else {
             None
         };
-        let block_proxy_ip = if let Some(ip) = tally.proxy_ip {
-            let key = SketchKey(ip, IpType::Proxy);
+        let block_proxied_client = if let Some(source) = tally.through_fullnode {
+            let key = SketchKey(source, ClientType::ThroughFullnode);
             self.sketch.increment_count(&key);
-            if self.sketch.get_request_rate(&key) >= self.proxy_threshold as f64 {
-                Some(ip)
+            if self.sketch.get_request_rate(&key) >= self.proxied_client_threshold as f64 {
+                Some(source)
             } else {
                 None
             }
@@ -281,8 +282,8 @@ impl FreqThresholdPolicy {
             None
         };
         PolicyResponse {
-            block_connection_ip,
-            block_proxy_ip,
+            block_client,
+            block_proxied_client,
         }
     }
 
@@ -335,23 +336,23 @@ impl TestNConnIPPolicy {
     }
 
     fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
-        let ip = if let Some(ip) = tally.connection_ip {
-            ip
+        let client = if let Some(client) = tally.direct {
+            client
         } else {
             return PolicyResponse::default();
         };
 
         // increment the count for the IP
         let mut frequencies = self.frequencies.write();
-        let count = frequencies.entry(tally.connection_ip.unwrap()).or_insert(0);
+        let count = frequencies.entry(client).or_insert(0);
         *count += 1;
         PolicyResponse {
-            block_connection_ip: if *count >= self.threshold {
-                Some(ip)
+            block_client: if *count >= self.threshold {
+                Some(client)
             } else {
                 None
             },
-            block_proxy_ip: None,
+            block_proxied_client: None,
         }
     }
 
@@ -403,8 +404,8 @@ mod tests {
         let mut policy = TrafficControlPolicy::FreqThreshold(FreqThresholdPolicy::new(
             PolicyConfig::default(),
             FreqThresholdConfig {
-                connection_threshold: 5,
-                proxy_threshold: 2,
+                client_threshold: 5,
+                proxied_client_threshold: 2,
                 window_size_secs: 5,
                 update_interval_secs: 1,
                 ..Default::default()
@@ -414,20 +415,20 @@ mod tests {
         // same fullnode, thus have the same connection IP on
         // validator, but different proxy IPs
         let alice = TrafficTally {
-            connection_ip: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
-            proxy_ip: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
+            direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
+            through_fullnode: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
             error_weight: Weight::zero(),
             timestamp: SystemTime::now(),
         };
         let bob = TrafficTally {
-            connection_ip: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
-            proxy_ip: Some(IpAddr::V4(Ipv4Addr::new(4, 3, 2, 1))),
+            direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
+            through_fullnode: Some(IpAddr::V4(Ipv4Addr::new(4, 3, 2, 1))),
             error_weight: Weight::zero(),
             timestamp: SystemTime::now(),
         };
         let charlie = TrafficTally {
-            connection_ip: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
-            proxy_ip: Some(IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8))),
+            direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
+            through_fullnode: Some(IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8))),
             error_weight: Weight::zero(),
             timestamp: SystemTime::now(),
         };
@@ -435,19 +436,19 @@ mod tests {
         // initial 2 tallies for alice, should not block
         for _ in 0..2 {
             let response = policy.handle_tally(alice.clone());
-            assert_eq!(response.block_proxy_ip, None);
-            assert_eq!(response.block_connection_ip, None);
+            assert_eq!(response.block_proxied_client, None);
+            assert_eq!(response.block_client, None);
         }
 
         // meanwhile bob spams 10 requests at once and is blocked
         for _ in 0..9 {
             let response = policy.handle_tally(bob.clone());
-            assert_eq!(response.block_connection_ip, None);
-            assert_eq!(response.block_proxy_ip, None);
+            assert_eq!(response.block_client, None);
+            assert_eq!(response.block_proxied_client, None);
         }
         let response = policy.handle_tally(bob.clone());
-        assert_eq!(response.block_connection_ip, None);
-        assert_eq!(response.block_proxy_ip, bob.proxy_ip);
+        assert_eq!(response.block_client, None);
+        assert_eq!(response.block_proxied_client, bob.through_fullnode);
 
         // 2 more tallies, so far we are above 2 tallies
         // per second, but over the average window of 5 seconds
@@ -455,40 +456,40 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         for _ in 0..2 {
             let response = policy.handle_tally(alice.clone());
-            assert_eq!(response.block_connection_ip, None);
-            assert_eq!(response.block_proxy_ip, None);
+            assert_eq!(response.block_client, None);
+            assert_eq!(response.block_proxied_client, None);
         }
         // bob is no longer blocked, as we moved past the bursty traffic
         // in the sliding window
         let _ = policy.handle_tally(bob.clone());
         let response = policy.handle_tally(bob.clone());
-        assert_eq!(response.block_connection_ip, None);
-        assert_eq!(response.block_proxy_ip, bob.proxy_ip);
+        assert_eq!(response.block_client, None);
+        assert_eq!(response.block_proxied_client, bob.through_fullnode);
 
         // close to threshold for alice, but still below
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         for i in 0..5 {
             let response = policy.handle_tally(alice.clone());
-            assert_eq!(response.block_connection_ip, None, "Blocked at i = {}", i);
-            assert_eq!(response.block_proxy_ip, None);
+            assert_eq!(response.block_client, None, "Blocked at i = {}", i);
+            assert_eq!(response.block_proxied_client, None);
         }
 
         // should block alice now
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         let response = policy.handle_tally(alice.clone());
-        assert_eq!(response.block_connection_ip, None);
-        assert_eq!(response.block_proxy_ip, alice.proxy_ip);
+        assert_eq!(response.block_client, None);
+        assert_eq!(response.block_proxied_client, alice.through_fullnode);
 
         // spam through charlie to block connection
         for i in 0..2 {
             let response = policy.handle_tally(charlie.clone());
-            assert_eq!(response.block_connection_ip, None, "Blocked at i = {}", i);
-            assert_eq!(response.block_proxy_ip, None);
+            assert_eq!(response.block_client, None, "Blocked at i = {}", i);
+            assert_eq!(response.block_proxied_client, None);
         }
         // Now we block connection IP
         let response = policy.handle_tally(charlie.clone());
-        assert_eq!(response.block_proxy_ip, None);
-        assert_eq!(response.block_connection_ip, charlie.connection_ip);
+        assert_eq!(response.block_proxied_client, None);
+        assert_eq!(response.block_client, charlie.direct);
 
         // Ensure that if we wait another second, we are no longer blocked
         // as the bursty first second has finally rotated out of the sliding
@@ -496,8 +497,8 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         for i in 0..3 {
             let response = policy.handle_tally(charlie.clone());
-            assert_eq!(response.block_connection_ip, None, "Blocked at i = {}", i);
-            assert_eq!(response.block_proxy_ip, None);
+            assert_eq!(response.block_client, None, "Blocked at i = {}", i);
+            assert_eq!(response.block_proxied_client, None);
         }
     }
 

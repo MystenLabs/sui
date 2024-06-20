@@ -28,12 +28,12 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tracing::{debug, error, info, warn};
 
-type BlocklistT = Arc<DashMap<IpAddr, SystemTime>>;
+type Blocklist = Arc<DashMap<IpAddr, SystemTime>>;
 
 #[derive(Clone)]
 struct Blocklists {
-    connection_ips: BlocklistT,
-    proxy_ips: BlocklistT,
+    clients: Blocklist,
+    proxied_clients: Blocklist,
 }
 
 #[derive(Clone)]
@@ -84,8 +84,8 @@ impl TrafficController {
         let ret = Self {
             tally_channel: tx,
             blocklists: Blocklists {
-                connection_ips: Arc::new(DashMap::new()),
-                proxy_ips: Arc::new(DashMap::new()),
+                clients: Arc::new(DashMap::new()),
+                proxied_clients: Arc::new(DashMap::new()),
             },
             metrics: metrics.clone(),
             dry_run_mode: policy_config.dry_run,
@@ -132,9 +132,9 @@ impl TrafficController {
     }
 
     /// Handle check with dry-run mode considered
-    pub async fn check(&self, connection_ip: Option<IpAddr>, proxy_ip: Option<IpAddr>) -> bool {
+    pub async fn check(&self, client: &Option<IpAddr>, proxied_client: &Option<IpAddr>) -> bool {
         match (
-            self.check_impl(connection_ip, proxy_ip).await,
+            self.check_impl(client, proxied_client).await,
             self.dry_run_mode(),
         ) {
             // check succeeded
@@ -142,8 +142,8 @@ impl TrafficController {
             // check failed while in dry-run mode
             (false, true) => {
                 debug!(
-                    "Dry run mode: Blocked request from connection IP {:?}, proxy IP: {:?}",
-                    connection_ip, proxy_ip
+                    "Dry run mode: Blocked request from client {:?}, proxied client: {:?}",
+                    client, proxied_client
                 );
                 self.metrics.num_dry_run_blocked_requests.inc();
                 true
@@ -156,21 +156,22 @@ impl TrafficController {
     /// Returns true if the connection is allowed, false if it is blocked
     pub async fn check_impl(
         &self,
-        connection_ip: Option<IpAddr>,
-        proxy_ip: Option<IpAddr>,
+        client: &Option<IpAddr>,
+        proxied_client: &Option<IpAddr>,
     ) -> bool {
-        let connection_check = self.check_and_clear_blocklist(
-            connection_ip,
-            self.blocklists.connection_ips.clone(),
+        let client_check = self.check_and_clear_blocklist(
+            client,
+            self.blocklists.clients.clone(),
             &self.metrics.connection_ip_blocklist_len,
         );
-        let proxy_check = self.check_and_clear_blocklist(
-            proxy_ip,
-            self.blocklists.proxy_ips.clone(),
+        let proxied_client_check = self.check_and_clear_blocklist(
+            proxied_client,
+            self.blocklists.proxied_clients.clone(),
             &self.metrics.proxy_ip_blocklist_len,
         );
-        let (conn_check, proxy_check) = futures::future::join(connection_check, proxy_check).await;
-        conn_check && proxy_check
+        let (client_check, proxied_client_check) =
+            futures::future::join(client_check, proxied_client_check).await;
+        client_check && proxied_client_check
     }
 
     pub fn dry_run_mode(&self) -> bool {
@@ -179,19 +180,19 @@ impl TrafficController {
 
     async fn check_and_clear_blocklist(
         &self,
-        ip: Option<IpAddr>,
-        blocklist: BlocklistT,
+        client: &Option<IpAddr>,
+        blocklist: Blocklist,
         blocklist_len_gauge: &IntGauge,
     ) -> bool {
-        let ip = match ip {
-            Some(ip) => ip,
+        let client = match client {
+            Some(client) => client,
             None => return true,
         };
         let now = SystemTime::now();
         // the below two blocks cannot be nested, otherwise we will deadlock
         // due to aquiring the lock on get, then holding across the remove
         let (should_block, should_remove) = {
-            match blocklist.get(&ip) {
+            match blocklist.get(client) {
                 Some(expiration) if now >= *expiration => (false, true),
                 None => (false, false),
                 _ => (true, false),
@@ -199,7 +200,7 @@ impl TrafficController {
         };
         if should_remove {
             blocklist_len_gauge.dec();
-            blocklist.remove(&ip);
+            blocklist.remove(client);
         }
         !should_block
     }
@@ -360,39 +361,39 @@ async fn handle_policy_response(
     metrics: Arc<TrafficControllerMetrics>,
 ) {
     let PolicyResponse {
-        block_connection_ip,
-        block_proxy_ip,
+        block_client,
+        block_proxied_client,
     } = response;
     let PolicyConfig {
         connection_blocklist_ttl_sec,
         proxy_blocklist_ttl_sec,
         ..
     } = policy_config;
-    if let Some(ip) = block_connection_ip {
+    if let Some(client) = block_client {
         if blocklists
-            .connection_ips
+            .clients
             .insert(
-                ip,
+                client,
                 SystemTime::now() + Duration::from_secs(*connection_blocklist_ttl_sec),
             )
             .is_none()
         {
-            // Only increment the metric if the IP was not already blocked
-            debug!("Blocking connection IP");
+            // Only increment the metric if the client was not already blocked
+            debug!("Blocking client: {:?}", client);
             metrics.connection_ip_blocklist_len.inc();
         }
     }
-    if let Some(ip) = block_proxy_ip {
+    if let Some(client) = block_proxied_client {
         if blocklists
-            .proxy_ips
+            .proxied_clients
             .insert(
-                ip,
+                client,
                 SystemTime::now() + Duration::from_secs(*proxy_blocklist_ttl_sec),
             )
             .is_none()
         {
-            // Only increment the metric if the IP was not already blocked
-            debug!("Blocking proxy IP");
+            // Only increment the metric if the client was not already blocked
+            debug!("Blocking proxied client: {:?}", client);
             metrics.proxy_ip_blocklist_len.inc();
         }
     }
@@ -406,8 +407,8 @@ async fn delegate_policy_response(
     metrics: Arc<TrafficControllerMetrics>,
 ) -> Result<(), reqwest::Error> {
     let PolicyResponse {
-        block_connection_ip,
-        block_proxy_ip,
+        block_client,
+        block_proxied_client,
     } = response;
     let PolicyConfig {
         connection_blocklist_ttl_sec,
@@ -415,16 +416,16 @@ async fn delegate_policy_response(
         ..
     } = policy_config;
     let mut addresses = vec![];
-    if let Some(ip) = block_connection_ip {
-        debug!("Delegating connection IP blocking to firewall");
+    if let Some(client_id) = block_client {
+        debug!("Delegating client blocking to firewall");
         addresses.push(BlockAddress {
-            source_address: ip.to_string(),
+            source_address: client_id.to_string(),
             destination_port,
             ttl: *connection_blocklist_ttl_sec,
         });
     }
-    if let Some(ip) = block_proxy_ip {
-        debug!("Delegating proxy IP blocking to firewall");
+    if let Some(ip) = block_proxied_client {
+        debug!("Delegating proxied client blocking to firewall");
         addresses.push(BlockAddress {
             source_address: ip.to_string(),
             destination_port,
@@ -603,15 +604,15 @@ impl TrafficSim {
         let start = Instant::now();
 
         while start.elapsed() < duration {
-            let connection_ip = Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, task_num)));
-            let allowed = controller.check(connection_ip, None).await;
+            let client = Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, task_num)));
+            let allowed = controller.check(&client, &None).await;
             if allowed {
                 if currently_blocked {
                     total_time_blocked += time_blocked_start.elapsed();
                     currently_blocked = false;
                 }
                 controller.tally(TrafficTally::new(
-                    connection_ip,
+                    client,
                     // TODO add proxy IP for testing
                     None,
                     // TODO add weight adjustment

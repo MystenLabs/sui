@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::{fmt::Debug, path::PathBuf};
+use std::path::PathBuf;
 
 // These values set to loosely attempt to limit
 // memory usage for a single sketch to ~20MB
@@ -15,6 +15,19 @@ pub const DEFAULT_SKETCH_TOLERANCE: f64 = 0.2;
 use rand::distributions::Distribution;
 
 const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
+
+/// The source that should be used to identify the client's
+/// IP address. To be used to configure cases where a node has
+/// infra running in front of the node that is separate from the
+/// protocol, such as a load balancer. Note that this is not the
+/// same as the client type (e.g a direct client vs a proxy client,
+/// as in the case of a fullnode driving requests from many clients).
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub enum ClientIdSource {
+    #[default]
+    SocketAddr,
+    XForwardedFor,
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Weight(f32);
@@ -83,10 +96,10 @@ fn default_drain_timeout() -> u64 {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct FreqThresholdConfig {
-    #[serde(default = "default_connection_threshold")]
-    pub connection_threshold: u64,
-    #[serde(default = "default_proxy_threshold")]
-    pub proxy_threshold: u64,
+    #[serde(default = "default_client_threshold")]
+    pub client_threshold: u64,
+    #[serde(default = "default_proxied_client_threshold")]
+    pub proxied_client_threshold: u64,
     #[serde(default = "default_window_size_secs")]
     pub window_size_secs: u64,
     #[serde(default = "default_update_interval_secs")]
@@ -102,8 +115,8 @@ pub struct FreqThresholdConfig {
 impl Default for FreqThresholdConfig {
     fn default() -> Self {
         Self {
-            connection_threshold: default_connection_threshold(),
-            proxy_threshold: default_proxy_threshold(),
+            client_threshold: default_client_threshold(),
+            proxied_client_threshold: default_proxied_client_threshold(),
             window_size_secs: default_window_size_secs(),
             update_interval_secs: default_update_interval_secs(),
             sketch_capacity: default_sketch_capacity(),
@@ -113,16 +126,17 @@ impl Default for FreqThresholdConfig {
     }
 }
 
-fn default_connection_threshold() -> u64 {
-    // by default only block connection IPs with unreasonably
-    // high qps, as a single fullnode could be routing the vast
-    // majority of all traffic in normal operations. If used as a
-    // spam policy, all requests would count against this threshold
-    // within the window time. In practice this should always be set
+fn default_client_threshold() -> u64 {
+    // by default only block client with unreasonably
+    // high qps, as a client could be a single fullnode proxying
+    // the majority of traffic from many behaving clients in normal
+    // operations. If used as a spam policy, all requests would
+    // count against this threshold within the window time. In
+    // practice this should always be set
     1_000_000
 }
 
-fn default_proxy_threshold() -> u64 {
+fn default_proxied_client_threshold() -> u64 {
     10
 }
 
@@ -174,6 +188,8 @@ pub enum PolicyType {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct PolicyConfig {
+    #[serde(default = "default_client_id_source")]
+    pub client_id_source: ClientIdSource,
     #[serde(default = "default_connection_blocklist_ttl_sec")]
     pub connection_blocklist_ttl_sec: u64,
     #[serde(default)]
@@ -193,6 +209,7 @@ pub struct PolicyConfig {
 impl Default for PolicyConfig {
     fn default() -> Self {
         Self {
+            client_id_source: default_client_id_source(),
             connection_blocklist_ttl_sec: 0,
             proxy_blocklist_ttl_sec: 0,
             spam_policy_type: PolicyType::NoOp,
@@ -202,6 +219,10 @@ impl Default for PolicyConfig {
             dry_run: default_dry_run(),
         }
     }
+}
+
+pub fn default_client_id_source() -> ClientIdSource {
+    ClientIdSource::SocketAddr
 }
 
 pub fn default_connection_blocklist_ttl_sec() -> u64 {
