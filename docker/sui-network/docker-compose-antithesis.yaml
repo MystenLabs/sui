@@ -9,7 +9,7 @@ services:
     container_name: validator1
     hostname: validator1
     environment:
-      - RUST_BACKTRACE=1
+      - RUST_BACKTRACE=full
       - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
@@ -36,7 +36,7 @@ services:
     container_name: validator2
     hostname: validator2
     environment:
-      - RUST_BACKTRACE=1
+      - RUST_BACKTRACE=full
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
@@ -63,7 +63,7 @@ services:
     container_name: validator3
     hostname: validator3
     environment:
-      - RUST_BACKTRACE=1
+      - RUST_BACKTRACE=full
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
@@ -90,7 +90,7 @@ services:
     container_name: validator4
     hostname: validator4
     environment:
-      - RUST_BACKTRACE=1
+      - RUST_BACKTRACE=full
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
@@ -117,7 +117,7 @@ services:
     hostname: fullnode1
     container_name: fullnode1
     environment:
-      - RUST_BACKTRACE=1
+      - RUST_BACKTRACE=full
       - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
