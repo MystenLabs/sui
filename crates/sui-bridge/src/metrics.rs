@@ -25,7 +25,9 @@ pub struct BridgeMetrics {
     pub(crate) eth_watcher_received_events: IntCounter,
     pub(crate) eth_watcher_received_actions: IntCounter,
     pub(crate) eth_watcher_unrecognized_events: IntCounter,
+    pub(crate) action_executor_already_processed_actions: IntCounter,
     pub(crate) action_executor_signing_queue_received_actions: IntCounter,
+    pub(crate) action_executor_signing_queue_skipped_actions: IntCounter,
     pub(crate) action_executor_execution_queue_received_actions: IntCounter,
 
     pub(crate) gas_coin_balance: IntGauge,
@@ -128,9 +130,21 @@ impl BridgeMetrics {
                 registry,
             )
             .unwrap(),
+            action_executor_already_processed_actions: register_int_counter_with_registry!(
+                "bridge_action_executor_already_processed_actions",
+                "Total number of already processed actions action executor",
+                registry,
+            )
+            .unwrap(),
             action_executor_signing_queue_received_actions: register_int_counter_with_registry!(
                 "bridge_action_executor_signing_queue_received_actions",
                 "Total number of received actions in action executor signing queue",
+                registry,
+            )
+            .unwrap(),
+            action_executor_signing_queue_skipped_actions: register_int_counter_with_registry!(
+                "bridge_action_executor_signing_queue_skipped_actions",
+                "Total number of skipped actions in action executor signing queue",
                 registry,
             )
             .unwrap(),

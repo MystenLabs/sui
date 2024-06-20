@@ -114,6 +114,7 @@ where
     }
 
     // TODO: define a type for block number for readability
+    // TODO: add a metrics for current start block
     async fn run_event_listening_task(
         contract_address: EthAddress,
         mut start_block: u64,

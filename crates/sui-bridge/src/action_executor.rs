@@ -4,6 +4,7 @@
 //! BridgeActionExecutor receives BridgeActions (from BridgeOrchestrator),
 //! collects bridge authority signatures and submit signatures on chain.
 
+use crate::retry_with_max_elapsed_time;
 use arc_swap::ArcSwap;
 use mysten_metrics::spawn_logged_monitored_task;
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -37,6 +38,7 @@ use crate::{
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
+use tokio::time::Duration;
 use tracing::{error, info, instrument, warn, Instrument};
 
 pub const CHANNEL_SIZE: usize = 1000;
@@ -215,6 +217,16 @@ where
         }
     }
 
+    async fn should_proceed_signing(sui_client: &Arc<SuiClient<C>>) -> bool {
+        let Ok(Ok(is_paused)) =
+            retry_with_max_elapsed_time!(sui_client.is_bridge_paused(), Duration::from_secs(600))
+        else {
+            error!("Failed to get bridge status after retry");
+            return false;
+        };
+        !is_paused
+    }
+
     #[instrument(level = "error", skip_all, fields(action_key=?action.0.key(), attempt_times=?action.1))]
     async fn handle_signing_task(
         semaphore: &Arc<Semaphore>,
@@ -233,6 +245,17 @@ where
         metrics.action_executor_signing_queue_received_actions.inc();
         let action_key = action.0.key();
         info!("Received action for signing: {:?}", action.0);
+
+        // TODO: this is a temporary fix to avoid signing when the bridge is paused.
+        // but the way is implemented is not ideal:
+        // 1. it should check the direction
+        // 2. should use a better mechanism to check the bridge status instead of polling for each action
+        let should_proceed = Self::should_proceed_signing(sui_client).await;
+        if !should_proceed {
+            metrics.action_executor_signing_queue_skipped_actions.inc();
+            warn!("skipping signing task: {:?}", action_key);
+            return;
+        }
 
         let auth_agg_clone = auth_agg.clone();
         let signing_queue_sender_clone = signing_queue_sender.clone();
@@ -264,6 +287,7 @@ where
         sui_client: &Arc<SuiClient<C>>,
         action: &BridgeAction,
         store: &Arc<BridgeOrchestratorTables>,
+        metrics: &Arc<BridgeMetrics>,
     ) -> bool {
         let status = sui_client
             .get_token_transfer_action_onchain_status_until_success(
@@ -277,6 +301,7 @@ where
                     "Action already approved or claimed, removing action from pending logs: {:?}",
                     action
                 );
+                metrics.action_executor_already_processed_actions.inc();
                 store
                     .remove_pending_actions(&[action.digest()])
                     .unwrap_or_else(|e| {
@@ -290,6 +315,8 @@ where
         }
     }
 
+    // TODO: introduce a way to properly stagger the handling
+    // for various validators.
     async fn request_signatures(
         semaphore: Arc<Semaphore>,
         sui_client: Arc<SuiClient<C>>,
@@ -316,8 +343,13 @@ where
         };
 
         // If the action is already processed, skip it.
-        if Self::handle_already_processed_token_transfer_action_maybe(&sui_client, &action, &store)
-            .await
+        if Self::handle_already_processed_token_transfer_action_maybe(
+            &sui_client,
+            &action,
+            &store,
+            &metrics,
+        )
+        .await
         {
             return;
         }
@@ -443,8 +475,10 @@ where
         let ceriticate_clone = certificate.clone();
 
         // Check once: if the action is already processed, skip it.
-        if Self::handle_already_processed_token_transfer_action_maybe(sui_client, action, store)
-            .await
+        if Self::handle_already_processed_token_transfer_action_maybe(
+            sui_client, action, store, metrics,
+        )
+        .await
         {
             info!("Action already processed, skipping");
             return;
@@ -480,8 +514,10 @@ where
         let tx_digest = *signed_tx.digest();
 
         // Check twice: If the action is already processed, skip it.
-        if Self::handle_already_processed_token_transfer_action_maybe(sui_client, action, store)
-            .await
+        if Self::handle_already_processed_token_transfer_action_maybe(
+            sui_client, action, store, metrics,
+        )
+        .await
         {
             info!("Action already processed, skipping");
             return;
