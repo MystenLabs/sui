@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::{hash::HashFunction, traits::ToFromBytes};
 use p256::pkcs8::DecodePublicKey;
 use passkey::{
     authenticator::{Authenticator, UserValidationMethod},
@@ -17,12 +17,11 @@ use passkey::{
         Bytes, Passkey,
     },
 };
-use shared_crypto::intent::{Intent, IntentMessage};
+use shared_crypto::intent::{Intent, IntentMessage, INTENT_PREFIX_LENGTH};
 use std::net::SocketAddr;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::crypto::Signature;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
@@ -31,6 +30,10 @@ use sui_types::{
     crypto::{PublicKey, SignatureScheme},
     passkey_authenticator::{to_signing_digest, PasskeyAuthenticator},
     transaction::TransactionData,
+};
+use sui_types::{
+    crypto::{DefaultHash, Signature},
+    passkey_authenticator::to_tx_digest,
 };
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -82,6 +85,8 @@ async fn execute_tx(tx: Transaction, test_cluster: &TestCluster) -> SuiResult {
 async fn create_credential_and_sign_test_tx(
     test_cluster: &TestCluster,
     sender: Option<SuiAddress>,
+    change_intent: bool,
+    change_tx: bool,
 ) -> PasskeyResponse<TransactionData> {
     // set up authenticator and client
     let my_aaguid = Aaguid::new_empty();
@@ -91,7 +96,7 @@ async fn create_credential_and_sign_test_tx(
     let mut my_client = Client::new(my_authenticator);
     let origin = Url::parse("https://www.sui.io").unwrap();
 
-    // create credential
+    // Create credential.
     let challenge_bytes_from_rp: Bytes = random_vec(32).into();
     let user_entity = PublicKeyCredentialUserEntity {
         id: random_vec(32).into(),
@@ -129,7 +134,7 @@ async fn create_credential_and_sign_test_tx(
     )
     .unwrap();
 
-    // derive compact pubkey from DER format
+    // Derive compact pubkey from DER format.
     let encoded_point = verifying_key.to_encoded_point(false);
     let x = encoded_point.x();
     let y = encoded_point.y();
@@ -138,7 +143,7 @@ async fn create_credential_and_sign_test_tx(
     pk_bytes.extend_from_slice(x.unwrap());
     let pk = PublicKey::try_from_bytes(SignatureScheme::PasskeyAuthenticator, &pk_bytes).unwrap();
 
-    // compute sui address and make a test transaction
+    // Compute sui address as sender, fund gas and make a test transaction.
     let sender = match sender {
         Some(s) => s,
         None => SuiAddress::from(&pk),
@@ -152,10 +157,22 @@ async fn create_credential_and_sign_test_tx(
         .build();
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
 
-    // compute the challenge = blake2b_hash(intent_msg(tx)) for passkey credential request
-    let passkey_digest = to_signing_digest(&intent_msg);
+    // Compute the challenge = blake2b_hash(intent_msg(tx)) for passkey credential request.
+    // If change_intent, mangle the intent bytes. If change_tx, mangle the hashed tx bytes.
+    let mut extended = [0; INTENT_PREFIX_LENGTH + DefaultHash::OUTPUT_SIZE];
+    let passkey_digest = if change_intent {
+        extended[..INTENT_PREFIX_LENGTH].copy_from_slice(&Intent::personal_message().to_bytes());
+        extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&to_tx_digest(&intent_msg));
+        extended
+    } else if change_tx {
+        extended[..INTENT_PREFIX_LENGTH].copy_from_slice(&intent_msg.intent.to_bytes());
+        extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&random_vec(32));
+        extended
+    } else {
+        to_signing_digest(&intent_msg)
+    };
 
-    // request a signature from passkey with challenge set to passkey_digest.
+    // Request a signature from passkey with challenge set to passkey_digest.
     let credential_request = CredentialRequestOptions {
         public_key: PublicKeyCredentialRequestOptions {
             challenge: Bytes::from(passkey_digest.to_vec()),
@@ -175,7 +192,7 @@ async fn create_credential_and_sign_test_tx(
         .await
         .unwrap();
 
-    // parse signature from der format in response and normalize it to lower s.
+    // Parse signature from der format in response and normalize it to lower s.
     let sig_bytes_der = authenticated_cred.response.signature.as_slice();
     let sig = p256::ecdsa::Signature::from_der(sig_bytes_der).unwrap();
     let sig_bytes = sig.normalize_s().unwrap_or(sig).to_bytes();
@@ -184,7 +201,7 @@ async fn create_credential_and_sign_test_tx(
     user_sig_bytes.extend_from_slice(&sig_bytes);
     user_sig_bytes.extend_from_slice(&pk_bytes);
 
-    // parse authenticator_data and client_data_json from response.
+    // Parse authenticator_data and client_data_json from response.
     let authenticator_data = authenticated_cred.response.authenticator_data.as_slice();
     let client_data_json = authenticated_cred.response.client_data_json.as_slice();
 
@@ -196,7 +213,7 @@ async fn create_credential_and_sign_test_tx(
     }
 }
 
-fn make_passkey_tx(response: PasskeyResponse<TransactionData>) -> Transaction {
+fn make_good_passkey_tx(response: PasskeyResponse<TransactionData>) -> Transaction {
     let sig = GenericSignature::PasskeyAuthenticator(
         PasskeyAuthenticator::new_for_testing(
             response.authenticator_data,
@@ -216,8 +233,8 @@ async fn test_passkey_feature_deny() {
         config
     });
     let test_cluster = TestClusterBuilder::new().build().await;
-    let response = create_credential_and_sign_test_tx(&test_cluster, None).await;
-    let tx = make_passkey_tx(response);
+    let response = create_credential_and_sign_test_tx(&test_cluster, None, false, false).await;
+    let tx = make_good_passkey_tx(response);
     let err = execute_tx(tx, &test_cluster).await.unwrap_err();
     assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
 }
@@ -225,8 +242,8 @@ async fn test_passkey_feature_deny() {
 #[sim_test]
 async fn test_passkey_authenticator_verifies() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let response = create_credential_and_sign_test_tx(&test_cluster, None).await;
-    let tx = make_passkey_tx(response);
+    let response = create_credential_and_sign_test_tx(&test_cluster, None, false, false).await;
+    let tx = make_good_passkey_tx(response);
     let res = execute_tx(tx, &test_cluster).await;
     assert!(res.is_ok());
 }
@@ -234,12 +251,33 @@ async fn test_passkey_authenticator_verifies() {
 #[sim_test]
 async fn test_passkey_fails_mismatched_challenge() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let response = create_credential_and_sign_test_tx(&test_cluster, None).await;
-    let client_data_json_with_wrong_challenge = r#"{"type":"webauthn.get","challenge":"9-fH7nX8Nb1JvUynz77mv1kXOkGkg1msZb2qhvZssGI","origin":"http://localhost:5173","crossOrigin":false}"#.as_bytes();
+
+    // Tweak intent in challenge that is sent to passkey.
+    let response = create_credential_and_sign_test_tx(&test_cluster, None, true, false).await;
     let sig = GenericSignature::PasskeyAuthenticator(
         PasskeyAuthenticator::new_for_testing(
             response.authenticator_data,
-            client_data_json_with_wrong_challenge.to_vec(),
+            response.client_data_json.to_vec(),
+            Signature::from_bytes(&response.user_sig_bytes).unwrap(),
+        )
+        .unwrap(),
+    );
+    let tx = Transaction::from_generic_sig_data(response.intent_msg.value, vec![sig]);
+    let res = execute_tx(tx, &test_cluster).await;
+    let err = res.unwrap_err();
+    assert_eq!(
+        err,
+        SuiError::InvalidSignature {
+            error: "Invalid challenge".to_string()
+        }
+    );
+
+    // Tweak tx_digest bytes in challenge that is sent to passkey.
+    let response = create_credential_and_sign_test_tx(&test_cluster, None, false, true).await;
+    let sig = GenericSignature::PasskeyAuthenticator(
+        PasskeyAuthenticator::new_for_testing(
+            response.authenticator_data,
+            response.client_data_json.to_vec(),
             Signature::from_bytes(&response.user_sig_bytes).unwrap(),
         )
         .unwrap(),
@@ -258,7 +296,7 @@ async fn test_passkey_fails_mismatched_challenge() {
 #[sim_test]
 async fn test_passkey_fails_to_verify_sig() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let response = create_credential_and_sign_test_tx(&test_cluster, None).await;
+    let response = create_credential_and_sign_test_tx(&test_cluster, None, false, false).await;
     let mut modified_sig = response.user_sig_bytes.clone();
     modified_sig[1] = 0x00;
     let sig = GenericSignature::PasskeyAuthenticator(
@@ -283,8 +321,10 @@ async fn test_passkey_fails_to_verify_sig() {
 #[sim_test]
 async fn test_passkey_fails_wrong_author() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    // modify sender that receives gas and construct test txn.
-    let response = create_credential_and_sign_test_tx(&test_cluster, Some(SuiAddress::ZERO)).await;
+    // Modify sender that receives gas and construct test txn.
+    let response =
+        create_credential_and_sign_test_tx(&test_cluster, Some(SuiAddress::ZERO), false, false)
+            .await;
     let sig = GenericSignature::PasskeyAuthenticator(
         PasskeyAuthenticator::new_for_testing(
             response.authenticator_data,
