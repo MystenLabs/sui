@@ -478,10 +478,12 @@ impl RandomnessManager {
             // DKG already started (or completed or failed).
             return Ok(());
         }
+
         let _ = self.dkg_start_time.set(Instant::now());
 
         let epoch_store = self.epoch_store()?;
         let dkg_version = epoch_store.protocol_config().dkg_version();
+        info!("random beacon: starting DKG, version {dkg_version}");
 
         let msg = match VersionedDkgMessage::create(dkg_version, self.party.clone()) {
             Ok(msg) => msg,
