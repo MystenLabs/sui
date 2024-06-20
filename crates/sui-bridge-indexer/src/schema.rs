@@ -4,6 +4,13 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    progress_store (task_name) {
+        task_name -> Text,
+        checkpoint -> Int8,
+    }
+}
+
+diesel::table! {
     token_transfer (chain_id, nonce, status) {
         chain_id -> Int4,
         nonce -> Int8,
@@ -32,4 +39,4 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(token_transfer, token_transfer_data);
+diesel::allow_tables_to_appear_in_same_query!(progress_store, token_transfer, token_transfer_data,);

@@ -1,20 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::models::ProgressStore as DBProgressStore;
 use crate::models::TokenTransfer as DBTokenTransfer;
 use crate::models::TokenTransferData as DBTokenTransferData;
+use crate::schema::progress_store::checkpoint;
+use crate::schema::progress_store::dsl::progress_store;
 use crate::schema::token_transfer_data;
-use crate::{schema::token_transfer, TokenTransfer};
+use crate::{schema, schema::token_transfer, TokenTransfer};
+use async_trait::async_trait;
 use diesel::result::Error;
 use diesel::BoolExpressionMethods;
-use diesel::ExpressionMethods;
-use diesel::OptionalExtension;
-use diesel::QueryDsl;
 use diesel::{
     pg::PgConnection,
     r2d2::{ConnectionManager, Pool},
-    Connection, RunQueryDsl,
+    Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
 };
+use sui_data_ingestion_core::ProgressStore;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 pub(crate) type PgPool = Pool<ConnectionManager<PgConnection>>;
 
@@ -69,5 +72,51 @@ pub fn get_latest_eth_token_transfer(
             .order(block_height.desc())
             .first::<DBTokenTransfer>(connection)
             .optional()
+    }
+}
+
+pub struct PgProgressStore {
+    pool: PgPool,
+    bridge_genesis_checkpoint: u64,
+}
+
+impl PgProgressStore {
+    pub fn new(pool: PgPool, bridge_genesis_checkpoint: u64) -> Self {
+        PgProgressStore {
+            pool,
+            bridge_genesis_checkpoint,
+        }
+    }
+}
+#[async_trait]
+impl ProgressStore for PgProgressStore {
+    async fn load(&mut self, task_name: String) -> anyhow::Result<CheckpointSequenceNumber> {
+        let mut conn = self.pool.get()?;
+        let cp: Option<DBProgressStore> = progress_store
+            .find(task_name)
+            .select(DBProgressStore::as_select())
+            .first(&mut conn)
+            .optional()?;
+        Ok(cp
+            .map(|d| d.checkpoint as u64)
+            .unwrap_or(self.bridge_genesis_checkpoint))
+    }
+
+    async fn save(
+        &mut self,
+        task_name: String,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> anyhow::Result<()> {
+        let mut conn = self.pool.get()?;
+        diesel::insert_into(schema::progress_store::table)
+            .values(&DBProgressStore {
+                task_name,
+                checkpoint: checkpoint_number as i64,
+            })
+            .on_conflict(schema::progress_store::dsl::task_name)
+            .do_update()
+            .set(checkpoint.eq(checkpoint_number as i64))
+            .execute(&mut conn)?;
+        Ok(())
     }
 }
