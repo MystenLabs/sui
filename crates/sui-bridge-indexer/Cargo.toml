@@ -24,6 +24,7 @@ sui-data-ingestion-core.workspace = true
 sui-types.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true
+backoff.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }
