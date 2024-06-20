@@ -1155,7 +1155,7 @@ fn mapped_files_extend(files: &mut MappedFiles, other: MappedFiles) {
             debug_assert!(false, "Found a file without a file entry");
             continue;
         };
-        let Some(path) = other.file_name_mapping().get(&file_hash) else {
+        let Some(path) = other.file_name_mapping().get(file_hash) else {
             debug_assert!(false, "Found a file without a path entry");
             continue;
         };
