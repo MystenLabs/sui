@@ -37,6 +37,7 @@ struct UseDefTest {
 impl UseDefTest {
     fn test(
         &self,
+        test_idx: usize,
         mod_symbols: &UseDefMap,
         symbols: &Symbols,
         output: &mut dyn std::io::Write,
@@ -45,7 +46,7 @@ impl UseDefTest {
         // let file_name_mapping = &symbols.file_name_mapping;
         let def_info = &symbols.def_info;
         let UseDefTest { use_ndx, use_line } = self;
-        writeln!(output, "-- test entry -------------------")?;
+        writeln!(output, "-- test {test_idx} -------------------")?;
         writeln!(output, "use line: {use_line}, use_ndx: {use_ndx}")?;
         let Some(uses) = mod_symbols.get(*use_line) else {
             writeln!(
@@ -61,7 +62,7 @@ impl UseDefTest {
             )?;
             return Ok(());
         };
-        use_def.render(output, symbols.files, use_line)?;
+        use_def.render(output, &symbols.files, *use_line)?;
         let Some(def) = def_info.get(&use_def.def_loc()) else {
             writeln!(output, "ERROR: No def loc found")?;
             return Ok(());
@@ -131,10 +132,10 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
             .get(&cpath)
             .ok_or(format!("NO SYMBOLS FOR {}", cpath.to_str().unwrap()))?;
 
-        for test in tests.iter() {
+        for (idx, test) in tests.iter().enumerate() {
             match test {
                 TestEntry::UseDefTest(use_def_test) => {
-                    use_def_test.test(mod_symbols, &symbols, writer, &file)?
+                    use_def_test.test(idx, mod_symbols, &symbols, writer, &file)?
                 }
             };
             writeln!(writer, "")?;

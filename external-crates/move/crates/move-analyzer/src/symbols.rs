@@ -92,7 +92,6 @@ use vfs::{
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     command_line::compiler::{construct_pre_compiled_lib, FullyCompiledProgram},
-    diagnostics::MappedFiles,
     editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
     linters::LintLevel,
@@ -1036,10 +1035,10 @@ impl UseDef {
     }
 
     // use_line is zero-indexed
-    pub fn render<Writer: std::io::Write>(
+    pub fn render(
         &self,
-        f: &mut Writer,
-        _mapping: MappedFiles,
+        f: &mut dyn std::io::Write,
+        _mapping: &MappedFiles,
         _use_line: u32,
     ) -> std::io::Result<()> {
         let UseDef {
@@ -1048,7 +1047,7 @@ impl UseDef {
             def_loc,
             type_def_loc,
         } = self;
-        write!(f, "start: {col_start}, end: {col_end}, ")?;
+        write!(f, "Use Def: start: {col_start}, end: {col_end}, ")?;
         let DefLoc {
             fhash: _,
             start: Position { line, character },
@@ -1059,9 +1058,9 @@ impl UseDef {
                 fhash: _,
                 start: Position { line, character },
             } = ty_info;
-            write!(f, "type def line: {line}, ty def char: {character}, ")
+            writeln!(f, "ty def line: {line}, ty def char: {character}, ")
         } else {
-            write!(f, "no type info")
+            writeln!(f, "no ty info")
         }
     }
 }
