@@ -13,7 +13,7 @@ use move_analyzer::symbols::{get_symbols, Symbols, UseDefMap};
 use move_command_line_common::testing::{
     add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT,
 };
-use move_compiler::linters::LintLevel;
+use move_compiler::{linters::LintLevel, shared::files::MappedFiles};
 use serde::{Deserialize, Serialize};
 use vfs::{MemoryFS, VfsPath};
 
@@ -42,6 +42,7 @@ impl UseDefTest {
         symbols: &Symbols,
         output: &mut dyn std::io::Write,
         use_file: &str,
+        use_file_path: &Path,
     ) -> anyhow::Result<()> {
         // let file_name_mapping = &symbols.file_name_mapping;
         let def_info = &symbols.def_info;
@@ -62,12 +63,40 @@ impl UseDefTest {
             )?;
             return Ok(());
         };
-        use_def.render(output, &symbols.files, *use_line)?;
+        let Some(mod_defs) = symbols.file_mods.get(use_file_path) else {
+            writeln!(
+                output,
+                "ERROR: No modules found for file at {use_file_path:?}"
+            )?;
+            return Ok(());
+        };
+        // symbols.file_mods only has an entry if there are actual modules in the file
+        // (BTreeSet containing module defs is never empty)
+        debug_assert!(!mod_defs.is_empty());
+        let use_file_hash = mod_defs.first().unwrap().fhash;
+        let Some((_, use_file_content)) = symbols.files.get(&use_file_hash) else {
+            writeln!(
+                output,
+                "ERROR: No use file content for file at {use_file_path:?}"
+            )?;
+            return Ok(());
+        };
+        let Some((_, def_file_content)) = symbols.files.get(&use_def.def_loc().fhash) else {
+            writeln!(output, "ERROR: No def file content")?;
+            return Ok(());
+        };
+        use_def.render(
+            output,
+            &symbols,
+            *use_line,
+            &use_file_content,
+            &def_file_content,
+        )?;
         let Some(def) = def_info.get(&use_def.def_loc()) else {
             writeln!(output, "ERROR: No def loc found")?;
             return Ok(());
         };
-        writeln!(output, "Def Info: {}", def)?;
+        writeln!(output, "On Hover:\n{}", def)?;
         Ok(())
     }
 }
@@ -135,7 +164,7 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
         for (idx, test) in tests.iter().enumerate() {
             match test {
                 TestEntry::UseDefTest(use_def_test) => {
-                    use_def_test.test(idx, mod_symbols, &symbols, writer, &file)?
+                    use_def_test.test(idx, mod_symbols, &symbols, writer, &file, &cpath)?
                 }
             };
             writeln!(writer, "")?;

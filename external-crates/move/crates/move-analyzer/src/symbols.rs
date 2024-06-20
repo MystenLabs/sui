@@ -1038,8 +1038,10 @@ impl UseDef {
     pub fn render(
         &self,
         f: &mut dyn std::io::Write,
-        _mapping: &MappedFiles,
-        _use_line: u32,
+        symbols: &Symbols,
+        use_line: u32,
+        use_file_content: &str,
+        def_file_content: &str,
     ) -> std::io::Result<()> {
         let UseDef {
             col_start,
@@ -1047,22 +1049,60 @@ impl UseDef {
             def_loc,
             type_def_loc,
         } = self;
-        write!(f, "Use Def: start: {col_start}, end: {col_end}, ")?;
+        let uident = use_ident(use_file_content, use_line, *col_start, *col_end);
+        writeln!(f, "Use: '{uident}', start: {col_start}, end: {col_end}")?;
         let DefLoc {
             fhash: _,
             start: Position { line, character },
         } = def_loc;
-        write!(f, "def line: {line}, def char: {character}, ")?;
+        let dident = def_ident(
+            def_file_content,
+            def_loc.start.line,
+            def_loc.start.character,
+        );
+        writeln!(f, "Def: '{dident}', line: {line}, def char: {character}")?;
         if let Some(ty_info) = type_def_loc {
             let DefLoc {
-                fhash: _,
+                fhash,
                 start: Position { line, character },
             } = ty_info;
-            writeln!(f, "ty def line: {line}, ty def char: {character}, ")
+            if let Some((_, type_def_file_content)) = symbols.files.get(fhash) {
+                let type_dident = def_ident(&type_def_file_content, *line, *character);
+                writeln!(
+                    f,
+                    "TypeDef: '{type_dident}', line: {line}, char: {character}"
+                )
+            } else {
+                writeln!(f, "TypeDef: INCORRECT INFO")
+            }
         } else {
-            writeln!(f, "no ty info")
+            writeln!(f, "TypeDef: no info")
         }
     }
+}
+
+fn use_ident(use_file_content: &str, use_line: u32, col_start: u32, col_end: u32) -> String {
+    if let Some(line) = use_file_content.lines().nth(use_line as usize) {
+        if let Some((start, _)) = line.char_indices().nth(col_start as usize) {
+            if let Some((end, _)) = line.char_indices().nth(col_end as usize) {
+                return line[start..end].into();
+            }
+        }
+    }
+    "INVALID USE IDENT".to_string()
+}
+
+fn def_ident(def_file_content: &str, def_line: u32, col_start: u32) -> String {
+    if let Some(line) = def_file_content.lines().nth(def_line as usize) {
+        if let Some((start, _)) = line.char_indices().nth(col_start as usize) {
+            let end = line[start..]
+                .char_indices()
+                .find(|(_, c)| !c.is_alphanumeric() && *c != '_' && *c != '$')
+                .map_or(line.len(), |(i, _)| start + i);
+            return line[start..end].into();
+        }
+    }
+    "INVALID DEF IDENT".to_string()
 }
 
 impl Ord for UseDef {
