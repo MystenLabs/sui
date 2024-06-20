@@ -3,6 +3,8 @@
 
 use std::{str::FromStr, sync::Arc};
 
+use super::to_signing_digest;
+use crate::crypto::DefaultHash;
 use crate::passkey_authenticator::{PasskeyAuthenticator, RawPasskeyAuthenticator};
 use crate::{
     base_types::{dbg_addr, ObjectID, SuiAddress},
@@ -14,6 +16,8 @@ use crate::{
     transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER},
 };
 use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::hash::HashFunction;
+use fastcrypto::rsa::{Base64UrlUnpadded, Encoding as _};
 use fastcrypto::{encoding::Base64, traits::ToFromBytes};
 use p256::pkcs8::DecodePublicKey;
 use passkey::{
@@ -31,10 +35,8 @@ use passkey::{
         Bytes, Passkey,
     },
 };
-use shared_crypto::intent::{Intent, IntentMessage};
+use shared_crypto::intent::{Intent, IntentMessage, INTENT_PREFIX_LENGTH};
 use url::Url;
-
-use super::to_signing_digest;
 
 /// Helper struct to initialize passkey client.
 pub struct MyUserValidationMethod {}
@@ -203,12 +205,8 @@ async fn test_passkey_serde() {
         authenticator_data: response.authenticator_data,
         client_data_json: response.client_data_json,
     };
-    let raw_serialized = bcs::to_bytes(&raw).unwrap();
-
-    // serialized raw passkey authenticator == serialized passkey authenticator
     let passkey: PasskeyAuthenticator = raw.try_into().unwrap();
     let serialized = bcs::to_bytes(&passkey).unwrap();
-    assert_eq!(raw_serialized, serialized);
 
     // deser back to passkey authenticator is the same
     let deserialized: PasskeyAuthenticator = bcs::from_bytes(&serialized).unwrap();
@@ -265,15 +263,42 @@ async fn test_passkey_fails_invalid_json() {
             error: "Invalid client data json".to_string()
         }
     );
-
-    let client_data_json_extra = r#"{"type":"webauthn.get", "challenge":"9-fH7nX8Nb1JvUynz77mv1kXOkGkg1msZb2qhvZssGI","origin":"http://localhost:5173","crossOrigin":false, "unknown": "unknown"}"#.as_bytes();
+    const CORRECT_LEN: usize = INTENT_PREFIX_LENGTH + DefaultHash::OUTPUT_SIZE;
+    let client_data_json_too_short = format!(
+        r#"{{"type":"webauthn.get", "challenge":"{}","origin":"http://localhost:5173","crossOrigin":false, "unknown": "unknown"}}"#,
+        Base64UrlUnpadded::encode_string(&[0; CORRECT_LEN - 1])
+    );
     let raw = RawPasskeyAuthenticator {
-        authenticator_data: response.authenticator_data,
-        client_data_json: client_data_json_extra.to_vec(),
+        authenticator_data: response.authenticator_data.clone(),
+        client_data_json: client_data_json_too_short.as_bytes().to_vec(),
         user_signature: Signature::from_bytes(&response.user_sig_bytes).unwrap(),
     };
     let res: Result<PasskeyAuthenticator, SuiError> = raw.try_into();
-    assert!(res.is_ok());
+    assert!(res.is_err());
+
+    let client_data_json_too_long = format!(
+        r#"{{"type":"webauthn.get", "challenge":"{}","origin":"http://localhost:5173","crossOrigin":false, "unknown": "unknown"}}"#,
+        Base64UrlUnpadded::encode_string(&[0; CORRECT_LEN + 1])
+    );
+    let raw_2 = RawPasskeyAuthenticator {
+        authenticator_data: response.authenticator_data.clone(),
+        client_data_json: client_data_json_too_long.as_bytes().to_vec(),
+        user_signature: Signature::from_bytes(&response.user_sig_bytes).unwrap(),
+    };
+    let res_2: Result<PasskeyAuthenticator, SuiError> = raw_2.try_into();
+    assert!(res_2.is_err());
+
+    let client_data_json_correct = format!(
+        r#"{{"type":"webauthn.get", "challenge":"{}","origin":"http://localhost:5173","crossOrigin":false, "unknown": "unknown"}}"#,
+        Base64UrlUnpadded::encode_string(&[0; CORRECT_LEN])
+    );
+    let raw_3 = RawPasskeyAuthenticator {
+        authenticator_data: response.authenticator_data,
+        client_data_json: client_data_json_correct.as_bytes().to_vec(),
+        user_signature: Signature::from_bytes(&response.user_sig_bytes).unwrap(),
+    };
+    let res_3: Result<PasskeyAuthenticator, SuiError> = raw_3.try_into();
+    assert!(res_3.is_ok());
 }
 
 #[tokio::test]

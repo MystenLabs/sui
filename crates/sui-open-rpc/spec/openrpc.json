@@ -7851,15 +7851,16 @@
         }
       },
       "PasskeyAuthenticator": {
-        "description": "An passkey authenticator with all the necessary fields.",
+        "description": "An passkey authenticator with parsed fields. See field defition below. Can be initialized from [struct RawPasskeyAuthenticator].",
         "type": "object",
         "required": [
           "authenticator_data",
           "client_data_json",
-          "user_signature"
+          "tx_digest"
         ],
         "properties": {
           "authenticator_data": {
+            "description": "`authenticatorData` is a bytearray that encodes [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) structure returned by the authenticator attestation response as is.",
             "type": "array",
             "items": {
               "type": "integer",
@@ -7868,6 +7869,7 @@
             }
           },
           "client_data_json": {
+            "description": "`clientDataJSON` contains a JSON-compatible UTF-8 encoded serialization of the client data which is passed to the authenticator by the client during the authentication request (see [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))",
             "type": "array",
             "items": {
               "type": "integer",
@@ -7875,8 +7877,16 @@
               "minimum": 0.0
             }
           },
-          "user_signature": {
-            "$ref": "#/components/schemas/Signature"
+          "tx_digest": {
+            "description": "Valid tx_digest parsed from the last 32 bytes of `client_data_json.challenge`.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "maxItems": 32,
+            "minItems": 32
           }
         }
       },
@@ -8021,6 +8031,18 @@
             "properties": {
               "ZkLogin": {
                 "$ref": "#/components/schemas/ZkLoginPublicIdentifier"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Passkey"
+            ],
+            "properties": {
+              "Passkey": {
+                "$ref": "#/components/schemas/Base64"
               }
             },
             "additionalProperties": false
