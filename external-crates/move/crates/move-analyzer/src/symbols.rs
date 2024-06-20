@@ -1105,7 +1105,8 @@ impl Symbols {
         for (k, v) in other.references {
             self.references.entry(k).or_default().extend(v);
         }
-        self.files.extend(other.files);
+        self.file_use_defs.extend(other.file_use_defs);
+        mapped_files_extend(&mut self.files, other.files);
         self.def_info.extend(other.def_info);
     }
 
@@ -1144,6 +1145,23 @@ fn has_precompiled_deps(
 ) -> bool {
     let pkg_deps = pkg_dependencies.lock().unwrap();
     pkg_deps.contains_key(pkg_path)
+}
+
+/// Mirrors implementation of MappedFiles::extend but allows duplicate
+/// hashes without throwing a debug assertion
+fn mapped_files_extend(files: &mut MappedFiles, other: MappedFiles) {
+    for (file_hash, file_id) in other.file_mapping() {
+        let Ok(file) = other.files().get(*file_id) else {
+            debug_assert!(false, "Found a file without a file entry");
+            continue;
+        };
+        let Some(path) = other.file_name_mapping().get(file_hash) else {
+            debug_assert!(false, "Found a file without a path entry");
+            continue;
+        };
+        let fname = format!("{}", path.to_string_lossy());
+        files.add(*file_hash, fname.into(), file.source().clone());
+    }
 }
 
 /// Main driver to get symbols for the whole package. Returned symbols is an option as only the
@@ -1237,6 +1255,7 @@ pub fn get_symbols(
                     && deps_hash == d.deps_hash =>
             {
                 eprintln!("found pre-compiled libs for {:?}", pkg_path);
+                mapped_files_extend(&mut mapped_files, d.deps.files.clone());
                 Some(d.deps.clone())
             }
             _ => construct_pre_compiled_lib(
@@ -1249,7 +1268,7 @@ pub fn get_symbols(
             .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
             .map(|libs| {
                 eprintln!("created pre-compiled libs for {:?}", pkg_path);
-                mapped_files.extend(libs.files.clone());
+                mapped_files_extend(&mut mapped_files, libs.files.clone());
                 let deps = Arc::new(libs);
                 pkg_deps.insert(
                     pkg_path.to_path_buf(),
@@ -1291,7 +1310,10 @@ pub fn get_symbols(
         eprintln!("compiled to parsed AST");
         let (compiler, parsed_program) = compiler.into_ast();
         parsed_ast = Some(parsed_program.clone());
-        mapped_files.extend(compiler.compilation_env_ref().mapped_files().clone());
+        mapped_files_extend(
+            &mut mapped_files,
+            compiler.compilation_env_ref().mapped_files().clone(),
+        );
 
         // extract typed AST
         let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
