@@ -13,6 +13,13 @@ use std::path::PathBuf;
     version
 )]
 pub enum Command {
+    /// Output a TOML config (suitable for passing into the --config parameter of the start-server
+    /// command) with all values set to their defaults.
+    GenerateConfig {
+        /// Optional path to a file to output to. Prints to stdout if none is provided.
+        output: Option<PathBuf>
+    },
+
     StartServer {
         /// The title to display at the top of the page
         #[clap(short, long)]
