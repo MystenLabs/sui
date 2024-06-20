@@ -174,6 +174,7 @@ impl PeerHeights {
     //
     // This will return false if the given peer doesn't have an entry or is not on the same chain
     // as us
+    #[instrument(level = "debug", skip_all, fields(peer_id=?peer_id, checkpoint=?checkpoint.sequence_number()))]
     pub fn update_peer_info(
         &mut self,
         peer_id: PeerId,
@@ -194,6 +195,7 @@ impl PeerHeights {
         true
     }
 
+    #[instrument(level = "debug", skip_all, fields(peer_id=?peer_id, lowest = ?info.lowest, height = ?info.height))]
     pub fn insert_peer_info(&mut self, peer_id: PeerId, info: PeerStateSyncInfo) {
         use std::collections::hash_map::Entry;
 
@@ -824,6 +826,7 @@ async fn get_latest_from_peer(
 
     // Bail early if this node isn't on the same chain as us
     if !info.on_same_chain_as_us {
+        trace!(?info, "Peer {peer_id} not on same chain as us");
         return;
     }
     let Some((highest_checkpoint, low_watermark)) =
@@ -1123,6 +1126,7 @@ async fn sync_checkpoint_contents_from_archive<S>(
         } else {
             false
         };
+        debug!("Syncing checkpoint contents from archive: {sync_from_archive},  highest_synced: {highest_synced},  lowest_checkpoint_on_peers: {}", lowest_checkpoint_on_peers.map_or_else(|| "None".to_string(), |l| l.to_string()));
         if sync_from_archive {
             let start = highest_synced
                 .checked_add(1)

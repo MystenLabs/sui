@@ -187,6 +187,7 @@ impl DiscoveryEventLoop {
                 affinity: anemo::types::PeerAffinity::High,
                 address: anemo_address.into_iter().collect(),
             };
+            debug!(?peer_info, "Add configured preferred peer");
             self.network.known_peers().insert(peer_info);
         }
     }
@@ -350,6 +351,7 @@ async fn try_to_connect_to_seed_peers(
     config: Arc<DiscoveryConfig>,
     seed_peers: Vec<SeedPeer>,
 ) {
+    debug!(?seed_peers, "Connecting to seed peers");
     let network = &network;
 
     futures::stream::iter(seed_peers.into_iter().filter_map(|seed| {
