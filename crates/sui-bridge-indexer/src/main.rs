@@ -103,7 +103,7 @@ async fn start_processing_sui_checkpoints(
         config.concurrency as usize,
     );
     executor.register(worker_pool).await?;
-    Ok(executor
+    executor
         .run(
             config.checkpoints_path.clone().into(),
             Some(config.remote_store_url.clone()),
@@ -111,5 +111,5 @@ async fn start_processing_sui_checkpoints(
             ReaderOptions::default(),
             exit_receiver,
         )
-        .await?)
+        .await
 }
