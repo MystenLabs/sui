@@ -98,7 +98,7 @@ impl MappedFiles {
         }
     }
 
-    pub fn extend(&mut self, other: Self) {
+    fn extend_(&mut self, other: Self, allow_duplicates: bool) {
         for (file_hash, file_id) in other.file_mapping {
             let Ok(file) = other.files.get(file_id) else {
                 debug_assert!(false, "Found a file without a file entry");
@@ -109,12 +109,20 @@ impl MappedFiles {
                 continue;
             };
             debug_assert!(
-                !self.file_mapping.contains_key(&file_hash),
+                allow_duplicates || !self.file_mapping.contains_key(&file_hash),
                 "Found a repeat file hash"
             );
             let fname = format!("{}", path.to_string_lossy());
             self.add(file_hash, fname.into(), file.source().clone());
         }
+    }
+
+    pub fn extend(&mut self, other: Self) {
+        self.extend_(other, false)
+    }
+
+    pub fn extend_with_duplicates(&mut self, other: Self) {
+        self.extend_(other, true)
     }
 
     pub fn add(&mut self, fhash: FileHash, fname: FileName, source: Arc<str>) {

@@ -11,10 +11,7 @@ use lsp_types::{
     InlayHintTooltip, Position,
 };
 
-use move_compiler::{
-    naming::ast as N,
-    shared::Identifier,
-};
+use move_compiler::{naming::ast as N, shared::Identifier};
 
 /// Handles inlay hints request of the language server
 pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Symbols) {
