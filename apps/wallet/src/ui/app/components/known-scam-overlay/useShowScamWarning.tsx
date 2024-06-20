@@ -13,17 +13,20 @@ export function useShowScamWarning({
 	requestType,
 	transaction,
 	message,
+	requestId,
 }: {
 	url?: URL;
 	requestType: RequestType;
 	transaction?: Transaction;
 	message?: string;
+	requestId: string;
 }) {
 	const { data, isPending, isError } = useDappPreflight({
 		requestType,
 		origin: url?.origin,
 		transaction,
 		message,
+		requestId,
 	});
 
 	useEffect(() => {

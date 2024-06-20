@@ -95,6 +95,7 @@ export function UserApproveContainer({
 			: RequestType.CONNECT,
 		transaction,
 		message,
+		requestId: requestID!,
 	});
 
 	return (

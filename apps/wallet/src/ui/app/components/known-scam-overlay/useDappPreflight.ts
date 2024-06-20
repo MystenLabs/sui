@@ -13,19 +13,20 @@ export function useDappPreflight({
 	origin,
 	transaction,
 	message,
+	requestId,
 }: {
 	requestType: RequestType;
 	origin?: string;
 	transaction?: Transaction;
 	message?: string;
+	requestId: string;
 }) {
 	const { request } = useAppsBackend();
 	const client = useSuiClient();
-	const transactionData = transaction?.getData();
 
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
-		queryKey: ['dapp-preflight', { requestType, origin, transaction: transactionData, message }],
+		queryKey: ['dapp-preflight', { requestId, requestType, origin, message }],
 		queryFn: async () => {
 			if (!origin) {
 				throw new Error('No origin provided');
