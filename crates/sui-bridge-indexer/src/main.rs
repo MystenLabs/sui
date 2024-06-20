@@ -13,21 +13,18 @@ use std::env;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use sui_bridge::{
-    abi::{EthBridgeCommittee, EthSuiBridge},
-    eth_client::EthClient,
-    eth_syncer::EthSyncer,
-};
-use sui_bridge_indexer::postgres_writer::PgProgressStore;
-use sui_bridge_indexer::{
-    config::load_config, metrics::BridgeIndexerMetrics, postgres_writer::get_connection_pool,
-    worker::process_eth_transaction, worker::BridgeWorker,
-};
+use sui_bridge::{eth_client::EthClient, eth_syncer::EthSyncer};
+use sui_bridge_indexer::{config::load_config, metrics::BridgeIndexerMetrics};
 use sui_data_ingestion_core::{DataIngestionMetrics, IndexerExecutor, ReaderOptions, WorkerPool};
 use tokio::sync::oneshot;
 use tracing::info;
 
 use sui_bridge_indexer::eth_worker::process_eth_events;
+use sui_bridge_indexer::latest_eth_syncer::LatestEthSyncer;
+use sui_bridge_indexer::postgres_manager::{
+    get_connection_pool, get_latest_eth_token_transfer, PgProgressStore,
+};
+use sui_bridge_indexer::sui_worker::SuiBridgeWorker;
 
 #[derive(Parser, Clone, Debug)]
 struct Args {

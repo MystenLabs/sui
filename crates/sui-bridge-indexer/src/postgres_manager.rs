@@ -7,13 +7,10 @@ use crate::models::TokenTransferData as DBTokenTransferData;
 use crate::schema::progress_store::checkpoint;
 use crate::schema::progress_store::dsl::progress_store;
 use crate::schema::token_transfer_data;
-use diesel::result::Error;
-use diesel::BoolExpressionMethods;
-use diesel::ExpressionMethods;
-use diesel::OptionalExtension;
-use diesel::QueryDsl;
 use crate::{schema, schema::token_transfer, TokenTransfer};
 use async_trait::async_trait;
+use diesel::result::Error;
+use diesel::BoolExpressionMethods;
 use diesel::{
     pg::PgConnection,
     r2d2::{ConnectionManager, Pool},
