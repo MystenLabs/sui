@@ -179,7 +179,14 @@ async fn test_regulated_coin_v2_types() {
         &coin_deny_config,
         deny_address,
         &env.authority.get_object_store(),
-        0,
+        Some(0),
+    ));
+    // If no epoch is specified, we always read the latest value, and it should be denied.
+    assert!(check_address_denied_by_coin(
+        &coin_deny_config,
+        deny_address,
+        &env.authority.get_object_store(),
+        None,
     ));
     // If we change the current epoch to be 1, the change from epoch 0
     // would be considered as from previous epoch, and hence will be
@@ -188,14 +195,14 @@ async fn test_regulated_coin_v2_types() {
         &coin_deny_config,
         deny_address,
         &env.authority.get_object_store(),
-        1,
+        Some(1),
     ));
     // Check a different address, and it should not be denied.
     assert!(!check_address_denied_by_coin(
         &coin_deny_config,
         dbg_addr(3),
         &env.authority.get_object_store(),
-        1,
+        Some(1),
     ));
 }
 

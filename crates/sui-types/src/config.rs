@@ -91,16 +91,21 @@ pub fn is_setting(tag: &StructTag) -> bool {
 impl<V> Setting<V> {
     /// Calls `SettingData::read_value` on the setting's data.
     /// The `data` should never be `None`, but for safety, this method returns `None` if it is.
-    pub fn read_value(&self, current_epoch: EpochId) -> Option<&V> {
-        self.data.as_ref()?.read_value(current_epoch)
+    pub fn read_value(&self, cur_epoch: Option<EpochId>) -> Option<&V> {
+        self.data.as_ref()?.read_value(cur_epoch)
     }
 }
 
 impl<V> SettingData<V> {
     /// Reads the value of the setting, giving `newer_value` if the current epoch is greater than
     /// `newer_value_epoch`, and `older_value_opt` otherwise.
-    pub fn read_value(&self, cur_epoch: EpochId) -> Option<&V> {
-        if cur_epoch > self.newer_value_epoch {
+    /// If `cur_epoch` is `None`, the `newer_value` is always returned.
+    pub fn read_value(&self, cur_epoch: Option<EpochId>) -> Option<&V> {
+        let use_newer_value = match cur_epoch {
+            Some(cur_epoch) => cur_epoch > self.newer_value_epoch,
+            None => true,
+        };
+        if use_newer_value {
             Some(&self.newer_value)
         } else {
             self.older_value_opt.as_ref()

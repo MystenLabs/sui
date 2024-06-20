@@ -76,7 +76,7 @@ pub fn check_address_denied_by_coin(
     coin_deny_config: &Config,
     address: SuiAddress,
     object_store: &dyn ObjectStore,
-    cur_epoch: EpochId,
+    cur_epoch: Option<EpochId>,
 ) -> bool {
     let address_key = AddressKey(address);
     read_config_setting(object_store, coin_deny_config, address_key, cur_epoch).unwrap_or(false)
@@ -85,16 +85,16 @@ pub fn check_address_denied_by_coin(
 /// Fetches the setting from a particular config.
 /// Reads the value of the setting, giving `newer_value` if the current epoch is greater than
 /// `newer_value_epoch`, and `older_value_opt` otherwise.
-/// If `current_epoch` is `None`, the `newer_value` is always returned.
+/// If `cur_epoch` is `None`, the `newer_value` is always returned.
 fn read_config_setting<K, V>(
     object_store: &dyn ObjectStore,
     config: &Config,
     setting_name: K,
-    cur_epoch: EpochId,
+    cur_epoch: Option<EpochId>,
 ) -> Option<V>
 where
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
-    V: Copy + Serialize + DeserializeOwned,
+    V: Clone + Serialize + DeserializeOwned + fmt::Debug,
 {
     let setting: Setting<V> = {
         match get_dynamic_field_from_store(object_store, *config.id.object_id(), &setting_name) {
