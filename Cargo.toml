@@ -130,6 +130,7 @@ members = [
   "crates/sui-open-rpc",
   "crates/sui-open-rpc-macros",
   "crates/sui-oracle",
+  "crates/sui-package-dump",
   "crates/sui-package-management",
   "crates/sui-package-resolver",
   "crates/sui-proc-macros",
@@ -304,6 +305,9 @@ criterion = { version = "0.5.0", features = [
 ] }
 crossterm = "0.25.0"
 csv = "1.2.1"
+# Pin to 3.4.3 as ^3.5.0 requires reqwest ^0.12
+cynic = { version = "= 3.4.3", features = ["http-reqwest"] }
+cynic-codegen = "= 3.4.3"
 dashmap = "5.5.3"
 # datatest-stable = "0.1.2"
 datatest-stable = { git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f" }
@@ -622,6 +626,7 @@ sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
 sui-open-rpc = { path = "crates/sui-open-rpc" }
 sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
+sui-package-dump = { path = "crates/sui-package-dump" }
 sui-package-management = { path = "crates/sui-package-management" }
 sui-package-resolver = { path = "crates/sui-package-resolver" }
 sui-proc-macros = { path = "crates/sui-proc-macros" }

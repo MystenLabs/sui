@@ -5,11 +5,11 @@ use crate::{
     check_completed_snapshot,
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
-    get_latest_available_epoch, get_object, get_transaction_block, make_clients, pkg_dump,
+    get_latest_available_epoch, get_object, get_transaction_block, make_clients,
     restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
     GroupedObjectOutput, VerboseObjectOutput,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures::{future::join_all, StreamExt};
 use std::path::PathBuf;
 use std::{collections::BTreeMap, env, sync::Arc};
@@ -177,20 +177,25 @@ pub enum ToolCommand {
         max_content_length: usize,
     },
 
-    /// Download all packages to the local filesystem from an indexer database. Each package gets
-    /// its own sub-directory, named for its ID on-chain, containing two metadata files
-    /// (linkage.json and origins.json) as well as a file for every module it contains. Each module
-    /// file is named for its module name, with a .mv suffix, and contains Move bytecode (suitable
-    /// for passing into a disassembler).
+    /// Download all packages to the local filesystem from a GraphQL service. Each package gets its
+    /// own sub-directory, named for its ID on-chain and version containing two metadata files
+    /// (linkage.json and origins.json), a file containing the overall object and a file for every
+    /// module it contains. Each module file is named for its module name, with a .mv suffix, and
+    /// contains Move bytecode (suitable for passing into a disassembler).
     #[command(name = "dump-packages")]
     DumpPackages {
-        /// Connection information for the Indexer's Postgres DB.
+        /// Connection information for a GraphQL service.
         #[clap(long, short)]
-        db_url: String,
+        rpc_url: String,
 
         /// Path to a non-existent directory that can be created and filled with package information.
         #[clap(long, short)]
         output_dir: PathBuf,
+
+        /// Only fetch packages that were created before this checkpoint (given by its sequence
+        /// number).
+        #[clap(long)]
+        before_checkpoint: Option<u64>,
 
         /// If false (default), log level will be overridden to "off", and output will be reduced to
         /// necessary status information.
@@ -633,8 +638,9 @@ impl ToolCommand {
                 }
             }
             ToolCommand::DumpPackages {
-                db_url,
+                rpc_url,
                 output_dir,
+                before_checkpoint,
                 verbose,
             } => {
                 if !verbose {
@@ -643,7 +649,12 @@ impl ToolCommand {
                         .expect("Failed to update log level");
                 }
 
-                pkg_dump::dump(db_url, output_dir).await?;
+                let before_checkpoint: Option<i32> = before_checkpoint
+                    .map(|n| n.try_into())
+                    .transpose()
+                    .context("Checkpoint number too large")?;
+
+                sui_package_dump::dump(rpc_url, output_dir, before_checkpoint).await?;
             }
             ToolCommand::DumpValidators { genesis, concise } => {
                 let genesis = Genesis::load(genesis).unwrap();

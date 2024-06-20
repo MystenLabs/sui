@@ -69,7 +69,6 @@ use typed_store::rocks::MetricConf;
 
 pub mod commands;
 pub mod db_tool;
-pub mod pkg_dump;
 
 // This functions requires at least one of genesis or fullnode_rpc to be `Some`.
 async fn make_clients(
