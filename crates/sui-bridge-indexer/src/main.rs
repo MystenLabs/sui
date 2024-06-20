@@ -5,6 +5,7 @@ use anyhow::Result;
 use clap::*;
 use mysten_metrics::start_prometheus_server;
 use prometheus::Registry;
+use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use sui_bridge_indexer::eth_worker::EthBridgeWorker;
@@ -12,10 +13,10 @@ use sui_bridge_indexer::postgres_manager::{get_connection_pool, PgProgressStore}
 use sui_bridge_indexer::sui_worker::SuiBridgeWorker;
 use sui_bridge_indexer::{config::load_config, metrics::BridgeIndexerMetrics};
 use sui_data_ingestion_core::{DataIngestionMetrics, IndexerExecutor, ReaderOptions, WorkerPool};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
 use tokio::sync::oneshot;
 use tracing::info;
-// use sui_bridge::retry_with_max_elapsed_time;
-// use tokio::time::Duration;
 
 #[derive(Parser, Clone, Debug)]
 struct Args {
@@ -34,15 +35,12 @@ async fn main() -> Result<()> {
 
     // load config
     let config_path = if let Some(path) = args.config_path {
-        Some(path)
+        path
     } else {
-        Some(
-            env::current_dir()
-                .expect("Current directory is invalid.")
-                .join("config.yaml"),
-        )
+        env::current_dir()
+            .expect("Couldn't get current directory")
+            .join("config.yaml")
     };
-    let config_path = config_path.unwrap();
     let config = load_config(&config_path).unwrap();
     let config_clone = config.clone();
 
@@ -69,14 +67,14 @@ async fn main() -> Result<()> {
     );
 
     // TODO: retry_with_max_elapsed_time
-
-    let unfinalized_handle = eth_worker.start_indexing_unfinalized_events();
-    let finalized_handle = eth_worker.start_indexing_finalized_events();
-
-    let _ = tokio::try_join!(finalized_handle, unfinalized_handle);
+    let eth_worker_binding = eth_worker.unwrap();
+    let unfinalized_handle = eth_worker_binding.start_indexing_unfinalized_events();
+    let finalized_handle = eth_worker_binding.start_indexing_finalized_events();
 
     // TODO: add retry_with_max_elapsed_time
-    let _ = start_processing_sui_checkpoints(&config_clone, indexer_meterics.clone()).await;
+    let progress = start_processing_sui_checkpoints(&config_clone, indexer_meterics.clone());
+
+    let _ = tokio::try_join!(finalized_handle, unfinalized_handle, progress);
 
     Ok(())
 }
@@ -84,7 +82,7 @@ async fn main() -> Result<()> {
 async fn start_processing_sui_checkpoints(
     config: &sui_bridge_indexer::config::Config,
     indexer_meterics: BridgeIndexerMetrics,
-) -> Result<()> {
+) -> Result<HashMap<String, CheckpointSequenceNumber>> {
     // metrics init
     let (_exit_sender, exit_receiver) = oneshot::channel();
     let ingestion_metrics = DataIngestionMetrics::new(&Registry::new());
@@ -105,7 +103,7 @@ async fn start_processing_sui_checkpoints(
         config.concurrency as usize,
     );
     executor.register(worker_pool).await?;
-    executor
+    Ok(executor
         .run(
             config.checkpoints_path.clone().into(),
             Some(config.remote_store_url.clone()),
@@ -113,7 +111,5 @@ async fn start_processing_sui_checkpoints(
             ReaderOptions::default(),
             exit_receiver,
         )
-        .await?;
-
-    Ok(())
+        .await?)
 }

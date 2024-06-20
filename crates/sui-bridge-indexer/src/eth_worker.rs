@@ -33,31 +33,25 @@ pub struct EthBridgeWorker {
 }
 
 impl EthBridgeWorker {
-    pub fn new(pg_pool: PgPool, metrics: BridgeIndexerMetrics, config: Config) -> Self {
-        let bridge_address = match EthAddress::from_str(&config.eth_sui_bridge_contract_address) {
-            Ok(addr) => addr,
-            Err(e) => {
-                panic!("Invalid Ethereum address: {}", e);
-            }
-        };
+    pub fn new(
+        pg_pool: PgPool,
+        metrics: BridgeIndexerMetrics,
+        config: Config,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
 
         let provider = Arc::new(
-            Provider::<Http>::try_from(&config.eth_rpc_url)
-                .unwrap_or_else(|_| {
-                    panic!(
-                        "Cannot create Ethereum HTTP provider, URL: {}",
-                        &config.eth_rpc_url
-                    )
-                })
+            Provider::<Http>::try_from(&config.eth_rpc_url)?
                 .interval(std::time::Duration::from_millis(2000)),
         );
-        Self {
+
+        Ok(Self {
             provider,
             pg_pool,
             metrics,
             bridge_address,
             config,
-        }
+        })
     }
 
     pub async fn start_indexing_finalized_events(&self) -> Result<JoinHandle<()>> {
@@ -66,7 +60,8 @@ impl EthBridgeWorker {
                 &self.config.eth_rpc_url,
                 HashSet::from_iter(vec![self.bridge_address]),
             )
-            .await?,
+            .await
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?,
         );
 
         let newest_finalized_block = match get_latest_eth_token_transfer(&self.pg_pool, true)? {
@@ -83,7 +78,7 @@ impl EthBridgeWorker {
             EthSyncer::new(eth_client, finalized_contract_addresses)
                 .run()
                 .await
-                .expect("Failed to start eth syncer");
+                .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
         let provider_clone = self.provider.clone();
         let pg_pool_clone = self.pg_pool.clone();
@@ -97,7 +92,7 @@ impl EthBridgeWorker {
                 eth_events_rx,
                 true
             ),
-            "unfinalized indexer handler"
+            "finalized indexer handler"
         ))
     }
 
@@ -133,7 +128,7 @@ impl EthBridgeWorker {
         )
         .run()
         .await
-        .expect("Failed to start eth syncer");
+        .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
         let provider_clone = self.provider.clone();
         let pg_pool_clone = self.pg_pool.clone();
