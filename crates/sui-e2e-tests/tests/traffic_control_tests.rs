@@ -135,16 +135,16 @@ async fn test_validator_traffic_control_dry_run() -> Result<(), anyhow::Error> {
         .build()
         .await;
 
-    assert_traffic_control_dry_run(test_cluster, n as usize).await
+    assert_validator_traffic_control_dry_run(test_cluster, n as usize).await
 }
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
-    let n = 15;
+    let txn_count = 15;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
-        spam_policy_type: PolicyType::TestNConnIP(n - 1),
+        spam_policy_type: PolicyType::TestNConnIP(txn_count - 1),
         spam_sample_rate: Weight::one(),
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
@@ -156,7 +156,49 @@ async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
         .with_fullnode_policy_config(Some(policy_config))
         .build()
         .await;
-    assert_traffic_control_dry_run(test_cluster, n as usize).await
+
+    let context = &mut test_cluster.wallet;
+    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
+    assert!(
+        txns.len() >= txn_count,
+        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
+        txn_count,
+    );
+
+    let txn = txns.swap_remove(0);
+    let tx_digest = txn.digest();
+    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
+    let params = rpc_params![
+        tx_bytes,
+        signatures,
+        SuiTransactionBlockResponseOptions::new(),
+        ExecuteTransactionRequestType::WaitForLocalExecution
+    ];
+
+    let response: SuiTransactionBlockResponse = jsonrpc_client
+        .request("sui_executeTransactionBlock", params.clone())
+        .await
+        .unwrap();
+    let SuiTransactionBlockResponse {
+        digest,
+        confirmed_local_execution,
+        ..
+    } = response;
+    assert_eq!(&digest, tx_digest);
+    assert!(confirmed_local_execution.unwrap());
+
+    // it should take no more than 4 requests to be added to the blocklist
+    for _ in 0..txn_count {
+        let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
+            .request("sui_getTransactionBlock", rpc_params![*tx_digest])
+            .await;
+        assert!(
+            response.is_ok(),
+            "Expected request to succeed in dry-run mode"
+        );
+    }
+    Ok(())
 }
 
 #[tokio::test]
@@ -177,16 +219,16 @@ async fn test_validator_traffic_control_spam_blocked() -> Result<(), anyhow::Err
         .set_network_config(network_config)
         .build()
         .await;
-    assert_traffic_control_spam_blocked(test_cluster, n as usize).await
+    assert_validator_traffic_control_spam_blocked(test_cluster, n as usize).await
 }
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Error> {
-    let n = 15;
+    let txn_count = 15;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 3,
         // Test that any N requests will cause an IP to be added to the blocklist.
-        spam_policy_type: PolicyType::TestNConnIP(n - 1),
+        spam_policy_type: PolicyType::TestNConnIP(txn_count - 1),
         spam_sample_rate: Weight::one(),
         dry_run: false,
         ..Default::default()
@@ -195,7 +237,57 @@ async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Erro
         .with_fullnode_policy_config(Some(policy_config))
         .build()
         .await;
-    assert_traffic_control_spam_blocked(test_cluster, n as usize).await
+
+    let context = &mut test_cluster.wallet;
+    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
+
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
+    assert!(
+        txns.len() >= txn_count,
+        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
+        txn_count,
+    );
+
+    let txn = txns.swap_remove(0);
+    let tx_digest = txn.digest();
+    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
+    let params = rpc_params![
+        tx_bytes,
+        signatures,
+        SuiTransactionBlockResponseOptions::new(),
+        ExecuteTransactionRequestType::WaitForLocalExecution
+    ];
+
+    let response: SuiTransactionBlockResponse = jsonrpc_client
+        .request("sui_executeTransactionBlock", params.clone())
+        .await
+        .unwrap();
+    let SuiTransactionBlockResponse {
+        digest,
+        confirmed_local_execution,
+        ..
+    } = response;
+    assert_eq!(&digest, tx_digest);
+    assert!(confirmed_local_execution.unwrap());
+
+    // it should take no more than 4 requests to be added to the blocklist
+    for _ in 0..txn_count {
+        let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
+            .request("sui_getTransactionBlock", rpc_params![*tx_digest])
+            .await;
+        if let Err(err) = response {
+            // TODO: fix validator blocking error handling such that the error message
+            // is not misleading. The full error message currently is the following:
+            //  Transaction execution failed due to issues with transaction inputs, please
+            //  review the errors and try again: Too many requests.
+            assert!(
+                err.to_string().contains("Too many requests"),
+                "Error not due to spam policy"
+            );
+            return Ok(());
+        }
+    }
+    panic!("Expected spam policy to trigger within {txn_count} requests");
 }
 
 #[tokio::test]
@@ -228,18 +320,18 @@ async fn test_validator_traffic_control_spam_delegated() -> Result<(), anyhow::E
         .set_network_config(network_config)
         .build()
         .await;
-    assert_traffic_control_spam_delegated(test_cluster, n as usize, port).await
+    assert_validator_traffic_control_spam_delegated(test_cluster, n as usize, port).await
 }
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Error> {
-    let n = 10;
+    let txn_count = 10;
     let port = 65001;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 120,
         proxy_blocklist_ttl_sec: 120,
         // Test that any N - 1 requests will cause an IP to be added to the blocklist.
-        spam_policy_type: PolicyType::TestNConnIP(n - 1),
+        spam_policy_type: PolicyType::TestNConnIP(txn_count - 1),
         spam_sample_rate: Weight::one(),
         dry_run: false,
         ..Default::default()
@@ -258,7 +350,57 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
         .with_fullnode_fw_config(Some(firewall_config.clone()))
         .build()
         .await;
-    assert_traffic_control_spam_delegated(test_cluster, n as usize, port).await
+
+    // start test firewall server
+    let mut server = NodeFwTestServer::new();
+    server.start(listen_port).await;
+    // await for the server to start
+    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    let context = &mut test_cluster.wallet;
+    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
+    assert!(
+        txns.len() >= txn_count,
+        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
+        txn_count,
+    );
+
+    let txn = txns.swap_remove(0);
+    let tx_digest = txn.digest();
+    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
+    let params = rpc_params![
+        tx_bytes,
+        signatures,
+        SuiTransactionBlockResponseOptions::new(),
+        ExecuteTransactionRequestType::WaitForLocalExecution
+    ];
+
+    // it should take no more than 4 requests to be added to the blocklist
+    let response: SuiTransactionBlockResponse = jsonrpc_client
+        .request("sui_executeTransactionBlock", params.clone())
+        .await
+        .unwrap();
+    let SuiTransactionBlockResponse {
+        digest,
+        confirmed_local_execution,
+        ..
+    } = response;
+    assert_eq!(&digest, tx_digest);
+    assert!(confirmed_local_execution.unwrap());
+
+    for _ in 0..txn_count {
+        let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
+            .request("sui_getTransactionBlock", rpc_params![*tx_digest])
+            .await;
+        assert!(response.is_ok(), "Expected request to succeed");
+    }
+    let fw_blocklist = server.list_addresses_rpc().await;
+    assert!(
+        !fw_blocklist.is_empty(),
+        "Expected blocklist to be non-empty"
+    );
+    server.stop().await;
+    Ok(())
 }
 
 #[tokio::test]
@@ -511,7 +653,7 @@ async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), 
 /// Test that in dry-run mode, actions that would otherwise
 /// lead to request blocking (in this case, a spammy client)
 /// are allowed to proceed.
-async fn assert_traffic_control_dry_run(
+async fn assert_validator_traffic_control_dry_run(
     mut test_cluster: TestCluster,
     txn_count: usize,
 ) -> Result<(), anyhow::Error> {
@@ -525,6 +667,7 @@ async fn assert_traffic_control_dry_run(
     );
 
     let txn = txns.swap_remove(0);
+    let tx_digest = txn.digest();
     let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
     let params = rpc_params![
         tx_bytes,
@@ -533,10 +676,22 @@ async fn assert_traffic_control_dry_run(
         ExecuteTransactionRequestType::WaitForLocalExecution
     ];
 
+    let response: SuiTransactionBlockResponse = jsonrpc_client
+        .request("sui_executeTransactionBlock", params.clone())
+        .await
+        .unwrap();
+    let SuiTransactionBlockResponse {
+        digest,
+        confirmed_local_execution,
+        ..
+    } = response;
+    assert_eq!(&digest, tx_digest);
+    assert!(confirmed_local_execution.unwrap());
+
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..txn_count {
         let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
-            .request("sui_executeTransactionBlock", params.clone())
+            .request("sui_getTransactionBlock", rpc_params![*tx_digest])
             .await;
         assert!(
             response.is_ok(),
@@ -546,7 +701,7 @@ async fn assert_traffic_control_dry_run(
     Ok(())
 }
 
-async fn assert_traffic_control_spam_blocked(
+async fn assert_validator_traffic_control_spam_blocked(
     mut test_cluster: TestCluster,
     txn_count: usize,
 ) -> Result<(), anyhow::Error> {
@@ -561,6 +716,7 @@ async fn assert_traffic_control_spam_blocked(
     );
 
     let txn = txns.swap_remove(0);
+    let tx_digest = txn.digest();
     let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
     let params = rpc_params![
         tx_bytes,
@@ -569,10 +725,22 @@ async fn assert_traffic_control_spam_blocked(
         ExecuteTransactionRequestType::WaitForLocalExecution
     ];
 
+    let response: SuiTransactionBlockResponse = jsonrpc_client
+        .request("sui_executeTransactionBlock", params.clone())
+        .await
+        .unwrap();
+    let SuiTransactionBlockResponse {
+        digest,
+        confirmed_local_execution,
+        ..
+    } = response;
+    assert_eq!(&digest, tx_digest);
+    assert!(confirmed_local_execution.unwrap());
+
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..txn_count {
         let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
-            .request("sui_executeTransactionBlock", params.clone())
+            .request("sui_getTransactionBlock", rpc_params![*tx_digest])
             .await;
         if let Err(err) = response {
             // TODO: fix validator blocking error handling such that the error message
@@ -589,7 +757,7 @@ async fn assert_traffic_control_spam_blocked(
     panic!("Expected spam policy to trigger within {txn_count} requests");
 }
 
-async fn assert_traffic_control_spam_delegated(
+async fn assert_validator_traffic_control_spam_delegated(
     mut test_cluster: TestCluster,
     txn_count: usize,
     listen_port: u16,
@@ -609,6 +777,7 @@ async fn assert_traffic_control_spam_delegated(
     );
 
     let txn = txns.swap_remove(0);
+    let tx_digest = txn.digest();
     let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
     let params = rpc_params![
         tx_bytes,
@@ -618,9 +787,21 @@ async fn assert_traffic_control_spam_delegated(
     ];
 
     // it should take no more than 4 requests to be added to the blocklist
+    let response: SuiTransactionBlockResponse = jsonrpc_client
+        .request("sui_executeTransactionBlock", params.clone())
+        .await
+        .unwrap();
+    let SuiTransactionBlockResponse {
+        digest,
+        confirmed_local_execution,
+        ..
+    } = response;
+    assert_eq!(&digest, tx_digest);
+    assert!(confirmed_local_execution.unwrap());
+
     for _ in 0..txn_count {
         let response: RpcResult<SuiTransactionBlockResponse> = jsonrpc_client
-            .request("sui_executeTransactionBlock", params.clone())
+            .request("sui_getTransactionBlock", rpc_params![*tx_digest])
             .await;
         assert!(response.is_ok(), "Expected request to succeed");
     }

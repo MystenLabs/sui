@@ -347,8 +347,6 @@ impl ValidatorService {
         &self,
         request: tonic::Request<Transaction>,
     ) -> WrappedServiceResponse<HandleTransactionResponse> {
-        let tally_spam = false;
-
         let Self {
             state,
             consensus_adapter,
@@ -416,7 +414,7 @@ impl ValidatorService {
             // to save more CPU.
             return Err(error.into());
         }
-        Ok((tonic::Response::new(info), tally_spam))
+        Ok((tonic::Response::new(info), Weight::zero()))
     }
 
     // In addition to the response from handling the certificates,
@@ -433,7 +431,7 @@ impl ValidatorService {
         _include_auxiliary_data: bool,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         wait_for_effects: bool,
-    ) -> Result<(Option<Vec<HandleCertificateResponseV3>>, bool), tonic::Status> {
+    ) -> Result<(Option<Vec<HandleCertificateResponseV3>>, Weight), tonic::Status> {
         // Validate if cert can be executed
         // Fullnode does not serve handle_certificate call.
         fp_ensure!(
@@ -487,7 +485,7 @@ impl ValidatorService {
                         output_objects: None,
                         auxiliary_data: None,
                     }]),
-                    true,
+                    Weight::one(),
                 ));
             };
         }
@@ -572,7 +570,7 @@ impl ValidatorService {
                     epoch_store,
                 );
             }
-            return Ok((None, false));
+            return Ok((None, Weight::zero()));
         }
 
         // 4) Execute the certificates immediately if they contain only owned object transactions,
@@ -612,11 +610,11 @@ impl ValidatorService {
         ))
         .await?;
 
-        Ok((Some(responses), false))
+        Ok((Some(responses), Weight::zero()))
     }
 }
 
-type WrappedServiceResponse<T> = Result<(tonic::Response<T>, bool), tonic::Status>;
+type WrappedServiceResponse<T> = Result<(tonic::Response<T>, Weight), tonic::Status>;
 
 impl ValidatorService {
     async fn transaction_impl(
@@ -646,12 +644,12 @@ impl ValidatorService {
         )
         .instrument(span)
         .await
-        .map(|(executed, tally_spam)| {
+        .map(|(executed, spam_weight)| {
             (
                 tonic::Response::new(SubmitCertificateResponse {
                     executed: executed.map(|mut x| x.remove(0)).map(Into::into),
                 }),
-                tally_spam,
+                spam_weight,
             )
         })
     }
@@ -676,7 +674,7 @@ impl ValidatorService {
         )
         .instrument(span)
         .await
-        .map(|(resp, tally_spam)| {
+        .map(|(resp, spam_weight)| {
             (
                 tonic::Response::new(
                     resp.expect(
@@ -685,7 +683,7 @@ impl ValidatorService {
                     .remove(0)
                     .into(),
                 ),
-                tally_spam,
+                spam_weight,
             )
         })
     }
@@ -710,7 +708,7 @@ impl ValidatorService {
         )
         .instrument(span)
         .await
-        .map(|(resp, tally_spam)| {
+        .map(|(resp, spam_weight)| {
             (
                 tonic::Response::new(
                     resp.expect(
@@ -718,7 +716,7 @@ impl ValidatorService {
                     )
                     .remove(0),
                 ),
-                tally_spam,
+                spam_weight,
             )
         })
     }
@@ -840,12 +838,12 @@ impl ValidatorService {
         )
         .instrument(span)
         .await
-        .map(|(resp, tally_spam)| {
+        .map(|(resp, spam_weight)| {
             (
                 tonic::Response::new(HandleSoftBundleCertificatesResponseV3 {
                     responses: resp.unwrap_or_default(),
                 }),
-                tally_spam,
+                spam_weight,
             )
         })
     }
@@ -878,7 +876,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<ObjectInfoResponse> {
         let request = request.into_inner();
         let response = self.state.handle_object_info_request(request).await?;
-        Ok((tonic::Response::new(response), true))
+        Ok((tonic::Response::new(response), Weight::one()))
     }
 
     async fn transaction_info_impl(
@@ -887,7 +885,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<TransactionInfoResponse> {
         let request = request.into_inner();
         let response = self.state.handle_transaction_info_request(request).await?;
-        Ok((tonic::Response::new(response), true))
+        Ok((tonic::Response::new(response), Weight::one()))
     }
 
     async fn checkpoint_impl(
@@ -896,7 +894,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<CheckpointResponse> {
         let request = request.into_inner();
         let response = self.state.handle_checkpoint_request(&request)?;
-        Ok((tonic::Response::new(response), true))
+        Ok((tonic::Response::new(response), Weight::one()))
     }
 
     async fn checkpoint_v2_impl(
@@ -905,7 +903,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<CheckpointResponseV2> {
         let request = request.into_inner();
         let response = self.state.handle_checkpoint_request_v2(&request)?;
-        Ok((tonic::Response::new(response), true))
+        Ok((tonic::Response::new(response), Weight::one()))
     }
 
     async fn get_system_state_object_impl(
@@ -916,7 +914,7 @@ impl ValidatorService {
             .state
             .get_object_cache_reader()
             .get_sui_system_state_object_unsafe()?;
-        Ok((tonic::Response::new(response), true))
+        Ok((tonic::Response::new(response), Weight::one()))
     }
 
     async fn handle_traffic_req(&self, client: Option<IpAddr>) -> Result<(), tonic::Status> {
@@ -935,13 +933,15 @@ impl ValidatorService {
     fn handle_traffic_resp<T>(
         &self,
         client: Option<IpAddr>,
-        response: &Result<tonic::Response<T>, tonic::Status>,
-        tally_spam: bool,
-    ) {
-        let error: Option<SuiError> = if let Err(status) = response {
-            Some(SuiError::from(status.clone()))
-        } else {
-            None
+        wrapped_response: WrappedServiceResponse<T>,
+    ) -> Result<tonic::Response<T>, tonic::Status> {
+        let (error, spam_weight, unwrapped_response) = match wrapped_response {
+            Ok((result, spam_weight)) => (None, spam_weight.clone(), Ok(result)),
+            Err(status) => (
+                Some(SuiError::from(status.clone())),
+                Weight::zero(),
+                Err(status.clone()),
+            ),
         };
 
         if let Some(traffic_controller) = self.traffic_controller.clone() {
@@ -949,10 +949,11 @@ impl ValidatorService {
                 direct: client,
                 through_fullnode: None,
                 error_weight: error.map(normalize).unwrap_or(Weight::zero()),
-                tally_spam,
+                spam_weight,
                 timestamp: SystemTime::now(),
             })
         }
+        unwrapped_response
     }
 }
 
@@ -1061,21 +1062,9 @@ macro_rules! handle_with_decoration {
         // check if either IP is blocked, in which case return early
         $self.handle_traffic_req(client.clone()).await?;
 
-        // handle response tallying.
-        match $self.$func_name($request).await {
-            Ok((result, tally_spam)) => {
-                let response = Ok(result);
-                $self.handle_traffic_resp(client, &response, tally_spam);
-                response
-            }
-            Err(err) => {
-                // TODO: should we set tally_spam to true here for error
-                // case?
-                let response = Err(err);
-                $self.handle_traffic_resp(client, &response, false);
-                response
-            }
-        }
+        // handle traffic tallying
+        let wrapped_response = $self.$func_name($request).await;
+        $self.handle_traffic_resp(client, wrapped_response)
     }};
 }
 

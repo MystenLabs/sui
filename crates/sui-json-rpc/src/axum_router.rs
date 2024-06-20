@@ -165,13 +165,14 @@ async fn process_raw_request<L: Logger>(
                 return blocked_response;
             }
         }
-        let tally_spam = tally_spam_for_method(&request.method);
-        let response = process_request(request, api_version, service.call_data()).await;
 
         // handle response tallying
+        let method = request.method.to_string();
+        let response = process_request(request, api_version, service.call_data()).await;
         if let Some(traffic_controller) = &service.traffic_controller {
-            handle_traffic_resp(traffic_controller.clone(), client, &response, tally_spam);
+            handle_traffic_resp(traffic_controller.clone(), client, &response, method);
         }
+
         response
     } else if let Ok(_batch) = serde_json::from_str::<Vec<&RawValue>>(raw_request) {
         MethodResponse::error(
@@ -198,12 +199,12 @@ async fn handle_traffic_req(
     }
 }
 
-fn tally_spam_for_method(method: &str) -> bool {
+fn spam_weight_for_method(method: String) -> Weight {
     // unless request requires gas payment, count against
     // spam tally
-    match method {
-        "sui_executeTransactionBlock" | "sui_devInspectTransactionBlock" => false,
-        _ => true,
+    match method.as_str() {
+        "sui_executeTransactionBlock" | "sui_devInspectTransactionBlock" => Weight::zero(),
+        _ => Weight::one(),
     }
 }
 
@@ -211,14 +212,14 @@ fn handle_traffic_resp(
     traffic_controller: Arc<TrafficController>,
     client: Option<IpAddr>,
     response: &MethodResponse,
-    tally_spam: bool,
+    method: String,
 ) {
     let error = response.error_code.map(ErrorCode::from);
     traffic_controller.tally(TrafficTally {
         direct: client,
         through_fullnode: None,
         error_weight: error.map(normalize).unwrap_or(Weight::zero()),
-        tally_spam,
+        spam_weight: spam_weight_for_method(method),
         timestamp: SystemTime::now(),
     });
 }
