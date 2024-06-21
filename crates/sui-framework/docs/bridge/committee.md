@@ -7,6 +7,7 @@ title: Module `0xb::committee`
 -  [Struct `BlocklistValidatorEvent`](#0xb_committee_BlocklistValidatorEvent)
 -  [Struct `BridgeCommittee`](#0xb_committee_BridgeCommittee)
 -  [Struct `CommitteeUpdateEvent`](#0xb_committee_CommitteeUpdateEvent)
+-  [Struct `CommitteeMemberUrlUpdateEvent`](#0xb_committee_CommitteeMemberUrlUpdateEvent)
 -  [Struct `CommitteeMember`](#0xb_committee_CommitteeMember)
 -  [Struct `CommitteeMemberRegistration`](#0xb_committee_CommitteeMemberRegistration)
 -  [Constants](#@Constants_0)
@@ -130,6 +131,39 @@ title: Module `0xb::committee`
 </dd>
 <dt>
 <code>stake_participation_percentage: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0xb_committee_CommitteeMemberUrlUpdateEvent"></a>
+
+## Struct `CommitteeMemberUrlUpdateEvent`
+
+
+
+<pre><code><b>struct</b> <a href="committee.md#0xb_committee_CommitteeMemberUrlUpdateEvent">CommitteeMemberUrlUpdateEvent</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>member: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>new_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
 </dt>
 <dd>
 
@@ -663,6 +697,10 @@ title: Module `0xb::committee`
         <b>let</b> (_, member) = self.members.get_entry_by_idx_mut(idx);
         <b>if</b> (member.sui_address == ctx.sender()) {
             member.http_rest_url = new_url;
+            emit (<a href="committee.md#0xb_committee_CommitteeMemberUrlUpdateEvent">CommitteeMemberUrlUpdateEvent</a> {
+                member: member.bridge_pubkey_bytes,
+                new_url
+            });
             <b>return</b>
         };
         idx = idx + 1;
