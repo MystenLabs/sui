@@ -6,14 +6,14 @@ import { normalizeSuiAddress } from '@mysten/sui/utils';
 
 import { ZkSendLink } from './claim.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
-import { MAINNET_CONTRACT_IDS } from './zk-bag.js';
+import { MAINNET_CONTRACT_IDS, TESTNET_CONTRACT_IDS } from './zk-bag.js';
 
 export async function getSentTransactionsWithLinks({
 	address,
 	cursor,
 	limit = 10,
 	network = 'mainnet',
-	contract = MAINNET_CONTRACT_IDS,
+	contract = network === 'testnet' ? TESTNET_CONTRACT_IDS : MAINNET_CONTRACT_IDS,
 	client = new SuiClient({ url: getFullnodeUrl(network) }),
 	loadClaimedAssets = false,
 	...linkOptions

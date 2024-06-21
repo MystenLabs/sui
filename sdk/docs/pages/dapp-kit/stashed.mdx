@@ -4,8 +4,9 @@ dApp Kit provides out-of-the-box opt-in support for the [Stashed wallet](../zkse
 
 ## Setup
 
-To enable support for Stashed wallets, pass the `stashedWallet` object to the `WalletProvider`
-component. This object has the following properties:
+The stashed wallet will be enabled by default, using the windows title as the name of the app. To
+customize the name of your app when connecting to a stashed wallet, you can pass options to the
+`stashedWallet` prop of the `WalletProvider`. This object has the following properties:
 
 - **`name`** - The name of your dApp, shown to the user when connecting to the dApp.
 

@@ -6,12 +6,12 @@ import type { CoinStruct } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import type { Keypair, Signer } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import type { TransactionObjectArgument, TransactionObjectInput } from '@mysten/sui/transactions';
+import type { TransactionObjectArgument } from '@mysten/sui/transactions';
 import { Transaction } from '@mysten/sui/transactions';
 import { normalizeStructTag, normalizeSuiAddress, SUI_TYPE_ARG, toB64 } from '@mysten/sui/utils';
 
 import type { ZkBagContractOptions } from './zk-bag.js';
-import { MAINNET_CONTRACT_IDS, ZkBag } from './zk-bag.js';
+import { MAINNET_CONTRACT_IDS, TESTNET_CONTRACT_IDS, ZkBag } from './zk-bag.js';
 
 interface ZkSendLinkRedirect {
 	url: string;
@@ -26,7 +26,7 @@ export interface ZkSendLinkBuilderOptions {
 	client?: SuiClient;
 	sender: string;
 	redirect?: ZkSendLinkRedirect;
-	contract?: ZkBagContractOptions | null;
+	contract?: ZkBagContractOptions;
 }
 
 const DEFAULT_ZK_SEND_LINK_OPTIONS = {
@@ -39,11 +39,6 @@ const SUI_COIN_TYPE = normalizeStructTag(SUI_TYPE_ARG);
 
 export interface CreateZkSendLinkOptions {
 	transaction?: Transaction;
-	calculateGas?: (options: {
-		balances: Map<string, bigint>;
-		objects: TransactionObjectInput[];
-		gasEstimateFromDryRun: bigint;
-	}) => Promise<bigint> | bigint;
 }
 
 export class ZkSendLinkBuilder {
@@ -60,7 +55,7 @@ export class ZkSendLinkBuilder {
 	#client: SuiClient;
 	#redirect?: ZkSendLinkRedirect;
 	#coinsByType = new Map<string, CoinStruct[]>();
-	#contract?: ZkBag<ZkBagContractOptions>;
+	#contract: ZkBag<ZkBagContractOptions>;
 
 	constructor({
 		host = DEFAULT_ZK_SEND_LINK_OPTIONS.host,
@@ -70,7 +65,7 @@ export class ZkSendLinkBuilder {
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		sender,
 		redirect,
-		contract = network === 'mainnet' ? MAINNET_CONTRACT_IDS : undefined,
+		contract = network === 'testnet' ? TESTNET_CONTRACT_IDS : MAINNET_CONTRACT_IDS,
 	}: ZkSendLinkBuilderOptions) {
 		this.#host = host;
 		this.#path = path;
@@ -78,10 +73,7 @@ export class ZkSendLinkBuilder {
 		this.keypair = keypair;
 		this.#client = client;
 		this.sender = normalizeSuiAddress(sender);
-
-		if (contract) {
-			this.#contract = new ZkBag(contract.packageId, contract);
-		}
+		this.#contract = new ZkBag(contract.packageId, contract);
 	}
 
 	addClaimableMist(amount: bigint) {
@@ -104,9 +96,7 @@ export class ZkSendLinkBuilder {
 	getLink(): string {
 		const link = new URL(this.#host);
 		link.pathname = this.#path;
-		link.hash = `${this.#contract ? '$' : ''}${toB64(
-			decodeSuiPrivateKey(this.keypair.getSecretKey()).secretKey,
-		)}`;
+		link.hash = `$${toB64(decodeSuiPrivateKey(this.keypair.getSecretKey()).secretKey)}`;
 
 		if (this.#redirect) {
 			link.searchParams.set('redirect_url', this.#redirect.url);
@@ -138,14 +128,7 @@ export class ZkSendLinkBuilder {
 
 		return result;
 	}
-	async createSendTransaction({
-		transaction = new Transaction(),
-		calculateGas,
-	}: CreateZkSendLinkOptions = {}) {
-		if (!this.#contract) {
-			return this.#createSendTransactionWithoutContract({ transaction, calculateGas });
-		}
-
+	async createSendTransaction({ transaction = new Transaction() }: CreateZkSendLinkOptions = {}) {
 		transaction.setSenderIfNotSet(this.sender);
 
 		return ZkSendLinkBuilder.createLinks({
@@ -221,71 +204,6 @@ export class ZkSendLinkBuilder {
 		return refsWithType;
 	}
 
-	async #createSendTransactionWithoutContract({
-		transaction: tx = new Transaction(),
-		calculateGas,
-	}: CreateZkSendLinkOptions = {}) {
-		const gasEstimateFromDryRun = await this.#estimateClaimGasFee();
-		const baseGasAmount = calculateGas
-			? await calculateGas({
-					balances: this.balances,
-					objects: [...this.objectIds],
-					gasEstimateFromDryRun,
-			  })
-			: gasEstimateFromDryRun * 2n;
-
-		// Ensure that rounded gas is not less than the calculated gas
-		const gasWithBuffer = baseGasAmount + 1013n;
-		// Ensure that gas amount ends in 987
-		const roundedGasAmount = gasWithBuffer - (gasWithBuffer % 1000n) - 13n;
-
-		const address = this.keypair.toSuiAddress();
-		const objectsToTransfer = (await this.#objectsToTransfer(tx)).map((obj) => obj.ref);
-		const [gas] = tx.splitCoins(tx.gas, [roundedGasAmount]);
-		objectsToTransfer.push(gas);
-
-		tx.setSenderIfNotSet(this.sender);
-		tx.transferObjects(objectsToTransfer, address);
-
-		return tx;
-	}
-
-	async #estimateClaimGasFee(): Promise<bigint> {
-		const tx = new Transaction();
-		tx.setSender(this.sender);
-		tx.setGasPayment([]);
-		tx.transferObjects([tx.gas], this.keypair.toSuiAddress());
-
-		const idsToTransfer = [...this.objectIds];
-
-		for (const [coinType] of this.balances) {
-			const coins = await this.#getCoinsByType(coinType);
-
-			if (!coins.length) {
-				throw new Error(`Sending account does not contain any coins of type ${coinType}`);
-			}
-
-			idsToTransfer.push(coins[0].coinObjectId);
-		}
-
-		if (idsToTransfer.length > 0) {
-			tx.transferObjects(
-				idsToTransfer.map((id) => tx.object(id)),
-				this.keypair.toSuiAddress(),
-			);
-		}
-
-		const result = await this.#client.dryRunTransactionBlock({
-			transactionBlock: await tx.build({ client: this.#client }),
-		});
-
-		return (
-			BigInt(result.effects.gasUsed.computationCost) +
-			BigInt(result.effects.gasUsed.storageCost) -
-			BigInt(result.effects.gasUsed.storageRebate)
-		);
-	}
-
 	async #getCoinsByType(coinType: string) {
 		if (this.#coinsByType.has(coinType)) {
 			return this.#coinsByType.get(coinType)!;
@@ -306,7 +224,7 @@ export class ZkSendLinkBuilder {
 		network = 'mainnet',
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		transaction = new Transaction(),
-		contract: contractIds = MAINNET_CONTRACT_IDS,
+		contract: contractIds = network === 'testnet' ? TESTNET_CONTRACT_IDS : MAINNET_CONTRACT_IDS,
 	}: {
 		transaction?: Transaction;
 		client?: SuiClient;

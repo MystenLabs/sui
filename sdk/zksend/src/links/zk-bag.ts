@@ -15,6 +15,12 @@ export const MAINNET_CONTRACT_IDS: ZkBagContractOptions = {
 	bagStoreTableId: '0x616db54ca564660cd58e36a4548be68b289371ef2611485c62c374a60960084e',
 };
 
+export const TESTNET_CONTRACT_IDS: ZkBagContractOptions = {
+	packageId: '0x036fee67274d0d85c3532f58296abe0dee86b93864f1b2b9074be6adb388f138',
+	bagStoreId: '0x5c63e71734c82c48a3cb9124c54001d1a09736cfb1668b3b30cd92a96dd4d0ce',
+	bagStoreTableId: '0x4e1bc4085d64005e03eb4eab2510d527aeba9548cda431cb8f149ff37451f870',
+};
+
 export class ZkBag<IDs> {
 	#package: string;
 	#module = 'zk_bag' as const;

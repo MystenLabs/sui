@@ -28,7 +28,7 @@ import { ZkSendLinkBuilder } from './builder.js';
 import type { LinkAssets } from './utils.js';
 import { getAssetsFromTransaction, isOwner, ownedAfterChange } from './utils.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
-import { MAINNET_CONTRACT_IDS, ZkBag } from './zk-bag.js';
+import { MAINNET_CONTRACT_IDS, TESTNET_CONTRACT_IDS, ZkBag } from './zk-bag.js';
 
 const DEFAULT_ZK_SEND_LINK_OPTIONS = {
 	host: 'https://zksend.com',
@@ -89,7 +89,7 @@ export class ZkSendLink {
 		network = DEFAULT_ZK_SEND_LINK_OPTIONS.network,
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		keypair,
-		contract = network === 'mainnet' ? MAINNET_CONTRACT_IDS : null,
+		contract = network === 'testnet' ? TESTNET_CONTRACT_IDS : MAINNET_CONTRACT_IDS,
 		address,
 		host = DEFAULT_ZK_SEND_LINK_OPTIONS.host,
 		path = DEFAULT_ZK_SEND_LINK_OPTIONS.path,
@@ -109,11 +109,7 @@ export class ZkSendLink {
 		this.#path = path;
 
 		if (isContractLink) {
-			if (!contract) {
-				throw new Error('Contract options are required for contract based links');
-			}
-
-			this.#contract = new ZkBag(contract.packageId, contract);
+			this.#contract = new ZkBag(contract!.packageId, contract!);
 		}
 	}
 
