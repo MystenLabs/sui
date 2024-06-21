@@ -12,13 +12,11 @@ export function useDappPreflight({
 	requestType,
 	origin,
 	transaction,
-	message,
 	requestId,
 }: {
 	requestType: RequestType;
 	origin?: string;
 	transaction?: Transaction;
-	message?: string;
 	requestId: string;
 }) {
 	const { request } = useAppsBackend();
@@ -26,7 +24,7 @@ export function useDappPreflight({
 
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
-		queryKey: ['dapp-preflight', { requestId, requestType, origin, message }],
+		queryKey: ['dapp-preflight', { requestId, requestType, origin }],
 		queryFn: async () => {
 			if (!origin) {
 				throw new Error('No origin provided');
@@ -37,9 +35,7 @@ export function useDappPreflight({
 				origin,
 			};
 
-			if (requestType === RequestType.SIGN_MESSAGE) {
-				body.message = message;
-			} else if (requestType === RequestType.SIGN_TRANSACTION && transaction) {
+			if (requestType === RequestType.SIGN_TRANSACTION && transaction) {
 				const transactionBytes = await transaction.build({ client });
 				body.transactionBytes = toB64(transactionBytes);
 			}
