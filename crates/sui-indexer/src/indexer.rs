@@ -18,7 +18,7 @@ use sui_data_ingestion_core::{
 use crate::build_json_rpc_server;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
-use crate::handlers::objects_snapshot_processor::{ObjectsSnapshotProcessor, SnapshotLagConfig};
+use crate::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
@@ -60,7 +60,7 @@ impl Indexer {
         config: &IndexerConfig,
         store: S,
         metrics: IndexerMetrics,
-        snapshot_config: SnapshotLagConfig,
+        _snapshot_config: SnapshotLagConfig,
         cancel: CancellationToken,
     ) -> Result<(), IndexerError> {
         info!(
@@ -88,15 +88,6 @@ impl Indexer {
             .unwrap();
 
         let rest_client = sui_rest_api::Client::new(format!("{}/rest", config.rpc_client_url));
-
-        let objects_snapshot_processor = ObjectsSnapshotProcessor::new_with_config(
-            rest_client.clone(),
-            store.clone(),
-            metrics.clone(),
-            snapshot_config,
-            cancel.clone(),
-        );
-        spawn_monitored_task!(objects_snapshot_processor.start());
 
         let cancel_clone = cancel.clone();
         let (exit_sender, exit_receiver) = oneshot::channel();

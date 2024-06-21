@@ -19,11 +19,10 @@ use crate::types::IndexerResult;
 use super::{CheckpointDataToCommit, EpochToCommit};
 
 const CHECKPOINT_COMMIT_BATCH_SIZE: usize = 100;
-const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: u64 = 900;
 
 pub async fn start_tx_checkpoint_commit_task<S>(
     state: S,
-    client: Client,
+    _client: Client,
     metrics: IndexerMetrics,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
     commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
@@ -43,7 +42,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
 
     let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(tx_indexing_receiver)
         .ready_chunks(checkpoint_commit_batch_size);
-    let mut object_snapshot_backfill_mode = true;
+    let object_snapshot_backfill_mode = false;
     let mut unprocessed = HashMap::new();
     let mut batch = vec![];
 
@@ -51,22 +50,6 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         if cancel.is_cancelled() {
             break;
         }
-
-        let mut latest_fn_cp_res = client.get_latest_checkpoint().await;
-        while latest_fn_cp_res.is_err() {
-            error!("Failed to get latest checkpoint from the network");
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            latest_fn_cp_res = client.get_latest_checkpoint().await;
-        }
-        // unwrap is safe here because we checked that latest_fn_cp_res is Ok above
-        let latest_fn_cp = latest_fn_cp_res.unwrap().sequence_number;
-        // unwrap is safe b/c we checked for empty batch above
-        let latest_committed_cp = indexed_checkpoint_batch
-            .last()
-            .unwrap()
-            .checkpoint
-            .sequence_number;
-
         // split the batch into smaller batches per epoch to handle partitioning
         for checkpoint in indexed_checkpoint_batch {
             unprocessed.insert(checkpoint.checkpoint.sequence_number, checkpoint);
@@ -99,11 +82,6 @@ pub async fn start_tx_checkpoint_commit_task<S>(
             )
             .await;
             batch = vec![];
-        }
-        // this is a one-way flip in case indexer falls behind again, so that the objects snapshot
-        // table will not be populated by both committer and async snapshot processor at the same time.
-        if latest_committed_cp + OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG > latest_fn_cp {
-            object_snapshot_backfill_mode = false;
         }
     }
 }
