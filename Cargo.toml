@@ -696,3 +696,6 @@ field_names = "0.2.0"
 semver = "1.0.16"
 spinners = "4.1.0"
 include_dir = "0.7.3"
+
+[patch.crates-io]
+anyhow = { git = "https://github.com/mystenmark/anyhow.git", rev = "4b31c23c49e7be753738ae07ba3d4e0cd3630fa6" }
