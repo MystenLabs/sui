@@ -207,7 +207,7 @@ async fn handle_update_committee_blocklist_action(
                 err
             ))
         })?;
-        let blocklisted_members = keys
+        let members_to_update = keys
             .split(',')
             .map(|s| {
                 let bytes = Hex::decode(s).map_err(|e| anyhow::anyhow!("{:?}", e))?;
@@ -220,7 +220,7 @@ async fn handle_update_committee_blocklist_action(
             chain_id,
             nonce,
             blocklist_type,
-            blocklisted_members,
+            members_to_update,
         });
 
         let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
@@ -626,7 +626,7 @@ mod tests {
             nonce: 129,
             chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Blocklist,
-            blocklisted_members: vec![pub_key_bytes.clone()],
+            members_to_update: vec![pub_key_bytes.clone()],
         });
         client.request_sign_bridge_action(action).await.unwrap();
     }
