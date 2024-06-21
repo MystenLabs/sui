@@ -707,10 +707,10 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         &self,
         indices: Vec<EventIndex>,
     ) -> Result<(), IndexerError> {
-        // let guard = self
-        //     .metrics
-        //     .checkpoint_db_commit_latency_event_indices_chunks
-        //     .start_timer();
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_event_indices_chunks
+            .start_timer();
         let len = indices.len();
         let (
             event_emit_packages,
@@ -759,6 +759,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             },
         );
 
+        // Now persist all the event indices in parallel into their tables.
         let mut futures = vec![];
         futures.push(self.spawn_blocking_task(move |this| {
             persist_chunk_into_table!(
@@ -828,8 +829,8 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     e
                 ))
             })?;
-        // let elapsed = guard.stop_and_record();
-        // info!(elapsed, "Persisted {} chunked event indices", len);
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} chunked event indices", len);
         Ok(())
     }
 
@@ -1655,10 +1656,10 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             return Ok(());
         }
         let len = indices.len();
-        // let guard = self
-        //     .metrics
-        //     .checkpoint_db_commit_latency_event_indices
-        //     .start_timer();
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_event_indices
+            .start_timer();
         let chunks = chunk!(indices, self.config.parallel_chunk_size);
 
         let futures = chunks
@@ -1685,8 +1686,8 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
                     e
                 ))
             })?;
-        // let elapsed = guard.stop_and_record();
-        // info!(elapsed, "Persisted {} event_indices chunks", len);
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} event_indices chunks", len);
         Ok(())
     }
 

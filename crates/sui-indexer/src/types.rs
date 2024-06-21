@@ -14,7 +14,7 @@ use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::effects::TransactionEffects;
-use sui_types::event::{Event, SystemEpochInfoEvent};
+use sui_types::event::SystemEpochInfoEvent;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointCommitment, CheckpointDigest, EndOfEpochData,
 };

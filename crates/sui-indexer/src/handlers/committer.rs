@@ -3,7 +3,6 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use diesel::r2d2::event;
 use tap::tap::TapFallible;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
