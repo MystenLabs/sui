@@ -248,7 +248,7 @@ impl StakedSui {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_field(ctx, name, Some(self.super_.super_.version_impl()))
+            .dynamic_field(ctx, name, Some(self.super_.root_version()))
             .await
     }
 
@@ -265,7 +265,7 @@ impl StakedSui {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_object_field(ctx, name, Some(self.super_.super_.version_impl()))
+            .dynamic_object_field(ctx, name, Some(self.super_.root_version()))
             .await
     }
 
@@ -288,7 +288,7 @@ impl StakedSui {
                 after,
                 last,
                 before,
-                Some(self.super_.super_.version_impl()),
+                Some(self.super_.root_version()),
             )
             .await
     }
