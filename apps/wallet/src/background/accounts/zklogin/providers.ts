@@ -22,6 +22,7 @@ export interface ZkLoginProviderData {
 }
 
 const isDev = process.env.NODE_ENV === 'development';
+const isBeta = process.env.WALLET_BETA === 'true';
 
 export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData> = {
 	google: {
@@ -74,8 +75,8 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 			response_type: 'id_token',
 			scope: 'openid email',
 		},
-		enabled: isDev,
-		hidden: !isDev,
+		enabled: isDev || isBeta,
+		hidden: !(isDev || isBeta),
 		mfaLink: 'https://www.facebook.com/help/148233965247823',
 		order: 2,
 	},
