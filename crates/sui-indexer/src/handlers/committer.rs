@@ -29,8 +29,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
     mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
-) -> IndexerResult<()>
-where
+) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
     use futures::StreamExt;
@@ -44,17 +43,7 @@ where
 
     let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(tx_indexing_receiver)
         .ready_chunks(checkpoint_commit_batch_size);
-
     let mut object_snapshot_backfill_mode = true;
-    let latest_object_snapshot_seq = state
-        .get_latest_object_snapshot_checkpoint_sequence_number()
-        .await?;
-    let latest_cp_seq = state.get_latest_checkpoint_sequence_number().await?;
-    if latest_object_snapshot_seq != latest_cp_seq {
-        info!("Flipping object_snapshot_backfill_mode to false because objects_snapshot is behind already!");
-        object_snapshot_backfill_mode = false;
-    }
-
     let mut unprocessed = HashMap::new();
     let mut batch = vec![];
 
@@ -114,11 +103,9 @@ where
         // this is a one-way flip in case indexer falls behind again, so that the objects snapshot
         // table will not be populated by both committer and async snapshot processor at the same time.
         if latest_committed_cp + OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG > latest_fn_cp {
-            info!("Flipping object_snapshot_backfill_mode to false because objects_snapshot is close to up-to-date.");
             object_snapshot_backfill_mode = false;
         }
     }
-    Ok(())
 }
 
 // Unwrap: Caller needs to make sure indexed_checkpoint_batch is not empty
