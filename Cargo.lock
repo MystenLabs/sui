@@ -12700,7 +12700,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-config"
-version = "1.28.0"
+version = "1.29.0"
 dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
