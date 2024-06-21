@@ -127,7 +127,7 @@ fn extra_derives(attrs: &[Attribute]) -> BTreeSet<Ident> {
                 continue;
             };
 
-            derives.remove(&ident);
+            derives.remove(ident);
         }
     }
 
