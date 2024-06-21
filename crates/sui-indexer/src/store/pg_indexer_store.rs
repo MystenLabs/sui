@@ -1312,11 +1312,25 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     "Failed to prune tx_changed_objects table"
                 ];
                 prune_tx_indice_table![
-                    tx_calls,
+                    tx_calls_pkg,
                     conn,
                     min_tx,
                     max_tx,
-                    "Failed to prune tx_calls table"
+                    "Failed to prune tx_calls_pkg table"
+                ];
+                prune_tx_indice_table![
+                    tx_calls_mod,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune tx_calls_mod table"
+                ];
+                prune_tx_indice_table![
+                    tx_calls_fun,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune tx_calls_fun table"
                 ];
                 prune_tx_indice_table![
                     tx_digests,

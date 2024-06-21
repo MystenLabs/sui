@@ -26,6 +26,8 @@ diesel::table! {
         checkpoint_commitments -> Bytea,
         validator_signature -> Bytea,
         end_of_epoch_data -> Nullable<Bytea>,
+        min_tx_sequence_number -> Nullable<Int8>,
+        max_tx_sequence_number -> Nullable<Int8>
     }
 }
 
@@ -336,7 +338,9 @@ macro_rules! for_all_tables {
             objects_version,
             packages,
             transactions,
-            tx_calls,
+            tx_calls_pkg,
+            tx_calls_mod,
+            tx_calls_fun,
             tx_changed_objects,
             tx_digests,
             tx_input_objects,

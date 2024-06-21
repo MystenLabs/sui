@@ -397,6 +397,7 @@ where
                     checkpoint_seq, tx_digest, sender_signed_data.digest()
                 )));
             }
+
             let tx = sender_signed_data.transaction_data();
             let events = events
                 .as_ref()
