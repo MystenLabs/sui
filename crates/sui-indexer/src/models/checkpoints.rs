@@ -36,6 +36,8 @@ pub struct StoredCheckpoint {
     pub checkpoint_commitments: Vec<u8>,
     pub validator_signature: Vec<u8>,
     pub end_of_epoch_data: Option<Vec<u8>>,
+    pub min_tx_sequence_number: Option<i64>,
+    pub max_tx_sequence_number: Option<i64>,
 }
 
 impl From<&IndexedCheckpoint> for StoredCheckpoint {
@@ -77,6 +79,8 @@ impl From<&IndexedCheckpoint> for StoredCheckpoint {
                 .as_ref()
                 .map(|d| bcs::to_bytes(d).unwrap()),
             end_of_epoch: c.end_of_epoch_data.is_some(),
+            min_tx_sequence_number: c.min_tx_sequence_number.map(|t| t as i64),
+            max_tx_sequence_number: c.max_tx_sequence_number.map(|t| t as i64),
         }
     }
 }
