@@ -176,7 +176,12 @@ Response: {
                 }
               },
               "value": {
-                "json": "df1"
+                "contents": {
+                  "json": {
+                    "id": "0x49cf623123e519b96c66de2c643cd2823f87957fbfcec77c2797acfe5b1925bb",
+                    "count": "2"
+                  }
+                }
               }
             }
           },
@@ -312,8 +317,8 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x844185d7b145f503838a1d509845a40ee249534f723dd2f003d9efdfc581000d",
-              "count": "1"
+              "id": "0x49cf623123e519b96c66de2c643cd2823f87957fbfcec77c2797acfe5b1925bb",
+              "count": "2"
             }
           }
         }
@@ -394,7 +399,12 @@ Response: {
                 }
               },
               "value": {
-                "json": "df1"
+                "contents": {
+                  "json": {
+                    "id": "0x49cf623123e519b96c66de2c643cd2823f87957fbfcec77c2797acfe5b1925bb",
+                    "count": "2"
+                  }
+                }
               }
             }
           },
@@ -481,7 +491,12 @@ Response: {
                 }
               },
               "value": {
-                "json": "df6"
+                "contents": {
+                  "json": {
+                    "id": "0x49cf623123e519b96c66de2c643cd2823f87957fbfcec77c2797acfe5b1925bb",
+                    "count": "2"
+                  }
+                }
               }
             }
           },
@@ -647,7 +662,12 @@ Response: {
                 }
               },
               "value": {
-                "json": "df1"
+                "contents": {
+                  "json": {
+                    "id": "0x49cf623123e519b96c66de2c643cd2823f87957fbfcec77c2797acfe5b1925bb",
+                    "count": "2"
+                  }
+                }
               }
             }
           },
@@ -720,7 +740,12 @@ Response: {
                 }
               },
               "value": {
-                "json": "df5"
+                "contents": {
+                  "json": {
+                    "id": "0x49cf623123e519b96c66de2c643cd2823f87957fbfcec77c2797acfe5b1925bb",
+                    "count": "2"
+                  }
+                }
               }
             }
           },
@@ -831,7 +856,14 @@ Response: {
                   "repr": "u64"
                 }
               },
-              "value": null
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x49cf623123e519b96c66de2c643cd2823f87957fbfcec77c2797acfe5b1925bb",
+                    "count": "2"
+                  }
+                }
+              }
             }
           }
         ]
@@ -842,7 +874,40 @@ Response: {
       "dynamicFields": {
         "edges": [
           {
-            "cursor": "IDRsS3vhS278nT8DX1FxtdG8Rsk9KKjH5ZU3Lq2fp1+oBwAAAAAAAAA=",
+            "cursor": "ICqrOlZMehwZo7RQiTUBo9x8xQUO+2aWXUyFsrYcBpiqBwAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "pAEAAAAAAAA=",
+                "type": {
+                  "repr": "u64"
+                }
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x49cf623123e519b96c66de2c643cd2823f87957fbfcec77c2797acfe5b1925bb",
+                    "count": "2"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "cursor": "IGzyQPM2sCXzzf/ffZn4ejUrGDdWWBP9lzjprMgXO6HUBwAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNg==",
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                }
+              },
+              "value": {
+                "json": "df6"
+              }
+            }
+          },
+          {
+            "cursor": "IHyU3J4wb+4rtDayF7wzyFfPprk19Yy1HgerwvaerQQgBwAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "A2RmNQ==",
