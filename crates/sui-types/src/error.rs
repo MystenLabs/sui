@@ -255,9 +255,6 @@ pub enum UserInputError {
         coin_type: String,
     },
 
-    #[error("Coin type is globally paused for use: {coin_type}")]
-    CoinTypeGlobalPause { coin_type: String },
-
     #[error("Commands following a command with Random can only be TransferObjects or MergeCoins")]
     PostRandomCommandRestrictions,
 
@@ -284,6 +281,9 @@ pub enum UserInputError {
         expected: u64,
         actual: u64,
     },
+
+    #[error("Coin type is globally paused for use: {coin_type}")]
+    CoinTypeGlobalPause { coin_type: String },
 }
 
 #[derive(

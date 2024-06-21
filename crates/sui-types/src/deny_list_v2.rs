@@ -125,6 +125,7 @@ pub fn get_per_type_coin_deny_list_v2(
             per_type_key: coin_type.as_bytes().to_vec(),
         },
     };
+    // TODO: Consider caching the config object UID to avoid repeat deserialization.
     let config: Config =
         get_dynamic_field_from_store(object_store, deny_list_root.id(), &config_key).ok()?;
     Some(config)

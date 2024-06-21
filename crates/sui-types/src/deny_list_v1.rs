@@ -139,6 +139,7 @@ pub struct RegulatedCoinMetadata {
 }
 
 pub fn get_deny_list_root_object(object_store: &dyn ObjectStore) -> Option<Object> {
+    // TODO: We should return error if this is not found.
     match object_store.get_object(&SUI_DENY_LIST_OBJECT_ID) {
         Ok(Some(obj)) => Some(obj),
         Ok(None) => {
