@@ -22,7 +22,8 @@ export interface ZkLoginProviderData {
 }
 
 const isDev = process.env.NODE_ENV === 'development';
-const isBeta = process.env.WALLET_BETA === 'true';
+const isBeta =
+	process.env.WALLET_BETA === 'true' || (process.env.WALLET_BETA as unknown as boolean) === true;
 
 export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData> = {
 	google: {
