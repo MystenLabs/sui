@@ -43,7 +43,7 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 
 use crate::errors::IndexerError;
-use crate::metrics::IndexerMetrics;
+use crate::metrics::{report_checkpoint_age, IndexerMetrics};
 
 use crate::db::ConnectionPool;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
@@ -120,9 +120,6 @@ where
     T: R2D2Connection + 'static,
 {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
-        checkpoint
-            .checkpoint_summary
-            .report_checkpoint_age_ms(&self.metrics.downloaded_checkpoint_age_ms);
         self.metrics
             .max_downloaded_checkpoint_sequence_number
             .set(checkpoint.checkpoint_summary.sequence_number as i64);
@@ -134,6 +131,11 @@ where
             checkpoint.checkpoint_summary.sequence_number,
             chrono::Utc::now().timestamp_millis(),
             checkpoint.checkpoint_summary.timestamp_ms
+        );
+        report_checkpoint_age(
+            &self.metrics.downloaded_checkpoint_age_ms,
+            checkpoint.checkpoint_summary.sequence_number,
+            checkpoint.checkpoint_summary.timestamp_ms,
         );
         let checkpoint_data = Self::index_checkpoint(
             self.state.clone().into(),
@@ -324,7 +326,11 @@ where
             chrono::Utc::now().timestamp_millis(),
             checkpoint.timestamp_ms
         );
-        cp_summary.report_checkpoint_age_ms(&metrics.indexed_checkpoint_age_ms);
+        report_checkpoint_age(
+            &metrics.indexed_checkpoint_age_ms,
+            cp_summary.sequence_number,
+            cp_summary.timestamp_ms,
+        );
 
         Ok(CheckpointDataToCommit {
             checkpoint,

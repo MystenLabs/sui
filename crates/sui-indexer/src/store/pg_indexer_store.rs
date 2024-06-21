@@ -5,7 +5,7 @@ use std::any::Any as StdAny;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
@@ -17,7 +17,7 @@ use diesel::{QueryDsl, RunQueryDsl};
 use downcast::Any;
 use itertools::Itertools;
 use tap::TapFallible;
-use tracing::{info, warn};
+use tracing::info;
 
 use sui_types::base_types::ObjectID;
 
@@ -25,7 +25,7 @@ use crate::db::ConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
-use crate::metrics::IndexerMetrics;
+use crate::metrics::{report_checkpoint_age, IndexerMetrics};
 use crate::models::checkpoints::StoredCheckpoint;
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
@@ -532,32 +532,23 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     stored_checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
                     insert_or_ignore_into!(checkpoints::table, stored_checkpoint_chunk, conn);
-                    let system_time_now = SystemTime::now();
                     for stored_checkpoint in stored_checkpoint_chunk {
-                        let checkpoint_time = UNIX_EPOCH + Duration::from_millis(stored_checkpoint.timestamp_ms as u64);
-                        system_time_now
-                        .duration_since(checkpoint_time)
-                        .map(|latency| self.metrics.committed_checkpoint_age_ms.report(latency.as_millis() as u64))
-                        .tap_err(|err| {
-                            warn!(
-                                checkpoint_seq = stored_checkpoint.sequence_number,
-                                "unable to compute indexer DB commit checkpoint age: {}", err
-                            )
-                        })
-                        .ok();
                         self.metrics.max_committed_checkpoint_sequence_number.set(
                             stored_checkpoint.sequence_number,
                         );
                         self.metrics.committed_checkpoint_timestamp_ms.set(
                             stored_checkpoint.timestamp_ms,
                         );
-                    }
-                    for stored_checkpoint in stored_checkpoint_chunk {
                         info!(
                             "Checkpoint age: persisted checkpoint {} with time now {} and checkpoint time {}",
                             stored_checkpoint.sequence_number,
                             chrono::Utc::now().timestamp_millis(),
                             stored_checkpoint.timestamp_ms
+                        );
+                        report_checkpoint_age(
+                            &self.metrics.committed_checkpoint_age_ms,
+                            stored_checkpoint.sequence_number as u64,
+                            stored_checkpoint.timestamp_ms as u64,
                         );
                     }
                 }

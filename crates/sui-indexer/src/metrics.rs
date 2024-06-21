@@ -3,17 +3,19 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
+use downcast::Any;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
 use prometheus::{Registry, TextEncoder};
 use regex::Regex;
+use tap::TapFallible;
 use tracing::{info, warn};
 
-use mysten_metrics::histogram::Histogram as MystenHistogram;
 use mysten_metrics::RegistryService;
 
 const METRICS_ROUTE: &str = "/metrics";
@@ -84,6 +86,13 @@ const DB_UPDATE_QUERY_LATENCY_SEC_BUCKETS: &[f64] = &[
 const JSON_RPC_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0,
 ];
+/// NOTE: for checkpoint age on indexer, from downloaded checkpoint to committed checkpoint.
+const INDEXER_CHECKPOINT_AGE_SEC_BUCKETS: &[f64] = &[
+    0.1, 0.5, // sub 0.5 sec, should be very rare based on today's lag
+    0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4,
+    2.5, 2.6, 2.7, 2.8, 2.9, 3.0, // expected range
+    5.0, 10.0, 30.0, 60.0, 300.0, 3600.0, // for anomalies
+];
 
 #[derive(Clone)]
 pub struct IndexerMetrics {
@@ -108,9 +117,9 @@ pub struct IndexerMetrics {
     pub indexed_checkpoint_timestamp_ms: IntGauge,
     pub committed_checkpoint_timestamp_ms: IntGauge,
     // checkpoint age from the timestamp of the checkpoint to the system time now
-    pub downloaded_checkpoint_age_ms: MystenHistogram,
-    pub indexed_checkpoint_age_ms: MystenHistogram,
-    pub committed_checkpoint_age_ms: MystenHistogram,
+    pub downloaded_checkpoint_age_ms: Histogram,
+    pub indexed_checkpoint_age_ms: Histogram,
+    pub committed_checkpoint_age_ms: Histogram,
     // latencies of various steps of data ingestion.
     // checkpoint E2E latency is: fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub checkpoint_download_bytes_size: IntGauge,
@@ -290,21 +299,24 @@ impl IndexerMetrics {
                 "Timestamp of the committed checkpoint",
                 registry,
             ).unwrap(),
-            downloaded_checkpoint_age_ms: MystenHistogram::new_in_registry(
+            downloaded_checkpoint_age_ms: register_histogram_with_registry!(
                 "downloaded_checkpoint_age_ms",
                 "Age of the downloaded checkpoint in milliseconds",
+                INDEXER_CHECKPOINT_AGE_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
-            indexed_checkpoint_age_ms: MystenHistogram::new_in_registry(
+            ).unwrap(),
+            indexed_checkpoint_age_ms: register_histogram_with_registry!(
                 "indexed_checkpoint_age_ms",
                 "Age of the indexed checkpoint in milliseconds",
+                INDEXER_CHECKPOINT_AGE_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
-            committed_checkpoint_age_ms: MystenHistogram::new_in_registry(
+            ).unwrap(),
+            committed_checkpoint_age_ms: register_histogram_with_registry!(
                 "committed_checkpoint_age_ms",
                 "Age of the committed checkpoint in milliseconds",
+                INDEXER_CHECKPOINT_AGE_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            ).unwrap(),
             checkpoint_download_bytes_size: register_int_gauge_with_registry!(
                 "checkpoint_download_bytes_size",
                 "Size of the downloaded checkpoint in bytes",
@@ -745,4 +757,20 @@ impl IndexerMetrics {
             .unwrap(),
         }
     }
+}
+
+pub(crate) fn report_checkpoint_age(metric: &Histogram, cp_seq: u64, cp_timestamp_ms: u64) {
+    let checkpoint_time = UNIX_EPOCH + Duration::from_millis(cp_timestamp_ms);
+    SystemTime::now()
+        .duration_since(checkpoint_time)
+        .map(|latency| metric.observe(latency.as_millis() as f64))
+        .tap_err(|err| {
+            warn!(
+                metric = metric.type_name(),
+                checkpoint_seq = cp_seq,
+                "unable to compute checkpoint age: {}",
+                err
+            )
+        })
+        .ok();
 }
