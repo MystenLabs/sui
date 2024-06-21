@@ -15,6 +15,8 @@ export class SerialTransactionExecutor {
 	#queue = new SerialQueue();
 	#signer: Signer;
 	#cache: CachingTransactionExecutor;
+	#client: SuiClient;
+	#lastDigest: string | null = null;
 
 	constructor({
 		signer,
@@ -24,6 +26,7 @@ export class SerialTransactionExecutor {
 		signer: Signer;
 	}) {
 		this.#signer = signer;
+		this.#client = options.client;
 		this.#cache = new CachingTransactionExecutor({
 			client: options.client,
 			cache: options.cache,
@@ -69,7 +72,14 @@ export class SerialTransactionExecutor {
 	};
 
 	resetCache() {
-		return this.#cache.reset();
+		return Promise.all([this.#cache.reset(), this.#waitForLastTransaction()]);
+	}
+
+	async #waitForLastTransaction() {
+		if (this.#lastDigest) {
+			await this.#client.waitForTransaction({ digest: this.#lastDigest });
+			this.#lastDigest = null;
+		}
 	}
 
 	executeTransaction(transaction: Transaction | Uint8Array) {
@@ -92,6 +102,7 @@ export class SerialTransactionExecutor {
 			const effectsBytes = Uint8Array.from(results.rawEffects!);
 			const effects = bcs.TransactionEffects.parse(effectsBytes);
 			await this.applyEffects(effects);
+			this.#lastDigest = results.digest;
 
 			return {
 				digest: results.digest,

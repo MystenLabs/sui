@@ -27,6 +27,7 @@ describe('Test Move call with strings', () => {
 				showEffects: true,
 			},
 		});
+		await toolbox.client.waitForTransaction({ digest: result.digest });
 		expect(result.effects?.status.status).toEqual('success');
 	}
 
