@@ -741,7 +741,7 @@ impl RandomnessEventLoop {
                 requests.push(async move {
                     let result = client.send_signatures(request).await;
                     if let Err(e) = result {
-                        debug!("failed to send partial signatures to {peer_name}: {e:?}");
+                        debug!("failed to send partial signatures to {peer_name}");
                     }
                 });
             }
