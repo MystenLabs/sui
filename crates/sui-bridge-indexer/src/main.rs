@@ -5,9 +5,11 @@ use anyhow::Result;
 use clap::*;
 use mysten_metrics::start_prometheus_server;
 use prometheus::Registry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::PathBuf;
+use std::sync::Arc;
+use sui_bridge::eth_client::EthClient;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::eth_worker::EthBridgeWorker;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, PgProgressStore};
@@ -61,22 +63,23 @@ async fn main() -> Result<()> {
     );
     let indexer_meterics = BridgeIndexerMetrics::new(&registry);
     let ingestion_metrics = DataIngestionMetrics::new(&registry);
-    let bridge_meterics = Arc::new(BridgeMetrics::new(&registry));
+    let bridge_metrics = Arc::new(BridgeMetrics::new(&registry));
 
     // unwrap safe: db_url must be set in `load_config` above
     let db_url = config.db_url.clone().unwrap();
 
+    // TODO: retry_with_max_elapsed_time
     let eth_worker = EthBridgeWorker::new(
         get_connection_pool(db_url.clone()),
         indexer_meterics.clone(),
-        config,
-    )?;
+        config.clone(),
+    )
+    .unwrap();
 
-    // TODO: retry_with_max_elapsed_time
     let eth_client = Arc::new(
         EthClient::<ethers::providers::Http>::new(
             &config.eth_rpc_url,
-            HashSet::from_iter(vec![config.eth_sui_bridge_contract_address.clone()]),
+            HashSet::from_iter(vec![eth_worker.bridge_address()]),
             bridge_metrics,
         )
         .await

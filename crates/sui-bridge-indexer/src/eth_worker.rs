@@ -12,9 +12,7 @@ use ethers::providers::Provider;
 use ethers::providers::{Http, Middleware};
 use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
-use sui_bridge::metrics::BridgeMetrics;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
@@ -55,7 +53,10 @@ impl EthBridgeWorker {
         })
     }
 
-    pub async fn start_indexing_finalized_events(&self, eth_client: Arc<EthClient::<ethers::providers::Http>>) -> Result<JoinHandle<()>> {
+    pub async fn start_indexing_finalized_events(
+        &self,
+        eth_client: Arc<EthClient<ethers::providers::Http>>,
+    ) -> Result<JoinHandle<()>> {
         let newest_finalized_block = match get_latest_eth_token_transfer(&self.pg_pool, true)? {
             Some(transfer) => transfer.block_height as u64,
             None => self.config.start_block,
@@ -88,7 +89,10 @@ impl EthBridgeWorker {
         ))
     }
 
-    pub async fn start_indexing_unfinalized_events(&self, eth_client: Arc<EthClient::<ethers::providers::Http>>) -> Result<JoinHandle<()>> {
+    pub async fn start_indexing_unfinalized_events(
+        &self,
+        eth_client: Arc<EthClient<ethers::providers::Http>>,
+    ) -> Result<JoinHandle<()>> {
         let newest_unfinalized_block_recorded =
             match get_latest_eth_token_transfer(&self.pg_pool, false)? {
                 Some(transfer) => transfer.block_height as u64,
@@ -128,6 +132,10 @@ impl EthBridgeWorker {
             ),
             "unfinalized indexer handler"
         ))
+    }
+
+    pub fn bridge_address(&self) -> EthAddress {
+        self.bridge_address
     }
 }
 
