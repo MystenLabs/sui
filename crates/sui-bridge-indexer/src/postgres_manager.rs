@@ -21,10 +21,8 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 pub(crate) type PgPool = Pool<ConnectionManager<PgConnection>>;
 
-pub fn get_connection_pool(database_url: Option<String>) -> PgPool {
-    let manager = ConnectionManager::<PgConnection>::new(
-        database_url.expect("DB_URL must be set via config"),
-    );
+pub fn get_connection_pool(database_url: String) -> PgPool {
+    let manager = ConnectionManager::<PgConnection>::new(database_url);
     Pool::builder()
         .test_on_check_out(true)
         .build(manager)

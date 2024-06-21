@@ -59,9 +59,13 @@ async fn main() -> Result<()> {
         config.metric_url, config.metric_port
     );
     let indexer_meterics = BridgeIndexerMetrics::new(&registry);
+    let ingestion_metrics = DataIngestionMetrics::new(&registry);
+
+    // unwrap safe: db_url must be set in `load_config` above
+    let db_url = config.db_url.clone().unwrap();
 
     let eth_worker = EthBridgeWorker::new(
-        get_connection_pool(config.db_url.clone()),
+        get_connection_pool(db_url.clone()),
         indexer_meterics.clone(),
         config,
     );
@@ -72,7 +76,12 @@ async fn main() -> Result<()> {
     let finalized_handle = eth_worker_binding.start_indexing_finalized_events();
 
     // TODO: add retry_with_max_elapsed_time
-    let progress = start_processing_sui_checkpoints(&config_clone, indexer_meterics.clone());
+    let progress = start_processing_sui_checkpoints(
+        &config_clone,
+        db_url,
+        indexer_meterics,
+        ingestion_metrics,
+    );
 
     let _ = tokio::try_join!(finalized_handle, unfinalized_handle, progress);
 
@@ -81,13 +90,14 @@ async fn main() -> Result<()> {
 
 async fn start_processing_sui_checkpoints(
     config: &sui_bridge_indexer::config::Config,
+    db_url: String,
     indexer_meterics: BridgeIndexerMetrics,
+    ingestion_metrics: DataIngestionMetrics,
 ) -> Result<HashMap<String, CheckpointSequenceNumber>> {
     // metrics init
     let (_exit_sender, exit_receiver) = oneshot::channel();
-    let ingestion_metrics = DataIngestionMetrics::new(&Registry::new());
 
-    let pg_pool = get_connection_pool(config.db_url.clone());
+    let pg_pool = get_connection_pool(db_url.clone());
     let progress_store = PgProgressStore::new(pg_pool, config.bridge_genesis_checkpoint);
     let mut executor = IndexerExecutor::new(
         progress_store,
@@ -98,7 +108,7 @@ async fn start_processing_sui_checkpoints(
     let indexer_metrics_cloned = indexer_meterics.clone();
 
     let worker_pool = WorkerPool::new(
-        SuiBridgeWorker::new(vec![], config.db_url.clone(), indexer_metrics_cloned),
+        SuiBridgeWorker::new(vec![], db_url, indexer_metrics_cloned),
         "bridge worker".into(),
         config.concurrency as usize,
     );

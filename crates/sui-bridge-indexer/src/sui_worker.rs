@@ -32,7 +32,7 @@ pub struct SuiBridgeWorker {
 impl SuiBridgeWorker {
     pub fn new(
         bridge_object_ids: Vec<ObjectID>,
-        db_url: Option<String>,
+        db_url: String,
         metrics: BridgeIndexerMetrics,
     ) -> Self {
         let mut bridge_object_ids = bridge_object_ids.into_iter().collect::<BTreeSet<_>>();
