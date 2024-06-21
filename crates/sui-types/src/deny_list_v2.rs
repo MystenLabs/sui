@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{EpochId, SuiAddress};
+use crate::config::{Config, Setting};
 use crate::deny_list_v1::{get_deny_list_root_object, DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE};
 use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::id::UID;
@@ -12,27 +13,6 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
-/// Rust representation of the Move type 0x2::config::Config.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Config {
-    id: UID,
-}
-
-/// Rust representation of the Move type 0x2::config::Setting.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Setting<V: Copy> {
-    id: UID,
-    data: Option<SettingData<V>>,
-}
-
-/// Rust representation of the Move type 0x2::config::SettingData.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct SettingData<V: Copy> {
-    newer_value_epoch: u64,
-    newer_value: V,
-    older_value_opt: Option<V>,
-}
 
 /// Rust representation of the Move type 0x2::coin::DenyCapV2.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -96,21 +76,25 @@ pub fn check_address_denied_by_coin(
     coin_deny_config: &Config,
     address: SuiAddress,
     object_store: &dyn ObjectStore,
-    cur_epoch: EpochId,
+    cur_epoch: Option<EpochId>,
 ) -> bool {
     let address_key = AddressKey(address);
     read_config_setting(object_store, coin_deny_config, address_key, cur_epoch).unwrap_or(false)
 }
 
+/// Fetches the setting from a particular config.
+/// Reads the value of the setting, giving `newer_value` if the current epoch is greater than
+/// `newer_value_epoch`, and `older_value_opt` otherwise.
+/// If `cur_epoch` is `None`, the `newer_value` is always returned.
 fn read_config_setting<K, V>(
     object_store: &dyn ObjectStore,
     config: &Config,
     setting_name: K,
-    cur_epoch: EpochId,
+    cur_epoch: Option<EpochId>,
 ) -> Option<V>
 where
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
-    V: Copy + Serialize + DeserializeOwned,
+    V: Clone + Serialize + DeserializeOwned + fmt::Debug,
 {
     let setting: Setting<V> = {
         match get_dynamic_field_from_store(object_store, *config.id.object_id(), &setting_name) {
@@ -118,12 +102,5 @@ where
             Err(_) => return None,
         }
     };
-    let Some(setting_data) = setting.data else {
-        return None;
-    };
-    if setting_data.newer_value_epoch < cur_epoch {
-        Some(setting_data.newer_value)
-    } else {
-        setting_data.older_value_opt
-    }
+    setting.read_value(cur_epoch).cloned()
 }
