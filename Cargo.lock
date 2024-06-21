@@ -2808,9 +2808,15 @@ dependencies = [
 
 [[package]]
 name = "coset"
+<<<<<<< HEAD
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff8aad850c1f86daa47e812913051eb5a26c4d9fb4242a89178bf99b946e4e3c"
+=======
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c765a4e852cef25c69a48e9fcd60995a7fecabf0134a0021e7181452c4a60f95"
+>>>>>>> 9b4a6265b3 (rebase)
 dependencies = [
  "ciborium",
  "ciborium-io",
@@ -14352,12 +14358,14 @@ version = "0.1.0"
 dependencies = [
  "anemo",
  "anyhow",
+ "async-trait",
  "bcs",
  "better_any",
  "bincode",
  "byteorder",
  "chrono",
  "consensus-config",
+ "coset",
  "criterion",
  "derivative",
  "derive_more",
@@ -14390,6 +14398,7 @@ dependencies = [
  "num-traits",
  "num_enum 0.6.1",
  "once_cell",
+ "p256",
  "parking_lot 0.12.1",
  "passkey",
  "prometheus",
@@ -14414,9 +14423,11 @@ dependencies = [
  "sui-sdk 0.0.0",
  "tap",
  "thiserror",
+ "tokio",
  "tonic 0.11.0",
  "tracing",
  "typed-store-error",
+ "url",
 ]
 
 [[package]]

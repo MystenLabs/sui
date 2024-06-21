@@ -163,7 +163,7 @@ impl Serialize for PasskeyAuthenticator {
         let mut bytes = Vec::with_capacity(Secp256r1SuiSignature::LENGTH);
         bytes.push(SignatureScheme::Secp256r1.flag());
         bytes.extend_from_slice(self.signature.as_ref());
-        bytes.extend_from_slice(&self.pk.as_ref());
+        bytes.extend_from_slice(self.pk.as_ref());
 
         let raw = RawPasskeyAuthenticator {
             authenticator_data: self.authenticator_data.clone(),
@@ -296,7 +296,7 @@ pub fn to_signing_digest<T: Serialize>(
 ) -> [u8; INTENT_PREFIX_LENGTH + DefaultHash::OUTPUT_SIZE] {
     let mut extended = [0; INTENT_PREFIX_LENGTH + DefaultHash::OUTPUT_SIZE];
     extended[..INTENT_PREFIX_LENGTH].copy_from_slice(&intent_msg.intent.to_bytes());
-    extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&to_tx_digest(&intent_msg));
+    extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&to_tx_digest(intent_msg));
     extended
 }
 
