@@ -100,6 +100,7 @@ impl EpochPartitionData {
 impl<T: R2D2Connection> PgPartitionManager<T> {
     pub fn new(cp: ConnectionPool<T>) -> Result<Self, IndexerError> {
         let mut partition_strategies = HashMap::new();
+        partition_strategies.insert("events", PgPartitionStrategy::TxSequenceNumber);
         partition_strategies.insert("transactions", PgPartitionStrategy::TxSequenceNumber);
         let manager = Self {
             cp,
