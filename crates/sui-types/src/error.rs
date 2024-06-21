@@ -281,6 +281,9 @@ pub enum UserInputError {
         expected: u64,
         actual: u64,
     },
+
+    #[error("Coin type is globally paused for use: {coin_type}")]
+    CoinTypeGlobalPause { coin_type: String },
 }
 
 #[derive(
