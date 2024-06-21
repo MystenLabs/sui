@@ -149,8 +149,10 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 // Version 51: Switch to DKG V1.
 // Version 52: Emit `CommitteeMemberUrlUpdateEvent` when updating bridge node url.
 //             std::config native functions.
+<<<<<<< HEAD
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
 //             Enable soft bundle in devnet and testnet.
+<<<<<<< HEAD
 <<<<<<< HEAD
 //             Core macro visibility in sui core framework.
 //             Enable Mysticeti on mainnet.
@@ -159,6 +161,10 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             Enable enums on testnet.
 
 =======
+=======
+=======
+>>>>>>> f61fc7319c (rebase)
+>>>>>>> 43070af820 (rebase)
 //             Add support for passkey in devnet.
 >>>>>>> 76a6eb2f98 (add protocol config, simtest)
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
