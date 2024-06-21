@@ -21,7 +21,7 @@ use tracing::error;
 
 const ETH_LOG_QUERY_MAX_BLOCK_RANGE: u64 = 1000;
 const ETH_EVENTS_CHANNEL_SIZE: usize = 1000;
-const FINALIZED_BLOCK_QUERY_INTERVAL: Duration = Duration::from_secs(2);
+const FINALIZED_BLOCK_QUERY_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct EthSyncer<P> {
     eth_client: Arc<EthClient<P>>,
@@ -92,6 +92,7 @@ where
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
+            // TODO: allow to pass custom initial interval
             let Ok(Ok(new_value)) = retry_with_max_elapsed_time!(
                 eth_client.get_last_finalized_block_id(),
                 time::Duration::from_secs(600)

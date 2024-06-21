@@ -151,6 +151,7 @@ async fn main() -> anyhow::Result<()> {
             let eth_action = make_action(chain_id, &cmd);
             println!("Action to execute on Eth: {:?}", eth_action);
             // Create Eth Signer Client
+            // TODO if a validator is blocklisted on eth, ignore their signatures?
             let certified_action = agg
                 .request_committee_signatures(eth_action)
                 .await
