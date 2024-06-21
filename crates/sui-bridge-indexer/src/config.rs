@@ -6,7 +6,7 @@ use serde::Deserialize;
 use std::{fs, path::Path};
 
 /// config as loaded from `config.yaml`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub remote_store_url: String,
     pub eth_rpc_url: String,
