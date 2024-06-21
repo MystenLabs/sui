@@ -110,15 +110,9 @@ export function useEnokiWallets() {
 	if (!context) {
 		throw new Error('Missing `EnokiWalletContext` provider');
 	}
-	const { flow, wallets, client } = context;
+	const { flow, wallets } = context;
 	return {
 		wallets,
 		flow,
-		execute: ({ bytes, signature }: { bytes: string; signature: string }) =>
-			flow.executeSignedTransaction({
-				bytes,
-				signature,
-				client,
-			}),
 	};
 }

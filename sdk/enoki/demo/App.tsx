@@ -18,10 +18,8 @@ export function App() {
 	const currentAccount = useCurrentAccount();
 	const [result, setResult] = useState<any>();
 
-	const { wallets, execute } = useEnokiWallets();
-	const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction({
-		execute,
-	});
+	const { wallets } = useEnokiWallets();
+	const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
 	return (
 		<div>

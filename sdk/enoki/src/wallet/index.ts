@@ -24,7 +24,7 @@ import { getWallets, ReadonlyWalletAccount } from '@mysten/wallet-standard';
 import type { Emitter } from 'mitt';
 import mitt from 'mitt';
 
-import { fromB64, toB64 } from '../../../bcs/src/b64.js';
+import { toB64 } from '../../../bcs/src/b64.js';
 import type { EnokiNetwork } from '../EnokiClient/type.js';
 import type { AuthProvider, EnokiFlowConfig } from '../EnokiFlow.js';
 import { EnokiFlow } from '../EnokiFlow.js';
@@ -55,7 +55,6 @@ export class EnokiWallet implements Wallet {
 	#clientId: string;
 	#redirectUrl: string | undefined;
 	#network: EnokiNetwork;
-	#sponsor;
 	#client;
 
 	get name() {
@@ -121,7 +120,6 @@ export class EnokiWallet implements Wallet {
 		redirectUrl,
 		client,
 		network,
-		sponsor,
 	}: {
 		icon: Wallet['icon'];
 		name: string;
@@ -131,7 +129,6 @@ export class EnokiWallet implements Wallet {
 		redirectUrl?: string;
 		client: SuiClient;
 		network: EnokiNetwork;
-		sponsor: boolean;
 	}) {
 		this.#accounts = [];
 		this.#events = mitt();
@@ -144,7 +141,6 @@ export class EnokiWallet implements Wallet {
 		this.#clientId = clientId;
 		this.#redirectUrl = redirectUrl;
 		this.#network = network;
-		this.#sponsor = sponsor;
 
 		this.#setAccount();
 	}
@@ -153,28 +149,11 @@ export class EnokiWallet implements Wallet {
 		const parsedTransaction = Transaction.from(await transaction.toJSON());
 		const keypair = await this.#flow.getKeypair({ network: this.#network });
 
-		if (this.#sponsor) {
-			const { bytes } = await this.#flow.sponsorTransaction({
-				network: this.#network,
-				client: this.#client,
-				transaction: parsedTransaction,
-			});
-			return keypair.signTransaction(fromB64(bytes));
-		}
-
 		return keypair.signTransaction(await parsedTransaction.build({ client: this.#client }));
 	};
 
 	#signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async ({ transaction }) => {
 		const parsedTransaction = Transaction.from(await transaction.toJSON());
-
-		if (this.#sponsor) {
-			return this.#flow.sponsorAndExecuteTransaction({
-				network: this.#network,
-				client: this.#client,
-				transaction: parsedTransaction,
-			});
-		}
 
 		const keypair = await this.#flow.getKeypair({ network: this.#network });
 		parsedTransaction.setSenderIfNotSet(keypair.toSuiAddress());
@@ -291,14 +270,12 @@ export function registerEnokiWallets({
 	redirectUrl,
 	client,
 	network = 'mainnet',
-	sponsor = true,
 	...config
 }: EnokiFlowConfig & {
 	clientIds: Partial<Record<AuthProvider, string>>;
 	redirectUrl?: string;
 	client: SuiClient;
 	network?: string;
-	sponsor?: boolean;
 }) {
 	const walletsApi = getWallets();
 	const flow = new EnokiFlow(config);
@@ -319,7 +296,6 @@ export function registerEnokiWallets({
 					client,
 					redirectUrl,
 					network,
-					sponsor,
 				});
 				const unregister = walletsApi.register(wallet);
 

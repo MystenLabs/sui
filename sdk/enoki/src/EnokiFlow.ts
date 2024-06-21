@@ -379,7 +379,7 @@ export class EnokiFlow {
 		});
 
 		// TODO: Should the parent just do this?
-		const { rawEffects } = await client.waitForTransaction({
+		await client.waitForTransaction({
 			digest,
 			options: { showRawEffects: true },
 		});
@@ -388,7 +388,6 @@ export class EnokiFlow {
 			digest,
 			signature: userSignature.signature,
 			bytes,
-			effects: toB64(Uint8Array.from(rawEffects!)),
 		};
 	}
 
@@ -409,12 +408,11 @@ export class EnokiFlow {
 		});
 
 		// TODO: Should the parent just do this?
-		const { rawEffects } = await client.waitForTransaction({
+		await client.waitForTransaction({
 			digest,
-			options: { showRawEffects: true },
 		});
 
-		return { digest, bytes, signature, rawEffects };
+		return { digest, bytes, signature };
 	}
 
 	async sponsorAndExecuteTransaction({
