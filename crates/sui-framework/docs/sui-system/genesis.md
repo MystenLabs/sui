@@ -77,13 +77,13 @@ title: Module `0x3::genesis`
 
 </dd>
 <dt>
-<code>gas_price: u64</code>
+<code>gas_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>commission_rate: u64</code>
+<code>commission_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -158,37 +158,37 @@ title: Module `0x3::genesis`
 
 <dl>
 <dt>
-<code>protocol_version: u64</code>
+<code>protocol_version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>chain_start_timestamp_ms: u64</code>
+<code>chain_start_timestamp_ms: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>epoch_duration_ms: u64</code>
+<code>epoch_duration_ms: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>stake_subsidy_start_epoch: u64</code>
+<code>stake_subsidy_start_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>stake_subsidy_initial_distribution_amount: u64</code>
+<code>stake_subsidy_initial_distribution_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>stake_subsidy_period_length: u64</code>
+<code>stake_subsidy_period_length: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -200,31 +200,31 @@ title: Module `0x3::genesis`
 
 </dd>
 <dt>
-<code>max_validator_count: u64</code>
+<code>max_validator_count: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>min_validator_joining_stake: u64</code>
+<code>min_validator_joining_stake: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>validator_low_stake_threshold: u64</code>
+<code>validator_low_stake_threshold: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>validator_very_low_stake_threshold: u64</code>
+<code>validator_very_low_stake_threshold: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>validator_low_stake_grace_period: u64</code>
+<code>validator_low_stake_grace_period: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -251,7 +251,7 @@ title: Module `0x3::genesis`
 
 <dl>
 <dt>
-<code>stake_subsidy_fund_mist: u64</code>
+<code>stake_subsidy_fund_mist: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -290,7 +290,7 @@ title: Module `0x3::genesis`
 
 </dd>
 <dt>
-<code>amount_mist: u64</code>
+<code>amount_mist: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -316,7 +316,7 @@ title: Module `0x3::genesis`
 The <code>create</code> function was called with duplicate validators.
 
 
-<pre><code><b>const</b> <a href="genesis.md#0x3_genesis_EDuplicateValidator">EDuplicateValidator</a>: u64 = 1;
+<pre><code><b>const</b> <a href="genesis.md#0x3_genesis_EDuplicateValidator">EDuplicateValidator</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -326,7 +326,7 @@ The <code>create</code> function was called with duplicate validators.
 The <code>create</code> function was called at a non-genesis epoch.
 
 
-<pre><code><b>const</b> <a href="genesis.md#0x3_genesis_ENotCalledAtGenesis">ENotCalledAtGenesis</a>: u64 = 0;
+<pre><code><b>const</b> <a href="genesis.md#0x3_genesis_ENotCalledAtGenesis">ENotCalledAtGenesis</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 

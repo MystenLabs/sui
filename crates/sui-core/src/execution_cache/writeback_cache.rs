@@ -97,12 +97,19 @@ enum ObjectEntry {
     Wrapped,
 }
 
-#[cfg(test)]
 impl ObjectEntry {
+    #[cfg(test)]
     fn unwrap_object(&self) -> &Object {
         match self {
             ObjectEntry::Object(o) => o,
             _ => panic!("unwrap_object called on non-Object"),
+        }
+    }
+
+    fn is_tombstone(&self) -> bool {
+        match self {
+            ObjectEntry::Deleted | ObjectEntry::Wrapped => true,
+            ObjectEntry::Object(_) => false,
         }
     }
 }
@@ -122,6 +129,49 @@ impl std::fmt::Debug for ObjectEntry {
 impl From<Object> for ObjectEntry {
     fn from(object: Object) -> Self {
         ObjectEntry::Object(object)
+    }
+}
+
+impl From<ObjectOrTombstone> for ObjectEntry {
+    fn from(object: ObjectOrTombstone) -> Self {
+        match object {
+            ObjectOrTombstone::Object(o) => o.into(),
+            ObjectOrTombstone::Tombstone(obj_ref) => {
+                if obj_ref.2.is_deleted() {
+                    ObjectEntry::Deleted
+                } else if obj_ref.2.is_wrapped() {
+                    ObjectEntry::Wrapped
+                } else {
+                    panic!("tombstone digest must either be deleted or wrapped");
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LatestObjectCacheEntry {
+    Object(SequenceNumber, ObjectEntry),
+    NonExistent,
+}
+
+impl LatestObjectCacheEntry {
+    fn is_newer_than(&self, other: &LatestObjectCacheEntry) -> bool {
+        match (self, other) {
+            (LatestObjectCacheEntry::Object(v1, _), LatestObjectCacheEntry::Object(v2, _)) => {
+                v1 > v2
+            }
+            (LatestObjectCacheEntry::Object(_, _), LatestObjectCacheEntry::NonExistent) => true,
+            _ => false,
+        }
+    }
+
+    #[cfg(test)]
+    fn version(&self) -> Option<SequenceNumber> {
+        match self {
+            LatestObjectCacheEntry::Object(version, _) => Some(*version),
+            LatestObjectCacheEntry::NonExistent => None,
+        }
     }
 }
 
@@ -219,6 +269,13 @@ struct CachedCommittedData {
     // See module level comment for an explanation of caching strategy.
     object_cache: MokaCache<ObjectID, Arc<Mutex<CachedVersionMap<ObjectEntry>>>>,
 
+    // We separately cache the latest version of each object. Although this seems
+    // redundant, it is the only way to support populating the cache after a read.
+    // We cannot simply insert objects that we read off the disk into `object_cache`,
+    // since that may violate the no-missing-versions property.
+    // `object_by_id_cache` is also written to on writes so that it is always coherent.
+    object_by_id_cache: MokaCache<ObjectID, Arc<Mutex<LatestObjectCacheEntry>>>,
+
     // See module level comment for an explanation of caching strategy.
     marker_cache: MokaCache<MarkerKey, Arc<Mutex<CachedVersionMap<MarkerValue>>>>,
 
@@ -238,6 +295,10 @@ struct CachedCommittedData {
 impl CachedCommittedData {
     fn new() -> Self {
         let object_cache = MokaCache::builder()
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
+            .build();
+        let object_by_id_cache = MokaCache::builder()
             .max_capacity(MAX_CACHE_SIZE)
             .max_capacity(MAX_CACHE_SIZE)
             .build();
@@ -268,6 +329,7 @@ impl CachedCommittedData {
 
         Self {
             object_cache,
+            object_by_id_cache,
             marker_cache,
             transactions,
             transaction_effects,
@@ -279,6 +341,7 @@ impl CachedCommittedData {
 
     fn clear_and_assert_empty(&self) {
         self.object_cache.invalidate_all();
+        self.object_by_id_cache.invalidate_all();
         self.marker_cache.invalidate_all();
         self.transactions.invalidate_all();
         self.transaction_effects.invalidate_all();
@@ -287,6 +350,7 @@ impl CachedCommittedData {
         self._transaction_objects.invalidate_all();
 
         assert_empty(&self.object_cache);
+        assert_empty(&self.object_by_id_cache);
         assert_empty(&self.marker_cache);
         assert_empty(&self.transactions);
         assert_empty(&self.transaction_effects);
@@ -330,9 +394,11 @@ pub struct WritebackCache {
 }
 
 macro_rules! check_cache_entry_by_version {
-    ($cache: expr, $version: expr) => {
+    ($self: ident, $table: expr, $level: expr, $cache: expr, $version: expr) => {
+        $self.metrics.record_cache_request($table, $level);
         if let Some(cache) = $cache {
             if let Some(entry) = cache.get(&$version) {
+                $self.metrics.record_cache_hit($table, $level);
                 return CacheResult::Hit(entry.clone());
             }
 
@@ -340,22 +406,27 @@ macro_rules! check_cache_entry_by_version {
                 if least_version.0 < $version {
                     // If the version is greater than the least version in the cache, then we know
                     // that the object does not exist anywhere
+                    $self.metrics.record_cache_negative_hit($table, $level);
                     return CacheResult::NegativeHit;
                 }
             }
         }
+        $self.metrics.record_cache_miss($table, $level);
     };
 }
 
 macro_rules! check_cache_entry_by_latest {
-    ($cache: expr) => {
+    ($self: ident, $table: expr, $level: expr, $cache: expr) => {
+        $self.metrics.record_cache_request($table, $level);
         if let Some(cache) = $cache {
             if let Some((version, entry)) = cache.get_highest() {
+                $self.metrics.record_cache_hit($table, $level);
                 return CacheResult::Hit((*version, entry.clone()));
             } else {
                 panic!("empty CachedVersionMap should have been removed");
             }
         }
+        $self.metrics.record_cache_miss($table, $level);
     };
 }
 
@@ -392,13 +463,18 @@ impl WritebackCache {
         version: SequenceNumber,
         object: ObjectEntry,
     ) {
-        debug!("inserting object entry {:?}: {:?}", object_id, version);
+        debug!(?object_id, ?version, ?object, "inserting object entry");
         fail_point_async!("write_object_entry");
+        self.metrics.record_cache_write("object");
         self.dirty
             .objects
             .entry(*object_id)
             .or_default()
-            .insert(version, object);
+            .insert(version, object.clone());
+        self.cached.object_by_id_cache.insert(
+            *object_id,
+            Arc::new(Mutex::new(LatestObjectCacheEntry::Object(version, object))),
+        );
     }
 
     async fn write_marker_value(
@@ -413,6 +489,7 @@ impl WritebackCache {
             marker_value
         );
         fail_point_async!("write_marker_entry");
+        self.metrics.record_cache_write("marker");
         self.dirty
             .markers
             .entry((epoch_id, object_key.0))
@@ -459,8 +536,20 @@ impl WritebackCache {
             &self.cached.object_cache,
             object_id,
             |dirty_entry, cached_entry| {
-                check_cache_entry_by_version!(dirty_entry, version);
-                check_cache_entry_by_version!(cached_entry, version);
+                check_cache_entry_by_version!(
+                    self,
+                    "object_by_version",
+                    "uncommitted",
+                    dirty_entry,
+                    version
+                );
+                check_cache_entry_by_version!(
+                    self,
+                    "object_by_version",
+                    "committed",
+                    cached_entry,
+                    version
+                );
                 CacheResult::Miss
             },
         )
@@ -483,16 +572,79 @@ impl WritebackCache {
 
     fn get_object_entry_by_id_cache_only(
         &self,
+        request_type: &'static str,
         object_id: &ObjectID,
     ) -> CacheResult<(SequenceNumber, ObjectEntry)> {
+        self.metrics
+            .record_cache_request(request_type, "object_by_id");
+        let entry = self.cached.object_by_id_cache.get(object_id);
+
+        if cfg!(debug_assertions) {
+            if let Some(entry) = &entry {
+                // check that cache is coherent
+                let highest: Option<ObjectEntry> = self
+                    .dirty
+                    .objects
+                    .get(object_id)
+                    .and_then(|entry| entry.get_highest().map(|(_, o)| o.clone()))
+                    .or_else(|| {
+                        let obj: Option<ObjectEntry> = self
+                            .store
+                            .get_latest_object_or_tombstone(*object_id)
+                            .unwrap()
+                            .map(|(_, o)| o.into());
+                        obj
+                    });
+
+                let cache_entry = match &*entry.lock() {
+                    LatestObjectCacheEntry::Object(_, entry) => Some(entry.clone()),
+                    LatestObjectCacheEntry::NonExistent => None,
+                };
+
+                // If the cache entry is a tombstone, the db entry may be missing if it was pruned.
+                let tombstone_possibly_pruned = highest.is_none()
+                    && cache_entry
+                        .as_ref()
+                        .map(|e| e.is_tombstone())
+                        .unwrap_or(false);
+
+                if highest != cache_entry && !tombstone_possibly_pruned {
+                    tracing::error!(
+                        ?highest,
+                        ?cache_entry,
+                        ?tombstone_possibly_pruned,
+                        "object_by_id cache is incoherent for {:?}",
+                        object_id
+                    );
+                    panic!("object_by_id cache is incoherent for {:?}", object_id);
+                }
+            }
+        }
+
+        if let Some(entry) = entry {
+            let entry = entry.lock();
+            match &*entry {
+                LatestObjectCacheEntry::Object(latest_version, latest_object) => {
+                    self.metrics.record_cache_hit(request_type, "object_by_id");
+                    return CacheResult::Hit((*latest_version, latest_object.clone()));
+                }
+                LatestObjectCacheEntry::NonExistent => {
+                    self.metrics
+                        .record_cache_negative_hit(request_type, "object_by_id");
+                    return CacheResult::NegativeHit;
+                }
+            }
+        } else {
+            self.metrics.record_cache_miss(request_type, "object_by_id");
+        }
+
         Self::with_locked_cache_entries(
             &self.dirty.objects,
             &self.cached.object_cache,
             object_id,
             |dirty_entry, cached_entry| {
-                check_cache_entry_by_latest!(dirty_entry);
-                check_cache_entry_by_latest!(cached_entry);
-
+                check_cache_entry_by_latest!(self, request_type, "uncommitted", dirty_entry);
+                check_cache_entry_by_latest!(self, request_type, "committed", cached_entry);
                 CacheResult::Miss
             },
         )
@@ -500,16 +652,15 @@ impl WritebackCache {
 
     fn get_object_by_id_cache_only(
         &self,
+        request_type: &'static str,
         object_id: &ObjectID,
     ) -> CacheResult<(SequenceNumber, Object)> {
-        match self.get_object_entry_by_id_cache_only(object_id) {
+        match self.get_object_entry_by_id_cache_only(request_type, object_id) {
             CacheResult::Hit((version, entry)) => match entry {
                 ObjectEntry::Object(object) => CacheResult::Hit((version, object)),
                 ObjectEntry::Deleted | ObjectEntry::Wrapped => CacheResult::NegativeHit,
             },
-            CacheResult::NegativeHit => {
-                panic!("cannot have negative hit when getting latest object")
-            }
+            CacheResult::NegativeHit => CacheResult::NegativeHit,
             CacheResult::Miss => CacheResult::Miss,
         }
     }
@@ -525,8 +676,20 @@ impl WritebackCache {
             &self.cached.marker_cache,
             &(epoch_id, *object_id),
             |dirty_entry, cached_entry| {
-                check_cache_entry_by_version!(dirty_entry, version);
-                check_cache_entry_by_version!(cached_entry, version);
+                check_cache_entry_by_version!(
+                    self,
+                    "marker_by_version",
+                    "uncommitted",
+                    dirty_entry,
+                    version
+                );
+                check_cache_entry_by_version!(
+                    self,
+                    "marker_by_version",
+                    "committed",
+                    cached_entry,
+                    version
+                );
                 CacheResult::Miss
             },
         )
@@ -542,11 +705,45 @@ impl WritebackCache {
             &self.cached.marker_cache,
             &(epoch_id, *object_id),
             |dirty_entry, cached_entry| {
-                check_cache_entry_by_latest!(dirty_entry);
-                check_cache_entry_by_latest!(cached_entry);
+                check_cache_entry_by_latest!(self, "marker_latest", "uncommitted", dirty_entry);
+                check_cache_entry_by_latest!(self, "marker_latest", "committed", cached_entry);
                 CacheResult::Miss
             },
         )
+    }
+
+    fn get_object_impl(
+        &self,
+        request_type: &'static str,
+        id: &ObjectID,
+    ) -> SuiResult<Option<Object>> {
+        match self.get_object_by_id_cache_only(request_type, id) {
+            CacheResult::Hit((_, object)) => Ok(Some(object)),
+            CacheResult::NegativeHit => Ok(None),
+            CacheResult::Miss => {
+                let obj = self.store.get_object(id)?;
+                if let Some(obj) = &obj {
+                    self.cache_latest_object_by_id(
+                        id,
+                        LatestObjectCacheEntry::Object(obj.version(), obj.clone().into()),
+                    );
+                } else {
+                    self.cache_object_not_found(id);
+                }
+                Ok(obj)
+            }
+        }
+    }
+
+    fn record_db_get(&self, request_type: &'static str) -> &AuthorityStore {
+        self.metrics.record_cache_request(request_type, "db");
+        &self.store
+    }
+
+    fn record_db_multi_get(&self, request_type: &'static str, count: usize) -> &AuthorityStore {
+        self.metrics
+            .record_cache_multi_request(request_type, "db", count);
+        &self.store
     }
 
     #[instrument(level = "debug", skip_all)]
@@ -613,6 +810,7 @@ impl WritebackCache {
 
         // insert transaction effects before executed_effects_digests so that there
         // are never dangling entries in executed_effects_digests
+        self.metrics.record_cache_write("transaction_effects");
         self.dirty
             .transaction_effects
             .insert(effects_digest, effects.clone());
@@ -620,6 +818,7 @@ impl WritebackCache {
         // note: if events.data.is_empty(), then there are no events for this transaction. We
         // store it anyway to avoid special cases in commint_transaction_outputs, and translate
         // an empty events structure to None when reading.
+        self.metrics.record_cache_write("transaction_events");
         match self.dirty.transaction_events.entry(events.digest()) {
             DashMapEntry::Occupied(mut occupied) => {
                 occupied.get_mut().0.insert(tx_digest);
@@ -631,10 +830,12 @@ impl WritebackCache {
             }
         }
 
+        self.metrics.record_cache_write("executed_effects_digests");
         self.dirty
             .executed_effects_digests
             .insert(tx_digest, effects_digest);
 
+        self.metrics.record_cache_write("transaction_block");
         self.dirty
             .pending_transaction_writes
             .insert(tx_digest, tx_outputs);
@@ -650,13 +851,14 @@ impl WritebackCache {
     }
 
     // Commits dirty data for the given TransactionDigest to the db.
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(level = "debug", skip_all)]
     async fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
         digests: &[TransactionDigest],
     ) -> SuiResult {
         fail_point_async!("writeback-cache-commit");
+        trace!(?digests);
 
         let mut all_outputs = Vec::with_capacity(digests.len());
         for tx in digests {
@@ -865,6 +1067,54 @@ impl WritebackCache {
         }
     }
 
+    // Updates the latest object id cache with an entry that was read from the db.
+    // Writes bypass this function, because an object write is guaranteed to be the
+    // most recent version (and cannot race with any other writes to that object id)
+    //
+    // If there are racing calls to this function, it is guaranteed that after a call
+    // has returned, reads from that thread will not observe a lower version than the
+    // one they inserted
+    fn cache_latest_object_by_id(&self, object_id: &ObjectID, object: LatestObjectCacheEntry) {
+        trace!("caching object by id: {:?} {:?}", object_id, object);
+        self.metrics.record_cache_write("object_by_id");
+        // Warning: tricky code!
+        let entry = self
+            .cached
+            .object_by_id_cache
+            .entry(*object_id)
+            // only one racing insert will call the closure
+            .or_insert_with(|| Arc::new(Mutex::new(object.clone())));
+
+        // We may be racing with another thread that observed an older version of the object
+        if !entry.is_fresh() {
+            // !is_fresh means we lost the race, and entry holds the value that was
+            // inserted by the other thread. We need to check if we have a more recent version
+            // than the other reader.
+            //
+            // This could also mean that the entry was inserted by a transaction write. This
+            // could occur in the following case:
+            //
+            // THREAD 1            | THREAD 2
+            // reads object at v1  |
+            //                     | tx writes object at v2
+            // tries to cache v1
+            //
+            // Thread 1 will see that v2 is already in the cache when it tries to cache it,
+            // and will try to update the cache with v1. But the is_newer_than check will fail,
+            // so v2 will remain in the cache
+
+            // Ensure only the latest version is inserted.
+            let mut entry = entry.value().lock();
+            if object.is_newer_than(&entry) {
+                *entry = object;
+            }
+        }
+    }
+
+    fn cache_object_not_found(&self, object_id: &ObjectID) {
+        self.cache_latest_object_by_id(object_id, LatestObjectCacheEntry::NonExistent);
+    }
+
     fn clear_state_end_of_epoch_impl(&self, _execution_guard: &ExecutionLockWriteGuard<'_>) {
         info!("clearing state at end of epoch");
         assert!(
@@ -898,6 +1148,11 @@ impl WritebackCache {
                 info!("removing non-finalized package from cache: {:?}", object_id);
                 self.packages.invalidate(object_id);
             }
+            self.cached.object_by_id_cache.invalidate(object_id);
+        }
+
+        for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
+            self.cached.object_by_id_cache.invalidate(object_id);
         }
 
         // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
@@ -933,6 +1188,8 @@ impl ExecutionCacheCommit for WritebackCache {
 
 impl ObjectCacheRead for WritebackCache {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        self.metrics
+            .record_cache_request("package", "package_cache");
         if let Some(p) = self.packages.get(package_id) {
             if cfg!(debug_assertions) {
                 if let Some(store_package) = self.store.get_object(package_id).unwrap() {
@@ -944,19 +1201,23 @@ impl ObjectCacheRead for WritebackCache {
                     );
                 }
             }
+            self.metrics.record_cache_hit("package", "package_cache");
             return Ok(Some(p));
+        } else {
+            self.metrics.record_cache_miss("package", "package_cache");
         }
 
         // We try the dirty objects cache as well before going to the database. This is necessary
         // because the package could be evicted from the package cache before it is committed
         // to the database.
-        if let Some(p) = ObjectCacheRead::get_object(self, package_id)? {
+        if let Some(p) = self.get_object_impl("package", package_id)? {
             if p.is_package() {
                 let p = PackageObject::new(p);
                 tracing::trace!(
                     "caching package: {:?}",
                     p.object().compute_object_reference()
                 );
+                self.metrics.record_cache_write("package");
                 self.packages.insert(*package_id, p.clone());
                 Ok(Some(p))
             } else {
@@ -977,18 +1238,9 @@ impl ObjectCacheRead for WritebackCache {
     }
 
     // get_object and variants.
-    //
-    // TODO: We don't insert objects into the cache after misses because they are usually only
-    // read once. We might want to cache immutable reads (RO shared objects and immutable objects)
-    // If we do this, we must be VERY CAREFUL not to break the contiguous version property
-    // of the cache.
 
     fn get_object(&self, id: &ObjectID) -> SuiResult<Option<Object>> {
-        match self.get_object_by_id_cache_only(id) {
-            CacheResult::Hit((_, object)) => Ok(Some(object)),
-            CacheResult::NegativeHit => Ok(None),
-            CacheResult::Miss => Ok(self.store.get_object(id)?),
-        }
+        self.get_object_impl("object_latest", id)
     }
 
     fn get_object_by_key(
@@ -999,7 +1251,9 @@ impl ObjectCacheRead for WritebackCache {
         match self.get_object_by_key_cache_only(object_id, version) {
             CacheResult::Hit(object) => Ok(Some(object)),
             CacheResult::NegativeHit => Ok(None),
-            CacheResult::Miss => Ok(self.store.get_object_by_key(object_id, version)?),
+            CacheResult::Miss => Ok(self
+                .record_db_get("object_by_version")
+                .get_object_by_key(object_id, version)?),
         }
     }
 
@@ -1017,7 +1271,7 @@ impl ObjectCacheRead for WritebackCache {
                 })
             },
             |remaining| {
-                self.store
+                self.record_db_multi_get("object_by_version", remaining.len())
                     .multi_get_objects_by_key(remaining)
                     .map_err(Into::into)
             },
@@ -1032,7 +1286,9 @@ impl ObjectCacheRead for WritebackCache {
         match self.get_object_by_key_cache_only(object_id, version) {
             CacheResult::Hit(_) => Ok(true),
             CacheResult::NegativeHit => Ok(false),
-            CacheResult::Miss => self.store.object_exists_by_key(object_id, version),
+            CacheResult::Miss => self
+                .record_db_get("object_by_version")
+                .object_exists_by_key(object_id, version),
         }
     }
 
@@ -1046,7 +1302,10 @@ impl ObjectCacheRead for WritebackCache {
                     CacheResult::Miss => CacheResult::Miss,
                 })
             },
-            |remaining| self.store.multi_object_exists_by_key(remaining),
+            |remaining| {
+                self.record_db_multi_get("object_by_version", remaining.len())
+                    .multi_object_exists_by_key(remaining)
+            },
         )
     }
 
@@ -1054,16 +1313,16 @@ impl ObjectCacheRead for WritebackCache {
         &self,
         object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>> {
-        match self.get_object_entry_by_id_cache_only(&object_id) {
+        match self.get_object_entry_by_id_cache_only("latest_objref_or_tombstone", &object_id) {
             CacheResult::Hit((version, entry)) => Ok(Some(match entry {
                 ObjectEntry::Object(object) => object.compute_object_reference(),
                 ObjectEntry::Deleted => (object_id, version, ObjectDigest::OBJECT_DIGEST_DELETED),
                 ObjectEntry::Wrapped => (object_id, version, ObjectDigest::OBJECT_DIGEST_WRAPPED),
             })),
-            CacheResult::NegativeHit => {
-                panic!("cannot have negative hit when getting latest object or tombstone")
-            }
-            CacheResult::Miss => self.store.get_latest_object_ref_or_tombstone(object_id),
+            CacheResult::NegativeHit => Ok(None),
+            CacheResult::Miss => self
+                .record_db_get("latest_objref_or_tombstone")
+                .get_latest_object_ref_or_tombstone(object_id),
         }
     }
 
@@ -1071,7 +1330,7 @@ impl ObjectCacheRead for WritebackCache {
         &self,
         object_id: ObjectID,
     ) -> Result<Option<(ObjectKey, ObjectOrTombstone)>, SuiError> {
-        match self.get_object_entry_by_id_cache_only(&object_id) {
+        match self.get_object_entry_by_id_cache_only("latest_object_or_tombstone", &object_id) {
             CacheResult::Hit((version, entry)) => {
                 let key = ObjectKey(object_id, version);
                 Ok(Some(match entry {
@@ -1094,43 +1353,146 @@ impl ObjectCacheRead for WritebackCache {
                     ),
                 }))
             }
-            CacheResult::NegativeHit => {
-                panic!("cannot have negative hit when getting latest object or tombstone")
-            }
-            CacheResult::Miss => self.store.get_latest_object_or_tombstone(object_id),
+            CacheResult::NegativeHit => Ok(None),
+            CacheResult::Miss => self
+                .record_db_get("latest_object_or_tombstone")
+                .get_latest_object_or_tombstone(object_id),
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(object_id, version_bound))]
     fn find_object_lt_or_eq_version(
         &self,
         object_id: ObjectID,
-        version: SequenceNumber,
+        version_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
         macro_rules! check_cache_entry {
-            ($objects: expr) => {
+            ($level: expr, $objects: expr) => {
+                self.metrics
+                    .record_cache_request("object_lt_or_eq_version", $level);
                 if let Some(objects) = $objects {
-                    if let Some((_, object)) =
-                        objects.all_versions_lt_or_eq_descending(&version).next()
+                    if let Some((_, object)) = objects
+                        .all_versions_lt_or_eq_descending(&version_bound)
+                        .next()
                     {
                         if let ObjectEntry::Object(object) = object {
+                            self.metrics
+                                .record_cache_hit("object_lt_or_eq_version", $level);
                             return Ok(Some(object.clone()));
                         } else {
                             // if we find a tombstone, the object does not exist
+                            self.metrics
+                                .record_cache_negative_hit("object_lt_or_eq_version", $level);
                             return Ok(None);
                         }
+                    } else {
+                        self.metrics
+                            .record_cache_miss("object_lt_or_eq_version", $level);
                     }
                 }
             };
         }
+
+        // if we have the latest version cached, and it is within the bound, we are done
+        self.metrics
+            .record_cache_request("object_lt_or_eq_version", "object_by_id");
+        if let Some(latest) = self.cached.object_by_id_cache.get(&object_id) {
+            let latest = latest.lock();
+            match &*latest {
+                LatestObjectCacheEntry::Object(latest_version, object) => {
+                    if *latest_version <= version_bound {
+                        if let ObjectEntry::Object(object) = object {
+                            self.metrics
+                                .record_cache_hit("object_lt_or_eq_version", "object_by_id");
+                            return Ok(Some(object.clone()));
+                        } else {
+                            // object is a tombstone, but is still within the version bound
+                            self.metrics.record_cache_negative_hit(
+                                "object_lt_or_eq_version",
+                                "object_by_id",
+                            );
+                            return Ok(None);
+                        }
+                    }
+                    // latest object is not within the version bound. fall through.
+                }
+                // No object by this ID exists at all
+                LatestObjectCacheEntry::NonExistent => {
+                    self.metrics
+                        .record_cache_negative_hit("object_lt_or_eq_version", "object_by_id");
+                    return Ok(None);
+                }
+            }
+        }
+        self.metrics
+            .record_cache_miss("object_lt_or_eq_version", "object_by_id");
 
         Self::with_locked_cache_entries(
             &self.dirty.objects,
             &self.cached.object_cache,
             &object_id,
             |dirty_entry, cached_entry| {
-                check_cache_entry!(dirty_entry);
-                check_cache_entry!(cached_entry);
-                self.store.find_object_lt_or_eq_version(object_id, version)
+                check_cache_entry!("committed", dirty_entry);
+                check_cache_entry!("uncommitted", cached_entry);
+
+                // Much of the time, the query will be for the very latest object version, so
+                // try that first. But we have to be careful:
+                // 1. We must load the tombstone if it is present, because its version may exceed
+                //    the version_bound, in which case we must do a scan.
+                // 2. You might think we could just call `self.store.get_latest_object_or_tombstone` here.
+                //    But we cannot, because there may be a more recent version in the dirty set, which
+                //    we skipped over in check_cache_entry! because of the version bound. However, if we
+                //    skipped it above, we will skip it here as well, again due to the version bound.
+                // 3. Despite that, we really want to warm the cache here. Why? Because if the object is
+                //    cold (not being written to), then we will very soon be able to start serving reads
+                //    of it from the object_by_id cache, IF we can warm the cache. If we don't warm the
+                //    the cache here, and no writes to the object occur, then we will always have to go
+                //    to the db for the object.
+                //
+                // Lastly, it is important to understand the rationale for all this: If the object is
+                // write-hot, we will serve almost all reads to it from the dirty set (or possibly the
+                // cached set if it is only written to once every few checkpoints). If the object is
+                // write-cold (or non-existent) and read-hot, then we will serve almost all reads to it
+                // from the object_by_id cache check above.  Most of the apparently wasteful code here
+                // exists only to ensure correctness in all the edge cases.
+                let latest: Option<(SequenceNumber, ObjectEntry)> =
+                    if let Some(dirty_set) = dirty_entry {
+                        dirty_set.get_highest().cloned()
+                    } else {
+                        self.record_db_get("object_lt_or_eq_version_latest")
+                            .get_latest_object_or_tombstone(object_id)?
+                            .map(|(ObjectKey(_, version), obj_or_tombstone)| {
+                                (version, ObjectEntry::from(obj_or_tombstone))
+                            })
+                    };
+
+                if let Some((obj_version, obj_entry)) = latest {
+                    // we can always cache the latest object (or tombstone), even if it is not within the
+                    // version_bound. This is done in order to warm the cache in the case where a sequence
+                    // of transactions all read the same child object without writing to it.
+                    self.cache_latest_object_by_id(
+                        &object_id,
+                        LatestObjectCacheEntry::Object(obj_version, obj_entry.clone()),
+                    );
+
+                    if obj_version <= version_bound {
+                        match obj_entry {
+                            ObjectEntry::Object(object) => Ok(Some(object)),
+                            ObjectEntry::Deleted | ObjectEntry::Wrapped => Ok(None),
+                        }
+                    } else {
+                        // The latest object exceeded the bound, so now we have to do a scan
+                        // But we already know there is no dirty entry within the bound,
+                        // so we go to the db.
+                        self.record_db_get("object_lt_or_eq_version_scan")
+                            .find_object_lt_or_eq_version(object_id, version_bound)
+                    }
+                } else {
+                    // no object found in dirty set or db, object does not exist
+                    assert!(cached_entry.is_none());
+                    self.cache_object_not_found(&object_id);
+                    Ok(None)
+                }
             },
         )
     }
@@ -1152,7 +1514,9 @@ impl ObjectCacheRead for WritebackCache {
         match self.get_marker_value_cache_only(object_id, version, epoch_id) {
             CacheResult::Hit(marker) => Ok(Some(marker)),
             CacheResult::NegativeHit => Ok(None),
-            CacheResult::Miss => self.store.get_marker_value(object_id, &version, epoch_id),
+            CacheResult::Miss => self
+                .record_db_get("marker_by_version")
+                .get_marker_value(object_id, &version, epoch_id),
         }
     }
 
@@ -1166,13 +1530,15 @@ impl ObjectCacheRead for WritebackCache {
             CacheResult::NegativeHit => {
                 panic!("cannot have negative hit when getting latest marker")
             }
-            CacheResult::Miss => self.store.get_latest_marker(object_id, epoch_id),
+            CacheResult::Miss => self
+                .record_db_get("marker_latest")
+                .get_latest_marker(object_id, epoch_id),
         }
     }
 
     fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
         let cur_epoch = epoch_store.epoch();
-        match self.get_object_by_id_cache_only(&obj_ref.0) {
+        match self.get_object_by_id_cache_only("lock", &obj_ref.0) {
             CacheResult::Hit((_, obj)) => {
                 let actual_objref = obj.compute_object_reference();
                 if obj_ref != actual_objref {
@@ -1205,12 +1571,12 @@ impl ObjectCacheRead for WritebackCache {
                     version: None,
                 }))
             }
-            CacheResult::Miss => self.store.get_lock(obj_ref, epoch_store),
+            CacheResult::Miss => self.record_db_get("lock").get_lock(obj_ref, epoch_store),
         }
     }
 
     fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
-        let obj = ObjectCacheRead::get_object(self, &object_id)?.ok_or(
+        let obj = self.get_object_impl("live_objref", &object_id)?.ok_or(
             UserInputError::ObjectNotFound {
                 object_id,
                 version: None,
@@ -1222,7 +1588,7 @@ impl ObjectCacheRead for WritebackCache {
     fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
         do_fallback_lookup(
             owned_object_refs,
-            |obj_ref| match self.get_object_by_id_cache_only(&obj_ref.0) {
+            |obj_ref| match self.get_object_by_id_cache_only("object_is_live", &obj_ref.0) {
                 CacheResult::Hit((version, obj)) => {
                     if obj.compute_object_reference() != *obj_ref {
                         Err(UserInputError::ObjectVersionUnavailableForConsumption {
@@ -1242,11 +1608,16 @@ impl ObjectCacheRead for WritebackCache {
                 CacheResult::Miss => Ok(CacheResult::Miss),
             },
             |remaining| {
-                self.store.check_owned_objects_are_live(remaining)?;
+                self.record_db_multi_get("object_is_live", remaining.len())
+                    .check_owned_objects_are_live(remaining)?;
                 Ok(vec![(); remaining.len()])
             },
         )?;
         Ok(())
+    }
+
+    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        self.store.perpetual_tables.get_highest_pruned_checkpoint()
     }
 }
 
@@ -1258,18 +1629,30 @@ impl TransactionCacheRead for WritebackCache {
         do_fallback_lookup(
             digests,
             |digest| {
-                Ok(
-                    if let Some(tx) = self.dirty.pending_transaction_writes.get(digest) {
-                        CacheResult::Hit(Some(tx.transaction.clone()))
-                    } else if let Some(tx) = self.cached.transactions.get(digest) {
-                        CacheResult::Hit(Some(tx.clone()))
-                    } else {
-                        CacheResult::Miss
-                    },
-                )
+                self.metrics
+                    .record_cache_request("transaction_block", "uncommitted");
+                if let Some(tx) = self.dirty.pending_transaction_writes.get(digest) {
+                    self.metrics
+                        .record_cache_hit("transaction_block", "uncommitted");
+                    return Ok(CacheResult::Hit(Some(tx.transaction.clone())));
+                }
+                self.metrics
+                    .record_cache_miss("transaction_block", "uncommitted");
+
+                self.metrics
+                    .record_cache_request("transaction_block", "committed");
+                if let Some(tx) = self.cached.transactions.get(digest) {
+                    self.metrics
+                        .record_cache_hit("transaction_block", "committed");
+                    return Ok(CacheResult::Hit(Some(tx.clone())));
+                }
+                self.metrics
+                    .record_cache_miss("transaction_block", "committed");
+
+                Ok(CacheResult::Miss)
             },
             |remaining| {
-                self.store
+                self.record_db_multi_get("transaction_block", remaining.len())
                     .multi_get_transaction_blocks(remaining)
                     .map(|v| v.into_iter().map(|o| o.map(Arc::new)).collect())
             },
@@ -1283,17 +1666,32 @@ impl TransactionCacheRead for WritebackCache {
         do_fallback_lookup(
             digests,
             |digest| {
-                Ok(
-                    if let Some(digest) = self.dirty.executed_effects_digests.get(digest) {
-                        CacheResult::Hit(Some(*digest))
-                    } else if let Some(digest) = self.cached.executed_effects_digests.get(digest) {
-                        CacheResult::Hit(Some(digest))
-                    } else {
-                        CacheResult::Miss
-                    },
-                )
+                self.metrics
+                    .record_cache_request("executed_effects_digests", "uncommitted");
+                if let Some(digest) = self.dirty.executed_effects_digests.get(digest) {
+                    self.metrics
+                        .record_cache_hit("executed_effects_digests", "uncommitted");
+                    return Ok(CacheResult::Hit(Some(*digest)));
+                }
+                self.metrics
+                    .record_cache_miss("executed_effects_digests", "uncommitted");
+
+                self.metrics
+                    .record_cache_request("executed_effects_digests", "committed");
+                if let Some(digest) = self.cached.executed_effects_digests.get(digest) {
+                    self.metrics
+                        .record_cache_hit("executed_effects_digests", "committed");
+                    return Ok(CacheResult::Hit(Some(digest)));
+                }
+                self.metrics
+                    .record_cache_miss("executed_effects_digests", "committed");
+
+                Ok(CacheResult::Miss)
             },
-            |remaining| self.store.multi_get_executed_effects_digests(remaining),
+            |remaining| {
+                self.record_db_multi_get("executed_effects_digests", remaining.len())
+                    .multi_get_executed_effects_digests(remaining)
+            },
         )
     }
 
@@ -1304,17 +1702,32 @@ impl TransactionCacheRead for WritebackCache {
         do_fallback_lookup(
             digests,
             |digest| {
-                Ok(
-                    if let Some(effects) = self.dirty.transaction_effects.get(digest) {
-                        CacheResult::Hit(Some(effects.clone()))
-                    } else if let Some(effects) = self.cached.transaction_effects.get(digest) {
-                        CacheResult::Hit(Some((*effects).clone()))
-                    } else {
-                        CacheResult::Miss
-                    },
-                )
+                self.metrics
+                    .record_cache_request("transaction_effects", "uncommitted");
+                if let Some(effects) = self.dirty.transaction_effects.get(digest) {
+                    self.metrics
+                        .record_cache_hit("transaction_effects", "uncommitted");
+                    return Ok(CacheResult::Hit(Some(effects.clone())));
+                }
+                self.metrics
+                    .record_cache_miss("transaction_effects", "uncommitted");
+
+                self.metrics
+                    .record_cache_request("transaction_effects", "committed");
+                if let Some(effects) = self.cached.transaction_effects.get(digest) {
+                    self.metrics
+                        .record_cache_hit("transaction_effects", "committed");
+                    return Ok(CacheResult::Hit(Some((*effects).clone())));
+                }
+                self.metrics
+                    .record_cache_miss("transaction_effects", "committed");
+
+                Ok(CacheResult::Miss)
             },
-            |remaining| self.store.multi_get_effects(remaining.iter()),
+            |remaining| {
+                self.record_db_multi_get("transaction_effects", remaining.len())
+                    .multi_get_effects(remaining.iter())
+            },
         )
     }
 
@@ -1347,31 +1760,50 @@ impl TransactionCacheRead for WritebackCache {
         &self,
         event_digests: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        fn map_events(events: TransactionEvents) -> Option<TransactionEvents> {
+            if events.data.is_empty() {
+                None
+            } else {
+                Some(events)
+            }
+        }
+
         do_fallback_lookup(
             event_digests,
             |digest| {
-                Ok(
-                    if let Some(events) = self
-                        .dirty
-                        .transaction_events
-                        .get(digest)
-                        .map(|e| e.1.clone())
-                        .or_else(|| {
-                            self.cached
-                                .transaction_events
-                                .get(digest)
-                                .map(|e| (*e).clone())
-                        })
-                    {
-                        if events.data.is_empty() {
-                            CacheResult::Hit(None)
-                        } else {
-                            CacheResult::Hit(Some(events))
-                        }
-                    } else {
-                        CacheResult::Miss
-                    },
-                )
+                self.metrics
+                    .record_cache_request("transaction_events", "uncommitted");
+                if let Some(events) = self
+                    .dirty
+                    .transaction_events
+                    .get(digest)
+                    .map(|e| e.1.clone())
+                {
+                    self.metrics
+                        .record_cache_hit("transaction_events", "uncommitted");
+
+                    return Ok(CacheResult::Hit(map_events(events)));
+                }
+                self.metrics
+                    .record_cache_miss("transaction_events", "uncommitted");
+
+                self.metrics
+                    .record_cache_request("transaction_events", "committed");
+                if let Some(events) = self
+                    .cached
+                    .transaction_events
+                    .get(digest)
+                    .map(|e| (*e).clone())
+                {
+                    self.metrics
+                        .record_cache_hit("transaction_events", "committed");
+                    return Ok(CacheResult::Hit(map_events(events)));
+                }
+
+                self.metrics
+                    .record_cache_miss("transaction_events", "committed");
+
+                Ok(CacheResult::Miss)
             },
             |digests| self.store.multi_get_events(digests),
         )

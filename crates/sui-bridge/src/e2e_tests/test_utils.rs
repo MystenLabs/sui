@@ -5,11 +5,13 @@ use crate::abi::EthBridgeCommittee;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::*;
+use crate::server::BridgeNodePublicMetadata;
 use crate::types::BridgeAction;
 use crate::utils::get_eth_signer_client;
 use crate::utils::EthSigner;
 use ethers::types::Address as EthAddress;
 use move_core_types::language_storage::StructTag;
+use prometheus::Registry;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -72,16 +74,21 @@ pub const TEST_PK: &str = "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1
 /// structs that are needed for testing.
 pub struct BridgeTestCluster {
     pub test_cluster: TestCluster,
+    bridge_client: SuiBridgeClient,
     eth_environment: EthBridgeEnvironment,
     bridge_node_handles: Option<Vec<JoinHandle<()>>>,
     approved_governance_actions_for_next_start: Option<Vec<Vec<BridgeAction>>>,
     bridge_tx_cursor: Option<TransactionDigest>,
+    eth_chain_id: BridgeChainId,
+    sui_chain_id: BridgeChainId,
 }
 
 pub struct BridgeTestClusterBuilder {
     with_eth_env: bool,
     with_bridge_cluster: bool,
     approved_governance_actions: Option<Vec<Vec<BridgeAction>>>,
+    eth_chain_id: BridgeChainId,
+    sui_chain_id: BridgeChainId,
 }
 
 impl Default for BridgeTestClusterBuilder {
@@ -96,6 +103,8 @@ impl BridgeTestClusterBuilder {
             with_eth_env: false,
             with_bridge_cluster: false,
             approved_governance_actions: None,
+            eth_chain_id: BridgeChainId::EthCustom,
+            sui_chain_id: BridgeChainId::SuiCustom,
         }
     }
 
@@ -114,6 +123,16 @@ impl BridgeTestClusterBuilder {
         approved_governance_actions: Vec<Vec<BridgeAction>>,
     ) -> Self {
         self.approved_governance_actions = Some(approved_governance_actions);
+        self
+    }
+
+    pub fn with_sui_chain_id(mut self, chain_id: BridgeChainId) -> Self {
+        self.sui_chain_id = chain_id;
+        self
+    }
+
+    pub fn with_eth_chain_id(mut self, chain_id: BridgeChainId) -> Self {
+        self.eth_chain_id = chain_id;
         self
     }
 
@@ -145,13 +164,18 @@ impl BridgeTestClusterBuilder {
                     .await,
             );
         }
-
+        let bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url)
+            .await
+            .unwrap();
         BridgeTestCluster {
             test_cluster,
+            bridge_client,
             eth_environment,
             bridge_node_handles,
             approved_governance_actions_for_next_start: self.approved_governance_actions,
             bridge_tx_cursor: None,
+            sui_chain_id: self.sui_chain_id,
+            eth_chain_id: self.eth_chain_id,
         }
     }
 
@@ -199,16 +223,24 @@ impl BridgeTestCluster {
         Ok((eth_signer, eth_address))
     }
 
-    pub async fn sui_bridge_client(&self) -> anyhow::Result<SuiBridgeClient> {
-        SuiBridgeClient::new(&self.test_cluster.fullnode_handle.rpc_url).await
+    pub fn bridge_client(&self) -> &SuiBridgeClient {
+        &self.bridge_client
     }
 
-    pub fn sui_client(&self) -> SuiClient {
-        self.test_cluster.fullnode_handle.sui_client.clone()
+    pub fn sui_client(&self) -> &SuiClient {
+        &self.test_cluster.fullnode_handle.sui_client
     }
 
     pub fn sui_user_address(&self) -> SuiAddress {
         self.test_cluster.get_address_0()
+    }
+
+    pub fn sui_chain_id(&self) -> BridgeChainId {
+        self.sui_chain_id
+    }
+
+    pub fn eth_chain_id(&self) -> BridgeChainId {
+        self.eth_chain_id
     }
 
     pub fn contracts(&self) -> &DeployedSolContracts {
@@ -223,7 +255,7 @@ impl BridgeTestCluster {
         self.test_cluster.wallet_mut()
     }
 
-    pub fn wallet(&mut self) -> &WalletContext {
+    pub fn wallet(&self) -> &WalletContext {
         &self.test_cluster.wallet
     }
 
@@ -688,7 +720,15 @@ pub(crate) async fn start_bridge_cluster(
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();
-        handles.push(run_bridge_node(config_clone).await.unwrap());
+        handles.push(
+            run_bridge_node(
+                config_clone,
+                BridgeNodePublicMetadata::empty_for_testing(),
+                Registry::new(),
+            )
+            .await
+            .unwrap(),
+        );
     }
     handles
 }

@@ -23,7 +23,8 @@ interface IBridgeLimiter {
         view
         returns (bool);
 
-    /// @dev Emitted when the hourly transfer amount is updated.
+    // We no longer emit this event but keep it here for ABI compatibility.
+    /// @dev (deprecated, not in use) Emitted when the hourly transfer amount is updated.
     /// @param hourUpdated The hour that was updated.
     /// @param amount The amount in USD transferred.
     event HourlyTransferAmountUpdated(uint32 hourUpdated, uint256 amount);

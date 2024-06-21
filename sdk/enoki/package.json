@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/enoki",
-	"version": "0.2.8",
+	"version": "0.3.8",
 	"description": "TODO: Description",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
@@ -55,7 +55,7 @@
 		"vite": "^4.4.4"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@mysten/zklogin": "workspace:*",
 		"@nanostores/react": "^0.7.1",
 		"jose": "^5.2.3",

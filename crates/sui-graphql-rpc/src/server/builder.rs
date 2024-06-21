@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::compatibility_check::check_all_tables;
+use super::exchange_rates_task::TriggerExchangeRatesTask;
 use super::system_package_task::SystemPackageTask;
 use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
@@ -65,7 +67,9 @@ pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
     watermark_task: WatermarkTask,
     system_package_task: SystemPackageTask,
+    trigger_exchange_rates_task: TriggerExchangeRatesTask,
     state: AppState,
+    db_reader: Db,
 }
 
 impl Server {
@@ -73,6 +77,11 @@ impl Server {
     /// signal is received, the method waits for all tasks to complete before returning.
     pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
+
+        // Compatibility check
+        info!("Starting compatibility check");
+        check_all_tables(&self.db_reader).await?;
+        info!("Compatibility check passed");
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
@@ -88,6 +97,13 @@ impl Server {
             info!("Starting system package task");
             spawn_monitored_task!(async move {
                 self.system_package_task.run().await;
+            })
+        };
+
+        let trigger_exchange_rates_task = {
+            info!("Starting trigger exchange rates task");
+            spawn_monitored_task!(async move {
+                self.trigger_exchange_rates_task.run().await;
             })
         };
 
@@ -107,7 +123,12 @@ impl Server {
 
         // Wait for all tasks to complete. This ensures that the service doesn't fully shut down
         // until all tasks and the server have completed their shutdown processes.
-        let _ = join!(watermark_task, system_package_task, server_task);
+        let _ = join!(
+            watermark_task,
+            system_package_task,
+            trigger_exchange_rates_task,
+            server_task
+        );
 
         Ok(())
     }
@@ -305,6 +326,12 @@ impl ServerBuilder {
             state.cancellation_token.clone(),
         );
 
+        let trigger_exchange_rates_task = TriggerExchangeRatesTask::new(
+            db_reader.clone(),
+            watermark_task.epoch_receiver(),
+            state.cancellation_token.clone(),
+        );
+
         let app = router
             .route_layer(middleware::from_fn_with_state(
                 state.version,
@@ -327,7 +354,9 @@ impl ServerBuilder {
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
             watermark_task,
             system_package_task,
+            trigger_exchange_rates_task,
             state,
+            db_reader,
         })
     }
 

@@ -4,12 +4,14 @@
 //! BridgeActionExecutor receives BridgeActions (from BridgeOrchestrator),
 //! collects bridge authority signatures and submit signatures on chain.
 
+use arc_swap::ArcSwap;
 use mysten_metrics::spawn_logged_monitored_task;
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
 use sui_types::transaction::ObjectArg;
+use sui_types::TypeTag;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{Signature, SuiKeyPair},
@@ -23,6 +25,7 @@ use crate::events::{
     TokenTransferAlreadyApproved, TokenTransferAlreadyClaimed, TokenTransferApproved,
     TokenTransferClaimed,
 };
+use crate::metrics::BridgeMetrics;
 use crate::{
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
     error::BridgeError,
@@ -31,8 +34,9 @@ use crate::{
     sui_transaction_builder::build_sui_transaction,
     types::{BridgeAction, BridgeActionStatus, VerifiedCertifiedBridgeAction},
 };
+use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{error, info, warn};
+use tracing::{error, info, instrument, warn, Instrument};
 
 pub const CHANNEL_SIZE: usize = 1000;
 
@@ -69,6 +73,8 @@ pub struct BridgeActionExecutor<C> {
     gas_object_id: ObjectID,
     store: Arc<BridgeOrchestratorTables>,
     bridge_object_arg: ObjectArg,
+    token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
+    metrics: Arc<BridgeMetrics>,
 }
 
 impl<C> BridgeActionExecutorTrait for BridgeActionExecutor<C>
@@ -97,6 +103,8 @@ where
         key: SuiKeyPair,
         sui_address: SuiAddress,
         gas_object_id: ObjectID,
+        token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
+        metrics: Arc<BridgeMetrics>,
     ) -> Self {
         let bridge_object_arg = sui_client
             .get_mutable_bridge_object_arg_must_succeed()
@@ -109,6 +117,8 @@ where
             gas_object_id,
             sui_address,
             bridge_object_arg,
+            token_config_rx,
+            metrics,
         }
     }
 
@@ -125,7 +135,7 @@ where
             CHANNEL_SIZE,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["executor_signing_queue"]),
         );
 
@@ -133,7 +143,7 @@ where
             CHANNEL_SIZE,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["executor_execution_queue"]),
         );
         let execution_tx_clone = execution_tx.clone();
@@ -141,6 +151,7 @@ where
         let store_clone = self.store.clone();
         let client_clone = self.sui_client.clone();
         let mut tasks = vec![];
+        let metrics = self.metrics.clone();
         tasks.push(spawn_logged_monitored_task!(
             Self::run_signature_aggregation_loop(
                 client_clone,
@@ -149,9 +160,11 @@ where
                 sender_clone,
                 receiver,
                 execution_tx_clone,
+                metrics,
             )
         ));
 
+        let metrics = self.metrics.clone();
         let execution_tx_clone = execution_tx.clone();
         tasks.push(spawn_logged_monitored_task!(
             Self::run_onchain_execution_loop(
@@ -163,6 +176,8 @@ where
                 execution_tx_clone,
                 execution_rx,
                 self.bridge_object_arg,
+                self.token_config_rx,
+                metrics,
             )
         ));
         (tasks, sender, execution_tx)
@@ -179,24 +194,57 @@ where
         execution_queue_sender: mysten_metrics::metered_channel::Sender<
             CertifiedBridgeActionExecutionWrapper,
         >,
+        metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting run_signature_aggregation_loop");
         while let Some(action) = signing_queue_receiver.recv().await {
-            info!("Received action for signing: {:?}", action);
-            let auth_agg_clone = auth_agg.clone();
-            let signing_queue_sender_clone = signing_queue_sender.clone();
-            let execution_queue_sender_clone = execution_queue_sender.clone();
-            let sui_client_clone = sui_client.clone();
-            let store_clone = store.clone();
-            spawn_logged_monitored_task!(Self::request_signature(
-                sui_client_clone,
-                auth_agg_clone,
+            Self::handle_signing_task(
+                &auth_agg,
+                &signing_queue_sender,
+                &execution_queue_sender,
+                &sui_client,
+                &store,
                 action,
-                store_clone,
-                signing_queue_sender_clone,
-                execution_queue_sender_clone
-            ));
+                &metrics,
+            )
+            .await;
         }
+    }
+
+    #[instrument(level = "error", skip_all, fields(action_key=?action.0.key(), attempt_times=?action.1))]
+    async fn handle_signing_task(
+        auth_agg: &Arc<BridgeAuthorityAggregator>,
+        signing_queue_sender: &mysten_metrics::metered_channel::Sender<
+            BridgeActionExecutionWrapper,
+        >,
+        execution_queue_sender: &mysten_metrics::metered_channel::Sender<
+            CertifiedBridgeActionExecutionWrapper,
+        >,
+        sui_client: &Arc<SuiClient<C>>,
+        store: &Arc<BridgeOrchestratorTables>,
+        action: BridgeActionExecutionWrapper,
+        metrics: &Arc<BridgeMetrics>,
+    ) {
+        metrics.action_executor_signing_queue_received_actions.inc();
+        let action_key = action.0.key();
+        info!("Received action for signing: {:?}", action.0);
+
+        let auth_agg_clone = auth_agg.clone();
+        let signing_queue_sender_clone = signing_queue_sender.clone();
+        let execution_queue_sender_clone = execution_queue_sender.clone();
+        let sui_client_clone = sui_client.clone();
+        let store_clone = store.clone();
+        let metrics_clone = metrics.clone();
+        spawn_logged_monitored_task!(Self::request_signature(
+            sui_client_clone,
+            auth_agg_clone,
+            action,
+            store_clone,
+            signing_queue_sender_clone,
+            execution_queue_sender_clone,
+            metrics_clone,
+        )
+        .instrument(tracing::debug_span!("request_signature", action_key=?action_key)));
     }
 
     // Checks if the action is already processed on chain.
@@ -241,6 +289,7 @@ where
         execution_queue_sender: mysten_metrics::metered_channel::Sender<
             CertifiedBridgeActionExecutionWrapper,
         >,
+        metrics: Arc<BridgeMetrics>,
     ) {
         let BridgeActionExecutionWrapper(action, attempt_times) = action;
 
@@ -258,14 +307,19 @@ where
         }
         match auth_agg.request_committee_signatures(action.clone()).await {
             Ok(certificate) => {
+                info!("Sending certificate to execution");
                 execution_queue_sender
                     .send(CertifiedBridgeActionExecutionWrapper(certificate, 0))
                     .await
-                    .expect("Sending to execution queue should not fail");
+                    .unwrap_or_else(|e| {
+                        panic!("Sending to execution queue should not fail: {:?}", e);
+                    });
             }
             Err(e) => {
                 warn!("Failed to collect sigs for bridge action: {:?}", e);
+                metrics.err_signature_aggregation.inc();
 
+                // TODO: spawn a task for this
                 if attempt_times >= MAX_SIGNING_ATTEMPTS {
                     error!("Manual intervention is required. Failed to collect sigs for bridge action after {MAX_SIGNING_ATTEMPTS} attempts: {:?}", e);
                     return;
@@ -274,7 +328,9 @@ where
                 signing_queue_sender
                     .send(BridgeActionExecutionWrapper(action, attempt_times + 1))
                     .await
-                    .expect("Sending to signing queue should not fail");
+                    .unwrap_or_else(|e| {
+                        panic!("Sending to signing queue should not fail: {:?}", e);
+                    });
             }
         }
     }
@@ -294,96 +350,168 @@ where
             CertifiedBridgeActionExecutionWrapper,
         >,
         bridge_object_arg: ObjectArg,
+        mut token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
+        metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting run_onchain_execution_loop");
-        // Get token id maps, this must succeed to continue.
-        let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
+        let sui_token_type_tags =
+            ArcSwap::new(Arc::new(token_config_rx.borrow_and_update().clone()));
 
-        while let Some(certificate_wrapper) = execution_queue_receiver.recv().await {
-            info!(
-                "Received certified action for execution: {:?}",
-                certificate_wrapper
-            );
-            let CertifiedBridgeActionExecutionWrapper(certificate, attempt_times) =
-                certificate_wrapper;
+        loop {
+            tokio::select! {
+                result = token_config_rx.changed() => {
+                    match result {
+                        Ok(()) => {
+                            sui_token_type_tags.store(Arc::new(token_config_rx.borrow_and_update().clone()));
+                        }
+                        Err(_) => {
+                            panic!("Token config watch channel closed unexpectedly");
+                        }
+                    }
+                },
+                certificate_wrapper = execution_queue_receiver.recv() => {
+                    match certificate_wrapper {
+                        Some(certificate_wrapper) => {
+                            Self::handle_execution_task(
+                                certificate_wrapper,
+                                &sui_client,
+                                &sui_key,
+                                &sui_address,
+                                gas_object_id,
+                                &store,
+                                &execution_queue_sender,
+                                &bridge_object_arg,
+                                &sui_token_type_tags,
+                                &metrics,
+                            )
+                            .await;
+                        },
+                        None => {
+                            panic!("Execution queue closed unexpectedly");
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-            let action = certificate.data();
-            // If the action is already processed, skip it.
-            if Self::handle_already_processed_token_transfer_action_maybe(
-                &sui_client,
-                action,
-                &store,
-            )
+    #[instrument(level = "error", skip_all, fields(action_key=?certificate_wrapper.0.data().key(), attempt_times=?certificate_wrapper.1))]
+    async fn handle_execution_task(
+        certificate_wrapper: CertifiedBridgeActionExecutionWrapper,
+        sui_client: &Arc<SuiClient<C>>,
+        sui_key: &SuiKeyPair,
+        sui_address: &SuiAddress,
+        gas_object_id: ObjectID,
+        store: &Arc<BridgeOrchestratorTables>,
+        execution_queue_sender: &mysten_metrics::metered_channel::Sender<
+            CertifiedBridgeActionExecutionWrapper,
+        >,
+        bridge_object_arg: &ObjectArg,
+        sui_token_type_tags: &ArcSwap<HashMap<u8, TypeTag>>,
+        metrics: &Arc<BridgeMetrics>,
+    ) {
+        metrics
+            .action_executor_execution_queue_received_actions
+            .inc();
+        let CertifiedBridgeActionExecutionWrapper(certificate, attempt_times) = certificate_wrapper;
+        let action = certificate.data();
+        let action_key = action.key();
+
+        info!("Received certified action for execution: {:?}", action);
+
+        // TODO check gas coin balance here. If gas balance too low, do not proceed.
+        let (gas_coin, gas_object_ref) =
+            Self::get_gas_data_assert_ownership(*sui_address, gas_object_id, sui_client).await;
+        metrics.gas_coin_balance.set(gas_coin.value() as i64);
+
+        let ceriticate_clone = certificate.clone();
+
+        // Check once: if the action is already processed, skip it.
+        if Self::handle_already_processed_token_transfer_action_maybe(sui_client, action, store)
             .await
-            {
+        {
+            info!("Action already processed, skipping");
+            return;
+        }
+
+        info!("Building Sui transaction");
+        let rgp = sui_client.get_reference_gas_price_until_success().await;
+        let tx_data = match build_sui_transaction(
+            *sui_address,
+            &gas_object_ref,
+            ceriticate_clone,
+            *bridge_object_arg,
+            sui_token_type_tags.load().as_ref(),
+            rgp,
+        ) {
+            Ok(tx_data) => tx_data,
+            Err(err) => {
+                metrics.err_build_sui_transaction.inc();
+                error!(
+                    "Manual intervention is required. Failed to build transaction for action {:?}: {:?}",
+                    action, err
+                );
+                // This should not happen, but in case it does, we do not want to
+                // panic, instead we log here for manual intervention.
                 return;
             }
+        };
+        let sig = Signature::new_secure(
+            &IntentMessage::new(Intent::sui_transaction(), &tx_data),
+            sui_key,
+        );
+        let signed_tx = Transaction::from_data(tx_data, vec![sig]);
+        let tx_digest = *signed_tx.digest();
 
-            // TODO check gas coin balance here. If gas balance too low, do not proceed.
-            let (_gas_coin, gas_object_ref) =
-                Self::get_gas_data_assert_ownership(sui_address, gas_object_id, &sui_client).await;
-            let ceriticate_clone = certificate.clone();
-            info!("Building Sui transaction for action: {:?}", action);
-            let rgp = sui_client.get_reference_gas_price_until_success().await;
-            let tx_data = match build_sui_transaction(
-                sui_address,
-                &gas_object_ref,
-                ceriticate_clone,
-                bridge_object_arg,
-                &sui_token_type_tags,
-                rgp,
-            ) {
-                Ok(tx_data) => tx_data,
-                Err(err) => {
-                    // TODO: add mertrics
-                    error!(
-                        "Failed to build transaction for action {:?}: {:?}",
-                        certificate, err
-                    );
-                    // This should not happen, but in case it does, we do not want to
-                    // panic, instead we log here for manual intervention.
-                    continue;
-                }
-            };
-            let sig = Signature::new_secure(
-                &IntentMessage::new(Intent::sui_transaction(), &tx_data),
-                &sui_key,
-            );
-            let signed_tx = Transaction::from_data(tx_data, vec![sig]);
-            let tx_digest = *signed_tx.digest();
+        // Check twice: If the action is already processed, skip it.
+        if Self::handle_already_processed_token_transfer_action_maybe(sui_client, action, store)
+            .await
+        {
+            info!("Action already processed, skipping");
+            return;
+        }
 
-            info!(?tx_digest, ?gas_object_ref, "Sending transaction to Sui");
-            // TODO: add metrics to detect low balances and so on
-            match sui_client
-                .execute_transaction_block_with_effects(signed_tx)
-                .await
-            {
-                Ok(resp) => Self::handle_execution_effects(tx_digest, resp, &store, action).await,
+        info!(?tx_digest, ?gas_object_ref, "Sending transaction to Sui");
+        match sui_client
+            .execute_transaction_block_with_effects(signed_tx)
+            .await
+        {
+            Ok(resp) => {
+                Self::handle_execution_effects(tx_digest, resp, store, action, metrics).await
+            }
 
-                // If the transaction did not go through, retry up to a certain times.
-                Err(err) => {
-                    error!("Sui transaction failed at signing: {err:?}");
-
-                    // Do this in a separate task so we won't deadlock here
-                    let sender_clone = execution_queue_sender.clone();
-                    spawn_logged_monitored_task!(async move {
-                        // TODO: metrics + alerts
-                        // If it fails for too many times, log and ask for manual intervention.
-                        if attempt_times >= MAX_EXECUTION_ATTEMPTS {
-                            error!("Manual intervention is required. Failed to collect execute transaction for bridge action after {MAX_EXECUTION_ATTEMPTS} attempts: {:?}", err);
-                            return;
-                        }
-                        delay(attempt_times).await;
-                        sender_clone
-                            .send(CertifiedBridgeActionExecutionWrapper(
-                                certificate,
-                                attempt_times + 1,
-                            ))
-                            .await
-                            .expect("Sending to execution queue should not fail");
-                        info!("Re-enqueued certificate for execution");
-                    });
-                }
+            // If the transaction did not go through, retry up to a certain times.
+            Err(err) => {
+                error!(
+                    ?action_key,
+                    ?tx_digest,
+                    "Sui transaction failed at signing: {err:?}"
+                );
+                metrics.err_sui_transaction_submission.inc();
+                let metrics_clone = metrics.clone();
+                // Do this in a separate task so we won't deadlock here
+                let sender_clone = execution_queue_sender.clone();
+                spawn_logged_monitored_task!(async move {
+                    // If it fails for too many times, log and ask for manual intervention.
+                    metrics_clone
+                        .err_sui_transaction_submission_too_many_failures
+                        .inc();
+                    if attempt_times >= MAX_EXECUTION_ATTEMPTS {
+                        error!("Manual intervention is required. Failed to collect execute transaction for bridge action after {MAX_EXECUTION_ATTEMPTS} attempts: {:?}", err);
+                        return;
+                    }
+                    delay(attempt_times).await;
+                    sender_clone
+                        .send(CertifiedBridgeActionExecutionWrapper(
+                            certificate,
+                            attempt_times + 1,
+                        ))
+                        .await
+                        .unwrap_or_else(|e| {
+                            panic!("Sending to execution queue should not fail: {:?}", e);
+                        });
+                    info!("Re-enqueued certificate for execution");
+                }.instrument(tracing::debug_span!("reenqueue_execution_task", action_key=?action_key)));
             }
         }
     }
@@ -394,6 +522,7 @@ where
         response: SuiTransactionBlockResponse,
         store: &Arc<BridgeOrchestratorTables>,
         action: &BridgeAction,
+        metrics: &Arc<BridgeMetrics>,
     ) {
         let effects = response
             .effects
@@ -429,7 +558,7 @@ where
                 // the execution queue because retries are mostly likely going to fail anyway.
                 // After human examination, the node should be restarted and fetch them from WAL.
 
-                // TODO metrics + alerts
+                metrics.err_sui_transaction_execution.inc();
                 error!(?tx_digest, "Manual intervention is needed. Sui transaction executed and failed with error: {error:?}");
             }
         }
@@ -474,11 +603,9 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use std::collections::{BTreeMap, HashMap};
-    use std::str::FromStr;
     use sui_json_rpc_types::SuiTransactionBlockEffects;
     use sui_json_rpc_types::SuiTransactionBlockEvents;
     use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockResponse};
-    use sui_types::bridge::{TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT};
     use sui_types::crypto::get_key_pair;
     use sui_types::gas_coin::GasCoin;
     use sui_types::TypeTag;
@@ -517,15 +644,14 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-            id_token_map,
+            token_tx,
         ) = setup().await;
-
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
         );
         let action = action_certificate.data().clone();
-
+        let id_token_map = token_tx.borrow();
         let tx_data = build_sui_transaction(
             sui_address,
             &gas_object_ref,
@@ -709,9 +835,9 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-            id_token_map,
+            token_tx,
         ) = setup().await;
-
+        let id_token_map = token_tx.borrow();
         let (action_certificate, sui_tx_digest, sui_tx_event_index) =
             get_bridge_authority_approved_action(
                 vec![&mock0, &mock1, &mock2, &mock3],
@@ -737,7 +863,6 @@ mod tests {
             gas_object_ref,
             Owner::AddressOwner(sui_address),
         );
-
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
             store.get_all_pending_actions()[&action.digest()],
@@ -830,7 +955,7 @@ mod tests {
             _handles,
             _gas_object_ref,
             _sui_address,
-            _id_token_map,
+            _token_tx,
         ) = setup().await;
 
         let sui_tx_digest = TransactionDigest::random();
@@ -897,9 +1022,9 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-            id_token_map,
+            token_tx,
         ) = setup().await;
-
+        let id_token_map = token_tx.borrow();
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
@@ -1088,7 +1213,7 @@ mod tests {
         Vec<tokio::task::JoinHandle<()>>,
         ObjectRef,
         SuiAddress,
-        HashMap<u8, TypeTag>,
+        tokio::sync::watch::Sender<HashMap<u8, TypeTag>>,
     ) {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
@@ -1122,7 +1247,10 @@ mod tests {
         let committee = BridgeCommittee::new(authorities).unwrap();
 
         let agg = Arc::new(BridgeAuthorityAggregator::new(Arc::new(committee)));
-
+        let metrics = Arc::new(BridgeMetrics::new(&registry));
+        let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
+        let (token_type_tags_tx, token_type_tags_rx) =
+            tokio::sync::watch::channel(sui_token_type_tags);
         let executor = BridgeActionExecutor::new(
             sui_client.clone(),
             agg.clone(),
@@ -1130,18 +1258,13 @@ mod tests {
             sui_key,
             sui_address,
             gas_object_ref.0,
+            token_type_tags_rx,
+            metrics,
         )
         .await;
 
         let (executor_handle, signing_tx, execution_tx) = executor.run_inner();
         handles.extend(executor_handle);
-
-        // Mock id token type map for testing
-        let mut id_token_map = HashMap::new();
-        id_token_map.insert(TOKEN_ID_BTC, TypeTag::from_str("0xb::btc::BTC").unwrap());
-        id_token_map.insert(TOKEN_ID_ETH, TypeTag::from_str("0xb::eth::ETH").unwrap());
-        id_token_map.insert(TOKEN_ID_USDC, TypeTag::from_str("0xb::usdc::USDC").unwrap());
-        id_token_map.insert(TOKEN_ID_USDT, TypeTag::from_str("0xb::usdt::USDT").unwrap());
 
         (
             signing_tx,
@@ -1158,7 +1281,7 @@ mod tests {
             handles,
             gas_object_ref,
             sui_address,
-            id_token_map,
+            token_type_tags_tx,
         )
     }
 }

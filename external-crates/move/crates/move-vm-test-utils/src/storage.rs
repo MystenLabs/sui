@@ -164,7 +164,7 @@ where
 
 impl InMemoryAccountStorage {
     fn apply(&mut self, account_changeset: AccountChangeSet) -> Result<()> {
-        let (modules, _resources) = account_changeset.into_inner();
+        let modules = account_changeset.into_inner();
         apply_changes(&mut self.modules, modules)?;
         Ok(())
     }

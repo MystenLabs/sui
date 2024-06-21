@@ -109,7 +109,7 @@ pub type SyntaxMethodKind = Spanned<SyntaxMethodKind_>;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SyntaxMethod {
     pub loc: Loc,
-    pub public_visibility: Loc,
+    pub visibility: Visibility,
     pub tname: TypeName,
     pub target_function: (ModuleIdent, FunctionName),
     pub kind: SyntaxMethodKind,
@@ -398,11 +398,6 @@ pub enum MacroArgument {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum IDEInfo {
-    ExpandedLambda,
-}
-
-#[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
@@ -432,7 +427,6 @@ pub enum Exp_ {
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
     Block(Block),
-    IDEAnnotation(IDEInfo, Box<Exp>),
     Lambda(Lambda),
 
     Assign(LValueList, Box<Exp>),
@@ -1160,7 +1154,7 @@ impl AstDebug for SyntaxMethod {
             loc: _,
             tname,
             target_function: (target_m, target_f),
-            public_visibility: _,
+            visibility: _,
             kind,
         } = self;
         let kind_str = format!("{:?}", kind.value);
@@ -1737,12 +1731,6 @@ impl AstDebug for Exp_ {
                 e.ast_debug(w);
             }
             E::Block(seq) => seq.ast_debug(w),
-            E::IDEAnnotation(info, e) => match info {
-                IDEInfo::ExpandedLambda => {
-                    w.write("ExpandedLambda:");
-                    e.ast_debug(w);
-                }
-            },
             E::Lambda(l) => l.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");

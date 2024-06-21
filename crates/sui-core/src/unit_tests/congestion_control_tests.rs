@@ -51,18 +51,19 @@ impl TestSetup {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config
-            .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
+        protocol_config.set_per_object_congestion_control_mode_for_testing(
+            PerObjectCongestionControlMode::TotalGasBudget,
+        );
 
         // Set shared object congestion control such that it only allows 1 transaction to go through.
         let max_accumulated_txn_cost_per_object_in_checkpoint =
             TEST_ONLY_GAS_PRICE * TEST_ONLY_GAS_UNIT;
-        protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(
+        protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
             max_accumulated_txn_cost_per_object_in_checkpoint,
         );
 
         // Set max deferral rounds to 0 to testr cancellation. All deferred transactions will be cancelled.
-        protocol_config.set_max_deferral_rounds_for_congestion_control(0);
+        protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(0);
 
         let setup_authority_state = TestAuthorityBuilder::new()
             .with_reference_gas_price(TEST_ONLY_GAS_PRICE)
@@ -257,7 +258,7 @@ async fn test_congestion_control_execution_cancellation() {
     telemetry_subscribers::init_for_testing();
 
     // Creates a authority state with 2 shared object and 1 owned object. We use this setup
-    // to intialize two more authority states: one tests cancellation execution, and one tests
+    // to initialize two more authority states: one tests cancellation execution, and one tests
     // executing cancelled transaction from effect.
     let test_setup = TestSetup::new().await;
     let shared_object_1 = test_setup.create_shared_object().await;
@@ -294,10 +295,10 @@ async fn test_congestion_control_execution_cancellation() {
     // Initialize shared object queue so that any transaction touches shared_object_1 should result in congestion and cancellation.
     register_fail_point_arg("initial_congestion_tracker", move || {
         Some(
-            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[(
-                shared_object_1.0,
-                10,
-            )]),
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(
+                &[(shared_object_1.0, 10)],
+                PerObjectCongestionControlMode::TotalGasBudget,
+            ),
         )
     });
 

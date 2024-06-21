@@ -1,5 +1,70 @@
 # @mysten/sui.js
 
+## 1.1.2
+
+### Patch Changes
+
+- 0dfff33b95: Fix bug that prevents coinWithBalance intent from being resolved
+
+## 1.1.1
+
+### Patch Changes
+
+- 101f1ff4b8: Fix coinWithBalance when passing balance using a number instead of a bigint
+
+## 1.1.0
+
+### Minor Changes
+
+- bae8f9683c: Remove address from parseSerializedSignature
+
+## 1.0.5
+
+### Patch Changes
+
+- 369b924343: Fix serializing bcs<u8> inputs from pure strings in v1 json
+- Updated dependencies [369b924343]
+  - @mysten/bcs@1.0.2
+
+## 1.0.4
+
+### Patch Changes
+
+- f1e828f557: Export types needed for defining Transaction plugins
+- Updated dependencies [f1e828f557]
+  - @mysten/bcs@1.0.1
+
+## 1.0.3
+
+### Patch Changes
+
+- 1f20580841: Fix parsing of object refs from v1 json
+
+## 1.0.2
+
+### Patch Changes
+
+- f0a839f874: Fix serialization bug when converting object inputs to v1 JSON
+
+## 1.0.1
+
+### Patch Changes
+
+- 6fc6235984: Fix parsing of struct tags
+
+## 1.0.0
+
+### Major Changes
+
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
+  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+
+### Patch Changes
+
+- ebdfe7cf21: Add support for more JSON RPC error codes
+- Updated dependencies [a92b03de42]
+  - @mysten/bcs@1.0.0
+
 ## 0.54.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import { SuiTransactionBlockResponse } from '@mysten/sui/client';
 
 // todo: add more logic for deriving transaction label
 export const getLabel = (transaction: SuiTransactionBlockResponse, currentAddress?: string) => {

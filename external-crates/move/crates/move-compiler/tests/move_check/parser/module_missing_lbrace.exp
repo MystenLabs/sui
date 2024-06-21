@@ -5,5 +5,5 @@ error[E01002]: unexpected token
   │     ^^^
   │     │
   │     Unexpected 'fun'
-  │     Expected '{'
+  │     Expected '{' or ':' after the module name
 

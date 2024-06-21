@@ -29,11 +29,12 @@ use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::consensus_manager::ConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
+use sui_core::storage::RestReadStore;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
-use sui_json_rpc::ServerType;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
+use sui_rest_api::RestMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
@@ -86,6 +87,7 @@ use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
+use sui_core::rest_index::RestIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
@@ -478,6 +480,8 @@ impl SuiNode {
             ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
 
+        info!("created epoch store");
+
         replay_log!(
             "Beginning replay run. Epoch: {:?}, Protocol config: {:?}",
             epoch_store.epoch(),
@@ -486,6 +490,7 @@ impl SuiNode {
 
         // the database is empty at genesis time
         if is_genesis {
+            info!("checking SUI conservation at genesis");
             // When we are opening the db table, the only time when it's safe to
             // check SUI conservation is at genesis. Otherwise we may be in the middle of
             // an epoch and the SUI conservation check will fail. This also initialize
@@ -508,6 +513,8 @@ impl SuiNode {
             );
         }
 
+        info!("creating checkpoint store");
+
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         checkpoint_store.insert_genesis_checkpoint(
             genesis.checkpoint(),
@@ -515,6 +522,7 @@ impl SuiNode {
             &epoch_store,
         );
 
+        info!("creating state sync store");
         let state_sync_store = RocksDbStore::new(
             cache_traits.clone(),
             committee_store.clone(),
@@ -522,12 +530,29 @@ impl SuiNode {
         );
 
         let index_store = if is_full_node && config.enable_index_processing {
+            info!("creating index store");
             Some(Arc::new(IndexStore::new(
                 config.db_path().join("indexes"),
                 &prometheus_registry,
                 epoch_store
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
+                config.remove_deprecated_tables,
+            )))
+        } else {
+            None
+        };
+
+        let rest_index = if is_full_node
+            && config.enable_experimental_rest_api
+            && config.enable_index_processing
+        {
+            Some(Arc::new(RestIndexStore::new(
+                config.db_path().join("rest_index"),
+                &store,
+                &checkpoint_store,
+                &epoch_store,
+                &cache_traits.backing_package_store,
             )))
         } else {
             None
@@ -537,6 +562,7 @@ impl SuiNode {
         // It's ok if the value is already set due to data races.
         let _ = CHAIN_IDENTIFIER.set(chain_identifier);
 
+        info!("creating archive reader");
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
@@ -571,16 +597,19 @@ impl SuiNode {
         )
         .expect("Initial trusted peers must be set");
 
+        info!("start state archival");
         // Start archiving local state to remote store
         let state_archive_handle =
             Self::start_state_archival(&config, &prometheus_registry, state_sync_store.clone())
                 .await?;
 
+        info!("start snapshot upload");
         // Start uploading state snapshot to remote store
         let state_snapshot_handle =
             Self::start_state_snapshot(&config, &prometheus_registry, checkpoint_store.clone())?;
 
         // Start uploading db checkpoints to remote store
+        info!("start db checkpoint");
         let (db_checkpoint_config, db_checkpoint_handle) = Self::start_db_checkpoint(
             &config,
             &prometheus_registry,
@@ -597,6 +626,7 @@ impl SuiNode {
                 .set_killswitch_tombstone_pruning(true);
         }
 
+        info!("create authority state");
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
@@ -606,6 +636,7 @@ impl SuiNode {
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
+            rest_index,
             checkpoint_store.clone(),
             &prometheus_registry,
             genesis.objects(),
@@ -682,6 +713,7 @@ impl SuiNode {
 
         let accumulator = Arc::new(StateAccumulator::new(
             cache_traits.accumulator_store.clone(),
+            &epoch_store,
         ));
 
         let authority_names_to_peer_ids = epoch_store
@@ -1818,8 +1850,6 @@ pub async fn build_http_server(
         return Ok(None);
     }
 
-    let chain_id = state.get_chain_identifier().unwrap();
-
     let mut router = axum::Router::new();
 
     let json_rpc_router = {
@@ -1883,23 +1913,31 @@ pub async fn build_http_server(
             metrics,
             config.indexer_max_subscriptions,
         ))?;
-        server.register_module(MoveUtils::new(state))?;
+        server.register_module(MoveUtils::new(state.clone()))?;
 
-        let server_type = if config.websocket_only {
-            Some(ServerType::WebSocket)
-        } else {
-            None
-        };
+        let server_type = config.jsonrpc_server_type();
+
         server.to_router(server_type).await?
     };
 
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let rest_router =
-            sui_rest_api::RestService::new(Arc::new(store.clone()), chain_id, software_version)
-                .into_router();
-        router = router.nest("/rest", rest_router);
+        let mut rest_service = sui_rest_api::RestService::new(
+            Arc::new(RestReadStore::new(state, store)),
+            software_version,
+        );
+
+        rest_service.with_metrics(RestMetrics::new(prometheus_registry));
+
+        if let Some(transaction_orchestrator) = transaction_orchestrator {
+            rest_service.with_executor(transaction_orchestrator.clone())
+        }
+
+        let rest_router = rest_service.into_router();
+        router = router
+            .nest("/rest", rest_router.clone())
+            .nest("/v2", rest_router);
     }
 
     let server = axum::Server::bind(&config.json_rpc_address)

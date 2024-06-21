@@ -21,6 +21,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Debug;
 use sui_types::bridge::{
     BridgeChainId, MoveTypeTokenTransferPayload, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM,
     APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER,
@@ -174,6 +175,23 @@ pub enum BridgeActionType {
     EvmContractUpgrade = 5,
     AddTokensOnSui = 6,
     AddTokensOnEvm = 7,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct BridgeActionKey {
+    pub action_type: BridgeActionType,
+    pub chain_id: BridgeChainId,
+    pub seq_num: u64,
+}
+
+impl Debug for BridgeActionKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "BridgeActionKey({},{},{})",
+            self.action_type as u8, self.chain_id as u8, self.seq_num
+        )
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, TryFromPrimitive)]
@@ -330,6 +348,14 @@ impl BridgeAction {
         let mut hasher = Keccak256::default();
         hasher.update(&self.to_bytes());
         BridgeActionDigest::new(hasher.finalize().into())
+    }
+
+    pub fn key(&self) -> BridgeActionKey {
+        BridgeActionKey {
+            action_type: self.action_type(),
+            chain_id: self.chain_id(),
+            seq_num: self.seq_number(),
+        }
     }
 
     pub fn chain_id(&self) -> BridgeChainId {

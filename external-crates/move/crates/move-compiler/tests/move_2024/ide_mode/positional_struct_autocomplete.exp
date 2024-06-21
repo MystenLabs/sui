@@ -1,9 +1,3 @@
-error[E15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:9:21
-  │
-9 │         let _tmp1 = _s.;
-  │                     ^^^ Autocompletes to: '0'
-
 error[E01002]: unexpected token
   ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:9:24
   │
@@ -12,12 +6,6 @@ error[E01002]: unexpected token
   │                        │
   │                        Unexpected ';'
   │                        Expected an identifier or a decimal number
-
-error[E15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:10:21
-   │
-10 │         let _tmp2 = _s.0.;
-   │                     ^^^^^ Autocompletes to: '0'
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:10:26

@@ -48,6 +48,7 @@ pub struct OnChainTransactionInfo {
     pub gas_price: u64,
     pub executed_epoch: u64,
     pub dependencies: Vec<TransactionDigest>,
+    pub receiving_objs: Vec<(ObjectID, SequenceNumber)>,
     // TODO: There are two problems with this being a json-rpc type:
     // 1. The json-rpc type is not a perfect mirror with TransactionEffects since v2. We lost the
     // ability to replay effects v2 specific forks. We need to fix this asap. Unfortunately at the moment
@@ -65,11 +66,6 @@ pub struct OnChainTransactionInfo {
 fn unspecified_chain() -> Chain {
     warn!("Unable to determine chain id. Defaulting to unknown");
     Chain::Unknown
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct DiagInfo {
-    pub loaded_child_objects: Vec<(ObjectID, VersionNumber)>,
 }
 
 #[allow(clippy::large_enum_variant)]

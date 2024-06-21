@@ -30,6 +30,7 @@ pub struct TestTransactionBuilder {
     sender: SuiAddress,
     gas_object: ObjectRef,
     gas_price: u64,
+    gas_budget: Option<u64>,
 }
 
 impl TestTransactionBuilder {
@@ -39,6 +40,7 @@ impl TestTransactionBuilder {
             sender,
             gas_object,
             gas_price,
+            gas_budget: None,
         }
     }
 
@@ -76,6 +78,11 @@ impl TestTransactionBuilder {
         } else {
             panic!("Cannot set type args for non-move call");
         }
+        self
+    }
+
+    pub fn with_gas_budget(mut self, gas_budget: u64) -> Self {
+        self.gas_budget = Some(gas_budget);
         self
     }
 
@@ -276,7 +283,8 @@ impl TestTransactionBuilder {
                 data.type_args,
                 self.gas_object,
                 data.args,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+                self.gas_budget
+                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
                 self.gas_price,
             )
             .unwrap(),
@@ -285,7 +293,8 @@ impl TestTransactionBuilder {
                 data.object,
                 self.sender,
                 self.gas_object,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+                self.gas_budget
+                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
                 self.gas_price,
             ),
             TestTransactionData::TransferSui(data) => TransactionData::new_transfer_sui(
@@ -293,13 +302,14 @@ impl TestTransactionBuilder {
                 self.sender,
                 data.amount,
                 self.gas_object,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+                self.gas_budget
+                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
                 self.gas_price,
             ),
             TestTransactionData::Publish(data) => {
                 let (all_module_bytes, dependencies) = match data {
                     PublishData::Source(path, with_unpublished_deps) => {
-                        let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
+                        let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
                         let all_module_bytes =
                             compiled_package.get_package_bytes(with_unpublished_deps);
                         let dependencies = compiled_package.get_dependency_original_package_ids();
@@ -318,7 +328,9 @@ impl TestTransactionBuilder {
                     self.gas_object,
                     all_module_bytes,
                     dependencies,
-                    self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+                    self.gas_budget.unwrap_or(
+                        self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+                    ),
                     self.gas_price,
                 )
             }
@@ -326,7 +338,8 @@ impl TestTransactionBuilder {
                 self.sender,
                 vec![self.gas_object],
                 pt,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+                self.gas_budget
+                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
                 self.gas_price,
             ),
             TestTransactionData::Empty => {

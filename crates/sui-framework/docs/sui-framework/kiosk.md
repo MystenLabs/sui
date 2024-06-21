@@ -312,7 +312,7 @@ on top of the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
  ID of the listed item.
 </dd>
 <dt>
-<code>min_price: u64</code>
+<code>min_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  Minimum price for which the item can be purchased.
@@ -482,7 +482,7 @@ type-indexed which allows for searching for offers of a specific <code>T</code>
 
 </dd>
 <dt>
-<code>price: u64</code>
+<code>price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -530,7 +530,7 @@ by the trading module / extension.
 
 </dd>
 <dt>
-<code>price: u64</code>
+<code>price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -585,7 +585,7 @@ to close tracked offers.
 Trying to withdraw higher amount than stored.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotEnough">ENotEnough</a>: u64 = 2;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotEnough">ENotEnough</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -595,7 +595,7 @@ Trying to withdraw higher amount than stored.
 Trying to withdraw profits and sender is not owner.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>: u64 = 0;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -605,7 +605,7 @@ Trying to withdraw profits and sender is not owner.
 Trying to exclusively list an already listed item.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>: u64 = 6;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 6;
 </code></pre>
 
 
@@ -615,7 +615,7 @@ Trying to exclusively list an already listed item.
 Coin paid does not match the offer price.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EIncorrectAmount">EIncorrectAmount</a>: u64 = 1;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EIncorrectAmount">EIncorrectAmount</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -625,7 +625,7 @@ Coin paid does not match the offer price.
 Taking or mutably borrowing an item that is listed.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EItemIsListed">EItemIsListed</a>: u64 = 9;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EItemIsListed">EItemIsListed</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 9;
 </code></pre>
 
 
@@ -635,7 +635,7 @@ Taking or mutably borrowing an item that is listed.
 Attempt to <code>take</code> an item that is locked.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EItemLocked">EItemLocked</a>: u64 = 8;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EItemLocked">EItemLocked</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 8;
 </code></pre>
 
 
@@ -645,7 +645,7 @@ Attempt to <code>take</code> an item that is locked.
 Item does not match <code><a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a></code> in <code>return_val</code>.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EItemMismatch">EItemMismatch</a>: u64 = 10;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EItemMismatch">EItemMismatch</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 10;
 </code></pre>
 
 
@@ -655,7 +655,7 @@ Item does not match <code><a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a></code> 
 An is not found while trying to borrow.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>: u64 = 11;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 11;
 </code></pre>
 
 
@@ -665,7 +665,7 @@ An is not found while trying to borrow.
 Attempt to take an item that has a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> issued.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>: u64 = 4;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
@@ -675,7 +675,7 @@ Attempt to take an item that has a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap
 Trying to close a Kiosk and it has items in it.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotEmpty">ENotEmpty</a>: u64 = 3;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotEmpty">ENotEmpty</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -685,7 +685,7 @@ Trying to close a Kiosk and it has items in it.
 Delisting an item that is not listed.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotListed">ENotListed</a>: u64 = 12;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotListed">ENotListed</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 12;
 </code></pre>
 
 
@@ -695,7 +695,7 @@ Delisting an item that is not listed.
 Trying to call <code>uid_mut</code> when <code>allow_extensions</code> set to false.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EUidAccessNotAllowed">EUidAccessNotAllowed</a>: u64 = 7;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EUidAccessNotAllowed">EUidAccessNotAllowed</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 7;
 </code></pre>
 
 
@@ -705,7 +705,7 @@ Trying to call <code>uid_mut</code> when <code>allow_extensions</code> set to fa
 <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> does not match the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>: u64 = 5;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 5;
 </code></pre>
 
 
@@ -962,7 +962,7 @@ Performs an authorization check to make sure only owner can do that.
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
 
     self.item_count = self.item_count - 1;
-    df::remove_if_exists&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
+    df::remove_if_exists&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
     dof::remove(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id })
 }
 </code></pre>
@@ -979,7 +979,7 @@ List the item by setting a price and making it available for purchase.
 Performs an authorization check to make sure only owner can sell.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, price: u64)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -989,7 +989,7 @@ Performs an authorization check to make sure only owner can sell.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, price: u64
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 ) {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
@@ -1011,7 +1011,7 @@ Performs an authorization check to make sure only owner can sell.
 Calls <code>place</code> and <code>list</code> together - simplifies the flow.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T, price: u64)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -1021,7 +1021,7 @@ Calls <code>place</code> and <code>list</code> together - simplifies the flow.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T, price: u64
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 ) {
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&item);
     self.<a href="kiosk.md#0x2_kiosk_place">place</a>(cap, item);
@@ -1058,7 +1058,7 @@ user Kiosk. Can only be performed by the owner of the <code><a href="kiosk.md#0x
     <b>assert</b>!(!self.<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(id), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(id), <a href="kiosk.md#0x2_kiosk_ENotListed">ENotListed</a>);
 
-    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
+    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
     <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_ItemDelisted">ItemDelisted</a>&lt;T&gt; { <a href="kiosk.md#0x2_kiosk">kiosk</a>: <a href="object.md#0x2_object_id">object::id</a>(self), id })
 }
 </code></pre>
@@ -1092,7 +1092,7 @@ finalized.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase">purchase</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID, payment: Coin&lt;SUI&gt;
 ): (T, TransferRequest&lt;T&gt;) {
-    <b>let</b> price = df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
+    <b>let</b> price = df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
     <b>let</b> inner = dof::remove&lt;<a href="kiosk.md#0x2_kiosk_Item">Item</a>, T&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id });
 
     self.item_count = self.item_count - 1;
@@ -1118,7 +1118,7 @@ Creates a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> 
 for any price equal or higher than the <code>min_price</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list_with_purchase_cap">list_with_purchase_cap</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, min_price: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="kiosk.md#0x2_kiosk_PurchaseCap">kiosk::PurchaseCap</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list_with_purchase_cap">list_with_purchase_cap</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, min_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="kiosk.md#0x2_kiosk_PurchaseCap">kiosk::PurchaseCap</a>&lt;T&gt;
 </code></pre>
 
 
@@ -1128,7 +1128,7 @@ for any price equal or higher than the <code>min_price</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list_with_purchase_cap">list_with_purchase_cap</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, min_price: u64, ctx: &<b>mut</b> TxContext
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, min_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> TxContext
 ): <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt; {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
@@ -1177,7 +1177,7 @@ as the price for the listing making sure it's no less than <code>min_amount</cod
     <b>assert</b>!(paid &gt;= min_price, <a href="kiosk.md#0x2_kiosk_EIncorrectAmount">EIncorrectAmount</a>);
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == kiosk_id, <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>);
 
-    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> });
+    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> });
 
     <a href="coin.md#0x2_coin_put">coin::put</a>(&<b>mut</b> self.profits, payment);
     self.item_count = self.item_count - 1;
@@ -1215,7 +1215,7 @@ allow the item for taking. Can only be returned to its <code><a href="kiosk.md#0
     <b>let</b> <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a> { id, item_id, kiosk_id, min_price: _ } = purchase_cap;
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == kiosk_id, <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>);
-    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id: item_id, is_exclusive: <b>true</b> });
+    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id: item_id, is_exclusive: <b>true</b> });
     id.delete()
 }
 </code></pre>
@@ -1231,7 +1231,7 @@ allow the item for taking. Can only be returned to its <code><a href="kiosk.md#0
 Withdraw profits from the Kiosk.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_withdraw">withdraw</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, amount: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_withdraw">withdraw</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, amount: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -1241,7 +1241,7 @@ Withdraw profits from the Kiosk.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_withdraw">withdraw</a>(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, amount: Option&lt;u64&gt;, ctx: &<b>mut</b> TxContext
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, amount: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, ctx: &<b>mut</b> TxContext
 ): Coin&lt;SUI&gt; {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
 
@@ -1662,7 +1662,7 @@ Get the number of items stored in a Kiosk.
 Get the amount of profits collected by selling items.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_amount">profits_amount</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_amount">profits_amount</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1671,7 +1671,7 @@ Get the amount of profits collected by selling items.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_amount">profits_amount</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_amount">profits_amount</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     self.profits.value()
 }
 </code></pre>
@@ -1919,7 +1919,7 @@ Get the <code>Item_id</code> from the <code><a href="kiosk.md#0x2_kiosk_Purchase
 Get the <code>min_price</code> from the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase_cap_min_price">purchase_cap_min_price</a>&lt;T: store, key&gt;(self: &<a href="kiosk.md#0x2_kiosk_PurchaseCap">kiosk::PurchaseCap</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase_cap_min_price">purchase_cap_min_price</a>&lt;T: store, key&gt;(self: &<a href="kiosk.md#0x2_kiosk_PurchaseCap">kiosk::PurchaseCap</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1928,7 +1928,7 @@ Get the <code>min_price</code> from the <code><a href="kiosk.md#0x2_kiosk_Purcha
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase_cap_min_price">purchase_cap_min_price</a>&lt;T: key + store&gt;(self: &<a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase_cap_min_price">purchase_cap_min_price</a>&lt;T: key + store&gt;(self: &<a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     self.min_price
 }
 </code></pre>

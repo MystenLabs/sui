@@ -31,7 +31,16 @@ fn accumulator_benchmark(c: &mut Criterion) {
             accumulator.insert(digest);
             accumulator
         };
+
+        let serialized = bcs::to_bytes(&point).unwrap();
+
         group.bench_function("sum_accumulators", |b| b.iter(|| accumulator.union(&point)));
+        group.bench_function("serialize_accumulators", |b| {
+            b.iter(|| bcs::to_bytes(&accumulator).unwrap())
+        });
+        group.bench_function("deserialize_accumulators", |b| {
+            b.iter(|| bcs::from_bytes::<Accumulator>(&serialized).unwrap())
+        });
     }
 }
 

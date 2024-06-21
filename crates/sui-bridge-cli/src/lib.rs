@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use clap::*;
 use ethers::providers::Middleware;
 use ethers::types::Address as EthAddress;
+use ethers::types::U256;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use fastcrypto::hash::{HashFunction, Keccak256};
@@ -16,14 +17,16 @@ use shared_crypto::intent::IntentMessage;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_bridge::abi::EthBridgeCommittee;
 use sui_bridge::abi::{eth_sui_bridge, EthSuiBridge};
 use sui_bridge::crypto::BridgeAuthorityPublicKeyBytes;
 use sui_bridge::error::BridgeResult;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::types::BridgeAction;
 use sui_bridge::types::{
-    AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, EmergencyAction,
-    EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction,
+    AddTokensOnEvmAction, AddTokensOnSuiAction, AssetPriceUpdateAction, BlocklistCommitteeAction,
+    BlocklistType, EmergencyAction, EmergencyActionType, EvmContractUpgradeAction,
+    LimitUpdateAction,
 };
 use sui_bridge::utils::{get_eth_signer_client, EthSigner};
 use sui_config::Config;
@@ -43,18 +46,18 @@ use tracing::info;
 #[clap(rename_all = "kebab-case")]
 pub struct Args {
     #[clap(subcommand)]
-    pub command: BridgeValidatorCommand,
+    pub command: BridgeCommand,
 }
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
-pub enum BridgeValidatorCommand {
+pub enum BridgeCommand {
     #[clap(name = "create-bridge-validator-key")]
     CreateBridgeValidatorKey { path: PathBuf },
     #[clap(name = "create-bridge-client-key")]
     CreateBridgeClientKey {
         path: PathBuf,
-        #[clap(name = "use-ecdsa", long, default_value = "false")]
+        #[clap(long = "use-ecdsa", default_value = "false")]
         use_ecdsa: bool,
     },
     /// Read bridge key from a file and print related information
@@ -62,13 +65,13 @@ pub enum BridgeValidatorCommand {
     #[clap(name = "examine-key")]
     ExamineKey {
         path: PathBuf,
-        #[clap(name = "is-validator-key", long)]
+        #[clap(long = "is-validator-key")]
         is_validator_key: bool,
     },
     #[clap(name = "create-bridge-node-config-template")]
     CreateBridgeNodeConfigTemplate {
         path: PathBuf,
-        #[clap(name = "run-client", long)]
+        #[clap(long = "run-client")]
         run_client: bool,
     },
     /// Governance client to facilitate and execute Bridge governance actions
@@ -81,6 +84,27 @@ pub enum BridgeValidatorCommand {
         chain_id: u8,
         #[clap(subcommand)]
         cmd: GovernanceClientCommands,
+    },
+    /// Given proxy address of SuiBridge contract, print other contract addresses
+    #[clap(name = "print-eth-bridge-addresses")]
+    PrintEthBridgeAddresses {
+        #[clap(long = "bridge-proxy")]
+        bridge_proxy: EthAddress,
+        #[clap(long = "eth-rpc-url")]
+        eth_rpc_url: String,
+    },
+    /// Print current registration info
+    #[clap(name = "print-bridge-registration-info")]
+    PrintBridgeRegistrationInfo {
+        #[clap(long = "sui-rpc-url")]
+        sui_rpc_url: String,
+    },
+    /// Print current committee info
+    #[clap(name = "print-bridge-committee-info")]
+    PrintBridgeCommitteeInfo {
+        sui_rpc_url: String,
+        #[clap(long, default_value = "false")]
+        ping: bool,
     },
     /// Client to facilitate and execute Bridge actions
     #[clap(name = "client")]
@@ -109,7 +133,7 @@ pub enum GovernanceClientCommands {
         nonce: u64,
         #[clap(name = "blocklist-type", long)]
         blocklist_type: BlocklistType,
-        #[clap(name = "pubkey-hex", long)]
+        #[clap(name = "pubkey-hex", use_value_delimiter = true, long)]
         pubkeys_hex: Vec<BridgeAuthorityPublicKeyBytes>,
     },
     #[clap(name = "update-limit")]
@@ -130,6 +154,30 @@ pub enum GovernanceClientCommands {
         #[clap(name = "new-usd-price", long)]
         new_usd_price: u64,
     },
+    #[clap(name = "add-tokens-on-sui")]
+    AddTokensOnSui {
+        #[clap(name = "nonce", long)]
+        nonce: u64,
+        #[clap(name = "token-ids", use_value_delimiter = true, long)]
+        token_ids: Vec<u8>,
+        #[clap(name = "token-type-names", use_value_delimiter = true, long)]
+        token_type_names: Vec<TypeTag>,
+        #[clap(name = "token-prices", use_value_delimiter = true, long)]
+        token_prices: Vec<u64>,
+    },
+    #[clap(name = "add-tokens-on-evm")]
+    AddTokensOnEvm {
+        #[clap(name = "nonce", long)]
+        nonce: u64,
+        #[clap(name = "token-ids", use_value_delimiter = true, long)]
+        token_ids: Vec<u8>,
+        #[clap(name = "token-type-names", use_value_delimiter = true, long)]
+        token_addresses: Vec<EthAddress>,
+        #[clap(name = "token-prices", use_value_delimiter = true, long)]
+        token_prices: Vec<u64>,
+        #[clap(name = "token-sui-decimals", use_value_delimiter = true, long)]
+        token_sui_decimals: Vec<u8>,
+    },
     #[clap(name = "upgrade-evm-contract")]
     UpgradeEVMContract {
         #[clap(name = "nonce", long)]
@@ -141,9 +189,9 @@ pub enum GovernanceClientCommands {
         implementation_address: EthAddress,
         /// Function selector with params types, e.g. `foo(uint256,bool,string)`
         #[clap(name = "function-selector", long)]
-        function_selector: String,
+        function_selector: Option<String>,
         /// Params to be passed to the function, e.g. `420,false,hello`
-        #[clap(name = "params", long)]
+        #[clap(name = "params", use_value_delimiter = true, long)]
         params: Vec<String>,
     },
 }
@@ -191,19 +239,62 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
             token_id: *token_id,
             new_usd_price: *new_usd_price,
         }),
+        GovernanceClientCommands::AddTokensOnSui {
+            nonce,
+            token_ids,
+            token_type_names,
+            token_prices,
+        } => {
+            assert_eq!(token_ids.len(), token_type_names.len());
+            assert_eq!(token_ids.len(), token_prices.len());
+            BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
+                nonce: *nonce,
+                chain_id,
+                native: false, // only foreign tokens are supported now
+                token_ids: token_ids.clone(),
+                token_type_names: token_type_names.clone(),
+                token_prices: token_prices.clone(),
+            })
+        }
+        GovernanceClientCommands::AddTokensOnEvm {
+            nonce,
+            token_ids,
+            token_addresses,
+            token_prices,
+            token_sui_decimals,
+        } => {
+            assert_eq!(token_ids.len(), token_addresses.len());
+            assert_eq!(token_ids.len(), token_prices.len());
+            assert_eq!(token_ids.len(), token_sui_decimals.len());
+            BridgeAction::AddTokensOnEvmAction(AddTokensOnEvmAction {
+                nonce: *nonce,
+                native: true, // only eth native tokens are supported now
+                chain_id,
+                token_ids: token_ids.clone(),
+                token_addresses: token_addresses.clone(),
+                token_prices: token_prices.clone(),
+                token_sui_decimals: token_sui_decimals.clone(),
+            })
+        }
         GovernanceClientCommands::UpgradeEVMContract {
             nonce,
             proxy_address,
             implementation_address,
             function_selector,
             params,
-        } => BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
-            nonce: *nonce,
-            chain_id,
-            proxy_address: *proxy_address,
-            new_impl_address: *implementation_address,
-            call_data: encode_call_data(function_selector, params),
-        }),
+        } => {
+            let call_data = match function_selector {
+                Some(function_selector) => encode_call_data(function_selector, params),
+                None => vec![],
+            };
+            BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+                nonce: *nonce,
+                chain_id,
+                proxy_address: *proxy_address,
+                new_impl_address: *implementation_address,
+                call_data,
+            })
+        }
     }
 }
 
@@ -260,10 +351,10 @@ pub fn select_contract_address(
             config.eth_bridge_committee_proxy_address
         }
         GovernanceClientCommands::UpdateLimit { .. } => config.eth_bridge_limiter_proxy_address,
-        GovernanceClientCommands::UpdateAssetPrice { .. } => {
-            config.eth_bridge_limiter_proxy_address
-        }
+        GovernanceClientCommands::UpdateAssetPrice { .. } => config.eth_bridge_config_proxy_address,
         GovernanceClientCommands::UpgradeEVMContract { proxy_address, .. } => *proxy_address,
+        GovernanceClientCommands::AddTokensOnSui { .. } => unreachable!(),
+        GovernanceClientCommands::AddTokensOnEvm { .. } => config.eth_bridge_config_proxy_address,
     }
 }
 
@@ -299,12 +390,13 @@ pub struct LoadedBridgeCliConfig {
     pub eth_bridge_proxy_address: EthAddress,
     /// Proxy address for BridgeCommittee deployed on Eth
     pub eth_bridge_committee_proxy_address: EthAddress,
+    /// Proxy address for BridgeConfig deployed on Eth
+    pub eth_bridge_config_proxy_address: EthAddress,
     /// Proxy address for BridgeLimiter deployed on Eth
     pub eth_bridge_limiter_proxy_address: EthAddress,
     /// Key pair for Sui operations
     sui_key: SuiKeyPair,
     /// Key pair for Eth operations, must be Secp256k1 key
-    // pub eth_key: SuiKeyPair,
     eth_signer: EthSigner,
 }
 
@@ -351,6 +443,10 @@ impl LoadedBridgeCliConfig {
         let sui_bridge = EthSuiBridge::new(cli_config.eth_bridge_proxy_address, provider.clone());
         let eth_bridge_committee_proxy_address: EthAddress = sui_bridge.committee().call().await?;
         let eth_bridge_limiter_proxy_address: EthAddress = sui_bridge.limiter().call().await?;
+        let eth_committee =
+            EthBridgeCommittee::new(eth_bridge_committee_proxy_address, provider.clone());
+        let eth_bridge_committee_proxy_address: EthAddress = sui_bridge.committee().call().await?;
+        let eth_bridge_config_proxy_address: EthAddress = eth_committee.config().call().await?;
 
         let eth_address = eth_signer.address();
         let eth_chain_id = provider.get_chainid().await?;
@@ -365,6 +461,7 @@ impl LoadedBridgeCliConfig {
             eth_bridge_proxy_address: cli_config.eth_bridge_proxy_address,
             eth_bridge_committee_proxy_address,
             eth_bridge_limiter_proxy_address,
+            eth_bridge_config_proxy_address,
             sui_key,
             eth_signer,
         })
@@ -393,7 +490,10 @@ impl LoadedBridgeCliConfig {
         let gas = gases
             .into_iter()
             .find(|coin| coin.balance >= 5_000_000_000)
-            .ok_or(anyhow!("Did not find gas object with enough balance"))?;
+            .ok_or(anyhow!(
+                "Did not find gas object with enough balance for {}",
+                sui_client_address
+            ))?;
         println!("Using Gas object: {}", gas.coin_object_id);
         Ok((self.sui_key.copy(), sui_client_address, gas.object_ref()))
     }
@@ -401,6 +501,15 @@ impl LoadedBridgeCliConfig {
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum BridgeClientCommands {
+    #[clap(name = "deposit-native-ether-on-eth")]
+    DepositNativeEtherOnEth {
+        #[clap(long)]
+        ether_amount: f64,
+        #[clap(long)]
+        target_chain: u8,
+        #[clap(long)]
+        sui_recipient_address: SuiAddress,
+    },
     #[clap(name = "deposit-on-sui")]
     DepositOnSui {
         #[clap(long)]
@@ -426,6 +535,31 @@ impl BridgeClientCommands {
         sui_bridge_client: SuiBridgeClient,
     ) -> anyhow::Result<()> {
         match self {
+            BridgeClientCommands::DepositNativeEtherOnEth {
+                ether_amount,
+                target_chain,
+                sui_recipient_address,
+            } => {
+                let eth_sui_bridge = EthSuiBridge::new(
+                    config.eth_bridge_proxy_address,
+                    Arc::new(config.eth_signer().clone()),
+                );
+                // Note: even with f64 there may still be loss of precision even there are a lot of 0s
+                let int_part = ether_amount.trunc() as u64;
+                let frac_part = ether_amount.fract();
+                let int_wei = U256::from(int_part) * U256::exp10(18);
+                let frac_wei = U256::from((frac_part * 1_000_000_000_000_000_000f64) as u64);
+                let amount = int_wei + frac_wei;
+                let eth_tx = eth_sui_bridge
+                    .bridge_eth(sui_recipient_address.to_vec().into(), target_chain)
+                    .value(amount);
+                let pending_tx = eth_tx.send().await.unwrap();
+                let tx_receipt = pending_tx.await.unwrap().unwrap();
+                info!(
+                    "Deposited {ether_amount} Ethers to {:?} (target chain {target_chain}). Receipt: {:?}", sui_recipient_address, tx_receipt,
+                );
+                Ok(())
+            }
             BridgeClientCommands::ClaimOnEth { seq_num } => {
                 claim_on_eth(seq_num, config, sui_bridge_client)
                     .await

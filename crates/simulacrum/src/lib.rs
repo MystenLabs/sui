@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use fastcrypto::traits::Signer;
+use move_core_types::language_storage::StructTag;
 use rand::rngs::OsRng;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_protocol_config::ProtocolVersion;
@@ -27,7 +28,7 @@ use sui_types::base_types::{AuthorityName, ObjectID, VersionNumber};
 use sui_types::crypto::AuthoritySignature;
 use sui_types::digests::ConsensusCommitDigest;
 use sui_types::object::Object;
-use sui_types::storage::{ObjectStore, ReadStore};
+use sui_types::storage::{ObjectStore, ReadStore, RestStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
@@ -46,7 +47,7 @@ use self::epoch_state::EpochState;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
 pub use self::store::SimulatorStore;
-use sui_types::messages_checkpoint::CheckpointContents;
+use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::{
     gas_coin::GasCoin,
@@ -220,6 +221,8 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let epoch = self.epoch_state.epoch();
         let round = self.epoch_state.next_consensus_round();
         let timestamp_ms = self.store.get_clock().timestamp_ms() + duration.as_millis() as u64;
+
+        // TODO(zhewu): use V3 once graphql tests are upgraded to protocol version 49.
         let consensus_commit_prologue_transaction =
             VerifiedTransaction::new_consensus_commit_prologue_v2(
                 epoch,
@@ -543,6 +546,62 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
     ) -> sui_types::storage::error::Result<
         Option<sui_types::messages_checkpoint::FullCheckpointContents>,
     > {
+        todo!()
+    }
+}
+
+impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RestStateReader for Simulacrum<T, V> {
+    fn get_transaction_checkpoint(
+        &self,
+        _digest: &sui_types::digests::TransactionDigest,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
+    > {
+        todo!()
+    }
+
+    fn get_lowest_available_checkpoint_objects(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        Ok(0)
+    }
+
+    fn get_chain_identifier(
+        &self,
+    ) -> sui_types::storage::error::Result<sui_types::digests::ChainIdentifier> {
+        Ok(self
+            .store()
+            .get_checkpoint_by_sequence_number(0)
+            .unwrap()
+            .digest()
+            .to_owned()
+            .into())
+    }
+
+    fn account_owned_objects_info_iter(
+        &self,
+        _owner: SuiAddress,
+        _cursor: Option<ObjectID>,
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = sui_types::storage::AccountOwnedObjectInfo> + '_>,
+    > {
+        todo!()
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        _parent: ObjectID,
+        _cursor: Option<ObjectID>,
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = sui_types::storage::RestDynamicFieldInfo> + '_>,
+    > {
+        todo!()
+    }
+
+    fn get_coin_info(
+        &self,
+        _coin_type: &StructTag,
+    ) -> sui_types::storage::error::Result<Option<sui_types::storage::CoinInfo>> {
         todo!()
     }
 }

@@ -821,6 +821,7 @@ fn module_(
         is_spec_module: _,
         name,
         members,
+        definition_mode: _,
     } = mdef;
     let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
     let mut warning_filter = module_warning_filter(context, &attributes);

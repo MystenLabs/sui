@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 45 --addresses A=0x42 --simulator
+//# init --protocol-version 48 --addresses A=0x42 --simulator
 
 //# run-graphql --show-usage
 # pageInfo does not inherit connection's weights

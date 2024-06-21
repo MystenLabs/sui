@@ -1,5 +1,102 @@
 # @mysten/dapp-kit
 
+## 0.14.9
+
+### Patch Changes
+
+- Updated dependencies [805ff4d4c2]
+  - @mysten/wallet-standard@0.12.9
+  - @mysten/zksend@0.9.9
+
+## 0.14.8
+
+### Patch Changes
+
+- Updated dependencies [0dfff33b95]
+  - @mysten/sui@1.1.2
+  - @mysten/wallet-standard@0.12.8
+  - @mysten/zksend@0.9.8
+
+## 0.14.7
+
+### Patch Changes
+
+- Updated dependencies [101f1ff4b8]
+  - @mysten/sui@1.1.1
+  - @mysten/wallet-standard@0.12.7
+  - @mysten/zksend@0.9.7
+
+## 0.14.6
+
+### Patch Changes
+
+- Updated dependencies [bae8f9683c]
+  - @mysten/sui@1.1.0
+  - @mysten/wallet-standard@0.12.6
+  - @mysten/zksend@0.9.6
+
+## 0.14.5
+
+### Patch Changes
+
+- Updated dependencies [369b924343]
+  - @mysten/sui@1.0.5
+  - @mysten/wallet-standard@0.12.5
+  - @mysten/zksend@0.9.5
+
+## 0.14.4
+
+### Patch Changes
+
+- Updated dependencies [f1e828f557]
+- Updated dependencies [8e0e8eb643]
+  - @mysten/sui@1.0.4
+  - @mysten/zksend@0.9.4
+  - @mysten/wallet-standard@0.12.4
+
+## 0.14.3
+
+### Patch Changes
+
+- Updated dependencies [1f20580841]
+  - @mysten/sui@1.0.3
+  - @mysten/wallet-standard@0.12.3
+  - @mysten/zksend@0.9.3
+
+## 0.14.2
+
+### Patch Changes
+
+- Updated dependencies [f0a839f874]
+  - @mysten/sui@1.0.2
+  - @mysten/wallet-standard@0.12.2
+  - @mysten/zksend@0.9.2
+
+## 0.14.1
+
+### Patch Changes
+
+- Updated dependencies [6fc6235984]
+  - @mysten/sui@1.0.1
+  - @mysten/wallet-standard@0.12.1
+  - @mysten/zksend@0.9.1
+
+## 0.14.0
+
+### Minor Changes
+
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
+  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+
+### Patch Changes
+
+- Updated dependencies [ebdfe7cf21]
+- Updated dependencies [3e1d716642]
+- Updated dependencies [a92b03de42]
+  - @mysten/sui@1.0.0
+  - @mysten/zksend@0.9.0
+  - @mysten/wallet-standard@0.12.0
+
 ## 0.13.2
 
 ### Patch Changes

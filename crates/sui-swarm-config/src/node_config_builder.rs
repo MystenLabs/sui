@@ -41,11 +41,15 @@ pub struct ValidatorConfigBuilder {
     firewall_config: Option<RemoteFirewallConfig>,
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
+    state_accumulator_v2: bool,
 }
 
 impl ValidatorConfigBuilder {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            state_accumulator_v2: true,
+            ..Default::default()
+        }
     }
 
     pub fn with_config_directory(mut self, config_directory: PathBuf) -> Self {
@@ -103,6 +107,11 @@ impl ValidatorConfigBuilder {
         submit_delay_step_override_millis: u64,
     ) -> Self {
         self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
+        self
+    }
+
+    pub fn with_state_accumulator_v2_enabled(mut self, enabled: bool) -> Self {
+        self.state_accumulator_v2 = enabled;
         self
     }
 
@@ -188,7 +197,7 @@ impl ValidatorConfigBuilder {
                 .to_socket_addr()
                 .unwrap(),
             consensus_config: Some(consensus_config),
-            enable_event_processing: false,
+            remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
             genesis: sui_config::node::Genesis::new(genesis),
             grpc_load_shed: None,
@@ -224,10 +233,12 @@ impl ValidatorConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: self.authority_overload_config.unwrap_or_default(),
             run_with_range: None,
-            websocket_only: false,
+            jsonrpc_server_type: None,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             execution_cache: ExecutionCacheConfig::default(),
+            state_accumulator_v2: self.state_accumulator_v2,
+            enable_soft_bundle: true,
         }
     }
 
@@ -455,7 +466,7 @@ impl FullnodeConfigBuilder {
                 .unwrap_or(local_ip_utils::get_available_port(&localhost)),
             json_rpc_address: self.json_rpc_address.unwrap_or(json_rpc_address),
             consensus_config: None,
-            enable_event_processing: true, // This is unused.
+            remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
             genesis: self.genesis.unwrap_or(sui_config::node::Genesis::new(
                 network_config.genesis.clone(),
@@ -492,10 +503,12 @@ impl FullnodeConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
-            websocket_only: false,
+            jsonrpc_server_type: None,
             policy_config: self.policy_config,
             firewall_config: self.fw_config,
             execution_cache: ExecutionCacheConfig::default(),
+            state_accumulator_v2: true,
+            enable_soft_bundle: true,
         }
     }
 }

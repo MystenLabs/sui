@@ -1,9 +1,9 @@
 {
-	"name": "@mysten/sui.js",
+	"name": "@mysten/sui",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui TypeScript API(Work in Progress)",
 	"homepage": "https://sdk.mystenlabs.com",
-	"version": "0.54.1",
+	"version": "1.1.2",
 	"license": "Apache-2.0",
 	"sideEffects": false,
 	"files": [
@@ -26,7 +26,7 @@
 		"zklogin"
 	],
 	"engines": {
-		"node": ">=16"
+		"node": ">=18"
 	},
 	"type": "commonjs",
 	"exports": {
@@ -67,8 +67,8 @@
 			"require": "./dist/cjs/multisig/index.js"
 		},
 		"./transactions": {
-			"import": "./dist/esm/transactions/export.js",
-			"require": "./dist/cjs/transactions/export.js"
+			"import": "./dist/esm/transactions/index.js",
+			"require": "./dist/cjs/transactions/index.js"
 		},
 		"./utils": {
 			"import": "./dist/esm/utils/index.js",
@@ -102,7 +102,7 @@
 		"test:unit": "vitest run unit __tests__",
 		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 180000 && vitest run e2e",
 		"test:e2e:nowait": "vitest run e2e",
-		"prepare:e2e": "docker-compose down && docker-compose up -d && cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator -- --with-indexer --pg-port 5435 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125",
+		"prepare:e2e": "docker-compose down && docker-compose up -d && cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=warn,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator -- --with-indexer --pg-port 5435 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125",
 		"prepublishOnly": "pnpm build",
 		"size": "size-limit",
 		"analyze": "size-limit --why",
@@ -140,7 +140,7 @@
 		"ts-retry-promise": "^0.7.0",
 		"typescript": "^5.3.3",
 		"vite": "^4.4.4",
-		"vitest": "^0.33.0",
+		"vitest": "^1.6.0",
 		"wait-on": "^7.0.1",
 		"ws": "^8.14.2"
 	},
@@ -155,7 +155,7 @@
 		"bech32": "^2.0.0",
 		"gql.tada": "^1.7.0",
 		"graphql": "^16.8.1",
-		"superstruct": "^1.0.3",
-		"tweetnacl": "^1.0.3"
+		"tweetnacl": "^1.0.3",
+		"valibot": "^0.25.0"
 	}
 }

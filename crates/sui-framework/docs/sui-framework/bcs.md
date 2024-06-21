@@ -108,7 +108,7 @@ enables use of <code><a href="../move-stdlib/vector.md#0x1_vector_pop_back">vect
 For when ULEB byte is out of range (or not found).
 
 
-<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_ELenOutOfRange">ELenOutOfRange</a>: u64 = 2;
+<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_ELenOutOfRange">ELenOutOfRange</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -118,7 +118,7 @@ For when ULEB byte is out of range (or not found).
 For when the boolean value different than <code>0</code> or <code>1</code>.
 
 
-<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_ENotBool">ENotBool</a>: u64 = 1;
+<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_ENotBool">ENotBool</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -128,7 +128,7 @@ For when the boolean value different than <code>0</code> or <code>1</code>.
 For when bytes length is less than required for deserialization.
 
 
-<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>: u64 = 0;
+<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -307,10 +307,10 @@ Read <code>u8</code> value from bcs-serialized bytes.
 
 ## Function `peel_u64`
 
-Read <code>u64</code> value from bcs-serialized bytes.
+Read <code><a href="../move-stdlib/u64.md#0x1_u64">u64</a></code> value from bcs-serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): u64
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -319,12 +319,12 @@ Read <code>u64</code> value from bcs-serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.length() &gt;= 8, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
 
     <b>let</b> (<b>mut</b> value, <b>mut</b> i) = (0u64, 0u8);
     <b>while</b> (i &lt; 64) {
-        <b>let</b> byte = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u64;
+        <b>let</b> byte = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>;
         value = value + (byte &lt;&lt; i);
         i = i + 8;
     };
@@ -341,10 +341,10 @@ Read <code>u64</code> value from bcs-serialized bytes.
 
 ## Function `peel_u128`
 
-Read <code>u128</code> value from bcs-serialized bytes.
+Read <code><a href="../move-stdlib/u128.md#0x1_u128">u128</a></code> value from bcs-serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): u128
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/u128.md#0x1_u128">u128</a>
 </code></pre>
 
 
@@ -353,12 +353,12 @@ Read <code>u128</code> value from bcs-serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): u128 {
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <a href="../move-stdlib/u128.md#0x1_u128">u128</a> {
     <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.length() &gt;= 16, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
 
     <b>let</b> (<b>mut</b> value, <b>mut</b> i) = (0u128, 0u8);
     <b>while</b> (i &lt; 128) {
-        <b>let</b> byte = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u128;
+        <b>let</b> byte = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> <a href="../move-stdlib/u128.md#0x1_u128">u128</a>;
         value = value + (byte &lt;&lt; i);
         i = i + 8;
     };
@@ -416,7 +416,7 @@ In BCS <code><a href="../move-stdlib/vector.md#0x1_vector">vector</a></code> len
 See more here: https://en.wikipedia.org/wiki/LEB128
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): u64
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -425,11 +425,11 @@ See more here: https://en.wikipedia.org/wiki/LEB128
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> (<b>mut</b> total, <b>mut</b> shift, <b>mut</b> len) = (0u64, 0, 0);
     <b>while</b> (<b>true</b>) {
         <b>assert</b>!(len &lt;= 4, <a href="bcs.md#0x2_bcs_ELenOutOfRange">ELenOutOfRange</a>);
-        <b>let</b> byte = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u64;
+        <b>let</b> byte = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>;
         len = len + 1;
         total = total | ((byte & 0x7f) &lt;&lt; shift);
         <b>if</b> ((byte & 0x80) == 0) {
@@ -569,10 +569,10 @@ Peel a <code><a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href
 
 ## Function `peel_vec_u64`
 
-Peel a vector of <code>u64</code> from serialized bytes.
+Peel a vector of <code><a href="../move-stdlib/u64.md#0x1_u64">u64</a></code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u64">peel_vec_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u64">peel_vec_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -581,7 +581,7 @@ Peel a vector of <code>u64</code> from serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u64">peel_vec_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u64">peel_vec_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
     <b>let</b> (len, <b>mut</b> i, <b>mut</b> res) = (<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.<a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(), 0, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[]);
     <b>while</b> (i &lt; len) {
         res.push_back(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.<a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>());
@@ -599,10 +599,10 @@ Peel a vector of <code>u64</code> from serialized bytes.
 
 ## Function `peel_vec_u128`
 
-Peel a vector of <code>u128</code> from serialized bytes.
+Peel a vector of <code><a href="../move-stdlib/u128.md#0x1_u128">u128</a></code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u128">peel_vec_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u128&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u128">peel_vec_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u128.md#0x1_u128">u128</a>&gt;
 </code></pre>
 
 
@@ -611,7 +611,7 @@ Peel a vector of <code>u128</code> from serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u128">peel_vec_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u128&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u128">peel_vec_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u128.md#0x1_u128">u128</a>&gt; {
     <b>let</b> (len, <b>mut</b> i, <b>mut</b> res) = (<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.<a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(), 0, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[]);
     <b>while</b> (i &lt; len) {
         res.push_back(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.<a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>());
@@ -716,10 +716,10 @@ Peel <code>Option&lt;u8&gt;</code> from serialized bytes.
 
 ## Function `peel_option_u64`
 
-Peel <code>Option&lt;u64&gt;</code> from serialized bytes.
+Peel <code>Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;</code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u64">peel_option_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u64">peel_option_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -728,7 +728,7 @@ Peel <code>Option&lt;u64&gt;</code> from serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u64">peel_option_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): Option&lt;u64&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u64">peel_option_u64</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
     <b>if</b> (<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.<a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>()) {
         <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.<a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>())
     } <b>else</b> {
@@ -745,10 +745,10 @@ Peel <code>Option&lt;u64&gt;</code> from serialized bytes.
 
 ## Function `peel_option_u128`
 
-Peel <code>Option&lt;u128&gt;</code> from serialized bytes.
+Peel <code>Option&lt;<a href="../move-stdlib/u128.md#0x1_u128">u128</a>&gt;</code> from serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u128">peel_option_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u128&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u128">peel_option_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> bcs::BCS): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u128.md#0x1_u128">u128</a>&gt;
 </code></pre>
 
 
@@ -757,7 +757,7 @@ Peel <code>Option&lt;u128&gt;</code> from serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u128">peel_option_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): Option&lt;u128&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u128">peel_option_u128</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): Option&lt;<a href="../move-stdlib/u128.md#0x1_u128">u128</a>&gt; {
     <b>if</b> (<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.<a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>()) {
         <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.<a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>())
     } <b>else</b> {

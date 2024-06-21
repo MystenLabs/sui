@@ -80,7 +80,7 @@ impl MoveVM {
             .loader()
             .load_module(
                 module_id,
-                &TransactionDataCache::new(remote, self.runtime.loader()),
+                &TransactionDataCache::new(remote),
             )
             .map(|(compiled, _)| compiled)
     }

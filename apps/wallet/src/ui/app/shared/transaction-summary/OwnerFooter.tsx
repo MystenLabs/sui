@@ -4,7 +4,7 @@
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { useActiveAddress } from '_src/ui/app/hooks';
-import { formatAddress, isValidSuiAddress } from '@mysten/sui.js/utils';
+import { formatAddress, isValidSuiAddress } from '@mysten/sui/utils';
 
 import { Text } from '../text';
 import { SummaryCardFooter } from './Card';

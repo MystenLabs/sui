@@ -5,7 +5,7 @@ use clap::Parser;
 #[cfg(feature = "unit_test")]
 use move_cli::base::test::UnitTestResult;
 use move_package::BuildConfig;
-use std::path::PathBuf;
+use std::path::Path;
 use sui_move_build::set_sui_flavor;
 
 #[cfg(feature = "build")]
@@ -43,7 +43,7 @@ pub struct Calib {
 }
 
 pub fn execute_move_command(
-    package_path: Option<PathBuf>,
+    package_path: Option<&Path>,
     mut build_config: BuildConfig,
     command: Command,
 ) -> anyhow::Result<()> {

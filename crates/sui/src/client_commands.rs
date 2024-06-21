@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    clever_error_rendering::render_clever_error_opt,
     client_ptb::ptb::PTB,
     displays::Pretty,
     key_identity::{get_identity_address, KeyIdentity},
@@ -11,7 +12,7 @@ use std::{
     collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
 };
@@ -32,7 +33,7 @@ use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sui_move::build::resolve_lock_file_path;
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
@@ -42,7 +43,8 @@ use sui_json_rpc_types::{
     Coin, DryRunTransactionBlockResponse, DynamicFieldPage, SuiCoinMetadata, SuiData,
     SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
     SuiObjectResponseQuery, SuiParsedData, SuiProtocolConfigValue, SuiRawData,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
@@ -63,6 +65,7 @@ use sui_types::{
     digests::TransactionDigest,
     dynamic_field::DynamicFieldInfo,
     error::SuiError,
+    gas::GasCostSummary,
     gas_coin::GasCoin,
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
@@ -662,7 +665,7 @@ impl SuiClientCommands {
         self,
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
-        let ret = Ok(match self {
+        let ret = match self {
             SuiClientCommands::ProfileTransaction {
                 tx_digest,
                 profile_output,
@@ -697,7 +700,6 @@ impl SuiClientCommands {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
                     show_effects: true,
-                    diag: false,
                     executor_version,
                     protocol_version,
                 };
@@ -868,7 +870,7 @@ impl SuiClientCommands {
                     upgrade_package(
                         client.read_api(),
                         build_config.clone(),
-                        package_path.clone(),
+                        &package_path,
                         upgrade_capability,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
@@ -892,7 +894,7 @@ impl SuiClientCommands {
                 .await?;
 
                 if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                    let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                     if let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Upgrade,
@@ -946,7 +948,7 @@ impl SuiClientCommands {
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     client.read_api(),
                     build_config.clone(),
-                    package_path.clone(),
+                    &package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
                 )
@@ -966,7 +968,7 @@ impl SuiClientCommands {
                 .await?;
 
                 if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                    let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                     if let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Publish,
@@ -1020,7 +1022,7 @@ impl SuiClientCommands {
 
                     (_, package_path) => {
                         let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
-                        let package = compile_package_simple(build_config, package_path)?;
+                        let package = compile_package_simple(build_config, &package_path)?;
                         let name = package
                             .package
                             .compiled_package_info
@@ -1555,14 +1557,13 @@ impl SuiClientCommands {
                     ));
                 }
 
-                let build_config =
-                    resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+                let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let compiled_package = BuildConfig {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
                 }
-                .build(package_path)?;
+                .build(&package_path)?;
 
                 let client = context.get_client().await?;
 
@@ -1584,8 +1585,9 @@ impl SuiClientCommands {
                 ptb.execute(context).await?;
                 SuiClientCommandResult::NoOutput
             }
-        });
-        ret
+        };
+        let client = context.get_client().await?;
+        Ok(ret.prerender_clever_errors(client.read_api()).await)
     }
 
     pub fn switch_env(config: &mut SuiClientConfig, env: &str) -> Result<(), anyhow::Error> {
@@ -1598,27 +1600,22 @@ impl SuiClientCommands {
 
 fn compile_package_simple(
     build_config: MoveBuildConfig,
-    package_path: PathBuf,
+    package_path: &Path,
 ) -> Result<CompiledPackage, anyhow::Error> {
     let config = BuildConfig {
-        config: resolve_lock_file_path(build_config, Some(package_path.clone()))?,
+        config: resolve_lock_file_path(build_config, Some(package_path))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
     };
-    let resolution_graph = config.resolution_graph(&package_path)?;
+    let resolution_graph = config.resolution_graph(package_path)?;
 
-    Ok(build_from_resolution_graph(
-        package_path,
-        resolution_graph,
-        false,
-        false,
-    )?)
+    Ok(build_from_resolution_graph(resolution_graph, false, false)?)
 }
 
 pub(crate) async fn upgrade_package(
     read_api: &ReadApi,
     build_config: MoveBuildConfig,
-    package_path: PathBuf,
+    package_path: &Path,
     upgrade_capability: ObjectID,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
@@ -1679,7 +1676,7 @@ pub(crate) async fn upgrade_package(
 pub(crate) async fn compile_package(
     read_api: &ReadApi,
     build_config: MoveBuildConfig,
-    package_path: PathBuf,
+    package_path: &Path,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
 ) -> Result<
@@ -1691,7 +1688,7 @@ pub(crate) async fn compile_package(
     ),
     anyhow::Error,
 > {
-    let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+    let config = resolve_lock_file_path(build_config, Some(package_path))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
     let config = BuildConfig {
@@ -1699,14 +1696,13 @@ pub(crate) async fn compile_package(
         run_bytecode_verifier,
         print_diags_to_stderr,
     };
-    let resolution_graph = config.resolution_graph(&package_path)?;
+    let resolution_graph = config.resolution_graph(package_path)?;
     let (package_id, dependencies) = gather_published_ids(&resolution_graph);
     check_invalid_dependencies(&dependencies.invalid)?;
     if !with_unpublished_dependencies {
         check_unpublished_dependencies(&dependencies.unpublished)?;
     };
     let compiled_package = build_from_resolution_graph(
-        package_path.clone(),
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
@@ -1807,7 +1803,7 @@ pub(crate) async fn compile_package(
         .package
         .compiled_package_info
         .build_flags
-        .update_lock_file_toolchain_version(&package_path, env!("CARGO_PKG_VERSION").into())
+        .update_lock_file_toolchain_version(package_path, env!("CARGO_PKG_VERSION").into())
         .map_err(|e| SuiError::ModuleBuildFailure {
             error: format!("Failed to update Move.lock toolchain version: {e}"),
         })?;
@@ -2211,6 +2207,42 @@ impl SuiClientCommandResult {
             _ => None,
         }
     }
+
+    pub async fn prerender_clever_errors(mut self, read_api: &ReadApi) -> Self {
+        match &mut self {
+            SuiClientCommandResult::DryRun(DryRunTransactionBlockResponse { effects, .. })
+            | SuiClientCommandResult::TransactionBlock(SuiTransactionBlockResponse {
+                effects: Some(effects),
+                ..
+            }) => prerender_clever_errors(effects, read_api).await,
+
+            SuiClientCommandResult::TransactionBlock(SuiTransactionBlockResponse {
+                effects: None,
+                ..
+            }) => (),
+            SuiClientCommandResult::ActiveAddress(_)
+            | SuiClientCommandResult::ActiveEnv(_)
+            | SuiClientCommandResult::Addresses(_)
+            | SuiClientCommandResult::Balance(_, _)
+            | SuiClientCommandResult::ChainIdentifier(_)
+            | SuiClientCommandResult::DynamicFieldQuery(_)
+            | SuiClientCommandResult::Envs(_, _)
+            | SuiClientCommandResult::Gas(_)
+            | SuiClientCommandResult::NewAddress(_)
+            | SuiClientCommandResult::NewEnv(_)
+            | SuiClientCommandResult::NoOutput
+            | SuiClientCommandResult::Object(_)
+            | SuiClientCommandResult::Objects(_)
+            | SuiClientCommandResult::RawObject(_)
+            | SuiClientCommandResult::SerializedSignedTransaction(_)
+            | SuiClientCommandResult::SerializedUnsignedTransaction(_)
+            | SuiClientCommandResult::Switch(_)
+            | SuiClientCommandResult::SyncClientState
+            | SuiClientCommandResult::VerifyBytecodeMeter { .. }
+            | SuiClientCommandResult::VerifySource => (),
+        }
+        self
+    }
 }
 
 #[derive(Serialize)]
@@ -2575,7 +2607,10 @@ pub async fn execute_dry_run(
         .dry_run_transaction_block(dry_run_tx_data)
         .await
         .map_err(|e| anyhow!("Dry run failed: {e}"))?;
-    Ok(SuiClientCommandResult::DryRun(response))
+    let resp = SuiClientCommandResult::DryRun(response)
+        .prerender_clever_errors(client.read_api())
+        .await;
+    Ok(resp)
 }
 
 /// Call a dry run with the transaction data to estimate the gas budget.
@@ -2601,12 +2636,23 @@ pub async fn estimate_gas_budget(
         bail!("Could not automatically determine the gas budget. Please supply one using the --gas-budget flag.")
     };
 
-    let safe_overhead = GAS_SAFE_OVERHEAD * client.read_api().get_reference_gas_price().await?;
-    let computation_cost_with_overhead =
-        dry_run.effects.gas_cost_summary().computation_cost + safe_overhead;
+    let rgp = client.read_api().get_reference_gas_price().await?;
 
-    let gas_usage = dry_run.effects.gas_cost_summary().net_gas_usage() + safe_overhead as i64;
-    Ok(computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 }))
+    Ok(estimate_gas_budget_from_gas_cost(
+        dry_run.effects.gas_cost_summary(),
+        rgp,
+    ))
+}
+
+pub fn estimate_gas_budget_from_gas_cost(
+    gas_cost_summary: &GasCostSummary,
+    reference_gas_price: u64,
+) -> u64 {
+    let safe_overhead = GAS_SAFE_OVERHEAD * reference_gas_price;
+    let computation_cost_with_overhead = gas_cost_summary.computation_cost + safe_overhead;
+
+    let gas_usage = gas_cost_summary.net_gas_usage() + safe_overhead as i64;
+    computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 })
 }
 
 /// Queries the protocol config for the maximum gas allowed in a transaction.
@@ -2714,17 +2760,32 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             ))
         } else {
             let transaction = Transaction::new(sender_signed_data);
-            let response = context.execute_transaction_may_fail(transaction).await?;
+            let mut response = context.execute_transaction_may_fail(transaction).await?;
+            if let Some(effects) = response.effects.as_mut() {
+                prerender_clever_errors(effects, client.read_api()).await;
+            }
             let effects = response.effects.as_ref().ok_or_else(|| {
                 anyhow!("Effects from SuiTransactionBlockResult should not be empty")
             })?;
-            if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+            if let SuiExecutionStatus::Failure { error } = effects.status() {
                 return Err(anyhow!(
-                    "Error executing transaction: {:#?}",
-                    effects.status()
+                    "Error executing transaction '{}': {error}",
+                    response.digest
                 ));
             }
             Ok(SuiClientCommandResult::TransactionBlock(response))
+        }
+    }
+}
+
+pub(crate) async fn prerender_clever_errors(
+    effects: &mut SuiTransactionBlockEffects,
+    read_api: &ReadApi,
+) {
+    let SuiTransactionBlockEffects::V1(effects) = effects;
+    if let SuiExecutionStatus::Failure { error } = &mut effects.status {
+        if let Some(rendered) = render_clever_error_opt(error, read_api).await {
+            *error = rendered;
         }
     }
 }

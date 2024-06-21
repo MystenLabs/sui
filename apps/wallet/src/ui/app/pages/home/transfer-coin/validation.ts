@@ -3,7 +3,7 @@
 
 import { createSuiAddressValidation } from '_components/address-input/validation';
 import { createTokenValidation } from '_src/shared/validation';
-import { type SuiClient } from '@mysten/sui.js/client';
+import { type SuiClient } from '@mysten/sui/client';
 import * as Yup from 'yup';
 
 export function createValidationSchemaStepOne(

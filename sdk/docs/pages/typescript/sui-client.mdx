@@ -5,12 +5,12 @@ The Sui TypeScript SDK provides a `SuiClient` class to connect to a network's JS
 
 ## Connecting to a Sui network
 
-To establish a connection to a network, import `SuiClient` from `@mysten/sui.js/client` and pass the
+To establish a connection to a network, import `SuiClient` from `@mysten/sui/client` and pass the
 relevant URL to the `url` parameter. The following example establishes a connection to Testnet and
 requests SUI from that network's faucet.
 
 ```typescript
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 
 // use getFullnodeUrl to define Devnet RPC location
 const rpcUrl = getFullnodeUrl('devnet');
@@ -46,7 +46,7 @@ methods are built into `SuiClient`, but you can use `call` to leverage any metho
 RPC.
 
 ```typescript
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 
 const client = new SuiClient({ url: getFullnodeUrl('devnet') });
 
@@ -62,7 +62,7 @@ For a full list of available RPC methods, see the
 In addition to calling RPC methods, you can use `SuiClient` to subscribe to network events:
 
 ```typescript
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -90,7 +90,7 @@ SuiClient. You can either use a global polyfill for the WebSocket class, or pass
 WebSocket implementation into SuiHTTPTransport (eg, using the `ws` package)
 
 ```typescript
-import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui/client';
 import { WebSocket } from 'ws';
 
 new SuiClient({
@@ -107,7 +107,7 @@ new SuiClient({
 Similar to subscribing to events, the `SuiClient` also supports subscribing to transactions:
 
 ```typescript
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -134,7 +134,7 @@ You can construct a custom transport instance if you need to pass any custom opt
 headers or timeout values.
 
 ```typescript
-import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui/client';
 
 const client = new SuiClient({
 	transport: new SuiHTTPTransport({
@@ -183,16 +183,16 @@ const page2 =
 ## Methods
 
 In addition to the RPC methods mentioned above, `SuiClient` also exposes some methods for working
-with Transaction Blocks.
+with Transactions.
 
 ### `executeTransactionBlock`
 
 ```tsx
-const txb = new TransactionBlock();
+const tx = new Transaction();
 
-// add transaction data to txb...
+// add transaction data to tx...
 
-const { bytes, signature } = txb.sign({ client, signer: keypair });
+const { bytes, signature } = tx.sign({ client, signer: keypair });
 
 const result = await client.executeTransactionBlock({
 	transactionBlock: bytes,
@@ -206,9 +206,9 @@ const result = await client.executeTransactionBlock({
 
 #### Arguments
 
-- `transactionBlock` - either a TransactionBlock or BCS serialized transaction data bytes as a
-  Uint8Array or as a base-64 encoded string.
-- `signer` - A `Keypair` instance to sign the transaction block
+- `transactionBlock` - either a Transaction or BCS serialized transaction data bytes as a Uint8Array
+  or as a base-64 encoded string.
+- `signer` - A `Keypair` instance to sign the transaction
 - `requestType`: `WaitForEffectsCert` or `WaitForLocalExecution`. Determines when the RPC node
   should return the response. Default to be `WaitForLocalExecution`
 - `options`:
@@ -219,14 +219,14 @@ const result = await client.executeTransactionBlock({
   - `showObjectChanges`: Whether to show object_changes. Default to be False
   - `showRawInput`: Whether to show bcs-encoded transaction input data
 
-### `signAndExecuteTransactionBlock`
+### `signAndExecuteTransaction`
 
 ```tsx
-const txb = new TransactionBlock();
-// add transaction data to txb
+const tx = new Transaction();
+// add transaction data to tx
 
-const result = await client.signAndExecuteTransactionBlock({
-	transactionBlock: txb,
+const result = await client.signAndExecuteTransaction({
+	transaction: tx,
 	signer: keypair,
 	requestType: 'WaitForLocalExecution',
 	options: {
@@ -237,7 +237,7 @@ const result = await client.signAndExecuteTransactionBlock({
 
 #### Arguments
 
-- `transactionBlock` - BCS serialized transaction data bytes as a Uint8Array or as a base-64 encoded
+- `transaction` - BCS serialized transaction data bytes as a Uint8Array or as a base-64 encoded
   string.
 - `signature` - A signature, or list of signatures committed to the intent message of the
   transaction data, as a base-64 encoded string.
@@ -251,21 +251,21 @@ const result = await client.signAndExecuteTransactionBlock({
   - `showObjectChanges`: Whether to show object_changes. Default to be False
   - `showRawInput`: Whether to show bcs-encoded transaction input data
 
-### `waitForTransactionBlock`
+### `waitForTransaction`
 
-Wait for a transaction block result to be available over the API. This can be used in conjunction
-with `executeTransactionBlock` to wait for the transaction to be available via the API. This
-currently polls the `getTransactionBlock` API to check for the transaction.
+Wait for a transaction result to be available over the API. This can be used in conjunction with
+`executeTransactionBlock` to wait for the transaction to be available via the API. This currently
+polls the `getTransactionBlock` API to check for the transaction.
 
 ```tsx
-const txb = new TransactionBlock();
+const tx = new Transaction();
 
-const result = await client.signAndExecuteTransactionBlock({
-	transactionBlock: txb,
+const result = await client.signAndExecuteTransaction({
+	transaction: tx,
 	signer: keypair,
 });
 
-const transactionBlock = await client.waitForTransactionBlock({
+const transaction = await client.waitForTransaction({
 	digest: result.digest,
 	options: {
 		showEffects: true,
@@ -277,9 +277,9 @@ const transactionBlock = await client.waitForTransactionBlock({
 
 - `digest` - the digest of the queried transaction
 - `signal` - An optional abort signal that can be used to cancel the request
-- `timeout` - The amount of time to wait for a transaction block. Defaults to one minute.
-- `pollInterval` - The amount of time to wait between checks for the transaction block. Defaults to
-  2 seconds.
+- `timeout` - The amount of time to wait for a transaction. Defaults to one minute.
+- `pollInterval` - The amount of time to wait between checks for the transaction. Defaults to 2
+  seconds.
 - `options`:
   - `showBalanceChanges`: Whether to show balance_changes. Default to be False
   - `showEffects`: Whether to show transaction effects. Default to be False

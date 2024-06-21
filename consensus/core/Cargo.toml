@@ -21,6 +21,7 @@ dashmap.workspace = true
 enum_dispatch.workspace = true
 fastcrypto.workspace = true
 futures.workspace = true
+http.workspace = true
 hyper.workspace = true
 hyper-rustls.workspace = true
 itertools.workspace = true

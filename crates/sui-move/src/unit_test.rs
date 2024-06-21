@@ -12,7 +12,7 @@ use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{
     collections::BTreeMap,
-    path::PathBuf,
+    path::Path,
     sync::{Arc, RwLock},
 };
 use sui_move_build::decorate_warnings;
@@ -42,7 +42,7 @@ pub struct Test {
 impl Test {
     pub fn execute(
         self,
-        path: Option<PathBuf>,
+        path: Option<&Path>,
         build_config: BuildConfig,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;
@@ -55,7 +55,7 @@ impl Test {
         let rerooted_path = base::reroot_path(path)?;
         let unit_test_config = self.test.unit_test_config();
         run_move_unit_tests(
-            rerooted_path,
+            &rerooted_path,
             build_config,
             Some(unit_test_config),
             compute_coverage,
@@ -96,7 +96,7 @@ static SET_EXTENSION_HOOK: Lazy<()> =
 /// This function returns a result of UnitTestResult. The outer result indicates whether it
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub fn run_move_unit_tests(
-    path: PathBuf,
+    path: &Path,
     build_config: BuildConfig,
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
@@ -108,7 +108,7 @@ pub fn run_move_unit_tests(
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
     let result = move_cli::base::test::run_move_unit_tests(
-        &path,
+        path,
         build_config,
         UnitTestingConfig {
             report_stacktrace_on_abort: true,

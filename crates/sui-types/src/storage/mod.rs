@@ -23,6 +23,7 @@ use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 pub use object_store_trait::ObjectStore;
 pub use read_store::ReadStore;
+pub use read_store::RestStateReader;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 pub use shared_in_memory_store::SharedInMemoryStore;
@@ -31,6 +32,10 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 pub use write_store::WriteStore;
+
+pub use read_store::AccountOwnedObjectInfo;
+pub use read_store::CoinInfo;
+pub use read_store::RestDynamicFieldInfo;
 
 /// A potential input to a transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -235,7 +240,13 @@ pub trait BackingPackageStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>>;
 }
 
-impl<S: BackingPackageStore> BackingPackageStore for Arc<S> {
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for Box<S> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        BackingPackageStore::get_package_object(self.as_ref(), package_id)
+    }
+}
+
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for Arc<S> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(self.as_ref(), package_id)
     }
@@ -464,9 +475,19 @@ impl From<&ObjectRef> for ObjectKey {
     }
 }
 
+#[derive(Clone)]
 pub enum ObjectOrTombstone {
     Object(Object),
     Tombstone(ObjectRef),
+}
+
+impl ObjectOrTombstone {
+    pub fn as_objref(&self) -> ObjectRef {
+        match self {
+            ObjectOrTombstone::Object(obj) => obj.compute_object_reference(),
+            ObjectOrTombstone::Tombstone(obref) => *obref,
+        }
+    }
 }
 
 impl From<Object> for ObjectOrTombstone {

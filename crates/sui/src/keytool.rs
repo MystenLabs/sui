@@ -231,9 +231,9 @@ pub enum KeyToolCommand {
         max_epoch: EpochId,
         #[clap(long, default_value = "devnet")]
         network: String,
-        #[clap(long, default_value = "true")]
+        #[clap(long, default_value = "false")]
         fixed: bool, // if true, use a fixed kp generated from [0; 32] seed.
-        #[clap(long, default_value = "true")]
+        #[clap(long, default_value = "false")]
         test_multisig: bool, // if true, use a multisig address with zklogin and a traditional kp.
         #[clap(long, default_value = "false")]
         sign_with_sk: bool, // if true, execute tx with the traditional sig (in the multisig), otherwise with the zklogin sig.
@@ -316,7 +316,7 @@ pub struct DecodedMultiSigOutput {
     participating_keys_signatures: Vec<DecodedMultiSig>,
     pub_keys: Vec<MultiSigOutput>,
     threshold: usize,
-    transaction_result: String,
+    sig_verify_result: String,
 }
 
 #[derive(Serialize)]
@@ -517,7 +517,7 @@ impl KeyToolCommand {
                     participating_keys_signatures: vec![],
                     pub_keys,
                     threshold,
-                    transaction_result: "".to_string(),
+                    sig_verify_result: "".to_string(),
                 };
 
                 for (sig, i) in sigs.iter().zip(bitmap) {
@@ -543,7 +543,11 @@ impl KeyToolCommand {
                         &VerifyParams::default(),
                         Arc::new(VerifiedDigestCache::new_empty()),
                     );
-                    output.transaction_result = format!("{:?}", res);
+
+                    match res {
+                        Ok(()) => output.sig_verify_result = "OK".to_string(),
+                        Err(e) => output.sig_verify_result = format!("{:?}", e),
+                    };
                 };
 
                 CommandOutput::DecodeMultiSig(output)
@@ -635,6 +639,7 @@ impl KeyToolCommand {
                             &input_string,
                             key_scheme,
                             derivation_path,
+                            alias,
                         )?;
                         let skp = keystore.get_key(&sui_address)?;
                         let key = Key::from(skp);

@@ -359,15 +359,18 @@ fn lvalue(context: &mut Context, sp!(loc, lv_): &T::LValue) {
     match lv_ {
         L::Ignore => (),
         L::Var { ty, .. } => type_(context, ty),
-        L::Unpack(m, _, tys, fields)
-        | L::BorrowUnpack(_, m, _, tys, fields)
-        | L::UnpackVariant(m, _, _, tys, fields)
-        | L::BorrowUnpackVariant(_, m, _, _, tys, fields) => {
+        L::Unpack(m, _, tys, fields) | L::BorrowUnpack(_, m, _, tys, fields) => {
             context.add_usage(*m, *loc);
             types(context, tys);
             for (_, _, (_, (_, field))) in fields {
                 lvalue(context, field)
             }
+        }
+        L::BorrowUnpackVariant(..) | L::UnpackVariant(..) => {
+            context.env.add_diag(ice!((
+                *loc,
+                "variant unpacking shouldn't occur before match expansion"
+            )));
         }
     }
 }
@@ -399,18 +402,21 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
             exp(context, e3);
         }
-        E::Match(_subject, _arms) => {
+        E::Match(esubject, arms) => {
+            exp(context, esubject);
+            for sp!(_, arm) in &arms.value {
+                pat(context, &arm.pattern);
+                if let Some(guard) = arm.guard.as_ref() {
+                    exp(context, guard)
+                }
+                exp(context, &arm.rhs);
+            }
+        }
+        E::VariantMatch(..) => {
             context.env.add_diag(ice!((
                 e.exp.loc,
-                "shouldn't find match after match compilation step"
+                "shouldn't find variant match before HLIR lowering"
             )));
-        }
-        E::VariantMatch(subject, (module, _), arms) => {
-            exp(context, subject);
-            context.add_usage(*module, e.exp.loc);
-            for (_, rhs) in arms {
-                exp(context, rhs);
-            }
         }
         E::While(_, e1, e2) => {
             exp(context, e1);
@@ -419,7 +425,6 @@ fn exp(context: &mut Context, e: &T::Exp) {
         E::Loop { body, .. } => exp(context, body),
         E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
-        E::IDEAnnotation(_, e) => exp(context, e),
         E::Assign(sp!(_, lvs_), ty_opts, e) => {
             lvalues(context, lvs_);
             for ty_opt in ty_opts {
@@ -472,11 +477,6 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e);
             type_(context, ty)
         }
-        E::AutocompleteDotAccess {
-            base_exp,
-            methods: _,
-            fields: _,
-        } => exp(context, base_exp),
         E::Unit { .. }
         | E::Value(_)
         | E::Move { .. }
@@ -487,5 +487,28 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::BorrowLocal(..)
         | E::ErrorConstant { .. }
         | E::UnresolvedError => (),
+    }
+}
+
+#[growing_stack]
+fn pat(context: &mut Context, p: &T::MatchPattern) {
+    use T::UnannotatedPat_ as P;
+    match &p.pat.value {
+        P::Variant(m, _, _, tys, fields)
+        | P::BorrowVariant(_, m, _, _, tys, fields)
+        | P::Struct(m, _, tys, fields)
+        | P::BorrowStruct(_, m, _, tys, fields) => {
+            context.add_usage(*m, p.pat.loc);
+            types(context, tys);
+            for (_, _, (_, (_, p))) in fields {
+                pat(context, p)
+            }
+        }
+        P::At(_, inner) => pat(context, inner),
+        P::Or(lhs, rhs) => {
+            pat(context, lhs);
+            pat(context, rhs);
+        }
+        P::Constant(_, _) | P::Wildcard | P::ErrorPat | P::Binder(_, _) | P::Literal(_) => (),
     }
 }

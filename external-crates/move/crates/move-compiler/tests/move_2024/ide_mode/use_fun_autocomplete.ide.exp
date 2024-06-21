@@ -1,0 +1,12 @@
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:11:11
+   │
+11 │         s.bak(); // autocompletion to `bak` and `foo`
+   │           ^^^ Autocompletes to: '0x42::m1::bak', '0x42::m1::foo', '0x42::m1::test1', or '0x42::m1::test2'
+
+note[I15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:16:11
+   │
+16 │         s.bar(); // auto-completion to only one (shadowed) `bar`
+   │           ^^^ Autocompletes to: '0x42::m1::bar', '0x42::m1::test1', or '0x42::m1::test2'
+

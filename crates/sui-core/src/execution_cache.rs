@@ -11,7 +11,7 @@ use crate::transaction_outputs::TransactionOutputs;
 use sui_types::bridge::Bridge;
 
 use futures::{future::BoxFuture, FutureExt};
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use prometheus::Registry;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
@@ -38,6 +38,7 @@ use sui_types::{
 use tracing::instrument;
 
 pub(crate) mod cache_types;
+pub mod metrics;
 mod object_locks;
 pub mod passthrough_cache;
 pub mod proxy_cache;
@@ -47,22 +48,7 @@ pub use passthrough_cache::PassthroughCache;
 pub use proxy_cache::ProxyCache;
 pub use writeback_cache::WritebackCache;
 
-pub struct ExecutionCacheMetrics {
-    pending_notify_read: IntGauge,
-}
-
-impl ExecutionCacheMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
-            pending_notify_read: register_int_gauge_with_registry!(
-                "pending_notify_read",
-                "Pending notify read requests",
-                registry,
-            )
-            .unwrap(),
-        }
-    }
-}
+use metrics::ExecutionCacheMetrics;
 
 // If you have Arc<ExecutionCache>, you cannot return a reference to it as
 // an &Arc<dyn ExecutionCacheRead> (for example), because the trait object is a fat pointer.
@@ -468,6 +454,9 @@ pub trait ObjectCacheRead: Send + Sync {
             _ => Ok(false),
         }
     }
+
+    /// Return the watermark for the highest checkpoint for which we've pruned objects.
+    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber>;
 }
 
 pub trait TransactionCacheRead: Send + Sync {

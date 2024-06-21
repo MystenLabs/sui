@@ -9,11 +9,13 @@ use crate::{
     parser::ast::{BinOp_, ConstantName, DatatypeName, Field, VariantName},
     shared::{
         ast_debug::{AstDebug, AstWriter},
+        ide::{IDEAnnotation, MissingMatchArmsInfo, PatternSuggestion},
         string_utils::{debug_print, format_oxford_list},
         unique_map::UniqueMap,
+        Identifier,
     },
     typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
-    typing::core::Context,
+    typing::core::{error_format, Context, Subst},
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -136,12 +138,15 @@ impl PatternArm {
         self.pats.is_empty()
     }
 
-    fn all_wild_arm(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<ArmResult> {
-        if self
-            .pats
+    /// Returns true if every entry is a wildcard or binder.
+    fn is_wild_arm(&self) -> bool {
+        self.pats
             .iter()
             .all(|pat| matches!(pat.pat.value, TP::Wildcard | TP::Binder(_, _)))
-        {
+    }
+
+    fn all_wild_arm(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<ArmResult> {
+        if self.is_wild_arm() {
             let bindings = self.make_arm_bindings(fringe);
             let PatternArm {
                 pats: _,
@@ -481,6 +486,13 @@ impl PatternMatrix {
                 .iter()
                 .all(|pat| matches!(pat.pat.value, TP::ErrorPat))
         })
+    }
+
+    /// Returns true if there is an arm made up entirely of wildcards / binders with no guard.
+    fn has_default_arm(&self) -> bool {
+        self.patterns
+            .iter()
+            .any(|pat| pat.is_wild_arm() && pat.guard.is_none())
     }
 
     fn wild_arm_opt(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<Vec<ArmResult>> {
@@ -960,6 +972,10 @@ pub fn compile_match(
     let mut counterexample_matrix = pattern_matrix.clone();
     let has_guards = counterexample_matrix.has_guards();
     counterexample_matrix.remove_guarded_arms();
+    if context.env.ide_mode() {
+        // Do this first, as it's a borrow and a shallow walk.
+        ide_report_missing_arms(context, arms_loc, &counterexample_matrix);
+    }
     if find_counterexample(context, subject.exp.loc, counterexample_matrix, has_guards) {
         return T::exp(
             result_type.clone(),
@@ -2324,21 +2340,21 @@ impl Display for CounterExample {
     }
 }
 
-/// Returns true if it found a counter-example.
+/// Returns true if it found a counter-example. Assumes all arms with guards have been removed from
+/// the provided matrix.
 fn find_counterexample(
     context: &mut Context,
     loc: Loc,
     matrix: PatternMatrix,
     has_guards: bool,
 ) -> bool {
-    // If the matrix is only errors (or empty), it was all error or something else went wrong; no
-    // counterexample is required.
+    // If the matrix is only errors (or empty), it was all error or something else (like typing)
+    // went wrong; no counterexample is required.
     if !matrix.is_empty() && !matrix.patterns_empty() && matrix.all_errors() {
         debug_print!(context.debug.match_counterexample, (msg "errors"), ("matrix" => matrix; dbg));
         assert!(context.env.has_errors());
         return true;
     }
-
     find_counterexample_impl(context, loc, matrix, has_guards)
 }
 
@@ -2355,6 +2371,7 @@ fn find_counterexample_impl(
             .collect()
     }
 
+    #[growing_stack]
     fn counterexample_bool(
         context: &mut Context,
         matrix: PatternMatrix,
@@ -2407,6 +2424,7 @@ fn find_counterexample_impl(
         }
     }
 
+    #[growing_stack]
     fn counterexample_builtin(
         context: &mut Context,
         matrix: PatternMatrix,
@@ -2455,6 +2473,7 @@ fn find_counterexample_impl(
         }
     }
 
+    #[growing_stack]
     fn counterexample_datatype(
         context: &mut Context,
         matrix: PatternMatrix,
@@ -2467,7 +2486,6 @@ fn find_counterexample_impl(
             context.debug.match_counterexample,
             (lines "matrix types" => &matrix.tys; verbose)
         );
-        // TODO: if we ever want to match against structs, this needs to behave differently
         if context.is_struct(&mident, &datatype_name) {
             // For a struct, we only care if we destructure it. If we do, we want to specialize and
             // recur. If we don't, we check it as a default specialization.
@@ -2609,6 +2627,7 @@ fn find_counterexample_impl(
     }
 
     // \mathcal{I} from Maranget. Warning for pattern matching. 1992.
+    #[growing_stack]
     fn counterexample_rec(
         context: &mut Context,
         matrix: PatternMatrix,
@@ -2628,7 +2647,6 @@ fn find_counterexample_impl(
                 .unfold_to_type_name()
                 .and_then(|sp!(_, name)| name.datatype_name())
             {
-                // This will need to also support structs if and when we add matching for them.
                 counterexample_datatype(context, matrix, arity, ndx, mident, datatype_name)
             } else {
                 // This can only be a binding or wildcard, so we act accordingly.
@@ -2673,6 +2691,195 @@ fn find_counterexample_impl(
         true
     } else {
         false
+    }
+}
+
+//------------------------------------------------
+// IDE Arm Suggestion Generation
+//------------------------------------------------
+
+/// Produces IDE information if the top-level match is incomplete. Assumes all arms with guards
+/// have been removed from the provided matrix.
+fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatrix) {
+    use PatternSuggestion as PS;
+    // This function looks at the very top-level of the match. For any arm missing, it suggests the
+    // IDE add an arm to address that missing one.
+
+    fn report_bool(context: &mut Context, loc: Loc, matrix: &PatternMatrix) {
+        let literals = matrix.first_lits();
+        assert!(literals.len() <= 2, "ICE match exhaustiveness failure");
+        // Figure out which are missing
+        let mut unused = BTreeSet::from([Value_::Bool(true), Value_::Bool(false)]);
+        for lit in literals {
+            unused.remove(&lit.value);
+        }
+        if !unused.is_empty() {
+            let arms = unused.into_iter().map(PS::Value).collect::<Vec<_>>();
+            let info = MissingMatchArmsInfo { arms };
+            context
+                .env
+                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+        }
+    }
+
+    fn report_builtin(context: &mut Context, loc: Loc, matrix: &PatternMatrix) {
+        // For all other non-literals, we don't consider a case where the constructors are
+        // saturated. If it doesn't have a wildcard, we suggest adding a wildcard.
+        if !matrix.has_default_arm() {
+            let info = MissingMatchArmsInfo {
+                arms: vec![PS::Wildcard],
+            };
+            context
+                .env
+                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+        }
+    }
+
+    fn report_datatype(
+        context: &mut Context,
+        loc: Loc,
+        matrix: &PatternMatrix,
+        mident: ModuleIdent,
+        name: DatatypeName,
+    ) {
+        if context.is_struct(&mident, &name) {
+            if !matrix.is_empty() {
+                // If the matrix isn't empty, we _must_ have matched the struct with at least one
+                // non-guard arm (either wildcards or the struct itself), so we're fine.
+                return;
+            }
+            // If the matrix _is_ empty, we suggest adding an unpack.
+            let is_positional = context.struct_is_positional(&mident, &name);
+            let Some(fields) = context.struct_fields(&mident, &name) else {
+                context.env.add_diag(ice!((
+                    loc,
+                    "Tried to look up fields for this struct and found none"
+                )));
+                return;
+            };
+            // NB: We might not have a concrete type for the type parameters to the datatype (due
+            // to type errors or otherwise), so we use stand-in types. Since this is IDE
+            // information that should be inserted and then re-compiled, this should work for our
+            // purposes.
+
+            let suggestion = if is_positional {
+                PS::UnpackPositionalStruct {
+                    module: mident,
+                    name,
+                    field_count: fields.len(),
+                }
+            } else {
+                PS::UnpackNamedStruct {
+                    module: mident,
+                    name,
+                    fields: fields.into_iter().map(|(field, _)| field.value()).collect(),
+                }
+            };
+            let info = MissingMatchArmsInfo {
+                arms: vec![suggestion],
+            };
+            context
+                .env
+                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+        } else {
+            // If there's a default arm, no suggestion is necessary.
+            if matrix.has_default_arm() {
+                return;
+            }
+
+            let mut unmatched_variants = context
+                .enum_variants(&mident, &name)
+                .into_iter()
+                .collect::<BTreeSet<_>>();
+            let ctors = matrix.first_variant_ctors();
+            for ctor in ctors.keys() {
+                unmatched_variants.remove(ctor);
+            }
+            // If all of the variants were matched, no suggestion is necessary.
+            if unmatched_variants.is_empty() {
+                return;
+            }
+            let mut arms = vec![];
+            // re-iterate the original so we generate these in definition order
+            for variant in context.enum_variants(&mident, &name).into_iter() {
+                if !unmatched_variants.contains(&variant) {
+                    continue;
+                }
+                let is_empty = context.enum_variant_is_empty(&mident, &name, &variant);
+                let is_positional = context.enum_variant_is_positional(&mident, &name, &variant);
+                let Some(fields) = context.enum_variant_fields(&mident, &name, &variant) else {
+                    context.env.add_diag(ice!((
+                        loc,
+                        "Tried to look up fields for this enum and found none"
+                    )));
+                    continue;
+                };
+                let suggestion = if is_empty {
+                    PS::UnpackEmptyVariant {
+                        module: mident,
+                        enum_name: name,
+                        variant_name: variant,
+                    }
+                } else if is_positional {
+                    PS::UnpackPositionalVariant {
+                        module: mident,
+                        enum_name: name,
+                        variant_name: variant,
+                        field_count: fields.len(),
+                    }
+                } else {
+                    PS::UnpackNamedVariant {
+                        module: mident,
+                        enum_name: name,
+                        variant_name: variant,
+                        fields: fields.into_iter().map(|(field, _)| field.value()).collect(),
+                    }
+                };
+                arms.push(suggestion);
+            }
+            let info = MissingMatchArmsInfo { arms };
+            context
+                .env
+                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+        }
+    }
+
+    let Some(ty) = matrix.tys.first() else {
+        context.env.add_diag(ice!((
+            loc,
+            "Pattern matrix with no types handed to IDE function"
+        )));
+        return;
+    };
+    if let Some(sp!(_, BuiltinTypeName_::Bool)) = &ty.value.unfold_to_builtin_type_name() {
+        report_bool(context, loc, matrix)
+    } else if let Some(_builtin) = ty.value.unfold_to_builtin_type_name() {
+        report_builtin(context, loc, matrix)
+    } else if let Some((mident, datatype_name)) = ty
+        .value
+        .unfold_to_type_name()
+        .and_then(|sp!(_, name)| name.datatype_name())
+    {
+        report_datatype(context, loc, matrix, mident, datatype_name)
+    } else {
+        if !context.env.has_errors() {
+            // It's unclear how we got here, so report an ICE and suggest a wildcard.
+            context.env.add_diag(ice!((
+                loc,
+                format!(
+                    "Found non-matchable type {} as match subject",
+                    error_format(ty, &Subst::empty())
+                )
+            )));
+        }
+        if !matrix.has_default_arm() {
+            let info = MissingMatchArmsInfo {
+                arms: vec![PS::Wildcard],
+            };
+            context
+                .env
+                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+        }
     }
 }
 

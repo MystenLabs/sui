@@ -5,8 +5,6 @@
 
 #[test_only]
 module std::option_tests {
-    use std::option;
-
     #[test]
     fun option_none_is_none() {
         let none = option::none<u64>();

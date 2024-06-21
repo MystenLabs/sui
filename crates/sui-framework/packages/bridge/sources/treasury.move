@@ -13,7 +13,6 @@ module bridge::treasury {
     use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};
     use sui::event::emit;
     use sui::hex;
-    use sui::math;
     use sui::object_bag::{Self, ObjectBag};
     use sui::package;
     use sui::package::UpgradeCap;
@@ -128,7 +127,7 @@ module bridge::treasury {
     public(package) fun add_new_token(
         self: &mut BridgeTreasury,
         token_name: String,
-        token_id:u8,
+        token_id: u8,
         native_token: bool,
         notional_value: u64,
     ) {
@@ -138,8 +137,8 @@ module bridge::treasury {
                 type_name,
                 uc,
                 decimal,
-            } = bag::remove<String, ForeignTokenRegistration>(&mut self.waiting_room, token_name);
-            let decimal_multiplier = math::pow(10, decimal);
+            } = self.waiting_room.remove<String, ForeignTokenRegistration>(token_name);
+            let decimal_multiplier = 10u64.pow(decimal);
             self.supported_tokens.insert(
                 type_name,
                 BridgeTokenMetadata{
@@ -219,13 +218,13 @@ module bridge::treasury {
     //
 
     #[test_only]
-    public struct ETH {}
+    public struct ETH has drop {}
     #[test_only]
-    public struct BTC {}
+    public struct BTC has drop {}
     #[test_only]
-    public struct USDT {}
+    public struct USDT has drop {}
     #[test_only]
-    public struct USDC {}
+    public struct USDC has drop {}
 
     #[test_only]
     public fun new_for_testing(ctx: &mut TxContext): BridgeTreasury {
@@ -270,5 +269,15 @@ module bridge::treasury {
         treasury.id_token_type_map.insert(2, type_name::get<ETH>());
         treasury.id_token_type_map.insert(3, type_name::get<USDC>());
         treasury.id_token_type_map.insert(4, type_name::get<USDT>());
+    }
+
+    #[test_only]
+    public fun waiting_room(treasury: &BridgeTreasury): &Bag {
+        &treasury.waiting_room
+    }
+
+    #[test_only]
+    public fun treasuries(treasury: &BridgeTreasury): &ObjectBag {
+        &treasury.treasuries
     }
 }

@@ -8,6 +8,7 @@ query queryTransactionBlocks(
 	$after: String
 	$showBalanceChanges: Boolean = false
 	$showEffects: Boolean = false
+	$showRawEffects: Boolean = false
 	$showEvents: Boolean = false
 	$showInput: Boolean = false
 	$showObjectChanges: Boolean = false
@@ -31,6 +32,7 @@ query getTransactionBlock(
 	$digest: String!
 	$showBalanceChanges: Boolean = false
 	$showEffects: Boolean = false
+	$showRawEffects: Boolean = false
 	$showEvents: Boolean = false
 	$showInput: Boolean = false
 	$showObjectChanges: Boolean = false
@@ -47,6 +49,7 @@ query multiGetTransactionBlocks(
 	$cursor: String
 	$showBalanceChanges: Boolean = false
 	$showEffects: Boolean = false
+	$showRawEffects: Boolean = false
 	$showEvents: Boolean = false
 	$showInput: Boolean = false
 	$showObjectChanges: Boolean = false
@@ -70,11 +73,9 @@ query paginateTransactionBlockLists(
 	$hasMoreEvents: Boolean!
 	$hasMoreBalanceChanges: Boolean!
 	$hasMoreObjectChanges: Boolean!
-	$hasMoreDependencies: Boolean!
 	$afterEvents: String
 	$afterBalanceChanges: String
 	$afterObjectChanges: String
-	$afterDependencies: String
 ) {
 	transactionBlock(digest: $digest) {
 		...PAGINATE_TRANSACTION_LISTS
@@ -112,42 +113,24 @@ fragment PAGINATE_TRANSACTION_LISTS on TransactionBlock {
 				amount
 			}
 		}
-		dependencies(after: $afterDependencies) @include(if: $hasMoreDependencies) {
-			pageInfo {
-				hasNextPage
-				endCursor
-			}
-			nodes {
-				digest
-			}
-		}
 		objectChanges(after: $afterObjectChanges) @include(if: $hasMoreObjectChanges) {
 			pageInfo {
 				hasNextPage
 				endCursor
 			}
 			nodes {
-				idCreated
-				idDeleted
+				address
 				inputState {
 					version
-					digest
-					address
 					asMoveObject {
 						contents {
 							type {
 								repr
 							}
 						}
-					}
-					owner {
-						...RPC_OBJECT_OWNER_FIELDS
 					}
 				}
 				outputState {
-					version
-					digest
-					address
 					asMoveObject {
 						contents {
 							type {
@@ -155,8 +138,12 @@ fragment PAGINATE_TRANSACTION_LISTS on TransactionBlock {
 							}
 						}
 					}
-					owner {
-						...RPC_OBJECT_OWNER_FIELDS
+					asMovePackage {
+						modules(first: 10) {
+							nodes {
+								name
+							}
+						}
 					}
 				}
 			}
@@ -175,6 +162,9 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 	signatures
 
 	effects {
+		bcs @include(if: $showEffects)
+		bcs @include(if: $showObjectChanges)
+		bcs @include(if: $showRawEffects)
 		events @include(if: $showEvents) {
 			pageInfo {
 				hasNextPage
@@ -208,59 +198,6 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 				amount
 			}
 		}
-		dependencies @include(if: $showEffects) {
-			pageInfo {
-				hasNextPage
-				endCursor
-			}
-			nodes {
-				digest
-			}
-		}
-		status @include(if: $showEffects)
-		gasEffects @include(if: $showEffects) {
-			gasObject {
-				owner {
-					...RPC_OBJECT_OWNER_FIELDS
-				}
-				digest
-				version
-				address
-			}
-			gasSummary {
-				storageCost
-				storageRebate
-				nonRefundableStorageFee
-				computationCost
-			}
-		}
-		executedEpoch: epoch @include(if: $showEffects) {
-			epochId
-		}
-
-		objectChanges @include(if: $showEffects) {
-			pageInfo {
-				hasNextPage
-				endCursor
-			}
-			nodes {
-				idCreated
-				idDeleted
-				inputState {
-					version
-					digest
-					address
-				}
-				outputState {
-					version
-					digest
-					address
-					owner {
-						...RPC_OBJECT_OWNER_FIELDS
-					}
-				}
-			}
-		}
 
 		objectChanges @include(if: $showObjectChanges) {
 			pageInfo {
@@ -268,27 +205,18 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 				endCursor
 			}
 			nodes {
-				idCreated
-				idDeleted
+				address
 				inputState {
 					version
-					digest
-					address
 					asMoveObject {
 						contents {
 							type {
 								repr
 							}
 						}
-					}
-					owner {
-						...RPC_OBJECT_OWNER_FIELDS
 					}
 				}
 				outputState {
-					version
-					digest
-					address
 					asMoveObject {
 						contents {
 							type {
@@ -296,8 +224,12 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 							}
 						}
 					}
-					owner {
-						...RPC_OBJECT_OWNER_FIELDS
+					asMovePackage {
+						modules(first: 10) {
+							nodes {
+								name
+							}
+						}
 					}
 				}
 			}

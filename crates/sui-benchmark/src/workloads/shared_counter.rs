@@ -100,9 +100,11 @@ impl SharedCounterWorkloadBuilder {
         let max_ops = target_qps * in_flight_ratio;
         let shared_counter_ratio =
             1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
-        let num_shared_counters =
-            num_shared_counters.unwrap_or((max_ops as f32 * shared_counter_ratio) as u64);
-        if num_shared_counters == 0 || num_workers == 0 {
+        let num_shared_counters = num_shared_counters.unwrap_or(std::cmp::max(
+            1,
+            (max_ops as f32 * shared_counter_ratio) as u64,
+        ));
+        if max_ops == 0 || num_shared_counters == 0 || num_workers == 0 {
             None
         } else {
             let workload_params = WorkloadParams {

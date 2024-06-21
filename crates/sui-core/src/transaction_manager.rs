@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cmp::max,
-    collections::{BTreeSet, HashMap, HashSet},
+    cmp::{max, Reverse},
+    collections::{hash_map, BTreeSet, BinaryHeap, HashMap, HashSet},
     sync::Arc,
     time::Duration,
 };
 
-use indexmap::IndexMap;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
@@ -227,7 +226,7 @@ struct Inner {
     // Stores age info for all transactions depending on each object.
     // Used for throttling signing and submitting transactions depending on hot objects.
     // An `IndexMap` is used to ensure that the insertion order is preserved.
-    input_objects: HashMap<ObjectID, IndexMap<TransactionDigest, Instant>>,
+    input_objects: HashMap<ObjectID, TransactionQueue>,
 
     // Maps object IDs to the highest observed sequence number of the object. When the value is
     // None, indicates that the object is immutable, corresponding to an InputKey with no sequence
@@ -286,12 +285,10 @@ impl Inner {
                 )
             });
         for digest in digests.iter() {
-            let age_opt = input_txns.shift_remove(digest);
-            // The digest of the transaction must be inside the map.
-            assert!(age_opt.is_some());
+            let age_opt = input_txns.remove(digest).expect("digest must be in map");
             metrics
                 .transaction_manager_transaction_queue_age_s
-                .observe(age_opt.unwrap().elapsed().as_secs_f64());
+                .observe(age_opt.elapsed().as_secs_f64());
         }
 
         if input_txns.is_empty() {
@@ -786,12 +783,12 @@ impl TransactionManager {
         let inner = reconfig_lock.read();
         keys.into_iter()
             .map(|key| {
-                let default_map = IndexMap::new();
+                let default_map = TransactionQueue::default();
                 let txns = inner.input_objects.get(&key).unwrap_or(&default_map);
                 (
                     key,
                     txns.len(),
-                    txns.first().map(|(_, time)| time.elapsed()),
+                    txns.first().map(|(time, _)| time.elapsed()),
                 )
             })
             .collect()
@@ -939,10 +936,71 @@ where
     }
 }
 
+#[derive(Default, Debug)]
+struct TransactionQueue {
+    digests: HashMap<TransactionDigest, Instant>,
+    ages: BinaryHeap<(Reverse<Instant>, TransactionDigest)>,
+}
+
+impl TransactionQueue {
+    fn len(&self) -> usize {
+        self.digests.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.digests.is_empty()
+    }
+
+    /// Insert the digest into the queue with the given time. If the digest is
+    /// already in the queue, this is a no-op.
+    fn insert(&mut self, digest: TransactionDigest, time: Instant) {
+        if let hash_map::Entry::Vacant(entry) = self.digests.entry(digest) {
+            entry.insert(time);
+            self.ages.push((Reverse(time), digest));
+        }
+    }
+
+    /// Remove the digest from the queue. Returns the time the digest was
+    /// inserted into the queue, if it was present.
+    ///
+    /// After removing the digest, first() will return the new oldest entry
+    /// in the queue (which may be unchanged).
+    fn remove(&mut self, digest: &TransactionDigest) -> Option<Instant> {
+        let Some(when) = self.digests.remove(digest) else {
+            return None;
+        };
+
+        // This loop removes all previously inserted entries that no longer
+        // correspond to live entries in self.digests. When the loop terminates,
+        // the top of the heap will be the oldest live entry.
+        // Amortized complexity of `remove` is O(lg(n)).
+        while !self.ages.is_empty() {
+            let first = self.ages.peek().expect("heap cannot be empty");
+
+            // We compare the exact time of the entry, because there may be an
+            // entry in the heap that was previously inserted and removed from
+            // digests, and we want to ignore it. (see test_transaction_queue_remove_in_order)
+            if self.digests.get(&first.1) == Some(&first.0 .0) {
+                break;
+            }
+
+            self.ages.pop();
+        }
+
+        Some(when)
+    }
+
+    /// Return the oldest entry in the queue.
+    fn first(&self) -> Option<(Instant, TransactionDigest)> {
+        self.ages.peek().map(|(time, digest)| (time.0, *digest))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use prometheus::Registry;
+    use rand::{Rng, RngCore};
 
     #[test]
     #[cfg_attr(msim, ignore)]
@@ -1014,5 +1072,168 @@ mod test {
             version: 8.into(),
         };
         assert_eq!(cache.is_object_available(&input_key), Some(true));
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue() {
+        let mut queue = TransactionQueue::default();
+
+        // insert and remove an item
+        let time = Instant::now();
+        let digest = TransactionDigest::new([1; 32]);
+        queue.insert(digest, time);
+        assert_eq!(queue.first(), Some((time, digest)));
+        queue.remove(&digest);
+        assert_eq!(queue.first(), None);
+
+        // remove a non-existent item
+        assert_eq!(queue.remove(&digest), None);
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue_remove_in_order() {
+        // insert two items, remove them in insertion order
+        let time1 = Instant::now();
+        let digest1 = TransactionDigest::new([1; 32]);
+        let time2 = time1 + Duration::from_secs(1);
+        let digest2 = TransactionDigest::new([2; 32]);
+
+        let mut queue = TransactionQueue::default();
+        queue.insert(digest1, time1);
+        queue.insert(digest2, time2);
+
+        assert_eq!(queue.first(), Some((time1, digest1)));
+        assert_eq!(queue.remove(&digest1), Some(time1));
+        assert_eq!(queue.first(), Some((time2, digest2)));
+        assert_eq!(queue.remove(&digest2), Some(time2));
+        assert_eq!(queue.first(), None);
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue_remove_in_reverse_order() {
+        // insert two items, remove them in reverse order
+        let time1 = Instant::now();
+        let digest1 = TransactionDigest::new([1; 32]);
+        let time2 = time1 + Duration::from_secs(1);
+        let digest2 = TransactionDigest::new([2; 32]);
+
+        let mut queue = TransactionQueue::default();
+        queue.insert(digest1, time1);
+        queue.insert(digest2, time2);
+
+        assert_eq!(queue.first(), Some((time1, digest1)));
+        assert_eq!(queue.remove(&digest2), Some(time2));
+
+        // after removing digest2, digest1 is still the first item
+        assert_eq!(queue.first(), Some((time1, digest1)));
+        assert_eq!(queue.remove(&digest1), Some(time1));
+
+        assert_eq!(queue.first(), None);
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue_reinsert() {
+        // insert two items
+        let time1 = Instant::now();
+        let digest1 = TransactionDigest::new([1; 32]);
+        let time2 = time1 + Duration::from_secs(1);
+        let digest2 = TransactionDigest::new([2; 32]);
+
+        let mut queue = TransactionQueue::default();
+        queue.insert(digest1, time1);
+        queue.insert(digest2, time2);
+
+        // remove the second item
+        queue.remove(&digest2);
+        assert_eq!(queue.first(), Some((time1, digest1)));
+
+        // insert the second item again
+        let time3 = time2 + Duration::from_secs(1);
+        queue.insert(digest2, time3);
+
+        // remove the first item
+        queue.remove(&digest1);
+
+        // time3 should be in first()
+        assert_eq!(queue.first(), Some((time3, digest2)));
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue_double_insert() {
+        let time1 = Instant::now();
+        let digest1 = TransactionDigest::new([1; 32]);
+        let time2 = time1 + Duration::from_secs(1);
+        let digest2 = TransactionDigest::new([2; 32]);
+        let time3 = time2 + Duration::from_secs(1);
+
+        let mut queue = TransactionQueue::default();
+        queue.insert(digest1, time1);
+        queue.insert(digest2, time2);
+        queue.insert(digest2, time3);
+
+        // re-insertion of digest2 should not change its time
+        assert_eq!(queue.first(), Some((time1, digest1)));
+        queue.remove(&digest1);
+        assert_eq!(queue.first(), Some((time2, digest2)));
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn transaction_queue_random_test() {
+        let mut rng = rand::thread_rng();
+        let mut digests = Vec::new();
+        for _ in 0..100 {
+            let mut digest = [0; 32];
+            rng.fill_bytes(&mut digest);
+            digests.push(TransactionDigest::new(digest));
+        }
+
+        let mut verifier = HashMap::new();
+        let mut queue = TransactionQueue::default();
+
+        let mut now = Instant::now();
+
+        // first insert some random digests so that the queue starts
+        // out well-populated
+        for _ in 0..70 {
+            now += Duration::from_secs(1);
+            let digest = digests[rng.gen_range(0..digests.len())];
+            let time = now;
+            queue.insert(digest, time);
+            verifier.entry(digest).or_insert(time);
+        }
+
+        // Do random operations on both the queue and the verifier, and
+        // verify that the two structures always agree
+        for _ in 0..100000 {
+            // advance time
+            now += Duration::from_secs(1);
+
+            // pick a random digest
+            let digest = digests[rng.gen_range(0..digests.len())];
+
+            // either insert or remove it
+            if rng.gen_bool(0.5) {
+                let time = now;
+                queue.insert(digest, time);
+                verifier.entry(digest).or_insert(time);
+            } else {
+                let time = verifier.remove(&digest);
+                assert_eq!(queue.remove(&digest), time);
+            }
+
+            assert_eq!(
+                queue.first(),
+                verifier
+                    .iter()
+                    .min_by_key(|(_, time)| **time)
+                    .map(|(digest, time)| (*time, *digest))
+            );
+        }
     }
 }

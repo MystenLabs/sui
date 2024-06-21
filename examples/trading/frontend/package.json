@@ -1,12 +1,12 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.10",
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build-frontend": "tsc && vite build",
     "preview": "vite preview",
     "prettier:check": "prettier -c --ignore-unknown .",
     "prettier:fix": "prettier -w --ignore-unknown .",
@@ -17,8 +17,8 @@
     "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
   },
   "dependencies": {
-    "@mysten/dapp-kit": "^0.12.2",
-    "@mysten/sui.js": "^0.50.1",
+    "@mysten/dapp-kit": "workspace:*",
+    "@mysten/sui": "workspace:*",
     "@radix-ui/colors": "^3.0.0",
     "@radix-ui/react-icons": "^1.3.0",
     "@radix-ui/themes": "^2.0.0",

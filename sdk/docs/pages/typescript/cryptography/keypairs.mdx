@@ -5,21 +5,21 @@ using the cryptographic key pairs associated with a Sui address.
 
 The Sui TypeScript SDK supports three signing schemes:
 
-| Sign scheme     | Class name         | Import folder                       |
-| --------------- | ------------------ | ----------------------------------- |
-| Ed25519         | `Ed25519Keypair`   | `@mysten/sui.js/keypairs/ed25519`   |
-| ECDSA Secp256k1 | `Secp256k1Keypair` | `@mysten/sui.js/keypairs/secp256k1` |
-| ECDSA Secp256r1 | `Secp256r1Keypair` | `@mysten/sui.js/keypairs/secp256r1` |
+| Sign scheme     | Class name         | Import folder                    |
+| --------------- | ------------------ | -------------------------------- |
+| Ed25519         | `Ed25519Keypair`   | `@mysten/sui/keypairs/ed25519`   |
+| ECDSA Secp256k1 | `Secp256k1Keypair` | `@mysten/sui/keypairs/secp256k1` |
+| ECDSA Secp256r1 | `Secp256r1Keypair` | `@mysten/sui/keypairs/secp256r1` |
 
 For information on these schemes, see the
 [Signatures](https://docs.sui.io/concepts/cryptography/transaction-auth/signatures) topic.
 
-To use, import the key pair class your project uses from the `@mysten/sui.js/keypairs` folder. For
+To use, import the key pair class your project uses from the `@mysten/sui/keypairs` folder. For
 example, to use the Ed25519 scheme, import the `Ed25519Keypair` class from
-`@mysten/sui.js/keypairs/ed25519`.
+`@mysten/sui/keypairs/ed25519`.
 
 ```typescript
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 ```
 
 To create a random key pair (which identifies a Sui address), instantiate a new `Keypair` class. To
@@ -51,14 +51,17 @@ to retrieve its associated Sui address. You can access a `Keypair` from its `Pub
 it from the bytes (as a `Uint8Array`) of the `PublicKey`, as in the following code:
 
 ```typescript
-import { Ed25519Keypair, Ed25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
+import { Ed25519Keypair, Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
 
 const keypair = new Ed25519Keypair();
-const bytes = keypair.getPublicKey().toBytes();
 
+// method 1
+const bytes = keypair.getPublicKey().toRawBytes();
 const publicKey = new Ed25519PublicKey(bytes);
-
 const address = publicKey.toSuiAddress();
+
+// method 2
+const address = keypair.getPublicKey().toSuiAddress();
 ```
 
 ## Verifying signatures without a key pair
@@ -71,44 +74,44 @@ then verifies the message to retrieve the public key. The code then uses `toSuiA
 if the address associated with the public key matches the address that the key pair defines.
 
 ```typescript
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { verifyPersonalMessage } from '@mysten/sui.js/verify';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 
 const keypair = new Ed25519Keypair();
 const message = new TextEncoder().encode('hello world');
 const { signature } = await keypair.signPersonalMessage(message);
 
-const publicKey = await verifyPersonalMessage(message, signature);
+const publicKey = await verifyPersonalMessageSignature(message, signature);
 
 if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 	throw new Error('Signature was valid, but was signed by a different key pair');
 }
 ```
 
-## Verifying transaction blocks
+## Verifying transaction signatures
 
-Verifying transaction blocks is similar to signature verification, except you use
-`verifyTransactionBlock`:
+Verifying transaction signatures is similar to personal message signature verification, except you
+use `verifyTransactionSignature`:
 
 ```typescript
 // import SuiClient to create a network client and the getFullnodeUrl helper function
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { verifyTransactionBlock } from '@mysten/sui.js/verify';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { verifyTransactionSignature } from '@mysten/sui/verify';
 
 // see Network Interactions with SuiClient for more info on creating clients
 const client = new SuiClient({ url: getFullnodeUrl('testnet') });
-const txb = new TransactionBlock();
+const tx = new Transaction();
 // ... add some transactions...
-const bytes = await txb.build({ client });
+const bytes = await tx.build({ client });
 
 const keypair = new Ed25519Keypair();
-const { signature } = await keypair.signTransactionBlock(bytes);
+const { signature } = await keypair.signTransaction(bytes);
 
 // if you have a public key, you can verify it
-//   const isValid = await publicKey.verifyTransactionBlock(bytes, signature);
-// or get the public key from the transaction block
-const publicKey = await verifyTransactionBlock(bytes, signature);
+//   const isValid = await publicKey.verifyTransaction(bytes, signature);
+// or get the public key from the transaction
+const publicKey = await verifyTransactionSignature(bytes, signature);
 
 if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 	throw new Error('Signature was valid, but was signed by a different keyPair');
@@ -132,8 +135,8 @@ You can derive a `Keypair` by converting the 33-byte secret key encoded in Bech3
 `Uint8Array` and passing it to the `fromSecretKey` method of a `Keypair` class.
 
 ```typescript
-import { decodeSuiPrivateKey, encodeSuiPrivateKey } from '@mysten/sui.js/cryptography/keypair';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { decodeSuiPrivateKey, encodeSuiPrivateKey } from '@mysten/sui/cryptography';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 const encoded = encodeSuiPrivateKey(
 	[
@@ -157,8 +160,8 @@ converting the secret key to a `Uint8Array` and passing it to the `fromSecretKey
 `Keypair` class.
 
 ```typescript
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { fromHex } from '@mysten/sui.js/utils';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { fromHex } from '@mysten/sui/utils';
 
 const secret = '0x...';
 const keypair = Ed25519Keypair.fromSecretKey(fromHex(secret));

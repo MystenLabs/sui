@@ -19,7 +19,7 @@ use crate::errors::IndexerError;
 use crate::schema::events;
 use crate::types::IndexedEvent;
 
-#[derive(Queryable, QueryableByName, Insertable, Debug, Clone)]
+#[derive(Queryable, QueryableByName, Selectable, Insertable, Debug, Clone)]
 #[diesel(table_name = events)]
 pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::BigInt)]

@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { normalizeSuiAddress } from '@mysten/sui.js/utils';
+import { Transaction } from '@mysten/sui/transactions';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -23,7 +23,7 @@ import {
 import {
 	createKiosk,
 	createPersonalKiosk,
-	executeTransactionBlock,
+	executeTransaction,
 	mintHero,
 	mintVillain,
 	publishExtensionsPackage,
@@ -178,10 +178,10 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 			address: toolbox.address(),
 		});
 
-		const txb = new TransactionBlock();
+		const tx = new Transaction();
 		const kioskTx = new KioskTransaction({
 			kioskClient,
-			transactionBlock: txb,
+			transaction: tx,
 			cap: kioskOwnerCaps[0],
 		});
 
@@ -194,7 +194,7 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 			itemId: heroId,
 		});
 
-		txb.moveCall({
+		tx.moveCall({
 			target: `${heroPackageId}::hero::level_up`,
 			arguments: [item],
 		});
@@ -212,7 +212,7 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 				itemId: heroId,
 			},
 			(item) => {
-				txb.moveCall({
+				tx.moveCall({
 					target: `${heroPackageId}::hero::level_up`,
 					arguments: [item],
 				});
@@ -220,7 +220,7 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 		);
 
 		kioskTx.finalize();
-		await executeTransactionBlock(toolbox, txb);
+		await executeTransaction(toolbox, tx);
 	});
 
 	it('Should purchase and resolve an item that has all rules.', async () => {
@@ -277,10 +277,10 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 			address: toolbox.address(),
 		});
 
-		const txb = new TransactionBlock();
+		const tx = new Transaction();
 		const tpTx = new TransferPolicyTransaction({
 			kioskClient,
-			transactionBlock: txb,
+			transaction: tx,
 			cap: villainPolicyCaps[0],
 		});
 
@@ -295,7 +295,7 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 			.removePersonalKioskRule()
 			.withdraw(toolbox.address());
 
-		await executeTransactionBlock(toolbox, txb);
+		await executeTransaction(toolbox, tx);
 	});
 
 	it('Should fetch a kiosk by id', async () => {
@@ -321,13 +321,13 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 
 	it('Should error when trying to call any function after calling finalize()', async () => {
 		const kioskTx = new KioskTransaction({
-			transactionBlock: new TransactionBlock(),
+			transaction: new Transaction(),
 			kioskClient,
 		});
 		kioskTx.createPersonal().finalize();
 
 		expect(() => kioskTx.withdraw(toolbox.address())).toThrowError(
-			"You can't add more transactions to a finalized kiosk transaction block.",
+			"You can't add more transactions to a finalized kiosk transaction.",
 		);
 	});
 });

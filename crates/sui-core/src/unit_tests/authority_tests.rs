@@ -41,6 +41,7 @@ use sui_types::error::UserInputError;
 use sui_types::execution::SharedInput;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
@@ -4164,7 +4165,7 @@ async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityStat
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
     let modules: Vec<_> = BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .get_modules()
         .cloned()
@@ -4200,7 +4201,7 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
     let modules: Vec<_> = BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .get_modules()
         .cloned()
@@ -4793,7 +4794,7 @@ async fn test_consensus_commit_prologue_generation() {
             .data()
             .transaction_data()
             .kind(),
-        TransactionKind::ConsensusCommitPrologueV2(..)
+        TransactionKind::ConsensusCommitPrologueV3(..)
     ));
 
     // Tests that the system clock object is updated by the new consensus commit prologue transaction.
@@ -5318,7 +5319,7 @@ async fn test_for_inc_201_dev_inspect() {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/publish_with_event");
     let modules = BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .get_package_bytes(false);
 
@@ -5363,7 +5364,7 @@ async fn test_for_inc_201_dry_run() {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/publish_with_event");
     let modules = BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .get_package_bytes(false);
 
@@ -5433,7 +5434,7 @@ async fn test_publish_transitive_dependencies_ok() {
         .insert("c".to_string(), AccountAddress::ZERO);
 
     let modules = build_config
-        .build(package_c_path)
+        .build(&package_c_path)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
 
@@ -5467,7 +5468,7 @@ async fn test_publish_transitive_dependencies_ok() {
     ]);
 
     let modules = build_config
-        .build(package_b_path)
+        .build(&package_b_path)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
 
@@ -5504,7 +5505,7 @@ async fn test_publish_transitive_dependencies_ok() {
     ]);
 
     let modules = build_config
-        .build(package_a_path)
+        .build(&package_a_path)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
 
@@ -5548,7 +5549,7 @@ async fn test_publish_transitive_dependencies_ok() {
     ]);
 
     let modules = build_config
-        .build(package_root_path)
+        .build(&package_root_path)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
 
@@ -5595,7 +5596,7 @@ async fn test_publish_missing_dependency() {
     path.extend(["src", "unit_tests", "data", "object_basics"]);
 
     let modules = BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
 
@@ -5644,7 +5645,7 @@ async fn test_publish_missing_transitive_dependency() {
     path.extend(["src", "unit_tests", "data", "object_basics"]);
 
     let modules = BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
 
@@ -5693,7 +5694,7 @@ async fn test_publish_not_a_package_dependency() {
     path.extend(["src", "unit_tests", "data", "object_basics"]);
 
     let modules = BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
 
@@ -5753,8 +5754,9 @@ fn create_shared_objects(num: u32) -> Vec<Object> {
     objects
 }
 
-#[sim_test]
-async fn test_consensus_handler_per_object_congestion_control() {
+async fn test_consensus_handler_per_object_congestion_control(
+    mode: PerObjectCongestionControlMode,
+) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // In this test, we tests transactions that operate on 2 shared objects. The idea is that
@@ -5764,16 +5766,31 @@ async fn test_consensus_handler_per_object_congestion_control() {
     //
     // We will create 2 batches of commits. So here, we create gas objects for each of them separately.
     let shared_objects = create_shared_objects(2);
-    let gas_objects_commit_1 = create_gas_objects(10, sender);
-    let gas_objects_commit_2 = create_gas_objects(5, sender);
+
+    let non_congested_tx_count = match mode {
+        PerObjectCongestionControlMode::None => unreachable!(),
+        PerObjectCongestionControlMode::TotalGasBudget => 5,
+        PerObjectCongestionControlMode::TotalTxCount => 2,
+    };
+    let gas_objects_commit_1 = create_gas_objects(5 + non_congested_tx_count, sender);
+    let gas_objects_commit_2 = create_gas_objects(non_congested_tx_count, sender);
 
     // Create the cluster with controlled per object congestion control.
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config
-        .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
-    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(200_000_000);
-    protocol_config.set_max_deferral_rounds_for_congestion_control(1000); // Set to a large number so that we don't hit this limit.
+    protocol_config.set_per_object_congestion_control_mode_for_testing(mode);
+
+    match mode {
+        PerObjectCongestionControlMode::None => unreachable!(),
+        PerObjectCongestionControlMode::TotalGasBudget => {
+            protocol_config
+                .set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(200_000_000);
+        }
+        PerObjectCongestionControlMode::TotalTxCount => {
+            protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(2);
+        }
+    }
+    protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(1000); // Set to a large number so that we don't hit this limit.
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
@@ -5785,9 +5802,9 @@ async fn test_consensus_handler_per_object_congestion_control() {
     authority.insert_genesis_objects(&genesis_objects).await;
 
     // Create first batch of commits. Here, we create 5 transactions that operate on the first
-    // shared object with very high gas budget. And 5 transactions that operate on the second
-    // shared object with low gas budget (so that there won't be any congestion on the second
-    // object).
+    // shared object with very high gas budget. And `non_congested_tx_count` transactions that
+    // operate on the second shared object with low gas budget (so that there won't be any
+    // congestion on the second object).
     //
     // For transaction operates on the expensive object, we use gas price from 1000 to 5000,
     // and for transaction operates on the cheaper object, we use gas price of 1000.
@@ -5831,7 +5848,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
     // should go through, and all transactions oeprate on the cheaper object should go through.
     // We also check that the scheduled transactions on the expensive object have the highest gas price.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
-    assert_eq!(scheduled_txns.len(), 7);
+    assert_eq!(scheduled_txns.len(), 2 + non_congested_tx_count as usize);
     for cert in scheduled_txns.iter() {
         assert!(
             cert.data().transaction_data().gas_price() >= 4000
@@ -5873,7 +5890,8 @@ async fn test_consensus_handler_per_object_congestion_control() {
         }
     }
 
-    // Create second batch of commits. Here, we create another 5 transactions that operate on the cheap object.
+    // Create second batch of commits. Here, we create another `non_congested_tx_count` transactions that operate
+    // on the cheap object.
     let mut new_certificates: Vec<VerifiedCertificate> = vec![];
     for gas_object in gas_objects_commit_2.iter() {
         let certificate = make_test_transaction(
@@ -5896,7 +5914,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
     // object should go through.
     let scheduled_txns =
         send_batch_consensus_no_execution(&authority, &new_certificates, true).await;
-    assert_eq!(scheduled_txns.len(), 7);
+    assert_eq!(scheduled_txns.len(), 2 + non_congested_tx_count as usize);
     for cert in scheduled_txns.iter() {
         assert!(
             cert.data().transaction_data().gas_price() >= 2000
@@ -5944,10 +5962,27 @@ async fn test_consensus_handler_per_object_congestion_control() {
         .is_empty());
 }
 
+#[sim_test]
+async fn test_consensus_handler_per_object_congestion_control_using_budget() {
+    test_consensus_handler_per_object_congestion_control(
+        PerObjectCongestionControlMode::TotalGasBudget,
+    )
+    .await;
+}
+
+#[sim_test]
+async fn test_consensus_handler_per_object_congestion_control_using_tx_count() {
+    test_consensus_handler_per_object_congestion_control(
+        PerObjectCongestionControlMode::TotalTxCount,
+    )
+    .await;
+}
+
 // Tests congestion control triggered transaction cancellation in consensus handler:
 //   1. Consensus handler cancels transactions that are deferred for too many rounds.
 //   2. Shared locks for cancelled transaction are set correctly.
 //   3. Input objects can be read correctly.
+//   4. Consensus commit prologue contains cancelled transaction version assignment.
 #[sim_test]
 async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
@@ -5964,10 +5999,11 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // Create the cluster with controlled per object congestion control and cancellation.
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config
-        .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
-    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(100_000_000);
-    protocol_config.set_max_deferral_rounds_for_congestion_control(2);
+    protocol_config.set_per_object_congestion_control_mode_for_testing(
+        PerObjectCongestionControlMode::TotalGasBudget,
+    );
+    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(100_000_000);
+    protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(2);
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
@@ -6021,21 +6057,27 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // We shuffle the transactions so that transactions in the list do not have any order in terms of gas price.
     certificates.shuffle(&mut rand::thread_rng());
 
-    // Sends all transactions to consensus. Expect first 2 rounds with 1 transaction per round going through.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
-    assert_eq!(scheduled_txns.len(), 1);
-    for cert in scheduled_txns.iter() {
-        assert!(cert.data().transaction_data().gas_price() == 2000);
-    }
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
-    assert_eq!(scheduled_txns.len(), 1);
-    for cert in scheduled_txns.iter() {
-        assert!(cert.data().transaction_data().gas_price() == 2000);
-    }
-
-    // Run consensus round 3. 2 transactions will come out with 1 transaction being cancelled.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
+    // Sends all transactions to consensus. Expect first 2 rounds with 1 user transaction per round going through.
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, false).await;
     assert_eq!(scheduled_txns.len(), 2);
+    // Note that consensus handler also generates consensus commit prologue transaction, and it must be the first one.
+    assert!(matches!(
+        scheduled_txns[0].data().transaction_data().kind(),
+        TransactionKind::ConsensusCommitPrologueV3(..)
+    ));
+    assert!(scheduled_txns[1].data().transaction_data().gas_price() == 2000);
+
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], false).await;
+    assert_eq!(scheduled_txns.len(), 2);
+    assert!(matches!(
+        scheduled_txns[0].data().transaction_data().kind(),
+        TransactionKind::ConsensusCommitPrologueV3(..)
+    ));
+    assert!(scheduled_txns[1].data().transaction_data().gas_price() == 2000);
+
+    // Run consensus round 3. 2 user transactions will come out with 1 transaction being cancelled.
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], false).await;
+    assert_eq!(scheduled_txns.len(), 3); // 3 = 2 user transactions + 1 consensus commit prologue transaction.
     assert!(authority
         .epoch_store_for_testing()
         .get_all_deferred_transactions_for_test()
@@ -6091,4 +6133,31 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // Test get_congested_objects.
     let congested_objects = input_objects.get_congested_objects().unwrap();
     assert_eq!(congested_objects, vec![shared_objects[0].id()]);
+
+    // Consensus commit prologue contains cancelled txn shared object version assignment.
+    if let TransactionKind::ConsensusCommitPrologueV3(prologue_txn) =
+        scheduled_txns[0].data().transaction_data().kind()
+    {
+        assert!(matches!(
+            &prologue_txn.consensus_determined_version_assignments,
+            ConsensusDeterminedVersionAssignments::CancelledTransactions(assignment)
+            if assignment == &vec![(
+                                *cancelled_txn.digest(),
+                                vec![
+                                    (shared_objects[0].id(), SequenceNumber::CONGESTED),
+                                    (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
+                                ]
+                            )]
+        ));
+    } else {
+        panic!("First scheduled transaction must be a ConsensusCommitPrologueV3 transaction.");
+    }
+}
+
+#[tokio::test]
+async fn test_single_authority_reconfigure() {
+    let state = TestAuthorityBuilder::new().build().await;
+    assert_eq!(state.epoch_store_for_testing().epoch(), 0);
+    state.reconfigure_for_testing().await;
+    assert_eq!(state.epoch_store_for_testing().epoch(), 1);
 }

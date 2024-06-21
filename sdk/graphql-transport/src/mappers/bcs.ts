@@ -3,7 +3,7 @@
 
 import { toB64 } from '@mysten/bcs';
 import type { BcsType } from '@mysten/bcs';
-import { bcs } from '@mysten/sui.js/bcs';
+import { bcs } from '@mysten/sui/bcs';
 
 import type { MoveTypeLayout } from './move.js';
 import { toShortTypeString } from './util.js';

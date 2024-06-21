@@ -21,6 +21,15 @@ const config = {
 			<meta httpEquiv="Content-Language" content="en" />
 		</>
 	),
+	banner: {
+		key: '1.0-release',
+		dismissible: false,
+		text: (
+			<a href="/typescript/migrations/sui-1.0">
+				🎉 @mysten/sui 1.0 has been released - Read the full migration guide here!
+			</a>
+		),
+	},
 	useNextSeoProps() {
 		const { asPath } = useRouter();
 

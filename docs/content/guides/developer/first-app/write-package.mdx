@@ -11,44 +11,7 @@ $ sui move new my_first_package
 
 Running the previous command creates a directory with the name you provide (`my_first_package` in this case). The command populates the new directory with a skeleton Move project that consists of a `sources` directory and a `Move.toml` manifest file. Open the manifest with a text editor to review its contents:
 
-```move title="my_first_package/Move.toml"
-[package]
-name = "my_first_package"
-edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
-# license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
-# authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
-
-[dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
-
-# For remote import, use the `{ git = "...", subdir = "...", rev = "..." }`.
-# Revision can be a branch, a tag, and a commit hash.
-# MyRemotePackage = { git = "https://some.remote/host.git", subdir = "remote/path", rev = "main" }
-
-# For local dependencies use `local = path`. Path is relative to the package root
-# Local = { local = "../path/to" }
-
-# To resolve a version conflict and force a specific version for dependency
-# override use `override = true`
-# Override = { local = "../conflicting/version", override = true }
-
-[addresses]
-my_first_package = "0x0"
-
-# Named addresses will be accessible in Move as `@name`. They're also exported:
-# for example, `std = "0x1"` is exported by the Standard Library.
-# alice = "0xA11CE"
-
-[dev-dependencies]
-# The dev-dependencies section allows overriding dependencies for `--test` and
-# `--dev` modes. You can introduce test-only dependencies here.
-# Local = { local = "../path/to/dev-build" }
-
-[dev-addresses]
-# The dev-addresses section allows overwriting named addresses for the `--test`
-# and `--dev` modes.
-# alice = "0xB0B"
-```
+{@inject: examples/move/first_package/Move.toml}
 
 The manifest file contents include available sections of the manifest and comments that provide additional information. In Move, you prepend the hash mark (`#`) to a line to denote a comment.
 
@@ -68,55 +31,7 @@ $ touch my_first_package/sources/my_module.move
 
 Populate the `my_module.move` file with the following code:
 
-```move
-module my_first_package::my_module {
-
-    // Part 1: These imports are provided by default
-    // use sui::object::{Self, UID};
-    // use sui::transfer;
-    // use sui::tx_context::{Self, TxContext};
-
-    // Part 2: struct definitions
-    public struct Sword has key, store {
-        id: UID,
-        magic: u64,
-        strength: u64,
-    }
-
-    public struct Forge has key {
-        id: UID,
-        swords_created: u64,
-    }
-
-    // Part 3: Module initializer to be executed when this module is published
-    fun init(ctx: &mut TxContext) {
-        let admin = Forge {
-            id: object::new(ctx),
-            swords_created: 0,
-        };
-        // Transfer the forge object to the module/package publisher
-        transfer::transfer(admin, ctx.sender());
-    }
-
-    // Part 4: Accessors required to read the struct fields
-    public fun magic(self: &Sword): u64 {
-        self.magic
-    }
-
-    public fun strength(self: &Sword): u64 {
-        self.strength
-    }
-
-    public fun swords_created(self: &Forge): u64 {
-        self.swords_created
-    }
-
-    // Part 5: Public/entry functions (introduced later in the tutorial)
-
-    // Part 6: Tests
-
-}
-```
+{@inject: examples/move/first_package/sources/example.move#first noTests}
 
 The comments in the preceding code highlight different parts of a typical Move source file.
 

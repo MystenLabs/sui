@@ -47,20 +47,21 @@ const ephemeralKeyPair = new Ed25519Keypair();
 const randomness = generateRandomness();
 const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
 ```
+
 The auth flow URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$NONCE`.
 
 For some providers ("Yes" for "Auth Flow Only"), the JWT can be found immediately in the redirect URL after the auth flow.
 
 For other providers ("No" for "Auth Flow Only"), the auth flow only returns a code (`$AUTH_CODE`) in redirect URL. To retrieve the JWT, an additional POST call is required with "Token Exchange URL".
 
-| Provider | Auth Flow URL | Token Exchange URL | Auth Flow Only |
-| ----------- | ----------- | ----------- | ----------- |
-| Google | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE` | N/A | Yes |
-| Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token` | N/A | Yes |
-| Twitch | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL& response_type=id_token&scope=openid&nonce=$NONCE` | N/A | Yes |
-| Kakao | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE` | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No |
-| Apple | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE` | N/A | Yes |
-| Slack | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid` | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET` | No |
+| Provider | Auth Flow URL                                                                                                                                                                        | Token Exchange URL                                                                                                                  | Auth Flow Only |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Google   | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE`                                      | N/A                                                                                                                                 | Yes            |
+| Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token`                                       | N/A                                                                                                                                 | Yes            |
+| Twitch   | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL& response_type=id_token&scope=openid&nonce=$NONCE` | N/A                                                                                                                                 | Yes            |
+| Kakao    | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE`                                                            | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No             |
+| Apple    | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE`            | N/A                                                                                                                                 | Yes            |
+| Slack    | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid`                                            | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET`                      | No             |
 
 ## Decoding JWT
 
@@ -75,23 +76,23 @@ The `id_token` param is the JWT in encoded format. You can validate the correctn
 To decode the JWT you can use a library like: `jwt_decode:` and map the response to the provided type `JwtPayload`:
 
 ```typescript
-
 const decodedJwt = jwt_decode(encodedJWT) as JwtPayload;
 
 export interface JwtPayload {
-   iss?: string;
-   sub?: string;  //Subject ID
-   aud?: string[] | string;
-   exp?: number;
-   nbf?: number;
-   iat?: number;
-   jti?: string;
+	iss?: string;
+	sub?: string; //Subject ID
+	aud?: string[] | string;
+	exp?: number;
+	nbf?: number;
+	iat?: number;
+	jti?: string;
 }
 ```
 
 ## User salt management
 
 zkLogin uses the user salt to compute the zkLogin Sui address (see [definition](#address-definition)). The salt must be a 16-byte value or a integer smaller than `2n**128n`. There are several options for the application to maintain the user salt:
+
 1. Client side:
    - Option 1: Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
    - Option 2: Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
@@ -136,6 +137,7 @@ You need to fetch a new ZK proof if the previous ephemeral key pair is expired o
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
 There are two options:
+
 1. Call the Mysten Labs-maintained proving service.
 1. Run the proving service in your backend using the provided Docker images.
 
@@ -171,21 +173,35 @@ Response:
 
 ```json
 {
-	"proofPoints":{
-		"a":["17267520948013237176538401967633949796808964318007586959472021003187557716854",
+	"proofPoints": {
+		"a": [
+			"17267520948013237176538401967633949796808964318007586959472021003187557716854",
 			"14650660244262428784196747165683760208919070184766586754097510948934669736103",
-			"1"],
-		"b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443",
-		"10547097602625638823059992458926868829066244356588080322181801706465994418281"],
-		["12744153306027049365027606189549081708414309055722206371798414155740784907883",
-		"17883388059920040098415197241200663975335711492591606641576557652282627716838"],
-		["1","0"]],
+			"1"
+		],
+		"b": [
+			[
+				"21139310988334827550539224708307701217878230950292201561482099688321320348443",
+				"10547097602625638823059992458926868829066244356588080322181801706465994418281"
+			],
+			[
+				"12744153306027049365027606189549081708414309055722206371798414155740784907883",
+				"17883388059920040098415197241200663975335711492591606641576557652282627716838"
+			],
+			["1", "0"]
+		],
 
-		"c":["14769767061575837119226231519343805418804298487906870764117230269550212315249",
-		"19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]
-		},
-		"issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw", "indexMod4": 2 },
-		"headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"
+		"c": [
+			"14769767061575837119226231519343805418804298487906870764117230269550212315249",
+			"19108054814174425469923382354535700312637807408963428646825944966509611405530",
+			"1"
+		]
+	},
+	"issBase64Details": {
+		"value": "wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw",
+		"indexMod4": 2
+	},
+	"headerBase64": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"
 }
 ```
 
@@ -207,25 +223,28 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 
 ### Run the proving service in your backend
 
-1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. There are zkeys available for Mainnet and Testnet, as well as a test zkey for Devnet. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated. Please install [git lfs](https://git-lfs.com/) which is needed before downloading the zkey.
+1. Install [Git Large File Storage](https://git-lfs.com/) (an open-source Git extension for large file versioning) before downloading the zkey.
 
-	- Main zkey (for Mainnet and Testnet)
-		```bash
-		wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-main-zkey.sh | bash
-		```
-	- Test zkey (for Devnet)
-		```bash
-		wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-test-zkey.sh | bash
-		```
+1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/). There are zkeys available for all Sui networks. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated.
 
-	- To verify the download contains the correct zkey file, you can run the following command to check the Blake2b hash: `b2sum ${file_name}.zkey`.
+   - Main zkey (for Mainnet and Testnet)
+     ```bash
+     wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-main-zkey.sh | bash
+     ```
+   - Test zkey (for Devnet)
 
-		| Network | zkey file name | Hash |
-		| ------------ | ----------   | -------- |
-		| Mainnet, Testnet |  `zkLogin-main.zkey` | `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` |
-		| Devnet | `zkLogin-test.zkey` | `686e2f5fd969897b1c034d7654799ee2c3952489814e4eaaf3d7e1bb539841047ae8ee5fdcdaca5f4ddd76abb5a8e8eb77b44b693a2ba9d4be57e94292b26ce2` |
+     ```bash
+     wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-test-zkey.sh | bash
+     ```
 
-1. For the next step, you need two Docker images from the [mysten/zklogin repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) (tagged as `prover` and `prover-fe`). To simplify, a docker compose file is available that automates this process. Run `docker compose` with the downloaded `zkey` from the same directory as the YAML file.
+   - To verify the download contains the correct zkey file, you can run the following command to check the Blake2b hash: `b2sum ${file_name}.zkey`.
+
+     | Network          | zkey file name      | Hash                                                                                                                               |
+     | ---------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+     | Mainnet, Testnet | `zkLogin-main.zkey` | `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` |
+     | Devnet           | `zkLogin-test.zkey` | `686e2f5fd969897b1c034d7654799ee2c3952489814e4eaaf3d7e1bb539841047ae8ee5fdcdaca5f4ddd76abb5a8e8eb77b44b693a2ba9d4be57e94292b26ce2` |
+
+1. For the next step, you need two Docker images from the [mysten/zklogin repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) (tagged as `prover` and `prover-fe`). To simplify, a docker compose file is available that automates this process. Run `docker compose` with the downloaded zkey from the same directory as the YAML file.
 
 ```yaml
 services:
@@ -240,10 +259,10 @@ services:
 
   frontend:
     image: mysten/zklogin:prover-fe-stable
-    command: "8080"
+    command: '8080'
     ports:
       # The PROVER_PORT environment variable must be set to the desired port.
-      - "${PROVER_PORT}:8080"
+      - '${PROVER_PORT}:8080'
     environment:
       - PROVER_URI=http://backend:8080/input
       - NODE_ENV=production
@@ -273,17 +292,17 @@ A few important things to note:
 First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional KeyPair signing](https://sdk.mystenlabs.com/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
 
 ```typescript
- const ephemeralKeyPair = new Ed25519Keypair();
+const ephemeralKeyPair = new Ed25519Keypair();
 
-const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
+const client = new SuiClient({ url: '<YOUR_RPC_URL>' });
 
-const txb = new TransactionBlock();
+const txb = new Transaction();
 
 txb.setSender(zkLoginUserAddress);
 
 const { bytes, signature: userSignature } = await txb.sign({
-   client,
-   signer: ephemeralKeyPair, // This must be the same ephemeral key pair used in the ZKP request
+	client,
+	signer: ephemeralKeyPair, // This must be the same ephemeral key pair used in the ZKP request
 });
 ```
 
@@ -295,17 +314,22 @@ You can now serialize the zkLogin signature by combining the ZK proof (`inputs`)
 the `maxEpoch`, and the ephemeral signature (`userSignature`).
 
 ```typescript
-import { genAddressSeed, getZkLoginSignature } from "@mysten/zklogin";
+import { genAddressSeed, getZkLoginSignature } from '@mysten/zklogin';
 
-const addressSeed : string = genAddressSeed(BigInt(userSalt!), "sub", decodedJwt.sub, decodedJwt.aud).toString();
+const addressSeed: string = genAddressSeed(
+	BigInt(userSalt!),
+	'sub',
+	decodedJwt.sub,
+	decodedJwt.aud,
+).toString();
 
-const zkLoginSignature : SerializedSignature = getZkLoginSignature({
-   inputs: {
-      ...partialZkLoginSignature,
-      addressSeed
-   },
-   maxEpoch,
-   userSignature,
+const zkLoginSignature: SerializedSignature = getZkLoginSignature({
+	inputs: {
+		...partialZkLoginSignature,
+		addressSeed,
+	},
+	maxEpoch,
+	userSignature,
 });
 ```
 
@@ -327,6 +351,14 @@ You might want to cache the ephemeral key pair along with the ZKP for future use
 However, the ephemeral key pair needs to be treated as a secret akin to a key pair in a traditional wallet. This is because if both the ephemeral private key and ZK proof are revealed to an attacker, then they can typically sign any transaction on behalf of the user (using the same process described previously).
 
 Consequently, you should not store them persistently in an unsecure storage location, on any platform. For example, on browsers, use session storage instead of local storage to store the ephemeral key pair and the ZK proof. This is because session storage automatically clears its data when the browser session ends, while data in local storage persists indefinitely.
+
+## Efficiency considerations
+
+Compared to traditional signatures, zkLogin signatures take a longer time to generate. For example, the prover that Mysten Labs maintains typically takes about three seconds to return a proof, which runs on a machine with 16 vCPUs and 64 GB RAM. Using more powerful machines, such as those with physical CPUs or graphics processing units (GPUs), can reduce the proving time further.
+
+Carefully consider how many requests your application needs to make to the prover. Broadly speaking, the right metric to consider is the number of active user sessions and not the number of signatures. This is because you can cache the same ZK proof and reuse it across the session, as previously explained. For example, if you expect a million active user sessions per day, then you need a prover that can handle one or two requests per second (RPS), assuming evenly distributed traffic.
+
+The prover that Mysten Labs maintains is set to auto-scale to handle traffic surges. If you are not sure whether Mysten Labs can handle a specific number of requests or expect a sudden spike in the number of prover requests your application needs to make, please reach out to us on [Discord](https://discord.gg/sui). Our plan is to horizontally scale the prover to handle any RPS you require.
 
 ## Related links
 

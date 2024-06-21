@@ -20,7 +20,7 @@ enclosed in quotation marks, you should use an editor that supports UTF-8, not t
 		<releaseNotes>https://github.com/MystenLabs/sui/releases/tag/mainnet-v$version$</releaseNotes>
 	</metadata>
 	<files>
-		<file src="../target/release/sui.exe" target="bin/sui.exe" />
+		<file src="./tmp/release/sui.exe" target="bin/sui.exe" />
 		<file src="../LICENSE" target="bin/LICENSE.txt" />
 		<file src="./VERIFICATION.txt" target="bin/VERIFICATION.txt" />
 	</files>

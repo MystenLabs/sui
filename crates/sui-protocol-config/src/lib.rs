@@ -1,19 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    cell::RefCell,
+    collections::BTreeSet,
+    sync::atomic::{AtomicBool, Ordering},
+};
+
 use clap::*;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::cell::RefCell;
-use std::collections::BTreeSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 48;
+const MAX_PROTOCOL_VERSION: u64 = 51;
 
 // Record history of protocol version allocations here:
 //
@@ -129,10 +132,21 @@ const MAX_PROTOCOL_VERSION: u64 = 48;
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 // Version 46: Enable native bridge in testnet
 //             Enable resharing at the same initial shared version.
-// Version 47: Use tonic networking for Mysticeti.
+// Version 47: Deepbook changes (framework update)
+// Version 48: Use tonic networking for Mysticeti.
 //             Resolve Move abort locations to the package id instead of the runtime module ID.
 //             Enable random beacon in testnet.
-// Version 48: Enable Move enums on devnet.
+//             Use new VM when verifying framework packages.
+// Version 49: Enable Move enums on devnet.
+//             Enable VDF in devnet
+//             Enable consensus commit prologue V3 in devnet.
+//             Run Mysticeti consensus by default.
+// Version 50: Add update_node_url to native bridge,
+//             New Move stdlib integer modules
+//             Enable checkpoint batching in testnet.
+//             Prepose consensus commit prologue in checkpoints.
+//             Set number of leaders per round for Mysticeti commits.
+// Version 51: Switch to DKG V1.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -235,8 +249,19 @@ impl Default for Chain {
     }
 }
 
+impl Chain {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Chain::Mainnet => "mainnet",
+            Chain::Testnet => "testnet",
+            Chain::Unknown => "unknown",
+        }
+    }
+}
+
 pub struct Error(pub String);
 
+// TODO: There are quite a few non boolean values in the feature flags. We should move them out.
 /// Records on/off feature flags that may vary at each protocol version.
 #[derive(Default, Clone, Serialize, Debug, ProtocolConfigFeatureFlagsGetters)]
 struct FeatureFlags {
@@ -450,6 +475,38 @@ struct FeatureFlags {
     // a flag as it will lead to checkpoint forks.
     #[serde(skip_serializing_if = "is_false")]
     mysticeti_use_committed_subdag_digest: bool,
+
+    // Enable VDF
+    #[serde(skip_serializing_if = "is_false")]
+    enable_vdf: bool,
+
+    // Controls whether consensus handler should record consensus determined shared object version
+    // assignments in consensus commit prologue transaction.
+    // The purpose of doing this is to enable replaying transaction without transaction effects.
+    #[serde(skip_serializing_if = "is_false")]
+    record_consensus_determined_version_assignments_in_prologue: bool,
+
+    // Run verification of framework upgrades using a new/fresh VM.
+    #[serde(skip_serializing_if = "is_false")]
+    fresh_vm_on_framework_upgrade: bool,
+
+    // When set to true, the consensus commit prologue transaction will be placed first
+    // in a consensus commit in checkpoints.
+    // If a checkpoint contains multiple consensus commit, say [cm1][cm2]. The each commit's
+    // consensus commit prologue will be the first transaction in each segment:
+    //     [ccp1, rest cm1][ccp2, rest cm2]
+    // The reason to prepose the prologue transaction is to provide information for transaction
+    // cancellation.
+    #[serde(skip_serializing_if = "is_false")]
+    prepend_prologue_tx_in_consensus_commit_in_checkpoints: bool,
+
+    // Set number of leaders per round for Mysticeti commits.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mysticeti_num_leaders_per_round: Option<usize>,
+
+    // Enable Soft Bundle (SIP-19).
+    #[serde(skip_serializing_if = "is_false")]
+    soft_bundle: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -482,6 +539,7 @@ pub enum PerObjectCongestionControlMode {
     #[default]
     None, // No congestion control.
     TotalGasBudget, // Use txn gas budget as execution cost.
+    TotalTxCount,   // Use total txn count as execution cost.
 }
 
 impl PerObjectCongestionControlMode {
@@ -1038,6 +1096,9 @@ pub struct ProtocolConfig {
     // zklogin::check_zklogin_issuer
     check_zklogin_issuer_cost_base: Option<u64>,
 
+    vdf_verify_vdf_cost: Option<u64>,
+    vdf_hash_to_input_cost: Option<u64>,
+
     // Const params for consensus scoring decision
     // The scaling factor property for the MED outlier detection
     scoring_decision_mad_divisor: Option<f64>,
@@ -1075,6 +1136,9 @@ pub struct ProtocolConfig {
     /// Minimum interval between consecutive rounds of generated randomness.
     random_beacon_min_round_interval_ms: Option<u64>,
 
+    /// Version of the random beacon DKG protocol, 0 when not set.
+    random_beacon_dkg_version: Option<u64>,
+
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
@@ -1088,6 +1152,15 @@ pub struct ProtocolConfig {
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
+
+    /// Minimum interval of commit timestamps between consecutive checkpoints.
+    min_checkpoint_interval_ms: Option<u64>,
+
+    /// Version number to use for version_specific_data in `CheckpointSummary`.
+    checkpoint_summary_version_specific_data: Option<u64>,
+
+    /// The max number of transactions that can be included in a single Soft Bundle.
+    max_soft_bundle_size: Option<u64>,
 }
 
 // feature flags
@@ -1262,6 +1335,10 @@ impl ProtocolConfig {
         self.feature_flags.random_beacon
     }
 
+    pub fn dkg_version(&self) -> u64 {
+        self.random_beacon_dkg_version.unwrap_or(0)
+    }
+
     pub fn enable_bridge(&self) -> bool {
         let ret = self.feature_flags.bridge;
         if ret {
@@ -1299,6 +1376,16 @@ impl ProtocolConfig {
         self.feature_flags.include_consensus_digest_in_prologue
     }
 
+    pub fn record_consensus_determined_version_assignments_in_prologue(&self) -> bool {
+        self.feature_flags
+            .record_consensus_determined_version_assignments_in_prologue
+    }
+
+    pub fn prepend_prologue_tx_in_consensus_commit_in_checkpoints(&self) -> bool {
+        self.feature_flags
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints
+    }
+
     pub fn hardened_otw_check(&self) -> bool {
         self.feature_flags.hardened_otw_check
     }
@@ -1307,7 +1394,7 @@ impl ProtocolConfig {
         self.feature_flags.enable_poseidon
     }
 
-    pub fn enable_coin_deny_list(&self) -> bool {
+    pub fn enable_coin_deny_list_v1(&self) -> bool {
         self.feature_flags.enable_coin_deny_list
     }
 
@@ -1349,6 +1436,22 @@ impl ProtocolConfig {
 
     pub fn mysticeti_use_committed_subdag_digest(&self) -> bool {
         self.feature_flags.mysticeti_use_committed_subdag_digest
+    }
+
+    pub fn enable_vdf(&self) -> bool {
+        self.feature_flags.enable_vdf
+    }
+
+    pub fn fresh_vm_on_framework_upgrade(&self) -> bool {
+        self.feature_flags.fresh_vm_on_framework_upgrade
+    }
+
+    pub fn mysticeti_num_leaders_per_round(&self) -> Option<usize> {
+        self.feature_flags.mysticeti_num_leaders_per_round
+    }
+
+    pub fn soft_bundle(&self) -> bool {
+        self.feature_flags.soft_bundle
     }
 }
 
@@ -1760,6 +1863,9 @@ impl ProtocolConfig {
             // zklogin::check_zklogin_issuer
             check_zklogin_issuer_cost_base: None,
 
+            vdf_verify_vdf_cost: None,
+            vdf_hash_to_input_cost: None,
+
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
 
@@ -1792,6 +1898,8 @@ impl ProtocolConfig {
 
             random_beacon_min_round_interval_ms: None,
 
+            random_beacon_dkg_version: None,
+
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
@@ -1799,6 +1907,12 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_checkpoint: None,
 
             max_deferral_rounds_for_congestion_control: None,
+
+            min_checkpoint_interval_ms: None,
+
+            checkpoint_summary_version_specific_data: None,
+
+            max_soft_bundle_size: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2237,7 +2351,8 @@ impl ProtocolConfig {
                     // Enable resharing at same initial version
                     cfg.feature_flags.reshare_at_same_initial_version = true;
                 }
-                47 => {
+                47 => {}
+                48 => {
                     // Use tonic networking for Mysticeti.
                     cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
 
@@ -2255,10 +2370,54 @@ impl ProtocolConfig {
                     // Enable the committed sub dag digest inclusion on the commit output
                     cfg.feature_flags.mysticeti_use_committed_subdag_digest = true;
                 }
-                48 => {
+                49 => {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.move_binary_format_version = Some(7);
                     }
+
+                    // enable vdf in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_vdf = true;
+                        // Set to 30x and 2x the cost of a signature verification for now. This
+                        // should be updated along with other native crypto functions.
+                        cfg.vdf_verify_vdf_cost = Some(1500);
+                        cfg.vdf_hash_to_input_cost = Some(100);
+                    }
+
+                    // Only enable consensus commit prologue V3 in devnet.
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .record_consensus_determined_version_assignments_in_prologue = true;
+                    }
+
+                    // Run Mysticeti consensus in testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
+                    }
+
+                    // Run Move verification on framework upgrades in its own VM
+                    cfg.feature_flags.fresh_vm_on_framework_upgrade = true;
+                }
+                50 => {
+                    // Enable checkpoint batching in testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.checkpoint_summary_version_specific_data = Some(1);
+                        cfg.min_checkpoint_interval_ms = Some(200);
+                    }
+
+                    // Only enable prepose consensus commit prologue in checkpoints in devnet.
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
+                    }
+
+                    cfg.feature_flags.mysticeti_num_leaders_per_round = Some(1);
+
+                    // Set max transaction deferral to 10 consensus rounds.
+                    cfg.max_deferral_rounds_for_congestion_control = Some(10);
+                }
+                51 => {
+                    cfg.random_beacon_dkg_version = Some(1);
                 }
                 // Use this template when making changes:
                 //
@@ -2341,16 +2500,15 @@ impl ProtocolConfig {
     }
 }
 
-// Setters for tests
+// Setters for tests.
+// This is only needed for feature_flags. Please suffix each setter with `_for_testing`.
+// Non-feature_flags should already have test setters defined through macros.
 impl ProtocolConfig {
-    pub fn set_package_upgrades_for_testing(&mut self, val: bool) {
-        self.feature_flags.package_upgrades = val
-    }
     pub fn set_advance_to_highest_supported_protocol_version_for_testing(&mut self, val: bool) {
         self.feature_flags
             .advance_to_highest_supported_protocol_version = val
     }
-    pub fn set_commit_root_state_digest_supported(&mut self, val: bool) {
+    pub fn set_commit_root_state_digest_supported_for_testing(&mut self, val: bool) {
         self.feature_flags.commit_root_state_digest = val
     }
     pub fn set_zklogin_auth_for_testing(&mut self, val: bool) {
@@ -2362,6 +2520,7 @@ impl ProtocolConfig {
     pub fn set_random_beacon_for_testing(&mut self, val: bool) {
         self.feature_flags.random_beacon = val
     }
+
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }
@@ -2369,65 +2528,52 @@ impl ProtocolConfig {
         self.feature_flags.accept_zklogin_in_multisig = val
     }
 
-    pub fn set_shared_object_deletion(&mut self, val: bool) {
+    pub fn set_shared_object_deletion_for_testing(&mut self, val: bool) {
         self.feature_flags.shared_object_deletion = val;
     }
 
-    pub fn set_narwhal_new_leader_election_schedule(&mut self, val: bool) {
+    pub fn set_narwhal_new_leader_election_schedule_for_testing(&mut self, val: bool) {
         self.feature_flags.narwhal_new_leader_election_schedule = val;
     }
 
-    pub fn set_consensus_bad_nodes_stake_threshold(&mut self, val: u64) {
-        self.consensus_bad_nodes_stake_threshold = Some(val);
-    }
     pub fn set_receive_object_for_testing(&mut self, val: bool) {
         self.feature_flags.receive_objects = val
     }
-    pub fn set_narwhal_certificate_v2(&mut self, val: bool) {
+    pub fn set_narwhal_certificate_v2_for_testing(&mut self, val: bool) {
         self.feature_flags.narwhal_certificate_v2 = val
     }
-    pub fn set_verify_legacy_zklogin_address(&mut self, val: bool) {
+    pub fn set_verify_legacy_zklogin_address_for_testing(&mut self, val: bool) {
         self.feature_flags.verify_legacy_zklogin_address = val
     }
-    pub fn set_enable_effects_v2(&mut self, val: bool) {
-        self.feature_flags.enable_effects_v2 = val;
-    }
-    pub fn set_consensus_max_transaction_size_bytes(&mut self, val: u64) {
-        self.consensus_max_transaction_size_bytes = Some(val);
-    }
-    pub fn set_consensus_max_transactions_in_block_bytes(&mut self, val: u64) {
-        self.consensus_max_transactions_in_block_bytes = Some(val);
-    }
 
-    pub fn set_per_object_congestion_control_mode(&mut self, val: PerObjectCongestionControlMode) {
+    pub fn set_per_object_congestion_control_mode_for_testing(
+        &mut self,
+        val: PerObjectCongestionControlMode,
+    ) {
         self.feature_flags.per_object_congestion_control_mode = val;
     }
 
-    pub fn set_consensus_choice(&mut self, val: ConsensusChoice) {
+    pub fn set_consensus_choice_for_testing(&mut self, val: ConsensusChoice) {
         self.feature_flags.consensus_choice = val;
     }
 
-    pub fn set_consensus_network(&mut self, val: ConsensusNetwork) {
+    pub fn set_consensus_network_for_testing(&mut self, val: ConsensusNetwork) {
         self.feature_flags.consensus_network = val;
     }
 
-    pub fn set_max_accumulated_txn_cost_per_object_in_checkpoint(&mut self, val: u64) {
-        self.max_accumulated_txn_cost_per_object_in_checkpoint = Some(val);
-    }
-
-    pub fn set_max_deferral_rounds_for_congestion_control(&mut self, val: u64) {
-        self.max_deferral_rounds_for_congestion_control = Some(val);
-    }
-
-    pub fn set_zklogin_max_epoch_upper_bound_delta(&mut self, val: Option<u64>) {
+    pub fn set_zklogin_max_epoch_upper_bound_delta_for_testing(&mut self, val: Option<u64>) {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
     }
     pub fn set_disable_bridge_for_testing(&mut self) {
         self.feature_flags.bridge = false
     }
 
-    pub fn set_mysticeti_leader_scoring_and_schedule(&mut self, val: bool) {
+    pub fn set_mysticeti_leader_scoring_and_schedule_for_testing(&mut self, val: bool) {
         self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
+    }
+
+    pub fn set_mysticeti_num_leaders_per_round_for_testing(&mut self, val: Option<usize>) {
+        self.feature_flags.mysticeti_num_leaders_per_round = val;
     }
 }
 
@@ -2521,8 +2667,9 @@ macro_rules! check_limit_by_meter {
 
 #[cfg(all(test, not(msim)))]
 mod test {
-    use super::*;
     use insta::assert_yaml_snapshot;
+
+    use super::*;
 
     #[test]
     fn snapshot_tests() {

@@ -3,7 +3,7 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "A collection of React hooks and components for interacting with the Sui blockchain and wallets.",
 	"homepage": "https://sdk.mystenlabs.com/typescript",
-	"version": "0.13.2",
+	"version": "0.14.9",
 	"license": "Apache-2.0",
 	"files": [
 		"CHANGELOG.md",
@@ -29,7 +29,7 @@
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"build": "build-dapp-kit",
-		"test": "pnpm test:typecheck && pnpm vitest",
+		"test": "pnpm test:typecheck && pnpm vitest run",
 		"test:typecheck": "tsc -b ./test",
 		"prepublishOnly": "pnpm build",
 		"size": "size-limit",
@@ -75,10 +75,10 @@
 		"size-limit": "^8.2.6",
 		"typescript": "^5.3.3",
 		"vite": "^4.4.4",
-		"vitest": "^0.33.0"
+		"vitest": "^1.6.0"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
 		"@mysten/zksend": "workspace:*",
 		"@radix-ui/react-dialog": "^1.0.4",

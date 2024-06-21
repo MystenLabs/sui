@@ -30,4 +30,13 @@ module std::AModule {
     fun double_three() {
         double_except_three(3);
     }
+
+    public macro fun abort_() {
+        assert!(false);
+    }
+
+    #[test]
+    fun abort_in_macro_same_module() {
+        abort_!();
+    }
 }

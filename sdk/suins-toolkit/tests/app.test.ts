@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // import { faker } from '@faker-js/faker';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { SuinsClient } from '../src';

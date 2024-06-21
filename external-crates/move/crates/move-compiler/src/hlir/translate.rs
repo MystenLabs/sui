@@ -9,6 +9,7 @@ use crate::{
     hlir::{
         ast::{self as H, Block, BlockLabel, MoveOpAnnotation, UnpackType},
         detect_dead_code::program as detect_dead_code_analysis,
+        match_compilation,
     },
     ice,
     naming::ast as N,
@@ -16,8 +17,10 @@ use crate::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, VariantName,
     },
     shared::{
+        matching::{new_match_var_name, MatchContext, MATCH_TEMP_PREFIX},
         process_binops,
-        string_utils::{debug_print, format_oxford_list},
+        program_info::TypingProgramInfo,
+        string_utils::debug_print,
         unique_map::UniqueMap,
         *,
     },
@@ -73,9 +76,6 @@ fn translate_block_label(lbl: N::BlockLabel) -> H::BlockLabel {
 const TEMP_PREFIX: &str = "%";
 static TEMP_PREFIX_SYMBOL: Lazy<Symbol> = Lazy::new(|| TEMP_PREFIX.into());
 
-const MATCH_TEMP_PREFIX: &str = "__match_tmp%";
-pub static MATCH_TEMP_PREFIX_SYMBOL: Lazy<Symbol> = Lazy::new(|| MATCH_TEMP_PREFIX.into());
-
 fn new_temp_name(context: &mut Context) -> Symbol {
     format!(
         "{}{}{}",
@@ -118,23 +118,20 @@ pub fn display_var(s: Symbol) -> DisplayVar {
 // Context
 //**************************************************************************************************
 
-type VariantFieldIndicies = UniqueMap<
-    ModuleIdent,
-    UniqueMap<DatatypeName, UniqueMap<VariantName, UniqueMap<Field, usize>>>,
->;
-
 pub(super) struct HLIRDebugFlags {
     pub(super) match_variant_translation: bool,
+    pub(super) match_translation: bool,
+    pub(super) match_specialization: bool,
+    pub(super) match_work_queue: bool,
     pub(super) function_translation: bool,
     pub(super) eval_order: bool,
 }
 
 pub(super) struct Context<'env> {
     pub env: &'env mut CompilationEnv,
+    pub info: Arc<TypingProgramInfo>,
     pub debug: HLIRDebugFlags,
     current_package: Option<Symbol>,
-    structs: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<Field, usize>>>,
-    variant_fields: VariantFieldIndicies,
     function_locals: UniqueMap<H::Var, (Mutability, H::SingleType)>,
     signature: Option<H::FunctionSignature>,
     tmp_counter: usize,
@@ -147,122 +144,22 @@ pub(super) struct Context<'env> {
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
-        pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
-        prog: &T::Program_,
+        _pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
+        prog: &T::Program,
     ) -> Self {
-        fn add_struct_fields(
-            env: &mut CompilationEnv,
-            structs: &mut UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<Field, usize>>>,
-            mident: ModuleIdent,
-            struct_defs: &UniqueMap<DatatypeName, N::StructDefinition>,
-        ) {
-            let mut cur_structs = UniqueMap::new();
-            let mut cur_structs_positional_info = UniqueMap::new();
-            for (sname, sdef) in struct_defs.key_cloned_iter() {
-                let mut fields = UniqueMap::new();
-                let field_map = match &sdef.fields {
-                    N::StructFields::Native(_) => continue,
-                    N::StructFields::Defined(fields_are_positional, m) => {
-                        cur_structs_positional_info
-                            .add(sname, *fields_are_positional)
-                            .unwrap();
-                        m
-                    }
-                };
-                for (field, (idx, _)) in field_map.key_cloned_iter() {
-                    fields.add(field, *idx).unwrap();
-                }
-                cur_structs.add(sname, fields).unwrap();
-            }
-            if let Err((_, prev_loc)) = structs.add(mident, cur_structs) {
-                let mut diag = ice!((
-                    mident.loc,
-                    format!("Structs for module {} redefined here", mident)
-                ));
-                diag.add_secondary_label((prev_loc, "Previously defined here"));
-                env.add_diag(diag);
-            }
-        }
-
-        fn add_enums(
-            env: &mut CompilationEnv,
-            variant_fields: &mut VariantFieldIndicies,
-            mident: ModuleIdent,
-            enum_defs: &UniqueMap<DatatypeName, N::EnumDefinition>,
-        ) {
-            let mut cur_enums_variants = UniqueMap::new();
-            let mut cur_enums_variant_fields = UniqueMap::new();
-            let mut cur_enums_variant_positional_info = UniqueMap::new();
-            for (ename, edef) in enum_defs.key_cloned_iter() {
-                let mut enum_variant_fields = UniqueMap::new();
-                let mut enum_variant_positional_info = UniqueMap::new();
-                let mut enum_indexed_variants = vec![];
-                for (variant_name, vdef) in edef.variants.key_cloned_iter() {
-                    let fields = match &vdef.fields {
-                        N::VariantFields::Empty => UniqueMap::new(),
-                        N::VariantFields::Defined(fields_are_positional, m) => {
-                            enum_variant_positional_info
-                                .add(variant_name, *fields_are_positional)
-                                .unwrap();
-                            UniqueMap::maybe_from_iter(
-                                m.key_cloned_iter().map(|(field, (idx, _))| (field, *idx)),
-                            )
-                            .unwrap()
-                        }
-                    };
-                    enum_indexed_variants.push((variant_name, vdef.index));
-                    enum_variant_fields.add(variant_name, fields).unwrap();
-                }
-                enum_indexed_variants.sort_by(|(_, ndx0), (_, ndx1)| ndx0.cmp(ndx1));
-                cur_enums_variants
-                    .add(
-                        ename,
-                        enum_indexed_variants
-                            .into_iter()
-                            .map(|(key, _ndx)| key)
-                            .collect::<Vec<_>>(),
-                    )
-                    .unwrap();
-                cur_enums_variant_fields
-                    .add(ename, enum_variant_fields)
-                    .unwrap();
-                cur_enums_variant_positional_info
-                    .add(ename, enum_variant_positional_info)
-                    .unwrap();
-            }
-            if let Err((_, prev_loc)) = variant_fields.add(mident, cur_enums_variant_fields) {
-                let mut diag = ice!((
-                    mident.loc,
-                    format!("Variants for module {} redefined here", mident)
-                ));
-                diag.add_secondary_label((prev_loc, "Previously defined here"));
-                env.add_diag(diag);
-            }
-        }
-
-        let mut structs = UniqueMap::new();
-        let mut variant_fields = UniqueMap::new();
-        if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
-            for (mident, mdef) in pre_compiled_lib.typing.inner.modules.key_cloned_iter() {
-                add_struct_fields(env, &mut structs, mident, &mdef.structs);
-                add_enums(env, &mut variant_fields, mident, &mdef.enums);
-            }
-        }
-        for (mident, mdef) in prog.modules.key_cloned_iter() {
-            add_struct_fields(env, &mut structs, mident, &mdef.structs);
-            add_enums(env, &mut variant_fields, mident, &mdef.enums);
-        }
         let debug = HLIRDebugFlags {
             match_variant_translation: false,
             function_translation: false,
             eval_order: false,
+            match_translation: false,
+            match_specialization: false,
+            match_work_queue: false,
         };
         Context {
             env,
+            info: prog.info.clone(),
             debug,
             current_package: None,
-            structs,
-            variant_fields,
             function_locals: UniqueMap::new(),
             signature: None,
             tmp_counter: 0,
@@ -334,38 +231,6 @@ impl<'env> Context<'env> {
         self.named_block_types.get(block_name).cloned()
     }
 
-    pub fn struct_fields(
-        &self,
-        module: &ModuleIdent,
-        struct_name: &DatatypeName,
-    ) -> Option<&UniqueMap<Field, usize>> {
-        let fields = self
-            .structs
-            .get(module)
-            .and_then(|structs| structs.get(struct_name));
-        // if fields are none, the struct must be defined in another module,
-        // in that case, there should be errors
-        assert!(fields.is_some() || self.env.has_errors());
-        fields
-    }
-
-    pub fn enum_variant_fields(
-        &self,
-        module: &ModuleIdent,
-        enum_name: &DatatypeName,
-        variant_name: &VariantName,
-    ) -> Option<&UniqueMap<Field, usize>> {
-        let fields = self
-            .variant_fields
-            .get(module)
-            .and_then(|enums| enums.get(enum_name))
-            .and_then(|variants| variants.get(variant_name));
-        // if fields are none, the variant must be defined in another module,
-        // in that case, there should be errors
-        assert!(fields.is_some() || self.env.has_errors());
-        fields
-    }
-
     fn counter_next(&mut self) -> usize {
         self.tmp_counter += 1;
         self.tmp_counter
@@ -375,6 +240,40 @@ impl<'env> Context<'env> {
         self.signature = None;
         self.named_block_binders = UniqueMap::new();
         self.named_block_types = UniqueMap::new();
+    }
+}
+
+impl MatchContext<true> for Context<'_> {
+    fn env(&mut self) -> &mut CompilationEnv {
+        self.env
+    }
+
+    fn env_ref(&self) -> &CompilationEnv {
+        self.env
+    }
+
+    /// Makes a new `naming/ast.rs` variable. Does _not_ record it as a function local, since this
+    /// should only be called in match compilation, which will have its body processed in HLIR
+    /// translation after expansion.
+    fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var {
+        let id = self.counter_next();
+        let name = new_match_var_name(&name, id);
+        // NOTE: this color is "wrong" insofar as it really should reflect whatever the current
+        // color scope is. Since these are only used as match temporaries, however, and they have
+        // names that may not be written as input, it's impossible for these to shadow macro
+        // argument names.
+        sp(
+            loc,
+            N::Var_ {
+                name,
+                id: id as u16,
+                color: 0,
+            },
+        )
+    }
+
+    fn program_info(&self) -> &program_info::ProgramInfo<true> {
+        self.info.as_ref()
     }
 }
 
@@ -389,11 +288,14 @@ pub fn program(
 ) -> H::Program {
     detect_dead_code_analysis(compilation_env, &prog);
 
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog.inner);
-    let T::Program_ { modules: tmodules } = prog.inner;
+    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
+    let T::Program {
+        modules: tmodules,
+        info,
+    } = prog;
     let modules = modules(&mut context, tmodules);
 
-    H::Program { modules }
+    H::Program { modules, info }
 }
 
 fn modules(
@@ -923,9 +825,18 @@ fn tail(
             }
         }
 
-        E::Match(_subject, _arms) => {
-            context.env.add_diag(ice!((eloc, "ICE unexpanded match")));
-            None
+        E::Match(subject, arms) => {
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
+            let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            let result = tail(context, block, expected_type, compiled);
+            debug_print!(context.debug.match_variant_translation,
+                         (lines "block" => block; verbose),
+                         (opt "result" => &result));
+            result
         }
 
         E::VariantMatch(subject, (_module, enum_name), arms) => {
@@ -1041,7 +952,6 @@ fn tail(
             })
         }
         E::Block((_, seq)) => tail_block(context, block, expected_type, seq),
-        E::IDEAnnotation(_, e) => tail(context, block, expected_type, *e),
 
         // -----------------------------------------------------------------------------------------
         //  statements that need to be hoisted out
@@ -1259,6 +1169,18 @@ fn value(
             }
         }
 
+        E::Match(subject, arms) => {
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
+            let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            let result = value(context, block, None, compiled);
+            debug_print!(context.debug.match_variant_translation, ("result" => &result));
+            result
+        }
+
         E::VariantMatch(subject, (_module, enum_name), arms) => {
             let subject_out_type = type_(context, subject.ty.clone());
             let subject = Box::new(value(context, block, Some(&subject_out_type), *subject));
@@ -1350,7 +1272,6 @@ fn value(
             bound_exp
         }
         E::Block((_, seq)) => value_block(context, block, Some(&out_type), eloc, seq),
-        E::IDEAnnotation(_, e) => value(context, block, expected_type, *e),
 
         // -----------------------------------------------------------------------------------------
         //  calls
@@ -1408,10 +1329,10 @@ fn value(
 
             let base_types = base_types(context, arg_types);
 
-            let decl_fields = context.struct_fields(&module_ident, &struct_name);
+            let decl_fields = context.info.struct_fields(&module_ident, &struct_name);
 
             let mut texp_fields: Vec<(usize, Field, usize, N::Type, T::Exp)> =
-                if let Some(field_map) = decl_fields {
+                if let Some(ref field_map) = decl_fields {
                     fields
                         .into_iter()
                         .map(|(f, (exp_idx, (bt, tf)))| {
@@ -1485,10 +1406,13 @@ fn value(
         E::PackVariant(module_ident, enum_name, variant_name, arg_types, fields) => {
             let base_types = base_types(context, arg_types);
 
-            let decl_fields = context.enum_variant_fields(&module_ident, &enum_name, &variant_name);
+            let decl_fields =
+                context
+                    .info
+                    .enum_variant_fields(&module_ident, &enum_name, &variant_name);
 
             let mut texp_fields: Vec<(usize, Field, usize, N::Type, T::Exp)> =
-                if let Some(field_map) = decl_fields {
+                if let Some(ref field_map) = decl_fields {
                     fields
                         .into_iter()
                         .map(|(f, (exp_idx, (bt, tf)))| {
@@ -1681,34 +1605,8 @@ fn value(
             context.env.add_diag(ice!((eloc, "ICE unexpanded use")));
             error_exp(eloc)
         }
-        E::Match(_subject, _arms) => {
-            context.env.add_diag(ice!((eloc, "ICE unexpanded match")));
-            error_exp(eloc)
-        }
         E::UnresolvedError => {
             assert!(context.env.has_errors());
-            make_exp(HE::UnresolvedError)
-        }
-        E::AutocompleteDotAccess {
-            base_exp: _,
-            methods,
-            fields,
-        } => {
-            if !(context.env.ide_mode()) {
-                context
-                    .env
-                    .add_diag(ice!((eloc, "Found autocomplete outside of IDE mode")));
-            };
-            let names = methods
-                .into_iter()
-                .map(|(m, f)| format!("{m}::{f}"))
-                .chain(fields.into_iter().map(|n| format!("{n}")))
-                .collect::<Vec<_>>();
-            let msg = format!(
-                "Autocompletes to: {}",
-                format_oxford_list!("or", "'{}'", names)
-            );
-            context.env.add_diag(diag!(IDE::Autocomplete, (eloc, msg)));
             make_exp(HE::UnresolvedError)
         }
     };
@@ -1916,6 +1814,17 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 },
             ));
         }
+        E::Match(subject, arms) => {
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
+            let subject_type = subject.ty.clone();
+            let compiled = match_compilation::compile_match(context, &subject_type, *subject, arms);
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            statement(context, block, compiled);
+            debug_print!(context.debug.match_variant_translation, (lines "block" => block));
+        }
         E::VariantMatch(subject, (_module, enum_name), arms) => {
             let subject = Box::new(value(context, block, None, *subject));
             let arms = arms
@@ -1974,7 +1883,6 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             }
         }
         E::Block((_, seq)) => statement_block(context, block, seq),
-        E::IDEAnnotation(_, e) => statement(context, block, *e),
         E::Return(rhs) => {
             let expected_type = context.signature.as_ref().map(|s| s.return_type.clone());
             let exp = value(context, block, expected_type.as_ref(), *rhs);
@@ -2052,7 +1960,6 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError
-        | E::AutocompleteDotAccess { .. }
         | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
 
         E::Value(_) | E::Unit { .. } => (),
@@ -2062,9 +1969,6 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         // -----------------------------------------------------------------------------------------
         E::Use(_) => {
             context.env.add_diag(ice!((eloc, "ICE unexpanded use")));
-        }
-        E::Match(_subject, _arms) => {
-            context.env.add_diag(ice!((eloc, "ICE unexpanded match")));
         }
     }
 }
@@ -2418,7 +2322,7 @@ fn assign_struct_fields(
     s: &DatatypeName,
     tfields: Fields<(N::Type, T::LValue)>,
 ) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
-    let decl_fields = context.struct_fields(m, s).cloned();
+    let decl_fields = context.info.struct_fields(m, s);
     let mut tfields_vec: Vec<_> = match decl_fields {
         Some(m) => tfields
             .into_iter()
@@ -2448,7 +2352,7 @@ fn assign_variant_fields(
     v: &VariantName,
     tfields: Fields<(N::Type, T::LValue)>,
 ) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
-    let decl_fields = context.enum_variant_fields(m, e, v).cloned();
+    let decl_fields = context.info.enum_variant_fields(m, e, v);
     let mut tfields_vec: Vec<_> = match decl_fields {
         Some(m) => tfields
             .into_iter()

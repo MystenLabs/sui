@@ -138,7 +138,7 @@ impl StateSnapshotReaderV1 {
         let progress_bar = m.add(
             ProgressBar::new(files.len() as u64).with_style(
                 ProgressStyle::with_template(
-                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .ref files done\n({msg})",
+                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .ref files done ({msg})",
                 )
                 .unwrap(),
             ),
@@ -170,7 +170,7 @@ impl StateSnapshotReaderV1 {
         &mut self,
         perpetual_db: &AuthorityPerpetualTables,
         abort_registration: AbortRegistration,
-        sender: Option<tokio::sync::mpsc::Sender<Accumulator>>,
+        sender: Option<tokio::sync::mpsc::Sender<(Accumulator, u64)>>,
     ) -> Result<()> {
         // This computes and stores the sha3 digest of object references in REFERENCE file for each
         // bucket partition. When downloading objects, we will match sha3 digest of object references
@@ -239,7 +239,7 @@ impl StateSnapshotReaderV1 {
 
     fn spawn_accumulation_tasks(
         &self,
-        sender: tokio::sync::mpsc::Sender<Accumulator>,
+        sender: tokio::sync::mpsc::Sender<(Accumulator, u64)>,
         num_part_files: usize,
     ) -> JoinHandle<()> {
         // Spawn accumulation progress bar
@@ -249,7 +249,7 @@ impl StateSnapshotReaderV1 {
         let accum_progress_bar = self.m.add(
              ProgressBar::new(num_part_files as u64).with_style(
                  ProgressStyle::with_template(
-                     "[{elapsed_precise}] {wide_bar} {pos} out of {len} ref files accumulated ({msg})",
+                     "[{elapsed_precise}] {wide_bar} {pos} out of {len} ref files accumulated from snapshot ({msg})",
                  )
                  .unwrap(),
              ),
@@ -306,9 +306,10 @@ impl StateSnapshotReaderV1 {
                         let sender_clone = sender.clone();
                         tokio::spawn(async move {
                             let mut partial_acc = Accumulator::default();
+                            let num_objects = obj_digests.len();
                             partial_acc.insert_all(obj_digests);
                             sender_clone
-                                .send(partial_acc)
+                                .send((partial_acc, num_objects as u64))
                                 .await
                                 .expect("Unable to send accumulator from snapshot reader");
                         })
@@ -350,7 +351,7 @@ impl StateSnapshotReaderV1 {
         let obj_progress_bar = self.m.add(
             ProgressBar::new(input_files.len() as u64).with_style(
                 ProgressStyle::with_template(
-                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .obj files done\n({msg})",
+                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .obj files done ({msg})",
                 )
                 .unwrap(),
             ),

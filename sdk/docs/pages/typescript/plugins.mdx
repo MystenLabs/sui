@@ -1,0 +1,264 @@
+# Transaction Plugins
+
+import { Callout } from 'nextra/components';
+
+<Callout type="warning">
+	The `Transaction` plugin API is experimental and may change rapidly as it is being developed.
+</Callout>
+
+This document describes the plugin API for the `Transaction` builder. It covers internal details
+intended for developers interested in extending the `Transaction` builder. Developers using the
+`Transaction` builder to build transactions do not need this level of detail. The `Transaction`
+builder includes a plugin system designed to extend how transactions are built. The two primary
+goals are:
+
+1. Allow developers to customize how data is resolved when building transactions.
+2. Provide a way for developers to extend the core commands that can be added to transactions.
+
+The Plugin API consists of three main components: serialization plugins, build plugins, and
+Transaction Intents. Serialization and build plugins act like middleware, allowing developers to
+modify the data and commands added to a transaction before it is serialized to JSON or built into
+BCS bytes. Transaction Intents are custom representations of user intents for a transaction,
+eventually resolved to one or more commands in the transaction.
+
+## Contents of a Transaction
+
+When a `Transaction` is created (e.g., `new Transaction()`), it is initialized with an empty
+[TransactionDataBuilder](/typedoc/classes/_mysten_sui.transactions.TransactionDataBuilder.html)
+instance which stores the state of the partially built transaction. The full API of the
+`TransactionDataBuilder` won't be covered here, but you can find the available methods and
+properties in the
+[typedoc definition](/typedoc/classes/_mysten_sui.transactions.TransactionDataBuilder.html).
+
+As commands are added to the `Transaction`, they are stored in the `TransactionDataBuilder`. The
+`TransactionData` contains a list of commands and their arguments. The exact arguments a command
+takes depend on the command, but they will be one of a few different types:
+
+- `GasCoin`: A reference to the coin used to pay for gas.
+- `Input`: An input to the transaction (described below).
+- `Result`: The result of a previous command.
+- `NestedResult`: If a previous command returns a tuple (e.g., `SplitCoin`), a `NestedResult` is
+  used to refer to a specific value in that tuple.
+
+Transactions also store a list of Inputs, which refer to user-provided values. Inputs can either be
+objects or Pure values and can be represented in several different ways:
+
+- `Pure`: An input value serialized to BCS. Pure values are generally scalar values or simple
+  wrappers like options or vectors and cannot represent object types.
+- `Object`: A fully resolved object reference, which will be one of the following types:
+  - `ImmOrOwnedObject`: A reference to an object, including the object's `id`, `version`, and
+    `digest`.
+  - `SharedObject`: A reference to a shared object, including the object's `id`,
+    `initialSharedVersion`, and whether the shared object is used mutably.
+  - `Receiving`: A reference to a receiving object, including the object's `id`, `version`, and
+    `digest`.
+- `UnresolvedPure`: A placeholder for a pure value that has not been serialized to BCS.
+- `UnresolvedObject`: A partial reference to an object, often containing just the object's `id`, but
+  may also include a version, digest, or initialSharedVersion.
+
+## Lifecycle of a Transaction
+
+Because transactions can contain `UnresolvedPure` and `UnresolvedObject` inputs, these values need
+to be resolved before the transaction can be serialized to BCS. However, these unresolved inputs can
+be represented in JSON. What may not be able to be represented in JSON are Transaction Intents.
+Transaction Intents represent custom concepts added by plugins or third-party SDKs. To account for
+this, the build process of a transaction is split into two phases: serialization and building.
+Serialization prepares the transaction to be serialized to JSON by running serialization plugins,
+and resolving any unsupported intents. The Build phase then runs, which runs build plugins and
+resolves any UnresolvedPure and UnresolvedObject inputs, before the transaction is serialized to
+BCS.
+
+## Serialization Plugins
+
+Serialization plugins can be added to a `Transaction` by calling the `addSerializationPlugin` method
+on a `Transaction` instance. Serialization plugins are called in the order they are added and are
+passed the `TransactionDataBuilder` instance of the transaction.
+
+```typescript
+const transaction = new Transaction();
+
+transaction.addSerializationPlugin(async (transactionData, buildOptions, next) => {
+	// Modify the data before running other serialization steps
+	await next();
+	// Modify the data after running other serialization steps
+});
+```
+
+## Build Plugins
+
+The build phase is responsible for taking unresolved objects and unresolved pure values and
+converting them to their resolved versions by querying the RPC API to fetch the missing data. Build
+plugins can hook into this phase to resolve some of this data from a cache instead, avoiding extra
+API calls.
+
+Build plugins work just like serialization plugins and can be added to a `Transaction` by calling
+the `addBuildPlugin` method on a `Transaction` instance. Build plugins are called in the order they
+are added and are passed the `TransactionDataBuilder` instance of the transaction.
+
+The following example demonstrates a simplified version of the caching plugin used by the
+`SerialTransactionExecutor` and `ParallelTransactionExecutor` classes. This example works by adding
+missing object versions and digest from a cache. Updating the cache (which could be done by looking
+at transaction effects of previous transactions) is not covered in this example.
+
+```typescript
+import {
+	BuildTransactionOptions,
+	Transaction,
+	TransactionDataBuilder,
+} from '@mysten/sui/transactions';
+
+const objectCache = new Map<string, { objectId: string; version: string; digest: string }>();
+
+function simpleObjectCachePlugin(
+	transactionData: TransactionDataBuilder,
+	_options: BuildTransactionOptions,
+	next: () => Promise<void>,
+) {
+	for (const input of transactionData.inputs) {
+		if (!input.UnresolvedObject) continue;
+
+		const cached = objectCache.get(input.UnresolvedObject.objectId);
+
+		if (!cached) continue;
+
+		if (cached.version && !input.UnresolvedObject.version) {
+			input.UnresolvedObject.version = cached.version;
+		}
+
+		if (cached.digest && !input.UnresolvedObject.digest) {
+			input.UnresolvedObject.digest = cached.digest;
+		}
+	}
+
+	return next();
+}
+
+// Example usage of the build plugin
+const transaction = new Transaction();
+transaction.addBuildPlugin(simpleObjectCachePlugin);
+```
+
+## Transaction Intents
+
+Transaction Intents consist of two parts: adding the intent to the transaction and resolving the
+intent to standard commands.
+
+Adding an intent is similar to adding any other command to a transaction:
+
+```typescript
+import { Commands, Transaction } from '@mysten/sui/transactions';
+
+const transaction = new Transaction();
+
+transaction.add(
+	Commands.Intent({
+		name: 'TransferToSender',
+		inputs: {
+			objects: [transaction.object(someId)],
+		},
+	}),
+);
+```
+
+To make our custom `TransferToSender` intent easier to use, we can write a helper function that
+wraps things up a bit. The `add` method on transactions accepts a function that will be passed the
+current transaction instance. This allows us to create a helper that automatically adds the intent:
+
+```typescript
+import { Commands, Transaction, TransactionObjectInput } from '@mysten/sui/transactions';
+
+function transferToSender(objects: TransactionObjectInput[]) {
+	return (tx: Transaction) => {
+		tx.add(
+			Commands.Intent({
+				name: 'TransferToSender',
+				inputs: {
+					objects: objects.map((obj) => tx.object(obj)),
+				},
+			}),
+		);
+	};
+}
+
+const transaction = new Transaction();
+
+transaction.add(transferToSender(['0x1234']));
+```
+
+Now that we've added the intent to the transaction, we need to resolve the intent to standard
+commands. To do this, we'll use the `addIntentResolver` method on the `Transaction` instance. The
+`addIntentResolver` method works like serialization and build plugins but will only be called if the
+intent is present in the transaction.
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+const transaction = new Transaction();
+
+transaction.addIntentResolver('TransferToSender', resolveTransferToSender);
+
+async function resolveTransferToSender(
+	transactionData: TransactionDataBuilder,
+	buildOptions: BuildTransactionOptions,
+	next: () => Promise<void>,
+) {
+	if (!transactionData.sender) {
+		throw new Error('Sender must be set to resolve TransferToSender');
+	}
+
+	// Add an input that references the sender's address
+	const addressInput = Inputs.Pure(bcs.Address.serialize(transactionData.sender));
+	transactionData.inputs.push(addressInput);
+	// Get the index of the input to use when adding the TransferObjects command
+	const addressIndex = transactionData.inputs.length - 1;
+
+	for (const [index, transaction] of transactionData.commands.entries()) {
+		if (transaction.$kind !== '$Intent' || transaction.$Intent.name !== 'TransferToSender') {
+			continue;
+		}
+
+		// This will replace the intent command with the correct TransferObjects command
+		transactionData.replaceCommand(index, [
+			Commands.TransferObjects(
+				// The inputs for intents are not currently typed, so we need to cast to the correct type here
+				transaction.$Intent.inputs.objects as Extract<
+					TransactionObjectArgument,
+					{ $kind: 'Input' }
+				>,
+				// This is a CallArg referencing the addressInput we added above
+				{
+					Input: addressIndex,
+				},
+			),
+		]);
+	}
+
+	// Plugins always need to call next() to continue the build process
+	return next();
+}
+```
+
+Manually adding intent resolvers to a transaction can be cumbersome, so we can add the resolver
+automatically when our `transferToSender` helper is called:
+
+```typescript
+import { Commands, Transaction, TransactionObjectInput } from '@mysten/sui/transactions';
+
+function transferToSender(objects: TransactionObjectInput[]) {
+	return (tx: Transaction) => {
+		// As long as we are adding the same function reference, it will only be added once
+		tx.addIntentResolver('TransferToSender', resolveTransferToSender);
+		tx.add(
+			Commands.Intent({
+				name: 'TransferToSender',
+				inputs: {
+					objects: objects.map((obj) => tx.object(obj)),
+				},
+			}),
+		);
+	};
+}
+
+const transaction = new Transaction();
+transaction.add(transferToSender(['0x1234']));
+```

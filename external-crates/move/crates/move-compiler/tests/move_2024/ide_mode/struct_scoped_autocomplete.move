@@ -13,7 +13,7 @@ module a::m {
 module a::n {
     use a::m::{A,B};
 
-    fun foo(_a: A, _b: B) {
+    public fun foo(_a: A, _b: B) {
         let _tmp1 = _a.;
         let _tmp2 = _b.;
     }

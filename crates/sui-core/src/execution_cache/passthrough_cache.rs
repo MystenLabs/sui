@@ -182,6 +182,10 @@ impl ObjectCacheRead for PassthroughCache {
     ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
         self.store.get_latest_marker(object_id, epoch_id)
     }
+
+    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        self.store.perpetual_tables.get_highest_pruned_checkpoint()
+    }
 }
 
 impl TransactionCacheRead for PassthroughCache {

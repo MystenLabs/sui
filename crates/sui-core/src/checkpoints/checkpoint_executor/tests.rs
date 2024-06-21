@@ -27,6 +27,8 @@ use typed_store::Map;
 /// picks up where it left off in the event of a mid-epoch node crash.
 #[tokio::test]
 pub async fn test_checkpoint_executor_crash_recovery() {
+    telemetry_subscribers::init_for_testing();
+
     let buffer_size = num_cpus::get() * 2;
     let tempdir = tempdir().unwrap();
     let checkpoint_store = CheckpointStore::new(tempdir.path());
@@ -390,8 +392,9 @@ async fn init_executor_test(
 
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
+    let epoch_store = state.epoch_store_for_testing();
 
-    let accumulator = StateAccumulator::new(state.get_accumulator_store().clone());
+    let accumulator = StateAccumulator::new(state.get_accumulator_store().clone(), &epoch_store);
     let accumulator = Arc::new(accumulator);
 
     let executor = CheckpointExecutor::new_for_tests(

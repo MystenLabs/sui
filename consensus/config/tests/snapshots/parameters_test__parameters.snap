@@ -24,4 +24,5 @@ tonic:
     secs: 5
     nanos: 0
   connection_buffer_size: 33554432
-  message_size_limit: 8388608
+  excessive_message_size: 16777216
+  message_size_limit: 67108864

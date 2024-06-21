@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/zksend",
-	"version": "0.8.2",
+	"version": "0.9.9",
 	"description": "TODO: Write Description",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
@@ -42,10 +42,10 @@
 		"@mysten/build-scripts": "workspace:*",
 		"@types/node": "^20.4.2",
 		"typescript": "^5.3.3",
-		"vitest": "^0.33.0"
+		"vitest": "^1.6.0"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
 		"mitt": "^3.0.1",
 		"nanostores": "^0.9.3",

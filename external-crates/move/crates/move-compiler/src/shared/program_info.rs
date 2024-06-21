@@ -12,7 +12,7 @@ use crate::{
         self as N, DatatypeTypeParameter, EnumDefinition, FunctionSignature, ResolvedUseFuns,
         StructDefinition, SyntaxMethods, Type,
     },
-    parser::ast::{ConstantName, DatatypeName, FunctionName},
+    parser::ast::{ConstantName, DatatypeName, Field, FunctionName, VariantName},
     shared::unique_map::UniqueMap,
     shared::*,
     typing::ast::{self as T},
@@ -115,10 +115,14 @@ macro_rules! program_info {
 impl TypingProgramInfo {
     pub fn new(
         pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
-        prog: &T::Program_,
+        modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         mut module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>,
     ) -> Self {
+        struct Prog<'a> {
+            modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
+        }
         let mut module_use_funs = Some(&mut module_use_funs);
+        let prog = Prog { modules };
         program_info!(pre_compiled_lib, prog, typing, module_use_funs)
     }
 }
@@ -128,6 +132,30 @@ impl NamingProgramInfo {
         // use_funs will be populated later
         let mut module_use_funs: Option<&mut BTreeMap<ModuleIdent, ResolvedUseFuns>> = None;
         program_info!(pre_compiled_lib, prog, naming, module_use_funs)
+    }
+
+    pub fn set_use_funs(&mut self, module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>) {
+        for (mident, use_funs) in module_use_funs {
+            let use_funs_ref = &mut self.modules.get_mut(&mident).unwrap().use_funs;
+            assert!(use_funs_ref.is_empty());
+            *use_funs_ref = use_funs;
+        }
+    }
+
+    pub fn take_use_funs(self) -> BTreeMap<ModuleIdent, ResolvedUseFuns> {
+        self.modules
+            .into_iter()
+            .map(|(mident, minfo)| (mident, minfo.use_funs))
+            .collect()
+    }
+
+    pub fn set_module_syntax_methods(
+        &mut self,
+        mident: ModuleIdent,
+        syntax_methods: SyntaxMethods,
+    ) {
+        let syntax_methods_ref = &mut self.modules.get_mut(&mident).unwrap().syntax_methods;
+        *syntax_methods_ref = syntax_methods;
     }
 }
 
@@ -224,30 +252,103 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
         let constants = &self.module(m).constants;
         constants.get(n).expect("ICE should have failed in naming")
     }
-}
 
-impl NamingProgramInfo {
-    pub fn set_use_funs(&mut self, module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>) {
-        for (mident, use_funs) in module_use_funs {
-            let use_funs_ref = &mut self.modules.get_mut(&mident).unwrap().use_funs;
-            assert!(use_funs_ref.is_empty());
-            *use_funs_ref = use_funs;
+    pub fn is_struct(&self, module: &ModuleIdent, datatype_name: &DatatypeName) -> bool {
+        matches!(
+            self.datatype_kind(module, datatype_name),
+            DatatypeKind::Struct
+        )
+    }
+
+    pub fn struct_fields(
+        &self,
+        module: &ModuleIdent,
+        struct_name: &DatatypeName,
+    ) -> Option<UniqueMap<Field, usize>> {
+        let fields = match &self.struct_definition(module, struct_name).fields {
+            N::StructFields::Defined(_, fields) => Some(fields.ref_map(|_, (ndx, _)| *ndx)),
+            N::StructFields::Native(_) => None,
+        };
+        fields
+    }
+
+    /// Indicates if the struct is positional. Returns false on native.
+    pub fn struct_is_positional(&self, module: &ModuleIdent, struct_name: &DatatypeName) -> bool {
+        match self.struct_definition(module, struct_name).fields {
+            N::StructFields::Defined(is_positional, _) => is_positional,
+            N::StructFields::Native(_) => false,
         }
     }
 
-    pub fn take_use_funs(self) -> BTreeMap<ModuleIdent, ResolvedUseFuns> {
-        self.modules
+    /// Returns the enum variant names in sorted order.
+    pub fn enum_variants(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+    ) -> Vec<VariantName> {
+        let mut names = self
+            .enum_definition(module, enum_name)
+            .variants
+            .ref_map(|_, vdef| vdef.index)
+            .clone()
             .into_iter()
-            .map(|(mident, minfo)| (mident, minfo.use_funs))
-            .collect()
+            .collect::<Vec<_>>();
+        names.sort_by(|(_, ndx0), (_, ndx1)| ndx0.cmp(ndx1));
+        names.into_iter().map(|(name, _ndx)| name).collect()
     }
 
-    pub fn set_module_syntax_methods(
-        &mut self,
-        mident: ModuleIdent,
-        syntax_methods: SyntaxMethods,
-    ) {
-        let syntax_methods_ref = &mut self.modules.get_mut(&mident).unwrap().syntax_methods;
-        *syntax_methods_ref = syntax_methods;
+    pub fn enum_variant_fields(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+        variant_name: &VariantName,
+    ) -> Option<UniqueMap<Field, usize>> {
+        let Some(variant) = self
+            .enum_definition(module, enum_name)
+            .variants
+            .get(variant_name)
+        else {
+            return None;
+        };
+        match &variant.fields {
+            N::VariantFields::Defined(_, fields) => Some(fields.ref_map(|_, (ndx, _)| *ndx)),
+            N::VariantFields::Empty => Some(UniqueMap::new()),
+        }
+    }
+
+    /// Indicates if the enum variant is empty.
+    pub fn enum_variant_is_empty(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+        variant_name: &VariantName,
+    ) -> bool {
+        let vdef = self
+            .enum_definition(module, enum_name)
+            .variants
+            .get(variant_name)
+            .expect("ICE should have failed during naming");
+        match &vdef.fields {
+            N::VariantFields::Empty => true,
+            N::VariantFields::Defined(_, _m) => false,
+        }
+    }
+
+    /// Indicates if the enum variant is positional. Returns false on empty or missing.
+    pub fn enum_variant_is_positional(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+        variant_name: &VariantName,
+    ) -> bool {
+        let vdef = self
+            .enum_definition(module, enum_name)
+            .variants
+            .get(variant_name)
+            .expect("ICE should have failed during naming");
+        match &vdef.fields {
+            N::VariantFields::Empty => false,
+            N::VariantFields::Defined(is_positional, _m) => *is_positional,
+        }
     }
 }

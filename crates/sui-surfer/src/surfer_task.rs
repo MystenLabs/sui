@@ -128,11 +128,16 @@ impl SurferTask {
     pub async fn surf(mut self) -> SurfStatistics {
         loop {
             let entry_functions = self.state.entry_functions.read().await.clone();
-            self.surf_strategy
-                .surf_for_a_while(&mut self.state, entry_functions, &self.exit_rcv)
-                .await;
-            if self.exit_rcv.has_changed().unwrap() {
-                return self.state.stats;
+
+            tokio::select! {
+                _ = self.surf_strategy
+                .surf_for_a_while(&mut self.state, entry_functions) => {
+                    continue;
+                }
+
+                _ = self.exit_rcv.changed() => {
+                    return self.state.stats;
+                }
             }
         }
     }

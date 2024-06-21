@@ -1,28 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{accept::AcceptFormat, response::ResponseContent, types::JsonObject, Result};
+use crate::{accept::AcceptFormat, reader::StateReader, response::ResponseContent, Result};
 use axum::extract::{Path, State};
-use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    object::Object,
-    storage::ReadStore,
-};
+use sui_sdk2::types::{Object, ObjectId, Version};
 use tap::Pipe;
 
 pub const GET_OBJECT_PATH: &str = "/objects/:object_id";
 
-pub async fn get_object<S: ReadStore>(
-    Path(object_id): Path<ObjectID>,
+pub async fn get_object(
+    Path(object_id): Path<ObjectId>,
     accept: AcceptFormat,
-    State(state): State<S>,
-) -> Result<ResponseContent<Object, JsonObject>> {
+    State(state): State<StateReader>,
+) -> Result<ResponseContent<Object>> {
     let object = state
-        .get_object(&object_id)?
+        .get_object(object_id)?
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(JsonObject::from_object(&object)),
+        AcceptFormat::Json => ResponseContent::Json(object),
         AcceptFormat::Bcs => ResponseContent::Bcs(object),
     }
     .pipe(Ok)
@@ -30,17 +26,17 @@ pub async fn get_object<S: ReadStore>(
 
 pub const GET_OBJECT_WITH_VERSION_PATH: &str = "/objects/:object_id/version/:version";
 
-pub async fn get_object_with_version<S: ReadStore>(
-    Path((object_id, version)): Path<(ObjectID, SequenceNumber)>,
+pub async fn get_object_with_version(
+    Path((object_id, version)): Path<(ObjectId, Version)>,
     accept: AcceptFormat,
-    State(state): State<S>,
-) -> Result<ResponseContent<Object, JsonObject>> {
+    State(state): State<StateReader>,
+) -> Result<ResponseContent<Object>> {
     let object = state
-        .get_object_by_key(&object_id, version)?
+        .get_object_with_version(object_id, version)?
         .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?;
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(JsonObject::from_object(&object)),
+        AcceptFormat::Json => ResponseContent::Json(object),
         AcceptFormat::Bcs => ResponseContent::Bcs(object),
     }
     .pipe(Ok)
@@ -48,19 +44,19 @@ pub async fn get_object_with_version<S: ReadStore>(
 
 #[derive(Debug)]
 pub struct ObjectNotFoundError {
-    object_id: ObjectID,
-    version: Option<SequenceNumber>,
+    object_id: ObjectId,
+    version: Option<Version>,
 }
 
 impl ObjectNotFoundError {
-    pub fn new(object_id: ObjectID) -> Self {
+    pub fn new(object_id: ObjectId) -> Self {
         Self {
             object_id,
             version: None,
         }
     }
 
-    pub fn new_with_version(object_id: ObjectID, version: SequenceNumber) -> Self {
+    pub fn new_with_version(object_id: ObjectId, version: Version) -> Self {
         Self {
             object_id,
             version: Some(version),

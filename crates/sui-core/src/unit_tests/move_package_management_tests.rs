@@ -20,7 +20,7 @@ async fn test_manage_package_update() {
     build_config.config.lock_file = Some(lock_file_path.clone());
     build_config
         .clone()
-        .build(path.clone())
+        .build(&path)
         .expect("Move package did not build");
     // Update the lock file with placeholder compiler version so this isn't bumped every release.
     build_config
@@ -38,7 +38,7 @@ async fn test_manage_package_update() {
         latest_id,
         version_number: 5,
     };
-    let _ = manage_package.execute(Some(lock_file_path.clone()), build_config.config);
+    let _ = manage_package.execute(Some(&lock_file_path), build_config.config);
 
     let mut lock_file_contents = String::new();
     File::open(lock_file_path)

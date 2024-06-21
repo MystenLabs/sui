@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/graphql-transport",
-	"version": "0.1.0",
+	"version": "0.2.8",
 	"description": "A GraphQL transport to allow SuiClient to work with RPC 2.0",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
@@ -31,7 +31,7 @@
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
 		"test:e2e:nowait": "vitest run e2e",
-		"test:e2e:prepare": "docker-compose down && docker-compose up -d && cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator -- --with-indexer --use-indexer-v2 --pg-port 5435 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125",
+		"test:e2e:prepare": "docker-compose down && docker-compose up -d && cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator -- --with-indexer --pg-port 5435 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125",
 		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 180000 && vitest"
 	},
 	"repository": {
@@ -54,13 +54,13 @@
 		"@types/node": "^20.4.2",
 		"graphql-config": "^5.0.3",
 		"typescript": "^5.3.3",
-		"vitest": "^0.33.0",
+		"vitest": "^1.6.0",
 		"wait-on": "^7.0.1"
 	},
 	"dependencies": {
 		"@graphql-typed-document-node/core": "^3.2.0",
 		"@mysten/bcs": "workspace:*",
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"graphql": "^16.8.1"
 	}
 }

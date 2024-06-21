@@ -2,7 +2,7 @@
 	"name": "@mysten/deepbook",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui Deepbook SDK",
-	"version": "0.7.8",
+	"version": "0.8.8",
 	"license": "Apache-2.0",
 	"type": "commonjs",
 	"main": "./dist/cjs/index.js",
@@ -20,7 +20,7 @@
 		"src"
 	],
 	"engines": {
-		"node": ">=16"
+		"node": ">=18"
 	},
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
@@ -33,10 +33,10 @@
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
 		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest run e2e",
-		"prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator"
+		"prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=warn,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*"
+		"@mysten/sui": "workspace:*"
 	},
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
@@ -46,7 +46,7 @@
 		"ts-retry-promise": "^0.7.0",
 		"typescript": "^5.3.3",
 		"vite": "^4.4.4",
-		"vitest": "^0.33.0",
+		"vitest": "^1.6.0",
 		"wait-on": "^7.0.1"
 	}
 }

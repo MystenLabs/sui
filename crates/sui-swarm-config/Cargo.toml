@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 anemo.workspace = true
 anyhow.workspace = true
+bcs.workspace = true
 fastcrypto.workspace = true
 rand.workspace = true
 serde.workspace = true
