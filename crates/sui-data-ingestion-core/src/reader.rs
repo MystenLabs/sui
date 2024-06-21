@@ -56,7 +56,7 @@ impl Default for ReaderOptions {
         Self {
             tick_interal_ms: 100,
             timeout_secs: 5,
-            batch_size: 100,
+            batch_size: 10,
             data_limit: 0,
         }
     }
