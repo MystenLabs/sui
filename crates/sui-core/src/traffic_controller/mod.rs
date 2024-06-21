@@ -330,7 +330,7 @@ async fn handle_error_tally(
     metrics: Arc<TrafficControllerMetrics>,
     mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
-    if !tally.error_weight.is_sampled().await {
+    if !tally.error_weight.is_sampled() {
         return Ok(());
     }
     let resp = policy.handle_tally(tally.clone());
@@ -364,15 +364,7 @@ async fn handle_spam_tally(
     metrics: Arc<TrafficControllerMetrics>,
     mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
-    let sampled = futures::future::join_all(vec![
-        tally.spam_weight.is_sampled(),
-        policy_config.spam_sample_rate.is_sampled(),
-    ])
-    .await
-    .into_iter()
-    .all(|sampled| sampled);
-
-    if !sampled {
+    if !(tally.spam_weight.is_sampled() && policy_config.spam_sample_rate.is_sampled()) {
         return Ok(());
     }
     let resp = policy.handle_tally(tally.clone());

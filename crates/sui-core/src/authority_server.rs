@@ -971,7 +971,7 @@ fn make_tonic_request_for_testing<T>(message: T) -> tonic::Request<T> {
 
 // TODO: refine error matching here
 fn normalize(err: SuiError) -> Weight {
-    match err {
+    match dbg!(err) {
         SuiError::UserInputError { .. }
         | SuiError::InvalidSignature { .. }
         | SuiError::SignerSignatureAbsent { .. }
@@ -990,14 +990,7 @@ fn normalize(err: SuiError) -> Weight {
 macro_rules! handle_with_decoration {
     ($self:ident, $func_name:ident, $request:ident) => {{
         if $self.client_id_source.is_none() {
-            return match $self.$func_name($request).await {
-                Ok((result, _)) => {
-                    Ok(result)
-                }
-                Err(err) => {
-                    Err(err)
-                }
-            }
+            return $self.$func_name($request).await.map(|(result, _)| result);
         }
 
         let client = match $self.client_id_source.as_ref().unwrap() {

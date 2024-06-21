@@ -167,10 +167,9 @@ async fn process_raw_request<L: Logger>(
         }
 
         // handle response tallying
-        let method = request.method.to_string();
         let response = process_request(request, api_version, service.call_data()).await;
         if let Some(traffic_controller) = &service.traffic_controller {
-            handle_traffic_resp(traffic_controller.clone(), client, &response, method);
+            handle_traffic_resp(traffic_controller.clone(), client, &response);
         }
 
         response
@@ -199,27 +198,24 @@ async fn handle_traffic_req(
     }
 }
 
-fn spam_weight_for_method(method: String) -> Weight {
-    // unless request requires gas payment, count against
-    // spam tally
-    match method.as_str() {
-        "sui_executeTransactionBlock" | "sui_devInspectTransactionBlock" => Weight::zero(),
-        _ => Weight::one(),
-    }
-}
-
 fn handle_traffic_resp(
     traffic_controller: Arc<TrafficController>,
     client: Option<IpAddr>,
     response: &MethodResponse,
-    method: String,
 ) {
     let error = response.error_code.map(ErrorCode::from);
     traffic_controller.tally(TrafficTally {
         direct: client,
         through_fullnode: None,
         error_weight: error.map(normalize).unwrap_or(Weight::zero()),
-        spam_weight: spam_weight_for_method(method),
+        // For now, count everything as spam with equal weight
+        // on the rpc node side, including gas-charging endpoints
+        // such as `sui_executeTransactionBlock`, as this can enable
+        // node operators who wish to rate limit their transcation
+        // traffic and incentivize high volume clients to choose a
+        // suitable rpc provider (or run their own). Later we may want
+        // to provide a weight distribution based on the method being called.
+        spam_weight: Weight::one(),
         timestamp: SystemTime::now(),
     });
 }
