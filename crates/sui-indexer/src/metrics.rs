@@ -13,6 +13,7 @@ use prometheus::{Registry, TextEncoder};
 use regex::Regex;
 use tracing::{info, warn};
 
+use mysten_metrics::histogram::Histogram as MystenHistogram;
 use mysten_metrics::RegistryService;
 
 const METRICS_ROUTE: &str = "/metrics";
@@ -106,10 +107,10 @@ pub struct IndexerMetrics {
     pub downloaded_checkpoint_timestamp_ms: IntGauge,
     pub indexed_checkpoint_timestamp_ms: IntGauge,
     pub committed_checkpoint_timestamp_ms: IntGauge,
-    // lag starting from the timestamp of the latest checkpoint to the current time
-    pub download_lag_ms: IntGauge,
-    pub index_lag_ms: IntGauge,
-    pub db_commit_lag_ms: IntGauge,
+    // checkpoint age from the timestamp of the checkpoint to the system time now
+    pub downloaded_checkpoint_age_ms: MystenHistogram,
+    pub indexed_checkpoint_age_ms: MystenHistogram,
+    pub committed_checkpoint_age_ms: MystenHistogram,
     // latencies of various steps of data ingestion.
     // checkpoint E2E latency is: fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub checkpoint_download_bytes_size: IntGauge,
@@ -289,21 +290,21 @@ impl IndexerMetrics {
                 "Timestamp of the committed checkpoint",
                 registry,
             ).unwrap(),
-            download_lag_ms: register_int_gauge_with_registry!(
-                "download_lag_ms",
-                "Lag of the latest checkpoint in milliseconds",
+            downloaded_checkpoint_age_ms: MystenHistogram::new_in_registry(
+                "downloaded_checkpoint_age_ms",
+                "Age of the downloaded checkpoint in milliseconds",
                 registry,
-            ).unwrap(),
-            index_lag_ms: register_int_gauge_with_registry!(
-                "index_lag_ms",
-                "Lag of the latest checkpoint in milliseconds",
+            ),
+            indexed_checkpoint_age_ms: MystenHistogram::new_in_registry(
+                "indexed_checkpoint_age_ms",
+                "Age of the indexed checkpoint in milliseconds",
                 registry,
-            ).unwrap(),
-            db_commit_lag_ms: register_int_gauge_with_registry!(
-                "db_commit_lag_ms",
-                "Lag of the latest checkpoint in milliseconds",
+            ),
+            committed_checkpoint_age_ms: MystenHistogram::new_in_registry(
+                "committed_checkpoint_age_ms",
+                "Age of the committed checkpoint in milliseconds",
                 registry,
-            ).unwrap(),
+            ),
             checkpoint_download_bytes_size: register_int_gauge_with_registry!(
                 "checkpoint_download_bytes_size",
                 "Size of the downloaded checkpoint in bytes",

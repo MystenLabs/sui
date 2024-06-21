@@ -5,8 +5,7 @@ use std::any::Any as StdAny;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::time::Duration;
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
@@ -18,7 +17,7 @@ use diesel::{QueryDsl, RunQueryDsl};
 use downcast::Any;
 use itertools::Itertools;
 use tap::TapFallible;
-use tracing::info;
+use tracing::{info, warn};
 
 use sui_types::base_types::ObjectID;
 
@@ -533,11 +532,19 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     stored_checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
                     insert_or_ignore_into!(checkpoints::table, stored_checkpoint_chunk, conn);
-                    let time_now_ms = chrono::Utc::now().timestamp_millis();
+                    let system_time_now = SystemTime::now();
                     for stored_checkpoint in stored_checkpoint_chunk {
-                        self.metrics
-                            .db_commit_lag_ms
-                            .set(time_now_ms - stored_checkpoint.timestamp_ms);
+                        let checkpoint_time = UNIX_EPOCH + Duration::from_millis(stored_checkpoint.timestamp_ms as u64);
+                        system_time_now
+                        .duration_since(checkpoint_time)
+                        .map(|latency| self.metrics.committed_checkpoint_age_ms.report(latency.as_millis() as u64))
+                        .tap_err(|err| {
+                            warn!(
+                                checkpoint_seq = stored_checkpoint.sequence_number,
+                                "unable to compute indexer DB commit checkpoint age: {}", err
+                            )
+                        })
+                        .ok();
                         self.metrics.max_committed_checkpoint_sequence_number.set(
                             stored_checkpoint.sequence_number,
                         );
@@ -546,7 +553,12 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                         );
                     }
                     for stored_checkpoint in stored_checkpoint_chunk {
-                        info!("Indexer lag: persisted checkpoint {} with time now {} and checkpoint time {}", stored_checkpoint.sequence_number, time_now_ms, stored_checkpoint.timestamp_ms);
+                        info!(
+                            "Checkpoint age: persisted checkpoint {} with time now {} and checkpoint time {}",
+                            stored_checkpoint.sequence_number,
+                            chrono::Utc::now().timestamp_millis(),
+                            stored_checkpoint.timestamp_ms
+                        );
                     }
                 }
                 Ok::<(), IndexerError>(())
