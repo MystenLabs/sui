@@ -409,7 +409,7 @@ impl Default for ConnectionConfig {
         Self {
             port: 8000,
             host: "127.0.0.1".to_string(),
-            db_url: "postgres://postgres@postgrespw@localhost:5432/sui_indexer".to_string(),
+            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer".to_string(),
             db_pool_size: 10,
             prom_url: "0.0.0.0".to_string(),
             prom_port: 9184,
