@@ -10,7 +10,9 @@ use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
-use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
+use crate::types::{
+    EventIndex, IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
+};
 
 #[allow(clippy::large_enum_variant)]
 pub enum ObjectChangeToCommit {
@@ -59,6 +61,11 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
     async fn persist_tx_indices(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError>;
 
     async fn persist_events(&self, events: Vec<IndexedEvent>) -> Result<(), IndexerError>;
+    async fn persist_event_indices(
+        &self,
+        event_indices: Vec<EventIndex>,
+    ) -> Result<(), IndexerError>;
+
     async fn persist_displays(
         &self,
         display_updates: BTreeMap<String, StoredDisplay>,

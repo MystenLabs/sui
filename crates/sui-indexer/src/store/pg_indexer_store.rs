@@ -40,13 +40,16 @@ use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::schema::tx_kinds;
 use crate::schema::{
-    checkpoints, display, epochs, events, objects, objects_history, objects_snapshot,
-    objects_version, packages, transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg,
-    tx_changed_objects, tx_digests, tx_input_objects, tx_recipients, tx_senders,
+    checkpoints, display, epochs, event_emit_module, event_emit_package, event_senders,
+    event_struct_instantiation, event_struct_module, event_struct_name, event_struct_package,
+    events, objects, objects_history, objects_snapshot, objects_version, packages, transactions,
+    tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects,
+    tx_recipients, tx_senders,
 };
+use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
-    insert_or_ignore_into, on_conflict_do_update, read_only_blocking,
+    insert_or_ignore_into, on_conflict_do_update, persist_chunk_into_table, read_only_blocking,
     transactional_blocking_with_retry,
 };
 
@@ -698,6 +701,137 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         .tap_err(|e| {
             tracing::error!("Failed to persist packages with error: {}", e);
         })
+    }
+
+    async fn persist_event_indices_chunk(
+        &self,
+        indices: Vec<EventIndex>,
+    ) -> Result<(), IndexerError> {
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_event_indices_chunks
+            .start_timer();
+        let len = indices.len();
+        let (
+            event_emit_packages,
+            event_emit_modules,
+            event_senders,
+            event_struct_packages,
+            event_struct_modules,
+            event_struct_names,
+            event_struct_instantiations,
+        ) = indices.into_iter().map(|i| i.split()).fold(
+            (
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            ),
+            |(
+                mut event_emit_packages,
+                mut event_emit_modules,
+                mut event_senders,
+                mut event_struct_packages,
+                mut event_struct_modules,
+                mut event_struct_names,
+                mut event_struct_instantiations,
+            ),
+             index| {
+                event_emit_packages.push(index.0);
+                event_emit_modules.push(index.1);
+                event_senders.push(index.2);
+                event_struct_packages.push(index.3);
+                event_struct_modules.push(index.4);
+                event_struct_names.push(index.5);
+                event_struct_instantiations.push(index.6);
+                (
+                    event_emit_packages,
+                    event_emit_modules,
+                    event_senders,
+                    event_struct_packages,
+                    event_struct_modules,
+                    event_struct_names,
+                    event_struct_instantiations,
+                )
+            },
+        );
+
+        // Now persist all the event indices in parallel into their tables.
+        let mut futures = vec![];
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_emit_package::table,
+                event_emit_packages,
+                &this.blocking_cp
+            )
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_emit_module::table,
+                event_emit_modules,
+                &this.blocking_cp
+            )
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(event_senders::table, event_senders, &this.blocking_cp)
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_struct_package::table,
+                event_struct_packages,
+                &this.blocking_cp
+            )
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_struct_module::table,
+                event_struct_modules,
+                &this.blocking_cp
+            )
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_struct_name::table,
+                event_struct_names,
+                &this.blocking_cp
+            )
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_struct_instantiation::table,
+                event_struct_instantiations,
+                &this.blocking_cp
+            )
+        }));
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!("Failed to join event indices futures in a chunk: {}", e);
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all event indices in a chunk: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} chunked event indices", len);
+        Ok(())
     }
 
     async fn persist_tx_indices_chunk(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError> {
@@ -1515,6 +1649,46 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
         }
         self.execute_in_blocking_worker(move |this| this.persist_packages(packages))
             .await
+    }
+
+    async fn persist_event_indices(&self, indices: Vec<EventIndex>) -> Result<(), IndexerError> {
+        if indices.is_empty() {
+            return Ok(());
+        }
+        let len = indices.len();
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_event_indices
+            .start_timer();
+        let chunks = chunk!(indices, self.config.parallel_chunk_size);
+
+        let futures = chunks
+            .into_iter()
+            .map(|chunk| {
+                self.spawn_task(move |this: Self| async move {
+                    this.persist_event_indices_chunk(chunk).await
+                })
+            })
+            .collect::<Vec<_>>();
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!("Failed to join persist_event_indices_chunk futures: {}", e);
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all event_indices chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} event_indices chunks", len);
+        Ok(())
     }
 
     async fn persist_tx_indices(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError> {
