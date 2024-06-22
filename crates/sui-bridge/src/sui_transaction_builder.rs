@@ -289,9 +289,9 @@ fn build_committee_blocklist_approve_transaction(
 
     let mut builder = ProgrammableTransactionBuilder::new();
 
-    let (source_chain, seq_num, blocklist_type, blocklisted_members) = match bridge_action {
+    let (source_chain, seq_num, blocklist_type, members_to_update) = match bridge_action {
         BridgeAction::BlocklistCommitteeAction(a) => {
-            (a.chain_id, a.nonce, a.blocklist_type, a.blocklisted_members)
+            (a.chain_id, a.nonce, a.blocklist_type, a.members_to_update)
         }
         _ => unreachable!(),
     };
@@ -300,11 +300,11 @@ fn build_committee_blocklist_approve_transaction(
     let source_chain = builder.pure(source_chain as u8).unwrap();
     let seq_num = builder.pure(seq_num).unwrap();
     let blocklist_type = builder.pure(blocklist_type as u8).unwrap();
-    let blocklisted_members = blocklisted_members
+    let members_to_update = members_to_update
         .into_iter()
         .map(|m| m.to_eth_address().as_bytes().to_vec())
         .collect::<Vec<_>>();
-    let blocklisted_members = builder.pure(blocklisted_members).unwrap();
+    let members_to_update = builder.pure(members_to_update).unwrap();
     let arg_bridge = builder.obj(bridge_object_arg).unwrap();
 
     let arg_msg = builder.programmable_move_call(
@@ -312,7 +312,7 @@ fn build_committee_blocklist_approve_transaction(
         ident_str!("message").to_owned(),
         ident_str!("create_blocklist_message").to_owned(),
         vec![],
-        vec![source_chain, seq_num, blocklist_type, blocklisted_members],
+        vec![source_chain, seq_num, blocklist_type, members_to_update],
     );
 
     let mut sig_bytes = vec![];
@@ -820,7 +820,7 @@ mod tests {
             nonce: 0,
             chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Blocklist,
-            blocklisted_members: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
+            members_to_update: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
                 &victim.bridge_pubkey_bytes,
             )
             .unwrap()],
@@ -849,7 +849,7 @@ mod tests {
             nonce: 1,
             chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Unblocklist,
-            blocklisted_members: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
+            members_to_update: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
                 &victim.bridge_pubkey_bytes,
             )
             .unwrap()],

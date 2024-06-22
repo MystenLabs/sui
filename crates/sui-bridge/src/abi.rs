@@ -332,7 +332,7 @@ mod tests {
             nonce: 0,
             chain_id: BridgeChainId::EthSepolia,
             blocklist_type: BlocklistType::Blocklist,
-            blocklisted_members: vec![pub_key_bytes],
+            members_to_update: vec![pub_key_bytes],
         };
         let message: eth_bridge_committee::Message = action.into();
         assert_eq!(

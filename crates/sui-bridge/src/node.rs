@@ -35,7 +35,7 @@ pub async fn run_bridge_node(
 ) -> anyhow::Result<JoinHandle<()>> {
     init_all_struct_tags();
     let metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
-    let (server_config, client_config) = config.validate().await?;
+    let (server_config, client_config) = config.validate(metrics.clone()).await?;
 
     // Start Client
     let _handles = if let Some(client_config) = client_config {

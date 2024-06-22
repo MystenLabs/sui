@@ -102,7 +102,10 @@ pub enum BridgeCommand {
     /// Print current committee info
     #[clap(name = "print-bridge-committee-info")]
     PrintBridgeCommitteeInfo {
+        #[clap(long = "sui-rpc-url")]
         sui_rpc_url: String,
+        #[clap(long, default_value = "false")]
+        hex: bool,
         #[clap(long, default_value = "false")]
         ping: bool,
     },
@@ -213,7 +216,7 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
             nonce: *nonce,
             chain_id,
             blocklist_type: *blocklist_type,
-            blocklisted_members: pubkeys_hex.clone(),
+            members_to_update: pubkeys_hex.clone(),
         }),
         GovernanceClientCommands::UpdateLimit {
             nonce,

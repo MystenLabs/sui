@@ -5,9 +5,12 @@ use anyhow::Result;
 use clap::*;
 use mysten_metrics::start_prometheus_server;
 use prometheus::Registry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::PathBuf;
+use std::sync::Arc;
+use sui_bridge::eth_client::EthClient;
+use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::eth_worker::EthBridgeWorker;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, PgProgressStore};
 use sui_bridge_indexer::sui_worker::SuiBridgeWorker;
@@ -60,20 +63,31 @@ async fn main() -> Result<()> {
     );
     let indexer_meterics = BridgeIndexerMetrics::new(&registry);
     let ingestion_metrics = DataIngestionMetrics::new(&registry);
+    let bridge_metrics = Arc::new(BridgeMetrics::new(&registry));
 
     // unwrap safe: db_url must be set in `load_config` above
     let db_url = config.db_url.clone().unwrap();
 
+    // TODO: retry_with_max_elapsed_time
     let eth_worker = EthBridgeWorker::new(
         get_connection_pool(db_url.clone()),
         indexer_meterics.clone(),
-        config,
+        config.clone(),
+    )
+    .unwrap();
+
+    let eth_client = Arc::new(
+        EthClient::<ethers::providers::Http>::new(
+            &config.eth_rpc_url,
+            HashSet::from_iter(vec![eth_worker.bridge_address()]),
+            bridge_metrics,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?,
     );
 
-    // TODO: retry_with_max_elapsed_time
-    let eth_worker_binding = eth_worker.unwrap();
-    let unfinalized_handle = eth_worker_binding.start_indexing_unfinalized_events();
-    let finalized_handle = eth_worker_binding.start_indexing_finalized_events();
+    let unfinalized_handle = eth_worker.start_indexing_unfinalized_events(eth_client.clone());
+    let finalized_handle = eth_worker.start_indexing_finalized_events(eth_client.clone());
 
     // TODO: add retry_with_max_elapsed_time
     let progress = start_processing_sui_checkpoints(
