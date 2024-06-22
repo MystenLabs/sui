@@ -190,9 +190,6 @@ mod ingestion_tests {
             db_event.event_type,
             event_type_tag.to_canonical_string(true)
         );
-        assert_eq!(db_event.event_type_package, SUI_SYSTEM_PACKAGE_ID.to_vec());
-        assert_eq!(db_event.event_type_module, "sui_system_state_inner");
-        assert_eq!(db_event.event_type_name, "SystemEpochInfoEvent");
         Ok(())
     }
 

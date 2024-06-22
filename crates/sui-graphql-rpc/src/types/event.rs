@@ -164,13 +164,6 @@ impl Event {
                 page.paginate_query::<StoredEvent, _, _, _>(conn, checkpoint_viewed_at, move || {
                     let mut query = events::dsl::events.into_boxed();
 
-                    // Bound events by the provided `checkpoint_viewed_at`. From EXPLAIN
-                    // ANALYZE, using the checkpoint sequence number directly instead of
-                    // translating into a transaction sequence number bound is more efficient.
-                    query = query.filter(
-                        events::dsl::checkpoint_sequence_number.le(checkpoint_viewed_at as i64),
-                    );
-
                     // The transactions table doesn't have an index on the senders column, so use
                     // `tx_senders`.
                     if let Some(sender) = &filter.sender {
@@ -203,16 +196,6 @@ impl Event {
 
                     if let Some(module) = &filter.emitting_module {
                         query = module.apply(query, events::dsl::package, events::dsl::module);
-                    }
-
-                    if let Some(type_) = &filter.event_type {
-                        query = type_.apply(
-                            query,
-                            events::dsl::event_type,
-                            events::dsl::event_type_package,
-                            events::dsl::event_type_module,
-                            events::dsl::event_type_name,
-                        );
                     }
 
                     query
@@ -257,7 +240,6 @@ impl Event {
             tx_sequence_number: stored_tx.tx_sequence_number,
             event_sequence_number: idx as i64,
             transaction_digest: stored_tx.transaction_digest.clone(),
-            checkpoint_sequence_number: stored_tx.checkpoint_sequence_number,
             #[cfg(feature = "postgres-feature")]
             senders: vec![Some(native_event.sender.to_vec())],
             #[cfg(feature = "mysql-feature")]
@@ -268,9 +250,6 @@ impl Event {
             event_type: native_event
                 .type_
                 .to_canonical_string(/* with_prefix */ true),
-            event_type_package: native_event.type_.address.to_vec(),
-            event_type_module: native_event.type_.module.to_string(),
-            event_type_name: native_event.type_.name.to_string(),
             bcs: native_event.contents.clone(),
             timestamp_ms: stored_tx.timestamp_ms,
         };
