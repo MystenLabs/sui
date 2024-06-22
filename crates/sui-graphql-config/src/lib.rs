@@ -44,7 +44,7 @@ pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
     };
 
     // Figure out which derives need to be added to meet the criteria of a config struct.
-    let extra_derives = extra_derives(&attrs);
+    let core_derives = core_derives(&attrs);
 
     // Extract field names once to avoid having to check for their existence multiple times.
     let fields_with_names: Vec<_> = named
@@ -79,7 +79,7 @@ pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
     });
 
     TokenStream::from(quote! {
-        #[derive(#(#extra_derives),*)]
+        #[derive(#(#core_derives),*)]
         #[serde(rename_all = "kebab-case")]
         #(#attrs)* #vis #struct_token #ident #generics {
             #(#fields),*
@@ -94,8 +94,8 @@ pub fn GraphQLConfig(_attr: TokenStream, input: TokenStream) -> TokenStream {
 /// Return a set of derives that should be added to the struct to make sure it derives all the
 /// things we expect from a config, namely `Serialize`, `Deserialize`, and `Debug`.
 ///
-/// We cannot add extra derives unconditionally, because they will conflict with existing ones.
-fn extra_derives(attrs: &[Attribute]) -> BTreeSet<Ident> {
+/// We cannot add core derives unconditionally, because they will conflict with existing ones.
+fn core_derives(attrs: &[Attribute]) -> BTreeSet<Ident> {
     let mut derives = BTreeSet::from_iter([
         format_ident!("Serialize"),
         format_ident!("Deserialize"),
