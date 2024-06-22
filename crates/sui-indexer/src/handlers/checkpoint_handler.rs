@@ -49,8 +49,8 @@ use crate::db::ConnectionPool;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
-    IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
-    IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
+    EventIndex, IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent,
+    IndexedObject, IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
 };
 
 use super::tx_processor::EpochEndIndexingObjectStore;
@@ -294,20 +294,21 @@ where
         let object_history_changes: TransactionObjectChangesToCommit =
             Self::index_objects_history(data.clone(), package_resolver.clone()).await?;
 
-        let (checkpoint, db_transactions, db_events, db_indices, db_displays) = {
+        let (checkpoint, db_transactions, db_events, db_tx_indices, db_event_indices, db_displays) = {
             let CheckpointData {
                 transactions,
                 checkpoint_summary,
                 checkpoint_contents,
             } = data;
 
-            let (db_transactions, db_events, db_indices, db_displays) = Self::index_transactions(
-                transactions,
-                &checkpoint_summary,
-                &checkpoint_contents,
-                &metrics,
-            )
-            .await?;
+            let (db_transactions, db_events, db_tx_indices, db_event_indices, db_displays) =
+                Self::index_transactions(
+                    transactions,
+                    &checkpoint_summary,
+                    &checkpoint_contents,
+                    &metrics,
+                )
+                .await?;
 
             let successful_tx_num: u64 = db_transactions.iter().map(|t| t.successful_tx_num).sum();
             (
@@ -318,7 +319,8 @@ where
                 ),
                 db_transactions,
                 db_events,
-                db_indices,
+                db_tx_indices,
+                db_event_indices,
                 db_displays,
             )
         };
@@ -341,7 +343,8 @@ where
             checkpoint,
             transactions: db_transactions,
             events: db_events,
-            tx_indices: db_indices,
+            tx_indices: db_tx_indices,
+            event_indices: db_event_indices,
             display_updates: db_displays,
             object_changes,
             object_history_changes,
@@ -359,6 +362,7 @@ where
         Vec<IndexedTransaction>,
         Vec<IndexedEvent>,
         Vec<TxIndex>,
+        Vec<EventIndex>,
         BTreeMap<String, StoredDisplay>,
     )> {
         let checkpoint_seq = checkpoint_summary.sequence_number();
@@ -379,7 +383,8 @@ where
         let mut db_transactions = Vec::new();
         let mut db_events = Vec::new();
         let mut db_displays = BTreeMap::new();
-        let mut db_indices = Vec::new();
+        let mut db_tx_indices = Vec::new();
+        let mut db_event_indices = Vec::new();
 
         for tx in transactions {
             let CheckpointTransaction {
@@ -420,6 +425,12 @@ where
                     checkpoint_summary.timestamp_ms,
                 )
             }));
+
+            db_event_indices.extend(
+                events.iter().enumerate().map(|(idx, event)| {
+                    EventIndex::from_event(tx_sequence_number, idx as u64, event)
+                }),
+            );
 
             db_displays.extend(
                 events
@@ -497,7 +508,7 @@ where
                 .map(|(p, m, f)| (*<&ObjectID>::clone(p), m.to_string(), f.to_string()))
                 .collect();
 
-            db_indices.push(TxIndex {
+            db_tx_indices.push(TxIndex {
                 tx_sequence_number,
                 transaction_digest: tx_digest,
                 checkpoint_sequence_number: *checkpoint_seq,
@@ -510,7 +521,13 @@ where
                 tx_kind: transaction_kind,
             });
         }
-        Ok((db_transactions, db_events, db_indices, db_displays))
+        Ok((
+            db_transactions,
+            db_events,
+            db_tx_indices,
+            db_event_indices,
+            db_displays,
+        ))
     }
 
     pub(crate) async fn index_objects(
