@@ -41,8 +41,8 @@ use crate::models::transactions::StoredTransaction;
 use crate::schema::tx_kinds;
 use crate::schema::{
     checkpoints, display, epochs, event_emit_module, event_emit_package, event_senders,
-    event_struct_module, event_struct_name, event_struct_package, event_struct_type, events,
-    objects, objects_history, objects_snapshot, objects_version, packages, transactions,
+    event_struct_instantiation, event_struct_module, event_struct_name, event_struct_package,
+    events, objects, objects_history, objects_snapshot, objects_version, packages, transactions,
     tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects,
     tx_recipients, tx_senders,
 };
@@ -719,7 +719,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             event_struct_packages,
             event_struct_modules,
             event_struct_names,
-            event_struct_types,
+            event_struct_instantiations,
         ) = indices.into_iter().map(|i| i.split()).fold(
             (
                 Vec::new(),
@@ -737,7 +737,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 mut event_struct_packages,
                 mut event_struct_modules,
                 mut event_struct_names,
-                mut event_struct_types,
+                mut event_struct_instantiations,
             ),
              index| {
                 event_emit_packages.push(index.0);
@@ -746,7 +746,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 event_struct_packages.push(index.3);
                 event_struct_modules.push(index.4);
                 event_struct_names.push(index.5);
-                event_struct_types.push(index.6);
+                event_struct_instantiations.push(index.6);
                 (
                     event_emit_packages,
                     event_emit_modules,
@@ -754,7 +754,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     event_struct_packages,
                     event_struct_modules,
                     event_struct_names,
-                    event_struct_types,
+                    event_struct_instantiations,
                 )
             },
         );
@@ -807,8 +807,8 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
 
         futures.push(self.spawn_blocking_task(move |this| {
             persist_chunk_into_table!(
-                event_struct_type::table,
-                event_struct_types,
+                event_struct_instantiation::table,
+                event_struct_instantiations,
                 &this.blocking_cp
             )
         }));

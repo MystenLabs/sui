@@ -45,7 +45,7 @@ CREATE TABLE event_struct_name
 (
     package                     BYTEA   NOT NULL,
     module                      TEXT    NOT NULL,
-    type_name                        TEXT    NOT NULL,
+    type_name                   TEXT    NOT NULL,
     tx_sequence_number          BIGINT  NOT NULL,
     event_sequence_number       BIGINT  NOT NULL,
     sender                      BYTEA   NOT NULL,
@@ -53,17 +53,17 @@ CREATE TABLE event_struct_name
 );
 CREATE INDEX event_struct_name_sender ON event_struct_name (sender, package, module, type_name, tx_sequence_number, event_sequence_number);
 
-CREATE TABLE event_struct_type
+CREATE TABLE event_struct_instantiation
 (
     package                     BYTEA   NOT NULL,
     module                      TEXT    NOT NULL,
-    full_name                   TEXT    NOT NULL,
+    type_instantiation          TEXT    NOT NULL,
     tx_sequence_number          BIGINT  NOT NULL,
     event_sequence_number       BIGINT  NOT NULL,
     sender                      BYTEA   NOT NULL,
-    PRIMARY KEY(package, module, full_name, tx_sequence_number, event_sequence_number)
+    PRIMARY KEY(package, module, type_instantiation, tx_sequence_number, event_sequence_number)
 );
-CREATE INDEX event_struct_type_sender ON event_struct_type (sender, package, module, full_name, tx_sequence_number, event_sequence_number);
+CREATE INDEX event_struct_instantiation_sender ON event_struct_instantiation (sender, package, module, type_instantiation, tx_sequence_number, event_sequence_number);
 
 CREATE TABLE event_senders
 (

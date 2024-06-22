@@ -232,8 +232,8 @@ pub struct EventIndex {
     pub type_module: String,
     /// Struct name of the event, without type parameters.
     pub type_name: String,
-    /// Struct name of the event, with type parameters, if any.
-    pub full_type_name: String,
+    /// Type instantiation of the event, with type name and type parameters, if any.
+    pub type_instantiation: String,
 }
 
 impl EventIndex {
@@ -242,10 +242,11 @@ impl EventIndex {
         event_sequence_number: u64,
         event: &sui_types::event::Event,
     ) -> Self {
-        let full_type_name = regex::Regex::new(r"^[^:]+::[^:]+::(?<name>\w+)")
-            .unwrap()
-            .captures(&event.type_.to_canonical_string(/* with_prefix */ true))
-            .unwrap()["name"]
+        let type_instantiation = event
+            .type_
+            .to_canonical_string(/* with_prefix */ true)
+            .splitn(3, "::")
+            .collect::<Vec<_>>()[2]
             .to_string();
         Self {
             tx_sequence_number,
@@ -256,7 +257,7 @@ impl EventIndex {
             type_package: event.type_.address.into(),
             type_module: event.type_.module.to_string(),
             type_name: event.type_.name.to_string(),
-            full_type_name,
+            type_instantiation,
         }
     }
 }

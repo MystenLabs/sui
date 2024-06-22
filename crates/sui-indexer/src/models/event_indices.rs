@@ -3,8 +3,8 @@
 
 use crate::{
     schema::{
-        event_emit_module, event_emit_package, event_senders, event_struct_module,
-        event_struct_name, event_struct_package, event_struct_type,
+        event_emit_module, event_emit_package, event_senders, event_struct_instantiation,
+        event_struct_module, event_struct_name, event_struct_package,
     },
     types::EventIndex,
 };
@@ -68,13 +68,13 @@ pub struct StoredEventStructName {
 }
 
 #[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
-#[diesel(table_name = event_struct_type)]
-pub struct StoredEventStructType {
+#[diesel(table_name = event_struct_instantiation)]
+pub struct StoredEventStructInstantiation {
     pub tx_sequence_number: i64,
     pub event_sequence_number: i64,
     pub package: Vec<u8>,
     pub module: String,
-    pub full_name: String,
+    pub type_instantiation: String,
     pub sender: Vec<u8>,
 }
 
@@ -88,7 +88,7 @@ impl EventIndex {
         StoredEventStructPackage,
         StoredEventStructModule,
         StoredEventStructName,
-        StoredEventStructType,
+        StoredEventStructInstantiation,
     ) {
         let tx_sequence_number = self.tx_sequence_number as i64;
         let event_sequence_number = self.event_sequence_number as i64;
@@ -132,12 +132,12 @@ impl EventIndex {
                 type_name: self.type_name.clone(),
                 sender: self.sender.to_vec(),
             },
-            StoredEventStructType {
+            StoredEventStructInstantiation {
                 tx_sequence_number,
                 event_sequence_number,
                 package: self.type_package.to_vec(),
                 module: self.type_module.clone(),
-                full_name: self.full_type_name.clone(),
+                type_instantiation: self.type_instantiation.clone(),
                 sender: self.sender.to_vec(),
             },
         )

@@ -86,6 +86,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    event_struct_instantiation (package, module, type_instantiation, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        type_instantiation -> Text,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
     event_struct_module (package, module, tx_sequence_number, event_sequence_number) {
         package -> Bytea,
         module -> Text,
@@ -116,18 +127,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    event_struct_type (package, module, full_name, tx_sequence_number, event_sequence_number) {
-        package -> Bytea,
-        module -> Text,
-        full_name -> Text,
-        tx_sequence_number -> Int8,
-        event_sequence_number -> Int8,
-        sender -> Bytea,
-    }
-}
-
-diesel::table! {
-    events (tx_sequence_number, event_sequence_number, checkpoint_sequence_number) {
+    events (tx_sequence_number, event_sequence_number) {
         tx_sequence_number -> Int8,
         event_sequence_number -> Int8,
         transaction_digest -> Bytea,
@@ -145,7 +145,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    events_partition_0 (tx_sequence_number, event_sequence_number, checkpoint_sequence_number) {
+    events_partition_0 (tx_sequence_number, event_sequence_number) {
         tx_sequence_number -> Int8,
         event_sequence_number -> Int8,
         transaction_digest -> Bytea,
@@ -382,6 +382,13 @@ macro_rules! for_all_tables {
             checkpoints,
             display,
             epochs,
+            event_emit_module,
+            event_emit_package,
+            event_senders,
+            event_struct_instantiation,
+            event_struct_module,
+            event_struct_name,
+            event_struct_package,
             events,
             events_partition_0,
             objects,
@@ -398,11 +405,13 @@ macro_rules! for_all_tables {
             tx_changed_objects,
             tx_digests,
             tx_input_objects,
+            tx_kinds,
             tx_recipients,
             tx_senders
         );
     };
 }
+
 pub use for_all_tables;
 
 for_all_tables!(diesel::allow_tables_to_appear_in_same_query);

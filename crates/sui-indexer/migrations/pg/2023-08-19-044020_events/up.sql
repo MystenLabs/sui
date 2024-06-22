@@ -1,3 +1,4 @@
+-- TODO: modify queries in indexer reader to take advantage of the new indices
 CREATE TABLE events
 (
     tx_sequence_number          BIGINT       NOT NULL,
