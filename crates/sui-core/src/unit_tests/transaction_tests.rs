@@ -33,6 +33,8 @@ use crate::authority::authority_test_utils::send_batch_consensus_no_execution;
 use crate::authority::authority_tests::{call_move_, create_gas_objects, publish_object_basics};
 use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
 
 use sui_macros::sim_test;
 macro_rules! assert_matches {
@@ -282,7 +284,7 @@ async fn test_user_sends_system_transaction_impl(transaction_kind: TransactionKi
     do_transaction_test_skip_cert_checks(
         0,
         |tx| {
-            *tx.kind_mut() = transaction_kind;
+            *tx.kind_mut() = transaction_kind.clone();
         },
         |_| {},
         |err| {
@@ -298,7 +300,7 @@ async fn test_user_sends_system_transaction_impl(transaction_kind: TransactionKi
 }
 
 pub fn init_transfer_transaction(
-    pre_sign_mutations: impl FnOnce(&mut TransactionData),
+    pre_sign_mutations: impl Fn(&mut TransactionData),
     sender: SuiAddress,
     secret: &AccountKeyPair,
     recipient: SuiAddress,
@@ -319,10 +321,34 @@ pub fn init_transfer_transaction(
     to_sender_signed_transaction(data, secret)
 }
 
+pub fn init_move_call_transaction(
+    pre_sign_mutations: impl Fn(&mut TransactionData),
+    sender: SuiAddress,
+    secret: &AccountKeyPair,
+    gas_object_ref: ObjectRef,
+    gas_budget: u64,
+    gas_price: u64,
+) -> Transaction {
+    let mut data = TransactionData::new_move_call(
+        sender,
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.into(),
+        ident_str!("request_add_validator").to_owned(),
+        vec![],
+        gas_object_ref,
+        vec![CallArg::SUI_SYSTEM_MUT],
+        gas_budget,
+        gas_price,
+    )
+    .unwrap();
+    pre_sign_mutations(&mut data);
+    to_sender_signed_transaction(data, secret)
+}
+
 async fn do_transaction_test_skip_cert_checks(
     expected_sig_errors: u64,
-    pre_sign_mutations: impl FnOnce(&mut TransactionData),
-    post_sign_mutations: impl FnOnce(&mut Transaction),
+    pre_sign_mutations: impl Fn(&mut TransactionData),
+    post_sign_mutations: impl Fn(&mut Transaction),
     err_check: impl Fn(&SuiError),
 ) {
     do_transaction_test_impl(
@@ -337,8 +363,8 @@ async fn do_transaction_test_skip_cert_checks(
 
 async fn do_transaction_test(
     expected_sig_errors: u64,
-    pre_sign_mutations: impl FnOnce(&mut TransactionData),
-    post_sign_mutations: impl FnOnce(&mut Transaction),
+    pre_sign_mutations: impl Fn(&mut TransactionData),
+    post_sign_mutations: impl Fn(&mut Transaction),
     err_check: impl Fn(&SuiError),
 ) {
     do_transaction_test_impl(
@@ -354,36 +380,59 @@ async fn do_transaction_test(
 async fn do_transaction_test_impl(
     _expected_sig_errors: u64,
     check_forged_cert: bool,
-    pre_sign_mutations: impl FnOnce(&mut TransactionData),
-    post_sign_mutations: impl FnOnce(&mut Transaction),
+    pre_sign_mutations: impl Fn(&mut TransactionData),
+    post_sign_mutations: impl Fn(&mut Transaction),
     err_check: impl Fn(&SuiError),
 ) {
     telemetry_subscribers::init_for_testing();
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
+    let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
-    let gas_object_id = ObjectID::random();
-    let authority_state =
-        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let gas_object_id1 = ObjectID::random();
+    let gas_object_id2 = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![
+        (sender1, object_id),
+        (sender1, gas_object_id1),
+        (sender2, gas_object_id2),
+    ])
+    .await;
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let object = authority_state
         .get_object(&object_id)
         .await
         .unwrap()
         .unwrap();
-    let gas_object = authority_state
-        .get_object(&gas_object_id)
+    let gas_object1 = authority_state
+        .get_object(&gas_object_id1)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object2 = authority_state
+        .get_object(&gas_object_id2)
         .await
         .unwrap()
         .unwrap();
 
+    // Execute the test with two transactions, one transfer and one move call.
+    // The move call contains access to a shared object.
+    // We test both txs and expect the same error.
     let mut transfer_transaction = init_transfer_transaction(
-        pre_sign_mutations,
-        sender,
-        &sender_key,
+        &pre_sign_mutations,
+        sender1,
+        &sender_key1,
         recipient,
         object.compute_object_reference(),
-        gas_object.compute_object_reference(),
+        gas_object1.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    let mut move_call_transaction = init_move_call_transaction(
+        &pre_sign_mutations,
+        sender2,
+        &sender_key2,
+        gas_object2.compute_object_reference(),
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
@@ -403,47 +452,74 @@ async fn do_transaction_test_impl(
         .unwrap();
 
     post_sign_mutations(&mut transfer_transaction);
+    post_sign_mutations(&mut move_call_transaction);
     let socket_addr = make_socket_addr();
 
-    let err = client
-        .handle_transaction(transfer_transaction.clone(), Some(socket_addr))
-        .await
-        .unwrap_err();
-    err_check(&err);
+    let transactions = vec![transfer_transaction, move_call_transaction];
+    for transaction in &transactions {
+        let err = client
+            .handle_transaction(transaction.clone(), Some(socket_addr))
+            .await
+            .unwrap_err();
+        err_check(&err);
+    }
 
     check_locks(authority_state.clone(), vec![object_id]).await;
 
-    // now verify that the same transaction is rejected if a false certificate is somehow formed and sent
+    // now verify that the same transactions are rejected if false certificates are somehow formed and sent
     if check_forged_cert {
         let epoch_store = authority_state.epoch_store_for_testing();
-        let signed_transaction = VerifiedSignedTransaction::new(
-            epoch_store.epoch(),
-            VerifiedTransaction::new_unchecked(transfer_transaction),
-            authority_state.name,
-            &*authority_state.secret,
-        );
-        let mut agg = StakeAggregator::new(epoch_store.committee().clone());
+        for transaction in transactions {
+            let signed_transaction = VerifiedSignedTransaction::new(
+                epoch_store.epoch(),
+                VerifiedTransaction::new_unchecked(transaction),
+                authority_state.name,
+                &*authority_state.secret,
+            );
+            let mut agg = StakeAggregator::new(epoch_store.committee().clone());
 
-        let InsertResult::QuorumReached(cert_sig) = agg.insert(signed_transaction.clone().into())
-        else {
-            panic!("quorum expected");
-        };
+            let InsertResult::QuorumReached(cert_sig) =
+                agg.insert(signed_transaction.clone().into())
+            else {
+                panic!("quorum expected");
+            };
 
-        let plain_tx = signed_transaction.into_inner();
+            let plain_tx = signed_transaction.into_inner();
 
-        let ct = CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
+            let ct = CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
 
-        let err = client
-            .handle_certificate_v2(ct.clone(), Some(socket_addr))
-            .await
-            .unwrap_err();
-        err_check(&err);
-        epoch_store.clear_signature_cache();
-        let err = client
-            .handle_certificate_v2(ct.clone(), Some(socket_addr))
-            .await
-            .unwrap_err();
-        err_check(&err);
+            let err = client
+                .handle_certificate_v2(ct.clone(), Some(socket_addr))
+                .await
+                .unwrap_err();
+            err_check(&err);
+            epoch_store.clear_signature_cache();
+            let err = client
+                .handle_certificate_v2(ct.clone(), Some(socket_addr))
+                .await
+                .unwrap_err();
+            err_check(&err);
+
+            // Additionally, if the tx contains access to shared objects, check if Soft Bundle handler returns the same error.
+            if ct.contains_shared_object() {
+                epoch_store.clear_signature_cache();
+                let err = client
+                    .handle_soft_bundle_certificates_v3(
+                        HandleSoftBundleCertificatesRequestV3 {
+                            certificates: vec![ct.clone()],
+                            wait_for_effects: true,
+                            include_events: false,
+                            include_auxiliary_data: false,
+                            include_input_objects: false,
+                            include_output_objects: false,
+                        },
+                        Some(socket_addr),
+                    )
+                    .await
+                    .unwrap_err();
+                err_check(&err);
+            }
+        }
     }
 }
 
