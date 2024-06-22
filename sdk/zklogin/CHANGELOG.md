@@ -1,5 +1,12 @@
 # @mysten/zklogin
 
+## 0.7.9
+
+### Patch Changes
+
+- Updated dependencies [fef99d377f]
+  - @mysten/sui@1.2.0
+
 ## 0.7.8
 
 ### Patch Changes
