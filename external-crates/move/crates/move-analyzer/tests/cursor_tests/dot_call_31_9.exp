@@ -1,0 +1,8 @@
+-- 31:9 ------------
+expected: let binding
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: seq item
+- value: Bind([Var(None, Var("some_struct"))], Some(Apply(Single(PathEntry { name: "SomeStructAlias", tyargs: None, is_macro: None }))), Call(Path(NamePath { root: RootPathEntry { name: M1, tyargs: None, is_macro: None }, entries: [PathEntry { name: "snew", tyargs: None, is_macro: None }] }), []))
+

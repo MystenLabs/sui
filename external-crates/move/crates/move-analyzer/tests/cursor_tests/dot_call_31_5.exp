@@ -1,0 +1,7 @@
+-- 31:5 ------------
+expected: inside a function body -- unknown
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: unknown
+

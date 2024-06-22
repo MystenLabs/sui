@@ -1,0 +1,10 @@
+-- 6:13 ------------
+expected: at a struct field name
+cursor info:
+- module: Move2024::M1
+- definition: struct SomeStruct
+- position: field
+- value: Field(
+    "some_field",
+)
+

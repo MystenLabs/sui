@@ -1,0 +1,7 @@
+{
+  "directory": "tests/move-2024",
+  "file": "sources/dot_call.move",
+  "line": 33,
+  "character": 29,
+  "description": "name in a dot call"
+}

@@ -153,6 +153,7 @@ pub fn run() {
                 ide_files_root.clone(),
                 p.as_path(),
                 lint,
+                None,
             ) {
                 let mut old_symbols = symbols.lock().unwrap();
                 (*old_symbols).merge(new_symbols);

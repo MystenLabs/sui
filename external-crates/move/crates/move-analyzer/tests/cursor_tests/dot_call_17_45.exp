@@ -1,0 +1,8 @@
+-- 17:45 ------------
+expected: at a function return type
+cursor info:
+- module: Move2024::M1
+- definition: function bar
+- position: type
+- value: Apply(Single(PathEntry { name: "u64", tyargs: None, is_macro: None }))
+

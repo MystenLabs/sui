@@ -6,8 +6,8 @@ use crate::{
     context::Context,
     symbols::{
         self, mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
-        type_list_to_ide_string, type_to_ide_string, DefInfo, PrecompiledPkgDeps,
-        SymbolicatorRunner, Symbols,
+        type_list_to_ide_string, type_to_ide_string, CursorContext, CursorDefinition, DefInfo,
+        PrecompiledPkgDeps, SymbolicatorRunner, Symbols,
     },
     utils,
 };
@@ -23,7 +23,7 @@ use move_compiler::{
     linters::LintLevel,
     naming::ast::Type,
     parser::{
-        ast::Ability_,
+        ast::{self as P, Ability_},
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
     },
@@ -142,7 +142,7 @@ fn identifiers(buffer: &str, symbols: &Symbols, path: &Path) -> Vec<CompletionIt
 }
 
 /// Returns the token corresponding to the "trigger character" that precedes the user's cursor,
-/// if it is one of `.`, `:`, or `::`. Otherwise, returns `None`.
+/// if it is one of `.`, `:`, '{', or `::`. Otherwise, returns `None`.
 fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
     // If the cursor is at the start of a new line, it cannot be preceded by a trigger character.
     if position.character == 0 {
@@ -172,53 +172,33 @@ fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
 /// Handle context-specific auto-completion requests with lbrace (`{`) trigger character.
 fn context_specific_lbrace(
     symbols: &Symbols,
-    use_fpath: &Path,
-    position: &Position,
-) -> Vec<CompletionItem> {
-    let mut completions = vec![];
-
-    // look for a struct definition on the line that contains `{`, check its abilities,
-    // and do auto-completion if `key` ability is present
-    for u in symbols.line_uses(use_fpath, position.line) {
-        let def_loc = u.def_loc();
-        let Some(use_file_mod_definition) = symbols.file_mods.get(use_fpath) else {
-            continue;
-        };
-        let Some(use_file_mod_def) = use_file_mod_definition.first() else {
-            continue;
-        };
-        if !is_definition(
-            symbols,
-            position.line,
-            u.col_start(),
-            use_file_mod_def.fhash(),
-            def_loc,
-        ) {
-            continue;
+    cursor: &CursorContext,
+) -> Option<Vec<CompletionItem>> {
+    match &cursor.defn_name {
+        // look for a struct definition on the line that contains `{`, check its abilities,
+        // and do auto-completion if `key` ability is present
+        Some(CursorDefinition::Struct(sname)) => {
+            let mident = cursor.module?;
+            let typed_ast = symbols.typed_ast.as_ref()?;
+            let struct_def = typed_ast.info.struct_definition_opt(&mident, sname)?;
+            if struct_def.abilities.has_ability_(Ability_::Key) {
+                let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
+                let init_completion = CompletionItem {
+                    label: "id: UID".to_string(),
+                    kind: Some(CompletionItemKind::SNIPPET),
+                    documentation: Some(Documentation::String("Object snippet".to_string())),
+                    insert_text: Some(obj_snippet),
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    ..Default::default()
+                };
+                vec![init_completion].into()
+            } else {
+                None
+            }
         }
-        let Some(def_info) = symbols.def_info(&def_loc) else {
-            continue;
-        };
-        let DefInfo::Struct(.., abilities, _, _, _) = def_info else {
-            continue;
-        };
-        if abilities.has_ability_(Ability_::Key) {
-            let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
-            let init_completion = CompletionItem {
-                label: "id: UID".to_string(),
-                kind: Some(CompletionItemKind::SNIPPET),
-                documentation: Some(Documentation::String("Object snippet".to_string())),
-                insert_text: Some(obj_snippet),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                ..Default::default()
-            };
-            completions.push(init_completion);
-            break;
-        }
+        Some(_) => None,
+        None => None,
     }
-    // on `{` we only auto-complete object declarations
-
-    completions
 }
 
 fn fun_def_info(
@@ -524,19 +504,10 @@ pub fn on_completion_request(
         .unwrap();
 
     let pos = parameters.text_document_position.position;
-    let items = match SymbolicatorRunner::root_dir(&path) {
-        Some(pkg_path) => {
-            match symbols::get_symbols(
-                pkg_dependencies,
-                ide_files_root.clone(),
-                &pkg_path,
-                LintLevel::None,
-            ) {
-                Ok((Some(symbols), _)) => completion_items(pos, &path, &symbols),
-                _ => completion_items(pos, &path, &context.symbols.lock().unwrap()),
-            }
-        }
-        None => completion_items(pos, &path, &context.symbols.lock().unwrap()),
+
+    let items = match cursor_compute_symbols(ide_files_root, pkg_dependencies, &path, pos) {
+        Some(items) => items,
+        None => completion_items(&context.symbols.lock().unwrap(), &path, pos),
     };
 
     let result = serde_json::to_value(items).expect("could not serialize completion response");
@@ -551,8 +522,28 @@ pub fn on_completion_request(
     }
 }
 
+fn cursor_compute_symbols(
+    ide_files_root: VfsPath,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
+    path: &PathBuf,
+    cursor_position: Position,
+) -> Option<Vec<CompletionItem>> {
+    let pkg_path = SymbolicatorRunner::root_dir(path)?;
+    let cursor_info = Some((path, cursor_position));
+    let (symbols, _diags) = symbols::get_symbols(
+        pkg_dependencies,
+        ide_files_root,
+        &pkg_path,
+        LintLevel::None,
+        cursor_info,
+    )
+    .ok()?;
+    let symbols = symbols?;
+    Some(completion_items(&symbols, path, cursor_position))
+}
+
 /// Computes completion items for a given completion request.
-fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<CompletionItem> {
+fn completion_items(symbols: &Symbols, path: &Path, pos: Position) -> Vec<CompletionItem> {
     let mut items = vec![];
 
     let Some(fhash) = symbols.file_hash(path) else {
@@ -565,56 +556,128 @@ fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<Comple
         return items;
     };
 
-    let buffer = file.source().clone();
-    if !buffer.is_empty() {
-        let mut only_custom_items = false;
-        let cursor = get_cursor_token(&buffer, &pos);
-        match cursor {
-            Some(Tok::Colon) => {
-                items.extend_from_slice(&primitive_types());
+    let file_source = file.source().clone();
+    if !file_source.is_empty() {
+        let only_custom_items;
+        match &symbols.cursor_context {
+            Some(cursor_context) => {
+                eprintln!("cursor completion");
+                let (new_items, only_has_custom_items) =
+                    cursor_completion_items(symbols, path, &file_source, pos, cursor_context);
+                only_custom_items = only_has_custom_items;
+                items.extend(new_items);
             }
-            Some(Tok::Period) => {
-                items = dot(symbols, path, &pos);
-                if !items.is_empty() {
-                    // found dot completions - do not look for any other
-                    only_custom_items = true;
-                }
-            }
-
-            Some(Tok::ColonColon) => {
-                // `.` or `::` must be followed by identifiers, which are added to the completion items
-                // below.
-            }
-            Some(Tok::LBrace) => {
-                let custom_items = context_specific_lbrace(symbols, path, &pos);
-                items.extend_from_slice(&custom_items);
-                // "generic" autocompletion for `{` does not make sense
-                only_custom_items = true;
-            }
-            _ => {
-                // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
-                // offer them context-specific autocompletion items as well as
-                // Move's keywords, operators, and builtins.
-                let (custom_items, custom) =
-                    context_specific_no_trigger(symbols, path, &buffer, &pos);
-                only_custom_items = custom;
-                items.extend_from_slice(&custom_items);
-                if !only_custom_items {
-                    items.extend_from_slice(&keywords());
-                    items.extend_from_slice(&builtins());
-                }
+            None => {
+                eprintln!("non-cursor completion");
+                let (new_items, only_has_custom_items) =
+                    default_items(symbols, path, &file_source, pos);
+                only_custom_items = only_has_custom_items;
+                items.extend(new_items);
             }
         }
         if !only_custom_items {
-            let identifiers = identifiers(&buffer, symbols, path);
-            items.extend_from_slice(&identifiers);
+            let identifiers = identifiers(&file_source, symbols, path);
+            items.extend(identifiers);
         }
     } else {
         // no file content
-        items.extend_from_slice(&keywords());
-        items.extend_from_slice(&builtins());
+        items.extend(keywords());
+        items.extend(builtins());
     }
     items
+}
+
+/// Return completion items, plus a flag indicating if we should only use the custom items returned
+/// (i.e., when the flag is false, default items and identifiers should also be added).
+fn cursor_completion_items(
+    symbols: &Symbols,
+    path: &Path,
+    file_source: &str,
+    pos: Position,
+    cursor: &CursorContext,
+) -> (Vec<CompletionItem>, bool) {
+    let cursor_leader = get_cursor_token(file_source, &pos);
+    match cursor_leader {
+        Some(Tok::Colon) => {
+            // TODO: sweep current scope and find types there.
+            (primitive_types(), false)
+        }
+        // TODO: consider using `cursor.position` for this instead
+        Some(Tok::Period) => {
+            let items = dot(symbols, path, &pos);
+            let items_is_empty = items.is_empty();
+            (items, !items_is_empty)
+        }
+        // TODO: consider using `cursor.position` for this instead
+        Some(Tok::ColonColon) => {
+            // `.` or `::` must be followed by identifiers, which are added to the completion items
+            // below.
+            // TODO: consider the cursor and see if we can handle a path there
+            match &cursor.position {
+                symbols::CursorPosition::Exp(sp!(_, P::Exp_::Name(name))) => {
+                    match &name.value {
+                        P::NameAccessChain_::Single(_name) => {
+                            // This is technically unreachable because we wouldn't be at a `::`
+                            (vec![], false)
+                        }
+                        P::NameAccessChain_::Path(path) => {
+                            let P::NamePath { root, entries } = path;
+                            if root.name.loc.contains(&cursor.loc) {
+                                // This is technically unreachable because we wouldn't be at a `::`
+                                (vec![], false)
+                            } else {
+                                for entry in entries {
+                                    if entry.name.loc.contains(&cursor.loc) {
+                                        // TODO: figure out what the name parts refers to, look it
+                                        // up in typing, and go from there.
+                                        return (vec![], false);
+                                    }
+                                }
+                                (vec![], false)
+                            }
+                        }
+                    }
+                }
+                _ => (vec![], false),
+            }
+        }
+        // Cqrve out to suggest UID for struct with key ability
+        Some(Tok::LBrace) => (
+            context_specific_lbrace(symbols, cursor).unwrap_or_default(),
+            true,
+        ),
+        _ => {
+            let mut items = vec![];
+            let mut only_custom_items = false;
+            if let symbols::CursorPosition::Exp(sp!(_, P::Exp_::Name(_name))) = &cursor.position {
+                // TODO: match on the name and use provided compiler info to resolve this
+                // (see PR 18108 for more details on that information)
+            }
+            let (default_items, default_custom) = default_items(symbols, path, file_source, pos);
+            items.extend(default_items);
+            only_custom_items |= default_custom;
+            (items, only_custom_items)
+        }
+    }
+}
+
+fn default_items(
+    symbols: &Symbols,
+    path: &Path,
+    file_source: &str,
+    pos: Position,
+) -> (Vec<CompletionItem>, bool) {
+    // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
+    // offer them context-specific autocompletion items as well as
+    // Move's keywords, operators, and builtins.
+    let (custom_items, only_custom_items) =
+        context_specific_no_trigger(symbols, path, file_source, &pos);
+    let mut items = custom_items;
+    if !only_custom_items {
+        items.extend(keywords());
+        items.extend(builtins());
+    }
+    (items, only_custom_items)
 }
 
 #[cfg(test)]
@@ -679,6 +742,7 @@ fn completion_dot_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -692,7 +756,7 @@ fn completion_dot_test() {
         line: 14,
         character: 10,
     };
-    let items = completion_items(pos, &cpath, &symbols);
+    let items = completion_items(&symbols, &cpath, pos);
     let loc = format!("{:?} (line: {}, col: {})", cpath, pos.line, pos.character);
     assert!(
         items.len() == 3,
@@ -733,7 +797,7 @@ fn completion_dot_test() {
         line: 20,
         character: 10,
     };
-    let items = completion_items(pos, &cpath, &symbols);
+    let items = completion_items(&symbols, &cpath, pos);
     let loc = format!("{:?} (line: {}, col: {}", cpath, pos.line, pos.character);
     assert!(items.len() == 3, "wrong number of items at {}", loc.clone());
     validate_item(
@@ -769,7 +833,7 @@ fn completion_dot_test() {
         line: 26,
         character: 10,
     };
-    let items = completion_items(pos, &cpath, &symbols);
+    let items = completion_items(&symbols, &cpath, pos);
     let loc = format!("{:?} (line: {}, col: {}", cpath, pos.line, pos.character);
     assert!(items.len() == 2, "wrong number of items at {}", loc.clone());
     validate_item(
@@ -789,5 +853,48 @@ fn completion_dot_test() {
         None,
         Some("u64"),
         "some_field",
+    );
+}
+
+#[test]
+/// Tests if the struct cursor code for suggesting a UID field for a key struct works
+fn completion_uid_key() {
+    use vfs::impls::memory::MemoryFS;
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/completion");
+
+    let mut fpath = path.clone();
+    fpath.push("sources/uid.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let pos = Position {
+        line: 1,
+        character: 38,
+    };
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = symbols::get_symbols(
+        Arc::new(Mutex::new(BTreeMap::new())),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+        Some((&cpath, pos)),
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let items = completion_items(&symbols, &cpath, pos);
+    let loc = format!("{:?} (line: {}, col: {}", cpath, pos.line, pos.character);
+    assert!(items.len() == 1, "wrong number of items at {}", loc.clone());
+    validate_item(
+        loc,
+        &items,
+        0,
+        "id: UID",
+        None,
+        None,
+        "\n\tid: UID,\n\t$1\n",
     );
 }

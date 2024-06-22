@@ -529,6 +529,7 @@ fn struct_def(
     let N::StructDefinition {
         warning_filter,
         index,
+        loc: _loc,
         attributes,
         abilities,
         type_parameters,
@@ -572,6 +573,7 @@ fn enum_def(
     let N::EnumDefinition {
         warning_filter,
         index,
+        loc: _loc,
         attributes,
         abilities,
         type_parameters,

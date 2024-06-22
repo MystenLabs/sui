@@ -1,0 +1,7 @@
+-- 5:23 ------------
+expected: at a struct definition name
+cursor info:
+- module: Move2024::M1
+- definition: struct SomeStruct
+- position: defn name
+

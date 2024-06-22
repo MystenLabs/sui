@@ -1,0 +1,8 @@
+-- 33:34 ------------
+expected: equal sign in a binop
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: exp
+- value: BinopExp(DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), "f1", None, None, []), Eq, DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), "f2", None, None, []))
+

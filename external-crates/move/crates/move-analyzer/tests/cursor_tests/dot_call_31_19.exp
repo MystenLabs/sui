@@ -1,0 +1,8 @@
+-- 31:19 ------------
+expected: binding in the lhs of a let-binding
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: binder
+- value: Var(None, Var("some_struct"))
+

@@ -1,0 +1,8 @@
+-- 31:50 ------------
+expected: name in module access
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: exp
+- value: Call(Path(NamePath { root: RootPathEntry { name: M1, tyargs: None, is_macro: None }, entries: [PathEntry { name: "snew", tyargs: None, is_macro: None }] }), [])
+

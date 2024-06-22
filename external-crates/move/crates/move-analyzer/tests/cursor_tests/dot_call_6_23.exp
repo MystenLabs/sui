@@ -1,0 +1,7 @@
+-- 6:23 ------------
+expected: in a struct definition at nowhere in particular
+cursor info:
+- module: Move2024::M1
+- definition: struct SomeStruct
+- position: unknown
+

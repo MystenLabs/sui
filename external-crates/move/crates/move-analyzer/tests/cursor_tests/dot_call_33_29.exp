@@ -1,0 +1,8 @@
+-- 33:29 ------------
+expected: name in a dot call
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: exp
+- value: DotCall(Name(Single(PathEntry { name: "some_struct", tyargs: None, is_macro: None })), "f1", None, None, [])
+

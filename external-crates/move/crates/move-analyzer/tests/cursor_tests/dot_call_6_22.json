@@ -1,0 +1,7 @@
+{
+  "directory": "tests/move-2024",
+  "file": "sources/dot_call.move",
+  "line": 6,
+  "character": 22,
+  "description": "at a struct field type"
+}

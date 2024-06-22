@@ -1,0 +1,7 @@
+{
+  "directory": "tests/move-2024",
+  "file": "sources/dot_call.move",
+  "line": 31,
+  "character": 50,
+  "description": "name in module access"
+}

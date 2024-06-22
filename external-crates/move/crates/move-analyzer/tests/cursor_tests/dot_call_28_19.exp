@@ -1,0 +1,7 @@
+-- 28:19 ------------
+expected: at a function definition at nowhere in particular
+cursor info:
+- module: Move2024::M2
+- definition: function baz
+- position: unknown
+

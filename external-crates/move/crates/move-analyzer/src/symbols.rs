@@ -59,7 +59,7 @@ use crate::{
     compiler_info::CompilerInfo,
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
-    utils::loc_start_to_lsp_position_opt,
+    utils::{loc_start_to_lsp_position_opt, lsp_position_to_loc},
 };
 
 use anyhow::{anyhow, Result};
@@ -103,7 +103,10 @@ use move_compiler::{
         Identifier, Name, NamedAddressMap, NamedAddressMaps,
     },
     typing::{
-        ast::{Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
+        ast::{
+            self as T, Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_,
+            UnannotatedExp_,
+        },
         visitor::TypingVisitorContext,
     },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
@@ -316,6 +319,53 @@ pub struct ModuleDefs {
     pub untyped_defs: BTreeSet<Loc>,
 }
 
+#[derive(Clone, Debug)]
+pub struct CursorContext {
+    /// Set during typing analysis
+    pub module: Option<ModuleIdent>,
+    /// Set during typing analysis
+    pub defn_name: Option<CursorDefinition>,
+    // TODO: consider making this a vector to hold the whole chain upward
+    /// Set during parsing analysis
+    pub position: CursorPosition,
+    /// Location provided for the cursor
+    pub loc: Loc,
+}
+
+impl CursorContext {
+    fn new(loc: Loc) -> Self {
+        CursorContext {
+            module: None,
+            defn_name: None,
+            position: CursorPosition::Unknown,
+            loc,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum CursorPosition {
+    Exp(P::Exp),
+    SeqItem(P::SequenceItem),
+    Binding(P::Bind),
+    Type(P::Type),
+    FieldDefn(P::Field),
+    Parameter(P::Var),
+    DefName,
+    Unknown,
+    // FIXME: These two are currently unused because these forms don't have enough location
+    // recorded on them during parsing.
+    DatatypeTypeParameter(P::DatatypeTypeParameter),
+    FunctionTypeParameter((Name, Vec<P::Ability>)),
+}
+
+#[derive(Clone, Debug)]
+pub enum CursorDefinition {
+    Function(P::FunctionName),
+    Constant(P::ConstantName),
+    Struct(P::DatatypeName),
+    Enum(P::DatatypeName),
+}
 /// Data used during symbolication over parsed AST
 pub struct ParsingSymbolicator<'a> {
     /// Outermost definitions in a module (structs, consts, functions), keyd on a ModuleIdent
@@ -340,6 +390,8 @@ pub struct ParsingSymbolicator<'a> {
     /// A per-package mapping from package names to their addresses (needs to be appropriately set
     /// before the package processint starts)
     pkg_addresses: &'a NamedAddressMap,
+    /// Cursor contextual information, computed as part of the traversal.
+    cursor: Option<&'a mut CursorContext>,
 }
 
 type LineOffset = u32;
@@ -368,6 +420,10 @@ pub struct Symbols {
     def_info: DefMap,
     /// IDE Annotation Information from the Compiler
     pub compiler_info: CompilerInfo,
+    /// Cursor information gathered up during analysis
+    pub cursor_context: Option<CursorContext>,
+    /// Typed Program
+    pub typed_ast: Option<T::Program>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -551,6 +607,75 @@ impl fmt::Display for DefInfo {
             }
             Self::Module(mod_ident_str, _) => write!(f, "module {mod_ident_str}"),
         }
+    }
+}
+
+impl fmt::Display for CursorContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let CursorContext {
+            module,
+            defn_name,
+            position,
+            loc: _,
+        } = self;
+        writeln!(f, "cursor info:")?;
+        write!(f, "- module: ")?;
+        match module {
+            Some(mident) => writeln!(f, "{mident}"),
+            None => writeln!(f, "None"),
+        }?;
+        write!(f, "- definition: ")?;
+        match defn_name {
+            Some(defn) => match defn {
+                CursorDefinition::Function(name) => writeln!(f, "function {name}"),
+                CursorDefinition::Constant(name) => writeln!(f, "constant {name}"),
+                CursorDefinition::Struct(name) => writeln!(f, "struct {name}"),
+                CursorDefinition::Enum(name) => writeln!(f, "enum {name}"),
+            },
+            None => writeln!(f, "None"),
+        }?;
+        write!(f, "- position: ")?;
+        match position {
+            CursorPosition::DefName => {
+                writeln!(f, "defn name")?;
+            }
+            CursorPosition::Unknown => {
+                writeln!(f, "unknown")?;
+            }
+            CursorPosition::Exp(value) => {
+                writeln!(f, "exp")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::SeqItem(value) => {
+                writeln!(f, "seq item")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::Binding(value) => {
+                writeln!(f, "binder")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::Type(value) => {
+                writeln!(f, "type")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::FieldDefn(value) => {
+                writeln!(f, "field")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::Parameter(value) => {
+                writeln!(f, "parameter")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::DatatypeTypeParameter(value) => {
+                writeln!(f, "datatype type param")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::FunctionTypeParameter(value) => {
+                writeln!(f, "fun type param")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -870,6 +995,7 @@ impl SymbolicatorRunner {
                             ide_files_root.clone(),
                             root_dir.unwrap().as_path(),
                             lint,
+                            None,
                         ) {
                             Ok((symbols_opt, lsp_diagnostics)) => {
                                 eprintln!("symbolication finished");
@@ -1149,6 +1275,7 @@ pub fn get_symbols(
     ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: LintLevel,
+    cursor_info: Option<(&PathBuf, Position)>,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let build_config = move_package::BuildConfig {
         test_mode: true,
@@ -1345,7 +1472,7 @@ pub fn get_symbols(
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
     let parsed_program = parsed_ast.unwrap();
-    let mut typed_modules = typed_ast.unwrap().modules;
+    let mut typed_program = typed_ast.clone().unwrap();
 
     let mut mod_outer_defs = BTreeMap::new();
     let mut mod_use_defs = BTreeMap::new();
@@ -1363,8 +1490,10 @@ pub fn get_symbols(
         file_id_to_lines.insert(*file_id, lines);
     }
 
+    let mut cursor_context = compute_cursor_context(&mapped_files, cursor_info);
+
     pre_process_typed_modules(
-        &typed_modules,
+        &typed_program.modules,
         &mapped_files,
         &file_id_to_lines,
         &mut mod_outer_defs,
@@ -1372,6 +1501,7 @@ pub fn get_symbols(
         &mut references,
         &mut def_info,
         &edition,
+        cursor_context.as_mut(),
     );
 
     if let Some(libs) = compiled_libs.clone() {
@@ -1384,6 +1514,7 @@ pub fn get_symbols(
             &mut references,
             &mut def_info,
             &edition,
+            None, // Cursor can never be in a compiled library(?)
         );
     }
 
@@ -1401,6 +1532,7 @@ pub fn get_symbols(
         current_mod_ident_str: None,
         alias_lengths: BTreeMap::new(),
         pkg_addresses: &NamedAddressMap::new(),
+        cursor: cursor_context.as_mut(),
     };
 
     parsing_symbolicator.prog_symbols(
@@ -1409,6 +1541,7 @@ pub fn get_symbols(
         &mut mod_to_alias_lengths,
     );
     if let Some(libs) = compiled_libs.clone() {
+        parsing_symbolicator.cursor = None;
         parsing_symbolicator.prog_symbols(
             &libs.parser,
             &mut mod_use_defs,
@@ -1431,7 +1564,7 @@ pub fn get_symbols(
     };
 
     process_typed_modules(
-        &mut typed_modules,
+        &mut typed_program.modules,
         &source_files,
         &mod_to_alias_lengths,
         &mut typing_symbolicator,
@@ -1463,11 +1596,24 @@ pub fn get_symbols(
         def_info,
         files: mapped_files,
         compiler_info,
+        cursor_context,
+        typed_ast,
     };
 
     eprintln!("get_symbols load complete");
 
     Ok((Some(symbols), ide_diagnostics))
+}
+
+fn compute_cursor_context(
+    mapped_files: &MappedFiles,
+    cursor_info: Option<(&PathBuf, Position)>,
+) -> Option<CursorContext> {
+    let (path, pos) = cursor_info?;
+    let file_hash = mapped_files.file_hash(path)?;
+    let loc = lsp_position_to_loc(mapped_files, file_hash, &pos)?;
+    eprintln!("computed cursor loc");
+    Some(CursorContext::new(loc))
 }
 
 fn pre_process_typed_modules(
@@ -1479,8 +1625,16 @@ fn pre_process_typed_modules(
     references: &mut References,
     def_info: &mut DefMap,
     edition: &Option<Edition>,
+    mut cursor_context: Option<&mut CursorContext>,
 ) {
     for (pos, module_ident, module_def) in typed_modules {
+        // If the cursor is in this module, mark that down.
+        if let Some(cursor) = &mut cursor_context {
+            if module_def.loc.contains(&cursor.loc) {
+                cursor.module = Some(sp(pos, *module_ident));
+            }
+        };
+
         let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         let (defs, symbols) = get_mod_outer_defs(
             &pos,
@@ -1641,6 +1795,8 @@ pub fn empty_symbols() -> Symbols {
         def_info: BTreeMap::new(),
         files: MappedFiles::empty(),
         compiler_info: CompilerInfo::new(),
+        cursor_context: None,
+        typed_ast: None,
     }
 }
 
@@ -1845,6 +2001,23 @@ fn get_mod_outer_defs(
     (mod_defs, use_def_map)
 }
 
+macro_rules! update_cursor {
+    ($cursor:expr, $subject:expr, $kind:ident) => {
+        if let Some(cursor) = &mut $cursor {
+            if $subject.loc.contains(&cursor.loc) {
+                cursor.position = CursorPosition::$kind($subject.clone());
+            }
+        };
+    };
+    (IDENT, $cursor:expr, $subject:expr, $kind:ident) => {
+        if let Some(cursor) = &mut $cursor {
+            if $subject.loc().contains(&cursor.loc) {
+                cursor.position = CursorPosition::$kind($subject.clone());
+            }
+        };
+    };
+}
+
 impl<'a> ParsingSymbolicator<'a> {
     /// Get symbols for the whole program
     fn prog_symbols(
@@ -1914,11 +2087,28 @@ impl<'a> ParsingSymbolicator<'a> {
                     if ignored_function(fun.name.value()) {
                         continue;
                     }
-                    fun.signature
-                        .parameters
-                        .iter()
-                        .for_each(|(_, _, t)| self.type_symbols(t));
+
+                    // Unit returns span the entire function signature, so we process them first
+                    // for cursor ordering.
                     self.type_symbols(&fun.signature.return_type);
+
+                    // If the cursor is in this item, mark that down.
+                    // This may be overridden by the recursion below.
+                    if let Some(cursor) = &mut self.cursor {
+                        if fun.name.loc().contains(&cursor.loc) {
+                            cursor.position = CursorPosition::DefName;
+                            debug_assert!(cursor.defn_name.is_none());
+                            cursor.defn_name = Some(CursorDefinition::Function(fun.name));
+                        } else if fun.loc.contains(&cursor.loc) {
+                            cursor.defn_name = Some(CursorDefinition::Function(fun.name));
+                        }
+                    };
+
+                    for (_, x, t) in fun.signature.parameters.iter() {
+                        update_cursor!(IDENT, self.cursor, x, Parameter);
+                        self.type_symbols(t)
+                    }
+
                     if fun.macro_.is_some() {
                         // we currently do not process macro function bodies
                         // in the parsing symbolicator (and do very limited
@@ -1929,19 +2119,50 @@ impl<'a> ParsingSymbolicator<'a> {
                         self.seq_symbols(seq);
                     };
                 }
-                MM::Struct(sdef) => match &sdef.fields {
-                    P::StructFields::Named(v) => v.iter().for_each(|(_, t)| self.type_symbols(t)),
-                    P::StructFields::Positional(v) => v.iter().for_each(|t| self.type_symbols(t)),
-                    P::StructFields::Native(_) => (),
-                },
+                MM::Struct(sdef) => {
+                    // If the cursor is in this item, mark that down.
+                    // This may be overridden by the recursion below.
+                    if let Some(cursor) = &mut self.cursor {
+                        if sdef.name.loc().contains(&cursor.loc) {
+                            cursor.position = CursorPosition::DefName;
+                            debug_assert!(cursor.defn_name.is_none());
+                            cursor.defn_name = Some(CursorDefinition::Struct(sdef.name));
+                        } else if sdef.loc.contains(&cursor.loc) {
+                            cursor.defn_name = Some(CursorDefinition::Struct(sdef.name));
+                        }
+                    };
+                    match &sdef.fields {
+                        P::StructFields::Named(v) => v.iter().for_each(|(x, t)| {
+                            self.field_defn(x);
+                            self.type_symbols(t)
+                        }),
+                        P::StructFields::Positional(v) => {
+                            v.iter().for_each(|t| self.type_symbols(t))
+                        }
+                        P::StructFields::Native(_) => (),
+                    }
+                }
                 MM::Enum(edef) => {
+                    // If the cursor is in this item, mark that down.
+                    // This may be overridden by the recursion below.
+                    if let Some(cursor) = &mut self.cursor {
+                        if edef.name.loc().contains(&cursor.loc) {
+                            cursor.position = CursorPosition::DefName;
+                            debug_assert!(cursor.defn_name.is_none());
+                            cursor.defn_name = Some(CursorDefinition::Enum(edef.name));
+                        } else if edef.loc.contains(&cursor.loc) {
+                            cursor.defn_name = Some(CursorDefinition::Enum(edef.name));
+                        }
+                    };
+
                     let P::EnumDefinition { variants, .. } = edef;
                     for variant in variants {
                         let P::VariantDefinition { fields, .. } = variant;
                         match fields {
-                            P::VariantFields::Named(v) => {
-                                v.iter().for_each(|(_, t)| self.type_symbols(t))
-                            }
+                            P::VariantFields::Named(v) => v.iter().for_each(|(x, t)| {
+                                self.field_defn(x);
+                                self.type_symbols(t)
+                            }),
                             P::VariantFields::Positional(v) => {
                                 v.iter().for_each(|t| self.type_symbols(t))
                             }
@@ -1952,6 +2173,17 @@ impl<'a> ParsingSymbolicator<'a> {
                 MM::Use(use_decl) => self.use_decl_symbols(use_decl),
                 MM::Friend(fdecl) => self.chain_symbols(&fdecl.friend),
                 MM::Constant(c) => {
+                    // If the cursor is in this item, mark that down.
+                    // This may be overridden by the recursion below.
+                    if let Some(cursor) = &mut self.cursor {
+                        if c.name.loc().contains(&cursor.loc) {
+                            cursor.position = CursorPosition::DefName;
+                            debug_assert!(cursor.defn_name.is_none());
+                            cursor.defn_name = Some(CursorDefinition::Constant(c.name));
+                        } else if c.loc.contains(&cursor.loc) {
+                            cursor.defn_name = Some(CursorDefinition::Constant(c.name));
+                        }
+                    };
                     self.type_symbols(&c.signature);
                     self.exp_symbols(&c.value);
                 }
@@ -1968,6 +2200,11 @@ impl<'a> ParsingSymbolicator<'a> {
     /// Get symbols for a sequence item
     fn seq_item_symbols(&mut self, seq_item: &P::SequenceItem) {
         use P::SequenceItem_ as I;
+
+        // If the cursor is in this item, mark that down.
+        // This may be overridden by the recursion below.
+        update_cursor!(self.cursor, seq_item, SeqItem);
+
         match &seq_item.value {
             I::Seq(e) => self.exp_symbols(e),
             I::Declare(v, to) => {
@@ -2013,9 +2250,14 @@ impl<'a> ParsingSymbolicator<'a> {
     }
 
     /// Get symbols for an expression
-    fn exp_symbols(&mut self, sp!(_, exp): &P::Exp) {
+    fn exp_symbols(&mut self, exp: &P::Exp) {
         use P::Exp_ as E;
-        match exp {
+
+        // If the cursor is in this item, mark that down.
+        // This may be overridden by the recursion below.
+        update_cursor!(self.cursor, exp, Exp);
+
+        match &exp.value {
             E::Move(_, e) => self.exp_symbols(e),
             E::Copy(_, e) => self.exp_symbols(e),
             E::Name(chain) => self.chain_symbols(chain),
@@ -2270,9 +2512,14 @@ impl<'a> ParsingSymbolicator<'a> {
     }
 
     /// Get symbols for a type
-    fn type_symbols(&mut self, sp!(_, t): &P::Type) {
+    fn type_symbols(&mut self, type_: &P::Type) {
         use P::Type_ as T;
-        match t {
+
+        // If the cursor is in this item, mark that down.
+        // This may be overridden by the recursion below.
+        update_cursor!(self.cursor, type_, Type);
+
+        match &type_.value {
             T::Apply(chain) => {
                 self.chain_symbols(chain);
             }
@@ -2288,9 +2535,14 @@ impl<'a> ParsingSymbolicator<'a> {
     }
 
     /// Get symbols for a bind statement
-    fn bind_symbols(&mut self, sp!(_, bind): &P::Bind, explicitly_typed: bool) {
+    fn bind_symbols(&mut self, bind: &P::Bind, explicitly_typed: bool) {
         use P::Bind_ as B;
-        match bind {
+
+        // If the cursor is in this item, mark that down.
+        // This may be overridden by the recursion below.
+        update_cursor!(self.cursor, bind, Binding);
+
+        match &bind.value {
             B::Unpack(chain, bindings) => {
                 self.chain_symbols(chain);
                 match bindings {
@@ -2363,6 +2615,11 @@ impl<'a> ParsingSymbolicator<'a> {
             return;
         };
         self.alias_lengths.insert(loc, name.len());
+    }
+
+    fn field_defn(&mut self, field: &P::Field) {
+        // If the cursor is in this item, mark that down.
+        update_cursor!(IDENT, self.cursor, field, FieldDefn);
     }
 }
 
@@ -3073,6 +3330,7 @@ fn docstring_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -3350,6 +3608,7 @@ fn symbols_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -4397,6 +4656,7 @@ fn const_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -4643,6 +4903,7 @@ fn imports_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -4851,6 +5112,7 @@ fn module_access_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5012,6 +5274,7 @@ fn parse_error_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5103,6 +5366,7 @@ fn parse_error_with_deps_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5158,6 +5422,7 @@ fn pretype_error_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5199,6 +5464,7 @@ fn pretype_error_with_deps_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5303,6 +5569,7 @@ fn dot_call_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5639,6 +5906,7 @@ fn mod_ident_uniform_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5664,6 +5932,7 @@ fn move2024_struct_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5787,6 +6056,7 @@ fn implicit_uses_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5840,6 +6110,7 @@ fn let_mut_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5921,6 +6192,7 @@ fn partial_function_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -5961,6 +6233,7 @@ fn partial_dot_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -6075,6 +6348,7 @@ fn pkg_renaming_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -6105,6 +6379,7 @@ fn function_types_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
@@ -6189,6 +6464,7 @@ fn macros_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();
