@@ -116,6 +116,7 @@ mod checked {
             receiving_objects,
             transaction_digest,
             protocol_config,
+            *epoch_id,
         );
 
         let mut gas_charger =
@@ -248,6 +249,7 @@ mod checked {
             vec![],
             tx_context.digest(),
             protocol_config,
+            0,
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
