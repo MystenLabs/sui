@@ -608,6 +608,7 @@ mod checked {
                 inputs,
                 results,
                 user_events,
+                state_view,
                 ..
             } = self;
             let tx_digest = tx_context.digest();
@@ -826,6 +827,10 @@ mod checked {
                         ));
                     }
                 }
+            }
+
+            if protocol_config.enable_coin_deny_list_v2() {
+                state_view.check_coin_deny_list(&written_objects)?;
             }
 
             let user_events = user_events
