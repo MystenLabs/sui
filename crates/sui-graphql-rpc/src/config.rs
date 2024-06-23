@@ -463,6 +463,7 @@ impl Default for Limits {
             // This value is set to be the size of the max transaction bytes allowed + base64
             // overhead + the max query payload overhead + the max signature size (on a multisig).
             // The base64 overhead is roughly 4/3 of the original string.
+            // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1578>
             max_mutation_payload_size: 174_667 + 5_000 + 1_350,
         }
     }
