@@ -7,8 +7,7 @@ use crate::{
 };
 use lsp_server::Request;
 use lsp_types::{
-    InlayHint, InlayHintKind, InlayHintLabel, InlayHintLabelPart, InlayHintParams,
-    InlayHintTooltip, Position,
+    InlayHint, InlayHintKind, InlayHintLabel, InlayHintLabelPart, InlayHintParams, InlayHintTooltip,
 };
 
 use move_compiler::{naming::ast as N, shared::Identifier};
@@ -30,7 +29,7 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
             for mod_defs in file_defs {
                 for untyped_def_loc in mod_defs.untyped_defs() {
                     let start_position = symbols.files.start_position(untyped_def_loc);
-                    if let Some(DefInfo::Local(n, t, _, _)) = symbols.def_info(untyped_def_loc) {
+                    if let Some(DefInfo::Local(_, t, _, _)) = symbols.def_info(untyped_def_loc) {
                         let colon_label = InlayHintLabelPart {
                             value: ": ".to_string(),
                             tooltip: None,

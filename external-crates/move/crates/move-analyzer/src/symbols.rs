@@ -2812,9 +2812,9 @@ fn extract_doc_string(
     let start_position = files.start_position_opt(loc)?;
     let file_lines = file_id_to_lines.get(&file_id)?;
 
-    /*
-        if let Some(outer_line) = outer_def_line {
-            if outer_line == name_start.line {
+    if let Some(outer_loc) = outer_def_loc {
+        if let Some(outer_pos) = files.start_position_opt(&outer_loc) {
+            if outer_pos.line_offset() == start_position.line_offset() {
                 // It's a bit of a hack but due to the way we extract doc strings
                 // we should not do it for a definition if this definition is placed
                 // on the same line as another (outer) one as this way we'd pick
@@ -2826,11 +2826,7 @@ fn extract_doc_string(
                 return None;
             }
         }
-
-        let Some(file_id) = file_id_mapping.get(file_hash) else {
-            return None;
-    };
-        */
+    }
 
     if start_position.line_offset() == 0 {
         return None;
