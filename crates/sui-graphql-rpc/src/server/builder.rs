@@ -415,7 +415,11 @@ impl ServerBuilder {
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
         // DB
-        let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
+        let db = Db::new(
+            reader.clone(),
+            config.service.limits.clone(),
+            metrics.clone(),
+        );
         let loader = DataLoader::new(db.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
         let package_store = DbPackageStore::new(loader.clone());
@@ -626,15 +630,23 @@ pub mod tests {
         connection_config: Option<ConnectionConfig>,
         service_config: Option<ServiceConfig>,
     ) -> ServerBuilder {
-        let connection_config =
-            connection_config.unwrap_or_else(ConnectionConfig::ci_integration_test_cfg);
+        let connection_config = connection_config.unwrap_or_default();
         let service_config = service_config.unwrap_or_default();
 
-        let db_url: String = connection_config.db_url.clone();
-        let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+        let reader = PgManager::reader_with_config(
+            connection_config.db_url.clone(),
+            connection_config.db_pool_size,
+            service_config.limits.request_timeout_ms,
+        )
+        .expect("Failed to create pg connection pool");
+
         let version = Version::for_testing();
         let metrics = metrics();
-        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
+        let db = Db::new(
+            reader.clone(),
+            service_config.limits.clone(),
+            metrics.clone(),
+        );
         let pg_conn_pool = PgManager::new(reader);
         let cancellation_token = CancellationToken::new();
         let watermark = Watermark {
