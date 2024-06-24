@@ -12,11 +12,10 @@ use sui_sdk2::types::{
 };
 use tap::Pipe;
 
+use crate::openapi::{ApiEndpoint, RouteHandler};
 use crate::response::Bcs;
-use crate::Result;
 use crate::{accept::AcceptFormat, response::ResponseContent};
-
-pub const POST_EXECUTE_TRANSACTION_PATH: &str = "/transactions";
+use crate::{RestService, Result};
 
 /// Trait to define the interface for how the REST service interacts with a a QuorumDriver or a
 /// simulated transaction executor.
@@ -34,6 +33,31 @@ pub trait TransactionExecutor: Send + Sync {
     //TODO include Simulate functionality
 }
 
+pub struct ExecuteTransaction;
+
+impl ApiEndpoint<RestService> for ExecuteTransaction {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::POST
+    }
+
+    fn path(&self) -> &'static str {
+        "/transactions"
+    }
+
+    fn operation(
+        &self,
+        generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        generator.subschema_for::<SignedTransaction>();
+
+        openapiv3::v3_1::Operation::default()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), execute_transaction)
+    }
+}
+
 /// Execute Transaction REST endpoint.
 ///
 /// Handles client transaction submission request by passing off the provided signed transaction to
@@ -41,13 +65,14 @@ pub trait TransactionExecutor: Send + Sync {
 /// set.
 ///
 /// A client can signal, using the `Accept` header, the response format as either JSON or BCS.
-pub async fn execute_transaction(
-    State(state): State<Arc<dyn TransactionExecutor>>,
+async fn execute_transaction(
+    State(state): State<Option<Arc<dyn TransactionExecutor>>>,
     Query(parameters): Query<ExecuteTransactionQueryParameters>,
     client_address: Option<axum::extract::ConnectInfo<SocketAddr>>,
     accept: AcceptFormat,
     Bcs(transaction): Bcs<SignedTransaction>,
 ) -> Result<ResponseContent<TransactionExecutionResponse>> {
+    let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
     let request = sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
         transaction: transaction.into(),
         include_events: parameters.events,
@@ -62,7 +87,7 @@ pub async fn execute_transaction(
         input_objects,
         output_objects,
         auxiliary_data: _,
-    } = state
+    } = executor
         .execute_transaction(request, client_address.map(|a| a.0))
         .await?;
 

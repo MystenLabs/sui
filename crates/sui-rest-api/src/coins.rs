@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::openapi::{ApiEndpoint, RouteHandler};
 use crate::RestError;
+use crate::RestService;
 use crate::{accept::AcceptFormat, reader::StateReader, Result};
 use axum::extract::{Path, State};
 use axum::Json;
@@ -9,9 +11,30 @@ use serde::{Deserialize, Serialize};
 use sui_sdk2::types::{ObjectId, StructTag};
 use sui_types::sui_sdk2_conversions::struct_tag_sdk_to_core;
 
-pub const GET_COIN_INFO_PATH: &str = "/coins/:coin_type";
+pub struct GetCoinInfo;
 
-pub async fn get_coin_info(
+impl ApiEndpoint<RestService> for GetCoinInfo {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/coins/{coin_type}"
+    }
+
+    fn operation(
+        &self,
+        _generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        openapiv3::v3_1::Operation::default()
+    }
+
+    fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
+        RouteHandler::new(self.method(), get_coin_info)
+    }
+}
+
+async fn get_coin_info(
     Path(coin_type): Path<StructTag>,
     accept: AcceptFormat,
     State(state): State<StateReader>,
