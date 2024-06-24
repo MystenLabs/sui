@@ -88,7 +88,7 @@ impl UseDefTest {
         };
         use_def.render(
             output,
-            &symbols,
+            symbols,
             *use_line,
             &use_file_content,
             &def_file_content,
@@ -116,7 +116,7 @@ fn check_expected(expected_path: &Path, result: &str) -> anyhow::Result<()> {
 
     if update_baseline {
         fs::write(expected_path, result)?;
-        return Ok(());
+        Ok(())
     } else {
         let exp_exists = expected_path.is_file();
         if exp_exists {
