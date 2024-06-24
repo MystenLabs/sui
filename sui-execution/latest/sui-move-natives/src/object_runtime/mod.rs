@@ -40,6 +40,7 @@ use sui_types::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use tracing::error;
 
 pub enum ObjectEvent {
     /// Transfer to a new address or object. Or make it shared or immutable.
@@ -416,8 +417,14 @@ impl<'a> ObjectRuntime<'a> {
             field_setting_layout,
             field_setting_object_type,
         ) {
-            Err(_e) => {
-                // TODO logging
+            Err(e) => {
+                error!(
+                    "Failed to read config setting.
+                    config_id: {config_id},
+                    name_df_id: {name_df_id},
+                    field_setting_object_type:  {field_setting_object_type:?},
+                    error: {e}"
+                );
                 None
             }
             Ok(ObjectResult::MismatchedType) | Ok(ObjectResult::Loaded(None)) => None,

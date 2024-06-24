@@ -18,7 +18,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::MoveObjectType, TypeTag};
-use tracing::instrument;
+use tracing::{error, instrument};
 
 const E_BCS_SERIALIZATION_FAILURE: u64 = 2;
 
@@ -121,12 +121,13 @@ fn consistent_value_before_current_epoch(
     name_df_addr: AccountAddress,
     current_epoch: u64,
 ) -> PartialVMResult<Value> {
+    let field_setting_obj_ty = MoveObjectType::from(field_setting_tag);
     let Some(field) = object_runtime.config_setting_unsequenced_read(
         config_addr.into(),
         name_df_addr.into(),
         field_setting_ty,
         field_setting_layout,
-        &MoveObjectType::from(field_setting_tag),
+        &field_setting_obj_ty,
     ) else {
         return option_none(&value_ty);
     };
@@ -135,7 +136,13 @@ fn consistent_value_before_current_epoch(
     let [data_opt]: [Value; 1] = unpack_struct(setting)?;
     let data = match unpack_option(data_opt, &setting_data_value_ty)? {
         None => {
-            // TODO logging
+            error!(
+                "
+                SettingData is none.
+                config_addr: {config_addr},
+                name_df_addr: {name_df_addr},
+                field_setting_obj_ty: {field_setting_obj_ty:?}",
+            );
             return option_none(&value_ty);
         }
         Some(data) => data,

@@ -657,11 +657,10 @@ impl<'a> ChildObjectStore<'a> {
                         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                             .with_message(format!(
                                 "Parent for config setting changed. Potential hash collision?
-                             parent: {parent},
-                             child: {child},
-                             setting_value_object_type: {field_setting_object_type},
-                             setting: {setting:#?},
-                        "
+                                parent: {parent},
+                                child: {child},
+                                setting_value_object_type: {field_setting_object_type},
+                                setting: {setting:#?}"
                             )),
                     );
                 }
