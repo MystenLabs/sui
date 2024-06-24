@@ -10,7 +10,6 @@ use std::{
     path::PathBuf,
 };
 use sui_genesis_builder::validator_info::GenesisValidatorInfo;
-use url::{ParseError, Url};
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
@@ -510,14 +509,6 @@ impl SuiValidatorCommand {
                 validator_address,
                 gas_budget,
             } => {
-                let parsed_url =
-                    Url::parse(&bridge_authority_url).map_err(|e: ParseError| anyhow!(e))?;
-                if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
-                    anyhow::bail!(
-                        "URL scheme has to be http or https: {}",
-                        parsed_url.scheme()
-                    );
-                }
                 // Read bridge keypair
                 let ecdsa_keypair = match read_key(&bridge_authority_key_path, true)? {
                     SuiKeyPair::Secp256k1(key) => key,
@@ -589,14 +580,6 @@ impl SuiValidatorCommand {
                 validator_address,
                 gas_budget,
             } => {
-                let parsed_url =
-                    Url::parse(&bridge_authority_url).map_err(|e: ParseError| anyhow!(e))?;
-                if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
-                    anyhow::bail!(
-                        "URL scheme has to be http or https: {}",
-                        parsed_url.scheme()
-                    );
-                }
                 // Make sure the address is member of the committee
                 let address = check_address(
                     context.active_address()?,

@@ -3883,9 +3883,6 @@ BridgeCommittee
 CommitteeUpdateEvent
 	public struct
 	0xb::committee
-CommitteeMemberUrlUpdateEvent
-	public struct
-	0xb::committee
 CommitteeMember
 	public struct
 	0xb::committee
