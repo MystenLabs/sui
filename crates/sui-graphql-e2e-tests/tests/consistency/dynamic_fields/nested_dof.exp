@@ -4,231 +4,301 @@ init:
 A: object(0,0)
 
 task 1 'publish'. lines 24-75:
-created: object(1,0)
-mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 8960400,  storage_rebate: 0, non_refundable_storage_fee: 0
+Error: error[E13001]: feature is not supported in specified edition
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:27:5
+   │
+27 │     public struct Parent has key, store {
+   │     ^^^^^^ Struct visibility modifiers are not supported by current edition 'legacy', only '2024.alpha' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01003]: invalid modifier
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:27:5
+   │
+27 │     public struct Parent has key, store {
+   │     ^^^^^^ Invalid struct declaration. Structs cannot have visibility modifiers as they are always 'public'
+   │
+   = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
+
+error[E03004]: unbound type
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:28:13
+   │
+28 │         id: UID,
+   │             ^^^ Unbound type 'UID' in current scope
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:31:5
+   │
+31 │     public struct Child has key, store {
+   │     ^^^^^^ Struct visibility modifiers are not supported by current edition 'legacy', only '2024.alpha' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01003]: invalid modifier
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:31:5
+   │
+31 │     public struct Child has key, store {
+   │     ^^^^^^ Invalid struct declaration. Structs cannot have visibility modifiers as they are always 'public'
+   │
+   = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
+
+error[E03004]: unbound type
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:32:13
+   │
+32 │         id: UID,
+   │             ^^^ Unbound type 'UID' in current scope
+
+warning[W09002]: unused variable
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:35:29
+   │
+35 │     public entry fun parent(recipient: address, ctx: &mut TxContext) {
+   │                             ^^^^^^^^^ Unused parameter 'recipient'. Consider removing or prefixing with an underscore: '_recipient'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:35:49
+   │
+35 │     public entry fun parent(recipient: address, ctx: &mut TxContext) {
+   │                                                 ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03004]: unbound type
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:35:59
+   │
+35 │     public entry fun parent(recipient: address, ctx: &mut TxContext) {
+   │                                                           ^^^^^^^^^ Unbound type 'TxContext' in current scope
+
+error[E03002]: unbound module
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:36:9
+   │
+36 │         transfer::public_transfer(
+   │         ^^^^^^^^ Unbound module alias 'transfer'
+
+error[E03002]: unbound module
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:37:26
+   │
+37 │             Parent { id: object::new(ctx), count: 0 },
+   │                          ^^^^^^ Unbound module alias 'object'
+
+warning[W09002]: unused variable
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:44:28
+   │
+44 │     public entry fun child(recipient: address, ctx: &mut TxContext) {
+   │                            ^^^^^^^^^ Unused parameter 'recipient'. Consider removing or prefixing with an underscore: '_recipient'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:44:48
+   │
+44 │     public entry fun child(recipient: address, ctx: &mut TxContext) {
+   │                                                ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03004]: unbound type
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:44:58
+   │
+44 │     public entry fun child(recipient: address, ctx: &mut TxContext) {
+   │                                                          ^^^^^^^^^ Unbound type 'TxContext' in current scope
+
+error[E03002]: unbound module
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:45:9
+   │
+45 │         transfer::public_transfer(
+   │         ^^^^^^^^ Unbound module alias 'transfer'
+
+error[E03002]: unbound module
+   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpaiVZMp:46:25
+   │
+46 │             Child { id: object::new(ctx), count: 0 },
+   │                         ^^^^^^ Unbound module alias 'object'
+
+
 
 task 2 'run'. lines 77-77:
-created: object(2,0)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
 
 task 3 'run'. lines 79-79:
-created: object(3,0)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
 
 task 4 'run'. lines 81-81:
-created: object(4,0)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
 
 task 5 'run'. lines 83-83:
-created: object(5,0)
-mutated: object(0,0), object(2,0), object(3,0)
-gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+Error: INVALID TEST. Unknown object, object(2,0)
 
 task 6 'run'. lines 85-85:
-created: object(6,0)
-mutated: object(0,0), object(2,0), object(4,0)
-gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+Error: INVALID TEST. Unknown object, object(2,0)
 
 task 7 'run'. lines 87-87:
-mutated: object(0,0), object(2,0), object(3,0)
-gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+Error: INVALID TEST. Unknown object, object(2,0)
 
 task 8 'run'. lines 89-89:
-mutated: object(0,0), object(2,0), object(4,0)
-gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+Error: INVALID TEST. Unknown object, object(2,0)
 
 task 9 'create-checkpoint'. lines 91-91:
 Checkpoint created: 1
 
 task 10 'run-graphql'. lines 93-123:
-Response: {
-  "data": {
-    "object": {
-      "dynamicFields": {
-        "nodes": [
-          {
-            "value": {
-              "address": "0x73f7e04f424045e449ed940a29a191045a40089fab972a4d83d7715d06c7ecf4",
-              "version": 5,
-              "contents": {
-                "json": {
-                  "id": "0x73f7e04f424045e449ed940a29a191045a40089fab972a4d83d7715d06c7ecf4",
-                  "count": "0"
-                }
-              },
-              "dynamicFields": {
-                "nodes": []
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "Test": "0x0",
+    "Test_opt": "0x0",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
 }
 
 task 11 'run-graphql'. lines 125-155:
-Response: {
-  "data": {
-    "object": {
-      "dynamicFields": {
-        "nodes": [
-          {
-            "value": {
-              "address": "0x73f7e04f424045e449ed940a29a191045a40089fab972a4d83d7715d06c7ecf4",
-              "version": 5,
-              "contents": {
-                "json": {
-                  "id": "0x73f7e04f424045e449ed940a29a191045a40089fab972a4d83d7715d06c7ecf4",
-                  "count": "0"
-                }
-              },
-              "dynamicFields": {
-                "nodes": [
-                  {
-                    "value": {
-                      "address": "0xc01dbc5bc85403c91054fc00aceffde453d176eecd91c216cace519337f3880b",
-                      "version": 6,
-                      "contents": {
-                        "json": {
-                          "id": "0xc01dbc5bc85403c91054fc00aceffde453d176eecd91c216cace519337f3880b",
-                          "count": "0"
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "Test": "0x0",
+    "Test_opt": "0x0",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
 }
 
 task 12 'run-graphql'. lines 157-187:
-Response: {
-  "data": {
-    "object": {
-      "dynamicFields": {
-        "nodes": [
-          {
-            "value": {
-              "address": "0x73f7e04f424045e449ed940a29a191045a40089fab972a4d83d7715d06c7ecf4",
-              "version": 7,
-              "contents": {
-                "json": {
-                  "id": "0x73f7e04f424045e449ed940a29a191045a40089fab972a4d83d7715d06c7ecf4",
-                  "count": "1"
-                }
-              },
-              "dynamicFields": {
-                "nodes": [
-                  {
-                    "value": {
-                      "address": "0xc01dbc5bc85403c91054fc00aceffde453d176eecd91c216cace519337f3880b",
-                      "version": 6,
-                      "contents": {
-                        "json": {
-                          "id": "0xc01dbc5bc85403c91054fc00aceffde453d176eecd91c216cace519337f3880b",
-                          "count": "0"
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "Test": "0x0",
+    "Test_opt": "0x0",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
 }
 
 task 13 'run-graphql'. lines 189-219:
-Response: {
-  "data": {
-    "object": {
-      "dynamicFields": {
-        "nodes": [
-          {
-            "value": {
-              "address": "0x73f7e04f424045e449ed940a29a191045a40089fab972a4d83d7715d06c7ecf4",
-              "version": 7,
-              "contents": {
-                "json": {
-                  "id": "0x73f7e04f424045e449ed940a29a191045a40089fab972a4d83d7715d06c7ecf4",
-                  "count": "1"
-                }
-              },
-              "dynamicFields": {
-                "nodes": [
-                  {
-                    "value": {
-                      "address": "0xc01dbc5bc85403c91054fc00aceffde453d176eecd91c216cace519337f3880b",
-                      "version": 8,
-                      "contents": {
-                        "json": {
-                          "id": "0xc01dbc5bc85403c91054fc00aceffde453d176eecd91c216cace519337f3880b",
-                          "count": "1"
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "Test": "0x0",
+    "Test_opt": "0x0",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
 }
 
 task 14 'run-graphql'. lines 221-238:
-Response: {
-  "data": {
-    "object": {
-      "dynamicFields": {
-        "nodes": []
-      }
-    }
-  }
+Error: Unknown variable: obj_3_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "Test": "0x0",
+    "Test_opt": "0x0",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
 }
 
 task 15 'run-graphql'. lines 240-257:
-Response: {
-  "data": {
-    "object": null
-  }
+Error: Unknown variable: obj_3_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "Test": "0x0",
+    "Test_opt": "0x0",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
 }
 
 task 16 'run-graphql'. lines 259-276:
-Response: {
-  "data": {
-    "object": {
-      "dynamicFields": {
-        "nodes": [
-          {
-            "value": {
-              "address": "0xc01dbc5bc85403c91054fc00aceffde453d176eecd91c216cace519337f3880b",
-              "version": 6,
-              "contents": {
-                "json": {
-                  "id": "0xc01dbc5bc85403c91054fc00aceffde453d176eecd91c216cace519337f3880b",
-                  "count": "0"
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
+Error: Unknown variable: obj_3_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "Test": "0x0",
+    "Test_opt": "0x0",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
 }
