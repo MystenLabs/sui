@@ -72,10 +72,15 @@ impl MoveTypeTagTrait for AddressKey {
 }
 
 /// Rust representation of the Move type 0x2::deny_list::GlobalPauseKey.
+/// There is no u8 in the Move definition, however empty structs in Move
+/// are represented as a single byte 0 in the serialized data.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct GlobalPauseKey;
+struct GlobalPauseKey(u8);
 
 impl GlobalPauseKey {
+    pub fn new() -> Self {
+        Self(0)
+    }
     pub fn type_() -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_PACKAGE_ID.into(),
@@ -146,7 +151,7 @@ pub fn check_global_pause(
     object_store: &dyn ObjectStore,
     cur_epoch: Option<EpochId>,
 ) -> bool {
-    let global_pause_key = GlobalPauseKey;
+    let global_pause_key = GlobalPauseKey::new();
     read_config_setting(object_store, deny_config, global_pause_key, cur_epoch).unwrap_or(false)
 }
 
