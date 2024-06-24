@@ -13,6 +13,7 @@ use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, Dynami
 
 use super::available_range::AvailableRange;
 use super::cursor::{Page, Target};
+use super::move_object::MoveObjectDowncastError;
 use super::object::{self, deserialize_move_struct, Object, ObjectKind, ObjectLookup};
 use super::type_filter::ExactTypeFilter;
 use super::{

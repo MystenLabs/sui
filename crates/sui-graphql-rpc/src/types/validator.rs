@@ -17,6 +17,7 @@ use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
 use super::object::Object;
+use super::owner::Owner;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
