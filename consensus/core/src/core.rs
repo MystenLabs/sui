@@ -204,6 +204,11 @@ impl Core {
                 .unwrap();
         }
 
+        debug!(
+            "Core recovery complete with last block {:?}",
+            self.last_proposed_block
+        );
+
         self
     }
 
@@ -406,6 +411,15 @@ impl Core {
             .node_metrics
             .block_ancestors
             .observe(ancestors.len() as f64);
+        for ancestor in &ancestors {
+            let authority = &self.context.committee.authority(ancestor.author()).hostname;
+            self.context
+                .metrics
+                .node_metrics
+                .block_ancestors_depth
+                .with_label_values(&[authority])
+                .observe(clock_round.saturating_sub(ancestor.round()).into());
+        }
 
         // Ensure ancestor timestamps are not more advanced than the current time.
         // Also catch the issue if system's clock go backwards.

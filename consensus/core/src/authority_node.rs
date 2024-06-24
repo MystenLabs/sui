@@ -292,6 +292,8 @@ where
 
         network_manager.install_service(network_service).await;
 
+        info!("Authority start complete, took {:?}", start_time.elapsed());
+
         Self {
             context,
             start_time,

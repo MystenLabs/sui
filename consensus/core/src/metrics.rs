@@ -101,6 +101,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) block_size: Histogram,
     pub(crate) block_ancestors: Histogram,
+    pub(crate) block_ancestors_depth: HistogramVec,
     pub(crate) highest_verified_authority_round: IntGaugeVec,
     pub(crate) lowest_verified_authority_round: IntGaugeVec,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
@@ -188,6 +189,13 @@ impl NodeMetrics {
                 "block_ancestors",
                 "Number of ancestors in proposed blocks",
                 exponential_buckets(1.0, 1.4, 20).unwrap(),
+                registry,
+            ).unwrap(),
+            block_ancestors_depth: register_histogram_vec_with_registry!(
+                "block_ancestors_depth",
+                "The depth in rounds of ancestors included in newly proposed blocks",
+                &["authority"],
+                exponential_buckets(1.0, 2.0, 14).unwrap(),
                 registry,
             ).unwrap(),
             highest_verified_authority_round: register_int_gauge_vec_with_registry!(
