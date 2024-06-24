@@ -260,7 +260,8 @@ impl ServiceConfig {
     }
 
     /// Maximum mutation payload size in bytes. This is the maximum size allowed for a transaction
-    /// plus the Base64 overhead, plus the max query payload size allowed.
+    /// plus the Base64 overhead, plus the max query payload size allowed, plus the size of
+    /// signatures.
     async fn max_mutation_payload_size(&self) -> u32 {
         self.limits.max_mutation_payload_size
     }
