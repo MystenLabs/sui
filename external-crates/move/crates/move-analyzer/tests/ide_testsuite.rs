@@ -149,7 +149,7 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
     let (symbols_opt, _) = get_symbols(
         Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
-        &project_path.as_path(),
+        project_path.as_path(),
         LintLevel::None,
     )?;
     let symbols = symbols_opt.ok_or("DID NOT FIND SYMBOLS")?;
@@ -178,7 +178,7 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
                     use_def_test.test(idx, mod_symbols, &symbols, writer, &file, &cpath)?
                 }
             };
-            writeln!(writer, "")?;
+            writeln!(writer)?;
         }
     }
 
