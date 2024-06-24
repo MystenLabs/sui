@@ -42,7 +42,7 @@ use tokio::time::Duration;
 use tracing::{error, info, instrument, warn, Instrument};
 
 pub const CHANNEL_SIZE: usize = 1000;
-pub const SIGNING_CONCURRENCY: usize = 10;
+pub const SIGNING_CONCURRENCY: usize = 1;
 
 // delay schedule: at most 16 times including the initial attempt
 // 0.1s, 0.2s, 0.4s, 0.8s, 1.6s, 3.2s, 6.4s, 12.8s, 25.6s, 51.2s, 102.4s, 204.8s, 409.6s, 819.2s, 1638.4s
