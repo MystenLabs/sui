@@ -100,7 +100,7 @@ zkLogin uses the user salt to compute the zkLogin Sui address (see [definition](
    - Option 3: Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
    - Option 4: Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
 
-Here's an example request and response for the Mysten Labs-maintained salt server (using option 4). If you want to use the Mysten Labs salt server, please contact us for whitelisting your registered client ID. Only valid JWT authenticated with whitelisted client IDs are accepted.
+Here's an example request and response for the Mysten Labs-maintained salt server (using option 4). If you want to use the Mysten Labs salt server, please refer to [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact us. Only valid JWT authenticated with whitelisted client IDs are accepted.
 
 ```bash
 curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
