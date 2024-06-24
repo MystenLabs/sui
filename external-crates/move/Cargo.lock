@@ -1299,6 +1299,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "json_comments"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
+
+[[package]]
 name = "keccak"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1528,6 +1534,7 @@ dependencies = [
  "dunce",
  "im",
  "itertools",
+ "json_comments",
  "lsp-server",
  "lsp-types",
  "move-command-line-common",

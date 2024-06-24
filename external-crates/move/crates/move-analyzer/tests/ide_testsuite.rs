@@ -9,11 +9,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use move_analyzer::symbols::{get_symbols, Symbols, UseDefMap};
+use json_comments::StripComments;
+use move_analyzer::symbols::{def_info_doc_string, get_symbols, Symbols, UseDefMap};
 use move_command_line_common::testing::{
     add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT,
 };
-use move_compiler::{linters::LintLevel, shared::files::MappedFiles};
+use move_compiler::linters::LintLevel;
 use serde::{Deserialize, Serialize};
 use vfs::{MemoryFS, VfsPath};
 
@@ -96,7 +97,16 @@ impl UseDefTest {
             writeln!(output, "ERROR: No def loc found")?;
             return Ok(());
         };
-        writeln!(output, "On Hover:\n{}", def)?;
+
+        writeln!(
+            output,
+            "On Hover:\n{}",
+            if let Some(s) = def_info_doc_string(def) {
+                format!("{}\n\n{}", def, s)
+            } else {
+                format!("{}", def)
+            }
+        )?;
         Ok(())
     }
 }
@@ -128,7 +138,8 @@ fn check_expected(expected_path: &Path, result: &str) -> anyhow::Result<()> {
 
 fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
-    let suite: TestSuite = serde_json::from_reader(suite_file)?;
+    let stripped = StripComments::new(suite_file);
+    let suite: TestSuite = serde_json::from_reader(stripped)?;
 
     let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut project_path = base_path.clone();

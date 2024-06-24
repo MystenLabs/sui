@@ -1,0 +1,105 @@
+// Tests if symbolication + doc_string information for documented Move constructs is constructed
+// correctly.
+{
+  "project": "tests/symbols",
+  "file_tests": {
+    "M6.move": [
+      {
+        "UseDefTest": {
+          "use_line": 4,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 10,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 14,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 14,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 14,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 15,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 15,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 15,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 26,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 31,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 26,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 27,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 27,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 38,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 43,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 43,
+          "use_ndx": 2
+        }
+      }
+    ]
+  }
+}

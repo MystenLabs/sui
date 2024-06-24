@@ -1,3 +1,5 @@
+// Tests macro definitions and invocations as well as if function types (`macro` or `entry`)
+// are displayed correctly
 {
   "project": "tests/macros",
   "file_tests": {
