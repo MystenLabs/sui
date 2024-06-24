@@ -72,7 +72,6 @@ async fn test_regulated_coin_v1_creation() {
 
 // Test that a v2 regulated coin can be created and all the necessary objects are created with the right types.
 // Also test that we could create the deny list config for the coin and all types can be loaded in Rust.
-#[ignore]
 #[tokio::test]
 async fn test_regulated_coin_v2_types() {
     let env = new_authority_and_publish("coin_deny_list_v2").await;
