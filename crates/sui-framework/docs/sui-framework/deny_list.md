@@ -215,13 +215,7 @@ A shared object that stores the addresses that are blocked for a given core type
 
 <dl>
 <dt>
-<code>per_type_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
+<code>key: <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">deny_list::ConfigKey</a></code>
 </dt>
 <dd>
 
@@ -579,11 +573,7 @@ meaningless to add them to the deny list.
     <b>let</b> <a href="../sui-framework/config.md#0x2_config">config</a> = <a href="../sui-framework/config.md#0x2_config_new">config::new</a>(&<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(), ctx);
     <b>let</b> config_id = <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&<a href="../sui-framework/config.md#0x2_config">config</a>);
     ofield::internal_add(&<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.id, key, <a href="../sui-framework/config.md#0x2_config">config</a>);
-    sui::event::emit(<a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeConfigCreated">PerTypeConfigCreated</a> {
-        per_type_index,
-        per_type_key,
-        config_id,
-    });
+    sui::event::emit(<a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeConfigCreated">PerTypeConfigCreated</a> { key, config_id });
 }
 </code></pre>
 

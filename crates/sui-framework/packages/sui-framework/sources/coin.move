@@ -324,22 +324,24 @@ module sui::coin {
         deny_list.v2_most_recent_contains(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
+    #[allow(unused_mut_parameter)]
     public(package) fun deny_list_v2_enable_global_pause<T>(
         deny_list: &mut DenyList,
-        _deny_cap: &mut DenyCapV2<T>,
+        deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
     ) {
-        assert!(_deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
+        assert!(deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
         let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
         deny_list.v2_enable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
     }
 
+    #[allow(unused_mut_parameter)]
     public(package) fun deny_list_v2_disable_global_pause<T>(
         deny_list: &mut DenyList,
-        _deny_cap: &mut DenyCapV2<T>,
+        deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
     ) {
-        assert!(_deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
+        assert!(deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
         let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
         deny_list.v2_disable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
     }

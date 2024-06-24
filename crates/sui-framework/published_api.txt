@@ -1846,16 +1846,16 @@ new
 create
 	public(package) fun
 	0x2::config
-new_for_epoch
+add_for_current_epoch
 	public(package) fun
 	0x2::config
 exists_with_type
 	public(package) fun
 	0x2::config
-exists_with_type_for_epoch
+exists_with_type_for_current_epoch
 	public(package) fun
 	0x2::config
-borrow_for_epoch_mut
+borrow_for_current_epoch_mut
 	public(package) fun
 	0x2::config
 borrow_most_recent

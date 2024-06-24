@@ -77,7 +77,7 @@ pub fn read_setting_impl(
             )
         }
     };
-    let Some(field_setting_layout_opt) = context.type_to_type_layout(&field_setting_ty)? else {
+    let Some(field_setting_layout) = context.type_to_type_layout(&field_setting_ty)? else {
         return Ok(NativeResult::err(
             context.gas_used(),
             E_BCS_SERIALIZATION_FAILURE,
@@ -89,7 +89,7 @@ pub fn read_setting_impl(
         object_runtime,
         &field_setting_ty,
         field_setting_tag,
-        &field_setting_layout_opt,
+        &field_setting_layout,
         &setting_value_ty,
         &setting_data_value_ty,
         &value_ty,
@@ -135,7 +135,7 @@ fn consistent_value_before_current_epoch(
     let [data_opt]: [Value; 1] = unpack_struct(setting)?;
     let data = match unpack_option(data_opt, &setting_data_value_ty)? {
         None => {
-            // invariant violation?
+            // TODO logging
             return option_none(&value_ty);
         }
         Some(data) => data,

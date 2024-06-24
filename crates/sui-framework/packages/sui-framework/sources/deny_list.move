@@ -67,8 +67,7 @@ module sui::deny_list {
     public struct GlobalPauseKey() has copy, drop, store;
 
     public struct PerTypeConfigCreated has copy, drop, store {
-        per_type_index: u64,
-        per_type_key: vector<u8>,
+        key: ConfigKey,
         config_id: ID,
     }
 
@@ -192,11 +191,7 @@ module sui::deny_list {
         let config = config::new(&mut ConfigWriteCap(), ctx);
         let config_id = object::id(&config);
         ofield::internal_add(&mut deny_list.id, key, config);
-        sui::event::emit(PerTypeConfigCreated {
-            per_type_index,
-            per_type_key,
-            config_id,
-        });
+        sui::event::emit(PerTypeConfigCreated { key, config_id });
     }
 
     public(package) fun borrow_per_type_config_mut(
