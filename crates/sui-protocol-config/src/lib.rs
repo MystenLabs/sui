@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 51;
+const MAX_PROTOCOL_VERSION: u64 = 52;
 
 // Record history of protocol version allocations here:
 //
@@ -147,6 +147,7 @@ const MAX_PROTOCOL_VERSION: u64 = 51;
 //             Prepose consensus commit prologue in checkpoints.
 //             Set number of leaders per round for Mysticeti commits.
 // Version 51: Switch to DKG V1.
+// Version 52: Emit `CommitteeMemberUrlUpdateEvent` when updating bridge node url.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2431,6 +2432,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_coin_deny_list_v2 = true;
                     }
                 }
+                52 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
