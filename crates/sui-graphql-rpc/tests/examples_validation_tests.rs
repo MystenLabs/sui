@@ -107,10 +107,8 @@ mod tests {
 
         sim.create_checkpoint();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-
         let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            connection_config,
+            ConnectionConfig::default(),
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
@@ -172,10 +170,8 @@ mod tests {
 
         sim.create_checkpoint();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-
         let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            connection_config,
+            ConnectionConfig::default(),
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,

@@ -60,6 +60,7 @@ thiserror.workspace = true
 uuid.workspace = true
 im.workspace = true
 
+sui-graphql-config.workspace = true
 sui-graphql-rpc-headers.workspace = true
 sui-graphql-rpc-client.workspace = true
 
