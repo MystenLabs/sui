@@ -81,7 +81,7 @@ impl UseDefTest {
             )?;
             return Ok(());
         };
-        let Some((_, def_file_content)) = symbols.files.get(&use_def.def_loc().fhash) else {
+        let Some((_, def_file_content)) = symbols.files.get(&use_def.def_loc().file_hash()) else {
             writeln!(output, "ERROR: No def file content")?;
             return Ok(());
         };

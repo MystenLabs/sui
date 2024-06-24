@@ -1051,26 +1051,20 @@ impl UseDef {
         } = self;
         let uident = use_ident(use_file_content, use_line, *col_start, *col_end);
         writeln!(f, "Use: '{uident}', start: {col_start}, end: {col_end}")?;
-        let DefLoc {
-            fhash: _,
-            start: Position { line, character },
-        } = def_loc;
-        let dident = def_ident(
-            def_file_content,
-            def_loc.start.line,
-            def_loc.start.character,
-        );
-        writeln!(f, "Def: '{dident}', line: {line}, def char: {character}")?;
-        if let Some(ty_info) = type_def_loc {
-            let DefLoc {
-                fhash,
-                start: Position { line, character },
-            } = ty_info;
-            if let Some((_, type_def_file_content)) = symbols.files.get(fhash) {
-                let type_dident = def_ident(&type_def_file_content, *line, *character);
+        let dstart = symbols.files.start_position(def_loc);
+        let dline = dstart.line_offset() as u32;
+        let dcharacter = dstart.column_offset() as u32;
+        let dident = def_ident(def_file_content, dline, dcharacter);
+        writeln!(f, "Def: '{dident}', line: {dline}, def char: {dcharacter}")?;
+        if let Some(ty_loc) = type_def_loc {
+            let tdstart = symbols.files.start_position(ty_loc);
+            let tdline = tdstart.line_offset() as u32;
+            let tdcharacter = tdstart.column_offset() as u32;
+            if let Some((_, type_def_file_content)) = symbols.files.get(&ty_loc.file_hash()) {
+                let type_dident = def_ident(&type_def_file_content, tdline, tdcharacter);
                 writeln!(
                     f,
-                    "TypeDef: '{type_dident}', line: {line}, char: {character}"
+                    "TypeDef: '{type_dident}', line: {tdline}, char: {tdcharacter}"
                 )
             } else {
                 writeln!(f, "TypeDef: INCORRECT INFO")
