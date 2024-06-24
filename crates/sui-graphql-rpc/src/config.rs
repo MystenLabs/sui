@@ -12,6 +12,7 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
+pub(crate) const DEFAULT_MAX_QUERY_PAYLOAD_SIZE: u32 = 5_000;
 
 /// The combination of all configurations for the GraphQL service.
 #[GraphQLConfig]
@@ -441,7 +442,7 @@ impl Default for Limits {
             max_query_depth: 20,
             max_query_nodes: 300,
             max_output_nodes: 100_000,
-            max_query_payload_size: 5_000,
+            max_query_payload_size: DEFAULT_MAX_QUERY_PAYLOAD_SIZE,
             max_db_query_cost: 20_000,
             default_page_size: 20,
             max_page_size: 50,
@@ -464,7 +465,7 @@ impl Default for Limits {
             // overhead + the max query payload overhead + the max signature size (on a multisig).
             // The base64 overhead is roughly 4/3 of the original string.
             // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1578>
-            max_mutation_payload_size: 174_667 + 5_000 + 1_350,
+            max_mutation_payload_size: 174_667 + DEFAULT_MAX_QUERY_PAYLOAD_SIZE + 1_350,
         }
     }
 }
