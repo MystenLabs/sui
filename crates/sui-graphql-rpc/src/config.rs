@@ -516,7 +516,7 @@ mod tests {
                 max-query-depth = 100
                 max-query-nodes = 300
                 max-output-nodes = 200000
-                max-mutation-payload-size = 179667
+                max-mutation-payload-size = 181017
                 max-query-payload-size = 2000
                 max-db-query-cost = 50
                 default-page-size = 20
@@ -536,7 +536,7 @@ mod tests {
                 max_query_depth: 100,
                 max_query_nodes: 300,
                 max_output_nodes: 200000,
-                max_mutation_payload_size: 179667,
+                max_mutation_payload_size: 181017,
                 max_query_payload_size: 2000,
                 max_db_query_cost: 50,
                 default_page_size: 20,
@@ -600,7 +600,7 @@ mod tests {
                 max-query-depth = 42
                 max-query-nodes = 320
                 max-output-nodes = 200000
-                max-mutation-payload-size = 179667
+                max-mutation-payload-size = 181017
                 max-query-payload-size = 200
                 max-db-query-cost = 20
                 default-page-size = 10
@@ -623,7 +623,7 @@ mod tests {
                 max_query_depth: 42,
                 max_query_nodes: 320,
                 max_output_nodes: 200000,
-                max_mutation_payload_size: 179667,
+                max_mutation_payload_size: 181017,
                 max_query_payload_size: 200,
                 max_db_query_cost: 20,
                 default_page_size: 10,
