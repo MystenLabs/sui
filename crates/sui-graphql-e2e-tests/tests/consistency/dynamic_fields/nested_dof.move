@@ -19,7 +19,7 @@
 // Child1 (5) -> None
 // Child1 (7) -> Child2 (6)
 
-//# init --protocol-version 45 --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 44 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::M1 {
