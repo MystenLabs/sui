@@ -84,6 +84,9 @@ pub enum BridgeCommand {
         chain_id: u8,
         #[clap(subcommand)]
         cmd: GovernanceClientCommands,
+        /// If true, only collect signatures but not execute on chain
+        #[clap(long = "dry-run")]
+        dry_run: bool,
     },
     /// Given proxy address of SuiBridge contract, print other contract addresses
     #[clap(name = "print-eth-bridge-addresses")]

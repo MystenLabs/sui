@@ -70,6 +70,7 @@ async fn main() -> anyhow::Result<()> {
             config_path,
             chain_id,
             cmd,
+            dry_run,
         } => {
             let chain_id = BridgeChainId::try_from(chain_id).expect("Invalid chain id");
             println!("Chain ID: {:?}", chain_id);
@@ -108,6 +109,10 @@ async fn main() -> anyhow::Result<()> {
                     .request_committee_signatures(sui_action)
                     .await
                     .expect("Failed to request committee signatures");
+                if dry_run {
+                    println!("Dryrun succeeded.");
+                    return Ok(());
+                }
                 let bridge_arg = sui_bridge_client
                     .get_mutable_bridge_object_arg_must_succeed()
                     .await;
@@ -156,6 +161,10 @@ async fn main() -> anyhow::Result<()> {
                 .request_committee_signatures(eth_action)
                 .await
                 .expect("Failed to request committee signatures");
+            if dry_run {
+                println!("Dryrun succeeded.");
+                return Ok(());
+            }
             let contract_address = select_contract_address(&config, &cmd);
             let tx = build_eth_transaction(
                 contract_address,
