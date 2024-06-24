@@ -193,7 +193,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0x844185d7b145f503838a1d509845a40ee249534f723dd2f003d9efdfc581000d",
-                    "count": "1"
+                    "count": "2"
                   }
                 }
               }
@@ -313,7 +313,7 @@ Response: {
           "contents": {
             "json": {
               "id": "0x844185d7b145f503838a1d509845a40ee249534f723dd2f003d9efdfc581000d",
-              "count": "1"
+              "count": "2"
             }
           }
         }
@@ -411,7 +411,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0x844185d7b145f503838a1d509845a40ee249534f723dd2f003d9efdfc581000d",
-                    "count": "1"
+                    "count": "2"
                   }
                 }
               }
@@ -540,7 +540,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0x844185d7b145f503838a1d509845a40ee249534f723dd2f003d9efdfc581000d",
-                    "count": "1"
+                    "count": "2"
                   }
                 }
               }
@@ -664,7 +664,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0x844185d7b145f503838a1d509845a40ee249534f723dd2f003d9efdfc581000d",
-                    "count": "1"
+                    "count": "2"
                   }
                 }
               }
@@ -765,7 +765,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0x844185d7b145f503838a1d509845a40ee249534f723dd2f003d9efdfc581000d",
-                    "count": "1"
+                    "count": "2"
                   }
                 }
               }
@@ -831,7 +831,14 @@ Response: {
                   "repr": "u64"
                 }
               },
-              "value": null
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x844185d7b145f503838a1d509845a40ee249534f723dd2f003d9efdfc581000d",
+                    "count": "2"
+                  }
+                }
+              }
             }
           }
         ]
@@ -892,7 +899,14 @@ Response: {
                   "repr": "u64"
                 }
               },
-              "value": null
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x844185d7b145f503838a1d509845a40ee249534f723dd2f003d9efdfc581000d",
+                    "count": "2"
+                  }
+                }
+              }
             }
           }
         ]
