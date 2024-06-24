@@ -3246,7 +3246,8 @@ type ServiceConfig {
 	requestTimeoutMs: Int!
 	"""
 	Maximum mutation payload size in bytes. This is the maximum size allowed for a transaction
-	plus the Base64 overhead, plus the max query payload size allowed.
+	plus the Base64 overhead, plus the max query payload size allowed, plus the size of
+	signatures.
 	"""
 	maxMutationPayloadSize: Int!
 	"""
@@ -4392,3 +4393,4 @@ schema {
 	query: Query
 	mutation: Mutation
 }
+
