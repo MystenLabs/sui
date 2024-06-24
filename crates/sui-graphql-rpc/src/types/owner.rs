@@ -7,7 +7,6 @@ use super::cursor::Page;
 use super::dynamic_field::DynamicField;
 use super::dynamic_field::DynamicFieldName;
 use super::move_package::MovePackage;
-use super::object::ObjectLookupKey;
 use super::stake::StakedSui;
 use super::suins_registration::{DomainFormat, NameService, SuinsRegistration};
 use crate::data::Db;
@@ -235,9 +234,9 @@ impl Owner {
 
     async fn as_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
         Object::query(
-            ctx.data_unchecked(),
+            ctx,
             self.address,
-            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+            Object::latest_at(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -446,7 +445,7 @@ impl OwnerImpl {
     ) -> Result<Option<DynamicField>> {
         use DynamicFieldType as T;
         DynamicField::query(
-            ctx.data_unchecked(),
+            ctx,
             self.address,
             parent_version,
             name,
@@ -465,7 +464,7 @@ impl OwnerImpl {
     ) -> Result<Option<DynamicField>> {
         use DynamicFieldType as T;
         DynamicField::query(
-            ctx.data_unchecked(),
+            ctx,
             self.address,
             parent_version,
             name,
