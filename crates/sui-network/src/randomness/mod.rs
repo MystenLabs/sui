@@ -740,8 +740,9 @@ impl RandomnessEventLoop {
                 .with_timeout(SEND_PARTIAL_SIGNATURES_TIMEOUT);
                 requests.push(async move {
                     let result = client.send_signatures(request).await;
-                    if let Err(e) = result {
-                        debug!("failed to send partial signatures to {peer_name}: {e:?}");
+                    if let Err(_error) = result {
+                        // TODO: add Display impl to anemo::rpc::Status, log it here
+                        debug!("failed to send partial signatures to {peer_name}");
                     }
                 });
             }
