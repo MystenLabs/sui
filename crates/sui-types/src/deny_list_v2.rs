@@ -75,11 +75,11 @@ impl MoveTypeTagTrait for AddressKey {
 /// There is no u8 in the Move definition, however empty structs in Move
 /// are represented as a single byte 0 in the serialized data.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct GlobalPauseKey(u8);
+struct GlobalPauseKey(bool);
 
 impl GlobalPauseKey {
     pub fn new() -> Self {
-        Self(0)
+        Self(false)
     }
     pub fn type_() -> StructTag {
         StructTag {
