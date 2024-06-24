@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
+import { tmpdir } from 'os';
+import path from 'path';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
@@ -34,10 +36,12 @@ export const DEFAULT_SEND_AMOUNT = 1000;
 export class TestToolbox {
 	keypair: Ed25519Keypair;
 	client: SuiClient;
+	configPath: string;
 
-	constructor(keypair: Ed25519Keypair, client: SuiClient) {
+	constructor(keypair: Ed25519Keypair, client: SuiClient, configPath: string) {
 		this.keypair = keypair;
 		this.client = client;
+		this.configPath = configPath;
 	}
 
 	address() {
@@ -68,12 +72,14 @@ export function getClient(url = DEFAULT_FULLNODE_URL): SuiClient {
 export async function setup(options: { graphQLURL?: string; rpcURL?: string } = {}) {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
-	return setupWithFundedAddress(keypair, address, options);
+	const configPath = path.join(tmpdir(), 'client.yaml');
+	return setupWithFundedAddress(keypair, address, configPath, options);
 }
 
 export async function setupWithFundedAddress(
 	keypair: Ed25519Keypair,
 	address: string,
+	configPath: string,
 	{ rpcURL }: { graphQLURL?: string; rpcURL?: string } = {},
 ) {
 	const client = getClient(rpcURL);
@@ -100,7 +106,8 @@ export async function setupWithFundedAddress(
 			retryIf: () => true,
 		},
 	);
-	return new TestToolbox(keypair, client);
+	execSync(`${SUI_BIN} client --yes --client.config ${configPath}`, { encoding: 'utf-8' });
+	return new TestToolbox(keypair, client, configPath);
 }
 
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {
@@ -116,7 +123,7 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 
 	const { modules, dependencies } = JSON.parse(
 		execSync(
-			`${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
+			`${SUI_BIN} move --client.config ${toolbox.configPath} build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
 			{ encoding: 'utf-8' },
 		),
 	);
@@ -170,7 +177,7 @@ export async function upgradePackage(
 
 	const { modules, dependencies, digest } = JSON.parse(
 		execSync(
-			`${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
+			`${SUI_BIN} move --client.config ${toolbox.configPath} build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
 			{ encoding: 'utf-8' },
 		),
 	);
