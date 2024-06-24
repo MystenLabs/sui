@@ -4042,6 +4042,111 @@ sha2_256
 sha3_256
 	public fun
 	0x1::hash
+max
+	public fun
+	0x1::u128
+min
+	public fun
+	0x1::u128
+diff
+	public fun
+	0x1::u128
+divide_and_round_up
+	public fun
+	0x1::u128
+pow
+	public fun
+	0x1::u128
+sqrt
+	public fun
+	0x1::u128
+max
+	public fun
+	0x1::u16
+min
+	public fun
+	0x1::u16
+diff
+	public fun
+	0x1::u16
+divide_and_round_up
+	public fun
+	0x1::u16
+pow
+	public fun
+	0x1::u16
+sqrt
+	public fun
+	0x1::u16
+max
+	public fun
+	0x1::u256
+min
+	public fun
+	0x1::u256
+diff
+	public fun
+	0x1::u256
+divide_and_round_up
+	public fun
+	0x1::u256
+pow
+	public fun
+	0x1::u256
+max
+	public fun
+	0x1::u32
+min
+	public fun
+	0x1::u32
+diff
+	public fun
+	0x1::u32
+divide_and_round_up
+	public fun
+	0x1::u32
+pow
+	public fun
+	0x1::u32
+sqrt
+	public fun
+	0x1::u32
+max
+	public fun
+	0x1::u64
+min
+	public fun
+	0x1::u64
+diff
+	public fun
+	0x1::u64
+divide_and_round_up
+	public fun
+	0x1::u64
+pow
+	public fun
+	0x1::u64
+sqrt
+	public fun
+	0x1::u64
+max
+	public fun
+	0x1::u8
+min
+	public fun
+	0x1::u8
+diff
+	public fun
+	0x1::u8
+divide_and_round_up
+	public fun
+	0x1::u8
+pow
+	public fun
+	0x1::u8
+sqrt
+	public fun
+	0x1::u8
 empty
 	public fun
 	0x1::vector
@@ -4291,108 +4396,3 @@ get_module
 into_string
 	public fun
 	0x1::type_name
-max
-	public fun
-	0x1::u128
-min
-	public fun
-	0x1::u128
-diff
-	public fun
-	0x1::u128
-divide_and_round_up
-	public fun
-	0x1::u128
-pow
-	public fun
-	0x1::u128
-sqrt
-	public fun
-	0x1::u128
-max
-	public fun
-	0x1::u16
-min
-	public fun
-	0x1::u16
-diff
-	public fun
-	0x1::u16
-divide_and_round_up
-	public fun
-	0x1::u16
-pow
-	public fun
-	0x1::u16
-sqrt
-	public fun
-	0x1::u16
-max
-	public fun
-	0x1::u256
-min
-	public fun
-	0x1::u256
-diff
-	public fun
-	0x1::u256
-divide_and_round_up
-	public fun
-	0x1::u256
-pow
-	public fun
-	0x1::u256
-max
-	public fun
-	0x1::u32
-min
-	public fun
-	0x1::u32
-diff
-	public fun
-	0x1::u32
-divide_and_round_up
-	public fun
-	0x1::u32
-pow
-	public fun
-	0x1::u32
-sqrt
-	public fun
-	0x1::u32
-max
-	public fun
-	0x1::u64
-min
-	public fun
-	0x1::u64
-diff
-	public fun
-	0x1::u64
-divide_and_round_up
-	public fun
-	0x1::u64
-pow
-	public fun
-	0x1::u64
-sqrt
-	public fun
-	0x1::u64
-max
-	public fun
-	0x1::u8
-min
-	public fun
-	0x1::u8
-diff
-	public fun
-	0x1::u8
-divide_and_round_up
-	public fun
-	0x1::u8
-pow
-	public fun
-	0x1::u8
-sqrt
-	public fun
-	0x1::u8
