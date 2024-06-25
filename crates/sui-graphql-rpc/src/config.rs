@@ -261,7 +261,7 @@ impl ServiceConfig {
 
     /// The maximum bytes allowed for the JSON object in the request body of a GraphQL mutation.
     /// It is the value of the maximum transaction bytes (including the signatures) allowed by the
-    /// protocol, plus the Base64 overhead (4/3 of the original string), plus the max query
+    /// protocol, plus the Base64 overhead (roughly 1/3 of the original string), plus the max query
     /// payload size allowed.
     async fn max_mutation_payload_size(&self) -> u32 {
         self.limits.max_mutation_payload_size
@@ -467,7 +467,7 @@ impl Default for Limits {
             // overhead + the max query payload overhead.
             // The base64 overhead is roughly 1/3 of the original string.
             // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1578>
-            max_mutation_payload_size: (128 * 1024) * (4 / 3) + DEFAULT_MAX_QUERY_PAYLOAD_SIZE,
+            max_mutation_payload_size: (128 * 1024 * 4) / 3 + DEFAULT_MAX_QUERY_PAYLOAD_SIZE,
         }
     }
 }
