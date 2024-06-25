@@ -7856,7 +7856,7 @@
         "required": [
           "authenticator_data",
           "client_data_json",
-          "tx_digest"
+          "digest"
         ],
         "properties": {
           "authenticator_data": {
@@ -7869,16 +7869,11 @@
             }
           },
           "client_data_json": {
-            "description": "`clientDataJSON` contains a JSON-compatible UTF-8 encoded serialization of the client data which is passed to the authenticator by the client during the authentication request (see [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))",
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            "description": "`clientDataJSON` contains a JSON-compatible UTF-8 encoded string of the client data which is passed to the authenticator by the client during the authentication request (see [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))",
+            "type": "string"
           },
-          "tx_digest": {
-            "description": "Valid tx_digest parsed from the last 32 bytes of `client_data_json.challenge`.",
+          "digest": {
+            "description": "Valid digest parsed from the last 32 bytes of `client_data_json.challenge`.",
             "type": "array",
             "items": {
               "type": "integer",
