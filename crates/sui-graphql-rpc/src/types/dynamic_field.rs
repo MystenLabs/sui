@@ -94,9 +94,10 @@ impl DynamicField {
         Ok(Some(MoveValue::new(type_tag, Base64::from(bcs))))
     }
 
-    /// The actual data stored in the dynamic field.
-    /// The returned dynamic field is an object if its return type is MoveObject,
-    /// in which case it is also accessible off-chain via its address.
+    /// The returned dynamic field is an object if its return type is `MoveObject`,
+    /// in which case it is also accessible off-chain via its address. Its contents
+    /// will be from the latest version that is at most equal to its parent object's
+    /// version
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
         if self.df_kind == DynamicFieldType::DynamicObject {
             // If `df_kind` is a DynamicObject, the object we are currently on is the field object,
@@ -107,12 +108,7 @@ impl DynamicField {
             let obj = MoveObject::query(
                 ctx,
                 self.df_object_id,
-                Object::under_parent(
-                    // TODO (RPC-131): The dynamic object field value's version should be bounded by
-                    // the field's parent version, not the version of the field object itself.
-                    self.super_.super_.version_impl(),
-                    self.super_.super_.checkpoint_viewed_at,
-                ),
+                Object::under_parent(self.root_version(), self.super_.super_.checkpoint_viewed_at),
             )
             .await
             .extend()?;
@@ -228,7 +224,11 @@ impl DynamicField {
             // checkpoint found on the cursor.
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
 
-            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
+            let object = Object::try_from_stored_history_object(
+                stored,
+                checkpoint_viewed_at,
+                parent_version,
+            )?;
 
             let move_ = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
@@ -242,6 +242,10 @@ impl DynamicField {
         }
 
         Ok(conn)
+    }
+
+    pub(crate) fn root_version(&self) -> u64 {
+        self.super_.root_version()
     }
 }
 

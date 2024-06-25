@@ -306,7 +306,7 @@ impl MoveObject {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_)
-            .dynamic_field(ctx, name, Some(self.super_.version_impl()))
+            .dynamic_field(ctx, name, Some(self.root_version()))
             .await
     }
 
@@ -323,7 +323,7 @@ impl MoveObject {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_)
-            .dynamic_object_field(ctx, name, Some(self.super_.version_impl()))
+            .dynamic_object_field(ctx, name, Some(self.root_version()))
             .await
     }
 
@@ -340,14 +340,7 @@ impl MoveObject {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(&self.super_)
-            .dynamic_fields(
-                ctx,
-                first,
-                after,
-                last,
-                before,
-                Some(self.super_.version_impl()),
-            )
+            .dynamic_fields(ctx, first, after, last, before, Some(self.root_version()))
             .await
     }
 
@@ -454,6 +447,13 @@ impl MoveObject {
             })
         })
         .await
+    }
+
+    /// Root parent object version for dynamic fields.
+    ///
+    /// Check [`Object::root_version`] for details.
+    pub(crate) fn root_version(&self) -> u64 {
+        self.super_.root_version()
     }
 }
 

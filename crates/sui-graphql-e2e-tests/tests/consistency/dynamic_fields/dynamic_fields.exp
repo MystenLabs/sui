@@ -126,7 +126,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0xa770d3129adc43c7383b2911822e58bac862439eb5079d7ca74d9df6246fb780",
-                    "count": "1"
+                    "count": "2"
                   }
                 }
               }
@@ -302,7 +302,7 @@ Response: {
           "contents": {
             "json": {
               "id": "0xa770d3129adc43c7383b2911822e58bac862439eb5079d7ca74d9df6246fb780",
-              "count": "1"
+              "count": "2"
             }
           }
         }
@@ -359,7 +359,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0xa770d3129adc43c7383b2911822e58bac862439eb5079d7ca74d9df6246fb780",
-                    "count": "1"
+                    "count": "2"
                   }
                 }
               }
@@ -474,7 +474,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0xa770d3129adc43c7383b2911822e58bac862439eb5079d7ca74d9df6246fb780",
-                    "count": "1"
+                    "count": "2"
                   }
                 }
               }
@@ -697,7 +697,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0xa770d3129adc43c7383b2911822e58bac862439eb5079d7ca74d9df6246fb780",
-                    "count": "1"
+                    "count": "2"
                   }
                 }
               }
@@ -812,7 +812,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0xa770d3129adc43c7383b2911822e58bac862439eb5079d7ca74d9df6246fb780",
-                    "count": "1"
+                    "count": "2"
                   }
                 }
               }
@@ -963,7 +963,14 @@ Response: {
                   "repr": "u64"
                 }
               },
-              "value": null
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0xa770d3129adc43c7383b2911822e58bac862439eb5079d7ca74d9df6246fb780",
+                    "count": "2"
+                  }
+                }
+              }
             }
           }
         ]
@@ -982,7 +989,14 @@ Response: {
                   "repr": "u64"
                 }
               },
-              "value": null
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0xa770d3129adc43c7383b2911822e58bac862439eb5079d7ca74d9df6246fb780",
+                    "count": "2"
+                  }
+                }
+              }
             }
           },
           {
