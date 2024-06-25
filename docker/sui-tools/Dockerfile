@@ -20,6 +20,7 @@ RUN cargo build --profile ${PROFILE} \
     --bin sui-node \
     --bin stress \
     --bin sui-bridge \
+    --bin bridge-indexer \
     --bin sui-bridge-cli \
     --bin sui-analytics-indexer \
     --bin sui-proxy \
