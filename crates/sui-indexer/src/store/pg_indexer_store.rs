@@ -1358,6 +1358,14 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
                 let table_partitions = self.partition_manager.get_table_partitions()?;
                 for (table, (_, last_partition)) in table_partitions {
+                    // Only advance epoch partition for epoch partitioned tables.
+                    if !self
+                        .partition_manager
+                        .get_strategy(&table)
+                        .is_epoch_partitioned()
+                    {
+                        continue;
+                    }
                     let guard = self.metrics.advance_epoch_latency.start_timer();
                     self.partition_manager.advance_epoch(
                         table.clone(),
