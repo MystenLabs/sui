@@ -672,7 +672,14 @@ pub fn compile_ir_module(
 ) -> Result<CompiledModule> {
     use move_ir_compiler::Compiler as IRCompiler;
     let code = std::fs::read_to_string(file_name).unwrap();
-    IRCompiler::new(state.dep_modules().collect()).into_compiled_module(&code)
+    let named_addresses = state
+        .named_address_mapping
+        .iter()
+        .map(|(name, addr)| (name.clone(), addr.into_inner()))
+        .collect();
+    IRCompiler::new(state.dep_modules().collect())
+        .with_named_addresses(named_addresses)
+        .into_compiled_module(&code)
 }
 
 pub async fn handle_actual_output<'a, Adapter>(

@@ -12,6 +12,8 @@
 # checkpoints_path: <path>
 # Number of concurrent operations
 # concurrency: 1
+# Bridge genesis checkpoint in SUI, for testnet = 43917829
+# bridge_genesis_checkpoint: <sui bridge genesis checkpoint>
 # Ethereum to Sui bridge contract address
 # eth_sui_bridge_contract_address: <contract_address>
 # Starting block number

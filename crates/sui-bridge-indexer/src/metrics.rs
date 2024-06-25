@@ -3,7 +3,7 @@
 
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BridgeIndexerMetrics {
     pub(crate) total_sui_bridge_transactions: IntCounter,
     pub(crate) total_sui_token_deposited: IntCounter,

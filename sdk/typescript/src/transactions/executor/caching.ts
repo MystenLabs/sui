@@ -4,6 +4,7 @@
 import { bcs } from '../../bcs/index.js';
 import type { ExecuteTransactionBlockParams, SuiClient } from '../../client/index.js';
 import type { Signer } from '../../cryptography/keypair.js';
+import type { BuildTransactionOptions } from '../json-rpc-resolver.js';
 import type { ObjectCacheOptions } from '../ObjectCache.js';
 import { ObjectCache } from '../ObjectCache.js';
 import type { Transaction } from '../Transaction.js';
@@ -32,10 +33,14 @@ export class CachingTransactionExecutor {
 		await this.cache.clearCustom();
 	}
 
-	async buildTransaction({ transaction }: { transaction: Transaction }) {
+	async buildTransaction({
+		transaction,
+		...options
+	}: { transaction: Transaction } & BuildTransactionOptions) {
 		transaction.addBuildPlugin(this.cache.asPlugin());
 		return transaction.build({
 			client: this.#client,
+			...options,
 		});
 	}
 

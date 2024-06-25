@@ -9,11 +9,11 @@ use move_core_types::ident_str;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{dbg_addr, ObjectID, SuiAddress};
+use sui_types::base_types::{dbg_addr, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::deny_list_v1::{CoinDenyCap, RegulatedCoinMetadata};
 use sui_types::deny_list_v2::{
-    check_address_denied_by_coin, get_per_type_coin_deny_list_v2, DenyCapV2,
+    check_address_denied_by_config, check_global_pause, get_per_type_coin_deny_list_v2, DenyCapV2,
 };
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::object::Object;
@@ -77,6 +77,7 @@ async fn test_regulated_coin_v1_creation() {
 async fn test_regulated_coin_v2_types() {
     let env = new_authority_and_publish("coin_deny_list_v2").await;
 
+    // Step 1: Publish the regulated coin and check basic types.
     let mut deny_cap_object = None;
     let mut metadata_object = None;
     let mut regulated_metadata_object = None;
@@ -124,13 +125,8 @@ async fn test_regulated_coin_v2_types() {
         metadata_object.id()
     );
 
-    let deny_list_object_init_version = env
-        .authority
-        .get_object(&SUI_DENY_LIST_OBJECT_ID)
-        .await
-        .unwrap()
-        .unwrap()
-        .version();
+    // Step 2: Deny an address and check the denylist types.
+    let deny_list_object_init_version = env.get_latest_object_ref(&SUI_DENY_LIST_OBJECT_ID).await.1;
     let regulated_coin_type = TypeTag::Struct(Box::new(StructTag {
         address: package_id.into(),
         module: ident_str!("regulated_coin").to_owned(),
@@ -140,12 +136,7 @@ async fn test_regulated_coin_v2_types() {
     let deny_address = dbg_addr(2);
     let tx = TestTransactionBuilder::new(
         env.sender,
-        env.authority
-            .get_object(&env.gas_object_id)
-            .await
-            .unwrap()
-            .unwrap()
-            .compute_object_reference(),
+        env.get_latest_object_ref(&env.gas_object_id).await,
         env.authority.reference_gas_price_for_testing().unwrap(),
     )
     .move_call(
@@ -166,36 +157,100 @@ async fn test_regulated_coin_v2_types() {
     )
     .with_type_args(vec![regulated_coin_type.clone()])
     .build_and_sign(&env.keypair);
-    send_and_confirm_transaction_(&env.authority, None, tx, true)
+    let (_, effects) = send_and_confirm_transaction_(&env.authority, None, tx, true)
         .await
         .unwrap();
+    if effects.status().is_err() {
+        panic!("Failed to add address to deny list: {:?}", effects.status());
+    }
     let coin_deny_config = get_per_type_coin_deny_list_v2(
-        regulated_coin_type.to_canonical_string(false),
+        &regulated_coin_type.to_canonical_string(false),
         &env.authority.get_object_store(),
     )
     .unwrap();
     // Updates from the current epoch will not be read.
-    assert!(!check_address_denied_by_coin(
+    assert!(!check_address_denied_by_config(
         &coin_deny_config,
         deny_address,
         &env.authority.get_object_store(),
-        0,
+        Some(0),
     ));
+    // If no epoch is specified, we always read the latest value, and it should be denied.
+    assert!(check_address_denied_by_config(
+        &coin_deny_config,
+        deny_address,
+        &env.authority.get_object_store(),
+        None,
+    ));
+    // If no epoch is specified, we always read the latest value, and it should be denied.
+    assert!(check_address_denied_by_config(
+        &coin_deny_config,
+        deny_address,
+        &env.authority.get_object_store(),
+        None,
+    ));
+
     // If we change the current epoch to be 1, the change from epoch 0
     // would be considered as from previous epoch, and hence will be
     // used.
-    assert!(check_address_denied_by_coin(
+    assert!(check_address_denied_by_config(
         &coin_deny_config,
         deny_address,
         &env.authority.get_object_store(),
-        1,
+        Some(1),
     ));
     // Check a different address, and it should not be denied.
-    assert!(!check_address_denied_by_coin(
+    assert!(!check_address_denied_by_config(
         &coin_deny_config,
         dbg_addr(3),
         &env.authority.get_object_store(),
-        1,
+        Some(1),
+    ));
+
+    // Step 3: Enable global pause and check the global pause types.
+    let tx = TestTransactionBuilder::new(
+        env.sender,
+        env.get_latest_object_ref(&env.gas_object_id).await,
+        env.authority.reference_gas_price_for_testing().unwrap(),
+    )
+    .move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        "coin",
+        "deny_list_v2_enable_global_pause",
+        vec![
+            CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_DENY_LIST_OBJECT_ID,
+                initial_shared_version: deny_list_object_init_version,
+                mutable: true,
+            }),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                env.get_latest_object_ref(&deny_cap_object.id()).await,
+            )),
+        ],
+    )
+    .with_type_args(vec![regulated_coin_type.clone()])
+    .build_and_sign(&env.keypair);
+    let (_, effects) = send_and_confirm_transaction_(&env.authority, None, tx, true)
+        .await
+        .unwrap();
+    if effects.status().is_err() {
+        panic!("Failed to enable global pause: {:?}", effects.status());
+    }
+    println!("Effects: {:?}", effects);
+    assert!(check_global_pause(
+        &coin_deny_config,
+        &env.authority.get_object_store(),
+        None,
+    ));
+    assert!(!check_global_pause(
+        &coin_deny_config,
+        &env.authority.get_object_store(),
+        Some(0),
+    ));
+    assert!(check_global_pause(
+        &coin_deny_config,
+        &env.authority.get_object_store(),
+        Some(1),
     ));
 }
 
@@ -205,6 +260,17 @@ struct TestEnv {
     keypair: AccountKeyPair,
     gas_object_id: ObjectID,
     publish_effects: TransactionEffects,
+}
+
+impl TestEnv {
+    async fn get_latest_object_ref(&self, id: &ObjectID) -> ObjectRef {
+        self.authority
+            .get_object(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .compute_object_reference()
+    }
 }
 
 async fn new_authority_and_publish(path: &str) -> TestEnv {

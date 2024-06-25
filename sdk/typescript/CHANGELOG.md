@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.2.0
+
+### Minor Changes
+
+- fef99d377f: Update parallel executor class to handle gasPrice and budgeting to remove extra rpc calls during execution"
+
 ## 1.1.2
 
 ### Patch Changes

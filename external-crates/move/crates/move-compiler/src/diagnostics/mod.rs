@@ -702,10 +702,8 @@ impl Diagnostic {
         let bloc = mapped_files.position(ploc);
         JsonDiagnostic {
             file: mapped_files
-                .files()
-                .get(bloc.file_id)
-                .unwrap()
-                .name()
+                .file_path(&bloc.file_hash)
+                .to_string_lossy()
                 .to_string(),
             // TODO: This line and column choice is a bit weird. Consider changing it.
             line: bloc.start.user_line(),

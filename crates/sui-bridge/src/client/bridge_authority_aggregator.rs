@@ -124,6 +124,11 @@ impl GetSigsState {
             }
         }
         if self.total_ok_stake >= self.validity_threshold {
+            info!(
+                "Got enough signatures from {} validators with total_ok_stake {}",
+                self.sigs.len(),
+                self.total_ok_stake
+            );
             let signatures = self
                 .sigs
                 .iter()

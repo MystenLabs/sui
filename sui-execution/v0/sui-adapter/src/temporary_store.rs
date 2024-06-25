@@ -1001,6 +1001,13 @@ impl<'backing> Storage for TemporaryStore<'backing> {
     ) {
         unreachable!("Unused in v0")
     }
+
+    fn check_coin_deny_list(
+        &self,
+        _written_objects: &BTreeMap<ObjectID, Object>,
+    ) -> Result<(), ExecutionError> {
+        unreachable!("Coin denylist v2 is not supported in sui-execution v0");
+    }
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {

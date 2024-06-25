@@ -162,6 +162,7 @@ pub use crate::checkpoints::checkpoint_executor::{
 
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
+use sui_types::deny_list_v2::check_coin_deny_list_v2_during_signing;
 use sui_types::execution_config_utils::to_binary_config;
 
 #[cfg(test)]
@@ -866,6 +867,15 @@ impl AuthorityState {
 
         if epoch_store.coin_deny_list_v1_enabled() {
             check_coin_deny_list_v1(
+                tx_data.sender(),
+                &checked_input_objects,
+                &receiving_objects,
+                &self.get_object_store(),
+            )?;
+        }
+
+        if epoch_store.protocol_config().enable_coin_deny_list_v2() {
+            check_coin_deny_list_v2_during_signing(
                 tx_data.sender(),
                 &checked_input_objects,
                 &receiving_objects,

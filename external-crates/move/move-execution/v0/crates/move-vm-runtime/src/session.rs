@@ -28,7 +28,7 @@ use std::{borrow::Borrow, sync::Arc};
 
 pub struct Session<'r, 'l, S> {
     pub(crate) runtime: &'l VMRuntime,
-    pub(crate) data_cache: TransactionDataCache<'l, S>,
+    pub(crate) data_cache: TransactionDataCache<S>,
     pub(crate) native_extensions: NativeContextExtensions<'r>,
 }
 
@@ -152,10 +152,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
     ) -> VMResult<()> {
         self.runtime
             .publish_module_bundle(modules, sender, &mut self.data_cache, gas_meter)
-    }
-
-    pub fn num_mutated_accounts(&self, sender: &AccountAddress) -> u64 {
-        self.data_cache.num_mutated_accounts(sender)
     }
 
     /// Finish up the session and produce the side effects.

@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 50;
+const MAX_PROTOCOL_VERSION: u64 = 52;
 
 // Record history of protocol version allocations here:
 //
@@ -146,6 +146,8 @@ const MAX_PROTOCOL_VERSION: u64 = 50;
 //             Enable checkpoint batching in testnet.
 //             Prepose consensus commit prologue in checkpoints.
 //             Set number of leaders per round for Mysticeti commits.
+// Version 51: Switch to DKG V1.
+// Version 52: Emit `CommitteeMemberUrlUpdateEvent` when updating bridge node url.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -506,6 +508,10 @@ struct FeatureFlags {
     // Enable Soft Bundle (SIP-19).
     #[serde(skip_serializing_if = "is_false")]
     soft_bundle: bool,
+
+    // If true, enable the coin deny list V2.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_deny_list_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1135,6 +1141,9 @@ pub struct ProtocolConfig {
     /// Minimum interval between consecutive rounds of generated randomness.
     random_beacon_min_round_interval_ms: Option<u64>,
 
+    /// Version of the random beacon DKG protocol, 0 when not set.
+    random_beacon_dkg_version: Option<u64>,
+
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
@@ -1331,6 +1340,10 @@ impl ProtocolConfig {
         self.feature_flags.random_beacon
     }
 
+    pub fn dkg_version(&self) -> u64 {
+        self.random_beacon_dkg_version.unwrap_or(0)
+    }
+
     pub fn enable_bridge(&self) -> bool {
         let ret = self.feature_flags.bridge;
         if ret {
@@ -1388,6 +1401,10 @@ impl ProtocolConfig {
 
     pub fn enable_coin_deny_list_v1(&self) -> bool {
         self.feature_flags.enable_coin_deny_list
+    }
+
+    pub fn enable_coin_deny_list_v2(&self) -> bool {
+        self.feature_flags.enable_coin_deny_list_v2
     }
 
     pub fn enable_group_ops_native_functions(&self) -> bool {
@@ -1889,6 +1906,8 @@ impl ProtocolConfig {
             random_beacon_dkg_timeout_round: None,
 
             random_beacon_min_round_interval_ms: None,
+
+            random_beacon_dkg_version: None,
 
             consensus_max_transaction_size_bytes: None,
 
@@ -2406,6 +2425,14 @@ impl ProtocolConfig {
                     // Set max transaction deferral to 10 consensus rounds.
                     cfg.max_deferral_rounds_for_congestion_control = Some(10);
                 }
+                51 => {
+                    cfg.random_beacon_dkg_version = Some(1);
+
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_coin_deny_list_v2 = true;
+                    }
+                }
+                52 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2507,6 +2534,7 @@ impl ProtocolConfig {
     pub fn set_random_beacon_for_testing(&mut self, val: bool) {
         self.feature_flags.random_beacon = val
     }
+
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }

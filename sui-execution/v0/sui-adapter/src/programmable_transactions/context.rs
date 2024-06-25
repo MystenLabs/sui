@@ -679,13 +679,8 @@ mod checked {
             }
 
             let (res, linkage) = session.finish_with_extensions();
-            let (change_set, mut native_context_extensions) =
+            let (_, mut native_context_extensions) =
                 res.map_err(|e| convert_vm_error(e, vm, &linkage))?;
-            // Sui Move programs should never touch global state, so resources should be empty
-            assert_invariant!(
-                change_set.resources().next().is_none(),
-                "Change set must be empty"
-            );
             let object_runtime: ObjectRuntime = native_context_extensions.remove();
             let new_ids = object_runtime.new_ids().clone();
             // tell the object runtime what input objects were taken and which were transferred
