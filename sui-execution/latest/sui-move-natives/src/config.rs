@@ -129,12 +129,12 @@ fn consistent_value_before_current_epoch(
         field_setting_layout,
         &field_setting_obj_ty,
     ) else {
-        return option_none(&value_ty);
+        return option_none(value_ty);
     };
 
     let [_id, _name, setting]: [Value; 3] = unpack_struct(field)?;
     let [data_opt]: [Value; 1] = unpack_struct(setting)?;
-    let data = match unpack_option(data_opt, &setting_data_value_ty)? {
+    let data = match unpack_option(data_opt, setting_data_value_ty)? {
         None => {
             error!(
                 "
@@ -143,14 +143,14 @@ fn consistent_value_before_current_epoch(
                 name_df_addr: {name_df_addr},
                 field_setting_obj_ty: {field_setting_obj_ty:?}",
             );
-            return option_none(&value_ty);
+            return option_none(value_ty);
         }
         Some(data) => data,
     };
     let [newer_value_epoch, newer_value, older_value_opt]: [Value; 3] = unpack_struct(data)?;
     let newer_value_epoch: u64 = newer_value_epoch.value_as()?;
     if current_epoch > newer_value_epoch {
-        option_some(&value_ty, newer_value)
+        option_some(value_ty, newer_value)
     } else {
         Ok(older_value_opt)
     }

@@ -100,6 +100,67 @@ pub(crate) enum ObjectResult<V> {
 
 type LoadedWithMetadataResult<V> = Option<(V, DynamicallyLoadedObjectMetadata)>;
 
+macro_rules! fetch_child_object_unbounded {
+    ($inner:ident, $parent:ident, $child:ident, $parents_root_version:expr, $had_parent_root_version:expr) => {{
+        let child_opt = $inner
+            .resolver
+            .read_child_object(&$parent, &$child, $parents_root_version)
+            .map_err(|msg| {
+                PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
+            })?;
+        if let Some(object) = child_opt {
+            // if there was no root version, guard against reading a child object. A newly
+            // created parent should not have a child in storage
+            if !$had_parent_root_version {
+                return Err(
+                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
+                        "A new parent {} should not have a child object {}.",
+                        $parent, $child
+                    )),
+                );
+            }
+            // guard against bugs in `read_child_object`: if it returns a child object such that
+            // C.parent != parent, we raise an invariant violation
+            match &object.owner {
+                Owner::ObjectOwner(id) => {
+                    if ObjectID::from(*id) != $parent {
+                        return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
+                            format!(
+                                "Bad owner for {}. Expected owner {} but found owner {}",
+                                $child, $parent, id
+                            ),
+                        ));
+                    }
+                }
+                Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared { .. } => {
+                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
+                        format!(
+                            "Bad owner for {}. \
+                            Expected an id owner {} but found an address, \
+                            immutable, or shared owner",
+                            $child, $parent
+                        ),
+                    ))
+                }
+            };
+            match object.data {
+                Data::Package(_) => {
+                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
+                        format!(
+                            "Mismatched object type for {}. \
+                            Expected a Move object but found a Move package",
+                            $child
+                        ),
+                    ))
+                }
+                Data::Move(_) => Some(object),
+            }
+        } else {
+            None
+        }
+    }};
+}
+
 impl<'a> Inner<'a> {
     fn receive_object_from_store(
         &self,
@@ -164,64 +225,7 @@ impl<'a> Inner<'a> {
         Ok(obj_opt)
     }
 
-    fn fetch_child_object_unbounded(
-        &self,
-        parent: ObjectID,
-        child: ObjectID,
-        parents_root_version: SequenceNumber,
-        had_parent_root_version: bool,
-    ) -> PartialVMResult<Option<Object>> {
-        let child_opt = self
-            .resolver
-            .read_child_object(&parent, &child, parents_root_version)
-            .map_err(|msg| {
-                PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
-            })?;
-        let Some(object) = child_opt else {
-            return Ok(None);
-        };
-        // if there was no root version, guard against reading a child object. A newly
-        // created parent should not have a child in storage
-        if !had_parent_root_version {
-            return Err(
-                PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
-                    "A new parent {parent} should not have a child object {child}."
-                )),
-            );
-        }
-        // guard against bugs in `read_child_object`: if it returns a child object such that
-        // C.parent != parent, we raise an invariant violation
-        match &object.owner {
-            Owner::ObjectOwner(id) => {
-                if ObjectID::from(*id) != parent {
-                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
-                        format!(
-                            "Bad owner for {child}. \
-                        Expected owner {parent} but found owner {id}"
-                        ),
-                    ));
-                }
-            }
-            Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared { .. } => {
-                return Err(
-                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
-                        "Bad owner for {child}. \
-                    Expected an id owner {parent} but found an address, immutable, or shared owner"
-                    )),
-                )
-            }
-        };
-        match object.data {
-            Data::Package(_) => Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
-                format!(
-                    "Mismatched object type for {child}. \
-                        Expected a Move object but found a Move package"
-                ),
-            )),
-            Data::Move(_) => Ok(Some(object)),
-        }
-    }
-
+    #[allow(clippy::map_entry)]
     fn get_or_fetch_object_from_store(
         &mut self,
         parent: ObjectID,
@@ -233,13 +237,14 @@ impl<'a> Inner<'a> {
         // if not found, it must be new so it won't have any child objects, thus
         // we can return SequenceNumber(0) as no child object will be found
         let parents_root_version = parents_root_version.unwrap_or(SequenceNumber::new());
-        if !self.cached_objects.contains_key(&child) {
-            let obj_opt = self.fetch_child_object_unbounded(
+        if let btree_map::Entry::Vacant(e) = self.cached_objects.entry(child) {
+            let obj_opt = fetch_child_object_unbounded!(
+                self,
                 parent,
                 child,
                 parents_root_version,
-                had_parent_root_version,
-            )?;
+                had_parent_root_version
+            );
 
             if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
                 self.is_metered,
@@ -260,7 +265,7 @@ impl<'a> Inner<'a> {
                     ));
             };
 
-            self.cached_objects.insert(child, obj_opt);
+            e.insert(obj_opt);
         }
         Ok(self
             .cached_objects
@@ -621,12 +626,9 @@ impl<'a> ChildObjectStore<'a> {
         let setting = match self.config_setting_cache.entry(child) {
             btree_map::Entry::Vacant(e) => {
                 let child_move_type = field_setting_object_type;
-                let obj_opt = self.inner.fetch_child_object_unbounded(
-                    parent,
-                    child,
-                    SequenceNumber::MAX,
-                    true,
-                )?;
+                let inner = &self.inner;
+                let obj_opt =
+                    fetch_child_object_unbounded!(inner, parent, child, SequenceNumber::MAX, true);
                 let Some(move_obj) = obj_opt.as_ref().map(|obj| obj.data.try_as_move().unwrap())
                 else {
                     return Ok(ObjectResult::Loaded(None));
