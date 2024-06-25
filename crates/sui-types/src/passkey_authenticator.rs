@@ -40,11 +40,10 @@ pub struct PasskeyAuthenticator {
     authenticator_data: Vec<u8>,
 
     /// `clientDataJSON` contains a JSON-compatible
-    /// UTF-8 encoded serialization of the client
-    /// data which is passed to the authenticator by
-    ///  the client during the authentication request
-    /// (see [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))
-    client_data_json: Vec<u8>,
+    /// UTF-8 encoded string of the client data which
+    /// is passed to the authenticator by the client
+    /// during the authentication request (see [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))
+    client_data_json: String,
 
     /// Normalized r1 signature returned by passkey.
     /// Initialized from `user_signature` in `RawPasskeyAuthenticator`.
@@ -60,8 +59,8 @@ pub struct PasskeyAuthenticator {
     #[serde(skip)]
     intent: Intent,
 
-    /// Valid tx_digest parsed from the last 32 bytes of `client_data_json.challenge`.
-    tx_digest: [u8; DefaultHash::OUTPUT_SIZE],
+    /// Valid digest parsed from the last 32 bytes of `client_data_json.challenge`.
+    digest: [u8; DefaultHash::OUTPUT_SIZE],
 
     /// Initialization of bytes for passkey in serialized form.
     #[serde(skip)]
@@ -72,7 +71,7 @@ pub struct PasskeyAuthenticator {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RawPasskeyAuthenticator {
     pub authenticator_data: Vec<u8>,
-    pub client_data_json: Vec<u8>,
+    pub client_data_json: String,
     pub user_signature: Signature,
 }
 
@@ -82,7 +81,7 @@ impl TryFrom<RawPasskeyAuthenticator> for PasskeyAuthenticator {
 
     fn try_from(raw: RawPasskeyAuthenticator) -> Result<Self, Self::Error> {
         let client_data_json_parsed: CollectedClientData =
-            serde_json::from_slice(&raw.client_data_json).map_err(|_| {
+            serde_json::from_str(&raw.client_data_json).map_err(|_| {
                 SuiError::InvalidSignature {
                     error: "Invalid client data json".to_string(),
                 }
@@ -106,10 +105,10 @@ impl TryFrom<RawPasskeyAuthenticator> for PasskeyAuthenticator {
                 }
             })?;
 
-        let tx_digest = parsed_challenge[INTENT_PREFIX_LENGTH..]
+        let digest = parsed_challenge[INTENT_PREFIX_LENGTH..]
             .try_into()
             .map_err(|_| SuiError::InvalidSignature {
-                error: "Invalid tx digest from challenge".to_string(),
+                error: "Invalid digest from challenge".to_string(),
             })?;
 
         if raw.user_signature.scheme() != SignatureScheme::Secp256r1 {
@@ -135,7 +134,7 @@ impl TryFrom<RawPasskeyAuthenticator> for PasskeyAuthenticator {
             signature,
             pk,
             intent,
-            tx_digest,
+            digest,
             bytes: OnceCell::new(),
         })
     }
@@ -180,7 +179,7 @@ impl PasskeyAuthenticator {
     /// defined fields. Used for testing.
     pub fn new_for_testing(
         authenticator_data: Vec<u8>,
-        client_data_json: Vec<u8>,
+        client_data_json: String,
         user_signature: Signature,
     ) -> Result<Self, SuiError> {
         let raw = RawPasskeyAuthenticator {
@@ -235,7 +234,7 @@ impl AuthenticatorTrait for PasskeyAuthenticator {
         T: Serialize,
     {
         // Check the intent and tx_digest is consisted from what's parsed from client_data_json.challenge
-        if intent_msg.intent != self.intent || to_tx_digest(intent_msg) != self.tx_digest {
+        if intent_msg.intent != self.intent || to_tx_digest(intent_msg) != self.digest {
             return Err(SuiError::InvalidSignature {
                 error: "Invalid challenge".to_string(),
             });
@@ -243,7 +242,7 @@ impl AuthenticatorTrait for PasskeyAuthenticator {
 
         // Construct msg = authenticator_data || sha256(client_data_json).
         let mut message = self.authenticator_data.clone();
-        let client_data_hash = Sha256::digest(self.client_data_json.as_slice()).digest;
+        let client_data_hash = Sha256::digest(self.client_data_json.as_bytes()).digest;
         message.extend_from_slice(&client_data_hash);
 
         // Check if author is derived from the public key.
@@ -291,7 +290,7 @@ impl AsRef<[u8]> for PasskeyAuthenticator {
 }
 /// Compute the digest that the signature committed over as `intent || hash(tx_data)`, total
 /// of 3 + 32 = 35 bytes.
-pub fn to_signing_digest<T: Serialize>(
+pub fn to_signing_message<T: Serialize>(
     intent_msg: &IntentMessage<T>,
 ) -> [u8; INTENT_PREFIX_LENGTH + DefaultHash::OUTPUT_SIZE] {
     let mut extended = [0; INTENT_PREFIX_LENGTH + DefaultHash::OUTPUT_SIZE];

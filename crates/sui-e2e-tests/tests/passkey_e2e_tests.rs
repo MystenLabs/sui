@@ -28,7 +28,7 @@ use sui_types::transaction::Transaction;
 use sui_types::{
     base_types::SuiAddress,
     crypto::{PublicKey, SignatureScheme},
-    passkey_authenticator::{to_signing_digest, PasskeyAuthenticator},
+    passkey_authenticator::{to_signing_message, PasskeyAuthenticator},
     transaction::TransactionData,
 };
 use sui_types::{
@@ -62,7 +62,7 @@ impl UserValidationMethod for MyUserValidationMethod {
 pub struct PasskeyResponse<T> {
     user_sig_bytes: Vec<u8>,
     authenticator_data: Vec<u8>,
-    client_data_json: Vec<u8>,
+    client_data_json: String,
     intent_msg: IntentMessage<T>,
 }
 
@@ -169,7 +169,7 @@ async fn create_credential_and_sign_test_tx(
         extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&random_vec(32));
         extended
     } else {
-        to_signing_digest(&intent_msg)
+        to_signing_message(&intent_msg)
     };
 
     // Request a signature from passkey with challenge set to passkey_digest.
@@ -208,7 +208,7 @@ async fn create_credential_and_sign_test_tx(
     PasskeyResponse {
         user_sig_bytes,
         authenticator_data: authenticator_data.to_vec(),
-        client_data_json: client_data_json.to_vec(),
+        client_data_json: String::from_utf8_lossy(client_data_json).to_string(),
         intent_msg,
     }
 }
@@ -257,7 +257,7 @@ async fn test_passkey_fails_mismatched_challenge() {
     let sig = GenericSignature::PasskeyAuthenticator(
         PasskeyAuthenticator::new_for_testing(
             response.authenticator_data,
-            response.client_data_json.to_vec(),
+            response.client_data_json,
             Signature::from_bytes(&response.user_sig_bytes).unwrap(),
         )
         .unwrap(),
@@ -277,7 +277,7 @@ async fn test_passkey_fails_mismatched_challenge() {
     let sig = GenericSignature::PasskeyAuthenticator(
         PasskeyAuthenticator::new_for_testing(
             response.authenticator_data,
-            response.client_data_json.to_vec(),
+            response.client_data_json,
             Signature::from_bytes(&response.user_sig_bytes).unwrap(),
         )
         .unwrap(),
@@ -302,7 +302,7 @@ async fn test_passkey_fails_to_verify_sig() {
     let sig = GenericSignature::PasskeyAuthenticator(
         PasskeyAuthenticator::new_for_testing(
             response.authenticator_data,
-            response.client_data_json.to_vec(),
+            response.client_data_json,
             Signature::from_bytes(&modified_sig).unwrap(),
         )
         .unwrap(),
@@ -328,7 +328,7 @@ async fn test_passkey_fails_wrong_author() {
     let sig = GenericSignature::PasskeyAuthenticator(
         PasskeyAuthenticator::new_for_testing(
             response.authenticator_data,
-            response.client_data_json.to_vec(),
+            response.client_data_json,
             Signature::from_bytes(&response.user_sig_bytes).unwrap(),
         )
         .unwrap(),
