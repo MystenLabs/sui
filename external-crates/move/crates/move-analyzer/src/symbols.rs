@@ -901,7 +901,7 @@ fn variant_to_ide_string(variants: &[VariantInfo]) -> String {
         .enumerate()
         .map(|(idx, info)| {
             if idx >= NUM_PRINTED - 1 {
-                format!("\t/* ... */")
+                "\t/* ... */".to_string()
             } else if info.empty {
                 format!("\t{}", info.name)
             } else if info.positional {
@@ -1969,7 +1969,7 @@ fn get_mod_outer_defs(
                     let (defs, types) = field_defs_and_types(
                         *name,
                         name_loc,
-                        &fields,
+                        fields,
                         mod_ident,
                         files,
                         file_id_to_lines,
@@ -3289,7 +3289,7 @@ fn enum_variant_symbols(enum_def: &MemberDef, symbols: &Symbols) -> Vec<Document
     let mut variants: Vec<DocumentSymbol> = vec![];
     if let MemberDefInfo::Enum { variants_info } = &enum_def.info {
         for (name, (loc, _, _)) in variants_info {
-            let Some(variant_range) = symbols.files.lsp_range_opt(&loc) else {
+            let Some(variant_range) = symbols.files.lsp_range_opt(loc) else {
                 continue;
             };
 

@@ -129,12 +129,12 @@ impl TypingAnalysisContext<'_> {
         if let Some(mod_name_start) = self.file_start_position_opt(&mod_name.loc()) {
             // a module will not be present if a constant belongs to an implicit module
             self.use_defs.insert(
-                mod_name_start.line as u32,
+                mod_name_start.line,
                 UseDef::new(
                     self.references,
                     self.alias_lengths,
                     mod_name.loc().file_hash(),
-                    mod_name_start.into(),
+                    mod_name_start,
                     mod_defs.name_loc,
                     &mod_name.value(),
                     None,
@@ -150,12 +150,12 @@ impl TypingAnalysisContext<'_> {
             let const_info = self.def_info.get(&const_def.name_loc).unwrap();
             let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
             self.use_defs.insert(
-                name_start.line as u32,
+                name_start.line,
                 UseDef::new(
                     self.references,
                     self.alias_lengths,
                     use_pos.file_hash(),
-                    name_start.into(),
+                    name_start,
                     const_def.name_loc,
                     &use_name,
                     ident_type_def_loc,
@@ -194,12 +194,12 @@ impl TypingAnalysisContext<'_> {
         // enter self-definition for def name
         let ident_type_def_loc = type_def_loc(self.mod_outer_defs, &def_type);
         self.use_defs.insert(
-            name_start.line as u32,
+            name_start.line,
             UseDef::new(
                 self.references,
                 self.alias_lengths,
                 loc.file_hash(),
-                name_start.into(),
+                name_start,
                 *loc,
                 name,
                 ident_type_def_loc,
@@ -222,12 +222,12 @@ impl TypingAnalysisContext<'_> {
         if let Some(local_def) = self.expression_scope.get(use_name) {
             let ident_type_def_loc = type_def_loc(self.mod_outer_defs, &local_def.def_type);
             self.use_defs.insert(
-                name_start.line as u32,
+                name_start.line,
                 UseDef::new(
                     self.references,
                     self.alias_lengths,
                     use_pos.file_hash(),
-                    name_start.into(),
+                    name_start,
                     local_def.def_loc,
                     use_name,
                     ident_type_def_loc,
@@ -256,12 +256,12 @@ impl TypingAnalysisContext<'_> {
         if let Some(mod_name_start) = self.file_start_position_opt(&mod_name.loc()) {
             // a module will not be present if a function belongs to an implicit module
             self.use_defs.insert(
-                mod_name_start.line as u32,
+                mod_name_start.line,
                 UseDef::new(
                     self.references,
                     self.alias_lengths,
                     mod_name.loc().file_hash(),
-                    mod_name_start.into(),
+                    mod_name_start,
                     mod_defs.name_loc,
                     &mod_name.value(),
                     None,
@@ -305,12 +305,12 @@ impl TypingAnalysisContext<'_> {
         if let Some(mod_name_start) = self.file_start_position_opt(&mod_name.loc()) {
             // a module will not be present if a struct belongs to an implicit module
             self.use_defs.insert(
-                mod_name_start.line as u32,
+                mod_name_start.line,
                 UseDef::new(
                     self.references,
                     self.alias_lengths,
                     mod_name.loc().file_hash(),
-                    mod_name_start.into(),
+                    mod_name_start,
                     mod_defs.name_loc,
                     &mod_name.value(),
                     None,
@@ -977,7 +977,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     true
                 }
                 TE::Constant(mod_ident, name) => {
-                    visitor.add_const_use_def(mod_ident, &name);
+                    visitor.add_const_use_def(mod_ident, name);
                     true
                 }
                 TE::ModuleCall(mod_call) => {
@@ -1120,12 +1120,12 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 };
                 let ident_type_def_loc = type_def_loc(self.mod_outer_defs, ty);
                 self.use_defs.insert(
-                    name_start.line as u32,
+                    name_start.line,
                     UseDef::new(
                         self.references,
                         self.alias_lengths,
                         use_pos.file_hash(),
-                        name_start.into(),
+                        name_start,
                         *def_loc,
                         &use_name,
                         ident_type_def_loc,
