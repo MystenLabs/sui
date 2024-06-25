@@ -56,7 +56,7 @@ impl<T: R2D2Connection> Clone for PgPartitionManager<T> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum PgPartitionStrategy {
     CheckpointSequenceNumber,
     TxSequenceNumber,
