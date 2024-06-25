@@ -18,6 +18,7 @@ pub struct TrafficControllerMetrics {
     pub num_dry_run_blocked_requests: IntCounter,
     pub tally_handled: IntCounter,
     pub error_tally_handled: IntCounter,
+    pub deadmans_switch_enabled: IntGauge,
 }
 
 impl TrafficControllerMetrics {
@@ -82,6 +83,13 @@ impl TrafficControllerMetrics {
             error_tally_handled: register_int_counter_with_registry!(
                 "traffic_control_error_tally_handled",
                 "Number of error tallies handled",
+                registry
+            )
+            .unwrap(),
+            deadmans_switch_enabled: register_int_gauge_with_registry!(
+                "deadmans_switch_enabled",
+                "If 1, the deadman's switch is enabled and all traffic control
+                should be getting bypassed",
                 registry
             )
             .unwrap(),

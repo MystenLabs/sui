@@ -80,6 +80,9 @@ impl TrafficController {
             .as_ref()
             .map(|config| config.drain_path.exists())
             .unwrap_or(false);
+        metrics
+            .deadmans_switch_enabled
+            .set(mem_drainfile_present as i64);
 
         let ret = Self {
             tally_channel: tx,
@@ -90,14 +93,21 @@ impl TrafficController {
             metrics: metrics.clone(),
             dry_run_mode: policy_config.dry_run,
         };
-        let blocklists = ret.blocklists.clone();
+        let tally_loop_blocklists = ret.blocklists.clone();
+        let clear_loop_blocklists = ret.blocklists.clone();
+        let tally_loop_metrics = metrics.clone();
+        let clear_loop_metrics = metrics.clone();
         spawn_monitored_task!(run_tally_loop(
             rx,
             policy_config,
             fw_config,
-            blocklists,
-            metrics,
+            tally_loop_blocklists,
+            tally_loop_metrics,
             mem_drainfile_present,
+        ));
+        spawn_monitored_task!(run_clear_blocklists_loop(
+            clear_loop_blocklists,
+            clear_loop_metrics,
         ));
         ret
     }
@@ -206,6 +216,29 @@ impl TrafficController {
     }
 }
 
+/// Although we clear IPs from the blocklist lazily when they are checked,
+/// it's possible that over time we may accumulate a large number of stale
+/// IPs in the blocklist for clients that are added, then once blocked,
+/// never checked again. This function runs periodically to clear out any
+/// such stale IPs. This also ensures that the blocklist length metric
+/// accurately reflects TTL.
+async fn run_clear_blocklists_loop(blocklists: Blocklists, metrics: Arc<TrafficControllerMetrics>) {
+    loop {
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        let now = SystemTime::now();
+        blocklists.clients.retain(|_, expiration| now < *expiration);
+        blocklists
+            .proxied_clients
+            .retain(|_, expiration| now < *expiration);
+        metrics
+            .connection_ip_blocklist_len
+            .set(blocklists.clients.len() as i64);
+        metrics
+            .proxy_ip_blocklist_len
+            .set(blocklists.proxied_clients.len() as i64);
+    }
+}
+
 async fn run_tally_loop(
     mut receiver: mpsc::Receiver<TrafficTally>,
     policy_config: PolicyConfig,
@@ -279,6 +312,7 @@ async fn run_tally_loop(
                         warn!("Draining Node firewall.");
                         File::create(&fw_config.drain_path)
                             .expect("Failed to touch nodefw drain file");
+                        metrics.deadmans_switch_enabled.set(1);
                     }
                 }
             }
