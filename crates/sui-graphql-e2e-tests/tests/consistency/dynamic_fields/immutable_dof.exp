@@ -3,344 +3,202 @@ processed 17 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 20-68:
-Error: error[E13001]: feature is not supported in specified edition
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:23:5
-   │
-23 │     public struct Parent has key, store {
-   │     ^^^^^^ Struct visibility modifiers are not supported by current edition 'legacy', only '2024.alpha' support this feature
-   │
-   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+task 1 'publish'. lines 20-71:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8770400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-error[E01003]: invalid modifier
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:23:5
-   │
-23 │     public struct Parent has key, store {
-   │     ^^^^^^ Invalid struct declaration. Structs cannot have visibility modifiers as they are always 'public'
-   │
-   = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
+task 2 'run'. lines 73-73:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-error[E03004]: unbound type
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:24:13
-   │
-24 │         id: UID,
-   │             ^^^ Unbound type 'UID' in current scope
+task 3 'run'. lines 75-75:
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-error[E13001]: feature is not supported in specified edition
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:27:5
-   │
-27 │     public struct Child has key, store {
-   │     ^^^^^^ Struct visibility modifiers are not supported by current edition 'legacy', only '2024.alpha' support this feature
-   │
-   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+task 4 'run'. lines 77-77:
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-error[E01003]: invalid modifier
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:27:5
-   │
-27 │     public struct Child has key, store {
-   │     ^^^^^^ Invalid struct declaration. Structs cannot have visibility modifiers as they are always 'public'
-   │
-   = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
+task 5 'run'. lines 79-79:
+created: object(5,0)
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
 
-error[E03004]: unbound type
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:28:13
-   │
-28 │         id: UID,
-   │             ^^^ Unbound type 'UID' in current scope
+task 6 'run'. lines 81-81:
+created: object(6,0)
+mutated: object(0,0), object(2,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
 
-warning[W09002]: unused variable
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:31:29
-   │
-31 │     public entry fun parent(recipient: address, ctx: &mut TxContext) {
-   │                             ^^^^^^^^^ Unused parameter 'recipient'. Consider removing or prefixing with an underscore: '_recipient'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+task 7 'run'. lines 83-83:
+mutated: object(0,0), object(2,0), object(3,0)
+deleted: object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
 
-warning[W09002]: unused variable
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:31:49
-   │
-31 │     public entry fun parent(recipient: address, ctx: &mut TxContext) {
-   │                                                 ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E03004]: unbound type
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:31:59
-   │
-31 │     public entry fun parent(recipient: address, ctx: &mut TxContext) {
-   │                                                           ^^^^^^^^^ Unbound type 'TxContext' in current scope
-
-error[E03002]: unbound module
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:32:9
-   │
-32 │         transfer::public_transfer(
-   │         ^^^^^^^^ Unbound module alias 'transfer'
-
-error[E03002]: unbound module
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:33:26
-   │
-33 │             Parent { id: object::new(ctx), count: 0 },
-   │                          ^^^^^^ Unbound module alias 'object'
-
-warning[W09002]: unused variable
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:40:28
-   │
-40 │     public entry fun child(recipient: address, ctx: &mut TxContext) {
-   │                            ^^^^^^^^^ Unused parameter 'recipient'. Consider removing or prefixing with an underscore: '_recipient'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09002]: unused variable
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:40:48
-   │
-40 │     public entry fun child(recipient: address, ctx: &mut TxContext) {
-   │                                                ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E03004]: unbound type
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:40:58
-   │
-40 │     public entry fun child(recipient: address, ctx: &mut TxContext) {
-   │                                                          ^^^^^^^^^ Unbound type 'TxContext' in current scope
-
-error[E03002]: unbound module
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:41:9
-   │
-41 │         transfer::public_transfer(
-   │         ^^^^^^^^ Unbound module alias 'transfer'
-
-error[E03002]: unbound module
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:42:25
-   │
-42 │             Child { id: object::new(ctx), count: 0 },
-   │                         ^^^^^^ Unbound module alias 'object'
-
-warning[W09002]: unused variable
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:56:41
-   │
-56 │     public fun reclaim_and_freeze_child(parent: &mut Parent, name: u64) {
-   │                                         ^^^^^^ Unused parameter 'parent'. Consider removing or prefixing with an underscore: '_parent'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09002]: unused variable
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:56:62
-   │
-56 │     public fun reclaim_and_freeze_child(parent: &mut Parent, name: u64) {
-   │                                                              ^^^^ Unused parameter 'name'. Consider removing or prefixing with an underscore: '_name'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E03002]: unbound module
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmpuoVymF:57:9
-   │
-57 │         transfer::public_freeze_object(reclaim_child(parent, name))
-   │         ^^^^^^^^ Unbound module alias 'transfer'
-
-
-
-task 2 'run'. lines 70-70:
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
-
-task 3 'run'. lines 72-72:
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
-
-task 4 'run'. lines 74-74:
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
-
-task 5 'run'. lines 76-76:
-Error: INVALID TEST. Unknown object, object(2,0)
-
-task 6 'run'. lines 78-78:
-Error: INVALID TEST. Unknown object, object(2,0)
-
-task 7 'run'. lines 80-80:
-Error: INVALID TEST. Unknown object, object(2,0)
-
-task 8 'create-checkpoint'. lines 82-82:
+task 8 'create-checkpoint'. lines 85-85:
 Checkpoint created: 1
 
-task 9 'run-graphql'. lines 84-114:
-Error: Unknown variable: obj_2_0
-Allowed variable mappings are {
-    "A": "@A",
-    "A_opt": "@A",
-    "Test": "0x0",
-    "Test_opt": "0x0",
-    "deepbook": "0xdee9",
-    "deepbook_opt": "0xdee9",
-    "obj_0_0": "object(0,0)",
-    "obj_0_0_opt": "object(0,0)",
-    "obj_0_1": "object(0,1)",
-    "obj_0_1_opt": "object(0,1)",
-    "std": "0x1",
-    "std_opt": "0x1",
-    "sui": "0x2",
-    "sui_opt": "0x2",
-    "sui_system": "0x3",
-    "sui_system_opt": "0x3",
-    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
-    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+task 9 'run-graphql'. lines 87-117:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "address": "0xb46d7d07374331839592e25e388f77b06dc6f8c34ce6f044d94eef4642a587ad",
+              "version": 5,
+              "contents": {
+                "json": {
+                  "id": "0xb46d7d07374331839592e25e388f77b06dc6f8c34ce6f044d94eef4642a587ad",
+                  "count": "0"
+                }
+              },
+              "dynamicFields": {
+                "nodes": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
 }
 
-task 10 'run-graphql'. lines 116-146:
-Error: Unknown variable: obj_2_0
-Allowed variable mappings are {
-    "A": "@A",
-    "A_opt": "@A",
-    "Test": "0x0",
-    "Test_opt": "0x0",
-    "deepbook": "0xdee9",
-    "deepbook_opt": "0xdee9",
-    "obj_0_0": "object(0,0)",
-    "obj_0_0_opt": "object(0,0)",
-    "obj_0_1": "object(0,1)",
-    "obj_0_1_opt": "object(0,1)",
-    "std": "0x1",
-    "std_opt": "0x1",
-    "sui": "0x2",
-    "sui_opt": "0x2",
-    "sui_system": "0x3",
-    "sui_system_opt": "0x3",
-    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
-    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+task 10 'run-graphql'. lines 119-149:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "address": "0xb46d7d07374331839592e25e388f77b06dc6f8c34ce6f044d94eef4642a587ad",
+              "version": 5,
+              "contents": {
+                "json": {
+                  "id": "0xb46d7d07374331839592e25e388f77b06dc6f8c34ce6f044d94eef4642a587ad",
+                  "count": "0"
+                }
+              },
+              "dynamicFields": {
+                "nodes": [
+                  {
+                    "value": {
+                      "address": "0xefcdbe93b04a94f46f8b6ab67f726e268c630cb051615dcb775814359f1bcfc6",
+                      "version": 6,
+                      "contents": {
+                        "json": {
+                          "id": "0xefcdbe93b04a94f46f8b6ab67f726e268c630cb051615dcb775814359f1bcfc6",
+                          "count": "0"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
 }
 
-task 11 'run-graphql'. lines 148-178:
-Error: Unknown variable: obj_2_0
-Allowed variable mappings are {
-    "A": "@A",
-    "A_opt": "@A",
-    "Test": "0x0",
-    "Test_opt": "0x0",
-    "deepbook": "0xdee9",
-    "deepbook_opt": "0xdee9",
-    "obj_0_0": "object(0,0)",
-    "obj_0_0_opt": "object(0,0)",
-    "obj_0_1": "object(0,1)",
-    "obj_0_1_opt": "object(0,1)",
-    "std": "0x1",
-    "std_opt": "0x1",
-    "sui": "0x2",
-    "sui_opt": "0x2",
-    "sui_system": "0x3",
-    "sui_system_opt": "0x3",
-    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
-    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+task 11 'run-graphql'. lines 151-181:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFields": {
+        "nodes": []
+      }
+    }
+  }
 }
 
-task 12 'run-graphql'. lines 180-210:
-Error: Unknown variable: obj_2_0
-Allowed variable mappings are {
-    "A": "@A",
-    "A_opt": "@A",
-    "Test": "0x0",
-    "Test_opt": "0x0",
-    "deepbook": "0xdee9",
-    "deepbook_opt": "0xdee9",
-    "obj_0_0": "object(0,0)",
-    "obj_0_0_opt": "object(0,0)",
-    "obj_0_1": "object(0,1)",
-    "obj_0_1_opt": "object(0,1)",
-    "std": "0x1",
-    "std_opt": "0x1",
-    "sui": "0x2",
-    "sui_opt": "0x2",
-    "sui_system": "0x3",
-    "sui_system_opt": "0x3",
-    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
-    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+task 12 'run-graphql'. lines 183-213:
+Response: {
+  "data": {
+    "object": null
+  }
 }
 
-task 13 'run-graphql'. lines 212-239:
-Error: Unknown variable: obj_3_0
-Allowed variable mappings are {
-    "A": "@A",
-    "A_opt": "@A",
-    "Test": "0x0",
-    "Test_opt": "0x0",
-    "deepbook": "0xdee9",
-    "deepbook_opt": "0xdee9",
-    "obj_0_0": "object(0,0)",
-    "obj_0_0_opt": "object(0,0)",
-    "obj_0_1": "object(0,1)",
-    "obj_0_1_opt": "object(0,1)",
-    "std": "0x1",
-    "std_opt": "0x1",
-    "sui": "0x2",
-    "sui_opt": "0x2",
-    "sui_system": "0x3",
-    "sui_system_opt": "0x3",
-    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
-    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+task 13 'run-graphql'. lines 215-242:
+Response: {
+  "data": {
+    "object": {
+      "owner": {
+        "parent": {
+          "address": "0x0d1762c5789dbd969ebb427f67a81ae5a695add42a33e2c61d3ee147770d76c7"
+        }
+      },
+      "dynamicFields": {
+        "nodes": []
+      }
+    }
+  }
 }
 
-task 14 'run-graphql'. lines 241-258:
-Error: Unknown variable: obj_3_0
-Allowed variable mappings are {
-    "A": "@A",
-    "A_opt": "@A",
-    "Test": "0x0",
-    "Test_opt": "0x0",
-    "deepbook": "0xdee9",
-    "deepbook_opt": "0xdee9",
-    "obj_0_0": "object(0,0)",
-    "obj_0_0_opt": "object(0,0)",
-    "obj_0_1": "object(0,1)",
-    "obj_0_1_opt": "object(0,1)",
-    "std": "0x1",
-    "std_opt": "0x1",
-    "sui": "0x2",
-    "sui_opt": "0x2",
-    "sui_system": "0x3",
-    "sui_system_opt": "0x3",
-    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
-    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+task 14 'run-graphql'. lines 244-261:
+Response: {
+  "data": {
+    "object": null
+  }
 }
 
-task 15 'run-graphql'. lines 260-287:
-Error: Unknown variable: obj_3_0
-Allowed variable mappings are {
-    "A": "@A",
-    "A_opt": "@A",
-    "Test": "0x0",
-    "Test_opt": "0x0",
-    "deepbook": "0xdee9",
-    "deepbook_opt": "0xdee9",
-    "obj_0_0": "object(0,0)",
-    "obj_0_0_opt": "object(0,0)",
-    "obj_0_1": "object(0,1)",
-    "obj_0_1_opt": "object(0,1)",
-    "std": "0x1",
-    "std_opt": "0x1",
-    "sui": "0x2",
-    "sui_opt": "0x2",
-    "sui_system": "0x3",
-    "sui_system_opt": "0x3",
-    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
-    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+task 15 'run-graphql'. lines 263-290:
+Response: {
+  "data": {
+    "object": {
+      "owner": {
+        "_": null
+      },
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "address": "0xefcdbe93b04a94f46f8b6ab67f726e268c630cb051615dcb775814359f1bcfc6",
+              "version": 6,
+              "contents": {
+                "json": {
+                  "id": "0xefcdbe93b04a94f46f8b6ab67f726e268c630cb051615dcb775814359f1bcfc6",
+                  "count": "0"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
 }
 
-task 16 'run-graphql'. lines 289-316:
-Error: Unknown variable: obj_3_0
-Allowed variable mappings are {
-    "A": "@A",
-    "A_opt": "@A",
-    "Test": "0x0",
-    "Test_opt": "0x0",
-    "deepbook": "0xdee9",
-    "deepbook_opt": "0xdee9",
-    "obj_0_0": "object(0,0)",
-    "obj_0_0_opt": "object(0,0)",
-    "obj_0_1": "object(0,1)",
-    "obj_0_1_opt": "object(0,1)",
-    "std": "0x1",
-    "std_opt": "0x1",
-    "sui": "0x2",
-    "sui_opt": "0x2",
-    "sui_system": "0x3",
-    "sui_system_opt": "0x3",
-    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
-    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+task 16 'run-graphql'. lines 292-319:
+Response: {
+  "data": {
+    "object": {
+      "owner": {
+        "_": null
+      },
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "address": "0xefcdbe93b04a94f46f8b6ab67f726e268c630cb051615dcb775814359f1bcfc6",
+              "version": 6,
+              "contents": {
+                "json": {
+                  "id": "0xefcdbe93b04a94f46f8b6ab67f726e268c630cb051615dcb775814359f1bcfc6",
+                  "count": "0"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
 }
