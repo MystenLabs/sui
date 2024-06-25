@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::{Limits, ServiceConfig};
+use crate::config::{Limits, ServiceConfig, DEFAULT_MAX_QUERY_PAYLOAD_SIZE};
 use crate::error::{code, graphql_error, graphql_error_at_pos};
 use crate::metrics::Metrics;
 use async_graphql::extensions::NextParseQuery;
@@ -131,22 +131,120 @@ impl Extension for QueryLimitsChecker {
         // Document layout of the query
         let doc = next.run(ctx, query, variables).await?;
 
-        let is_mutation = doc
+        let mutation_node = doc
             .operations
             .iter()
-            .any(|(_, operation)| operation.node.ty == OperationType::Mutation);
+            .find(|(_, operation)| operation.node.ty == OperationType::Mutation);
 
-        if is_mutation && query.len() > cfg.limits.max_mutation_payload_size as usize {
+        let is_mutation = mutation_node.is_some();
+
+        let mut tx_bytes_sigs_bytes = 0;
+        if is_mutation {
+            // get the mutation node and the selection set
+            let mutation_selection_set =
+                mutation_node.map(|(_, operation)| &operation.node.selection_set);
+
+            let mut counter = 0;
+            // the number of bytes for the tx_bytes and signatures strings
+            tx_bytes_sigs_bytes = if let Some(selection_set) = mutation_selection_set {
+                selection_set.node.items.iter().for_each(|x| match &x.node {
+                    Selection::Field(f) => {
+                        if f.node.name.node == "executeTransactionBlock" {
+                            for arg in &f.node.arguments {
+                                match &arg.1.node {
+                                    GqlValue::String(s) => {
+                                        counter += s.len();
+                                    }
+                                    // TODO what happens if there are other variables?
+                                    GqlValue::Variable(v) => match variables.get(v) {
+                                        // the variables are expected to be strings
+                                        Some(Value::String(s)) => {
+                                            counter += s.len();
+                                        }
+                                        _ => {}
+                                    },
+
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                });
+                counter
+            } else {
+                0
+            };
+        };
+
+        // this messes up the nice formatting of the query, meaning it will actually have fewer
+        // characters compared to the query in the GraphiQL editor that is nicely formatted.
+        let doc_after_resolving_vars = ctx.stringify_execute_doc(&doc, variables);
+        let query_len = doc_after_resolving_vars.len();
+
+        // check if the read part of the mutation request is larger than the max query payload size
+        if is_mutation
+            && (query_len - tx_bytes_sigs_bytes) > cfg.limits.max_query_payload_size as usize
+        {
             metrics
                 .request_metrics
                 .query_payload_too_large_size
-                .observe(query.len() as f64);
+                .observe(query_len as f64);
+            info!(
+                query_id = %query_id,
+                session_id = %session_id,
+                error_code = code::BAD_USER_INPUT,
+                "Mutation payload txBytes size OK. The read part of the request is too large: {}",
+                query_len
+            );
+
+            return Err(graphql_error(
+                code::BAD_USER_INPUT,
+                format!(
+                "Mutation payload txBytes size OK. The read part of the request is too large. Maximum allowed is {}",
+                    cfg.limits.max_query_payload_size
+                ),
+            ));
+        }
+
+        // check if the txBytes value is larger than the max mutation payload size (which includes the default
+        // max query payload size, so that is subtracted)
+        if is_mutation
+            && tx_bytes_sigs_bytes
+                > (cfg.limits.max_mutation_payload_size - DEFAULT_MAX_QUERY_PAYLOAD_SIZE) as usize
+        {
+            metrics
+                .request_metrics
+                .query_payload_too_large_size
+                .observe(query_len as f64);
+            info!(
+                query_id = %query_id,
+                session_id = %session_id,
+                error_cod_ = code::BAD_USER_INPUT,
+                "Mutation payload txBytes size is too large: {}",
+                tx_bytes_sigs_bytes
+            );
+
+            return Err(graphql_error(
+                code::BAD_USER_INPUT,
+                format!(
+                    "Mutation payload txBytes size is too large. The maximum allowed is {} bytes",
+                    cfg.limits.max_mutation_payload_size - DEFAULT_MAX_QUERY_PAYLOAD_SIZE
+                ),
+            ));
+        }
+
+        if is_mutation && query_len > cfg.limits.max_mutation_payload_size as usize {
+            metrics
+                .request_metrics
+                .query_payload_too_large_size
+                .observe(query_len as f64);
             info!(
                 query_id = %query_id,
                 session_id = %session_id,
                 error_code = code::BAD_USER_INPUT,
                 "Mutation payload is too large: {}",
-                query.len()
+                query_len
             );
 
             return Err(graphql_error(
@@ -158,17 +256,18 @@ impl Extension for QueryLimitsChecker {
             ));
         }
 
-        if !is_mutation && query.len() > cfg.limits.max_query_payload_size as usize {
+        // check if the read query is larger than the max query payload size
+        if !is_mutation && query_len > cfg.limits.max_query_payload_size as usize {
             metrics
                 .request_metrics
                 .query_payload_too_large_size
-                .observe(query.len() as f64);
+                .observe(query_len as f64);
             info!(
                 query_id = %query_id,
                 session_id = %session_id,
                 error_code = code::BAD_USER_INPUT,
                 "Query payload is too large: {}",
-                query.len()
+                query_len
             );
 
             return Err(graphql_error(
@@ -222,7 +321,7 @@ impl Extension for QueryLimitsChecker {
                 input_nodes: running_costs.input_nodes,
                 output_nodes: running_costs.output_nodes,
                 depth: running_costs.depth,
-                query_payload: query.len() as u32,
+                query_payload: query_len as u32,
                 num_variables: variables.len() as u32,
                 num_fragments: doc.fragments.len() as u32,
             });
@@ -243,7 +342,7 @@ impl Extension for QueryLimitsChecker {
         metrics
             .request_metrics
             .query_payload_size
-            .observe(query.len() as f64);
+            .observe(query_len as f64);
         Ok(doc)
     }
 }
