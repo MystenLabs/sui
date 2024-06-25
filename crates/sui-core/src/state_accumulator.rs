@@ -629,6 +629,10 @@ impl StateAccumulatorV2 {
         checkpoint_acc: Option<Accumulator>,
     ) -> SuiResult {
         let _scope = monitored_scope("AccumulateRunningRoot");
+        tracing::info!(
+            "accumulating running root for checkpoint {}",
+            checkpoint_seq_num
+        );
 
         // For the last checkpoint of the epoch, this function will be called once by the
         // checkpoint builder, and again by checkpoint executor.
