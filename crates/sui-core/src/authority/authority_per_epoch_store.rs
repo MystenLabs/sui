@@ -1180,6 +1180,18 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub fn insert_effects_signature(
+        &self,
+        tx_digest: &TransactionDigest,
+        effects_signature: &AuthoritySignInfo,
+    ) -> SuiResult {
+        let tables = self.tables()?;
+        tables
+            .effects_signatures
+            .insert(tx_digest, effects_signature)?;
+        Ok(())
+    }
+
     pub fn transactions_executed_in_cur_epoch<'a>(
         &self,
         digests: impl IntoIterator<Item = &'a TransactionDigest>,
