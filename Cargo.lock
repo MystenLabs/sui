@@ -5851,6 +5851,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "json_comments"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
+
+[[package]]
 name = "json_to_table"
 version = "0.6.0"
 source = "git+https://github.com/zhiburt/tabled/?rev=e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4#e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4"
@@ -6620,6 +6626,7 @@ dependencies = [
  "dunce",
  "im",
  "itertools 0.10.5",
+ "json_comments",
  "lsp-server",
  "lsp-types",
  "move-command-line-common",
@@ -6627,6 +6634,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-symbol-pool",
+ "serde",
  "serde_json",
  "sha2 0.9.9",
  "tempfile",

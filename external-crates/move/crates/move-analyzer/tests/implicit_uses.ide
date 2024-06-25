@@ -1,0 +1,20 @@
+// Tests symbolication of implicit structs and modules.
+{
+  "project": "tests/move-2024",
+  "file_tests": {
+    "implicit_uses.move": [
+      {
+        "UseDefTest": {
+          "use_line": 3,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 7,
+          "use_ndx": 2
+        }
+      }
+    ]
+  }
+}
