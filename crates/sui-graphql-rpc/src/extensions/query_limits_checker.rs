@@ -147,29 +147,25 @@ impl Extension for QueryLimitsChecker {
             let mut counter = 0;
             // the number of bytes for the tx_bytes and signatures strings
             tx_bytes_sigs_bytes = if let Some(selection_set) = mutation_selection_set {
-                selection_set.node.items.iter().for_each(|x| match &x.node {
-                    Selection::Field(f) => {
+                selection_set.node.items.iter().for_each(|x| {
+                    if let Selection::Field(f) = &x.node {
                         if f.node.name.node == "executeTransactionBlock" {
                             for arg in &f.node.arguments {
                                 match &arg.1.node {
                                     GqlValue::String(s) => {
                                         counter += s.len();
                                     }
-                                    // TODO what happens if there are other variables?
-                                    GqlValue::Variable(v) => match variables.get(v) {
-                                        // the variables are expected to be strings
-                                        Some(Value::String(s)) => {
+                                    // the variables are expected to be strings
+                                    GqlValue::Variable(v) => {
+                                        if let Some(Value::String(s)) = variables.get(v) {
                                             counter += s.len();
                                         }
-                                        _ => {}
-                                    },
-
+                                    }
                                     _ => {}
                                 }
                             }
                         }
                     }
-                    _ => {}
                 });
                 counter
             } else {
