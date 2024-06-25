@@ -868,7 +868,7 @@ impl LegacyPathExpander {
         position_kind: LegacyPositionKind,
         loc: Loc,
     ) {
-        if context.env.ide_mode() {
+        if context.env.ide_mode() && context.is_source_definition {
             let mut info = AliasAutocompleteInfo::new();
 
             match position_kind {

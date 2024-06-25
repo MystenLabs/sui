@@ -14,31 +14,31 @@ note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:4:24
   │
 4 │     public fun foo(_s: S) {}
-  │                        ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', 'test2 -> 0x42::m1::test2', or 'unit_test_poison -> 0x42::m1::unit_test_poison'
+  │                        ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', or 'test2 -> 0x42::m1::test2'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:6:24
   │
 6 │     public fun bar(_s: S) {}
-  │                        ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', 'test2 -> 0x42::m1::test2', or 'unit_test_poison -> 0x42::m1::unit_test_poison'
+  │                        ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', or 'test2 -> 0x42::m1::test2'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:9:25
   │
 9 │     public fun test1(s: S) {
-  │                         ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', 'test2 -> 0x42::m1::test2', or 'unit_test_poison -> 0x42::m1::unit_test_poison'
+  │                         ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', or 'test2 -> 0x42::m1::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:10:17
    │
 10 │         use fun bar as S.bak;
-   │                 ^^^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', 'test2 -> 0x42::m1::test2', or 'unit_test_poison -> 0x42::m1::unit_test_poison'
+   │                 ^^^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', or 'test2 -> 0x42::m1::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:10:24
    │
 10 │         use fun bar as S.bak;
-   │                        ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', 'test2 -> 0x42::m1::test2', or 'unit_test_poison -> 0x42::m1::unit_test_poison'
+   │                        ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', or 'test2 -> 0x42::m1::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:11:11
@@ -50,19 +50,19 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:14:25
    │
 14 │     public fun test2(s: S) {
-   │                         ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', 'test2 -> 0x42::m1::test2', or 'unit_test_poison -> 0x42::m1::unit_test_poison'
+   │                         ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', or 'test2 -> 0x42::m1::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:15:17
    │
 15 │         use fun foo as S.bar;
-   │                 ^^^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', 'test2 -> 0x42::m1::test2', or 'unit_test_poison -> 0x42::m1::unit_test_poison'
+   │                 ^^^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', or 'test2 -> 0x42::m1::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:15:24
    │
 15 │         use fun foo as S.bar;
-   │                        ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', 'test2 -> 0x42::m1::test2', or 'unit_test_poison -> 0x42::m1::unit_test_poison'
+   │                        ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m1::S', 'bar -> 0x42::m1::bar', 'foo -> 0x42::m1::foo', 'test1 -> 0x42::m1::test1', or 'test2 -> 0x42::m1::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:16:11

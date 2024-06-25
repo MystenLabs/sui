@@ -14,19 +14,19 @@ note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:5:21
   │
 5 │     public struct B(A) has copy, drop;
-  │                     ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', or 'unit_test_poison -> a::m::unit_test_poison'
+  │                     ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::m::foo'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:8:18
   │
 8 │         let _s = B(A(0));
-  │                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', or 'unit_test_poison -> a::m::unit_test_poison'
+  │                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::m::foo'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:8:20
   │
 8 │         let _s = B(A(0));
-  │                    ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', or 'unit_test_poison -> a::m::unit_test_poison'
+  │                    ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::m::foo'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:9:23

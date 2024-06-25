@@ -14,49 +14,49 @@ note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:7:23
   │
 7 │     public fun t0(_s: A): u64 { abort 0 }
-  │                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+  │                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', or 't5 -> a::m::t5'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:8:24
   │
 8 │     public fun t1(_s: &A): u64 { abort 0 }
-  │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+  │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', or 't5 -> a::m::t5'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:9:24
   │
 9 │     public fun t2(_s: &A): u64 { abort 0 }
-  │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+  │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', or 't5 -> a::m::t5'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:11:23
    │
 11 │     public fun t3(_s: B): u64 { abort 0 }
-   │                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', or 't5 -> a::m::t5'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:12:24
    │
 12 │     public fun t4(_s: &B): u64 { abort 0 }
-   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', or 't5 -> a::m::t5'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:13:24
    │
 13 │     public fun t5(_s: &B): u64 { abort 0 }
-   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', or 't5 -> a::m::t5'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:16:18
    │
 16 │         let _a = A {};
-   │                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', or 't5 -> a::m::t5'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:17:18
    │
 17 │         let _b = B();
-   │                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', 't5 -> a::m::t5', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'foo -> a::m::foo', 't0 -> a::m::t0', 't1 -> a::m::t1', 't2 -> a::m::t2', 't3 -> a::m::t3', 't4 -> a::m::t4', or 't5 -> a::m::t5'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:18:23

@@ -14,37 +14,37 @@ note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:5:12
   │
 5 │         a: A,
-  │            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+  │            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:14:25
    │
 14 │     public fun test(a: &A, b: &B, c: &C) {
-   │                         ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                         ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:14:32
    │
 14 │     public fun test(a: &A, b: &B, c: &C) {
-   │                                ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                                ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:14:39
    │
 14 │     public fun test(a: &A, b: &B, c: &C) {
-   │                                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:15:13
    │
 15 │         let A(_q, _d) = a;
-   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:16:13
    │
 16 │         let A(.., _q) = a;
-   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15005]: IDE ellipsis expansion
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:16:15
@@ -56,7 +56,7 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:17:13
    │
 17 │         let A(_q, ..) = a;
-   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15005]: IDE ellipsis expansion
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:17:19
@@ -68,7 +68,7 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:18:13
    │
 18 │         let A(..) = a;
-   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15005]: IDE ellipsis expansion
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:18:15
@@ -80,13 +80,13 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:19:13
    │
 19 │         let B { a: _a, q: _q } = b;
-   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:20:13
    │
 20 │         let B { q: _q, .. } = b;
-   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15005]: IDE ellipsis expansion
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:20:24
@@ -98,7 +98,7 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:21:13
    │
 21 │         let B { a: _a, .. } = b;
-   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15005]: IDE ellipsis expansion
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:21:24
@@ -110,7 +110,7 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:22:13
    │
 22 │         let B { .. } = b;
-   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test -> a::m::test', or 'unit_test_poison -> a::m::unit_test_poison'
+   │             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', or 'test -> a::m::test'
 
 note[I15005]: IDE ellipsis expansion
    ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:22:17

@@ -14,19 +14,19 @@ note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/method_autocomplete.move:4:24
   │
 4 │     public struct A<T>(T) has drop;
-  │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+  │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/method_autocomplete.move:5:24
   │
 5 │     public struct B<T>(A<T>) has drop;
-  │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+  │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/method_autocomplete.move:5:26
   │
 5 │     public struct B<T>(A<T>) has drop;
-  │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+  │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 warning[W09009]: unused struct field
   ┌─ tests/move_2024/ide_mode/method_autocomplete.move:6:23
@@ -48,73 +48,73 @@ note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/method_autocomplete.move:8:32
   │
 8 │     public fun for_a_0<T>(_a: &A<T>) {  }
-  │                                ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+  │                                ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/method_autocomplete.move:8:34
   │
 8 │     public fun for_a_0<T>(_a: &A<T>) {  }
-  │                                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+  │                                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/method_autocomplete.move:9:32
   │
 9 │     public fun for_a_1<T>(_a: &A<T>) {  }
-  │                                ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+  │                                ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/method_autocomplete.move:9:34
   │
 9 │     public fun for_a_1<T>(_a: &A<T>) {  }
-  │                                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+  │                                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:10:32
    │
 10 │     public fun for_b_0<T>(_b: &B<T>) {  }
-   │                                ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+   │                                ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:10:34
    │
 10 │     public fun for_b_0<T>(_b: &B<T>) {  }
-   │                                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+   │                                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:11:32
    │
 11 │     public fun for_b_1<T>(_b: &B<T>) {  }
-   │                                ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+   │                                ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:11:34
    │
 11 │     public fun for_b_1<T>(_b: &B<T>) {  }
-   │                                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+   │                                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:12:29
    │
 12 │     public fun for_c_0(_c: &C) {  }
-   │                             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:13:29
    │
 13 │     public fun for_c_1(_c: &C) {  }
-   │                             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:15:27
    │
 15 │     public fun test0(in: &B<A<u64>>) {
-   │                           ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                           ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:15:29
    │
 15 │     public fun test0(in: &B<A<u64>>) {
-   │                             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:16:12
@@ -126,13 +126,13 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:19:27
    │
 19 │     public fun test1(in: &B<A<u64>>) {
-   │                           ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                           ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:19:29
    │
 19 │     public fun test1(in: &B<A<u64>>) {
-   │                             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:20:12
@@ -150,19 +150,19 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:23:27
    │
 23 │     public fun test2(in: &B<A<C>>) {
-   │                           ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                           ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:23:29
    │
 23 │     public fun test2(in: &B<A<C>>) {
-   │                             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                             ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:23:31
    │
 23 │     public fun test2(in: &B<A<C>>) {
-   │                               ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                               ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'for_a_0 -> a::m::for_a_0', 'for_a_1 -> a::m::for_a_1', 'for_b_0 -> a::m::for_b_0', 'for_b_1 -> a::m::for_b_1', 'for_c_0 -> a::m::for_c_0', 'for_c_1 -> a::m::for_c_1', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:24:12

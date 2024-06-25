@@ -14,7 +14,7 @@ note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:5:23
   │
 5 │     public fun t0(s: &S): u64 {
-  │                       ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m::S', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', or 'unit_test_poison -> 0x42::m::unit_test_poison'
+  │                       ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m::S', 't0 -> 0x42::m::t0', or 't1 -> 0x42::m::t1'
 
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:6:16
@@ -34,13 +34,13 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/missing_match_struct.move:10:23
    │
 10 │     public fun t1(s: &S): u64 {
-   │                       ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m::S', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', or 'unit_test_poison -> 0x42::m::unit_test_poison'
+   │                       ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m::S', 't0 -> 0x42::m::t0', or 't1 -> 0x42::m::t1'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/missing_match_struct.move:12:13
    │
 12 │             S { } => 0
-   │             ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m::S', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', or 'unit_test_poison -> 0x42::m::unit_test_poison'
+   │             ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m::S', 't0 -> 0x42::m::t0', or 't1 -> 0x42::m::t1'
 
 error[E04016]: too few arguments
    ┌─ tests/move_2024/ide_mode/missing_match_struct.move:12:13

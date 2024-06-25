@@ -14,7 +14,7 @@ note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:8:23
   │
 8 │     public fun t0(e: &E): u64 {
-  │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', 't3 -> 0x42::m::t3', or 'unit_test_poison -> 0x42::m::unit_test_poison'
+  │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', or 't3 -> 0x42::m::t3'
 
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:9:16
@@ -34,7 +34,7 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/missing_match_enum.move:13:23
    │
 13 │     public fun t1(e: &E): u64 {
-   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', 't3 -> 0x42::m::t3', or 'unit_test_poison -> 0x42::m::unit_test_poison'
+   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', or 't3 -> 0x42::m::t3'
 
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/ide_mode/missing_match_enum.move:14:16
@@ -61,7 +61,7 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/missing_match_enum.move:19:23
    │
 19 │     public fun t2(e: &E): u64 {
-   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', 't3 -> 0x42::m::t3', or 'unit_test_poison -> 0x42::m::unit_test_poison'
+   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', or 't3 -> 0x42::m::t3'
 
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/ide_mode/missing_match_enum.move:20:16
@@ -95,7 +95,7 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/missing_match_enum.move:26:23
    │
 26 │     public fun t3(e: &E): u64 {
-   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', 't3 -> 0x42::m::t3', or 'unit_test_poison -> 0x42::m::unit_test_poison'
+   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', or 't3 -> 0x42::m::t3'
 
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/ide_mode/missing_match_enum.move:27:16

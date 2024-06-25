@@ -1,7 +1,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-
 use crate::{
     debug_display, diag,
     diagnostics::Diagnostic,
@@ -14,6 +13,7 @@ use crate::{
     shared::string_utils::format_oxford_list,
     shared::Name,
     typing::ast as T,
+    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 
 use move_command_line_common::address::NumericalAddress;
@@ -208,7 +208,10 @@ impl From<&BTreeMap<Symbol, LeadingAccessEntry>> for AliasAutocompleteInfo {
         let mut members: BTreeSet<(Symbol, E::ModuleIdent, Name)> = BTreeSet::new();
         let mut type_params: BTreeSet<Symbol> = BTreeSet::new();
 
-        for (symbol, entry) in names {
+        for (symbol, entry) in names
+            .iter()
+            .filter(|(symbol, _)| symbol.to_string() != UNIT_TEST_POISON_FUN_NAME.to_string())
+        {
             match entry {
                 LeadingAccessEntry::Address(addr) => {
                     addresses.insert((*symbol, *addr));
@@ -241,7 +244,10 @@ impl From<&BTreeMap<Symbol, MemberEntry>> for AliasAutocompleteInfo {
         let mut members: BTreeSet<(Symbol, E::ModuleIdent, Name)> = BTreeSet::new();
         let mut type_params: BTreeSet<Symbol> = BTreeSet::new();
 
-        for (symbol, entry) in names {
+        for (symbol, entry) in names
+            .iter()
+            .filter(|(symbol, _)| symbol.to_string() != UNIT_TEST_POISON_FUN_NAME.to_string())
+        {
             match entry {
                 MemberEntry::Member(mident, name) => {
                     members.insert((*symbol, *mident, *name));

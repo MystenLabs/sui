@@ -13,25 +13,25 @@ note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:5:51
   │
 5 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
-  │                                                   ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'unit_test_poison -> std::vector::unit_test_poison', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
+  │                                                   ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:5:71
   │
 5 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
-  │                                                                       ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'unit_test_poison -> std::vector::unit_test_poison', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
+  │                                                                       ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:7:59
   │
 7 │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
-  │                                                           ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'unit_test_poison -> std::vector::unit_test_poison', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
+  │                                                           ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
 
 note[I15001]: IDE autocomplete
   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:7:83
   │
 7 │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
-  │                                                                                   ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'unit_test_poison -> std::vector::unit_test_poison', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
+  │                                                                                   ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:10:1
@@ -49,19 +49,19 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:12:31
    │
 12 │     public struct A<T>(vector<T>) has drop;
-   │                               ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+   │                               ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:13:24
    │
 13 │     public struct B<T>(A<T>) has drop;
-   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:13:26
    │
 13 │     public struct B<T>(A<T>) has drop;
-   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', 'unit_test_poison -> a::m::unit_test_poison', or 'T'
+   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
 
 warning[W09009]: unused struct field
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:14:23
@@ -83,13 +83,13 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:16:26
    │
 16 │     public fun test0(in: B<A<u64>>) {
-   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:16:28
    │
 16 │     public fun test0(in: B<A<u64>>) {
-   │                            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:21
@@ -122,13 +122,13 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:20:26
    │
 20 │     public fun test1(in: B<A<u64>>) {
-   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:20:28
    │
 20 │     public fun test1(in: B<A<u64>>) {
-   │                            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:21
@@ -167,19 +167,19 @@ note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:24:26
    │
 24 │     public fun test2(in: B<A<C>>) {
-   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:24:28
    │
 24 │     public fun test2(in: B<A<C>>) {
-   │                            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:24:30
    │
 24 │     public fun test2(in: B<A<C>>) {
-   │                              ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'unit_test_poison -> a::m::unit_test_poison'
+   │                              ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
 
 note[I15001]: IDE autocomplete
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:21
