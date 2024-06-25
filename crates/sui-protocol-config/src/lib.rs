@@ -2440,6 +2440,10 @@ impl ProtocolConfig {
                 }
                 51 => {
                     cfg.random_beacon_dkg_version = Some(1);
+
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_coin_deny_list_v2 = true;
+                    }
                 }
                 52 => {
                     cfg.config_read_setting_impl_cost_base = Some(100);
