@@ -362,6 +362,10 @@ function printBlockIdentifier(path: AstPath<Node>, options: ParserOptions, print
  * Print `label` node.
  */
 function printLabel(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
+	if (path.node.nextSibling?.type == ':') {
+		return [path.node.text, ':'];
+	}
+
 	return path.node.text;
 }
 
@@ -385,7 +389,7 @@ function printFieldInitializeList(
 	if (children.length === 0) {
 		return ' {}';
 	}
-	
+
 	return group([
 		` {`,
 		indent(line),

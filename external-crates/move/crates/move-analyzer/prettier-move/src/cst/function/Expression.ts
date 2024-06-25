@@ -117,11 +117,22 @@ function printLambdaExpression(path: AstPath<Node>, options: ParserOptions, prin
 		return children[0]!;
 	}
 
-	return [
-		children[0]!,
-		' -> ',
-		join(' ', children.slice(1))
-	];
+	if (children.length === 2) {
+		return join(' ', children);
+	}
+
+	// bindings, return type, expression
+	if (children.length === 3) {
+		return [
+			children[0]!, // bindings
+			' -> ',
+			children[1]!, // return type
+			' ',
+			children[2]!, // expression
+		];
+	}
+
+	throw new Error('`lambda_expression` node should have 1, 2 or 3 children');
 }
 
 /**
@@ -169,8 +180,8 @@ export function printBreakExpression(
 	options: ParserOptions,
 	print: printFn,
 ): Doc {
-	if (path.node.nonFormattingChildren.length === 1) {
-		return ['break ', path.call(print, 'nonFormattingChildren', 0)];
+	if (path.node.nonFormattingChildren.length > 0) {
+		return join(' ', ['break', ...path.map(print, 'nonFormattingChildren')]);
 	}
 
 	return 'break';
@@ -440,7 +451,7 @@ function printIdentifiedExpression(
 ): Doc {
 	return [
 		path.call(print, 'nonFormattingChildren', 0), // identifier
-		': ',
+		' ',
 		path.call(print, 'nonFormattingChildren', 1), // expression
 	];
 }

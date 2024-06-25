@@ -46,19 +46,19 @@ export interface FormattedNode extends SyntaxNode {
 	 */
 	isList: boolean;
 
-    /**
-     * Whether a node is a control flow node, such as `if_statement`, `while_statement`,
-     * `loop_statement`, etc. This is useful to know to not break the parent node if the
-     * control flow node is the first child of the parent.
-     */
-    isControlFlow: boolean;
+	/**
+	 * Whether a node is a control flow node, such as `if_statement`, `while_statement`,
+	 * `loop_statement`, etc. This is useful to know to not break the parent node if the
+	 * control flow node is the first child of the parent.
+	 */
+	isControlFlow: boolean;
 
-    /**
-     * Whether an expression is breakable. This is useful to know if the expression
-     * can break itself into multiple lines, and if the parent node should break
-     * itself as well.
-     */
-    isBreakableExpression: boolean;
+	/**
+	 * Whether an expression is breakable. This is useful to know if the expression
+	 * can break itself into multiple lines, and if the parent node should break
+	 * itself as well.
+	 */
+	isBreakableExpression: boolean;
 
 	parent: FormattedNode;
 	firstNamedChild: SyntaxNode;
@@ -142,8 +142,8 @@ function newProxy(node: FormattedNode): FormattedNode {
 				}
 
 				// Leading comment is a comment that either is the first node,
-                // or starts with a newline character, or the previous node is
-                // an empty line node.
+				// or starts with a newline character, or the previous node is
+				// an empty line node.
 				return isNextLine(node) ||
 					isEmptyLine(node.previousSibling) ||
 					!node.previousSibling
@@ -161,36 +161,32 @@ function newProxy(node: FormattedNode): FormattedNode {
 			if (prop === 'isBlockComment') return target.type === 'block_comment';
 			if (prop === 'isLineComment') return target.type === 'line_comment';
 
-            if (prop === 'isControlFlow') {
-                return [
-                    'if_expression',
-                    'while_expression',
-                    'loop_expression',
-                    'abort_expression',
-                    'return_expression',
-                ].includes(target.type);
-            }
-
-			if (prop === 'isList') {
+			if (prop === 'isControlFlow') {
 				return [
-					'vector_expression',
-					'expression_list',
-					'block',
+					'if_expression',
+					'while_expression',
+					'loop_expression',
+					'abort_expression',
+					'return_expression',
 				].includes(target.type);
 			}
 
-            if (prop === 'isBreakableExpression') {
-                return [
+			if (prop === 'isList') {
+				return ['vector_expression', 'expression_list', 'block'].includes(target.type);
+			}
+
+			if (prop === 'isBreakableExpression') {
+				return [
 					// TODO: consider revisiting `call_expression` and `macro_call_expression`
-                    // 'call_expression',
-                    // 'macro_call_expression',
-                    'vector_expression',
-                    'expression_list',
-                    'if_expression',
-                    'pack_expression',
-                    'block',
-                ];
-            }
+					// 'call_expression',
+					// 'macro_call_expression',
+					'vector_expression',
+					'expression_list',
+					'if_expression',
+					'pack_expression',
+					'block',
+				];
+			}
 
 			// Returns all the named children of the node that are not formatting.
 			if (prop === 'nonFormattingChildren') {
@@ -241,7 +237,7 @@ function newProxy(node: FormattedNode): FormattedNode {
 			}
 
 			// very-very weakly typed check for a `SyntaxNode`
-			if (typeof result === 'object' && result.namedChildren) {
+			if (typeof result === 'object' && result !== null && result.namedChildren) {
 				return newProxy(result);
 			}
 
