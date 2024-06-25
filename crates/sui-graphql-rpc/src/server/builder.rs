@@ -873,7 +873,7 @@ pub mod tests {
         );
     }
 
-    pub async fn test_query_default_page_limit_impl() {
+    pub async fn test_query_default_page_limit_impl(connection_config: ConnectionConfig) {
         let service_config = ServiceConfig {
             limits: Limits {
                 default_page_size: 1,
@@ -881,7 +881,7 @@ pub mod tests {
             },
             ..Default::default()
         };
-        let schema = prep_schema(None, Some(service_config)).build_schema();
+        let schema = prep_schema(Some(connection_config), Some(service_config)).build_schema();
 
         let resp = schema
             .execute("{ checkpoints { nodes { sequenceNumber } } }")
