@@ -36,6 +36,9 @@ pub fn get_connection_pool(database_url: String) -> PgPool {
 
 // TODO: add retry logic
 pub fn write(pool: &PgPool, token_txns: Vec<TokenTransfer>) -> Result<(), anyhow::Error> {
+    if token_txns.is_empty() {
+        return Ok(());
+    }
     let (transfers, data): (Vec<DBTokenTransfer>, Vec<Option<DBTokenTransferData>>) = token_txns
         .iter()
         .map(|t| (t.to_db(), t.to_data_maybe()))
@@ -57,7 +60,10 @@ pub fn write(pool: &PgPool, token_txns: Vec<TokenTransfer>) -> Result<(), anyhow
     Ok(())
 }
 
-pub fn update_sui_progress_store(pool: &PgPool, tx_digest: TransactionDigest) -> Result<(), anyhow::Error> {
+pub fn update_sui_progress_store(
+    pool: &PgPool,
+    tx_digest: TransactionDigest,
+) -> Result<(), anyhow::Error> {
     let mut conn = pool.get()?;
     diesel::insert_into(schema::sui_progress_store::table)
         .values(&SuiProgressStore {
@@ -78,11 +84,12 @@ pub fn read_sui_progress_store(pool: &PgPool) -> anyhow::Result<Option<Transacti
         .first(&mut conn)
         .optional()?;
     match val {
-        Some(val) => Ok(Some(TransactionDigest::try_from(val.txn_digest.as_slice())?)),
+        Some(val) => Ok(Some(TransactionDigest::try_from(
+            val.txn_digest.as_slice(),
+        )?)),
         None => Ok(None),
     }
 }
-
 
 pub fn get_latest_eth_token_transfer(
     pool: &PgPool,

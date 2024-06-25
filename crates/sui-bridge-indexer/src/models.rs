@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::{progress_store, token_transfer, token_transfer_data, sui_progress_store};
+use crate::schema::{progress_store, sui_progress_store, token_transfer, token_transfer_data};
 use diesel::{Identifiable, Insertable, Queryable, Selectable};
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]

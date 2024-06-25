@@ -12199,6 +12199,7 @@ dependencies = [
  "sui-sdk 1.29.0",
  "sui-test-transaction-builder",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "test-cluster",
  "tokio",

@@ -1,5 +1,8 @@
-use crate::postgres_manager::{update_sui_progress_store, write, PgPool, PgProgressStore};
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::metrics::BridgeIndexerMetrics;
+use crate::postgres_manager::{update_sui_progress_store, write, PgPool};
 use crate::{BridgeDataSource, TokenTransfer, TokenTransferData, TokenTransferStatus};
 use anyhow::Result;
 use futures::StreamExt;
@@ -10,9 +13,7 @@ use sui_bridge::events::{
     MoveTokenDepositedEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
 };
 
-use sui_json_rpc_types::{
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-};
+use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
 
 use sui_types::BRIDGE_ADDRESS;
 use tracing::{error, info};
@@ -21,7 +22,10 @@ pub(crate) const COMMIT_BATCH_SIZE: usize = 10;
 
 pub async fn handle_sui_transcations_loop(
     pg_pool: PgPool,
-    rx: mysten_metrics::metered_channel::Receiver<(Vec<SuiTransactionBlockResponse>, Option<TransactionDigest>)>,
+    rx: mysten_metrics::metered_channel::Receiver<(
+        Vec<SuiTransactionBlockResponse>,
+        Option<TransactionDigest>,
+    )>,
     metrics: BridgeIndexerMetrics,
 ) {
     let checkpoint_commit_batch_size = std::env::var("COMMIT_BATCH_SIZE")
@@ -32,23 +36,28 @@ pub async fn handle_sui_transcations_loop(
         .ready_chunks(checkpoint_commit_batch_size);
     while let Some(batch) = stream.next().await {
         // unwrap: batch must not be empty
-        let cursor = batch.last().unwrap().1.clone();
-        let token_transfers = batch.into_iter().map(
+        let cursor = batch.last().unwrap().1;
+        let token_transfers = batch
+            .into_iter()
             // TODO: letting it panic so we can capture errors, but we should handle this more gracefully
-            |(chunk, _)| process_transctions(chunk, &metrics).unwrap()
-        ).flatten().collect::<Vec<_>>();
-        // for (chunk, _) in batch {
-        //     let token_transfers = process_transctions(resp, &metrics).unwrap();
-            if !token_transfers.is_empty() {
-                while let Err(err) = write(&pg_pool, token_transfers.clone()) {
-                    error!("Failed to write sui transactions to DB: {:?}", err);
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                }
-                info!("Wrote {} token transfers to DB", token_transfers.len());
+            .flat_map(|(chunk, _)| process_transctions(chunk, &metrics).unwrap())
+            .collect::<Vec<_>>();
+
+        // write batched token transfers to DB
+        if !token_transfers.is_empty() {
+            // unwrap: token_transfers is not empty
+            let last_ckp = token_transfers.last().as_ref().unwrap().block_height;
+            while let Err(err) = write(&pg_pool, token_transfers.clone()) {
+                error!("Failed to write sui transactions to DB: {:?}", err);
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
-        // }
+            info!("Wrote {} token transfers to DB", token_transfers.len());
+            metrics.last_committed_sui_checkpoint.set(last_ckp as i64);
+        }
+
+        // update sui progress store using the latest cursor
         if let Some(cursor) = cursor {
-            while let Err(err) = update_sui_progress_store(&pg_pool, cursor.clone()) {
+            while let Err(err) = update_sui_progress_store(&pg_pool, cursor) {
                 error!("Failed to update sui progress tore DB: {:?}", err);
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }

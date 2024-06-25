@@ -19,6 +19,8 @@ use tokio::task::JoinHandle;
 use tokio::time::{self, Duration};
 use tracing::error;
 
+use crate::metrics::BridgeIndexerMetrics;
+
 const ETH_LOG_QUERY_MAX_BLOCK_RANGE: u64 = 1000;
 const ETH_EVENTS_CHANNEL_SIZE: usize = 1000;
 const BLOCK_QUERY_INTERVAL: Duration = Duration::from_secs(2);
@@ -51,6 +53,7 @@ where
 
     pub async fn run(
         self,
+        metrics: BridgeIndexerMetrics,
     ) -> BridgeResult<(
         Vec<JoinHandle<()>>,
         mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
@@ -66,9 +69,9 @@ where
         let mut task_handles = vec![];
         for (contract_address, start_block) in self.contract_addresses {
             let eth_events_tx_clone = eth_evnets_tx.clone();
-            // let latest_block_rx_clone = latest_block_rx.clone();
             let eth_client_clone = self.eth_client.clone();
             let provider_clone = self.provider.clone();
+            let metrics_clone = metrics.clone();
             task_handles.push(spawn_logged_monitored_task!(
                 Self::run_event_listening_task(
                     contract_address,
@@ -76,6 +79,7 @@ where
                     provider_clone,
                     eth_events_tx_clone,
                     eth_client_clone,
+                    metrics_clone,
                 )
             ));
         }
@@ -88,6 +92,7 @@ where
         provider: Arc<Provider<Http>>,
         events_sender: mysten_metrics::metered_channel::Sender<(EthAddress, u64, Vec<EthLog>)>,
         eth_client: Arc<EthClient<P>>,
+        metrics: BridgeIndexerMetrics,
     ) {
         tracing::info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
         loop {
@@ -124,6 +129,7 @@ where
                 continue;
             };
             let len = events.len();
+            let last_block = events.last().map(|e| e.block_number);
 
             // Note 1: we always events to the channel even when it is empty. This is because of
             // how `eth_getLogs` api is designed - we want cursor to move forward continuously.
@@ -142,6 +148,11 @@ where
                     end_block,
                     "Observed {len} new Eth events",
                 );
+            }
+            if let Some(last_block) = last_block {
+                metrics
+                    .last_synced_unfinalized_eth_block
+                    .set(last_block as i64);
             }
             start_block = end_block + 1;
         }
