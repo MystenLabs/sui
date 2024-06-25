@@ -247,7 +247,7 @@ impl<'env, 'a> StructClassImportCtx<'env, 'a> {
 
 pub fn get_full_name_with_address(
     strct: &StructEnv,
-    type_origin_table: &TypeOriginTable
+    type_origin_table: &TypeOriginTable,
 ) -> String {
     let addr = strct.module_env.self_address();
     let types = type_origin_table.get(addr).unwrap_or_else(|| {
@@ -262,7 +262,8 @@ pub fn get_full_name_with_address(
         panic!(
             "unable to find origin address for struct {} in package {}. \
             check consistency between original id and published at for this package.",
-            strct.get_full_name_str(), addr.to_hex_literal()
+            strct.get_full_name_str(),
+            addr.to_hex_literal()
         )
     });
 
@@ -388,7 +389,7 @@ fn gen_bcs_def_for_type(
     ty: &Type,
     env: &GlobalEnv,
     type_param_names: &Vec<QuoteItem>,
-    type_origin_table: &TypeOriginTable
+    type_origin_table: &TypeOriginTable,
 ) -> js::Tokens {
     let mut toks = js::Tokens::new();
     toks.append(Item::OpenQuote(true));
@@ -398,7 +399,7 @@ fn gen_bcs_def_for_type(
         ty: &Type,
         env: &GlobalEnv,
         type_param_names: &Vec<QuoteItem>,
-        type_origin_table: &TypeOriginTable
+        type_origin_table: &TypeOriginTable,
     ) {
         match ty {
             Type::TypeParameter(idx) => match &type_param_names[*idx as usize] {
@@ -457,16 +458,20 @@ fn gen_bcs_def_for_type(
 pub struct FunctionsGen<'env> {
     env: &'env GlobalEnv,
     framework: FrameworkImportCtx,
-    type_origin_table: &'env TypeOriginTable
+    type_origin_table: &'env TypeOriginTable,
 }
 
 impl<'env> FunctionsGen<'env> {
     pub fn new(
         env: &'env GlobalEnv,
         framework: FrameworkImportCtx,
-        type_origin_table: &'env TypeOriginTable
+        type_origin_table: &'env TypeOriginTable,
     ) -> Self {
-        FunctionsGen { env, framework, type_origin_table }
+        FunctionsGen {
+            env,
+            framework,
+            type_origin_table,
+        }
     }
 
     fn symbol_pool(&self) -> &SymbolPool {
@@ -769,7 +774,9 @@ impl<'env> FunctionsGen<'env> {
     ) -> js::Tokens {
         let import_with_possible_alias = |field_name: &str| {
             if single_param && arg_field_name == field_name {
-                self.framework.import("util", field_name).with_alias(field_name.to_owned() + "_")
+                self.framework
+                    .import("util", field_name)
+                    .with_alias(field_name.to_owned() + "_")
             } else {
                 self.framework.import("util", field_name)
             }
@@ -795,16 +802,27 @@ impl<'env> FunctionsGen<'env> {
         if self.is_pure(&ty) {
             quote!($pure(txb, $arg_field_name, $ty_tok))
         } else if let Some(ty) = self.is_option(&ty) {
-            let ty_tok = gen_bcs_def_for_type(ty, self.env, &type_param_names, self.type_origin_table);
+            let ty_tok =
+                gen_bcs_def_for_type(ty, self.env, &type_param_names, self.type_origin_table);
             quote!($option(txb, $ty_tok, $arg_field_name))
         } else {
             match ty {
                 Type::TypeParameter(_) => {
-                    let ty_tok = gen_bcs_def_for_type(&ty, self.env, &type_param_names, self.type_origin_table);
+                    let ty_tok = gen_bcs_def_for_type(
+                        &ty,
+                        self.env,
+                        &type_param_names,
+                        self.type_origin_table,
+                    );
                     quote!($generic(txb, $ty_tok, $arg_field_name))
                 }
                 Type::Vector(ty) => {
-                    let ty_tok = gen_bcs_def_for_type(&ty, self.env, &type_param_names, self.type_origin_table);
+                    let ty_tok = gen_bcs_def_for_type(
+                        &ty,
+                        self.env,
+                        &type_param_names,
+                        self.type_origin_table,
+                    );
                     quote!($vector(txb, $ty_tok, $arg_field_name))
                 }
                 _ => {
@@ -898,7 +916,7 @@ pub struct StructsGen<'env, 'a> {
     env: &'env GlobalEnv,
     import_ctx: StructClassImportCtx<'env, 'a>,
     framework: FrameworkImportCtx,
-    type_origin_table: &'env TypeOriginTable
+    type_origin_table: &'env TypeOriginTable,
 }
 
 impl<'env, 'a> StructsGen<'env, 'a> {
@@ -906,7 +924,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
         env: &'env GlobalEnv,
         import_ctx: StructClassImportCtx<'env, 'a>,
         framework: FrameworkImportCtx,
-        type_origin_table: &'env TypeOriginTable
+        type_origin_table: &'env TypeOriginTable,
     ) -> Self {
         StructsGen {
             env,
@@ -935,7 +953,6 @@ impl<'env, 'a> StructsGen<'env, 'a> {
             $name
         }
     }
-
 
     /// Generates a TS interface field type for a struct field. References class structs generated
     /// in other modules by importing them when needed.
@@ -967,7 +984,10 @@ impl<'env, 'a> StructsGen<'env, 'a> {
         is_top_level: bool,
     ) -> js::Tokens {
         let to_field = &self.framework.import("reified", "ToField");
-        let to_phantom = &self.framework.import("reified", "ToTypeStr").with_alias("ToPhantom");
+        let to_phantom = &self
+            .framework
+            .import("reified", "ToTypeStr")
+            .with_alias("ToPhantom");
         let vector = &self.framework.import("reified", "Vector");
 
         let field_type = match ty {
@@ -994,15 +1014,22 @@ impl<'env, 'a> StructsGen<'env, 'a> {
                 let class = self.import_ctx.get_class(&field_strct);
 
                 let type_param_inner_toks = (0..ts.len()).map(|idx| {
-                    let wrap_to_phantom = field_strct.is_phantom_parameter(idx) && match &ts[idx] {
-                        Type::TypeParameter(t_idx) => !strct.is_phantom_parameter(*t_idx as usize),
-                        Type::Struct(_, _, _) | Type::Vector(_) => true,
-                        _ => false,
-                    };
+                    let wrap_to_phantom = field_strct.is_phantom_parameter(idx)
+                        && match &ts[idx] {
+                            Type::TypeParameter(t_idx) => {
+                                !strct.is_phantom_parameter(*t_idx as usize)
+                            }
+                            Type::Struct(_, _, _) | Type::Vector(_) => true,
+                            _ => false,
+                        };
 
                     let inner = self.gen_struct_class_field_type_inner(
-                        strct, &ts[idx], type_param_names.clone(), wrap_non_phantom_type_parameter.clone(),
-                        wrap_phantom_type_parameter.clone(), false
+                        strct,
+                        &ts[idx],
+                        type_param_names.clone(),
+                        wrap_non_phantom_type_parameter.clone(),
+                        wrap_phantom_type_parameter.clone(),
+                        false,
                     );
                     if wrap_to_phantom {
                         quote!($to_phantom<$inner>)
@@ -1154,12 +1181,15 @@ impl<'env, 'a> StructsGen<'env, 'a> {
 
                 let class = self.import_ctx.get_class(&field_strct);
 
-                let mut toks: Vec<js::Tokens> = vec![]; 
+                let mut toks: Vec<js::Tokens> = vec![];
                 for (idx, ty) in ts.iter().enumerate() {
-                    let wrap_to_phantom = field_strct.is_phantom_parameter(idx) && match &ts[idx] {
-                        Type::TypeParameter(t_idx) => !strct.is_phantom_parameter(*t_idx as usize),
-                        _ => true,
-                    };
+                    let wrap_to_phantom = field_strct.is_phantom_parameter(idx)
+                        && match &ts[idx] {
+                            Type::TypeParameter(t_idx) => {
+                                !strct.is_phantom_parameter(*t_idx as usize)
+                            }
+                            _ => true,
+                        };
 
                     let inner = self.gen_reified(strct, ty, type_param_names);
                     let tok = if wrap_to_phantom {
@@ -1168,7 +1198,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
                         quote!($inner)
                     };
                     toks.push(tok);
-                };
+                }
 
                 quote!($class.reified($(if !ts.is_empty() {
                     $(for t in toks join (, ) => $t)
@@ -1182,23 +1212,16 @@ impl<'env, 'a> StructsGen<'env, 'a> {
     }
 
     fn gen_from_fields_field_decode(&mut self, field: &FieldEnv) -> js::Tokens {
-        let decode_from_fields = &self
-            .framework
-            .import("reified", "decodeFromFields");
+        let decode_from_fields = &self.framework.import("reified", "decodeFromFields");
 
         let strct = &field.struct_env;
 
-        let field_arg_name = format!(
-            "fields.{}",
-            field.get_name().display(self.symbol_pool())
-        );
+        let field_arg_name = format!("fields.{}", field.get_name().display(self.symbol_pool()));
 
         let type_param_names = match strct.get_type_parameters().len() {
             0 => vec![],
             1 => vec![quote!(typeArg)],
-            n => (0..n)
-                .map(|idx| quote!(typeArgs[$idx]))
-                .collect::<Vec<_>>(),
+            n => (0..n).map(|idx| quote!(typeArgs[$idx])).collect::<Vec<_>>(),
         };
         let reified = self.gen_reified(strct, &field.get_type(), &type_param_names);
 
@@ -1222,9 +1245,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
         let type_param_names = match strct.get_type_parameters().len() {
             0 => vec![],
             1 => vec![quote!(typeArg)],
-            n => (0..n)
-                .map(|idx| quote!(typeArgs[$idx]))
-                .collect::<Vec<_>>(),
+            n => (0..n).map(|idx| quote!(typeArgs[$idx])).collect::<Vec<_>>(),
         };
         let reified = self.gen_reified(strct, &field.get_type(), &type_param_names);
 
@@ -1234,9 +1255,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
     }
 
     fn gen_from_json_field_field_decode(&mut self, field: &FieldEnv) -> js::Tokens {
-        let decode_from_json_field = &self
-            .framework
-            .import("reified", "decodeFromJSONField");
+        let decode_from_json_field = &self.framework.import("reified", "decodeFromJSONField");
 
         let strct = &field.struct_env;
 
@@ -1245,9 +1264,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
         let type_param_names = match strct.get_type_parameters().len() {
             0 => vec![],
             1 => vec![quote!(typeArg)],
-            n => (0..n)
-                .map(|idx| quote!(typeArgs[$idx]))
-                .collect::<Vec<_>>(),
+            n => (0..n).map(|idx| quote!(typeArgs[$idx])).collect::<Vec<_>>(),
         };
         let reified = self.gen_reified(strct, &field.get_type(), &type_param_names);
 
@@ -1280,10 +1297,11 @@ impl<'env, 'a> StructsGen<'env, 'a> {
     /// are not used in the generated code.
     /// E.g. for `struct Foo<T, P>`, this generates `<T, P>`.
     fn gen_params_toks(
-        &self, strct: &StructEnv,
+        &self,
+        strct: &StructEnv,
         param_names: Vec<impl FormatInto<JavaScript>>,
         extends_or_wraps_non_phantom: &ExtendsOrWraps,
-        extends_or_wraps_phantom: &ExtendsOrWraps
+        extends_or_wraps_phantom: &ExtendsOrWraps,
     ) -> js::Tokens {
         if param_names.is_empty() {
             return quote!();
@@ -1297,13 +1315,15 @@ impl<'env, 'a> StructsGen<'env, 'a> {
             }
         };
 
-        let param_toks = param_names.into_iter().enumerate().map(
-            |(idx, param_name)| {
+        let param_toks = param_names
+            .into_iter()
+            .enumerate()
+            .map(|(idx, param_name)| {
                 let extend_or_wrap = extend_or_wrap(idx);
                 match extend_or_wrap {
                     ExtendsOrWraps::Extends(extends) => {
                         quote!($param_name extends $extends)
-                    },
+                    }
                     ExtendsOrWraps::Wraps(wraps) => {
                         quote!($wraps<$param_name>)
                     }
@@ -1311,8 +1331,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
                         quote!($param_name)
                     }
                 }
-            }
-        );
+            });
 
         quote!(<$(for param in param_toks join (, ) => $param)>)
     }
@@ -1327,9 +1346,10 @@ impl<'env, 'a> StructsGen<'env, 'a> {
         &self,
         strct: &StructEnv,
         extends_or_wraps_non_phantom: &ExtendsOrWraps,
-        extends_or_wraps_phantom: &ExtendsOrWraps
+        extends_or_wraps_phantom: &ExtendsOrWraps,
     ) -> js::Tokens {
-        let type_params_str = self.strct_type_param_names(strct)
+        let type_params_str = self
+            .strct_type_param_names(strct)
             .iter()
             .map(|param| param.display(self.symbol_pool()).to_string())
             .collect::<Vec<_>>();
@@ -1385,7 +1405,9 @@ impl<'env, 'a> StructsGen<'env, 'a> {
         let to_bcs = &self.framework.import("reified", "toBcs");
         let extract_type = &self.framework.import("reified", "extractType");
         let phantom = &self.framework.import("reified", "phantom");
-        let assert_reified_type_args_match = &self.framework.import("reified", "assertReifiedTypeArgsMatch");
+        let assert_reified_type_args_match = &self
+            .framework
+            .import("reified", "assertReifiedTypeArgsMatch");
         let assert_fields_with_types_args_match = &self
             .framework
             .import("reified", "assertFieldsWithTypesArgsMatch");
@@ -1444,7 +1466,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
             1 => quote!(
                 typeArg: $(type_params[0].display(self.symbol_pool()).to_string()),
             ),
-            _ => quote!(typeArgs: [$(for idx in 0..type_params.len() join (, ) => 
+            _ => quote!(typeArgs: [$(for idx in 0..type_params.len() join (, ) =>
                     $(&type_params[idx].display(self.symbol_pool()).to_string())
                 )],),
         };
@@ -1452,7 +1474,8 @@ impl<'env, 'a> StructsGen<'env, 'a> {
         let extends_type_argument = ExtendsOrWraps::Extends(quote!($type_argument));
         let extends_phantom_type_argument = ExtendsOrWraps::Extends(quote!($phantom_type_argument));
         let wraps_to_type_argument = ExtendsOrWraps::Wraps(quote!($to_type_argument));
-        let wraps_phantom_to_type_argument = ExtendsOrWraps::Wraps(quote!($to_phantom_type_argument));
+        let wraps_phantom_to_type_argument =
+            ExtendsOrWraps::Wraps(quote!($to_phantom_type_argument));
 
         // <T extends Reified<TypeArgument, any>, P extends PhantomReified<PhantomTypeArgument>>
         let params_toks_for_reified = &{
@@ -1473,7 +1496,10 @@ impl<'env, 'a> StructsGen<'env, 'a> {
 
         // <ToTypeArgument<T>, ToPhantomTypeArgument<P>>
         let params_toks_for_to_type_argument = &self.gen_params_toks(
-            strct, type_params_str.clone(), &wraps_to_type_argument, &wraps_phantom_to_type_argument
+            strct,
+            type_params_str.clone(),
+            &wraps_to_type_argument,
+            &wraps_phantom_to_type_argument,
         );
 
         // `0x2::foo::Bar<${ToTypeStr<ToTypeArgument<T>>}, ${ToTypeStr<ToPhantomTypeArgument<P>>}>`
@@ -1482,7 +1508,9 @@ impl<'env, 'a> StructsGen<'env, 'a> {
             _ => {
                 let mut toks = js::Tokens::new();
                 toks.append(Item::OpenQuote(true));
-                toks.append(Item::Literal(ItemStr::from(self.get_full_name_with_address(strct))));
+                toks.append(Item::Literal(ItemStr::from(
+                    self.get_full_name_with_address(strct),
+                )));
                 toks.append(Item::Literal(ItemStr::from("<")));
                 for (idx, param) in type_params_str.iter().enumerate() {
                     let is_phantom = strct.is_phantom_parameter(idx);
@@ -1503,11 +1531,11 @@ impl<'env, 'a> StructsGen<'env, 'a> {
                 toks.append(Item::Literal(ItemStr::from(">")));
                 toks.append(Item::CloseQuote);
                 quote!($toks)
-            },
+            }
         };
 
         // [PhantomToTypeStr<ToPhantomTypeArgument<T>>, ToTypeStr<ToTypeArgument<P>>, ...]
-        let reified_type_args_as_toks = &quote!([$(for(idx, param) in type_params_str.iter().enumerate() join (, ) => 
+        let reified_type_args_as_toks = &quote!([$(for(idx, param) in type_params_str.iter().enumerate() join (, ) =>
             $(if strct.is_phantom_parameter(idx) {
                 $phantom_to_type_str<$to_phantom_type_argument<$param>>
             } else {
@@ -1521,7 +1549,9 @@ impl<'env, 'a> StructsGen<'env, 'a> {
             _ => {
                 let mut toks = js::Tokens::new();
                 toks.append(Item::OpenQuote(true));
-                toks.append(Item::Literal(ItemStr::from(self.get_full_name_with_address(strct))));
+                toks.append(Item::Literal(ItemStr::from(
+                    self.get_full_name_with_address(strct),
+                )));
                 toks.append(Item::Literal(ItemStr::from("<")));
                 for (idx, param) in type_params_str.iter().enumerate() {
                     toks.append(Item::Literal(ItemStr::from("${")));
@@ -1540,7 +1570,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
                 toks.append(Item::Literal(ItemStr::from(">")));
                 toks.append(Item::CloseQuote);
                 quote!($toks)
-            },
+            }
         };
 
         let is_option = self.get_full_name_with_address(strct) == "0x1::option::Option";
@@ -1771,7 +1801,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
                                 1 => quote!([typeArg]),
                                 _ => quote!(typeArgs),
                             };
-                             quote_in!(*toks => 
+                             quote_in!(*toks =>
                                 $assert_fields_with_types_args_match(item, $type_args_name);
                              )
                         }
