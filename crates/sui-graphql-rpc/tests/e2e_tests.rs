@@ -14,6 +14,7 @@ mod tests {
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::client::ClientError;
     use sui_graphql_rpc::config::ConnectionConfig;
+    use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use sui_types::digests::ChainIdentifier;
     use sui_types::gas_coin::GAS;
@@ -25,6 +26,33 @@ mod tests {
     use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
     use tempfile::tempdir;
     use tokio::time::sleep;
+
+    async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
+        let rng = StdRng::from_seed([12; 32]);
+        let data_ingestion_path = tempdir().unwrap().into_path();
+        let mut sim = Simulacrum::new_with_rng(rng);
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
+
+        sim.create_checkpoint();
+        sim.create_checkpoint();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
+            connection_config.clone(),
+            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
+            Arc::new(sim),
+            None,
+            data_ingestion_path,
+        )
+        .await;
+
+        cluster
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .await;
+
+        (connection_config, cluster)
+    }
 
     #[tokio::test]
     #[serial]
@@ -118,25 +146,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_graphql_client_response() {
-        let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap().into_path();
-        let mut sim = Simulacrum::new_with_rng(rng);
-        sim.set_data_ingestion_path(data_ingestion_path.clone());
-
-        sim.create_checkpoint();
-        sim.create_checkpoint();
-
-        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            ConnectionConfig::default(),
-            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
-            Arc::new(sim),
-            None,
-            data_ingestion_path,
-        )
-        .await;
-        cluster
-            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
-            .await;
+        let (_, cluster) = prep_cluster().await;
 
         let query = r#"
             {
@@ -165,25 +175,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_graphql_client_variables() {
-        let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap().into_path();
-        let mut sim = Simulacrum::new_with_rng(rng);
-        sim.set_data_ingestion_path(data_ingestion_path.clone());
-
-        sim.create_checkpoint();
-        sim.create_checkpoint();
-
-        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            ConnectionConfig::default(),
-            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
-            Arc::new(sim),
-            None,
-            data_ingestion_path,
-        )
-        .await;
-        cluster
-            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
-            .await;
+        let (_, cluster) = prep_cluster().await;
 
         let query = r#"{obj1: object(address: $framework_addr) {address}
             obj2: object(address: $deepbook_addr) {address}}"#;
@@ -873,7 +865,8 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_query_default_page_limit() {
-        test_query_default_page_limit_impl().await;
+        let (connection_config, _) = prep_cluster().await;
+        test_query_default_page_limit_impl(connection_config).await;
     }
 
     #[tokio::test]

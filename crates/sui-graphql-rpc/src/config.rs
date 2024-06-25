@@ -310,6 +310,14 @@ impl ConnectionConfig {
         }
     }
 
+    pub fn ci_integration_test_cfg() -> Self {
+        Self {
+            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_graphql_rpc_e2e_tests"
+                .to_string(),
+            ..Default::default()
+        }
+    }
+
     pub fn ci_integration_test_cfg_with_db_name(
         db_name: String,
         port: u16,
