@@ -317,6 +317,8 @@ pub struct AuthorityPerEpochStore {
     pub(crate) metrics: Arc<EpochMetrics>,
     epoch_start_configuration: Arc<EpochStartConfiguration>,
 
+    executed_in_epoch_table_enabled: once_cell::sync::OnceCell<bool>,
+
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
 
@@ -348,7 +350,10 @@ pub struct AuthorityEpochTables {
     effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
     /// Signatures of transaction certificates that are executed locally.
-    pub(crate) transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
+    transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
+
+    /// Transactions that were executed in the current epoch.
+    executed_in_epoch: DBMap<TransactionDigest, ()>,
 
     /// The tables below manage shared object locks / versions. There are three ways they can be
     /// updated:
@@ -818,6 +823,7 @@ impl AuthorityPerEpochStore {
             epoch_close_time: Default::default(),
             metrics,
             epoch_start_configuration,
+            executed_in_epoch_table_enabled: once_cell::sync::OnceCell::new(),
             execution_component,
             chain_identifier,
             jwk_aggregator,
@@ -919,6 +925,14 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration
             .flags()
             .contains(&EpochFlag::StateAccumulatorV2Enabled)
+    }
+
+    pub fn executed_in_epoch_table_enabled(&self) -> bool {
+        *self.executed_in_epoch_table_enabled.get_or_init(|| {
+            self.epoch_start_configuration
+                .flags()
+                .contains(&EpochFlag::ExecutedInEpochTable)
+        })
     }
 
     /// Returns `&Arc<EpochStartConfiguration>`
@@ -1142,24 +1156,21 @@ impl AuthorityPerEpochStore {
         cert_sig: Option<&AuthorityStrongQuorumSignInfo>,
         effects_signature: Option<&AuthoritySignInfo>,
     ) -> SuiResult {
+        let tables = self.tables()?;
         let mut batch = self.tables()?.effects_signatures.batch();
         if let Some(cert_sig) = cert_sig {
-            batch.insert_batch(
-                &self.tables()?.transaction_cert_signatures,
-                [(tx_digest, cert_sig)],
-            )?;
+            batch.insert_batch(&tables.transaction_cert_signatures, [(tx_digest, cert_sig)])?;
         }
+
+        if self.executed_in_epoch_table_enabled() {
+            batch.insert_batch(&tables.executed_in_epoch, [(tx_digest, ())])?;
+        }
+
         if let Some(effects_signature) = effects_signature {
-            batch.insert_batch(
-                &self.tables()?.effects_signatures,
-                [(tx_digest, effects_signature)],
-            )?;
+            batch.insert_batch(&tables.effects_signatures, [(tx_digest, effects_signature)])?;
         }
         if !matches!(tx_key, TransactionKey::Digest(_)) {
-            batch.insert_batch(
-                &self.tables()?.transaction_key_to_digest,
-                [(tx_key, tx_digest)],
-            )?;
+            batch.insert_batch(&tables.transaction_key_to_digest, [(tx_key, tx_digest)])?;
         }
         batch.write()?;
 
@@ -1169,14 +1180,16 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn effects_signatures_exists<'a>(
+    pub fn transactions_executed_in_cur_epoch<'a>(
         &self,
         digests: impl IntoIterator<Item = &'a TransactionDigest>,
     ) -> SuiResult<Vec<bool>> {
-        Ok(self
-            .tables()?
-            .effects_signatures
-            .multi_contains_keys(digests)?)
+        let tables = self.tables()?;
+        if self.executed_in_epoch_table_enabled() {
+            Ok(tables.executed_in_epoch.multi_contains_keys(digests)?)
+        } else {
+            Ok(tables.effects_signatures.multi_contains_keys(digests)?)
+        }
     }
 
     pub fn get_effects_signature(
