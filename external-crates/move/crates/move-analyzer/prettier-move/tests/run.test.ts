@@ -83,9 +83,9 @@ function runSpec(dirname: string) {
 
 				if (result != expected) {
 					const [snapshot, actual] = diff.diffLines(expected, result);
-					// assert.fail(
-					// 	`\nEXPECTED\n>${snapshot.value.split('\n').join('\n>')}\nGOT:\n>${actual.value.split('\n').join('\n >')}\nCurrent output does not match the expected one (run with UB=1 to save the current output)`,
-					// );
+					assert.fail(
+						`\nEXPECTED\n>${snapshot.value.split('\n').join('\n>')}\nGOT:\n>${actual.value.split('\n').join('\n >')}\nCurrent output does not match the expected one (run with UB=1 to save the current output)`,
+					);
 				}
 			}),
 		);
