@@ -2918,11 +2918,23 @@ pub fn on_go_to_def_request(context: &Context, request: &Request, symbols: &Symb
     );
 }
 
-pub fn def_ide_location(def_loc: &Loc, symbols: &Symbols) -> Location {
+pub fn def_ide_location(loc: &Loc, symbols: &Symbols) -> Location {
     // TODO: Do we need beginning and end of the definition? Does not seem to make a
     // difference from the IDE perspective as the cursor goes to the beginning anyway (at
     // least in VSCode).
-    let span = symbols.files.position_opt(def_loc).unwrap();
+    let def_loc = if loc.start() as usize > symbols.files.file_size(&loc.file_hash()) {
+        // Locations for enum guard variable definitions are "reverted" (as we need two definitions
+        // to represent different types but they share the same location in the AST). We need to
+        // adjust the "reverted" value for go to def to jump to the right location
+        Loc::new(
+            loc.file_hash(),
+            std::u32::MAX - loc.start(),
+            std::u32::MAX - loc.end(),
+        )
+    } else {
+        *loc
+    };
+    let span = symbols.files.position_opt(&def_loc).unwrap();
     let range = Range {
         start: span.start.into(),
         end: span.end.into(),
@@ -3053,6 +3065,7 @@ pub fn on_hover_request(context: &Context, request: &Request, symbols: &Symbols)
             let Some(info) = symbols.def_info.get(&u.def_loc) else {
                 return Some(serde_json::to_value(Option::<lsp_types::Location>::None).unwrap());
             };
+
             // use rust for highlighting in Markdown until there is support for Move
             let contents = HoverContents::Markup(on_hover_markup(info));
             let range = None;

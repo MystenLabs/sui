@@ -603,10 +603,37 @@ impl TypingAnalysisContext<'_> {
     fn process_match_arm(&mut self, sp!(_, arm): &mut T::MatchArm) {
         self.process_match_patterm(&mut arm.pattern);
         arm.binders.iter_mut().for_each(|(var, ty)| {
-            self.add_local_def(&var.loc, &var.value.name, ty.clone(), false, false)
+            self.add_local_def(&var.loc, &var.value.name, ty.clone(), false, false);
         });
+
+        // Enum guard variables are re-defined to reflect the fact that they have different
+        // type (immutable reference) than variables in patterns and in RHS of the match arm.
+        // These re-definitions share the same location as the original definitions. At the same
+        // time, symbolicator stores information to be displayed on hover (e.g. type) in a map
+        // keyed on the definition's location. In order to have two definitions with the same
+        // location have two different type, we have to use a trick when one location is "reverted",
+        // making it possible to have two entries in the map for the same location (the location
+        // has to be "reverted" back when serving go-to-def to support jump to the right location).
         if let Some(exp) = &mut arm.guard {
+            let new_scope = self.expression_scope.clone();
+            let previous_scope = std::mem::replace(&mut self.expression_scope, new_scope);
+
+            for (var, ty) in &arm.binders {
+                let new_ty = sp(
+                    ty.loc,
+                    N::Type_::Ref(false, Box::new(sp(ty.loc, ty.value.base_type_()))),
+                );
+                let reverted_loc = Loc::new(
+                    var.loc.file_hash(),
+                    std::u32::MAX - var.loc.start(),
+                    std::u32::MAX - var.loc.end(),
+                );
+                self.add_local_def(&reverted_loc, &var.value.name, new_ty, false, false);
+            }
+
             self.visit_exp(exp);
+
+            let _inner_scope = std::mem::replace(&mut self.expression_scope, previous_scope);
         }
         self.visit_exp(&mut arm.rhs);
     }
