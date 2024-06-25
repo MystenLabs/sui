@@ -8,15 +8,12 @@ use codespan_reporting::{
 use colored::*;
 use core::fmt;
 use futures::future;
-use move_binary_format::file_format::{
-    CompiledModule, FunctionDefinitionIndex, StructDefinitionIndex,
-};
+use move_binary_format::file_format::CompiledModule;
 use move_bytecode_utils::Modules;
 use move_compiler::editions as ME;
 use move_core_types::account_address::AccountAddress;
-use move_model::ast::ModuleName;
-use move_model::model::{DatatypeId, FunId, FunctionData, GlobalEnv, Loc, ModuleData, ModuleId};
-use move_model::{self, addr_to_big_uint};
+use move_model::model::GlobalEnv;
+use move_model::{self, run_bytecode_model_builder};
 use move_package::compilation::model_builder::ModelBuilder;
 use move_package::resolution::resolution_graph::ResolvedGraph;
 use move_package::source_package::parsed_manifest as PM;
@@ -216,8 +213,7 @@ async fn build_on_chain_model<Progress: Write>(
     let dep_graph = module_map.compute_dependency_graph();
     let topo_order = dep_graph.compute_topological_order()?;
 
-    let mut on_chain_env = GlobalEnv::new();
-    add_modules_to_model(&mut on_chain_env, topo_order)?;
+    let on_chain_env = run_bytecode_model_builder(topo_order)?;
 
     let mut stderr = StandardStream::stderr(ColorChoice::Always);
     on_chain_env.report_diag(&mut stderr, Severity::Warning);
@@ -411,49 +407,6 @@ async fn resolve_original_package_id(
     }
 
     Ok(id)
-}
-
-/// Add compiled modules to the model. The `modules` list must be
-/// topologically sorted by the dependency relation (i.e., a child node in the dependency graph
-/// should appear earlier in the vector than its parents).
-fn add_modules_to_model<'a>(
-    env: &mut GlobalEnv,
-    modules: impl IntoIterator<Item = &'a CompiledModule>,
-) -> Result<()> {
-    for (i, m) in modules.into_iter().enumerate() {
-        let id = m.self_id();
-        let addr = addr_to_big_uint(id.address());
-        let module_name = ModuleName::new(addr, env.symbol_pool().make(id.name().as_str()));
-        let module_id = ModuleId::new(i);
-        let mut module_data = ModuleData::stub(module_name.clone(), module_id, m.clone());
-
-        // add functions
-        for (i, def) in m.function_defs().iter().enumerate() {
-            let def_idx = FunctionDefinitionIndex(i as u16);
-            let name = m.identifier_at(m.function_handle_at(def.function).name);
-            let symbol = env.symbol_pool().make(name.as_str());
-            let fun_id = FunId::new(symbol);
-            let data = FunctionData::stub(symbol, def_idx, def.function);
-            module_data.function_data.insert(fun_id, data);
-            module_data.function_idx_to_id.insert(def_idx, fun_id);
-        }
-
-        // add structs
-        for (i, def) in m.struct_defs().iter().enumerate() {
-            let def_idx = StructDefinitionIndex(i as u16);
-            let name = m.identifier_at(m.datatype_handle_at(def.struct_handle).name);
-            let symbol = env.symbol_pool().make(name.as_str());
-            let struct_id = DatatypeId::new(symbol);
-            let data =
-                env.create_move_struct_data(m, def_idx, symbol, Loc::default(), Vec::default());
-            module_data.struct_data.insert(struct_id, data);
-            module_data.struct_idx_to_id.insert(def_idx, struct_id);
-        }
-
-        env.module_data.push(module_data);
-    }
-
-    Ok(())
 }
 
 async fn resolve_type_origin_table<Progress: Write>(
