@@ -15,7 +15,7 @@
 import { Node } from '../..';
 import { printFn, treeFn } from '../../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
-const { group, line, ifBreak, indentIfBreak, indent, softline } = doc.builders;
+const { group, line, ifBreak, join, indentIfBreak, indent, softline } = doc.builders;
 
 export default function (path: AstPath<Node>): treeFn | null {
 	switch (path.node.type) {
@@ -132,19 +132,32 @@ function printIfExpression(path: AstPath<Node>, options: ParserOptions, print: p
  * Print `return_expression` node.
  */
 function printReturnExpression(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	const expression = path.node.nonFormattingChildren[0];
-	const printed = path.call(print, 'nonFormattingChildren', 0);
+	const nodes = path.node.nonFormattingChildren;
 
-	if (!expression) {
+	if (nodes.length === 0) {
 		return 'return';
 	}
 
-	return group([
-		'return',
-		expression.isList || expression.isControlFlow
-			? [' ', printed]
-			: [indent(line), indent(printed)],
-	]);
+	// either label or expression
+	if (nodes.length === 1) {
+		const expression = nodes[0]!;
+		const printed = path.call(print, 'nonFormattingChildren', 0);
+		return ['return ', expression.isList ? printed : indent(printed)];
+	}
+
+	// labeled expression
+	if (nodes.length === 2) {
+		const expression = nodes[1]!;
+		const printedLabel = path.call(print, 'nonFormattingChildren', 0);
+		const printedExpression = path.call(print, 'nonFormattingChildren', 1);
+		return join(' ', [
+			'return',
+			printedLabel,
+			expression.isList ? printedExpression : indent(printedExpression),
+		]);
+	}
+
+	throw new Error('Invalid return expression');
 }
 
 /**

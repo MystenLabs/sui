@@ -82,8 +82,7 @@ module test::if_expression {
             very_very_long_if_condition > very_very_long_if_condition &&
             very_very_long_if_condition > very_very_long_if_condition
         ) {
-            return
-                very_very_long_if_condition > very_very_long_if_condition &&
+            return very_very_long_if_condition > very_very_long_if_condition &&
                 very_very_long_if_condition > very_very_long_if_condition ||
                 very_very_long_if_condition > very_very_long_if_condition
         }

@@ -57,7 +57,7 @@ module foo::bar {
         let NewPoster<T>(mut y, z, i) = x.new();
         let NewPoster::Variant<T>(mut y, z, i) = x.new();
 
-        x.foreach!(|y| -> { x = y; });
+        x.foreach!(|y| { x = y; });
         assert!(x == 1, 6);
         x
     }
@@ -65,10 +65,10 @@ module foo::bar {
     // blocks
     public fun block() {
         'a: {
-            return 'a;
-            break;
-            return 'a;
-            break;
+            return 'a x;
+            break 'a x;
+            return 'a x.foo!();
+            break 'a { x = x + 1;x };
             continue 'a;
         };
         'a: loop {};
@@ -103,13 +103,13 @@ module foo::bar {
     macro fun new<$T>($len: u64, $f: |u64| -> $T): vector<$T> {
         let len = $len;
         let mut v = vector[];
-        for!(0, len, |i| -> v.push_back($f(i)));
+        for!(0, len, |i| v.push_back($f(i)));
         v
     }
 
     macro fun sum($v: &vector<u64>): u64 {
         let mut s = 0;
-        for_each!($v, |i| -> s = s + *i);
+        for_each!($v, |i| s = s + *i);
         s
     }
 
@@ -118,7 +118,7 @@ module foo::bar {
     }
 
     entry fun main() {
-        let v = new!(10, |i| -> i);
+        let v = new!(10, |i| i);
         assert!(sum!(&v) == 45, 0);
     }
 
