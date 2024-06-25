@@ -2,14 +2,14 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "indexer-reader.fullname" . }}
+  name: {{ include "indexer.fullname" . }}
   labels:
-    {{- include "indexer-reader.labels" . | nindent 4 }}
+    {{- include "indexer.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "indexer-reader.fullname" . }}
+    name: {{ include "indexer.fullname" . }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:

@@ -70,7 +70,7 @@ More Documentation on this coming soon! The storage amount recommendations will 
 - Modify values.yaml files for the service you want to deploy with helm
 - Ensure changes still render. Note that successful render does not mean a successful deploy but its step 1 regardless. `helm template <chart-name> --debug`
 - Ensure your local kube context is pointing to your desired cluster and namespace.
-- `helm install <name> <chart-name>` specific example `helm install my-indexer-reader indexer-reader`
+- `helm install <name> <chart-name>` specific example `helm install indexer-reader indexer -f indexer/values.yaml -f indexer/values.reader.yaml`
 - Iterate on values/templates to fit any specific needs the run `helm upgrade <name> <chart-name>`
 
 ### Other Helm actions

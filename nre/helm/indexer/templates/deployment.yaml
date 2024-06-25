@@ -1,9 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "indexer-reader.fullname" . }}
+  name: {{ include "indexer.fullname" . }}
   labels:
-    {{- include "indexer-reader.labels" . | nindent 4 }}
+    {{- include "indexer.labels" . | nindent 4 }}
 spec:
   {{- if .Values.minReadySeconds }}
   minReadySeconds: {{ .Values.minReadySeconds }}
@@ -29,7 +29,7 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      {{- include "indexer-reader.selectorLabels" . | nindent 6 }}
+      {{- include "indexer.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -37,7 +37,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "indexer-reader.labels" . | nindent 8 }}
+        {{- include "indexer.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -46,7 +46,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "indexer-reader.serviceAccountName" . }}
+      serviceAccountName: {{ include "indexer.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:

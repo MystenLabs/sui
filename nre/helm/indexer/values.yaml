@@ -3,7 +3,6 @@
 # Declare variables to be passed into your templates.
 
 command: ["/usr/local/bin/sui-indexer"]
-args: ["--db-url", "$(DB_URL)", "--rpc-client-url", "$(RPC_CLIENT)", "--remote-store-url", "https://checkpoints.mainnet.sui.io", "--rpc-server-worker"]
 
 replicaCount: 1
 
@@ -11,7 +10,8 @@ image:
   repository: "mysten/sui-indexer"
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "sui-v1.25.0-release"
+  # Ensure this is set to most recent sui indexer version. See github.com/MystenLabs/sui for latest releases.
+  tag: "testnet-v1.27.2"
 
 
 env:
@@ -29,6 +29,8 @@ env:
     value: "300"
   RPC_CLIENT:
     value: "https://public-rpc.mainnet.sui.io"
+  REMOTE_STORE:
+    value: "https://checkpoints.mainnet.sui.io"
   DB_URL:
     valueFrom:
       secretKeyRef:
@@ -36,7 +38,7 @@ env:
         key: "db-url"
 
 podAnnotations:
-    app: indexer-reader
+    app: sui-indexer
 
 resources: 
   limits:
@@ -47,7 +49,7 @@ resources:
      memory: 8Gi
 
 service:
-  name: indexer-reader
+  name: sui-indexer
   type: ClusterIP
   port: 9000
   targetPort: 9000
