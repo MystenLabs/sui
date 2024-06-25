@@ -3,7 +3,7 @@
 
 use std::{str::FromStr, sync::Arc};
 
-use super::to_signing_digest;
+use super::to_signing_message;
 use crate::crypto::DefaultHash;
 use crate::passkey_authenticator::{PasskeyAuthenticator, RawPasskeyAuthenticator};
 use crate::{
@@ -64,7 +64,7 @@ impl UserValidationMethod for MyUserValidationMethod {
 pub struct PasskeyResponse<T> {
     user_sig_bytes: Vec<u8>,
     authenticator_data: Vec<u8>,
-    client_data_json: Vec<u8>,
+    client_data_json: String,
     intent_msg: IntentMessage<T>,
     sender: SuiAddress,
 }
@@ -119,7 +119,7 @@ async fn create_credential_and_sign_test_tx(
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
 
     // Compute the challenge as blake2b_hash(intent_msg(tx)). This is the challenge for the passkey to sign.
-    let passkey_digest = to_signing_digest(&intent_msg);
+    let passkey_digest = to_signing_message(&intent_msg);
 
     // Send the challenge to the passkey to sign with the rp_id.
     let credential_request = CredentialRequestOptions {
@@ -158,7 +158,7 @@ async fn create_credential_and_sign_test_tx(
     PasskeyResponse {
         user_sig_bytes,
         authenticator_data: authenticator_data.to_vec(),
-        client_data_json: client_data_json.to_vec(),
+        client_data_json: String::from_utf8_lossy(client_data_json).to_string(),
         intent_msg,
         sender,
     }
@@ -249,10 +249,10 @@ async fn test_passkey_fails_invalid_json() {
     let origin = Url::parse("https://www.sui.io").unwrap();
     let request = make_credential_creation_option(&origin);
     let response = create_credential_and_sign_test_tx(&origin, request).await;
-    let client_data_json_missing_type = r#"{"challenge":"9-fH7nX8Nb1JvUynz77mv1kXOkGkg1msZb2qhvZssGI","origin":"http://localhost:5173","crossOrigin":false}"#.as_bytes();
+    let client_data_json_missing_type = r#"{"challenge":"9-fH7nX8Nb1JvUynz77mv1kXOkGkg1msZb2qhvZssGI","origin":"http://localhost:5173","crossOrigin":false}"#;
     let raw = RawPasskeyAuthenticator {
         authenticator_data: response.authenticator_data.clone(),
-        client_data_json: client_data_json_missing_type.to_vec(),
+        client_data_json: client_data_json_missing_type.to_string(),
         user_signature: Signature::from_bytes(&response.user_sig_bytes).unwrap(),
     };
     let res: Result<PasskeyAuthenticator, SuiError> = raw.try_into();
@@ -270,7 +270,7 @@ async fn test_passkey_fails_invalid_json() {
     );
     let raw = RawPasskeyAuthenticator {
         authenticator_data: response.authenticator_data.clone(),
-        client_data_json: client_data_json_too_short.as_bytes().to_vec(),
+        client_data_json: client_data_json_too_short,
         user_signature: Signature::from_bytes(&response.user_sig_bytes).unwrap(),
     };
     let res: Result<PasskeyAuthenticator, SuiError> = raw.try_into();
@@ -282,7 +282,7 @@ async fn test_passkey_fails_invalid_json() {
     );
     let raw_2 = RawPasskeyAuthenticator {
         authenticator_data: response.authenticator_data.clone(),
-        client_data_json: client_data_json_too_long.as_bytes().to_vec(),
+        client_data_json: client_data_json_too_long,
         user_signature: Signature::from_bytes(&response.user_sig_bytes).unwrap(),
     };
     let res_2: Result<PasskeyAuthenticator, SuiError> = raw_2.try_into();
@@ -294,7 +294,7 @@ async fn test_passkey_fails_invalid_json() {
     );
     let raw_3 = RawPasskeyAuthenticator {
         authenticator_data: response.authenticator_data,
-        client_data_json: client_data_json_correct.as_bytes().to_vec(),
+        client_data_json: client_data_json_correct,
         user_signature: Signature::from_bytes(&response.user_sig_bytes).unwrap(),
     };
     let res_3: Result<PasskeyAuthenticator, SuiError> = raw_3.try_into();
@@ -306,10 +306,10 @@ async fn test_passkey_fails_invalid_challenge() {
     let origin = Url::parse("https://www.sui.io").unwrap();
     let request = make_credential_creation_option(&origin);
     let response = create_credential_and_sign_test_tx(&origin, request).await;
-    let fake_client_data_json = r#"{"type":"webauthn.get","challenge":"wrong_base64_encoding","origin":"http://localhost:5173","crossOrigin":false}"#.as_bytes();
+    let fake_client_data_json = r#"{"type":"webauthn.get","challenge":"wrong_base64_encoding","origin":"http://localhost:5173","crossOrigin":false}"#;
     let raw = RawPasskeyAuthenticator {
         authenticator_data: response.authenticator_data,
-        client_data_json: fake_client_data_json.to_vec(),
+        client_data_json: fake_client_data_json.to_string(),
         user_signature: Signature::from_bytes(&response.user_sig_bytes).unwrap(),
     };
     let res: Result<PasskeyAuthenticator, SuiError> = raw.try_into();
@@ -327,10 +327,10 @@ async fn test_passkey_fails_wrong_client_data_type() {
     let origin = Url::parse("https://www.sui.io").unwrap();
     let request = make_credential_creation_option(&origin);
     let response = create_credential_and_sign_test_tx(&origin, request).await;
-    let fake_client_data_json = r#"{"type":"webauthn.create","challenge":"9-fH7nX8Nb1JvUynz77mv1kXOkGkg1msZb2qhvZssGI","origin":"http://localhost:5173","crossOrigin":false}"#.as_bytes();
+    let fake_client_data_json = r#"{"type":"webauthn.create","challenge":"9-fH7nX8Nb1JvUynz77mv1kXOkGkg1msZb2qhvZssGI","origin":"http://localhost:5173","crossOrigin":false}"#;
     let raw = RawPasskeyAuthenticator {
         authenticator_data: response.authenticator_data,
-        client_data_json: fake_client_data_json.to_vec(),
+        client_data_json: fake_client_data_json.to_string(),
         user_signature: Signature::from_bytes(&response.user_sig_bytes).unwrap(),
     };
     let res: Result<PasskeyAuthenticator, SuiError> = raw.try_into();
@@ -350,7 +350,7 @@ async fn test_passkey_fails_not_normalized_signature() {
     let response = PasskeyResponse::<TransactionData> {
         user_sig_bytes: Hex::decode("02bbd02ace0bad3b32eb3a891dc5c85e56274f52695d24db41b247ec694d1531d6fe1a5bec11a8063d1eb0512e7971bfd23395c2cb8862f73049d0f78fd204c6d602276d5f3a22f3e698cdd2272a63da8bfdd9344de73312c7f7f9eca21bfc304f2e").unwrap(),
         authenticator_data: Hex::decode("49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000").unwrap(),
-        client_data_json: Hex::decode("7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a22414141415a67554431696e6853316c397155665a655061697675364962496f5f537843476d5963665477726d634655222c226f726967696e223a22687474703a2f2f6c6f63616c686f73743a35313733222c2263726f73734f726967696e223a66616c73657d").unwrap(),
+        client_data_json: r#"{"type":"webauthn.get","challenge":"AAAAZgUD1inhS1l9qUfZePaivu6IbIo_SxCGmYcfTwrmcFU","origin":"http://localhost:5173","crossOrigin":false}"#.to_string(),
         intent_msg: IntentMessage::new(Intent::sui_transaction(), tx_data),
         sender: SuiAddress::from_str("0x769364b73418667a44d600a8f0bc2d6655ef11cefb9e337fbd5aad5d4cc0552d").unwrap()
     };
