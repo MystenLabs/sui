@@ -52,6 +52,7 @@ pub enum EpochFlag {
 
     WritebackCacheEnabled,
     StateAccumulatorV2Enabled,
+    ExecutedInEpochTable,
 }
 
 impl EpochFlag {
@@ -68,7 +69,7 @@ impl EpochFlag {
         cache_config: &ExecutionCacheConfig,
         enable_state_accumulator_v2: bool,
     ) -> Vec<Self> {
-        let mut new_flags = vec![];
+        let mut new_flags = vec![EpochFlag::ExecutedInEpochTable];
 
         if matches!(
             choose_execution_cache(cache_config),
@@ -100,6 +101,7 @@ impl fmt::Display for EpochFlag {
             }
             EpochFlag::WritebackCacheEnabled => write!(f, "WritebackCacheEnabled"),
             EpochFlag::StateAccumulatorV2Enabled => write!(f, "StateAccumulatorV2Enabled"),
+            EpochFlag::ExecutedInEpochTable => write!(f, "ExecutedInEpochTable"),
         }
     }
 }
