@@ -148,6 +148,7 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 //             Set number of leaders per round for Mysticeti commits.
 // Version 51: Switch to DKG V1.
 // Version 52: Emit `CommitteeMemberUrlUpdateEvent` when updating bridge node url.
+//             Modified sui-system package to enable withdrawal of stake before it becomes active.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);

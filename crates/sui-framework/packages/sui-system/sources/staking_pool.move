@@ -130,6 +130,14 @@ module sui_system::staking_pool {
         staked_sui: StakedSui,
         ctx: &TxContext
     ) : Balance<SUI> {
+        // stake is inactive
+        if (staked_sui.stake_activation_epoch > ctx.epoch()) {
+            let principal = unwrap_staked_sui(staked_sui);
+            pool.pending_stake = pool.pending_stake - principal.value();
+
+            return principal
+        };
+
         let (pool_token_withdraw_amount, mut principal_withdraw) =
             withdraw_from_principal(pool, staked_sui);
         let principal_withdraw_amount = principal_withdraw.value();
