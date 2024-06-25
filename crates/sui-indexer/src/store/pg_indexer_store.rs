@@ -1233,6 +1233,21 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
                 let table_partitions = self.partition_manager.get_table_partitions()?;
                 for (table, (first_partition, last_partition)) in table_partitions {
+                    tracing::error!(
+                        "Advancing epoch partition for table {} from {} to {} strategy: {:?}",
+                        table,
+                        first_partition,
+                        last_partition,
+                        self.partition_manager.get_strategy(&table)
+                    );
+                    // Only advance epoch partition for epoch partitioned tables.
+                    if !self.partition_manager.get_strategy(&table).is_epoch_partitioned() {
+                        tracing::error!(
+                            "Table {} is not epoch partitioned, skipping",
+                            table.clone()
+                        );
+                        continue;
+                    }
                     let guard = self.metrics.advance_epoch_latency.start_timer();
                     self.partition_manager.advance_and_prune_epoch_partition(
                         table.clone(),
