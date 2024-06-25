@@ -2597,12 +2597,8 @@ impl ProtocolConfig {
         self.feature_flags.mysticeti_num_leaders_per_round = val;
     }
 
-    pub fn set_enable_soft_bundle(&mut self, val: bool) {
+    pub fn set_enable_soft_bundle_for_testing(&mut self, val: bool) {
         self.feature_flags.soft_bundle = val;
-    }
-
-    pub fn set_max_soft_bundle_size(&mut self, val: u64) {
-        self.max_soft_bundle_size = Some(val);
     }
 }
 

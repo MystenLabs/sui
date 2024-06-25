@@ -1662,8 +1662,8 @@ async fn test_handle_soft_bundle_certificates() {
 
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config.set_enable_soft_bundle(true);
-    protocol_config.set_max_soft_bundle_size(10);
+    protocol_config.set_enable_soft_bundle_for_testing(true);
+    protocol_config.set_max_soft_bundle_size_for_testing(10);
 
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
@@ -1833,8 +1833,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
 
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config.set_enable_soft_bundle(true);
-    protocol_config.set_max_soft_bundle_size(3);
+    protocol_config.set_enable_soft_bundle_for_testing(true);
+    protocol_config.set_max_soft_bundle_size_for_testing(3);
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
