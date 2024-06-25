@@ -28,9 +28,7 @@ mod tests {
 
     async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
         let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap().into_path();
         let mut sim = Simulacrum::new_with_rng(rng);
-        sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         sim.create_checkpoint();
         sim.create_checkpoint();
@@ -42,7 +40,6 @@ mod tests {
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
-            data_ingestion_path,
         )
         .await;
 
