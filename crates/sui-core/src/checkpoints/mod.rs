@@ -2762,10 +2762,9 @@ mod tests {
         let effects = e(digest, dependencies, gas_used);
         store.insert(digest, effects.clone());
         epoch_store
-            .insert_tx_cert_and_effects_signature(
+            .insert_tx_key_and_effects_signature(
                 &TransactionKey::Digest(digest),
                 &digest,
-                None,
                 Some(&AuthoritySignInfo::new(
                     epoch_store.epoch(),
                     &effects,

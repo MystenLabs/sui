@@ -592,6 +592,7 @@ impl ValidatorService {
                     .and_then(Result::ok);
 
                 let signed_effects = self.state.sign_effects(effects, epoch_store)?;
+                epoch_store.insert_tx_cert_sig(certificate.digest(), certificate.auth_sig())?;
 
                 Ok::<_, SuiError>(HandleCertificateResponseV3 {
                     effects: signed_effects.into_inner(),
