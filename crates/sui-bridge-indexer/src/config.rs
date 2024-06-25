@@ -18,6 +18,7 @@ pub struct Config {
     pub start_block: u64,
     pub metric_url: String,
     pub metric_port: u16,
+    pub sui_rpc_url: Option<String>,
 }
 
 /// Load the config to run.

@@ -12,8 +12,11 @@ pub mod metrics;
 pub mod models;
 pub mod postgres_manager;
 pub mod schema;
+pub mod sui_transaction_handler;
+pub mod sui_transaction_queries;
 pub mod sui_worker;
 
+#[derive(Clone)]
 pub struct TokenTransfer {
     chain_id: u8,
     nonce: u64,
@@ -27,6 +30,7 @@ pub struct TokenTransfer {
     data: Option<TokenTransferData>,
 }
 
+#[derive(Clone)]
 pub struct TokenTransferData {
     sender_address: Vec<u8>,
     destination_chain: u8,
@@ -66,6 +70,7 @@ impl TokenTransfer {
     }
 }
 
+#[derive(Clone)]
 pub(crate) enum TokenTransferStatus {
     DepositedUnfinalized,
     Deposited,
@@ -85,6 +90,7 @@ impl Display for TokenTransferStatus {
     }
 }
 
+#[derive(Clone)]
 enum BridgeDataSource {
     Sui,
     Eth,
