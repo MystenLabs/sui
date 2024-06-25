@@ -60,6 +60,16 @@ impl<T: R2D2Connection> Clone for PgPartitionManager<T> {
 pub enum PgPartitionStrategy {
     CheckpointSequenceNumber,
     TxSequenceNumber,
+    ObjectId,
+}
+
+impl PgPartitionStrategy {
+    pub fn is_epoch_partitioned(&self) -> bool {
+        matches!(
+            self,
+            Self::CheckpointSequenceNumber | Self::TxSequenceNumber
+        )
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -102,6 +112,7 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
         let mut partition_strategies = HashMap::new();
         partition_strategies.insert("events", PgPartitionStrategy::TxSequenceNumber);
         partition_strategies.insert("transactions", PgPartitionStrategy::TxSequenceNumber);
+        partition_strategies.insert("objects_version", PgPartitionStrategy::ObjectId);
         let manager = Self {
             cp,
             partition_strategies,
@@ -152,18 +163,19 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
             .unwrap_or(PgPartitionStrategy::CheckpointSequenceNumber)
     }
 
-    pub fn determine_partition_range(
+    pub fn determine_epoch_partition_range(
         &self,
         table_name: &str,
         data: &EpochPartitionData,
-    ) -> (u64, u64) {
+    ) -> Option<(u64, u64)> {
         match self.get_strategy(table_name) {
             PgPartitionStrategy::CheckpointSequenceNumber => {
-                (data.last_epoch_start_cp, data.next_epoch_start_cp)
+                Some((data.last_epoch_start_cp, data.next_epoch_start_cp))
             }
             PgPartitionStrategy::TxSequenceNumber => {
-                (data.last_epoch_start_tx, data.next_epoch_start_tx)
+                Some((data.last_epoch_start_tx, data.next_epoch_start_tx))
             }
+            PgPartitionStrategy::ObjectId => None,
         }
     }
 
@@ -175,7 +187,9 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
         data: &EpochPartitionData,
         epochs_to_keep: Option<u64>,
     ) -> Result<(), IndexerError> {
-        let partition_range = self.determine_partition_range(&table, data);
+        let Some(partition_range) = self.determine_epoch_partition_range(&table, data) else {
+            return Ok(());
+        };
         if data.next_epoch == 0 {
             tracing::info!("Epoch 0 partition has been created in the initial setup.");
             return Ok(());
