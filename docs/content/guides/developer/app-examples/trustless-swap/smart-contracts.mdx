@@ -15,13 +15,13 @@ In this part of the guide, you will write the Move contracts that perform the tr
 
 ## `Locked` and `Key`
 
-Once we initiate a trade, we don't want the other party to be able to modify the object they agreed to trade with us: imagine we're trading in-game items and we agree to trade a weapon with all its attachments, and its owner strips all its attachments just before the trade!
+Once the trade has been initiated, you don't want the other party to be able to modify the object they agreed to trade with you: imagine you're trading in-game items and you agree to trade a weapon with all its attachments, and its owner strips all its attachments just before the trade!
 
 Usually this is handled by having a third party hold the items in escrow to make sure they are not tampered with, but this requires trusting that the third party won't tamper with it themselves, and/or paying them to ensure that doesn't happen.
 
-Instead, we can use the safety properties of Move to force an item's owner to prove that they have not tampered with the version of the object that we agreed to trade, without involving anyone else.
+Instead, you can use the safety properties of Move to force an item's owner to prove that they have not tampered with the version of the object that you agreed to trade, without involving anyone else.
 
-We do this by requiring that an object that is available for trading be **locked** with a **single-use key**, and asking the owner to supply the key when finalising the trade.
+This is done by requiring that an object that is available for trading is **locked** with a **single-use key**, and asking the owner to supply the key when finalising the trade.
 
 To tamper with the object, they would have needed to unlock it, which would consume the key, meaning they would not be able to produce the key to finish the trade.
 
@@ -89,12 +89,12 @@ Together, they ensure that a lock and key cannot have existed before the lock op
 
 ## Testing `Locked` and `Key`
 
-Move's type system guarantees that a given `Key` cannot be re-used (because `unlock` accepts it by value), but there are some properties that we need to confirm with tests:
+Move's type system guarantees that a given `Key` cannot be re-used (because `unlock` accepts it by value), but there are some properties that need to be confirmed with tests:
 
 - A locked object can be unlocked with its key.
 - Trying to lock an object with the wrong key will fail.
 
-The test starts with a helper function for creating an object, it doesn't matter what kind of object it is, as long as it has the `store` ability. We will use `Coin<SUI>`, because it comes with a `#[test_only]` function for minting:
+The test starts with a helper function for creating an object, it doesn't matter what kind of object it is, as long as it has the `store` ability. The test uses `Coin<SUI>`, because it comes with a `#[test_only]` function for minting:
 
 ```move
 #[test_only] use sui::coin::{Self, Coin};
@@ -107,8 +107,8 @@ fun test_coin(ts: &mut Scenario): Coin<SUI> {
 }
 ```
 
-- We annotate all test-related functions and imports with `#[test_only]` to make sure they don't show up in the published package. This can also be done by separating tests into their own module – e.g. `lock_tests.move` – and marking that module as `#[test_only]`.
-- We are using the `test_scenario` module to provide access to a `&mut TxContext` in the test (necessary for creating new objects). Tests that don't need to simulate multiple transactions but still need access to a `TxContext` can use `sui::tx_context::dummy` to create a test context instead.
+- All test-related functions and imports are annotated with `#[test_only]` to make sure they don't show up in the published package. This can also be done by separating tests into their own module – e.g. `lock_tests.move` – and marking that module as `#[test_only]`.
+- The `test_scenario` module is used to provide access to a `&mut TxContext` in the test (necessary for creating new objects). Tests that don't need to simulate multiple transactions but still need access to a `TxContext` can use `sui::tx_context::dummy` to create a test context instead.
 
 The first test works by creating an object to test, locking it and unlocking it – this should finish executing without aborting.
 The last two lines exist to keep the Move compiler happy by cleaning up the test coin and test scenario objects, because values in Move will not be implicitly cleaned up unless they have the `drop` ability.
@@ -129,7 +129,7 @@ fun test_lock_unlock() {
 
 The other test is testing a failure scenario – that an abort happens. It creates two locked objects (this time the values are just `u64`'s), and use the key from one to try and unlock the other, which should fail (specified using the `expected_failure` attribute).
 
-Unlike the previous test, we don't need to do the same clean-up, because we expect the code to abort. Instead, we add another abort after the code we expect to abort (making sure to use a different code for this second abort).
+Unlike the previous test, the same clean-up is not needed, because the code is expected to abort. Instead, add another abort after the code that you expect to abort (making sure to use a different code for this second abort).
 
 ```move
 #[test]
@@ -155,11 +155,11 @@ fun test_lock_key_mismatch() {
 
 Trading proceeds in three steps:
 
-1. The first party locks the object they want to trade – this is already handled by the `lock` module we wrote earlier.
+1. The first party locks the object they want to trade – this is already handled by the `lock` module you wrote earlier.
 1. The second party puts their object up for escrow and registers their interest in the first party's object. This will be handled by a new module – `escrow`.
 1. The first party completes the trade by providing their locked object and the key to unlock it. Assuming all checks pass, this transfers their object to the second party and makes the second party's object available to them.
 
-We start implementing steps two and three by defining a new type to hold the escrowed object. It holds the `escrowed` object and an `id: UID` (because it's an object in its own right), but it also records the `sender` and intended `recipient` (to confirm they match when the trade happens), and it registers interest in the first party's object by recording the `ID` of the key that unlocks the `Locked<U>` that contains the object.
+You can start by implementing steps two and three, by defining a new type to hold the escrowed object. It holds the `escrowed` object and an `id: UID` (because it's an object in its own right), but it also records the `sender` and intended `recipient` (to confirm they match when the trade happens), and it registers interest in the first party's object by recording the `ID` of the key that unlocks the `Locked<U>` that contains the object.
 
 ```move
 use sui::object::{ID, UID};
@@ -173,7 +173,7 @@ struct Escrow<T: key + store> has key, store {
 }
 ```
 
-We also provide a function for creating the `Escrow` object. The object is shared because it needs to be accessed by the address that created it (in case the object needs to be returned) and by the intended recipient (to complete the swap).
+You also need to create a function for creating the `Escrow` object. The object is shared because it needs to be accessed by the address that created it (in case the object needs to be returned) and by the intended recipient (to complete the swap).
 
 ```move
 use sui::object;
@@ -198,10 +198,10 @@ public fun create<T: key + store>(
 }
 ```
 
-If the second party stops responding, the first party can unlock their object. We add a function so the second party can recover their object in the symmetric case as well.
+If the second party stops responding, the first party can unlock their object. You need to create a function so the second party can recover their object in the symmetric case as well.
 
 - It needs to check that the caller matches `sender`, because `Escrow` objects are shared and anybody can access them.
-- It accepts the `Escrow` by value so that it can clean it up after extracting the `escrowed` object, reclaiming the storage rebate for the sender and cleaning up an unused object on-chain.
+- It accepts the `Escrow` by value so that it can clean it up after extracting the `escrowed` object, reclaiming the storage rebate for the sender and cleaning up an unused object on chain.
 
 ```move
 /// The `sender` and `recipient` of the two escrowed objects do not match
@@ -225,12 +225,12 @@ public fun return_to_sender<T: key + store>(
 }
 ```
 
-Finally, we need to add a function to allow the first party to complete the trade.
+Finally, you need to add a function to allow the first party to complete the trade.
 
 - This function also accepts the `Escrow` by value because it will consume it once the swap is complete.
-- It checks that the sender of the transaction is the intended recipient (the first party), and that the ID of the key they provided matches the key specified when the object was escrowed. This is what ensures no tampering occurs, because this key can only be provided if it had not been used to unlock the object, which proves the object has not left its `Locked<U>` between the call to `create` and to `swap`, and we can tell by inspecting the `lock` module that it cannot be modified while in there.
+- It checks that the sender of the transaction is the intended recipient (the first party), and that the ID of the key they provided matches the key specified when the object was escrowed. This is what ensures no tampering occurs, because this key can only be provided if it had not been used to unlock the object, which proves the object has not left its `Locked<U>` between the call to `create` and to `swap`, and you can tell by inspecting the `lock` module that it cannot be modified while in there.
 - The call to `unlock` further checks that the key matches the locked object that was provided.
-- Instead of transferring the escrowed object to the recipient address, it is returned by the `swap` function. We can do this because we checked that the transaction sender is the recipient, and it makes this API more composable. Programmable Transaction Blocks give us the flexibility to decide whether to transfer the object as it is received or do something else with it.
+- Instead of transferring the escrowed object to the recipient address, it is returned by the `swap` function. You can do this because you checked that the transaction sender is the recipient, and it makes this API more composable. Programmable Transaction Blocks give us the flexibility to decide whether to transfer the object as it is received or do something else with it.
 
 ```move
 /// The `exchange_for` fields of the two escrowed objects do not match
@@ -272,11 +272,11 @@ public fun swap<T: key + store, U: key + store>(
 
 ## Testing
 
-Tests for the `escrow` module will be more involved than for `lock` – we will take advantage of `test_scenario`'s ability to simulate multiple transactions from different senders, and interact with shared objects.
+Tests for the `escrow` module will be more involved than for `lock` – you will take advantage of `test_scenario`'s ability to simulate multiple transactions from different senders, and interact with shared objects.
 
-We will focus on the test for a successful swap, but a link to all the tests can be found later on.
+You will focus on the test for a successful swap, but a link to all the tests can be found later on.
 
-As with the lock test, we start by creating a function to mint a test coin. We also create some constants to represent our transaction senders, `ALICE` and `BOB`.
+As with the lock test, start by creating a function to mint a test coin. You also create some constants to represent our transaction senders, `ALICE` and `BOB`.
 
 ```move
 #[test_only] use sui::coin::{Self, Coin};
@@ -292,7 +292,7 @@ fun test_coin(ts: &mut Scenario): Coin<SUI> {
 }
 ```
 
-The test body starts with a call to `test_scenario::begin` and ends with a call to `test_scenario::end`. It doesn't matter which address we pass to `begin`, because we will pick one of `ALICE` or `BOB` at the start of each new transaction we write, so we set it to `@0x0`:
+The test body starts with a call to `test_scenario::begin` and ends with a call to `test_scenario::end`. It doesn't matter which address you pass to `begin`, because you will pick one of `ALICE` or `BOB` at the start of each new transaction you write, so set it to `@0x0`:
 
 ```move
 #[test]
@@ -305,9 +305,9 @@ fun test_successful_swap() {
 }
 ```
 
-The first transaction is from `BOB` who creates a coin and locks it. We remember the ID of the coin and the ID of the key, which we will need later, but we transfer the locked object and the key itself to `BOB`, because this is what would happen with a real transaction: When simulating transactions in a test, we should only keep around primitive values, not whole objects, which would need to be written to chain between transactions.
+The first transaction is from `BOB` who creates a coin and locks it. You may remember the ID of the coin and the ID of the key, which you will need later, but now you transfer the locked object and the key itself to `BOB`, because this is what would happen with a real transaction: When simulating transactions in a test, you should only keep around primitive values, not whole objects, which would need to be written to chain between transactions.
 
-We write these transactions inside the `test_succesful_swap` function, between the call to `begin` and `end`.
+Write these transactions inside the `test_succesful_swap` function, between the call to `begin` and `end`.
 
 ```move
 let (i2, ik2) = {
@@ -334,7 +334,7 @@ let i1 = {
 };
 ```
 
-Finally, `BOB` completes the trade by calling `swap`. We use the `take_shared` function to simulate accepting a shared input. It uses type inference to know that the object must be an `Escrow`, and finds the last object of this type that was shared (by `ALICE` in the previous transaction). Similarly, we use `take_from_sender` to simulate accepting owned inputs (in this case, `BOB`'s lock and key). The coin returned by `swap` is transferred back to `BOB`, as if it was called as part of a PTB, followed by a transfer command.
+Finally, `BOB` completes the trade by calling `swap`. The `take_shared` function is used to simulate accepting a shared input. It uses type inference to know that the object must be an `Escrow`, and finds the last object of this type that was shared (by `ALICE` in the previous transaction). Similarly, use `take_from_sender` to simulate accepting owned inputs (in this case, `BOB`'s lock and key). The coin returned by `swap` is transferred back to `BOB`, as if it was called as part of a PTB, followed by a transfer command.
 
 ```move
 {
@@ -378,11 +378,11 @@ ts::next_tx(&mut ts, @0x0);
 
 ## Observability
 
-The `escrow` Move package is now functional: We could publish it on-chain and perform trustless swaps by creating transactions. Creating those transactions requires knowing the IDs of `Locked`, `Key`, and `Escrow` objects.
+The `escrow` Move package is now functional: You could publish it on chain and perform trustless swaps by creating transactions. Creating those transactions requires knowing the IDs of `Locked`, `Key`, and `Escrow` objects.
 
 `Locked` and `Key` objects are typically owned by the transaction sender, and so can be queried through the Sui RPC, but `Escrow` objects are shared, and it is useful to be able to query them by their sender and recipient (so that users can see the trades they have offered and received).
 
-Querying `Escrow` objects by their sender or recipient will require custom indexing, and to make it easy for the indexer to spot relevant transactions we will add the following **events** to `escrow.move`:
+Querying `Escrow` objects by their sender or recipient will require custom indexing, and to make it easy for the indexer to spot relevant transactions you will add the following **events** to `escrow.move`:
 
 ```move
 struct EscrowCreated has copy, drop {
