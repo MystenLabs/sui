@@ -165,21 +165,7 @@ const guides = [
 					'guides/developer/app-examples/recaptcha',
           'guides/developer/app-examples/reviews-rating',
 					'guides/developer/app-examples/tic-tac-toe',
-					{
-						type: 'category',
-						label: 'Trustless Swap',
-						link: {
-							type: 'doc',
-							id: 'guides/developer/app-examples/trustless-swap/intro',
-						},
-						items: [
-							'guides/developer/app-examples/trustless-swap/intro',
-							'guides/developer/app-examples/trustless-swap/smart-contracts',
-							'guides/developer/app-examples/trustless-swap/backend',
-							'guides/developer/app-examples/trustless-swap/frontend',
-						],
-					},
-					'guides/developer/app-examples/trusted-swap',
+					'guides/developer/app-examples/trustless-swap',
 					'guides/developer/app-examples/turnip-town',
 				],
 			},
