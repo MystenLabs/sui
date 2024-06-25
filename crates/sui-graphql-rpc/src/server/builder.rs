@@ -36,12 +36,16 @@ use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::extract::FromRef;
-use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
+use axum::extract::{
+    connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, Query as AxumQuery, State,
+};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self};
 use axum::response::IntoResponse;
-use axum::routing::{post, MethodRouter, Route};
+use axum::routing::{get, post, MethodRouter, Route};
+use axum::Extension;
 use axum::{headers::Header, Router};
+use chrono::Utc;
 use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
@@ -51,6 +55,7 @@ use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandl
 use std::convert::Infallible;
 use std::net::TcpStream;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
@@ -62,6 +67,9 @@ use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
+
+/// The default allowed maximum lag between the current timestamp and the checkpoint timestamp.
+const DEFAULT_MAX_CHECKPOINT_LAG: Duration = Duration::from_secs(300);
 
 pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -248,7 +256,7 @@ impl ServerBuilder {
                 .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
                 .route("/graphql/:version", post(graphql_handler))
-                .route("/health", axum::routing::get(health_checks))
+                .route("/health", get(health_check))
                 .with_state(self.state.clone())
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
@@ -502,8 +510,8 @@ pub fn export_schema() -> String {
 /// if set in the request headers, and the watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    schema: axum::Extension<SuiGraphQLSchema>,
-    axum::Extension(watermark_lock): axum::Extension<WatermarkLock>,
+    schema: Extension<SuiGraphQLSchema>,
+    Extension(watermark_lock): Extension<WatermarkLock>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -579,7 +587,7 @@ impl Drop for MetricsCallbackHandler {
 struct GraphqlErrors(std::sync::Arc<Vec<async_graphql::ServerError>>);
 
 /// Connect via a TCPStream to the DB to check if it is alive
-async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode {
+async fn db_health_check(State(connection): State<ConnectionConfig>) -> StatusCode {
     let Ok(url) = reqwest::Url::parse(connection.db_url.as_str()) else {
         return StatusCode::INTERNAL_SERVER_ERROR;
     };
@@ -599,6 +607,48 @@ async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode
     } else {
         StatusCode::OK
     }
+}
+
+#[derive(serde::Deserialize)]
+struct HealthParam {
+    max_checkpoint_lag_ms: Option<u64>,
+}
+
+/// Endpoint for querying the health of the service.
+/// It returns 500 for any internal error, including not connecting to the DB,
+/// and 504 if the checkpoint timestamp is too far behind the current timestamp as per the
+/// max checkpoint timestamp lag query parameter, or the default value if not provided.
+async fn health_check(
+    State(connection): State<ConnectionConfig>,
+    Extension(watermark_lock): Extension<WatermarkLock>,
+    AxumQuery(query_params): AxumQuery<HealthParam>,
+) -> StatusCode {
+    let db_health_check = db_health_check(axum::extract::State(connection)).await;
+    if db_health_check != StatusCode::OK {
+        return db_health_check;
+    }
+
+    let max_checkpoint_lag_ms = query_params
+        .max_checkpoint_lag_ms
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| DEFAULT_MAX_CHECKPOINT_LAG);
+
+    let checkpoint_timestamp =
+        Duration::from_millis(watermark_lock.read().await.checkpoint_timestamp_ms);
+
+    let now_millis = Utc::now().timestamp_millis();
+
+    // Check for negative timestamp or conversion failure
+    let now: Duration = match u64::try_from(now_millis) {
+        Ok(val) => Duration::from_millis(val),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+    };
+
+    if (now - checkpoint_timestamp) > max_checkpoint_lag_ms {
+        return StatusCode::GATEWAY_TIMEOUT;
+    }
+
+    db_health_check
 }
 
 // One server per proc, so this is okay
@@ -651,6 +701,7 @@ pub mod tests {
         let cancellation_token = CancellationToken::new();
         let watermark = Watermark {
             checkpoint: 1,
+            checkpoint_timestamp_ms: 1,
             epoch: 0,
         };
         let state = AppState::new(
@@ -1018,5 +1069,21 @@ pub mod tests {
         assert_eq!(req_metrics.input_nodes.get_sample_sum(), 2. + 4.);
         assert_eq!(req_metrics.output_nodes.get_sample_sum(), 2. + 4.);
         assert_eq!(req_metrics.query_depth.get_sample_sum(), 1. + 3.);
+    }
+
+    pub async fn test_health_check_impl() {
+        let server_builder = prep_schema(None, None);
+        let url = format!(
+            "http://{}:{}/health",
+            server_builder.state.connection.host, server_builder.state.connection.port
+        );
+        server_builder.build_schema();
+
+        let resp = reqwest::get(&url).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let url_with_param = format!("{}?max_checkpoint_lag_ms=1", url);
+        let resp = reqwest::get(&url_with_param).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::GATEWAY_TIMEOUT);
     }
 }
