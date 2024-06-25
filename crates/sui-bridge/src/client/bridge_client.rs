@@ -66,7 +66,7 @@ impl BridgeClient {
                 let nonce = a.nonce.to_string();
                 let type_ = (a.blocklist_type as u8).to_string();
                 let keys = a
-                    .blocklisted_members
+                    .members_to_update
                     .iter()
                     .map(|k| Hex::encode(k.as_bytes()))
                     .collect::<Vec<_>>()
@@ -485,7 +485,7 @@ mod tests {
                 chain_id: BridgeChainId::EthSepolia,
                 nonce: 1,
                 blocklist_type: crate::types::BlocklistType::Blocklist,
-                blocklisted_members: vec![pub_key_bytes.clone()],
+                members_to_update: vec![pub_key_bytes.clone()],
             });
         assert_eq!(
             BridgeClient::bridge_action_to_path(&action),
@@ -501,7 +501,7 @@ mod tests {
                 chain_id: BridgeChainId::EthSepolia,
                 nonce: 1,
                 blocklist_type: crate::types::BlocklistType::Blocklist,
-                blocklisted_members: vec![pub_key_bytes.clone(), pub_key_bytes2.clone()],
+                members_to_update: vec![pub_key_bytes.clone(), pub_key_bytes2.clone()],
             });
         assert_eq!(
             BridgeClient::bridge_action_to_path(&action),

@@ -1,54 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::check_table;
-use crate::data::{Db, DbConnection, QueryExecutor};
+use crate::data::{Db, DbConnection, DieselBackend, DieselConn, QueryExecutor};
 use crate::error::Error;
-use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
-use sui_indexer::models::checkpoints::StoredCheckpoint;
-use sui_indexer::models::display::StoredDisplay;
-use sui_indexer::models::epoch::QueryableEpochInfo;
-use sui_indexer::models::events::StoredEvent;
-use sui_indexer::models::objects::{StoredHistoryObject, StoredObjectSnapshot};
-use sui_indexer::models::packages::StoredPackage;
-use sui_indexer::models::transactions::StoredTransaction;
-use sui_indexer::models::tx_indices::{
-    StoredTxCalls, StoredTxChangedObject, StoredTxDigest, StoredTxInputObject, StoredTxRecipients,
-    StoredTxSenders,
-};
-use sui_indexer::schema::tx_digests;
-use sui_indexer::schema::{
-    checkpoints, display, epochs, events, objects_history, objects_snapshot, packages,
-    transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
-};
+use diesel::query_builder::{AstPass, Query, QueryFragment, QueryId};
+use diesel::sql_types::Bool;
+use diesel::{QueryDsl, QueryResult, RunQueryDsl};
 
-#[macro_export]
-macro_rules! check_table {
-    ($conn:expr, $table:path, $type:ty) => {{
-        let result: Result<Option<$type>, _> = $conn
-            .first(move || $table.select(<$type>::as_select()))
-            .optional();
-        result.is_ok()
-    }};
-}
-
-#[macro_export]
-macro_rules! generate_check_all_tables {
-    ($(($table:ident, $type:ty)),* $(,)?) => {
-        pub(crate) async fn check_all_tables(db: &Db) -> Result<bool, Error> {
+/// Generates a function: `check_all_tables` that runs a query against every table this GraphQL
+/// service is aware of, to test for schema compatibility. Each query is of the form:
+///
+///   SELECT TRUE FROM (...) q WHERE FALSE
+///
+/// where `...` is a query selecting all of the fields from the given table. The query is expected
+/// to return no results, but will complain if it relies on a column that doesn't exist.
+macro_rules! generate_compatibility_check {
+    ($($table:ident),*) => {
+        pub(crate) async fn check_all_tables(db: &Db) -> Result<(), Error> {
             use futures::future::join_all;
+            use sui_indexer::schema::*;
 
             let futures = vec![
                 $(
-                    db.execute(|conn| {
-                        Ok::<_, diesel::result::Error>(check_table!(conn, $table::dsl::$table, $type))
-                    })
+                    db.execute(|conn| Ok::<_, diesel::result::Error>(
+                        conn.results::<_, bool>(move || Check {
+                            query: $table::table.select($table::all_columns)
+                        })
+                        .is_ok()
+                    ))
                 ),*
             ];
 
             let results = join_all(futures).await;
             if results.into_iter().all(|res| res.unwrap_or(false)) {
-                Ok(true)
+                Ok(())
             } else {
                 Err(Error::Internal(
                     "One or more tables are missing expected columns".into(),
@@ -58,19 +43,24 @@ macro_rules! generate_check_all_tables {
     };
 }
 
-generate_check_all_tables!(
-    (checkpoints, StoredCheckpoint),
-    (display, StoredDisplay),
-    (epochs, QueryableEpochInfo),
-    (events, StoredEvent),
-    (objects_history, StoredHistoryObject),
-    (objects_snapshot, StoredObjectSnapshot),
-    (packages, StoredPackage),
-    (transactions, StoredTransaction),
-    (tx_calls, StoredTxCalls),
-    (tx_changed_objects, StoredTxChangedObject),
-    (tx_digests, StoredTxDigest),
-    (tx_input_objects, StoredTxInputObject),
-    (tx_recipients, StoredTxRecipients),
-    (tx_senders, StoredTxSenders),
-);
+sui_indexer::for_all_tables!(generate_compatibility_check);
+
+#[derive(Debug, Clone, Copy, QueryId)]
+struct Check<Q> {
+    query: Q,
+}
+
+impl<Q: Query> Query for Check<Q> {
+    type SqlType = Bool;
+}
+
+impl<Q> RunQueryDsl<DieselConn> for Check<Q> {}
+
+impl<Q: QueryFragment<DieselBackend>> QueryFragment<DieselBackend> for Check<Q> {
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, DieselBackend>) -> QueryResult<()> {
+        out.push_sql("SELECT TRUE FROM (");
+        self.query.walk_ast(out.reborrow())?;
+        out.push_sql(") q WHERE FALSE");
+        Ok(())
+    }
+}

@@ -21,7 +21,7 @@ async fn test_leader_swap_table() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut protocol_config = latest_protocol_version();
-    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
+    protocol_config.set_consensus_bad_nodes_stake_threshold_for_testing(33);
 
     // the authority ids
     let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
@@ -104,7 +104,7 @@ async fn test_leader_schedule() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut protocol_config = latest_protocol_version();
-    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
+    protocol_config.set_consensus_bad_nodes_stake_threshold_for_testing(33);
 
     // the authority ids
     let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
@@ -205,7 +205,7 @@ async fn test_leader_schedule_from_store() {
 
     // WHEN
     let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    protocol_config.set_consensus_bad_nodes_stake_threshold(33);
+    protocol_config.set_consensus_bad_nodes_stake_threshold_for_testing(33);
     let schedule = LeaderSchedule::from_store(committee, store, protocol_config);
 
     // THEN the stored schedule should be returned and eventually the low score leader should be

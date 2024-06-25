@@ -172,7 +172,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let built_test_plan = construct_test_plan(compilation_env, Some(root_package), &cfgir);
-        let mapped_files = compilation_env.file_mapping().clone();
+        let mapped_files = compilation_env.mapped_files().clone();
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =

@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use move_command_line_common::files::FileHash;
 use move_compiler::shared::ide as CI;
 use move_ir_types::location::Loc;
 
@@ -10,7 +11,7 @@ use move_ir_types::location::Loc;
 pub struct CompilerInfo {
     pub macro_info: BTreeMap<Loc, CI::MacroCallInfo>,
     pub expanded_lambdas: BTreeSet<Loc>,
-    pub autocomplete_info: BTreeMap<Loc, CI::AutocompleteInfo>,
+    pub autocomplete_info: BTreeMap<FileHash, BTreeMap<Loc, CI::AutocompleteInfo>>,
 }
 
 impl CompilerInfo {
@@ -40,7 +41,12 @@ impl CompilerInfo {
                 CI::IDEAnnotation::AutocompleteInfo(info) => {
                     // TODO: what if we find two autocomplete info sets? Intersection may be better
                     // than union, as it's likely in a lambda body.
-                    if let Some(_old) = self.autocomplete_info.insert(loc, *info) {
+                    if let Some(_old) = self
+                        .autocomplete_info
+                        .entry(loc.file_hash())
+                        .or_default()
+                        .insert(loc, *info)
+                    {
                         eprintln!("Repeated autocomplete info");
                     }
                 }
@@ -62,7 +68,19 @@ impl CompilerInfo {
         self.expanded_lambdas.contains(loc)
     }
 
-    pub fn get_autocomplete_info(&mut self, loc: &Loc) -> Option<&CI::AutocompleteInfo> {
-        self.autocomplete_info.get(loc)
+    pub fn get_autocomplete_info(
+        &self,
+        fhash: FileHash,
+        loc: &Loc,
+    ) -> Option<&CI::AutocompleteInfo> {
+        self.autocomplete_info.get(&fhash).and_then(|a| {
+            a.iter().find_map(|(aloc, ainfo)| {
+                if aloc.contains(loc) {
+                    Some(ainfo)
+                } else {
+                    None
+                }
+            })
+        })
     }
 }

@@ -244,8 +244,7 @@ pub struct BlocklistCommitteeAction {
     pub nonce: u64,
     pub chain_id: BridgeChainId,
     pub blocklist_type: BlocklistType,
-    // TODO: rename this to `members_to_update`
-    pub blocklisted_members: Vec<BridgeAuthorityPublicKeyBytes>,
+    pub members_to_update: Vec<BridgeAuthorityPublicKeyBytes>,
 }
 
 #[derive(
@@ -625,7 +624,7 @@ mod tests {
             nonce: 94,
             chain_id: BridgeChainId::EthSepolia,
             blocklist_type: BlocklistType::Unblocklist,
-            blocklisted_members: vec![],
+            members_to_update: vec![],
         });
         assert_eq!(action.approval_threshold(), 5001);
 

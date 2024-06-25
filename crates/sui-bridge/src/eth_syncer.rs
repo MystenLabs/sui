@@ -21,7 +21,7 @@ use tracing::error;
 
 const ETH_LOG_QUERY_MAX_BLOCK_RANGE: u64 = 1000;
 const ETH_EVENTS_CHANNEL_SIZE: usize = 1000;
-const FINALIZED_BLOCK_QUERY_INTERVAL: Duration = Duration::from_secs(2);
+const FINALIZED_BLOCK_QUERY_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct EthSyncer<P> {
     eth_client: Arc<EthClient<P>>,
@@ -92,9 +92,10 @@ where
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
+            // TODO: allow to pass custom initial interval
             let Ok(Ok(new_value)) = retry_with_max_elapsed_time!(
                 eth_client.get_last_finalized_block_id(),
-                time::Duration::from_secs(10)
+                time::Duration::from_secs(600)
             ) else {
                 error!("Failed to get last finalized block from eth client after retry");
                 continue;
@@ -114,6 +115,7 @@ where
     }
 
     // TODO: define a type for block number for readability
+    // TODO: add a metrics for current start block
     async fn run_event_listening_task(
         contract_address: EthAddress,
         mut start_block: u64,
@@ -149,7 +151,7 @@ where
             more_blocks = end_block < new_finalized_block;
             let Ok(Ok(events)) = retry_with_max_elapsed_time!(
                 eth_client.get_events_in_range(contract_address, start_block, end_block),
-                Duration::from_secs(30)
+                Duration::from_secs(600)
             ) else {
                 error!("Failed to get events from eth client after retry");
                 continue;

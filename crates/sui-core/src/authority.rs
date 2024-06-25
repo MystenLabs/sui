@@ -162,6 +162,7 @@ pub use crate::checkpoints::checkpoint_executor::{
 
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
+use sui_types::deny_list_v2::check_coin_deny_list_v2_during_signing;
 use sui_types::execution_config_utils::to_binary_config;
 
 #[cfg(test)]
@@ -187,6 +188,10 @@ mod gas_tests;
 #[cfg(test)]
 #[path = "unit_tests/batch_verification_tests.rs"]
 mod batch_verification_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/coin_deny_list_tests.rs"]
+mod coin_deny_list_tests;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod authority_test_utils;
@@ -862,6 +867,15 @@ impl AuthorityState {
 
         if epoch_store.coin_deny_list_v1_enabled() {
             check_coin_deny_list_v1(
+                tx_data.sender(),
+                &checked_input_objects,
+                &receiving_objects,
+                &self.get_object_store(),
+            )?;
+        }
+
+        if epoch_store.protocol_config().enable_coin_deny_list_v2() {
+            check_coin_deny_list_v2_during_signing(
                 tx_data.sender(),
                 &checked_input_objects,
                 &receiving_objects,
@@ -2907,6 +2921,32 @@ impl AuthorityState {
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
         Ok(new_epoch_store)
+    }
+
+    /// Advance the epoch store to the next epoch for testing only.
+    /// This only manually sets all the places where we have the epoch number.
+    /// It doesn't properly reconfigure the node, hence should be only used for testing.
+    pub async fn reconfigure_for_testing(&self) {
+        let mut execution_lock = self.execution_lock_for_reconfiguration().await;
+        let epoch_store = self.epoch_store_for_testing().clone();
+        let protocol_config = epoch_store.protocol_config().clone();
+        // The current protocol config used in the epoch store may have been overridden and diverged from
+        // the protocol config definitions. That override may have now been dropped when the initial guard was dropped.
+        // We reapply the override before creating the new epoch store, to make sure that
+        // the new epoch store has the same protocol config as the current one.
+        // Since this is for testing only, we mostly like to keep the protocol config the same
+        // across epochs.
+        let _guard =
+            ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone());
+        let new_epoch_store = epoch_store.new_at_next_epoch_for_testing(
+            self.get_backing_package_store().clone(),
+            self.get_object_store().clone(),
+            &self.config.expensive_safety_check_config,
+        );
+        let new_epoch = new_epoch_store.epoch();
+        self.transaction_manager.reconfigure(new_epoch);
+        self.epoch_store.store(new_epoch_store);
+        *execution_lock = new_epoch;
     }
 
     /// This is a temporary method to be used when we enable simplified_unwrap_then_delete.

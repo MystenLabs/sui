@@ -13,8 +13,10 @@ use codespan_reporting::{
     },
 };
 use move_command_line_common::character_sets::is_permitted_chars;
+use move_core_types::account_address::AccountAddress;
 use move_ir_to_bytecode_syntax::syntax::{self, ParseError};
 use move_ir_types::{ast, location::*};
+use std::collections::BTreeMap;
 
 // We restrict strings to only ascii visual characters (0x20 <= c <= 0x7E) or a permitted newline
 // character--\r--,--\n--or a tab--\t. Checking each character in the input string is more fool-proof
@@ -39,8 +41,18 @@ fn verify_string(string: &str) -> Result<()> {
 /// Given the raw input of a file, creates a single `ModuleDefinition` struct
 /// Fails with `Err(_)` if the text cannot be parsed
 pub fn parse_module(modules_str: &str) -> Result<ast::ModuleDefinition> {
+    parse_module_with_named_addresses(modules_str, &BTreeMap::new())
+}
+
+/// Given the raw input of a file, creates a single `ModuleDefinition` struct
+/// Fails with `Err(_)` if the text cannot be parsed
+pub fn parse_module_with_named_addresses(
+    modules_str: &str,
+    named_address_mapping: &BTreeMap<String, AccountAddress>,
+) -> Result<ast::ModuleDefinition> {
     verify_string(modules_str)?;
-    syntax::parse_module_string(modules_str).or_else(|e| handle_error(e, modules_str))
+    syntax::parse_module_string_with_named_addresses(modules_str, named_address_mapping)
+        .or_else(|e| handle_error(e, modules_str))
 }
 
 fn handle_error<T>(e: syntax::ParseError<Loc, anyhow::Error>, code_str: &str) -> Result<T> {

@@ -33,6 +33,10 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 pub use write_store::WriteStore;
 
+pub use read_store::AccountOwnedObjectInfo;
+pub use read_store::CoinInfo;
+pub use read_store::RestDynamicFieldInfo;
+
 /// A potential input to a transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum InputKey {

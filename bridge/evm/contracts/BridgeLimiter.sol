@@ -153,8 +153,6 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
         key = getChainHourTimestampKey(chainID, _currentHour);
         // update hourly transfers
         chainHourlyTransferAmount[key] += usdAmount;
-
-        emit HourlyTransferAmountUpdated(_currentHour, usdAmount);
     }
 
     /// @notice Updates the total limit with the provided message if the provided signatures are valid.

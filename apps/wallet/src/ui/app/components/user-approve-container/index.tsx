@@ -1,17 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ampli } from '_src/shared/analytics/ampli';
 import { type PermissionType } from '_src/shared/messaging/messages/payloads/permissions';
+import { Transaction } from '@mysten/sui/transactions';
 import cn from 'clsx';
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useParams } from 'react-router-dom';
 
+import { useAppSelector } from '../../hooks';
 import { useAccountByAddress } from '../../hooks/useAccountByAddress';
+import { type RootState } from '../../redux/RootReducer';
+import { txRequestsSelectors } from '../../redux/slices/transaction-requests';
 import { Button } from '../../shared/ButtonUI';
 import { UnlockAccountButton } from '../accounts/UnlockAccountButton';
 import { DAppInfoCard } from '../DAppInfoCard';
 import { ScamOverlay } from '../known-scam-overlay';
+import { RequestType } from '../known-scam-overlay/types';
 import { useShowScamWarning } from '../known-scam-overlay/useShowScamWarning';
 
 type UserApproveContainerProps = {
@@ -59,23 +64,46 @@ export function UserApproveContainer({
 
 	const { data: selectedAccount } = useAccountByAddress(address);
 	const parsedOrigin = useMemo(() => new URL(origin), [origin]);
+	const { requestID } = useParams();
+	const requestSelector = useMemo(
+		() => (state: RootState) =>
+			requestID ? txRequestsSelectors.selectById(state, requestID) : null,
+		[requestID],
+	);
+	const request = useAppSelector(requestSelector);
+
+	const transaction = useMemo(() => {
+		if (request && request.tx && 'data' in request.tx) {
+			const transaction = Transaction.from(request.tx.data);
+			transaction.setSender(request.tx.account);
+			return transaction;
+		}
+	}, [request]);
+	const message = request && request.tx && 'message' in request.tx ? request.tx.message : undefined;
 
 	const {
+		data,
 		isOpen,
 		isPending: isDomainCheckLoading,
 		isError,
-		bypass,
-	} = useShowScamWarning({ hostname: parsedOrigin.hostname });
+	} = useShowScamWarning({
+		url: parsedOrigin,
+		requestType: message
+			? RequestType.SIGN_MESSAGE
+			: transaction
+			? RequestType.SIGN_TRANSACTION
+			: RequestType.CONNECT,
+		transaction,
+		requestId: requestID!,
+	});
 
 	return (
 		<>
 			<ScamOverlay
 				open={isOpen}
+				title={data?.block.title}
+				subtitle={data?.block.subtitle}
 				onDismiss={() => handleOnResponse(false)}
-				onContinue={() => {
-					ampli.bypassedScamWarning({ hostname: parsedOrigin.hostname });
-					bypass();
-				}}
 			/>
 			<div className="flex flex-1 flex-col flex-nowrap h-full">
 				<div className="flex-1 pb-0 flex flex-col">

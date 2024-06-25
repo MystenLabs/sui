@@ -7,7 +7,7 @@ use colored::{control, Colorize};
 use move_binary_format::errors::{ExecutionState, Location, VMError};
 use move_command_line_common::error_bitset::ErrorBitset;
 use move_compiler::{
-    diagnostics::{self, Diagnostic, Diagnostics, PositionInfo},
+    diagnostics::{self, Diagnostic, Diagnostics},
     unit_test::{ModuleTestPlan, MoveErrorType, TestPlan},
 };
 use move_core_types::{
@@ -226,11 +226,14 @@ impl TestFailure {
                 let fn_name = named_module.module.identifier_at(fn_id_idx).as_str();
                 let file_name = test_plan.mapped_files.filename(&loc.file_hash());
                 let formatted_line = {
+                    // Adjust lines by 1 to report 1-indexed
                     let position = test_plan.mapped_files.position(&loc);
-                    if position.start.line == position.end.line {
-                        format!("{}", position.start.line)
+                    let start_line = position.start.user_line();
+                    let end_line = position.end.user_line();
+                    if start_line == end_line {
+                        format!("{}", start_line)
                     } else {
-                        format!("{}-{}", position.start.line, position.end.line)
+                        format!("{}-{}", start_line, end_line)
                     }
                 };
                 buf.push_str(
@@ -582,7 +585,7 @@ impl TestResults {
                             "│ {}",
                             format!(
                                 "This test uses randomly generated inputs. Rerun with `{}` to recreate this test failure.\n",
-                                format!("test {} --seed {}", 
+                                format!("test {} --seed {}",
                                     test_name,
                                     seed
                                 ).bright_red().bold()

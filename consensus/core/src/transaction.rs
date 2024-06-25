@@ -92,7 +92,7 @@ impl TransactionConsumer {
 
             if remaining_txs.is_empty() {
                 // The batch has been fully consumed, register its ack.
-                // In case a batch gets splitted, ack shall only be sent when the last transaction is included in the block.
+                // In case a batch gets split, ack shall only be sent when the last transaction is included in the block.
                 acks.push(t.included_in_block_ack);
                 None
             } else {
@@ -264,8 +264,8 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn basic_submit_and_consume() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes(2_000); // 2KB
-            config.set_consensus_max_transactions_in_block_bytes(2_000);
+            config.set_consensus_max_transaction_size_bytes_for_testing(2_000); // 2KB
+            config.set_consensus_max_transactions_in_block_bytes_for_testing(2_000);
             config
         });
 
@@ -316,8 +316,8 @@ mod tests {
     #[tokio::test]
     async fn submit_over_max_fetch_size_and_consume() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes(100);
-            config.set_consensus_max_transactions_in_block_bytes(100);
+            config.set_consensus_max_transaction_size_bytes_for_testing(100);
+            config.set_consensus_max_transactions_in_block_bytes_for_testing(100);
             config
         });
 
@@ -384,8 +384,8 @@ mod tests {
     #[tokio::test]
     async fn submit_large_batch_and_ack() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes(100);
-            config.set_consensus_max_transactions_in_block_bytes(100);
+            config.set_consensus_max_transaction_size_bytes_for_testing(100);
+            config.set_consensus_max_transactions_in_block_bytes_for_testing(100);
             config
         });
 

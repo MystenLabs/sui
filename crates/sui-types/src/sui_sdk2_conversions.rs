@@ -286,6 +286,18 @@ impl From<CheckpointDigest> for crate::messages_checkpoint::CheckpointDigest {
     }
 }
 
+impl From<crate::digests::TransactionDigest> for TransactionDigest {
+    fn from(value: crate::digests::TransactionDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<TransactionDigest> for crate::digests::TransactionDigest {
+    fn from(value: TransactionDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
 impl From<crate::committee::Committee> for ValidatorCommittee {
     fn from(value: crate::committee::Committee) -> Self {
         Self {

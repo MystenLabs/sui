@@ -5,6 +5,7 @@ use crate::abi::EthBridgeConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::error::BridgeError;
 use crate::eth_client::EthClient;
+use crate::metrics::BridgeMetrics;
 use crate::sui_client::SuiClient;
 use crate::types::{is_route_valid, BridgeAction};
 use crate::utils::get_eth_contract_addresses;
@@ -118,6 +119,7 @@ impl Config for BridgeNodeConfig {}
 impl BridgeNodeConfig {
     pub async fn validate(
         &self,
+        metrics: Arc<BridgeMetrics>,
     ) -> anyhow::Result<(BridgeServerConfig, Option<BridgeClientConfig>)> {
         if !is_route_valid(
             BridgeChainId::try_from(self.sui.sui_bridge_chain_id)?,
@@ -148,7 +150,7 @@ impl BridgeNodeConfig {
             ));
         }
 
-        let (eth_client, eth_contracts) = self.prepare_for_eth().await?;
+        let (eth_client, eth_contracts) = self.prepare_for_eth(metrics).await?;
         let bridge_summary = sui_client
             .get_bridge_summary()
             .await
@@ -218,6 +220,7 @@ impl BridgeNodeConfig {
 
     async fn prepare_for_eth(
         &self,
+        metrics: Arc<BridgeMetrics>,
     ) -> anyhow::Result<(Arc<EthClient<ethers::providers::Http>>, Vec<EthAddress>)> {
         let bridge_proxy_address = EthAddress::from_str(&self.eth.eth_bridge_proxy_address)?;
         let provider = Arc::new(
@@ -274,6 +277,7 @@ impl BridgeNodeConfig {
                     limiter_address,
                     vault_address,
                 ]),
+                metrics,
             )
             .await?,
         );

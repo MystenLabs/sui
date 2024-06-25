@@ -45,6 +45,7 @@
     "markdown-to-jsx": "^7.4.3",
     "nightOwl": "link:prism-react-renderer/themes/nightOwl",
     "postcss": "^8.4.37",
+    "posthog-docusaurus": "^2.0.0",
     "prism-react-renderer": "^2.3.1",
     "prismjs": "^1.29.0",
     "react": "^18.0.0",

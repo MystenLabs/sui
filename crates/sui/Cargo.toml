@@ -24,6 +24,7 @@ clap.workspace = true
 bip32.workspace = true
 rand.workspace = true
 tap.workspace = true
+url.workspace = true
 inquire.workspace = true
 rusoto_core.workspace = true
 rusoto_kms.workspace = true

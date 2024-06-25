@@ -326,6 +326,12 @@ impl MoveObjectType {
             && self.name().as_str() == "DenyCap"
     }
 
+    pub fn is_coin_deny_cap_v2(&self) -> bool {
+        self.address() == SUI_FRAMEWORK_ADDRESS
+            && self.module().as_str() == "coin"
+            && self.name().as_str() == "DenyCapV2"
+    }
+
     pub fn is_dynamic_field(&self) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {

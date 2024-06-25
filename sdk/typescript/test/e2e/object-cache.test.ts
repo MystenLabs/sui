@@ -45,6 +45,8 @@ describe('CachingTransactionExecutor', async () => {
 			},
 		});
 
+		await toolbox.client.waitForTransaction({ digest: x.digest });
+
 		const y = (x.effects?.created)!.map((o) => getOwnerAddress(o))!;
 		receiveObjectId = (x.effects?.created)!.filter(
 			(o) => !y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
@@ -182,6 +184,7 @@ describe('CachingTransactionExecutor', async () => {
 				showEffects: true,
 			},
 		});
+
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 		expect(result2.effects?.status.status).toBe('success');
 

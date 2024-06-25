@@ -2,26 +2,40 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ampli } from '_src/shared/analytics/ampli';
-import { useEffect, useState } from 'react';
+import { type Transaction } from '@mysten/sui/transactions';
+import { useEffect } from 'react';
 
-import { useCheckBlocklist } from '../../hooks/useDomainBlocklist';
+import { type RequestType } from './types';
+import { useDappPreflight } from './useDappPreflight';
 
-export function useShowScamWarning({ hostname }: { hostname?: string }) {
-	const [userBypassed, setUserBypassed] = useState(false);
-	const { data, isPending, isError } = useCheckBlocklist(hostname);
-	const bypass = () => setUserBypassed(true);
+export function useShowScamWarning({
+	url,
+	requestType,
+	transaction,
+	requestId,
+}: {
+	url?: URL;
+	requestType: RequestType;
+	transaction?: Transaction;
+	requestId: string;
+}) {
+	const { data, isPending, isError } = useDappPreflight({
+		requestType,
+		origin: url?.origin,
+		transaction,
+		requestId,
+	});
 
 	useEffect(() => {
-		if (data?.block && hostname) {
-			ampli.interactedWithMaliciousDomain({ hostname });
+		if (data?.block.enabled && url?.hostname) {
+			ampli.interactedWithMaliciousDomain({ hostname: url.hostname });
 		}
-	}, [data, hostname]);
+	}, [data, url]);
 
 	return {
-		isOpen: !!data?.block && !userBypassed,
-		isPending: isPending,
+		data,
+		isOpen: !!data?.block.enabled && !isError,
+		isPending,
 		isError,
-		userBypassed,
-		bypass,
 	};
 }
