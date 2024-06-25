@@ -4,7 +4,6 @@
 /// The `string` module defines the `String` type which represents UTF8 encoded strings.
 module std::string {
     use std::ascii;
-    use std::option::{Self, Option};
 
     /// An invalid UTF8 encoding.
     const EINVALID_UTF8: u64 = 1;

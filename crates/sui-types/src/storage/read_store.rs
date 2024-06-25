@@ -3,17 +3,23 @@
 
 use super::error::Result;
 use super::ObjectStore;
-use crate::base_types::EpochId;
+use crate::base_types::{EpochId, MoveObjectType, ObjectID, SequenceNumber, SuiAddress};
 use crate::committee::Committee;
 use crate::digests::{
-    CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
+    ChainIdentifier, CheckpointContentsDigest, CheckpointDigest, TransactionDigest,
+    TransactionEventsDigest,
 };
+use crate::dynamic_field::DynamicFieldType;
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::full_checkpoint_content::CheckpointData;
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
 };
 use crate::transaction::VerifiedTransaction;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
+use serde::Deserialize;
+use serde::Serialize;
 use std::sync::Arc;
 
 pub trait ReadStore: ObjectStore {
@@ -55,7 +61,15 @@ pub trait ReadStore: ObjectStore {
     /// are guaranteed to be present in the store
     fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint>;
 
-    /// The lowest available checkpoint that hasn't yet been pruned.
+    /// Lowest available checkpoint for which transaction and checkpoint data can be requested.
+    ///
+    /// Specifically this is the lowest checkpoint for which the following data can be requested:
+    ///  - checkpoints
+    ///  - transactions
+    ///  - effects
+    ///  - events
+    ///
+    /// For object availability see `get_lowest_available_checkpoint_objects`.
     fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber>;
 
     fn get_checkpoint_by_digest(
@@ -155,7 +169,7 @@ pub trait ReadStore: ObjectStore {
         use super::ObjectKey;
         use crate::effects::TransactionEffectsAPI;
         use crate::full_checkpoint_content::CheckpointTransaction;
-        use std::collections::{HashMap, HashSet};
+        use std::collections::HashMap;
 
         let transaction_digests = checkpoint_contents
             .iter()
@@ -198,29 +212,11 @@ pub trait ReadStore: ObjectStore {
                     .cloned()
                     .expect("event was already checked to be present")
             });
-            // Note unwrapped_then_deleted contains **updated** versions.
-            let unwrapped_then_deleted_obj_ids = fx
-                .unwrapped_then_deleted()
-                .into_iter()
-                .map(|k| k.0)
-                .collect::<HashSet<_>>();
 
             let input_object_keys = fx
-                .input_shared_objects()
+                .modified_at_versions()
                 .into_iter()
-                .map(|kind| {
-                    let (id, version) = kind.id_and_version();
-                    ObjectKey(id, version)
-                })
-                .chain(
-                    fx.modified_at_versions()
-                        .into_iter()
-                        .map(|(object_id, version)| ObjectKey(object_id, version)),
-                )
-                .collect::<HashSet<_>>()
-                .into_iter()
-                // Unwrapped-then-deleted objects are not stored in state before the tx, so we have nothing to fetch.
-                .filter(|key| !unwrapped_then_deleted_obj_ids.contains(&key.0))
+                .map(|(object_id, version)| ObjectKey(object_id, version))
                 .collect::<Vec<_>>();
 
             let input_objects = self
@@ -644,4 +640,61 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
     ) -> anyhow::Result<CheckpointData> {
         (**self).get_checkpoint_data(checkpoint, checkpoint_contents)
     }
+}
+
+/// Trait used to provide functionality to the REST API service.
+///
+/// It extends both ObjectStore and ReadStore by adding functionality that may require more
+/// detailed underlying databases or indexes to support.
+pub trait RestStateReader: ObjectStore + ReadStore + Send + Sync {
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>>;
+
+    /// Lowest available checkpoint for which object data can be requested.
+    ///
+    /// Specifically this is the lowest checkpoint for which input/output object data will be
+    /// available.
+    fn get_lowest_available_checkpoint_objects(&self) -> Result<CheckpointSequenceNumber>;
+
+    fn get_chain_identifier(&self) -> Result<ChainIdentifier>;
+
+    fn account_owned_objects_info_iter(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+    ) -> Result<Box<dyn Iterator<Item = AccountOwnedObjectInfo> + '_>>;
+
+    fn dynamic_field_iter(
+        &self,
+        parent: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> Result<Box<dyn Iterator<Item = RestDynamicFieldInfo> + '_>>;
+
+    fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
+}
+
+pub struct AccountOwnedObjectInfo {
+    pub owner: SuiAddress,
+    pub object_id: ObjectID,
+    pub version: SequenceNumber,
+    pub type_: MoveObjectType,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub struct RestDynamicFieldInfo {
+    pub parent: ObjectID,
+    pub field_id: ObjectID,
+    pub dynamic_field_type: DynamicFieldType,
+    pub name_type: TypeTag,
+    pub name_value: Vec<u8>,
+    /// ObjectId of the child object when `dynamic_field_type == DynamicFieldType::DynamicObject`
+    pub dynamic_object_id: Option<ObjectID>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub struct CoinInfo {
+    pub coin_metadata_object_id: Option<ObjectID>,
+    pub treasury_object_id: Option<ObjectID>,
 }

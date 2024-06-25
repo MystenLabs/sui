@@ -29,7 +29,7 @@ use move_core_types::{
 };
 use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::bridge::BRIDGE_MODULE_NAME;
-use sui_types::deny_list::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
+use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::{
     authenticator_state::AUTHENTICATOR_STATE_MODULE_NAME,
     clock::CLOCK_MODULE_NAME,
@@ -346,7 +346,7 @@ fn pack(
     // "id". That fields must come from one of the functions that creates a new UID.
     let handle = verifier
         .binary_view
-        .struct_handle_at(struct_def.struct_handle);
+        .datatype_handle_at(struct_def.struct_handle);
     let num_fields = num_fields(struct_def);
     verifier.stack_popn(num_fields - 1)?;
     let last_value = verifier.stack.pop().unwrap();
@@ -541,6 +541,43 @@ fn execute_inner(
         Bytecode::VecSwap(_) => {
             verifier.stack.pop().unwrap();
             verifier.stack.pop().unwrap();
+            verifier.stack.pop().unwrap();
+        }
+        Bytecode::PackVariant(vidx) =>  {
+            let handle = verifier.binary_view.variant_handle_at(*vidx);
+            let variant = verifier.binary_view.variant_def_at(handle.enum_def, handle.variant);
+            let num_fields = variant.fields.len();
+            verifier.stack_popn(num_fields as u64)?;
+            verifier.stack_push(AbstractValue::Other)?;
+        }
+        Bytecode::PackVariantGeneric(vidx) =>  {
+            let handle = verifier.binary_view.variant_instantiation_handle_at(*vidx);
+            let enum_inst = verifier.binary_view.enum_instantiation_at(handle.enum_def);
+            let variant = verifier.binary_view.variant_def_at(enum_inst.def, handle.variant);
+            let num_fields = variant.fields.len();
+            verifier.stack_popn(num_fields as u64)?;
+            verifier.stack_push(AbstractValue::Other)?;
+        }
+        Bytecode::UnpackVariant(vidx)
+        | Bytecode::UnpackVariantImmRef(vidx)
+        | Bytecode::UnpackVariantMutRef(vidx) =>  {
+            let handle = verifier.binary_view.variant_handle_at(*vidx);
+            let variant = verifier.binary_view.variant_def_at(handle.enum_def, handle.variant);
+            let num_fields = variant.fields.len();
+            verifier.stack.pop().unwrap();
+            verifier.stack_pushn(num_fields as u64, AbstractValue::Other)?;
+        }
+        Bytecode::UnpackVariantGeneric(vidx)
+        | Bytecode::UnpackVariantGenericImmRef(vidx)
+        | Bytecode::UnpackVariantGenericMutRef(vidx) =>  {
+            let handle = verifier.binary_view.variant_instantiation_handle_at(*vidx);
+            let enum_inst = verifier.binary_view.enum_instantiation_at(handle.enum_def);
+            let variant = verifier.binary_view.variant_def_at(enum_inst.def, handle.variant);
+            let num_fields = variant.fields.len();
+            verifier.stack.pop().unwrap();
+            verifier.stack_pushn(num_fields as u64, AbstractValue::Other)?;
+        }
+        Bytecode::VariantSwitch(_) =>  {
             verifier.stack.pop().unwrap();
         }
     };

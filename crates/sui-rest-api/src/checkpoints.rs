@@ -1,68 +1,62 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::extract::Query;
 use axum::extract::{Path, State};
-use sui_types::{full_checkpoint_content::CheckpointData, messages_checkpoint::CheckpointDigest};
-use sui_types::{
-    messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber},
-    storage::ReadStore,
+use sui_sdk2::types::{
+    CheckpointData, CheckpointDigest, CheckpointSequenceNumber, SignedCheckpointSummary,
 };
+use sui_types::storage::ReadStore;
 use tap::Pipe;
 
-use crate::{accept::AcceptFormat, response::Bcs, response::ResponseContent, Result};
+use crate::reader::StateReader;
+use crate::Direction;
+use crate::Page;
+use crate::{accept::AcceptFormat, response::ResponseContent, Result};
 
-pub const GET_LATEST_CHECKPOINT_PATH: &str = "/checkpoints";
+pub const LIST_CHECKPOINT_PATH: &str = "/checkpoints";
 pub const GET_CHECKPOINT_PATH: &str = "/checkpoints/:checkpoint";
 pub const GET_FULL_CHECKPOINT_PATH: &str = "/checkpoints/:checkpoint/full";
 
-pub async fn get_full_checkpoint<S: ReadStore>(
+pub async fn get_full_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
     accept: AcceptFormat,
-    State(state): State<S>,
-) -> Result<Bcs<CheckpointData>> {
-    match accept {
-        AcceptFormat::Bcs => {}
-        _ => return Err(anyhow::anyhow!("invalid accept type").into()),
-    }
-
+    State(state): State<StateReader>,
+) -> Result<ResponseContent<CheckpointData>> {
     let verified_summary = match checkpoint_id {
-        CheckpointId::SequenceNumber(s) => state.get_checkpoint_by_sequence_number(s),
-        CheckpointId::Digest(d) => state.get_checkpoint_by_digest(&d),
+        CheckpointId::SequenceNumber(s) => state.inner().get_checkpoint_by_sequence_number(s),
+        CheckpointId::Digest(d) => state.inner().get_checkpoint_by_digest(&d.into()),
     }?
     .ok_or(CheckpointNotFoundError(checkpoint_id))?;
 
     let checkpoint_contents = state
+        .inner()
         .get_checkpoint_contents_by_digest(&verified_summary.content_digest)?
         .ok_or(CheckpointNotFoundError(checkpoint_id))?;
 
-    let checkpoint_data = state.get_checkpoint_data(verified_summary, checkpoint_contents)?;
-
-    Ok(Bcs(checkpoint_data))
-}
-
-pub async fn get_latest_checkpoint<S: ReadStore>(
-    accept: AcceptFormat,
-    State(state): State<S>,
-) -> Result<ResponseContent<CertifiedCheckpointSummary>> {
-    let summary = state.get_latest_checkpoint()?.into();
+    let checkpoint_data = state
+        .inner()
+        .get_checkpoint_data(verified_summary, checkpoint_contents)?
+        .into();
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(summary),
-        AcceptFormat::Bcs => ResponseContent::Bcs(summary),
+        AcceptFormat::Json => ResponseContent::Json(checkpoint_data),
+        AcceptFormat::Bcs => ResponseContent::Bcs(checkpoint_data),
     }
     .pipe(Ok)
 }
 
-pub async fn get_checkpoint<S: ReadStore>(
+pub async fn get_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
     accept: AcceptFormat,
-    State(state): State<S>,
-) -> Result<ResponseContent<CertifiedCheckpointSummary>> {
+    State(state): State<StateReader>,
+) -> Result<ResponseContent<SignedCheckpointSummary>> {
     let summary = match checkpoint_id {
-        CheckpointId::SequenceNumber(s) => state.get_checkpoint_by_sequence_number(s),
-        CheckpointId::Digest(d) => state.get_checkpoint_by_digest(&d),
+        CheckpointId::SequenceNumber(s) => state.inner().get_checkpoint_by_sequence_number(s),
+        CheckpointId::Digest(d) => state.inner().get_checkpoint_by_digest(&d.into()),
     }?
     .ok_or(CheckpointNotFoundError(checkpoint_id))?
+    .into_inner()
     .into();
 
     match accept {
@@ -130,5 +124,70 @@ impl std::error::Error for CheckpointNotFoundError {}
 impl From<CheckpointNotFoundError> for crate::RestError {
     fn from(value: CheckpointNotFoundError) -> Self {
         Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
+    }
+}
+
+pub async fn list_checkpoints(
+    Query(parameters): Query<ListCheckpointsQueryParameters>,
+    accept: AcceptFormat,
+    State(state): State<StateReader>,
+) -> Result<Page<SignedCheckpointSummary, CheckpointSequenceNumber>> {
+    let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
+    let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
+    let limit = parameters.limit();
+    let start = parameters.start(latest_checkpoint);
+    let direction = parameters.direction();
+
+    if start < oldest_checkpoint {
+        return Err(crate::RestError::new(
+            axum::http::StatusCode::GONE,
+            "Old checkpoints have been pruned",
+        ));
+    }
+
+    let checkpoints = state
+        .checkpoint_iter(direction, start)
+        .map(|result| {
+            result.map(|(checkpoint, _contents)| SignedCheckpointSummary::from(checkpoint))
+        })
+        .take(limit)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let cursor = checkpoints.last().and_then(|checkpoint| match direction {
+        Direction::Ascending => checkpoint.checkpoint.sequence_number.checked_add(1),
+        Direction::Descending => checkpoint.checkpoint.sequence_number.checked_sub(1),
+    });
+
+    match accept {
+        AcceptFormat::Json => ResponseContent::Json(checkpoints),
+        AcceptFormat::Bcs => ResponseContent::Bcs(checkpoints),
+    }
+    .pipe(|entries| Page { entries, cursor })
+    .pipe(Ok)
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct ListCheckpointsQueryParameters {
+    pub limit: Option<u32>,
+    /// The checkpoint to start listing from.
+    ///
+    /// Defaults to the latest checkpoint if not provided.
+    pub start: Option<CheckpointSequenceNumber>,
+    pub direction: Option<Direction>,
+}
+
+impl ListCheckpointsQueryParameters {
+    pub fn limit(&self) -> usize {
+        self.limit
+            .map(|l| (l as usize).clamp(1, crate::MAX_PAGE_SIZE))
+            .unwrap_or(crate::DEFAULT_PAGE_SIZE)
+    }
+
+    pub fn start(&self, default: CheckpointSequenceNumber) -> CheckpointSequenceNumber {
+        self.start.unwrap_or(default)
+    }
+
+    pub fn direction(&self) -> Direction {
+        self.direction.unwrap_or(Direction::Descending)
     }
 }

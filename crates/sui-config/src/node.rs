@@ -73,16 +73,18 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
 
-    // TODO: Remove this as it's no longer used.
-    #[serde(default)]
-    pub enable_event_processing: bool,
-
     #[serde(default = "default_enable_index_processing")]
     pub enable_index_processing: bool,
 
-    // only alow websocket connections for jsonrpc traffic
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub remove_deprecated_tables: bool,
+
     #[serde(default)]
-    pub websocket_only: bool,
+    /// Determines the jsonrpc server type as either:
+    /// - 'websocket' for a websocket based service (deprecated)
+    /// - 'http' for an http based service
+    /// - 'both' for both a websocket and http based service (deprecated)
+    pub jsonrpc_server_type: Option<ServerType>,
 
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
@@ -179,6 +181,33 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub firewall_config: Option<RemoteFirewallConfig>,
+
+    #[serde(default)]
+    pub execution_cache: ExecutionCacheConfig,
+
+    #[serde(default = "bool_true")]
+    pub state_accumulator_v2: bool,
+
+    #[serde(default = "bool_true")]
+    pub enable_soft_bundle: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionCacheConfig {
+    #[default]
+    PassthroughCache,
+    WritebackCache {
+        max_cache_size: Option<usize>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ServerType {
+    WebSocket,
+    Http,
+    Both,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -201,6 +230,10 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Apple".to_string(),
         "Slack".to_string(),
         "TestIssuer".to_string(),
+        "Microsoft".to_string(),
+        "KarrierOne".to_string(),
+        "Credenza3".to_string(),
+        "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(),
     ]);
     let providers = BTreeSet::from([
         "Google".to_string(),
@@ -351,6 +384,10 @@ impl NodeConfig {
                     })
             })
             .collect()
+    }
+
+    pub fn jsonrpc_server_type(&self) -> ServerType {
+        self.jsonrpc_server_type.unwrap_or(ServerType::Http)
     }
 }
 
@@ -547,7 +584,7 @@ impl Default for CheckpointExecutorConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct AuthorityStorePruningConfig {
     /// number of the latest epoch dbs to retain

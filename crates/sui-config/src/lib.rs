@@ -18,7 +18,7 @@ pub mod object_storage_config;
 pub mod p2p;
 pub mod transaction_deny_config;
 
-pub use node::{ConsensusConfig, NodeConfig};
+pub use node::{ConsensusConfig, ExecutionCacheConfig, NodeConfig};
 use sui_types::multiaddr::Multiaddr;
 
 const SUI_DIR: &str = ".sui";

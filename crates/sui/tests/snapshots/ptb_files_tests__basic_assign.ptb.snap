@@ -8,8 +8,8 @@ expression: "results.join(\"\\n\")"
 ├─────────────┬──────────────┤
 │ command     │ values       │
 ├─────────────┼──────────────┤
-│ assign      │ x 10u64      │
-│ assign      │ y 11u64      │
+│ assign      │ x 10         │
+│ assign      │ y 11         │
 │ split-coins │ gas [x, y]   │
 │ assign      │ coins        │
 │ assign      │ c0 coins.0   │

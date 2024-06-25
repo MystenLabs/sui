@@ -4,7 +4,6 @@
 /// The `ASCII` module defines basic string and char newtypes in Move that verify
 /// that characters are valid ASCII, and that strings consist of only valid ASCII characters.
 module std::ascii {
-    use std::option::{Self, Option};
 
     // Allows calling `.to_string()` to convert an `ascii::String` into as `string::String`
     public use fun std::string::from_ascii as String.to_string;

@@ -31,7 +31,7 @@ Having access to random numbers is only one part of designing secure application
 While composition is very powerful for smart contracts, it opens the door to attacks on functions that use randomness. Consider for example the next module:
 
 ```move
-module games::dice { 
+module games::dice {
 ...
   struct GuessedCorrectly has drop { ... };
 
@@ -42,7 +42,7 @@ module games::dice {
     transfer::public_transfer(fee, CREATOR_ADDRESS);
     // Roll the dice
     let generator = new_generator(r, ctx);
-    if (guess == random::generate_u8_in_range(&mut generator, 1, 6)) { 
+    if (guess == random::generate_u8_in_range(&mut generator, 1, 6)) {
       option::some(GuessedCorrectly {})
     } else {
       option::none()
@@ -63,7 +63,7 @@ public fun attack(guess: u8, r: &Random, ctx: &mut TxContext): GuessedCorrectly 
 
 The attacker can now call `attack` with a guess, and always revert the fee transfer if the guess is incorrect.
 
-To protect against composition attacks in this example, define `play_dice` as a private `entry` function so functions from other modules cannot call it, such as, 
+To protect against composition attacks in this example, define `play_dice` as a private `entry` function so functions from other modules cannot call it, such as,
 
 ```move
 entry fun play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext): Option<GuessedCorrectly> {
@@ -79,7 +79,7 @@ The Move compiler enforces this behavior by rejecting `public` functions with `R
 
 ## Programmable transaction block (PTB) restrictions
 
-A similar attack to the one previously described involves PTBs *even* when `play_dice` is defined as a private `entry` function. For example, consider the `entry play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext): Option<GuessedCorrectly> { … }` function defined earlier, the attacker can publish the function
+A similar attack to the one previously described involves PTBs _even_ when `play_dice` is defined as a private `entry` function. For example, consider the `entry play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext): Option<GuessedCorrectly> { … }` function defined earlier, the attacker can publish the function
 
 ```move
 public fun attack(output: Option<GuessedCorrectly>): GuessedCorrectly {
@@ -87,7 +87,7 @@ public fun attack(output: Option<GuessedCorrectly>): GuessedCorrectly {
 }
 ```
 
-and send a PTB with commands `play_dice(...), attack(Result(0))` where `Result(0)` is the output of the first command. As before, the attack takes advantage of the atomic nature of PTBs and always reverts the *entire transaction* if the guess was incorrect, without paying the fee. Sending multiple transactions can repeat the attck, each one executed with different randomness and reverted if the guess is incorrect.
+and send a PTB with commands `play_dice(...), attack(Result(0))` where `Result(0)` is the output of the first command. As before, the attack takes advantage of the atomic nature of PTBs and always reverts the _entire transaction_ if the guess was incorrect, without paying the fee. Sending multiple transactions can repeat the attck, each one executed with different randomness and reverted if the guess is incorrect.
 
 :::note
 
@@ -110,7 +110,8 @@ The Move compiler enforces this behavior by rejecting `public` functions with `R
 Developers should be aware that some resources that are available to transactions are limited. If a function that reads `Random` consumes more resources in the unhappy path flow than in the happy path flow, an attacker can use that difference to revert the transaction in the unhappy flow as previously demonstrated. Concretely, gas is such a resource. Consider the following code:
 
 ```move
-entry fun play(r: &Random, payment: Coin<SUI>, ...) {
+// Insecure implementation, do not use.
+entry fun insecure_play(r: &Random, payment: Coin<SUI>, ...) {
   ...
   let generator = new_generator(r, ctx);
   let win = random::generate_bool(generator);
@@ -122,13 +123,13 @@ entry fun play(r: &Random, payment: Coin<SUI>, ...) {
 }
 ```
 
-Observe that the gas costs of a transaction that calls `play` depends on the value of `win` - An attacker could call this function with a gas object that has enough balance to cover the happy flow but not the unhappy one, resulting in it either winning or reverting the transaction (but never losing the payment).
+Observe that the gas costs of a transaction that calls `insecure_play` depends on the value of `win` - An attacker could call this function with a gas object that has enough balance to cover the happy flow but not the unhappy one, resulting in it either winning or reverting the transaction (but never losing the payment).
 
 In many cases this is not an issue, like when selecting a raffle winner, lottery numbers, or a random NFT. However, in the cases where it can be problematic, you can do one of the following:
 
 - Write the function in a way that the happy flow consumes more gas than the unhappy one.
-    - Keep in mind that external functions or native ones can change in the future, potentially resulting in different costs compared to the time you conducted your tests.
-    - Use [profile-transaction](../../../references/cli/client.mdx#profile-a-transaction) on Testnet transactions to verify the costs of different flows.
+  - Keep in mind that external functions or native ones can change in the future, potentially resulting in different costs compared to the time you conducted your tests.
+  - Use [profile-transaction](../../../references/cli/client.mdx#profile-a-transaction) on Testnet transactions to verify the costs of different flows.
 - Split the logic in two: one function that fetches a random value and stores it in an object, and another function that reads that stored value and completes the operation. The latter function might indeed fail, but now the random value is fixed and cannot be modified using repeated calls.
 
 See [random_nft](https://github.com/MystenLabs/sui/blob/main/examples/move/random/random_nft) for examples.
@@ -141,8 +142,9 @@ Other limited resources per transaction are:
 ## Accessing `Random` from TypeScript
 
 If you want to call `roll_dice(r: &Random, ctx: &mut TxContext)` in module `example`, use the following code snippet:
+
 ```typescript
-const txb = new TransactionBlock();
+const txb = new Transaction();
 txb.moveCall({
   target: "${PACKAGE_ID}::example::roll_dice",
   arguments: [txb.object('0x8')]
@@ -150,11 +152,12 @@ txb.moveCall({
 ...
 ```
 
-
 ## Related Links
 
 - [Sui Framework Reference](../../../references/framework)
-	- <a href="/references/framework/sui-framework/random" data-noBrokenLinkCheck='true'>random.move</a>
+  - <a href="/references/framework/sui-framework/random" data-noBrokenLinkCheck="true">
+    	random.move
+    </a>
 - [Randomness NFT example](https://github.com/MystenLabs/sui/blob/main/examples/move/random/random_nft)
 - [Raffle example](https://github.com/MystenLabs/sui/blob/main/examples/move/random/raffles)
 - [Sui Client CLI](../../../references/cli/client)

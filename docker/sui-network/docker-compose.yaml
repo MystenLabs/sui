@@ -12,6 +12,8 @@ services:
       - RUST_BACKTRACE=1
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
+      - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
+      - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
     volumes:
       - ./genesis/files/validator1-8080.yaml:/opt/sui/config/validator.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
@@ -39,6 +41,8 @@ services:
       - RUST_BACKTRACE=1
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
+      - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
+      - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
     volumes:
       - ./genesis/files/validator2-8080.yaml:/opt/sui/config/validator.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
@@ -66,6 +70,8 @@ services:
       - RUST_BACKTRACE=1
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
+      - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
+      - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
     volumes:
       - ./genesis/files/validator3-8080.yaml:/opt/sui/config/validator.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
@@ -93,6 +99,8 @@ services:
       - RUST_BACKTRACE=1
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
+      - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
+      - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
     volumes:
       - ./genesis/files/validator4-8080.yaml:/opt/sui/config/validator.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
@@ -120,6 +128,8 @@ services:
       - RUST_BACKTRACE=1
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
+      - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
+      - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
     volumes:
       - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro

@@ -3,8 +3,8 @@
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
 
 import type { Signer } from '../cryptography/index.js';
-import type { TransactionBlock } from '../transactions/index.js';
-import { isTransactionBlock } from '../transactions/index.js';
+import type { Transaction } from '../transactions/index.js';
+import { isTransaction } from '../transactions/index.js';
 import {
 	isValidSuiAddress,
 	isValidSuiObjectId,
@@ -108,7 +108,7 @@ export interface OrderArguments {
  */
 export type SuiClientOptions = NetworkOrTransport;
 
-export type NetworkOrTransport =
+type NetworkOrTransport =
 	| {
 			url: string;
 			transport?: never;
@@ -118,7 +118,7 @@ export type NetworkOrTransport =
 			url?: never;
 	  };
 
-export const SUI_CLIENT_BRAND = Symbol.for('@mysten/SuiClient');
+const SUI_CLIENT_BRAND = Symbol.for('@mysten/SuiClient');
 
 export function isSuiClient(client: unknown): client is SuiClient {
 	return (
@@ -424,12 +424,12 @@ export class SuiClient {
 		});
 	}
 
-	async signAndExecuteTransactionBlock({
-		transactionBlock,
+	async signAndExecuteTransaction({
+		transaction,
 		signer,
 		...input
 	}: {
-		transactionBlock: Uint8Array | TransactionBlock;
+		transaction: Uint8Array | Transaction;
 		signer: Signer;
 	} & Omit<
 		ExecuteTransactionBlockParams,
@@ -437,14 +437,14 @@ export class SuiClient {
 	>): Promise<SuiTransactionBlockResponse> {
 		let transactionBytes;
 
-		if (transactionBlock instanceof Uint8Array) {
-			transactionBytes = transactionBlock;
+		if (transaction instanceof Uint8Array) {
+			transactionBytes = transaction;
 		} else {
-			transactionBlock.setSenderIfNotSet(signer.toSuiAddress());
-			transactionBytes = await transactionBlock.build({ client: this });
+			transaction.setSenderIfNotSet(signer.toSuiAddress());
+			transactionBytes = await transaction.build({ client: this });
 		}
 
-		const { signature, bytes } = await signer.signTransactionBlock(transactionBytes);
+		const { signature, bytes } = await signer.signTransaction(transactionBytes);
 
 		return this.executeTransactionBlock({
 			transactionBlock: bytes,
@@ -563,7 +563,7 @@ export class SuiClient {
 		input: DevInspectTransactionBlockParams,
 	): Promise<DevInspectResults> {
 		let devInspectTxBytes;
-		if (isTransactionBlock(input.transactionBlock)) {
+		if (isTransaction(input.transactionBlock)) {
 			input.transactionBlock.setSenderIfNotSet(input.sender);
 			devInspectTxBytes = toB64(
 				await input.transactionBlock.build({
@@ -771,7 +771,7 @@ export class SuiClient {
 	 * be available via the API.
 	 * This currently polls the `getTransactionBlock` API to check for the transaction.
 	 */
-	async waitForTransactionBlock({
+	async waitForTransaction({
 		signal,
 		timeout = 60 * 1000,
 		pollInterval = 2 * 1000,

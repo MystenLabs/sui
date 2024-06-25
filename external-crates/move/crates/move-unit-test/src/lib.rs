@@ -8,11 +8,13 @@ pub mod test_reporter;
 pub mod test_runner;
 
 use crate::test_runner::TestRunner;
+use anyhow::{bail, Result};
 use clap::*;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     self,
-    diagnostics::{self},
+    compiled_unit::NamedCompiledModule,
+    diagnostics,
     shared::{self, NumericalAddress},
     unit_test::{self, TestPlan},
     Compiler, Flags, PASS_CFGIR,
@@ -20,15 +22,16 @@ use move_compiler::{
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use move_vm_test_utils::gas_schedule::CostTable;
-use std::{
-    collections::BTreeMap,
-    io::{Result, Write},
-    marker::Send,
-    sync::Mutex,
-};
+use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex};
 
 /// The default value bounding the amount of gas consumed in a test.
 const DEFAULT_EXECUTION_BOUND: u64 = 1_000_000;
+
+/// The default number of iterations to run each random test for.
+const DEFAULT_RAND_ITERS: u64 = 10;
+
+const RAND_NUM_ITERS_FLAG: &str = "rand-num-iters";
+const SEED_FLAG: &str = "seed";
 
 #[derive(Debug, Parser, Clone)]
 #[clap(author, version, about)]
@@ -92,22 +95,33 @@ pub struct UnitTestingConfig {
     )]
     pub source_files: Vec<String>,
 
-    /// Use the stackless bytecode interpreter to run the tests and cross check its results with
-    /// the execution result from Move VM.
-    #[clap(long = "stackless")]
-    pub check_stackless_vm: bool,
-
     /// Verbose mode
     #[clap(short = 'v', long = "verbose")]
     pub verbose: bool,
+
+    /// Number of iterations to run each test if arguments are being generated
+    #[clap(long = RAND_NUM_ITERS_FLAG)]
+    pub rand_num_iters: Option<u64>,
+
+    /// Seed to use for generating arguments
+    #[clap(long = SEED_FLAG)]
+    pub seed: Option<u64>,
+
+    // Deterministically generate the same arguments for #[random_test]s between test runs.
+    // WARNING: You should only use this flag for debugging and meta-testing purposes!
+    #[clap(skip)]
+    pub deterministic_generation: bool,
 }
 
-fn format_module_id(module_id: &ModuleId) -> String {
-    format!(
-        "0x{}::{}",
-        module_id.address().short_str_lossless(),
-        module_id.name()
-    )
+fn format_module_id(
+    module_map: &BTreeMap<ModuleId, NamedCompiledModule>,
+    module_id: &ModuleId,
+) -> String {
+    if let Some(address_name) = module_map.get(module_id).and_then(|m| m.address_name()) {
+        format!("{}::{}", address_name, module_id.name())
+    } else {
+        module_id.short_str_lossless()
+    }
 }
 
 impl UnitTestingConfig {
@@ -121,10 +135,12 @@ impl UnitTestingConfig {
             report_stacktrace_on_abort: false,
             source_files: vec![],
             dep_files: vec![],
-            check_stackless_vm: false,
             verbose: false,
             list: false,
             named_address_values: vec![],
+            rand_num_iters: Some(DEFAULT_RAND_ITERS),
+            seed: None,
+            deterministic_generation: false,
         }
     }
 
@@ -156,26 +172,24 @@ impl UnitTestingConfig {
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let test_plan = unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
+        let mapped_files = compilation_env.mapped_files().clone();
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =
             diagnostics::unwrap_or_report_pass_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings);
         let units: Vec<_> = units.into_iter().map(|unit| unit.named_module).collect();
-        test_plan.map(|tests| TestPlan::new(tests, files, units))
+        test_plan.map(|tests| TestPlan::new(tests, mapped_files, units))
     }
 
     /// Build a test plan from a unit test config
     pub fn build_test_plan(&self) -> Option<TestPlan> {
         let deps = self.dep_files.clone();
 
-        let TestPlan {
-            files, module_info, ..
-        } = self.compile_to_test_plan(deps.clone(), vec![])?;
+        let TestPlan { module_info, .. } = self.compile_to_test_plan(deps.clone(), vec![])?;
 
         let mut test_plan = self.compile_to_test_plan(self.source_files.clone(), deps)?;
         test_plan.module_info.extend(module_info);
-        test_plan.files.extend(files);
         Some(test_plan)
     }
 
@@ -190,13 +204,31 @@ impl UnitTestingConfig {
     ) -> Result<(W, bool)> {
         let shared_writer = Mutex::new(writer);
 
+        let rand_num_iters = match self.rand_num_iters {
+            Some(_) if self.seed.is_some() => {
+                bail!(format!(
+                    "Invalid arguments -- '{RAND_NUM_ITERS_FLAG}' and '{SEED_FLAG}' both set. \
+                    You can only set one or the other at a time."
+                ))
+            }
+            Some(0) => {
+                bail!(format!(
+                    "Invalid argument -- '{RAND_NUM_ITERS_FLAG}' set to zero. \
+                    '{RAND_NUM_ITERS_FLAG}' must set be a positive integer."
+                ))
+            }
+            Some(n) => n,
+            None if self.seed.is_some() => 1,
+            None => DEFAULT_RAND_ITERS,
+        };
+
         if self.list {
-            for (module_id, test_plan) in &test_plan.module_tests {
-                for test_name in test_plan.tests.keys() {
+            for (module_id, module_test_plan) in &test_plan.module_tests {
+                for test_name in module_test_plan.tests.keys() {
                     writeln!(
                         shared_writer.lock().unwrap(),
                         "{}::{}: test",
-                        format_module_id(module_id),
+                        format_module_id(&test_plan.module_info, module_id),
                         test_name
                     )?;
                 }
@@ -208,13 +240,13 @@ impl UnitTestingConfig {
         let mut test_runner = TestRunner::new(
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
             self.num_threads,
-            self.check_stackless_vm,
-            self.verbose,
             self.report_stacktrace_on_abort,
+            self.seed,
+            rand_num_iters,
+            self.deterministic_generation,
             test_plan,
             native_function_table,
             cost_table,
-            verify_and_create_named_address_mapping(self.named_address_values.clone()).unwrap(),
         )
         .unwrap();
 

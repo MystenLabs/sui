@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 mime = "0.3.17"
 anyhow.workspace = true
-axum.workspace = true
+axum = { workspace = true, features = ["matched-path"] }
 bcs.workspace = true
 rand.workspace = true
 reqwest.workspace = true
@@ -17,9 +17,15 @@ serde_json.workspace = true
 serde_with.workspace = true
 tap.workspace = true
 thiserror.workspace = true
+async-trait.workspace = true
+itertools.workspace = true
+sui-sdk2.workspace = true
+prometheus.workspace = true
 
 fastcrypto.workspace = true
 sui-types.workspace = true
+mysten-network.workspace = true
+sui-protocol-config.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

@@ -41,7 +41,7 @@ pub fn generate_struct_layouts(
                     shallow,
                 },
             );
-            layout_builder.build_struct_layout(&struct_tag)?;
+            layout_builder.build_data_layout(&struct_tag)?;
             let layout = serde_yaml::to_string(layout_builder.registry())?;
             state.save_struct_layouts(&layout)?;
             println!("{}", layout);

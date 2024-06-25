@@ -9,7 +9,7 @@ mod write_store;
 
 use crate::base_types::{TransactionDigest, VersionNumber};
 use crate::committee::EpochId;
-use crate::error::SuiError;
+use crate::error::{ExecutionError, SuiError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use crate::move_package::MovePackage;
 use crate::transaction::{SenderSignedData, TransactionDataAPI, TransactionKey};
@@ -23,6 +23,7 @@ use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 pub use object_store_trait::ObjectStore;
 pub use read_store::ReadStore;
+pub use read_store::RestStateReader;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 pub use shared_in_memory_store::SharedInMemoryStore;
@@ -31,6 +32,10 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 pub use write_store::WriteStore;
+
+pub use read_store::AccountOwnedObjectInfo;
+pub use read_store::CoinInfo;
+pub use read_store::RestDynamicFieldInfo;
 
 /// A potential input to a transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -201,6 +206,11 @@ pub trait Storage {
         &mut self,
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     );
+
+    fn check_coin_deny_list(
+        &self,
+        written_objects: &BTreeMap<ObjectID, Object>,
+    ) -> Result<(), ExecutionError>;
 }
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
@@ -235,7 +245,13 @@ pub trait BackingPackageStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>>;
 }
 
-impl<S: BackingPackageStore> BackingPackageStore for Arc<S> {
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for Box<S> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        BackingPackageStore::get_package_object(self.as_ref(), package_id)
+    }
+}
+
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for Arc<S> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(self.as_ref(), package_id)
     }
@@ -293,8 +309,8 @@ pub fn get_package_objects<'a>(
     }
 }
 
-pub fn get_module<S: BackingPackageStore>(
-    store: S,
+pub fn get_module(
+    store: impl BackingPackageStore,
     module_id: &ModuleId,
 ) -> Result<Option<Vec<u8>>, SuiError> {
     Ok(store
@@ -309,7 +325,7 @@ pub fn get_module<S: BackingPackageStore>(
 }
 
 pub fn get_module_by_id<S: BackingPackageStore>(
-    store: S,
+    store: &S,
     id: &ModuleId,
 ) -> anyhow::Result<Option<CompiledModule>, SuiError> {
     Ok(get_module(store, id)?
@@ -464,9 +480,19 @@ impl From<&ObjectRef> for ObjectKey {
     }
 }
 
+#[derive(Clone)]
 pub enum ObjectOrTombstone {
     Object(Object),
     Tombstone(ObjectRef),
+}
+
+impl ObjectOrTombstone {
+    pub fn as_objref(&self) -> ObjectRef {
+        match self {
+            ObjectOrTombstone::Object(obj) => obj.compute_object_reference(),
+            ObjectOrTombstone::Tombstone(obref) => *obref,
+        }
+    }
 }
 
 impl From<Object> for ObjectOrTombstone {

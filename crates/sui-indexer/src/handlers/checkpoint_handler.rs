@@ -12,7 +12,7 @@ use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use sui_package_resolver::{PackageStore, PackageStoreWithLruCache, Resolver};
-use sui_rest_api::{CheckpointData, CheckpointTransaction, Client};
+use sui_rest_api::{CheckpointData, CheckpointTransaction};
 use sui_types::base_types::ObjectRef;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::dynamic_field::DynamicFieldName;
@@ -63,7 +63,6 @@ const CHECKPOINT_QUEUE_SIZE: usize = 100;
 
 pub async fn new_handlers<S, T>(
     state: S,
-    client: Client,
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
@@ -81,17 +80,15 @@ where
         mysten_metrics::metered_channel::channel(
             checkpoint_queue_size,
             &global_metrics
-                .channels
+                .channel_inflight
                 .with_label_values(&["checkpoint_indexing"]),
         );
 
     let state_clone = state.clone();
-    let client_clone = client.clone();
     let metrics_clone = metrics.clone();
     let (tx, package_tx) = watch::channel(None);
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
-        client_clone,
         metrics_clone,
         indexed_checkpoint_receiver,
         tx,
@@ -123,6 +120,25 @@ where
     T: R2D2Connection + 'static,
 {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
+        let time_now_ms = chrono::Utc::now().timestamp_millis();
+        let cp_download_lag = time_now_ms - checkpoint.checkpoint_summary.timestamp_ms as i64;
+        info!(
+            "checkpoint download lag for cp {}: {} ms",
+            checkpoint.checkpoint_summary.sequence_number, cp_download_lag
+        );
+        self.metrics.download_lag_ms.set(cp_download_lag);
+        self.metrics
+            .max_downloaded_checkpoint_sequence_number
+            .set(checkpoint.checkpoint_summary.sequence_number as i64);
+        self.metrics
+            .downloaded_checkpoint_timestamp_ms
+            .set(checkpoint.checkpoint_summary.timestamp_ms as i64);
+        info!(
+            "Indexer lag: downloaded checkpoint {} with time now {} and checkpoint time {}",
+            checkpoint.checkpoint_summary.sequence_number,
+            time_now_ms,
+            checkpoint.checkpoint_summary.timestamp_ms
+        );
         let checkpoint_data = Self::index_checkpoint(
             self.state.clone().into(),
             checkpoint.clone(),
@@ -299,10 +315,20 @@ where
                 db_displays,
             )
         };
-        info!(checkpoint_seq, "Indexed one checkpoint.");
+        let time_now_ms = chrono::Utc::now().timestamp_millis();
         metrics
             .index_lag_ms
-            .set(chrono::Utc::now().timestamp_millis() - checkpoint.timestamp_ms as i64);
+            .set(time_now_ms - checkpoint.timestamp_ms as i64);
+        metrics
+            .max_indexed_checkpoint_sequence_number
+            .set(checkpoint.sequence_number as i64);
+        metrics
+            .indexed_checkpoint_timestamp_ms
+            .set(checkpoint.timestamp_ms as i64);
+        info!(
+            "Indexer lag: indexed checkpoint {} with time now {} and checkpoint time {}",
+            checkpoint.sequence_number, time_now_ms, checkpoint.timestamp_ms
+        );
 
         Ok(CheckpointDataToCommit {
             checkpoint,
@@ -478,7 +504,7 @@ where
         Ok((db_transactions, db_events, db_indices, db_displays))
     }
 
-    async fn index_objects(
+    pub(crate) async fn index_objects(
         data: CheckpointData,
         metrics: &IndexerMetrics,
         package_resolver: Arc<Resolver<impl PackageStore>>,
@@ -651,7 +677,9 @@ where
             .collect()
     }
 
-    fn get_package_objects(checkpoint_data: &[CheckpointData]) -> Vec<(IndexedPackage, Object)> {
+    pub(crate) fn get_package_objects(
+        checkpoint_data: &[CheckpointData],
+    ) -> Vec<(IndexedPackage, Object)> {
         checkpoint_data
             .iter()
             .flat_map(|data| {
@@ -675,7 +703,7 @@ where
             .collect()
     }
 
-    fn pg_blocking_cp(state: S) -> Result<ConnectionPool<T>, IndexerError> {
+    pub(crate) fn pg_blocking_cp(state: S) -> Result<ConnectionPool<T>, IndexerError> {
         let state_as_any = state.as_any();
         if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStore<T>>() {
             return Ok(pg_state.blocking_cp());

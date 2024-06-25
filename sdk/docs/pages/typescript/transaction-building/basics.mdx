@@ -1,27 +1,27 @@
-# Sui Programmable Transaction Blocks Basics
+# Sui Programmable Transaction Basics
 
-This example starts by constructing a transaction block to send SUI. To construct transactions
-blocks, import the `TransactionBlock` class and construct it:
+This example starts by constructing a transaction to send SUI. To construct transactions, import the
+`Transaction` class and construct it:
 
 ```tsx
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
-const txb = new TransactionBlock();
+const tx = new Transaction();
 ```
 
-You can then add transactions to the transaction block.
+You can then add transactions to the transaction .
 
 ```tsx
 // create a new coin with balance 100, based on the coins used as gas payment
 // you can define any balance here
-const [coin] = txb.splitCoins(txb.gas, [100]);
+const [coin] = tx.splitCoins(tx.gas, [100]);
 
 // transfer the split coin to a specific address
-txb.transferObjects([coin], '0xSomeSuiAddress');
+tx.transferObjects([coin], '0xSomeSuiAddress');
 ```
 
-You can attach multiple transactions of the same type to a transaction block, as well. For example,
-to get a list of transfers and iterate over them to transfer coins to each of them:
+You can attach multiple transactions of the same type to a transaction, as well. For example, to get
+a list of transfers and iterate over them to transfer coins to each of them:
 
 ```tsx
 interface Transfer {
@@ -32,50 +32,50 @@ interface Transfer {
 // procure a list of some Sui transfers to make
 const transfers: Transfer[] = getTransfers();
 
-const txb = new TransactionBlock();
+const tx = new Transaction();
 
 // first, split the gas coin into multiple coins
-const coins = txb.splitCoins(
-	txb.gas,
+const coins = tx.splitCoins(
+	tx.gas,
 	transfers.map((transfer) => transfer.amount),
 );
 
 // next, create a transfer transaction for each coin
 transfers.forEach((transfer, index) => {
-	txb.transferObjects([coins[index]], transfer.to);
+	tx.transferObjects([coins[index]], transfer.to);
 });
 ```
 
-After you have the transaction block defined, you can directly execute it with a signer using
-`signAndExecuteTransactionBlock`.
+After you have the transaction defined, you can directly execute it with a signer using
+`signAndExecuteTransaction`.
 
 ```tsx
-client.signAndExecuteTransactionBlock({ signer: keypair, transactionBlock: txb });
+client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
 ```
 
 ## Transactions
 
-Programmable Transaction blocks have two key concepts: inputs and transactions.
+Programmable Transactions have two key concepts: inputs and transactions.
 
-Transactions are steps of execution in the transaction block. Each Transaction in a TransactionBlock
-takes a set of inputs, and produces results. The inputs for a transaction depend on the kind of
-transaction. Sui supports following transactions:
+Transactions are steps of execution in the transaction. Each Transaction in a Transaction takes a
+set of inputs, and produces results. The inputs for a transaction depend on the kind of transaction.
+Sui supports following transactions:
 
-- `txb.splitCoins(coin, amounts)` - Creates new coins with the defined amounts, split from the
+- `tx.splitCoins(coin, amounts)` - Creates new coins with the defined amounts, split from the
   provided coin. Returns the coins so that it can be used in subsequent transactions.
-  - Example: `txb.splitCoins(txb.gas, [100, 200])`
-- `txb.mergeCoins(destinationCoin, sourceCoins)` - Merges the sourceCoins into the destinationCoin.
-  - Example: `txb.mergeCoins(txb.object(coin1), [txb.object(coin2), txb.object(coin3)])`
-- `txb.transferObjects(objects, address)` - Transfers a list of objects to the specified address.
-  - Example: `txb.transferObjects([txb.object(thing1), txb.object(thing2)], myAddress)`
-- `txb.moveCall({ target, arguments, typeArguments  })` - Executes a Move call. Returns whatever the
+  - Example: `tx.splitCoins(tx.gas, [100, 200])`
+- `tx.mergeCoins(destinationCoin, sourceCoins)` - Merges the sourceCoins into the destinationCoin.
+  - Example: `tx.mergeCoins(tx.object(coin1), [tx.object(coin2), tx.object(coin3)])`
+- `tx.transferObjects(objects, address)` - Transfers a list of objects to the specified address.
+  - Example: `tx.transferObjects([tx.object(thing1), tx.object(thing2)], myAddress)`
+- `tx.moveCall({ target, arguments, typeArguments  })` - Executes a Move call. Returns whatever the
   Sui Move call returns.
   - Example:
-    `txb.moveCall({ target: '0x2::devnet_nft::mint', arguments: [txb.pure.string(name), txb.pure.string(description), txb.pure.string(image)] })`
-- `txb.makeMoveVec({ type, objects })` - Constructs a vector of objects that can be passed into a
+    `tx.moveCall({ target: '0x2::devnet_nft::mint', arguments: [tx.pure.string(name), tx.pure.string(description), tx.pure.string(image)] })`
+- `tx.makeMoveVec({ type, elements })` - Constructs a vector of objects that can be passed into a
   `moveCall`. This is required as there’s no way to define a vector as an input.
-  - Example: `txb.makeMoveVec({ objects: [txb.object(id1), txb.object(id2)] })`
-- `txb.publish(modules, dependencies)` - Publishes a Move package. Returns the upgrade capability
+  - Example: `tx.makeMoveVec({ elements: [tx.object(id1), tx.object(id2)] })`
+- `tx.publish(modules, dependencies)` - Publishes a Move package. Returns the upgrade capability
   object.
 
 ## Passing inputs to a transaction
@@ -91,73 +91,73 @@ calling the transaction method. appropriate Move type automatically.
 
 ```ts
 // the amount to split off the gas coin is provided as a pure javascript number
-const [coin] = txb.splitCoins(txb.gas, [100]);
+const [coin] = tx.splitCoins(tx.gas, [100]);
 // the address for the transfer is provided as a pure javascript string
-txb.transferObjects([coin], '0xSomeSuiAddress');
+tx.transferObjects([coin], '0xSomeSuiAddress');
 ```
 
 #### Pure values
 
 When providing inputs that are not on chain objects, the values must be serialized as
 
-[BCS](https://sdk.mystenlabs.com/bcs), which can be done using `txb.pure` eg,
-`txb.pure.address(address)` or `txb.pure(bcs.vector(bcs.U8).serialize(bytes))`.
+[BCS](https://sdk.mystenlabs.com/bcs), which can be done using `tx.pure` eg,
+`tx.pure.address(address)` or `tx.pure(bcs.vector(bcs.U8).serialize(bytes))`.
 
-`txb.pure` can be called as a function that accepts a SerializedBcs object, or as a namespace that
+`tx.pure` can be called as a function that accepts a SerializedBcs object, or as a namespace that
 contains functions for each of the supported types.
 
 ```ts
-const [coin] = txb.splitCoins(txb.gas, [txb.pure.u64(100)]);
-const [coin] = txb.splitCoins(txb.gas, [txb.pure(bcs.U64.serialize(100))]);
-txb.transferObjects([coin], txb.pure.address('0xSomeSuiAddress'));
-txb.transferObjects([coin], txb.pure(bcs.Address.serialize('0xSomeSuiAddress')));
+const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(100)]);
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(bcs.U64.serialize(100))]);
+tx.transferObjects([coin], tx.pure.address('0xSomeSuiAddress'));
+tx.transferObjects([coin], tx.pure(bcs.Address.serialize('0xSomeSuiAddress')));
 ```
 
 #### Object references
 
 To use an on chain object as a transaction input, you must pass a reference to that object. This can
-be done by calling `txb.object` with the object id. Transaction arguments that only accept objects
+be done by calling `tx.object` with the object id. Transaction arguments that only accept objects
 (like `objects` in `transferObjects`) will automatically treat any provided strings as objects ids.
 For methods like `moveCall` that accept both objects and other types, you must explicitly call
-`txb.object` to convert the id to an object reference.
+`tx.object` to convert the id to an object reference.
 
 ```ts
 // Object IDs can be passed to some methods like (transferObjects) directly
-txb.transferObjects(['0xSomeObject'], 'OxSomeAddress');
-// txb.object can be used anywhere an object is accepted
-txb.transferObjects([txb.object('0xSomeObject')], 'OxSomeAddress');
+tx.transferObjects(['0xSomeObject'], 'OxSomeAddress');
+// tx.object can be used anywhere an object is accepted
+tx.transferObjects([tx.object('0xSomeObject')], 'OxSomeAddress');
 
-txb.moveCall({
+tx.moveCall({
 	target: '0x2::nft::mint',
 	// object IDs must be wrapped in moveCall arguments
-	arguments: [txb.object('0xSomeObject')],
+	arguments: [tx.object('0xSomeObject')],
 });
 
-// txb.object automaically converts the object ID to receiving transaction arguments if the moveCall expects it
-txb.moveCall({
+// tx.object automaically converts the object ID to receiving transaction arguments if the moveCall expects it
+tx.moveCall({
 	target: '0xSomeAddress::example::receive_object',
 	// 0xSomeAddress::example::receive_object expects a receiving argument and has a Move definition that looks like this:
 	// public fun receive_object<T: key>(parent_object: &mut ParentObjectType, receiving_object: Receiving<ChildObjectType>) { ... }
-	arguments: [txb.object('0xParentObjectID'), txb.object('0xReceivingObjectID')],
+	arguments: [tx.object('0xParentObjectID'), tx.object('0xReceivingObjectID')],
 });
 ```
 
-When building a transaction block, Sui expects all objects to be fully resolved, including the
-object version. The SDK automatically looks up the current version of objects for any provided
-object reference when building a transaction block. If the object reference is used as a receiving
-argument to a `moveCall`, the object reference is automatically converted to a receiving transaction
-argument. This greatly simplifies building transactions, but requires additional RPC calls. You can
-optimize this process by providing a fully resolved object reference instead:
+When building a transaction, Sui expects all objects to be fully resolved, including the object
+version. The SDK automatically looks up the current version of objects for any provided object
+reference when building a transaction. If the object reference is used as a receiving argument to a
+`moveCall`, the object reference is automatically converted to a receiving transaction argument.
+This greatly simplifies building transactions, but requires additional RPC calls. You can optimize
+this process by providing a fully resolved object reference instead:
 
 ```ts
 // for owned or immutable objects
-txb.object(Inputs.ObjectRef({ digest, objectId, version }));
+tx.object(Inputs.ObjectRef({ digest, objectId, version }));
 
 // for shared objects
-txb.object(Inputs.SharedObjectRef({ objectId, initialSharedVersion, mutable }));
+tx.object(Inputs.SharedObjectRef({ objectId, initialSharedVersion, mutable }));
 
 // for receiving objects
-txb.object(Inputs.ReceivingRef({ digest, objectId, version }));
+tx.object(Inputs.ReceivingRef({ digest, objectId, version }));
 ```
 
 #### Transaction results
@@ -167,9 +167,9 @@ transaction method on the transaction builder returns a reference to the transac
 
 ```tsx
 // split a coin object off of the gas object
-const [coin] = txb.splitCoins(txb.gas, [100]);
+const [coin] = tx.splitCoins(tx.gas, [100]);
 // transfer the resulting coin object
-txb.transferObjects([coin], address);
+tx.transferObjects([coin], address);
 ```
 
 When a transaction returns multiple results, you can access the result at a specific index either
@@ -177,37 +177,36 @@ using destructuring, or array indexes.
 
 ```tsx
 // destructuring (preferred, as it gives you logical local names)
-const [nft1, nft2] = txb.moveCall({ target: '0x2::nft::mint_many' });
-txb.transferObjects([nft1, nft2], address);
+const [nft1, nft2] = tx.moveCall({ target: '0x2::nft::mint_many' });
+tx.transferObjects([nft1, nft2], address);
 
 // array indexes
-const mintMany = txb.moveCall({ target: '0x2::nft::mint_many' });
-txb.transferObjects([mintMany[0], mintMany[1]], address);
+const mintMany = tx.moveCall({ target: '0x2::nft::mint_many' });
+tx.transferObjects([mintMany[0], mintMany[1]], address);
 ```
 
-## Get transaction block bytes
+## Get transaction bytes
 
-If you need the transaction block bytes, instead of signing or executing the transaction block, you
-can use the `build` method on the transaction builder itself.
+If you need the transaction bytes, instead of signing or executing the transaction, you can use the
+`build` method on the transaction builder itself.
 
-**Important:** You might need to explicitly call `setSender()` on the transaction block to ensure
-that the `sender` field is populated. This is normally done by the signer before signing the
-transaction, but will not be done automatically if you’re building the transaction block bytes
-yourself.
+**Important:** You might need to explicitly call `setSender()` on the transaction to ensure that the
+`sender` field is populated. This is normally done by the signer before signing the transaction, but
+will not be done automatically if you’re building the transaction bytes yourself.
 
 ```tsx
-const txb = new TransactionBlock();
+const tx = new Transaction();
 
 // ... add some transactions...
 
-await txb.build({ client });
+await tx.build({ client });
 ```
 
 In most cases, building requires your SuiClient to fully resolve input values.
 
-If you have transaction block bytes, you can also convert them back into a `TransactionBlock` class:
+If you have transaction bytes, you can also convert them back into a `Transaction` class:
 
 ```tsx
-const bytes = getTransactionBlockBytesFromSomewhere();
-const txb = TransactionBlock.from(bytes);
+const bytes = getTransactionBytesFromSomewhere();
+const tx = Transaction.from(bytes);
 ```

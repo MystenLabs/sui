@@ -1033,6 +1033,18 @@ blake2b256
 keccak256
 	public fun
 	0x2::hash
+hash_to_input
+	public fun
+	0x2::vdf
+hash_to_input_internal
+	fun
+	0x2::vdf
+vdf_verify
+	public fun
+	0x2::vdf
+vdf_verify_internal
+	fun
+	0x2::vdf
 encode
 	public fun
 	0x2::hex
@@ -1216,27 +1228,6 @@ transfer_impl
 receive_impl
 	fun
 	0x2::transfer
-max
-	public fun
-	0x2::math
-min
-	public fun
-	0x2::math
-diff
-	public fun
-	0x2::math
-pow
-	public fun
-	0x2::math
-sqrt
-	public fun
-	0x2::math
-sqrt_u128
-	public fun
-	0x2::math
-divide_and_round_up
-	public fun
-	0x2::math
 Field
 	public struct
 	0x2::dynamic_field
@@ -1753,6 +1744,9 @@ is_empty
 into_keys
 	public fun
 	0x2::vec_set
+from_keys
+	public fun
+	0x2::vec_set
 keys
 	public fun
 	0x2::vec_set
@@ -1988,6 +1982,9 @@ destroy_empty
 	public fun
 	0x2::vec_map
 into_keys_values
+	public fun
+	0x2::vec_map
+from_keys_values
 	public fun
 	0x2::vec_map
 keys
@@ -2506,6 +2503,27 @@ destroy_empty
 drop
 	public fun
 	0x2::linked_table
+max
+	public fun
+	0x2::math
+min
+	public fun
+	0x2::math
+diff
+	public fun
+	0x2::math
+pow
+	public fun
+	0x2::math
+sqrt
+	public fun
+	0x2::math
+sqrt_u128
+	public fun
+	0x2::math
+divide_and_round_up
+	public fun
+	0x2::math
 ObjectBag
 	public struct
 	0x2::object_bag
@@ -3865,6 +3883,9 @@ BridgeCommittee
 CommitteeUpdateEvent
 	public struct
 	0xb::committee
+CommitteeMemberUrlUpdateEvent
+	public struct
+	0xb::committee
 CommitteeMember
 	public struct
 	0xb::committee
@@ -3887,6 +3908,9 @@ execute_blocklist
 	public(package) fun
 	0xb::committee
 committee_members
+	public(package) fun
+	0xb::committee
+update_node_url
 	public(package) fun
 	0xb::committee
 check_uniqueness_bridge_keys
@@ -3929,6 +3953,9 @@ init_bridge_committee
 	fun
 	0xb::bridge
 committee_registration
+	public fun
+	0xb::bridge
+update_node_url
 	public fun
 	0xb::bridge
 register_foreign_token
@@ -3982,6 +4009,9 @@ get_current_seq_num_and_increment
 get_parsed_token_transfer_message
 	fun
 	0xb::bridge
+to_bytes
+	public fun
+	0x1::bcs
 print
 	public fun
 	0x1::debug
@@ -4264,6 +4294,108 @@ get_module
 into_string
 	public fun
 	0x1::type_name
-to_bytes
+max
 	public fun
-	0x1::bcs
+	0x1::u128
+min
+	public fun
+	0x1::u128
+diff
+	public fun
+	0x1::u128
+divide_and_round_up
+	public fun
+	0x1::u128
+pow
+	public fun
+	0x1::u128
+sqrt
+	public fun
+	0x1::u128
+max
+	public fun
+	0x1::u16
+min
+	public fun
+	0x1::u16
+diff
+	public fun
+	0x1::u16
+divide_and_round_up
+	public fun
+	0x1::u16
+pow
+	public fun
+	0x1::u16
+sqrt
+	public fun
+	0x1::u16
+max
+	public fun
+	0x1::u256
+min
+	public fun
+	0x1::u256
+diff
+	public fun
+	0x1::u256
+divide_and_round_up
+	public fun
+	0x1::u256
+pow
+	public fun
+	0x1::u256
+max
+	public fun
+	0x1::u32
+min
+	public fun
+	0x1::u32
+diff
+	public fun
+	0x1::u32
+divide_and_round_up
+	public fun
+	0x1::u32
+pow
+	public fun
+	0x1::u32
+sqrt
+	public fun
+	0x1::u32
+max
+	public fun
+	0x1::u64
+min
+	public fun
+	0x1::u64
+diff
+	public fun
+	0x1::u64
+divide_and_round_up
+	public fun
+	0x1::u64
+pow
+	public fun
+	0x1::u64
+sqrt
+	public fun
+	0x1::u64
+max
+	public fun
+	0x1::u8
+min
+	public fun
+	0x1::u8
+diff
+	public fun
+	0x1::u8
+divide_and_round_up
+	public fun
+	0x1::u8
+pow
+	public fun
+	0x1::u8
+sqrt
+	public fun
+	0x1::u8

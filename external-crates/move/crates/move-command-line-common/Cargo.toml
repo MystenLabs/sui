@@ -20,8 +20,16 @@ once_cell.workspace = true
 serde.workspace = true
 dirs-next.workspace = true
 vfs.workspace = true
+bcs.workspace = true
 
 move-core-types.workspace = true
+move-binary-format.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+# Ok to do this since:
+# edition = 2021 ==> resolver = 2
+# * https://doc.rust-lang.org/edition-guide/rust-2021/default-cargo-resolver.html#summary
+# resolver = 2 ==> feature-resolver-version-2 which allows dev-dependencies to set features
+# * https://doc.rust-lang.org/cargo/reference/resolver.html#feature-resolver-version-2
+move-core-types = { workspace = true, features = ["fuzzing"] }

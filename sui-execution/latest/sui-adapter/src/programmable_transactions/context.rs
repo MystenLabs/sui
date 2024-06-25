@@ -21,7 +21,6 @@ mod checked {
         file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
         CompiledModule,
     };
-    use move_core_types::gas_algebra::NumBytes;
     use move_core_types::resolver::ModuleResolver;
     use move_core_types::vm_status::StatusCode;
     use move_core_types::{
@@ -36,7 +35,6 @@ mod checked {
     };
     use move_vm_types::data_store::DataStore;
     use move_vm_types::loaded_data::runtime_types::Type;
-    use move_vm_types::values::GlobalValue;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
@@ -610,6 +608,7 @@ mod checked {
                 inputs,
                 results,
                 user_events,
+                state_view,
                 ..
             } = self;
             let tx_digest = tx_context.digest();
@@ -757,15 +756,23 @@ mod checked {
             }
 
             for (id, (recipient, ty, value)) in writes {
-                let abilities = vm
-                    .get_runtime()
-                    .get_type_abilities(&ty)
-                    .map_err(|e| convert_vm_error(e, vm, &linkage_view))?;
+                let abilities = vm.get_runtime().get_type_abilities(&ty).map_err(|e| {
+                    convert_vm_error(
+                        e,
+                        vm,
+                        &linkage_view,
+                        protocol_config.resolve_abort_locations_to_package_id(),
+                    )
+                })?;
                 let has_public_transfer = abilities.has_store();
-                let layout = vm
-                    .get_runtime()
-                    .type_to_type_layout(&ty)
-                    .map_err(|e| convert_vm_error(e, vm, &linkage_view))?;
+                let layout = vm.get_runtime().type_to_type_layout(&ty).map_err(|e| {
+                    convert_vm_error(
+                        e,
+                        vm,
+                        &linkage_view,
+                        protocol_config.resolve_abort_locations_to_package_id(),
+                    )
+                })?;
                 let Some(bytes) = value.simple_serialize(&layout) else {
                     invariant_violation!("Failed to deserialize already serialized Move value");
                 };
@@ -822,6 +829,10 @@ mod checked {
                 }
             }
 
+            if protocol_config.enable_coin_deny_list_v2() {
+                state_view.check_coin_deny_list(&written_objects)?;
+            }
+
             let user_events = user_events
                 .into_iter()
                 .map(|(module_id, tag, contents)| {
@@ -849,7 +860,12 @@ mod checked {
 
         /// Convert a VM Error to an execution one
         pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
-            crate::error::convert_vm_error(error, self.vm, &self.linkage_view)
+            crate::error::convert_vm_error(
+                error,
+                self.vm,
+                &self.linkage_view,
+                self.protocol_config.resolve_abort_locations_to_package_id(),
+            )
         }
 
         /// Special case errors for type arguments to Move functions
@@ -1073,7 +1089,7 @@ mod checked {
 
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
-        let res = vm.get_runtime().load_struct(&runtime_id, name, &data_store);
+        let res = vm.get_runtime().load_type(&runtime_id, name, &data_store);
         linkage_view.reset_linkage();
         let (idx, struct_type) = res?;
 
@@ -1084,7 +1100,7 @@ mod checked {
         }
 
         if type_params.is_empty() {
-            Ok(Type::Struct(idx))
+            Ok(Type::Datatype(idx))
         } else {
             let loaded_type_params = type_params
                 .iter()
@@ -1099,7 +1115,7 @@ mod checked {
                 }
             }
 
-            Ok(Type::StructInstantiation(Box::new((
+            Ok(Type::DatatypeInstantiation(Box::new((
                 idx,
                 loaded_type_params,
             ))))
@@ -1154,13 +1170,23 @@ mod checked {
         };
 
         let tag: StructTag = type_.into();
-        let type_ = load_type_from_struct(vm, linkage_view, new_packages, &tag)
-            .map_err(|e| crate::error::convert_vm_error(e, vm, linkage_view))?;
+        let type_ = load_type_from_struct(vm, linkage_view, new_packages, &tag).map_err(|e| {
+            crate::error::convert_vm_error(
+                e,
+                vm,
+                linkage_view,
+                protocol_config.resolve_abort_locations_to_package_id(),
+            )
+        })?;
         let has_public_transfer = if protocol_config.recompute_has_public_transfer_in_execution() {
-            let abilities = vm
-                .get_runtime()
-                .get_type_abilities(&type_)
-                .map_err(|e| crate::error::convert_vm_error(e, vm, linkage_view))?;
+            let abilities = vm.get_runtime().get_type_abilities(&type_).map_err(|e| {
+                crate::error::convert_vm_error(
+                    e,
+                    vm,
+                    linkage_view,
+                    protocol_config.resolve_abort_locations_to_package_id(),
+                )
+            })?;
             abilities.has_store()
         } else {
             has_public_transfer
@@ -1243,7 +1269,14 @@ mod checked {
             let fully_annotated_layout = vm
                 .get_runtime()
                 .type_to_fully_annotated_layout(&obj_value.type_)
-                .map_err(|e| convert_vm_error(e, vm, linkage_view))?;
+                .map_err(|e| {
+                    convert_vm_error(
+                        e,
+                        vm,
+                        linkage_view,
+                        protocol_config.resolve_abort_locations_to_package_id(),
+                    )
+                })?;
             let mut bytes = vec![];
             obj_value.write_bcs_bytes(&mut bytes);
             match get_all_uids(&fully_annotated_layout, &bytes) {
@@ -1401,10 +1434,14 @@ mod checked {
             .get(&id)
             .map(|obj: &LoadedRuntimeObject| obj.version);
 
-        let type_tag = vm
-            .get_runtime()
-            .get_type_tag(&type_)
-            .map_err(|e| crate::error::convert_vm_error(e, vm, linkage_view))?;
+        let type_tag = vm.get_runtime().get_type_tag(&type_).map_err(|e| {
+            crate::error::convert_vm_error(
+                e,
+                vm,
+                linkage_view,
+                protocol_config.resolve_abort_locations_to_package_id(),
+            )
+        })?;
 
         let struct_tag = match type_tag {
             TypeTag::Struct(inner) => *inner,
@@ -1498,19 +1535,6 @@ mod checked {
                     )
                 }
             }
-        }
-
-        //
-        // TODO: later we will clean up the interface with the runtime and the functions below
-        //       will likely be exposed via extensions
-        //
-
-        fn load_resource(
-            &mut self,
-            _addr: AccountAddress,
-            _ty: &Type,
-        ) -> PartialVMResult<(&mut GlobalValue, Option<Option<NumBytes>>)> {
-            panic!("load_resource should never be called for LinkageView")
         }
 
         fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {

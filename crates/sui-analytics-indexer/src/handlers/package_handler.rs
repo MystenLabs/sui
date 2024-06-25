@@ -3,36 +3,40 @@
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
-use sui_indexer::framework::Handler;
+use sui_data_ingestion_core::Worker;
 use sui_rest_api::CheckpointData;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
 use sui_types::object::Object;
+use tokio::sync::Mutex;
 
 use crate::handlers::AnalyticsHandler;
 use crate::tables::MovePackageEntry;
 use crate::FileType;
 
 pub struct PackageHandler {
+    state: Mutex<State>,
+}
+
+struct State {
     packages: Vec<MovePackageEntry>,
 }
 
 #[async_trait::async_trait]
-impl Handler for PackageHandler {
-    fn name(&self) -> &str {
-        "package"
-    }
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
+impl Worker for PackageHandler {
+    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
+        let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             self.process_transaction(
                 checkpoint_summary.epoch,
                 checkpoint_summary.sequence_number,
                 checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
+                &checkpoint_transaction,
+                &mut state,
             )?;
         }
         Ok(())
@@ -41,39 +45,47 @@ impl Handler for PackageHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<MovePackageEntry> for PackageHandler {
-    fn read(&mut self) -> Result<Vec<MovePackageEntry>> {
-        let cloned = self.packages.clone();
-        self.packages.clear();
+    async fn read(&self) -> Result<Vec<MovePackageEntry>> {
+        let mut state = self.state.lock().await;
+        let cloned = state.packages.clone();
+        state.packages.clear();
         Ok(cloned)
     }
 
     fn file_type(&self) -> Result<FileType> {
         Ok(FileType::MovePackage)
     }
+
+    fn name(&self) -> &str {
+        "package"
+    }
 }
 
 impl PackageHandler {
     pub fn new() -> Self {
-        PackageHandler { packages: vec![] }
+        let state = Mutex::new(State { packages: vec![] });
+        PackageHandler { state }
     }
     fn process_transaction(
-        &mut self,
+        &self,
         epoch: u64,
         checkpoint: u64,
         timestamp_ms: u64,
         checkpoint_transaction: &CheckpointTransaction,
+        state: &mut State,
     ) -> Result<()> {
         for object in checkpoint_transaction.output_objects.iter() {
-            self.process_package(epoch, checkpoint, timestamp_ms, object)?;
+            self.process_package(epoch, checkpoint, timestamp_ms, object, state)?;
         }
         Ok(())
     }
     fn process_package(
-        &mut self,
+        &self,
         epoch: u64,
         checkpoint: u64,
         timestamp_ms: u64,
         object: &Object,
+        state: &mut State,
     ) -> Result<()> {
         if let sui_types::object::Data::Package(p) = &object.data {
             let package_id = p.id();
@@ -89,7 +101,7 @@ impl PackageHandler {
                 transaction_digest: object.previous_transaction.to_string(),
                 original_package_id: Some(original_package_id.to_string()),
             };
-            self.packages.push(package)
+            state.packages.push(package)
         }
         Ok(())
     }

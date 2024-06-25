@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getFullnodeUrl, SuiClient, SuiObjectChange } from '@mysten/sui.js/client';
-import { decodeSuiPrivateKey, Keypair } from '@mysten/sui.js/cryptography';
-import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { toB64 } from '@mysten/sui.js/utils';
+import { getFullnodeUrl, SuiClient, SuiObjectChange } from '@mysten/sui/client';
+import { decodeSuiPrivateKey, Keypair } from '@mysten/sui/cryptography';
+import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
+import { toB64 } from '@mysten/sui/utils';
 import { describe } from 'node:test';
 import { beforeAll, expect, test } from 'vitest';
 
-import { getSentTransactionBlocksWithLinks, ZkSendLink, ZkSendLinkBuilder } from './index.js';
+import { getSentTransactionsWithLinks, ZkSendLink, ZkSendLinkBuilder } from './index.js';
 
 export const DEMO_BEAR_CONFIG = {
 	packageId: '0xab8ed19f16874f9b8b66b0b6e325ee064848b1a7fdcb1c2f0478b17ad8574e65',
@@ -45,7 +45,7 @@ async function getSuiFromFaucet(keypair: Keypair) {
 		throw new Error(result.error);
 	}
 
-	await client.waitForTransactionBlock({
+	await client.waitForTransaction({
 		digest: result.transferredGasObjects[0].transferTxDigest,
 	});
 }
@@ -72,7 +72,7 @@ describe('Contract links', () => {
 
 			await link.create({
 				signer: keypair,
-				waitForTransactionBlock: true,
+				waitForTransaction: true,
 			});
 
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
@@ -96,7 +96,7 @@ describe('Contract links', () => {
 
 			const claim = await claimLink.claimAssets(keypair.toSuiAddress());
 
-			const res = await client.waitForTransactionBlock({
+			const res = await client.waitForTransaction({
 				digest: claim.digest,
 				options: {
 					showObjectChanges: true,
@@ -148,10 +148,10 @@ describe('Contract links', () => {
 
 			const { digest } = await link.create({
 				signer: keypair,
-				waitForTransactionBlock: true,
+				waitForTransaction: true,
 			});
 
-			await client.waitForTransactionBlock({ digest });
+			await client.waitForTransaction({ digest });
 
 			const {
 				data: [
@@ -159,18 +159,18 @@ describe('Contract links', () => {
 						links: [lostLink],
 					},
 				],
-			} = await getSentTransactionBlocksWithLinks({
+			} = await getSentTransactionsWithLinks({
 				address: keypair.toSuiAddress(),
 				network: 'testnet',
 				contract: ZK_BAG_CONFIG,
 			});
 
-			const { url, transactionBlock } = await lostLink.createRegenerateTransaction(
+			const { url, transaction } = await lostLink.createRegenerateTransaction(
 				keypair.toSuiAddress(),
 			);
 
-			const result = await client.signAndExecuteTransactionBlock({
-				transactionBlock,
+			const result = await client.signAndExecuteTransaction({
+				transaction,
 				signer: keypair,
 				options: {
 					showEffects: true,
@@ -178,7 +178,7 @@ describe('Contract links', () => {
 				},
 			});
 
-			await client.waitForTransactionBlock({ digest: result.digest });
+			await client.waitForTransaction({ digest: result.digest });
 
 			const claimLink = await ZkSendLink.fromUrl(url, {
 				contract: ZK_BAG_CONFIG,
@@ -198,7 +198,7 @@ describe('Contract links', () => {
 
 			const claim = await claimLink.claimAssets(keypair.toSuiAddress());
 
-			const res = await client.waitForTransactionBlock({
+			const res = await client.waitForTransaction({
 				digest: claim.digest,
 				options: {
 					showObjectChanges: true,
@@ -249,10 +249,10 @@ describe('Contract links', () => {
 
 			const { digest } = await link.create({
 				signer: keypair,
-				waitForTransactionBlock: true,
+				waitForTransaction: true,
 			});
 
-			await client.waitForTransactionBlock({ digest });
+			await client.waitForTransaction({ digest });
 
 			const {
 				data: [
@@ -260,7 +260,7 @@ describe('Contract links', () => {
 						links: [lostLink],
 					},
 				],
-			} = await getSentTransactionBlocksWithLinks({
+			} = await getSentTransactionsWithLinks({
 				address: keypair.toSuiAddress(),
 				network: 'testnet',
 				contract: ZK_BAG_CONFIG,
@@ -268,10 +268,10 @@ describe('Contract links', () => {
 
 			const { digest: claimDigest } = await lostLink.claimAssets(keypair.toSuiAddress(), {
 				reclaim: true,
-				sign: async (txb) => (await keypair.signTransactionBlock(txb)).signature,
+				sign: async (tx) => (await keypair.signTransaction(tx)).signature,
 			});
 
-			const result = await client.waitForTransactionBlock({
+			const result = await client.waitForTransaction({
 				digest: claimDigest,
 				options: { showObjectChanges: true, showEffects: true },
 			});
@@ -307,18 +307,18 @@ describe('Contract links', () => {
 				links.push(link);
 			}
 
-			const txb = await ZkSendLinkBuilder.createLinks({
+			const tx = await ZkSendLinkBuilder.createLinks({
 				links,
 				client,
 				contract: ZK_BAG_CONFIG,
 			});
 
-			const result = await client.signAndExecuteTransactionBlock({
-				transactionBlock: txb,
+			const result = await client.signAndExecuteTransaction({
+				transaction: tx,
 				signer: keypair,
 			});
 
-			await client.waitForTransactionBlock({ digest: result.digest });
+			await client.waitForTransaction({ digest: result.digest });
 
 			for (const link of links) {
 				const linkUrl = link.getLink();
@@ -344,7 +344,7 @@ describe('Contract links', () => {
 
 				const claim = await claimLink.claimAssets(keypair.toSuiAddress());
 
-				const res = await client.waitForTransactionBlock({
+				const res = await client.waitForTransaction({
 					digest: claim.digest,
 					options: {
 						showObjectChanges: true,
@@ -387,7 +387,7 @@ describe('Non contract links', () => {
 
 			await link.create({
 				signer: keypair,
-				waitForTransactionBlock: true,
+				waitForTransaction: true,
 			});
 
 			// Balances sometimes not updated even though we wait for the transaction to be indexed
@@ -410,7 +410,7 @@ describe('Non contract links', () => {
 
 			const claimTx = await claimLink.claimAssets(new Ed25519Keypair().toSuiAddress());
 
-			const res = await client.waitForTransactionBlock({
+			const res = await client.waitForTransaction({
 				digest: claimTx.digest,
 				options: {
 					showObjectChanges: true,
@@ -444,17 +444,17 @@ describe('Non contract links', () => {
 		async () => {
 			const linkKp = new Ed25519Keypair();
 
-			const txb = new TransactionBlock();
+			const tx = new Transaction();
 
-			const [coin] = txb.splitCoins(txb.gas, [5_000_000]);
-			txb.transferObjects([coin], linkKp.toSuiAddress());
+			const [coin] = tx.splitCoins(tx.gas, [5_000_000]);
+			tx.transferObjects([coin], linkKp.toSuiAddress());
 
-			const { digest } = await client.signAndExecuteTransactionBlock({
+			const { digest } = await client.signAndExecuteTransaction({
 				signer: keypair,
-				transactionBlock: txb,
+				transaction: tx,
 			});
 
-			await client.waitForTransactionBlock({ digest });
+			await client.waitForTransaction({ digest });
 
 			const claimLink = new ZkSendLink({
 				keypair: linkKp,
@@ -472,7 +472,7 @@ describe('Non contract links', () => {
 
 			const claimTx = await claimLink.claimAssets(keypair.toSuiAddress());
 
-			const res = await client.waitForTransactionBlock({
+			const res = await client.waitForTransaction({
 				digest: claimTx.digest,
 				options: {
 					showBalanceChanges: true,
@@ -518,16 +518,16 @@ describe('Non contract links', () => {
 
 			const receiver = new Ed25519Keypair();
 
-			const txb = await link.createSendToAddressTransaction({
+			const tx = await link.createSendToAddressTransaction({
 				address: receiver.toSuiAddress(),
 			});
 
-			const { digest } = await client.signAndExecuteTransactionBlock({
-				transactionBlock: txb,
+			const { digest } = await client.signAndExecuteTransaction({
+				transaction: tx,
 				signer: keypair,
 			});
 
-			await client.waitForTransactionBlock({
+			await client.waitForTransaction({
 				digest,
 			});
 
@@ -551,13 +551,13 @@ describe('Non contract links', () => {
 				sender: keypair.toSuiAddress(),
 			});
 
-			const txb = new TransactionBlock();
+			const tx = new Transaction();
 
 			for (let i = 0; i < 3; i++) {
-				const bear = txb.moveCall({
+				const bear = tx.moveCall({
 					target: `${DEMO_BEAR_CONFIG.packageId}::demo_bear::new`,
 					arguments: [
-						txb.pure.string(`A happy bear - ${Math.floor(Math.random() * 1_000_000_000)}`),
+						tx.pure.string(`A happy bear - ${Math.floor(Math.random() * 1_000_000_000)}`),
 					],
 				});
 
@@ -569,9 +569,9 @@ describe('Non contract links', () => {
 			const linkUrl = link.getLink();
 
 			await link.create({
-				transactionBlock: txb,
+				transaction: tx,
 				signer: keypair,
-				waitForTransactionBlock: true,
+				waitForTransaction: true,
 			});
 
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
@@ -595,7 +595,7 @@ describe('Non contract links', () => {
 
 			const claim = await claimLink.claimAssets(keypair.toSuiAddress());
 
-			const res = await client.waitForTransactionBlock({
+			const res = await client.waitForTransaction({
 				digest: claim.digest,
 				options: {
 					showObjectChanges: true,
@@ -627,29 +627,29 @@ describe('Non contract links', () => {
 });
 
 async function createBears(totalBears: number) {
-	const txb = new TransactionBlock();
+	const tx = new Transaction();
 	const bears = [];
 
 	for (let i = 0; i < totalBears; i++) {
-		const bear = txb.moveCall({
+		const bear = tx.moveCall({
 			target: `${DEMO_BEAR_CONFIG.packageId}::demo_bear::new`,
-			arguments: [txb.pure.string(`A happy bear - ${Math.floor(Math.random() * 1_000_000_000)}`)],
+			arguments: [tx.pure.string(`A happy bear - ${Math.floor(Math.random() * 1_000_000_000)}`)],
 		});
 
 		bears.push(bear);
 	}
 
-	txb.transferObjects(bears, txb.pure.address(keypair.toSuiAddress()));
+	tx.transferObjects(bears, tx.pure.address(keypair.toSuiAddress()));
 
-	const res = await client.signAndExecuteTransactionBlock({
-		transactionBlock: txb,
+	const res = await client.signAndExecuteTransaction({
+		transaction: tx,
 		signer: keypair,
 		options: {
 			showObjectChanges: true,
 		},
 	});
 
-	await client.waitForTransactionBlock({
+	await client.waitForTransaction({
 		digest: res.digest,
 	});
 

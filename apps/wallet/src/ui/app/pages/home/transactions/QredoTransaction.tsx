@@ -7,8 +7,8 @@ import { TxnIcon } from '_src/ui/app/components/transactions-card/TxnIcon';
 import { useGetQredoTransaction } from '_src/ui/app/hooks/useGetQredoTransaction';
 import { Text } from '_src/ui/app/shared/text';
 import { formatDate, useOnScreen } from '@mysten/core';
-import { IntentScope } from '@mysten/sui.js/cryptography';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { bcs } from '@mysten/sui/bcs';
+import { fromB64 } from '@mysten/sui/utils';
 import { useMemo, useRef } from 'react';
 
 export type QredoTransactionProps = {
@@ -30,8 +30,11 @@ export function QredoTransaction({ qredoID, qredoTransactionID }: QredoTransacti
 		}
 		return null;
 	}, [data?.MessageWithIntent]);
-	const scope = messageWithIntent?.[0];
-	const isSignMessage = scope === IntentScope.PersonalMessage;
+
+	const isSignMessage = messageWithIntent
+		? bcs.IntentScope.parse(messageWithIntent).PersonalMessage
+		: false;
+
 	const transactionBytes = useMemo(() => messageWithIntent?.slice(3) || null, [messageWithIntent]);
 	const messageToSign =
 		useMemo(

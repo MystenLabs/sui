@@ -1,0 +1,89 @@
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: &u64): Self.Foo<u64> {
+        let y: Self.Foo<u64>;
+    label b0:
+        y = Foo.V<u64> { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: &u64): Self.Foo<&u64> {
+        let y: Self.Foo<&u64>;
+    label b0:
+        y = Foo.V<&u64> { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: &T } }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: &mut u64): Self.Foo<u64> {
+        let y: Self.Foo<u64>;
+    label b0:
+        y = Foo.V<u64> { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: &mut u64): Self.Foo<&mut u64> {
+        let y: Self.Foo<&mut u64>;
+    label b0:
+        y = Foo.V<&mut u64> { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: &mut T } }
+}
+
+
+// Mono decls now
+
+//# publish
+module 0x2.O {
+    enum Foo { V { x: u64 } }
+
+    foo(x: &mut u64): Self.Foo {
+        let y: Self.Foo;
+    label b0:
+        y = Foo.V { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo { V { x: &mut u64 } }
+
+    foo(x: &mut u64): Self.Foo {
+        let y: Self.Foo;
+    label b0:
+        y = Foo.V { x: move(x) };
+        return move(y);
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo { V { x: &mut u64 } }
+}

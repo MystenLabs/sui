@@ -2,9 +2,14 @@
 
 import { Callout } from 'nextra/components';
 
-<Callout type="info">
-	Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
-	development.
+<Callout type="warning">
+	Sui Owned Object Pools (SuiOOP) will likely be replaced by
+	[`ParallelTransactionExecutor`](../executors#paralleltransactionexecutor) from
+	`@mysten/sui/transactions`
+
+    Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
+    development.
+
 </Callout>
 
 These examples demonstrate some possible use cases for the Sui Owned Object Pool library.
@@ -28,9 +33,9 @@ Here is the code that creates the coins by splitting a single coin 20 times and 
 coins to your address:
 
 ```ts
-import { SuiClient } from '@mysten/sui.js/client/';
-import type { SuiObjectRef, SuiObjectResponse } from '@mysten/sui.js/client/';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SuiClient } from '@mysten/sui/client/';
+import type { SuiObjectRef, SuiObjectResponse } from '@mysten/sui/client/';
+import { Transaction } from '@mysten/sui/transactions';
 
 const client = new SuiClient({
 	url: 'https://fullnode.testnet.sui.io:443',
@@ -50,23 +55,23 @@ async function splitCoinAndTransferToSelf(
 	coinObjectId: string,
 	yourAddressSecretKey: string,
 ) {
-	const txb = new TransactionBlock();
+	const tx = new Transaction();
 	const coinToPay = await client.getObject({ id: coinObjectId });
-	const newcoins1 = txb.splitCoins(txb.gas, [txb.pure(300000000)]);
-	// const newcoins2 = txb.splitCoins(txb.gas, [txb.pure(300000000)]);
-	txb.transferObjects(
+	const newcoins1 = tx.splitCoins(tx.gas, [tx.pure(300000000)]);
+	// const newcoins2 = tx.splitCoins(tx.gas, [tx.pure(300000000)]);
+	tx.transferObjects(
 		[
 			newcoins1,
 			// newcoins2
 		],
-		txb.pure(getKeyPair(yourAddressSecretKey).getPublicKey().toSuiAddress()),
+		tx.pure(getKeyPair(yourAddressSecretKey).getPublicKey().toSuiAddress()),
 	);
-	txb.setGasPayment([toSuiObjectRef(coinToPay)]);
-	txb.setGasBudget(100000000);
+	tx.setGasPayment([toSuiObjectRef(coinToPay)]);
+	tx.setGasBudget(100000000);
 	await client
-		.signAndExecuteTransactionBlock({
+		.signAndExecuteTransaction({
 			signer: getKeyPair(yourAddressSecretKey),
-			transactionBlock: txb,
+			transaction: tx,
 			requestType: 'WaitForLocalExecution',
 			options: {
 				showEffects: true,
@@ -100,14 +105,14 @@ import { DefaultSplitStrategy, ExecutorServiceHandler } from 'suioop';
 const eshandler = await ExecutorServiceHandler.initialize(adminKeypair, client);
 // Define the number of transactions to execute
 const promises = [];
-let txb: TransactionBlockWithLambda;
+let tx: TransactionBlockWithLambda;
 for (let i = 0; i < 10; i++) {
-	txb = new TransactionBlockWithLambda(
-		() => createPaymentTxb('<recipient-address>'), // Use a test user address to receive the txbs
+	tx = new TransactionBlockWithLambda(
+		() => createPaymenttx('<recipient-address>'), // Use a test user address to receive the txs
 	);
 	promises.push(
 		eshandler.execute(
-			txb,
+			tx,
 			client,
 			new DefaultSplitStrategy(300000000), // Each pool contains coins with a total balance of 300000000 MIST
 		),
@@ -154,32 +159,32 @@ while (i <= 20) {
 // ...
 ```
 
-Now that you have the coins and the admin caps, you can define the `mintNFTTxb` function that
-creates and returns the transaction block of type `TransactionBlockWithLambda`.
+Now that you have the coins and the admin caps, you can define the `mintNFTtx` function that creates
+and returns the transaction of type `TransactionBlockWithLambda`.
 
 ```ts
-function mintNFTTxb(
+function mintNFTtx(
 	env: EnvironmentVariables,
 	adminKeypair: Ed25519Keypair,
 ): TransactionBlockWithLambda {
-	const txbLambda = (adminCapId: string) => {
-		const txb = new TransactionBlock();
-		const hero = txb.moveCall({
+	const txLambda = (adminCapId: string) => {
+		const tx = new Transaction();
+		const hero = tx.moveCall({
 			arguments: [
-				txb.object(adminCapId),
-				txb.pure('zed'),
-				txb.pure('gold'),
-				txb.pure(3),
-				txb.pure('ipfs://example.com/'),
+				tx.object(adminCapId),
+				tx.pure('zed'),
+				tx.pure('gold'),
+				tx.pure(3),
+				tx.pure('ipfs://example.com/'),
 			],
 			target: `${env.NFT_APP_PACKAGE_ID}::hero_nft::mint_hero`,
 		});
 
-		txb.transferObjects([hero], txb.pure(adminKeypair.getPublicKey().toSuiAddress()));
-		txb.setGasBudget(10000000);
-		return txb;
+		tx.transferObjects([hero], tx.pure(adminKeypair.getPublicKey().toSuiAddress()));
+		tx.setGasBudget(10000000);
+		return tx;
 	};
-	return new TransactionBlockWithLambda(txbLambda, ['AdminCap']);
+	return new TransactionBlockWithLambda(txLambda, ['AdminCap']);
 }
 ```
 
@@ -189,11 +194,11 @@ and execute the transactions.
 ```ts
 const eshandler = await ExecutorServiceHandler.initialize(adminKeypair, client);
 const promises: Promise<SuiTransactionBlockResponse>[] = [];
-let txb: TransactionBlockWithLambda;
+let tx: TransactionBlockWithLambda;
 for (let i = 0; i < NUMBER_OF_TRANSACTION_TO_EXECUTE; i++) {
-	txb = mintNFTTxb(env, adminKeypair);
+	tx = mintNFTtx(env, adminKeypair);
 	promises.push(
-		eshandler.execute(txb, client, new IncludeAdminCapStrategy('<your-nft-package-id>')),
+		eshandler.execute(tx, client, new IncludeAdminCapStrategy('<your-nft-package-id>')),
 	);
 }
 

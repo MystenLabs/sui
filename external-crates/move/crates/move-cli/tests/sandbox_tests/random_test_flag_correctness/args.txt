@@ -1,0 +1,5 @@
+test --seed 1 --rand-num-iters 10
+test --seed 2 --rand-num-iters 0
+test --rand-num-iters 0
+test --rand-num-iters 100
+

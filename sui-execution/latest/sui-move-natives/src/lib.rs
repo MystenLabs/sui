@@ -40,6 +40,7 @@ use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use better_any::{Tid, TidAble};
+use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A,
@@ -151,6 +152,9 @@ pub struct NativesCostTable {
 
     // group ops
     pub group_ops_cost_params: GroupOpsCostParams,
+
+    // vdf
+    pub vdf_cost_params: VDFCostParams,
 
     // zklogin
     pub check_zklogin_id_cost_params: CheckZkloginIdCostParams,
@@ -610,6 +614,14 @@ impl NativesCostTable {
                     .group_ops_bls12381_pairing_cost_as_option()
                     .map(Into::into),
             },
+            vdf_cost_params: VDFCostParams {
+                vdf_verify_cost: protocol_config
+                    .vdf_verify_vdf_cost_as_option()
+                    .map(Into::into),
+                hash_to_input_cost: protocol_config
+                    .vdf_hash_to_input_cost_as_option()
+                    .map(Into::into),
+            },
         }
     }
 }
@@ -697,6 +709,12 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(ed25519::ed25519_verify),
         ),
         ("event", "emit", make_native!(event::emit)),
+        (
+            "event",
+            "events_by_type",
+            make_native!(event::get_events_by_type),
+        ),
+        ("event", "num_events", make_native!(event::num_events)),
         (
             "groth16",
             "verify_groth16_proof_internal",
@@ -876,6 +894,26 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "poseidon",
             "poseidon_bn254_internal",
             make_native!(poseidon::poseidon_bn254_internal),
+        ),
+        (
+            "vdf",
+            "vdf_verify_internal",
+            make_native!(vdf::vdf_verify_internal),
+        ),
+        (
+            "vdf",
+            "hash_to_input_internal",
+            make_native!(vdf::hash_to_input_internal),
+        ),
+        (
+            "ecdsa_k1",
+            "secp256k1_sign",
+            make_native!(ecdsa_k1::secp256k1_sign),
+        ),
+        (
+            "ecdsa_k1",
+            "secp256k1_keypair_from_seed",
+            make_native!(ecdsa_k1::secp256k1_keypair_from_seed),
         ),
     ];
     let sui_framework_natives_iter =

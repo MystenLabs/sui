@@ -2,7 +2,7 @@
 name = "A"
 version = "0.0.1"
 published-at = "0xa0"
-edition = "2024.beta"
+edition = "development"
 
 [addresses]
 a = "0xa0"

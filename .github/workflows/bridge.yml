@@ -1,0 +1,125 @@
+name: Native Bridge
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'devnet'
+      - 'testnet'
+      - 'mainnet'
+      - 'releases/sui-*-release'
+  pull_request:
+    types: [ opened, synchronize, reopened, ready_for_review ]
+  workflow_dispatch:
+    inputs:
+      sui_repo_ref:
+        description: "Branch / commit to test"
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation.
+  #
+  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
+  # as it lets the compiler avoid recompiling code that hasn't changed. However,
+  # on CI, we're not making small edits; we're almost always building the entire
+  # project from scratch. Thus, incremental compilation on CI actually
+  # introduces *additional* overhead to support making future builds
+  # faster...but no future builds will ever occur in any given CI environment.
+  #
+  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
+  # for details.
+  CARGO_INCREMENTAL: 0
+  # Allow more retries for network requests in cargo (downloading crates) and
+  # rustup (installing toolchains). This should help to reduce flaky CI failures
+  # from transient network timeouts or other issues.
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # Don't emit giant backtraces in the CI logs.
+  RUST_BACKTRACE: short
+  # Some integration tests can produce too much INFO logs that are infeasible to be printed on failure.
+  RUST_LOG: error
+  # RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  diff:
+    runs-on: [ ubuntu-latest ]
+    outputs:
+      isRust: ${{ steps.diff.outputs.isRust }}
+      isMove: ${{ steps.diff.outputs.isMove }}
+      isSolidity: ${{ steps.diff.outputs.isSolidity }}
+      isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
+      isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - name: Detect Changes
+        uses: './.github/actions/diffs'
+        id: diff
+
+  test:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
+    timeout-minutes: 45
+    env:
+      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
+      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
+      # non-deterministic `test` job.
+      SUI_SKIP_SIMTESTS: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ ubuntu-ghcloud ]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: taiki-e/install-action@nextest
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
+      - name: Install Foundry
+        run: |
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
+      - name: Install Foundry Dependencies
+        working-directory: bridge/evm
+        run: |
+          forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
+      - name: cargo test
+        run: |
+          cargo nextest run --profile ci -E 'package(sui-bridge)'
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
+        shell: bash
+
+  bridge-evm:
+    name: bridge-evm-tests
+    needs: diff
+    if: needs.diff.outputs.isSolidity == 'true'
+    runs-on: [ ubuntu-ghcloud ]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - name: Install Foundry
+        run: |
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
+      - name: Install Foundry Dependencies
+        working-directory: bridge/evm
+        run: |
+          forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
+      - name: Check Bridge EVM Unit Tests
+        shell: bash
+        working-directory: bridge/evm
+        env:
+          INFURA_API_KEY: ${{ secrets.INFURA_API_KEY }}
+        run: |
+          forge clean
+          forge test --ffi

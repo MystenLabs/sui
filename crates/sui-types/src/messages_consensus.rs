@@ -1,21 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::ConciseableName;
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::digests::ConsensusCommitDigest;
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
 use crate::transaction::CertifiedTransaction;
 use byteorder::{BigEndian, ReadBytesExt};
+use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::dkg;
+use fastcrypto_tbls::{dkg, dkg_v0, dkg_v1};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use sui_protocol_config::SupportedProtocolVersions;
 
@@ -41,6 +44,30 @@ pub struct ConsensusCommitPrologueV2 {
     pub commit_timestamp_ms: CheckpointTimestamp,
     /// Digest of consensus output
     pub consensus_commit_digest: ConsensusCommitDigest,
+}
+
+/// Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
+pub enum ConsensusDeterminedVersionAssignments {
+    // Cancelled transaction version assignment.
+    CancelledTransactions(Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ConsensusCommitPrologueV3 {
+    /// Epoch of the commit prologue transaction
+    pub epoch: u64,
+    /// Consensus round of the commit
+    pub round: u64,
+    /// The sub DAG index of the consensus commit. This field will be populated if there
+    /// are multiple consensus commits per round.
+    pub sub_dag_index: Option<u64>,
+    /// Unix timestamp from consensus
+    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Digest of consensus output
+    pub consensus_commit_digest: ConsensusCommitDigest,
+    /// Stores consensus handler determined shared object version assignments.
+    pub consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
 }
 
 // In practice, JWKs are about 500 bytes of json each, plus a bit more for the ID.
@@ -191,6 +218,117 @@ impl ConsensusTransactionKind {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
+pub enum VersionedDkgMessage {
+    V0(dkg_v0::Message<bls12381::G2Element, bls12381::G2Element>),
+    V1(dkg_v1::Message<bls12381::G2Element, bls12381::G2Element>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VersionedDkgConfimation {
+    V0(dkg::Confirmation<bls12381::G2Element>),
+    V1(dkg::Confirmation<bls12381::G2Element>),
+}
+
+impl Debug for VersionedDkgMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VersionedDkgMessage::V0(msg) => write!(
+                f,
+                "DKG V0 Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
+                msg.sender,
+                msg.vss_pk.degree(),
+                msg.encrypted_shares.len(),
+            ),
+            VersionedDkgMessage::V1(msg) => write!(
+                f,
+                "DKG V1 Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
+                msg.sender,
+                msg.vss_pk.degree(),
+                msg.encrypted_shares.len(),
+            ),
+        }
+    }
+}
+
+impl VersionedDkgMessage {
+    pub fn sender(&self) -> u16 {
+        match self {
+            VersionedDkgMessage::V0(msg) => msg.sender,
+            VersionedDkgMessage::V1(msg) => msg.sender,
+        }
+    }
+
+    pub fn create(
+        dkg_version: u64,
+        party: Arc<dkg::Party<bls12381::G2Element, bls12381::G2Element>>,
+    ) -> FastCryptoResult<VersionedDkgMessage> {
+        match dkg_version {
+            0 => {
+                let msg = party.create_message(&mut rand::thread_rng())?;
+                Ok(VersionedDkgMessage::V0(msg))
+            }
+            1 => {
+                let msg = party.create_message_v1(&mut rand::thread_rng())?;
+                Ok(VersionedDkgMessage::V1(msg))
+            }
+            _ => panic!("BUG: invalid DKG version"),
+        }
+    }
+
+    pub fn unwrap_v0(self) -> dkg_v0::Message<bls12381::G2Element, bls12381::G2Element> {
+        match self {
+            VersionedDkgMessage::V0(msg) => msg,
+            _ => panic!("BUG: expected V0 message"),
+        }
+    }
+
+    pub fn unwrap_v1(self) -> dkg_v1::Message<bls12381::G2Element, bls12381::G2Element> {
+        match self {
+            VersionedDkgMessage::V1(msg) => msg,
+            _ => panic!("BUG: expected V1 message"),
+        }
+    }
+}
+
+impl VersionedDkgConfimation {
+    pub fn sender(&self) -> u16 {
+        match self {
+            VersionedDkgConfimation::V0(msg) => msg.sender,
+            VersionedDkgConfimation::V1(msg) => msg.sender,
+        }
+    }
+
+    pub fn num_of_complaints(&self) -> usize {
+        match self {
+            VersionedDkgConfimation::V0(msg) => msg.complaints.len(),
+            VersionedDkgConfimation::V1(msg) => msg.complaints.len(),
+        }
+    }
+
+    pub fn unwrap_v0(&self) -> &dkg::Confirmation<bls12381::G2Element> {
+        match self {
+            VersionedDkgConfimation::V0(msg) => msg,
+            _ => panic!("BUG: expected V0 confirmation"),
+        }
+    }
+
+    pub fn unwrap_v1(&self) -> &dkg::Confirmation<bls12381::G2Element> {
+        match self {
+            VersionedDkgConfimation::V1(msg) => msg,
+            _ => panic!("BUG: expected V1 confirmation"),
+        }
+    }
+
+    pub fn expect_v1(self) -> Self {
+        match self {
+            VersionedDkgConfimation::V1(_) => self,
+            _ => panic!("BUG: expected V1 confirmation"),
+        }
+    }
+}
+
 impl ConsensusTransaction {
     pub fn new_certificate_message(
         authority: &AuthorityName,
@@ -266,9 +404,15 @@ impl ConsensusTransaction {
 
     pub fn new_randomness_dkg_message(
         authority: AuthorityName,
-        message: &dkg::Message<bls12381::G2Element, bls12381::G2Element>,
+        versioned_message: &VersionedDkgMessage,
     ) -> Self {
-        let message = bcs::to_bytes(message).expect("message serialization should not fail");
+        let message = match versioned_message {
+            VersionedDkgMessage::V0(msg) => {
+                // Old version does not use the enum, so we need to serialize it separately.
+                bcs::to_bytes(msg).expect("message serialization should not fail")
+            }
+            _ => bcs::to_bytes(versioned_message).expect("message serialization should not fail"),
+        };
         let mut hasher = DefaultHasher::new();
         message.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
@@ -277,13 +421,19 @@ impl ConsensusTransaction {
             kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, message),
         }
     }
-
     pub fn new_randomness_dkg_confirmation(
         authority: AuthorityName,
-        confirmation: &dkg::Confirmation<bls12381::G2Element>,
+        versioned_confirmation: &VersionedDkgConfimation,
     ) -> Self {
-        let confirmation =
-            bcs::to_bytes(confirmation).expect("message serialization should not fail");
+        let confirmation = match versioned_confirmation {
+            VersionedDkgConfimation::V0(msg) => {
+                // Old version does not use the enum, so we need to serialize it separately.
+                bcs::to_bytes(msg).expect("message serialization should not fail")
+            }
+            _ => bcs::to_bytes(versioned_confirmation)
+                .expect("message serialization should not fail"),
+        };
+
         let mut hasher = DefaultHasher::new();
         confirmation.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();

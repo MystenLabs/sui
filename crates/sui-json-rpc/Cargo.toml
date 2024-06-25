@@ -46,6 +46,7 @@ sui-json-rpc-api.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
 sui-protocol-config.workspace = true
+sui-config.workspace = true
 sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-transaction-builder.workspace = true

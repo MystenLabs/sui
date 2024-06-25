@@ -10,7 +10,7 @@ use prometheus::{
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 
-use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
+use crate::network::metrics::NetworkMetrics;
 
 // starts from 1μs, 50μs, 100μs...
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -19,9 +19,33 @@ const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
     4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
 ];
 
-const COMMITTED_BLOCKS_BUCKETS: &[f64] = &[
-    1.0, 2.0, 4.0, 8.0, 10.0, 20.0, 40.0, 80.0, 100.0, 150.0, 200.0, 400.0, 800.0, 1000.0, 2000.0,
+const NUM_BLOCKS_BUCKETS: &[f64] = &[
+    1.0,
+    2.0,
+    4.0,
+    8.0,
+    10.0,
+    20.0,
+    40.0,
+    80.0,
+    100.0,
+    150.0,
+    200.0,
+    400.0,
+    800.0,
+    1000.0,
+    2000.0,
     3000.0,
+    5000.0,
+    10000.0,
+    20000.0,
+    30000.0,
+    50000.0,
+    100_000.0,
+    200_000.0,
+    300_000.0,
+    500_000.0,
+    1_000_000.0,
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -54,22 +78,16 @@ const SIZE_BUCKETS: &[f64] = &[
 
 pub(crate) struct Metrics {
     pub(crate) node_metrics: NodeMetrics,
-    pub(crate) channel_metrics: ChannelMetrics,
     pub(crate) network_metrics: NetworkMetrics,
-    pub(crate) quinn_connection_metrics: QuinnConnectionMetrics,
 }
 
 pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     let node_metrics = NodeMetrics::new(&registry);
-    let channel_metrics = ChannelMetrics::new(&registry);
     let network_metrics = NetworkMetrics::new(&registry);
-    let quinn_connection_metrics = QuinnConnectionMetrics::new(&registry);
 
     Arc::new(Metrics {
         node_metrics,
-        channel_metrics,
         network_metrics,
-        quinn_connection_metrics,
     })
 }
 
@@ -83,13 +101,17 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) block_size: Histogram,
     pub(crate) block_ancestors: Histogram,
+    pub(crate) highest_verified_authority_round: IntGaugeVec,
+    pub(crate) lowest_verified_authority_round: IntGaugeVec,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
     pub(crate) block_proposal_leader_wait_count: IntCounterVec,
     pub(crate) block_timestamp_drift_wait_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
+    pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
+    pub(crate) highest_accepted_authority_round: IntGaugeVec,
     pub(crate) highest_accepted_round: IntGauge,
     pub(crate) accepted_blocks: IntCounterVec,
     pub(crate) dag_state_recent_blocks: IntGauge,
@@ -97,13 +119,17 @@ pub(crate) struct NodeMetrics {
     pub(crate) dag_state_store_read_count: IntCounterVec,
     pub(crate) dag_state_store_write_count: IntCounter,
     pub(crate) fetch_blocks_scheduler_inflight: IntGauge,
-    pub(crate) fetched_blocks: IntCounterVec,
+    pub(crate) synchronizer_fetched_blocks_by_peer: IntCounterVec,
+    pub(crate) synchronizer_fetched_blocks_by_authority: IntCounterVec,
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
     pub(crate) rejected_future_blocks: IntCounterVec,
+    pub(crate) subscribed_blocks: IntCounterVec,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
+    pub(crate) last_committed_authority_round: IntGaugeVec,
     pub(crate) last_committed_leader_round: IntGauge,
+    pub(crate) last_commit_index: IntGauge,
     pub(crate) commit_round_advancement_interval: Histogram,
     pub(crate) last_decided_leader_round: IntGauge,
     pub(crate) leader_timeout_total: IntCounterVec,
@@ -123,6 +149,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) threshold_clock_round: IntGauge,
     pub(crate) subscriber_connection_attempts: IntCounterVec,
     pub(crate) subscriber_connections: IntGaugeVec,
+    pub(crate) subscribed_peers: IntGaugeVec,
     pub(crate) commit_sync_inflight_fetches: IntGauge,
     pub(crate) commit_sync_pending_fetches: IntGauge,
     pub(crate) commit_sync_fetched_commits: IntCounter,
@@ -163,6 +190,18 @@ impl NodeMetrics {
                 exponential_buckets(1.0, 1.4, 20).unwrap(),
                 registry,
             ).unwrap(),
+            highest_verified_authority_round: register_int_gauge_vec_with_registry!(
+                "highest_verified_authority_round",
+                "The highest round of verified block for the corresponding authority",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            lowest_verified_authority_round: register_int_gauge_vec_with_registry!(
+                "lowest_verified_authority_round",
+                "The lowest round of verified block for the corresponding authority",
+                &["authority"],
+                registry,
+            ).unwrap(),
             block_proposal_leader_wait_ms: register_int_counter_vec_with_registry!(
                 "block_proposal_leader_wait_ms",
                 "Total time in ms spent waiting for a leader when proposing blocks.",
@@ -184,13 +223,19 @@ impl NodeMetrics {
             blocks_per_commit_count: register_histogram_with_registry!(
                 "blocks_per_commit_count",
                 "The number of blocks per commit.",
-                COMMITTED_BLOCKS_BUCKETS.to_vec(),
+                NUM_BLOCKS_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(
                 "broadcaster_rtt_estimate_ms",
                 "Estimated RTT latency per peer authority, for block sending in Broadcaster",
                 &["peer"],
+                registry,
+            ).unwrap(),
+            core_add_blocks_batch_size: register_histogram_with_registry!(
+                "core_add_blocks_batch_size",
+                "The number of blocks received from Core for processing on a single batch",
+                NUM_BLOCKS_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             core_lock_dequeued: register_int_counter_with_registry!(
@@ -201,6 +246,12 @@ impl NodeMetrics {
             core_lock_enqueued: register_int_counter_with_registry!(
                 "core_lock_enqueued",
                 "Number of enqueued core requests",
+                registry,
+            ).unwrap(),
+            highest_accepted_authority_round: register_int_gauge_vec_with_registry!(
+                "highest_accepted_authority_round",
+                "The highest round where a block has been accepted by author. Resets on restart.",
+                &["author"],
                 registry,
             ).unwrap(),
             highest_accepted_round: register_int_gauge_with_registry!(
@@ -240,9 +291,15 @@ impl NodeMetrics {
                 "Designates whether the synchronizer scheduler task to fetch blocks is currently running",
                 registry,
             ).unwrap(),
-            fetched_blocks: register_int_counter_vec_with_registry!(
-                "fetched_blocks",
-                "Number of fetched blocks per peer authority via the synchronizer.",
+            synchronizer_fetched_blocks_by_peer: register_int_counter_vec_with_registry!(
+                "synchronizer_fetched_blocks_by_peer",
+                "Number of fetched blocks per peer authority via the synchronizer and also by block authority",
+                &["peer", "type"],
+                registry,
+            ).unwrap(),
+            synchronizer_fetched_blocks_by_authority: register_int_counter_vec_with_registry!(
+                "synchronizer_fetched_blocks_by_authority",
+                "Number of fetched blocks per block author via the synchronizer",
                 &["authority", "type"],
                 registry,
             ).unwrap(),
@@ -265,6 +322,12 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
+            subscribed_blocks: register_int_counter_vec_with_registry!(
+                "subscribed_blocks",
+                "Number of blocks received from each peer before verification",
+                &["authority"],
+                registry,
+            ).unwrap(),
             verified_blocks: register_int_counter_vec_with_registry!(
                 "verified_blocks",
                 "Number of blocks received from each peer that are verified",
@@ -277,9 +340,20 @@ impl NodeMetrics {
                 &["authority", "commit_type"],
                 registry,
             ).unwrap(),
+            last_committed_authority_round: register_int_gauge_vec_with_registry!(
+                "last_committed_authority_round",
+                "The last round committed by authority.",
+                &["authority"],
+                registry,
+            ).unwrap(),
             last_committed_leader_round: register_int_gauge_with_registry!(
                 "last_committed_leader_round",
                 "The last round where a leader was committed to store and sent to commit consumer.",
+                registry,
+            ).unwrap(),
+            last_commit_index: register_int_gauge_with_registry!(
+                "last_commit_index",
+                "Index of the last commit.",
                 registry,
             ).unwrap(),
             commit_round_advancement_interval: register_histogram_with_registry!(
@@ -383,7 +457,13 @@ impl NodeMetrics {
             ).unwrap(),
             subscriber_connections: register_int_gauge_vec_with_registry!(
                 "subscriber_connections",
-                "The number of block stream connections broken down by peer",
+                "Peers that this authority subscribed to for block streams.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            subscribed_peers: register_int_gauge_vec_with_registry!(
+                "subscribed_peers",
+                "Peers subscribing for block streams from this authority.",
                 &["authority"],
                 registry,
             ).unwrap(),
@@ -445,67 +525,6 @@ impl NodeMetrics {
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
-        }
-    }
-}
-
-pub(crate) struct ChannelMetrics {
-    /// occupancy of the channel from TransactionClient to TransactionConsumer
-    pub(crate) tx_transactions_submit: IntGauge,
-    /// total received on channel from TransactionClient to TransactionConsumer
-    pub(crate) tx_transactions_submit_total: IntCounter,
-    /// occupancy of the CoreThread commands channel
-    pub(crate) core_thread: IntGauge,
-    /// total received on the CoreThread commands channel
-    pub(crate) core_thread_total: IntCounter,
-}
-
-impl ChannelMetrics {
-    pub(crate) fn new(registry: &Registry) -> Self {
-        Self {
-            tx_transactions_submit: register_int_gauge_with_registry!(
-                "tx_transactions_submit",
-                "occupancy of the channel from the `TransactionClient` to the `TransactionConsumer`",
-                registry
-            ).unwrap(),
-            tx_transactions_submit_total: register_int_counter_with_registry!(
-                "tx_transactions_submit_total",
-                "total received on channel from the `TransactionClient` to the `TransactionConsumer`",
-                registry
-            ).unwrap(),
-            core_thread: register_int_gauge_with_registry!(
-                "core_thread",
-                "occupancy of the `CoreThread` commands channel",
-                registry
-            ).unwrap(),
-            core_thread_total: register_int_counter_with_registry!(
-                "core_thread_total",
-                "total received on the `CoreThread` commands channel",
-                registry
-            ).unwrap(),
-        }
-    }
-}
-
-// Fields for network-agnostic metrics can be added here
-pub(crate) struct NetworkMetrics {
-    pub(crate) network_type: IntGaugeVec,
-    pub(crate) inbound: NetworkRouteMetrics,
-    pub(crate) outbound: NetworkRouteMetrics,
-}
-
-impl NetworkMetrics {
-    pub(crate) fn new(registry: &Registry) -> Self {
-        Self {
-            network_type: register_int_gauge_vec_with_registry!(
-                "network_type",
-                "Type of the network used: anemo or tonic",
-                &["type"],
-                registry
-            )
-            .unwrap(),
-            inbound: NetworkRouteMetrics::new("inbound", registry),
-            outbound: NetworkRouteMetrics::new("outbound", registry),
         }
     }
 }

@@ -23,7 +23,7 @@ Error: Transaction Effects Status: The shared object operation is not allowed.
 Debug of error: SharedObjectOperationNotAllowed at command None
 
 task 5 'view-object'. lines 81-81:
-Owner: Shared
+Owner: Shared( 3 )
 Version: 4
 Contents: test::m::Child {
     id: sui::object::UID {
@@ -39,7 +39,7 @@ Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_fi
 Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) at command Some(0)
 
 task 7 'view-object'. lines 85-85:
-Owner: Shared
+Owner: Shared( 3 )
 Version: 4
 Contents: test::m::Child {
     id: sui::object::UID {

@@ -4,7 +4,6 @@
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_core::authority::EffectsNotifyRead;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
@@ -69,8 +68,8 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     // Wait for data sync to catch up
     handle
         .state()
-        .get_effects_notify_read()
-        .notify_read_executed_effects(vec![digest])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
 
@@ -112,8 +111,8 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     {
         use sui_core::authority::{init_checkpoint_timeout_config, CheckpointTimeoutConfig};
         init_checkpoint_timeout_config(CheckpointTimeoutConfig {
-            timeout: Duration::from_secs(2),
-            panic_on_timeout: false,
+            warning_timeout: Duration::from_secs(2),
+            panic_timeout: None,
         });
     }
     telemetry_subscribers::init_for_testing();

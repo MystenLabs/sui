@@ -257,6 +257,33 @@ pub enum UserInputError {
 
     #[error("Commands following a command with Random can only be TransferObjects or MergeCoins")]
     PostRandomCommandRestrictions,
+
+    // Soft Bundle related errors
+    #[error(
+        "Number of transactions exceeds the maximum allowed ({:?}) in a Soft Bundle",
+        limit
+    )]
+    TooManyTransactionsInSoftBundle { limit: u64 },
+    #[error("Transaction {:?} in Soft Bundle contains no shared objects", digest)]
+    NoSharedObjectError { digest: TransactionDigest },
+    #[error("Transaction {:?} in Soft Bundle has already been executed", digest)]
+    AlreadyExecutedError { digest: TransactionDigest },
+    #[error("At least one certificate in Soft Bundle has already been processed")]
+    CeritificateAlreadyProcessed,
+    #[error(
+        "Gas price for transaction {:?} in Soft Bundle mismatch: want {:?}, have {:?}",
+        digest,
+        expected,
+        actual
+    )]
+    GasPriceMismatchError {
+        digest: TransactionDigest,
+        expected: u64,
+        actual: u64,
+    },
+
+    #[error("Coin type is globally paused for use: {coin_type}")]
+    CoinTypeGlobalPause { coin_type: String },
 }
 
 #[derive(
@@ -332,6 +359,9 @@ pub enum SuiError {
         threshold: u64,
     },
 
+    #[error("Soft bundle must only contain transactions of UserTransaction kind")]
+    InvalidTxKindInSoftBundle,
+
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
@@ -404,6 +434,8 @@ pub enum SuiError {
 
     #[error("Invalid digest length. Expected {expected}, got {actual}")]
     InvalidDigestLength { expected: usize, actual: usize },
+    #[error("Invalid DKG message size")]
+    InvalidDkgMessageSize,
 
     #[error("Unexpected message.")]
     UnexpectedMessage,
@@ -624,6 +656,9 @@ pub enum SuiError {
 
     #[error("Too many requests")]
     TooManyRequests,
+
+    #[error("The request did not contain a certificate")]
+    NoCertificateProvidedError,
 }
 
 #[repr(u64)]

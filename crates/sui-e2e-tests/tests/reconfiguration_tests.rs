@@ -6,10 +6,9 @@ use rand::rngs::OsRng;
 use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_macros::{register_fail_point_arg, sim_test};
+use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
@@ -264,7 +263,7 @@ async fn test_passive_reconfig_determinism() {
 async fn do_test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
     let _commit_root_state_digest = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_commit_root_state_digest_supported(true);
+        config.set_commit_root_state_digest_supported_for_testing(true);
         config
     });
     ProtocolConfig::poison_get_for_min_version();
@@ -301,21 +300,6 @@ async fn do_test_passive_reconfig() {
 // Test for syncing a node to an authority that already has many txes.
 #[sim_test]
 async fn test_expired_locks() {
-    do_test_lock_table_upgrade().await
-}
-
-#[sim_test]
-async fn test_expired_locks_with_lock_table_upgrade() {
-    register_fail_point_arg("initial_epoch_flags", || {
-        Some(vec![
-            EpochFlag::InMemoryCheckpointRoots,
-            EpochFlag::PerEpochFinalizedTransactions,
-        ])
-    });
-    do_test_lock_table_upgrade().await
-}
-
-async fn do_test_lock_table_upgrade() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .build()
@@ -677,6 +661,8 @@ async fn do_test_reconfig_with_committee_change_stress() {
         .build()
         .await;
 
+    let mut cur_epoch = 0;
+
     while let Some(v1) = candidates.pop() {
         let v2 = candidates.pop().unwrap();
         execute_add_validator_transactions(&test_cluster, &v1).await;
@@ -703,11 +689,18 @@ async fn do_test_reconfig_with_committee_change_stress() {
         }
         let handle1 = test_cluster.spawn_new_validator(v1).await;
         let handle2 = test_cluster.spawn_new_validator(v2).await;
+
+        tokio::join!(
+            test_cluster.wait_for_epoch_on_node(&handle1, Some(cur_epoch), Duration::from_secs(60)),
+            test_cluster.wait_for_epoch_on_node(&handle2, Some(cur_epoch), Duration::from_secs(60))
+        );
+
         test_cluster.trigger_reconfiguration().await;
         let committee = test_cluster
             .fullnode_handle
             .sui_node
             .with(|node| node.state().epoch_store_for_testing().committee().clone());
+        cur_epoch = committee.epoch();
         assert_eq!(committee.num_members(), 7);
         assert!(committee.authority_exists(&handle1.state().name));
         assert!(committee.authority_exists(&handle2.state().name));
@@ -715,6 +708,72 @@ async fn do_test_reconfig_with_committee_change_stress() {
             .iter()
             .all(|v| !committee.authority_exists(v));
     }
+}
+
+#[cfg(msim)]
+#[sim_test]
+async fn test_epoch_flag_upgrade() {
+    use std::any;
+
+    use std::sync::Mutex;
+    use sui_core::authority::epoch_start_configuration::EpochFlag;
+    use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
+    use sui_macros::register_fail_point_arg;
+
+    let initial_flags_nodes = Arc::new(Mutex::new(HashSet::new()));
+    register_fail_point_arg("initial_epoch_flags", move || {
+        // only alter flags on each node once
+        let current_node = sui_simulator::current_simnode_id();
+
+        // override flags on up to 2 nodes.
+        let mut initial_flags_nodes = initial_flags_nodes.lock().unwrap();
+        if initial_flags_nodes.len() >= 2 || !initial_flags_nodes.insert(current_node) {
+            return None;
+        }
+
+        // start with no flags set
+        Some(Vec::<EpochFlag>::new())
+    });
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(30000)
+        .build()
+        .await;
+
+    let mut any_empty = false;
+    for node in test_cluster.all_node_handles() {
+        any_empty = any_empty
+            || node.with(|node| {
+                node.state()
+                    .epoch_store_for_testing()
+                    .epoch_start_config()
+                    .flags()
+                    .is_empty()
+            });
+    }
+    assert!(any_empty);
+
+    test_cluster.wait_for_epoch_all_nodes(1).await;
+
+    let mut any_empty = false;
+    for node in test_cluster.all_node_handles() {
+        any_empty = any_empty
+            || node.with(|node| {
+                node.state()
+                    .epoch_store_for_testing()
+                    .epoch_start_config()
+                    .flags()
+                    .is_empty()
+            });
+    }
+    assert!(!any_empty);
+
+    sleep(Duration::from_secs(15)).await;
+
+    test_cluster.stop_all_validators().await;
+    test_cluster.start_all_validators().await;
+
+    test_cluster.wait_for_epoch_all_nodes(2).await;
 }
 
 #[cfg(msim)]

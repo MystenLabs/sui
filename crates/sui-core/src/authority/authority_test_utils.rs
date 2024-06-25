@@ -88,7 +88,8 @@ pub async fn execute_certificate_with_execution_error(
     // for testing and regression detection.
     // We must do this before sending to consensus, otherwise consensus may already
     // lead to transaction execution and state change.
-    let state_acc = StateAccumulator::new(authority.execution_cache.clone());
+    let state_acc =
+        StateAccumulator::new_for_tests(authority.get_accumulator_store().clone(), &epoch_store);
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()
@@ -373,7 +374,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
         .process_consensus_transactions_for_tests(
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &authority.metrics,
             true,
         )
@@ -397,7 +398,7 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
         .process_consensus_transactions_for_tests(
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &authority.metrics,
             true,
         )
@@ -427,7 +428,7 @@ pub async fn send_batch_consensus_no_execution(
         .process_consensus_transactions_for_tests(
             transactions,
             &Arc::new(CheckpointServiceNoop {}),
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &authority.metrics,
             skip_consensus_commit_prologue_in_test,
         )
@@ -436,7 +437,7 @@ pub async fn send_batch_consensus_no_execution(
 }
 
 pub fn build_test_modules_with_dep_addr(
-    path: PathBuf,
+    path: &Path,
     dep_original_addresses: impl IntoIterator<Item = (&'static str, ObjectID)>,
     dep_ids: impl IntoIterator<Item = (&'static str, ObjectID)>,
 ) -> CompiledPackage {
@@ -478,7 +479,7 @@ pub fn build_test_modules_with_dep_addr(
 /// must be the original IDs of names.
 /// dep_ids are the IDs of the dependencies of the package, in the latest version (if there were upgrades).
 pub async fn publish_package_on_single_authority(
-    path: PathBuf,
+    path: &Path,
     sender: SuiAddress,
     sender_key: &dyn Signer<Signature>,
     gas_payment: ObjectRef,
@@ -531,7 +532,7 @@ pub async fn publish_package_on_single_authority(
 }
 
 pub async fn upgrade_package_on_single_authority(
-    path: PathBuf,
+    path: &Path,
     sender: SuiAddress,
     sender_key: &dyn Signer<Signature>,
     gas_payment: ObjectRef,

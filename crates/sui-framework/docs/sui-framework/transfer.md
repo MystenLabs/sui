@@ -56,7 +56,7 @@ Internals of this struct are opaque outside this module.
 
 </dd>
 <dt>
-<code>version: u64</code>
+<code>version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -76,7 +76,7 @@ Internals of this struct are opaque outside this module.
 Serialization of the object failed.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/transfer.md#0x2_transfer_EBCSSerializationFailure">EBCSSerializationFailure</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/transfer.md#0x2_transfer_EBCSSerializationFailure">EBCSSerializationFailure</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -86,7 +86,7 @@ Serialization of the object failed.
 The object being received is not of the expected type.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/transfer.md#0x2_transfer_EReceivingObjectTypeMismatch">EReceivingObjectTypeMismatch</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui-framework/transfer.md#0x2_transfer_EReceivingObjectTypeMismatch">EReceivingObjectTypeMismatch</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -97,7 +97,7 @@ Shared an object that was previously created. Shared objects must currently
 be constructed in the transaction they are created.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/transfer.md#0x2_transfer_ESharedNonNewObject">ESharedNonNewObject</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/transfer.md#0x2_transfer_ESharedNonNewObject">ESharedNonNewObject</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -107,7 +107,7 @@ be constructed in the transaction they are created.
 Shared object operations such as wrapping, freezing, and converting to owned are not allowed.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/transfer.md#0x2_transfer_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../sui-framework/transfer.md#0x2_transfer_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
@@ -118,7 +118,7 @@ Represents both the case where the object does not exist and the case where the 
 able to be accessed through the parent that is passed-in.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/transfer.md#0x2_transfer_EUnableToReceiveObject">EUnableToReceiveObject</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../sui-framework/transfer.md#0x2_transfer_EUnableToReceiveObject">EUnableToReceiveObject</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -462,7 +462,7 @@ Return the object ID that the given <code><a href="../sui-framework/transfer.md#
 
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>&lt;T: key&gt;(parent: <b>address</b>, to_receive: <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>, version: u64): T
+<pre><code><b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>&lt;T: key&gt;(parent: <b>address</b>, to_receive: <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>, version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): T
 </code></pre>
 
 
@@ -471,7 +471,7 @@ Return the object ID that the given <code><a href="../sui-framework/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>&lt;T: key&gt;(parent: <b>address</b>, to_receive: ID, version: u64): T;
+<pre><code><b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>&lt;T: key&gt;(parent: <b>address</b>, to_receive: ID, version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): T;
 </code></pre>
 
 

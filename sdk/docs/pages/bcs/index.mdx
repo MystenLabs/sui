@@ -196,7 +196,7 @@ import { bcs, BcsType } from '@mysten/bcs';
 
 // The T typescript generic is a placeholder for the typescript type of the generic value
 // The T argument will be the bcs type passed in when creating a concrete instance of the Container type
-function Container<T>(T: BcsType<T>) {
+function Container<T extends BcsType<any>>(T: T) {
 	return bcs.struct('Container<T>', {
 		contents: T,
 	}),
@@ -210,7 +210,7 @@ const U8Container = Container(bcs.u8());
 const bytes = U8Container.serialize({ contents: 100 }).toBytes();
 
 // Using multiple generics
-function VecMap<K, V>(K: BcsType<K>, V: BcsType<V>) {
+function VecMap<K extends BcsType<any>, V extends BcsType<any>>(K: K, V: V) {
 	// You can use the names of the generic params in the type name to
 	return bcs.struct(
 		// You can use the names of the generic params to give your type a more useful name
@@ -258,7 +258,7 @@ when calling `serialize`. The `output` type can generally be inferred from the d
 input type will need to be provided explicitly. In some cases, for complex transforms, you'll need
 to manually type the return
 
-transforms can also handle more complex types. For instance, `@mysten/sui.js` uses the following
+transforms can also handle more complex types. For instance, `@mysten/sui` uses the following
 definition to transform enums into a more TypeScript friends format:
 
 ```ts

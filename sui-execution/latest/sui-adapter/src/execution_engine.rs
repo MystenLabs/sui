@@ -26,10 +26,12 @@ mod checked {
     use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
     use tracing::{info, instrument, trace, warn};
 
+    use crate::adapter::new_move_vm;
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_core_types::ident_str;
+    use sui_move_natives::all_natives;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
@@ -43,7 +45,7 @@ mod checked {
     };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
-    use sui_types::deny_list::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
+    use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
     use sui_types::digests::{
         get_mainnet_chain_identifier, get_testnet_chain_identifier, ChainIdentifier,
     };
@@ -114,6 +116,7 @@ mod checked {
             receiving_objects,
             transaction_digest,
             protocol_config,
+            *epoch_id,
         );
 
         let mut gas_charger =
@@ -246,6 +249,7 @@ mod checked {
             vec![],
             tx_context.digest(),
             protocol_config,
+            0,
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
@@ -601,6 +605,19 @@ mod checked {
                 .expect("ConsensusCommitPrologueV2 cannot fail");
                 Ok(Mode::empty_results())
             }
+            TransactionKind::ConsensusCommitPrologueV3(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologueV3 cannot fail");
+                Ok(Mode::empty_results())
+            }
             TransactionKind::ProgrammableTransaction(pt) => {
                 programmable_transactions::execution::execute::<Mode>(
                     protocol_config,
@@ -647,7 +664,7 @@ mod checked {
                             builder = setup_randomness_state_create(builder);
                         }
                         EndOfEpochTransactionKind::DenyListStateCreate => {
-                            assert!(protocol_config.enable_coin_deny_list());
+                            assert!(protocol_config.enable_coin_deny_list_v1());
                             builder = setup_coin_deny_list_state_create(builder);
                         }
                         EndOfEpochTransactionKind::BridgeStateCreate(chain_id) => {
@@ -890,6 +907,45 @@ mod checked {
             }
         }
 
+        if protocol_config.fresh_vm_on_framework_upgrade() {
+            let new_vm = new_move_vm(
+                all_natives(/* silent */ true),
+                protocol_config,
+                /* enable_profiler */ None,
+            )
+            .expect("Failed to create new MoveVM");
+            process_system_packages(
+                change_epoch,
+                temporary_store,
+                tx_ctx,
+                &new_vm,
+                gas_charger,
+                protocol_config,
+                metrics,
+            );
+        } else {
+            process_system_packages(
+                change_epoch,
+                temporary_store,
+                tx_ctx,
+                move_vm,
+                gas_charger,
+                protocol_config,
+                metrics,
+            );
+        }
+        Ok(())
+    }
+
+    fn process_system_packages(
+        change_epoch: ChangeEpoch,
+        temporary_store: &mut TemporaryStore<'_>,
+        tx_ctx: &mut TxContext,
+        move_vm: &MoveVM,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) {
         let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
@@ -942,8 +998,6 @@ mod checked {
                 temporary_store.upgrade_system_package(new_package);
             }
         }
-
-        Ok(())
     }
 
     /// Perform metadata updates in preparation for the transactions in the upcoming checkpoint:

@@ -80,7 +80,8 @@ pub async fn send_and_confirm_transaction(
     //
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection
-    let state_acc = StateAccumulator::new(authority.get_execution_cache().clone());
+    let state_acc =
+        StateAccumulator::new_for_tests(authority.get_accumulator_store().clone(), &epoch_store);
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()
@@ -125,7 +126,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
         state
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .notify_read_executed_effects(&[digest]),
     )
     .await
@@ -142,7 +143,7 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
         state
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .notify_read_executed_effects(&digests),
     )
     .await
@@ -201,7 +202,7 @@ pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push(relative_path);
 
-    BuildConfig::new_for_testing().build(path).unwrap()
+    BuildConfig::new_for_testing().build(&path).unwrap()
 }
 
 async fn init_genesis(

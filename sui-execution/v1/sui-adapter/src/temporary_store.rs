@@ -93,8 +93,12 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     pub fn update_object_version_and_prev_tx(&mut self) {
-        self.execution_results
-            .update_version_and_previous_tx(self.lamport_timestamp, self.tx_digest);
+        self.execution_results.update_version_and_previous_tx(
+            self.lamport_timestamp,
+            self.tx_digest,
+            &self.input_objects,
+            false,
+        );
 
         #[cfg(debug_assertions)]
         {
@@ -1107,6 +1111,13 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         _wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     ) {
         unreachable!("Unused in v1")
+    }
+
+    fn check_coin_deny_list(
+        &self,
+        _written_objects: &BTreeMap<ObjectID, Object>,
+    ) -> Result<(), ExecutionError> {
+        unreachable!("Coin denylist v2 is not supported in sui-execution v1");
     }
 }
 

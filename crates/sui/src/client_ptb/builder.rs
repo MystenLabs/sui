@@ -20,9 +20,11 @@ use move_command_line_common::{
     address::{NumericalAddress, ParsedAddress},
     parser::NumberFormat,
 };
-use move_core_types::{account_address::AccountAddress, ident_str, runtime_value::MoveValue};
+use move_core_types::{
+    account_address::AccountAddress, annotated_value::MoveTypeLayout, ident_str,
+};
 use move_package::BuildConfig;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
 use sui_sdk::apis::ReadApi;
@@ -59,9 +61,10 @@ trait Resolver<'a>: Send {
         &mut self,
         builder: &mut PTBBuilder<'a>,
         loc: Span,
-        val: MoveValue,
+        argument: PTBArg,
     ) -> PTBResult<Tx::Argument> {
-        builder.ptb.pure(val).map_err(|e| err!(loc, "{e}"))
+        let value = argument.to_pure_move_value(loc)?;
+        builder.ptb.pure(value).map_err(|e| err!(loc, "{e}"))
     }
 
     async fn resolve_object_id(
@@ -147,10 +150,34 @@ impl<'a> Resolver<'a> for ToObject {
 }
 
 /// A resolver that resolves object IDs that it encounters to pure PTB values.
-struct ToPure;
+struct ToPure {
+    type_: TypeTag,
+}
+
+impl ToPure {
+    pub fn new(type_: TypeTag) -> Self {
+        Self { type_ }
+    }
+
+    pub fn new_from_layout(layout: MoveTypeLayout) -> Self {
+        Self {
+            type_: TypeTag::from(&layout),
+        }
+    }
+}
 
 #[async_trait]
 impl<'a> Resolver<'a> for ToPure {
+    async fn pure(
+        &mut self,
+        builder: &mut PTBBuilder<'a>,
+        loc: Span,
+        argument: PTBArg,
+    ) -> PTBResult<Tx::Argument> {
+        let value = argument.checked_to_pure_move_value(loc, &self.type_)?;
+        builder.ptb.pure(value).map_err(|e| err!(loc, "{e}"))
+    }
+
     async fn resolve_object_id(
         &mut self,
         builder: &mut PTBBuilder<'a>,
@@ -415,12 +442,14 @@ impl<'a> PTBBuilder<'a> {
         sp!(loc, arg): Spanned<PTBArg>,
         param: &SignatureToken,
     ) -> PTBResult<Tx::Argument> {
-        let (is_primitive, _) = primitive_type(view, ty_args, param);
+        let (is_primitive, layout) = primitive_type(view, ty_args, param);
 
         // If it's a primitive value, see if we've already resolved this argument. Otherwise, we
         // need to resolve it.
         if is_primitive {
-            return self.resolve(loc.wrap(arg), ToPure).await;
+            return self
+                .resolve(loc.wrap(arg), ToPure::new_from_layout(layout.unwrap()))
+                .await;
         }
 
         // Otherwise it's ambiguous what the value should be, and we need to turn to the signature
@@ -433,7 +462,7 @@ impl<'a> PTBBuilder<'a> {
         // and also determine if it's a receiving argument or not.
         for tok in param.preorder_traversal() {
             match tok {
-                SignatureToken::Struct(..) | SignatureToken::StructInstantiation(..) => {
+                SignatureToken::Datatype(..) | SignatureToken::DatatypeInstantiation(..) => {
                     is_receiving |= is_receiving_argument(view, tok);
                 }
                 SignatureToken::TypeParameter(idx) => {
@@ -602,12 +631,10 @@ impl<'a> PTBBuilder<'a> {
             | PTBArg::U64(_)
             | PTBArg::U128(_)
             | PTBArg::U256(_)
+            | PTBArg::InferredNum(_)
             | PTBArg::String(_)
             | PTBArg::Option(_)
-            | PTBArg::Vector(_)) => {
-                ctx.pure(self, arg_loc, a.to_pure_move_value(arg_loc)?)
-                    .await
-            }
+            | PTBArg::Vector(_)) => ctx.pure(self, arg_loc, a).await,
             PTBArg::Gas => Ok(Tx::Argument::GasCoin),
             // NB: the ordering of these lines is important so that shadowing is properly
             // supported.
@@ -766,7 +793,9 @@ impl<'a> PTBBuilder<'a> {
         // let sp!(cmd_span, tok) = &command.name;
         match command {
             ParsedPTBCommand::TransferObjects(obj_args, to_address) => {
-                let to_arg = self.resolve(to_address, ToPure).await?;
+                let to_arg = self
+                    .resolve(to_address, ToPure::new(TypeTag::Address))
+                    .await?;
                 let mut transfer_args = vec![];
                 for o in obj_args.value.into_iter() {
                     let arg = self.resolve(o, ToObject::default()).await?;
@@ -804,7 +833,7 @@ impl<'a> PTBBuilder<'a> {
                 let mut vec_args: Vec<Tx::Argument> = vec![];
                 if is_primitive_type_tag(&ty_arg) {
                     for arg in args.into_iter() {
-                        let arg = self.resolve(arg, ToPure).await?;
+                        let arg = self.resolve(arg, ToPure::new(ty_arg.clone())).await?;
                         vec_args.push(arg);
                     }
                 } else {
@@ -822,7 +851,7 @@ impl<'a> PTBBuilder<'a> {
                 let coin = self.resolve(pre_coin, ToObject::default()).await?;
                 let mut args = vec![];
                 for arg in amounts.into_iter() {
-                    let arg = self.resolve(arg, ToPure).await?;
+                    let arg = self.resolve(arg, ToPure::new(TypeTag::U64)).await?;
                     args.push(arg);
                 }
                 let res = self.ptb.command(Tx::Command::SplitCoins(coin, args));
@@ -900,7 +929,7 @@ impl<'a> PTBBuilder<'a> {
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     self.reader,
                     BuildConfig::default(),
-                    PathBuf::from(package_path),
+                    Path::new(&package_path),
                     false, /* with_unpublished_dependencies */
                     false, /* skip_dependency_verification */
                 )
@@ -941,7 +970,7 @@ impl<'a> PTBBuilder<'a> {
                     upgrade_package(
                         self.reader,
                         BuildConfig::default(),
-                        PathBuf::from(package_path),
+                        Path::new(&package_path),
                         ObjectID::from_address(upgrade_cap_id.into_inner()),
                         false, /* with_unpublished_dependencies */
                         false, /* skip_dependency_verification */

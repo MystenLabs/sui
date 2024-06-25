@@ -12,7 +12,7 @@ pub(crate) use write_api::WriteApi;
 
 mod coin_api;
 mod extended_api;
-mod governance_api;
+pub mod governance_api;
 mod indexer_api;
 mod move_utils;
 mod read_api;

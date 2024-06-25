@@ -36,6 +36,7 @@ parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 roaring.workspace = true
+rayon.workspace = true
 rocksdb.workspace = true
 reqwest.workspace = true
 scopeguard.workspace = true
@@ -86,6 +87,7 @@ sui-framework.workspace = true
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true
 sui-json-rpc-types.workspace = true
+sui-rest-api.workspace = true
 sui-macros.workspace = true
 sui-move-build.workspace = true
 sui-network.workspace = true
@@ -95,6 +97,7 @@ sui-simulator.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 zeroize.workspace = true
+nonempty.workspace = true
 
 [dev-dependencies]
 clap.workspace = true
@@ -103,6 +106,7 @@ expect-test.workspace = true
 fs_extra.workspace = true
 more-asserts.workspace = true
 pretty_assertions.workspace = true
+rstest.workspace = true
 serde-reflection.workspace = true
 serde_yaml.workspace = true
 num-bigint = "0.4.4"
@@ -112,6 +116,7 @@ move-symbol-pool.workspace = true
 
 sui-test-transaction-builder.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
+sui-move.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
 pprof.workspace = true

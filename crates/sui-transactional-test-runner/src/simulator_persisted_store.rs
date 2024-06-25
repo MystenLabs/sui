@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::language_storage::StructTag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use simulacrum::Simulacrum;
 use std::num::NonZeroUsize;
@@ -12,7 +13,7 @@ use sui_config::genesis;
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::storage::ReadStore;
+use sui_types::storage::{ReadStore, RestStateReader};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
@@ -701,6 +702,59 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     ) -> sui_types::storage::error::Result<
         Option<sui_types::messages_checkpoint::FullCheckpointContents>,
     > {
+        todo!()
+    }
+}
+
+impl RestStateReader for PersistedStoreInnerReadOnlyWrapper {
+    fn get_transaction_checkpoint(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
+        todo!()
+    }
+
+    fn get_lowest_available_checkpoint_objects(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        Ok(0)
+    }
+
+    fn get_chain_identifier(
+        &self,
+    ) -> sui_types::storage::error::Result<sui_types::digests::ChainIdentifier> {
+        Ok((*self
+            .get_checkpoint_by_sequence_number(0)
+            .unwrap()
+            .unwrap()
+            .digest())
+        .into())
+    }
+
+    fn account_owned_objects_info_iter(
+        &self,
+        _owner: SuiAddress,
+        _cursor: Option<ObjectID>,
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = sui_types::storage::AccountOwnedObjectInfo> + '_>,
+    > {
+        todo!()
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        _parent: ObjectID,
+        _cursor: Option<ObjectID>,
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = sui_types::storage::RestDynamicFieldInfo> + '_>,
+    > {
+        todo!()
+    }
+
+    fn get_coin_info(
+        &self,
+        _coin_type: &StructTag,
+    ) -> sui_types::storage::error::Result<Option<sui_types::storage::CoinInfo>> {
         todo!()
     }
 }

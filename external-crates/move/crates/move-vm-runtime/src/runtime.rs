@@ -29,7 +29,7 @@ use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
-    loaded_data::runtime_types::{CachedStructIndex, StructType, Type},
+    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
     values::{Locals, Reference, VMValueCast, Value},
 };
 use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};
@@ -61,7 +61,7 @@ impl VMRuntime {
     ) -> Session<'r, '_, S> {
         Session {
             runtime: self,
-            data_cache: TransactionDataCache::new(remote, &self.loader),
+            data_cache: TransactionDataCache::new(remote),
             native_extensions,
         }
     }
@@ -452,8 +452,8 @@ impl VMRuntime {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
-    pub fn get_struct_type(&self, index: CachedStructIndex) -> Option<Arc<StructType>> {
-        self.loader.get_struct_type(index)
+    pub fn get_type(&self, index: CachedTypeIndex) -> Option<Arc<CachedDatatype>> {
+        self.loader.get_type(index)
     }
 
     pub fn type_to_type_layout(&self, ty: &Type) -> VMResult<MoveTypeLayout> {
@@ -462,14 +462,14 @@ impl VMRuntime {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
-    pub fn load_struct(
+    pub fn load_type(
         &self,
         module_id: &ModuleId,
         struct_name: &IdentStr,
         data_store: &impl DataStore,
-    ) -> VMResult<(CachedStructIndex, Arc<StructType>)> {
+    ) -> VMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         self.loader
-            .load_struct_by_name(struct_name, module_id, data_store)
+            .load_type_by_name(struct_name, module_id, data_store)
     }
 
     pub fn execute_function_bypass_visibility(

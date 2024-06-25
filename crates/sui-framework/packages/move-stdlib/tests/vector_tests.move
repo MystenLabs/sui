@@ -5,29 +5,27 @@
 
 #[test_only]
 module std::vector_tests {
-    use std::vector;
-
     public struct R has store { }
     public struct Droppable has drop {}
     public struct NotDroppable {}
 
     #[test]
     fun test_singleton_contains() {
-        assert!(vector[0][0] == 0, 0);
-        assert!(vector[true][0] == true, 0);
-        assert!(vector[@0x1][0] == @0x1, 0);
+        assert!(vector[0][0] == 0);
+        assert!(vector[true][0] == true);
+        assert!(vector[@0x1][0] == @0x1);
     }
 
     #[test]
     fun test_singleton_len() {
-        assert!(&vector[0].length() == 1, 0);
-        assert!(&vector[true].length() == 1, 0);
-        assert!(&vector[@0x1].length() == 1, 0);
+        assert!(&vector[0].length() == 1);
+        assert!(&vector[true].length() == 1);
+        assert!(&vector[@0x1].length() == 1);
     }
 
     #[test]
     fun test_empty_is_empty() {
-        assert!(vector<u64>[].is_empty(), 0);
+        assert!(vector<u64>[].is_empty());
     }
 
     #[test]
@@ -35,7 +33,7 @@ module std::vector_tests {
         let mut v1 = vector<u64>[];
         let v2 = vector<u64>[];
         v1.append(v2);
-        assert!(v1.is_empty(), 0);
+        assert!(v1.is_empty());
     }
 
     #[test]
@@ -47,12 +45,12 @@ module std::vector_tests {
         v2.push_back(2);
         v2.push_back(3);
         v1.append(v2);
-        assert!(!v1.is_empty(), 0);
-        assert!(v1.length() == 4, 1);
-        assert!(v1[0] == 0, 2);
-        assert!(v1[1] == 1, 3);
-        assert!(v1[2] == 2, 4);
-        assert!(v1[3] == 3, 5);
+        assert!(!v1.is_empty());
+        assert!(v1.length() == 4);
+        assert!(v1[0] == 0);
+        assert!(v1[1] == 1);
+        assert!(v1[2] == 2);
+        assert!(v1[3] == 3);
     }
 
     #[test]
@@ -64,12 +62,12 @@ module std::vector_tests {
         v1.push_back(2);
         v1.push_back(3);
         v1.append(v2);
-        assert!(!v1.is_empty(), 0);
-        assert!(v1.length() == 4, 1);
-        assert!(v1[0] == 0, 2);
-        assert!(v1[1] == 1, 3);
-        assert!(v1[2] == 2, 4);
-        assert!(v1[3] == 3, 5);
+        assert!(!v1.is_empty());
+        assert!(v1.length() == 4);
+        assert!(v1[0] == 0);
+        assert!(v1[1] == 1);
+        assert!(v1[2] == 2);
+        assert!(v1[3] == 3);
     }
 
     #[test]
@@ -85,8 +83,8 @@ module std::vector_tests {
         v2.push_back(6);
         v2.push_back(7);
         v1.append(v2);
-        assert!(!v1.is_empty(), 0);
-        assert!(v1.length() == 8, 1);
+        assert!(!v1.is_empty());
+        assert!(v1.length() == 8);
         let mut i = 0;
         while (i < 8) {
             assert!(v1[i] == i, i);
@@ -105,22 +103,22 @@ module std::vector_tests {
     #[test]
     fun vector_contains() {
         let mut vec = vector[];
-        assert!(!vec.contains(&0), 1);
+        assert!(!vec.contains(&0));
 
         vec.push_back(0);
-        assert!(vec.contains(&0), 2);
-        assert!(!vec.contains(&1), 3);
+        assert!(vec.contains(&0));
+        assert!(!vec.contains(&1));
 
         vec.push_back(1);
-        assert!(vec.contains(&0), 4);
-        assert!(vec.contains(&1), 5);
-        assert!(!vec.contains(&2), 6);
+        assert!(vec.contains(&0));
+        assert!(vec.contains(&1));
+        assert!(!vec.contains(&2));
 
         vec.push_back(2);
-        assert!(vec.contains(&0), 7);
-        assert!(vec.contains(&1), 8);
-        assert!(vec.contains(&2), 9);
-        assert!(!vec.contains(&3), 10);
+        assert!(vec.contains(&0));
+        assert!(vec.contains(&1));
+        assert!(vec.contains(&2));
+        assert!(!vec.contains(&3));
     }
 
     #[test]
@@ -152,12 +150,12 @@ module std::vector_tests {
         let mut vec = vector[];
         vec.push_back(0);
         vec.push_back(1);
-        assert!(vec[1] == 1, 0);
-        assert!(vec[0] == 0, 1);
+        assert!(vec[1] == 1);
+        assert!(vec[0] == 0);
 
         *&mut vec[0] = 17;
-        assert!(vec[1] == 1, 0);
-        assert!(vec[0] == 17, 0);
+        assert!(vec[1] == 1);
+        assert!(vec[0] == 17);
     }
 
     #[test]
@@ -176,10 +174,10 @@ module std::vector_tests {
         vec.push_back(3);
         vec.swap(0, 3);
         vec.swap(1, 2);
-        assert!(vec[0] == 3, 0);
-        assert!(vec[1] == 2, 0);
-        assert!(vec[2] == 1, 0);
-        assert!(vec[3] == 0, 0);
+        assert!(vec[0] == 3);
+        assert!(vec[1] == 2);
+        assert!(vec[2] == 1);
+        assert!(vec[3] == 0);
     }
 
     #[test]
@@ -190,18 +188,18 @@ module std::vector_tests {
         vec.push_back(2);
         vec.push_back(3);
         vec.swap(1, 1);
-        assert!(vec[0] == 0, 0);
-        assert!(vec[1] == 1, 0);
-        assert!(vec[2] == 2, 0);
-        assert!(vec[3] == 3, 0);
+        assert!(vec[0] == 0);
+        assert!(vec[1] == 1);
+        assert!(vec[2] == 2);
+        assert!(vec[3] == 3);
     }
 
     #[test]
     fun remove_singleton_vector() {
         let mut v = vector[];
         v.push_back(0);
-        assert!(v.remove(0) == 0, 0);
-        assert!(v.length() == 0, 0);
+        assert!(v.remove(0) == 0);
+        assert!(v.length() == 0);
     }
 
     #[test]
@@ -212,11 +210,11 @@ module std::vector_tests {
         v.push_back(2);
         v.push_back(3);
 
-        assert!(v.remove(1) == 1, 0);
-        assert!(v.length() == 3, 0);
-        assert!(v[0] == 0, 0);
-        assert!(v[1] == 2, 0);
-        assert!(v[2] == 3, 0);
+        assert!(v.remove(1) == 1);
+        assert!(v.length() == 3);
+        assert!(v[0] == 0);
+        assert!(v[1] == 2);
+        assert!(v[2] == 3);
     }
 
     #[test]
@@ -227,11 +225,11 @@ module std::vector_tests {
         v.push_back(2);
         v.push_back(3);
 
-        assert!(v.remove(3) == 3, 0);
-        assert!(v.length() == 3, 0);
-        assert!(v[0] == 0, 0);
-        assert!(v[1] == 1, 0);
-        assert!(v[2] == 2, 0);
+        assert!(v.remove(3) == 3);
+        assert!(v.length() == 3);
+        assert!(v[0] == 0);
+        assert!(v[1] == 1);
+        assert!(v[2] == 2);
     }
 
     #[test]
@@ -254,16 +252,16 @@ module std::vector_tests {
         let mut v = vector<u64>[];
         let is_empty = v.is_empty();
         v.reverse();
-        assert!(is_empty == v.is_empty(), 0);
+        assert!(is_empty == v.is_empty());
     }
 
     #[test]
     fun reverse_singleton_vector() {
         let mut v = vector[];
         v.push_back(0);
-        assert!(v[0] == 0, 1);
+        assert!(v[0] == 0);
         v.reverse();
-        assert!(v[0] == 0, 2);
+        assert!(v[0] == 0);
     }
 
     #[test]
@@ -274,17 +272,17 @@ module std::vector_tests {
         v.push_back(2);
         v.push_back(3);
 
-        assert!(v[0] == 0, 1);
-        assert!(v[1] == 1, 2);
-        assert!(v[2] == 2, 3);
-        assert!(v[3] == 3, 4);
+        assert!(v[0] == 0);
+        assert!(v[1] == 1);
+        assert!(v[2] == 2);
+        assert!(v[3] == 3);
 
         v.reverse();
 
-        assert!(v[3] == 0, 5);
-        assert!(v[2] == 1, 6);
-        assert!(v[1] == 2, 7);
-        assert!(v[0] == 3, 8);
+        assert!(v[3] == 0);
+        assert!(v[2] == 1);
+        assert!(v[1] == 2);
+        assert!(v[0] == 3);
     }
 
     #[test]
@@ -294,15 +292,15 @@ module std::vector_tests {
         v.push_back(1);
         v.push_back(2);
 
-        assert!(v[0] == 0, 1);
-        assert!(v[1] == 1, 2);
-        assert!(v[2] == 2, 3);
+        assert!(v[0] == 0);
+        assert!(v[1] == 1);
+        assert!(v[2] == 2);
 
         v.reverse();
 
-        assert!(v[2] == 0, 4);
-        assert!(v[1] == 1, 5);
-        assert!(v[0] == 2, 6);
+        assert!(v[2] == 0);
+        assert!(v[1] == 1);
+        assert!(v[0] == 2);
     }
 
     #[test]
@@ -336,8 +334,8 @@ module std::vector_tests {
     fun swap_remove_singleton() {
         let mut v = vector<u64>[];
         v.push_back(0);
-        assert!(v.swap_remove(0) == 0, 0);
-        assert!(v.is_empty(), 1);
+        assert!(v.swap_remove(0) == 0);
+        assert!(v.is_empty());
     }
 
     #[test]
@@ -348,17 +346,17 @@ module std::vector_tests {
         v.push_back(2);
         v.push_back(3);
 
-        assert!(v[0] == 0, 1);
-        assert!(v[1] == 1, 2);
-        assert!(v[2] == 2, 3);
-        assert!(v[3] == 3, 4);
+        assert!(v[0] == 0);
+        assert!(v[1] == 1);
+        assert!(v[2] == 2);
+        assert!(v[3] == 3);
 
-        assert!(v.swap_remove(1) == 1, 5);
-        assert!(v.length() == 3, 6);
+        assert!(v.swap_remove(1) == 1);
+        assert!(v.length() == 3);
 
-        assert!(v[0] == 0, 7);
-        assert!(v[1] == 3, 8);
-        assert!(v[2] == 2, 9);
+        assert!(v[0] == 0);
+        assert!(v[1] == 3);
+        assert!(v[2] == 2);
 
     }
 
@@ -370,17 +368,17 @@ module std::vector_tests {
         v.push_back(2);
         v.push_back(3);
 
-        assert!(v[0] == 0, 1);
-        assert!(v[1] == 1, 2);
-        assert!(v[2] == 2, 3);
-        assert!(v[3] == 3, 4);
+        assert!(v[0] == 0);
+        assert!(v[1] == 1);
+        assert!(v[2] == 2);
+        assert!(v[3] == 3);
 
-        assert!(v.swap_remove(3) == 3, 5);
-        assert!(v.length() == 3, 6);
+        assert!(v.swap_remove(3) == 3);
+        assert!(v.length() == 3);
 
-        assert!(v[0] == 0, 7);
-        assert!(v[1] == 1, 8);
-        assert!(v[2] == 2, 9);
+        assert!(v[0] == 0);
+        assert!(v[1] == 1);
+        assert!(v[2] == 2);
     }
 
     #[test]
@@ -395,22 +393,22 @@ module std::vector_tests {
     fun push_back_and_borrow() {
         let mut v = vector[];
         v.push_back(7);
-        assert!(!v.is_empty(), 0);
-        assert!(v.length() == 1, 1);
-        assert!(v[0] == 7, 2);
+        assert!(!v.is_empty());
+        assert!(v.length() == 1);
+        assert!(v[0] == 7);
 
         v.push_back(8);
-        assert!(v.length() == 2, 3);
-        assert!(v[0] == 7, 4);
-        assert!(v[1] == 8, 5);
+        assert!(v.length() == 2);
+        assert!(v[0] == 7);
+        assert!(v[1] == 8);
     }
 
     #[test]
     fun index_of_empty_not_has() {
         let v = vector[];
         let (has, index) = v.index_of(&true);
-        assert!(!has, 0);
-        assert!(index == 0, 1);
+        assert!(!has);
+        assert!(index == 0);
     }
 
     #[test]
@@ -418,8 +416,8 @@ module std::vector_tests {
         let mut v = vector[];
         v.push_back(false);
         let (has, index) = v.index_of(&true);
-        assert!(!has, 0);
-        assert!(index == 0, 1);
+        assert!(!has);
+        assert!(index == 0);
     }
 
     #[test]
@@ -428,8 +426,8 @@ module std::vector_tests {
         v.push_back(false);
         v.push_back(true);
         let (has, index) = v.index_of(&true);
-        assert!(has, 0);
-        assert!(index == 1, 1);
+        assert!(has);
+        assert!(index == 1);
     }
 
     // index_of will return the index first occurence that is equal
@@ -440,14 +438,14 @@ module std::vector_tests {
         v.push_back(true);
         v.push_back(true);
         let (has, index) = v.index_of(&true);
-        assert!(has, 0);
-        assert!(index == 1, 1);
+        assert!(has);
+        assert!(index == 1);
     }
 
     #[test]
     fun length() {
         let mut empty = vector[];
-        assert!(empty.length() == 0, 0);
+        assert!(empty.length() == 0);
         let mut i = 0;
         let max_len = 42;
         while (i < max_len) {
@@ -477,16 +475,16 @@ module std::vector_tests {
     #[test_only]
     fun test_natives_with_type<T>(mut x1: T, mut x2: T): (T, T) {
         let mut v = vector[];
-        assert!(v.length() == 0, 0);
+        assert!(v.length() == 0);
         v.push_back(x1);
-        assert!(v.length() == 1, 1);
+        assert!(v.length() == 1);
         v.push_back(x2);
-        assert!(v.length() == 2, 2);
+        assert!(v.length() == 2);
         v.swap(0, 1);
         x1 = v.pop_back();
-        assert!(v.length() == 1, 3);
+        assert!(v.length() == 1);
         x2 = v.pop_back();
-        assert!(v.length() == 0, 4);
+        assert!(v.length() == 0);
         v.destroy_empty();
         (x1, x2)
     }
@@ -515,29 +513,29 @@ module std::vector_tests {
     fun test_insert() {
         let mut v = vector[7];
         v.insert(6, 0);
-        assert!(v == vector[6, 7], 0);
+        assert!(v == vector[6, 7]);
 
         let mut v = vector[7, 9];
         v.insert(8, 1);
-        assert!(v == vector[7, 8, 9], 0);
+        assert!(v == vector[7, 8, 9]);
 
         let mut v = vector[6, 7];
         v.insert(5, 0);
-        assert!(v == vector[5, 6, 7], 0);
+        assert!(v == vector[5, 6, 7]);
 
         let mut v = vector[5, 6, 8];
         v.insert(7, 2);
-        assert!(v == vector[5, 6, 7, 8], 0);
+        assert!(v == vector[5, 6, 7, 8]);
     }
 
     #[test]
     fun insert_at_end() {
         let mut v = vector[];
         v.insert(6, 0);
-        assert!(v == vector[6], 0);
+        assert!(v == vector[6]);
 
         v.insert(7, 1);
-        assert!(v == vector[6, 7], 0);
+        assert!(v == vector[6, 7]);
     }
 
     #[test]
@@ -576,10 +574,10 @@ module std::vector_tests {
 
     #[test]
     fun test_string_aliases() {
-        assert!(b"hello_world".to_string().length() == 11, 0);
-        assert!(b"hello_world".try_to_string().is_some(), 1);
+        assert!(b"hello_world".to_string().length() == 11);
+        assert!(b"hello_world".try_to_string().is_some());
 
-        assert!(b"hello_world".to_ascii_string().length() == 11, 2);
-        assert!(b"hello_world".try_to_ascii_string().is_some(), 3);
+        assert!(b"hello_world".to_ascii_string().length() == 11);
+        assert!(b"hello_world".try_to_ascii_string().is_some());
     }
 }

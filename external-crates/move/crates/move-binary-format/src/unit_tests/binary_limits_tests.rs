@@ -69,7 +69,7 @@ fn binary_limits_test() {
     // make given max size for different tables
     binary_config.table_config = TableConfig {
         module_handles: 10,
-        struct_handles: 15,
+        datatype_handles: 15,
         function_handles: 11,
         function_instantiations: 5,
         signatures: 20,
@@ -82,6 +82,10 @@ fn binary_limits_test() {
         field_handles: 11,
         field_instantiations: 16,
         friend_decls: 12,
+        enum_defs: 12,
+        enum_def_instantiations: 13,
+        variant_handles: 11,
+        variant_instantiation_handles: 16,
     };
 
     // From file_format_common.rs::TableType test table type of interest (no METADATA
@@ -99,19 +103,19 @@ fn binary_limits_test() {
         "MODULE_HANDLES"
     );
 
-    // STRUCT_HANDLES
+    // DATATYPE_HANDLES
     let module_test = &mut module.clone();
     check_limit!(
         module_test,
-        struct_handles,
-        StructHandle {
+        datatype_handles,
+        DatatypeHandle {
             module: ModuleHandleIndex(0),
             name: IdentifierIndex(0),
             abilities: AbilitySet::EMPTY,
             type_parameters: vec![],
         },
         &binary_config,
-        "STRUCT_HANDLES"
+        "DATATYPE_HANDLES"
     );
 
     // FUNCTION_HANDLES
@@ -195,7 +199,7 @@ fn binary_limits_test() {
 
     // STRUCT_DEFS
     let module_test = &mut module.clone();
-    module_test.struct_handles.push(StructHandle {
+    module_test.datatype_handles.push(DatatypeHandle {
         module: ModuleHandleIndex(0),
         name: IdentifierIndex(0),
         abilities: AbilitySet::EMPTY,
@@ -205,7 +209,7 @@ fn binary_limits_test() {
         module_test,
         struct_defs,
         StructDefinition {
-            struct_handle: StructHandleIndex(0),
+            struct_handle: DatatypeHandleIndex(0),
             field_information: StructFieldInformation::Declared(vec![]),
         },
         &binary_config,
@@ -214,14 +218,14 @@ fn binary_limits_test() {
 
     // STRUCT_DEF_INST
     let module_test = &mut module.clone();
-    module_test.struct_handles.push(StructHandle {
+    module_test.datatype_handles.push(DatatypeHandle {
         module: ModuleHandleIndex(0),
         name: IdentifierIndex(0),
         abilities: AbilitySet::EMPTY,
         type_parameters: vec![],
     });
     module_test.struct_defs.push(StructDefinition {
-        struct_handle: StructHandleIndex(0),
+        struct_handle: DatatypeHandleIndex(0),
         field_information: StructFieldInformation::Declared(vec![]),
     });
     check_limit!(
@@ -233,6 +237,54 @@ fn binary_limits_test() {
         },
         &binary_config,
         "STRUCT_DEF_INST"
+    );
+
+    // ENUM_DEFS
+    let module_test = &mut module.clone();
+    module_test.datatype_handles.push(DatatypeHandle {
+        module: ModuleHandleIndex(0),
+        name: IdentifierIndex(0),
+        abilities: AbilitySet::EMPTY,
+        type_parameters: vec![],
+    });
+    check_limit!(
+        module_test,
+        enum_defs,
+        EnumDefinition {
+            enum_handle: DatatypeHandleIndex(0),
+            variants: vec![VariantDefinition {
+                variant_name: IdentifierIndex(0),
+                fields: vec![],
+            }]
+        },
+        &binary_config,
+        "ENUM_DEFS"
+    );
+
+    // ENUM_DEF_INST
+    let module_test = &mut module.clone();
+    module_test.datatype_handles.push(DatatypeHandle {
+        module: ModuleHandleIndex(0),
+        name: IdentifierIndex(0),
+        abilities: AbilitySet::EMPTY,
+        type_parameters: vec![],
+    });
+    module_test.enum_defs.push(EnumDefinition {
+        enum_handle: DatatypeHandleIndex(0),
+        variants: vec![VariantDefinition {
+            variant_name: IdentifierIndex(0),
+            fields: vec![],
+        }],
+    });
+    check_limit!(
+        module_test,
+        enum_def_instantiations,
+        EnumDefInstantiation {
+            def: EnumDefinitionIndex(0),
+            type_parameters: SignatureIndex(0),
+        },
+        &binary_config,
+        "ENUM_DEF_INST"
     );
 
     // FUNCTION_DEFS
@@ -255,6 +307,7 @@ fn binary_limits_test() {
             code: Some(CodeUnit {
                 locals: SignatureIndex(0),
                 code: vec![Bytecode::Ret],
+                jump_tables: vec![],
             }),
         },
         &binary_config,
@@ -263,14 +316,14 @@ fn binary_limits_test() {
 
     // FIELD_HANDLE
     let module_test = &mut module.clone();
-    module_test.struct_handles.push(StructHandle {
+    module_test.datatype_handles.push(DatatypeHandle {
         module: ModuleHandleIndex(0),
         name: IdentifierIndex(0),
         abilities: AbilitySet::EMPTY,
         type_parameters: vec![],
     });
     module_test.struct_defs.push(StructDefinition {
-        struct_handle: StructHandleIndex(0),
+        struct_handle: DatatypeHandleIndex(0),
         field_information: StructFieldInformation::Declared(vec![FieldDefinition {
             name: IdentifierIndex(0),
             signature: TypeSignature(SignatureToken::Bool),
@@ -289,14 +342,14 @@ fn binary_limits_test() {
 
     // FIELD_INST
     let module_test = &mut module.clone();
-    module_test.struct_handles.push(StructHandle {
+    module_test.datatype_handles.push(DatatypeHandle {
         module: ModuleHandleIndex(0),
         name: IdentifierIndex(0),
         abilities: AbilitySet::EMPTY,
         type_parameters: vec![],
     });
     module_test.struct_defs.push(StructDefinition {
-        struct_handle: StructHandleIndex(0),
+        struct_handle: DatatypeHandleIndex(0),
         field_information: StructFieldInformation::Declared(vec![FieldDefinition {
             name: IdentifierIndex(0),
             signature: TypeSignature(SignatureToken::Bool),
@@ -315,6 +368,70 @@ fn binary_limits_test() {
         },
         &binary_config,
         "FIELD_INST"
+    );
+
+    // VARIANT_HANDLE
+    let module_test = &mut module.clone();
+    module_test.datatype_handles.push(DatatypeHandle {
+        module: ModuleHandleIndex(0),
+        name: IdentifierIndex(0),
+        abilities: AbilitySet::EMPTY,
+        type_parameters: vec![],
+    });
+    module_test.enum_defs.push(EnumDefinition {
+        enum_handle: DatatypeHandleIndex(0),
+        variants: vec![VariantDefinition {
+            variant_name: IdentifierIndex(0),
+            fields: vec![FieldDefinition {
+                name: IdentifierIndex(0),
+                signature: TypeSignature(SignatureToken::Bool),
+            }],
+        }],
+    });
+    check_limit!(
+        module_test,
+        variant_handles,
+        VariantHandle {
+            enum_def: EnumDefinitionIndex(0),
+            variant: 0,
+        },
+        &binary_config,
+        "VARIANT_HANDLE"
+    );
+
+    // VARIANT_INST
+    let module_test = &mut module.clone();
+    module_test.datatype_handles.push(DatatypeHandle {
+        module: ModuleHandleIndex(0),
+        name: IdentifierIndex(0),
+        abilities: AbilitySet::EMPTY,
+        type_parameters: vec![],
+    });
+    module_test.enum_defs.push(EnumDefinition {
+        enum_handle: DatatypeHandleIndex(0),
+        variants: vec![VariantDefinition {
+            variant_name: IdentifierIndex(0),
+            fields: vec![FieldDefinition {
+                name: IdentifierIndex(0),
+                signature: TypeSignature(SignatureToken::Bool),
+            }],
+        }],
+    });
+    module_test
+        .enum_def_instantiations
+        .push(EnumDefInstantiation {
+            def: EnumDefinitionIndex(0),
+            type_parameters: SignatureIndex(0),
+        });
+    check_limit!(
+        module_test,
+        variant_instantiation_handles,
+        VariantInstantiationHandle {
+            enum_def: EnumDefInstantiationIndex(0),
+            variant: 0,
+        },
+        &binary_config,
+        "VARIANT_INST"
     );
 
     // FRIEND_DECLS

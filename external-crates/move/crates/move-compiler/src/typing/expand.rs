@@ -9,8 +9,9 @@ use crate::{
     ice,
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
+    shared::{ide::IDEAnnotation, string_utils::debug_print, AstDebug},
     typing::{
-        ast as T,
+        ast::{self as T},
         core::{self, Context},
     },
 };
@@ -58,8 +59,10 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
         Anything | UnresolvedError | Param(_) | Unit => (),
         Ref(_, b) => type_(context, b),
         Var(tvar) => {
+            debug_print!(context.debug.type_elaboration, ("before" => Var(*tvar)));
             let ty_tvar = sp(ty.loc, Var(*tvar));
             let replacement = core::unfold_type(&context.subst, ty_tvar);
+            debug_print!(context.debug.type_elaboration, ("resolved" => replacement));
             let replacement = match replacement {
                 sp!(loc, Var(_)) => {
                     let diag = ice!((
@@ -85,6 +88,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
             };
             *ty = replacement;
             type_(context, ty);
+            debug_print!(context.debug.type_elaboration, ("after" => ty));
         }
         Apply(Some(_), sp!(_, TypeName_::Builtin(_)), tys) => types(context, tys),
         aty @ Apply(Some(_), _, _) => {
@@ -264,14 +268,13 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             exp(context, er);
         }
 
-        E::Return(er)
-        | E::Abort(er)
-        | E::Give(_, er)
-        | E::Dereference(er)
-        | E::UnaryExp(_, er)
-        | E::Borrow(_, er, _)
-        | E::TempBorrow(_, er)
-        | E::InvalidAccess(er) => exp(context, er),
+        E::Return(base_exp)
+        | E::Abort(base_exp)
+        | E::Give(_, base_exp)
+        | E::Dereference(base_exp)
+        | E::UnaryExp(_, base_exp)
+        | E::Borrow(_, base_exp, _)
+        | E::TempBorrow(_, base_exp) => exp(context, base_exp),
         E::Mutate(el, er) => {
             exp(context, el);
             exp(context, er)
@@ -503,5 +506,30 @@ fn exp_list_item(context: &mut Context, item: &mut T::ExpListItem) {
             exp(context, e);
             types(context, ss);
         }
+    }
+}
+
+//**************************************************************************************************
+// IDE Information
+//**************************************************************************************************
+
+pub fn ide_annotation(context: &mut Context, annotation: &mut IDEAnnotation) {
+    match annotation {
+        IDEAnnotation::MacroCallInfo(info) => {
+            for t in info.type_arguments.iter_mut() {
+                type_(context, t);
+            }
+            for t in info.by_value_args.iter_mut() {
+                sequence_item(context, t);
+            }
+        }
+        IDEAnnotation::ExpandedLambda => (),
+        IDEAnnotation::AutocompleteInfo(info) => {
+            for (_, t) in info.fields.iter_mut() {
+                type_(context, t);
+            }
+        }
+        IDEAnnotation::MissingMatchArms(_) => (),
+        IDEAnnotation::EllipsisMatchEntries(_) => (),
     }
 }

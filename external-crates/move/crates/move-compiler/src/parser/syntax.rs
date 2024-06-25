@@ -1107,6 +1107,10 @@ fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> 
 // Parse attributes. Used to annotate a variety of AST nodes
 //      Attributes = ("#" "[" Comma<Attribute> "]")*
 fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagnostic>> {
+    let mut doc_comments = context
+        .tokens
+        .read_doc_comments()
+        .map_or_else(Vec::new, |doc_comments| vec![doc_comments]);
     let mut attributes_vec = vec![];
     while let Tok::NumSign = context.tokens.peek() {
         let start_loc = context.tokens.start_loc();
@@ -1125,8 +1129,18 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
             start_loc,
             end_loc,
             attributes_,
-        ))
+        ));
+        if let Some(new_doc_comments) = context.tokens.read_doc_comments() {
+            doc_comments.push(new_doc_comments);
+        }
     }
+
+    // Attaches the doc comments to the start of the location of the member that these
+    // attributes/doc comments are attached to.
+    if !doc_comments.is_empty() {
+        context.tokens.attach_doc_comments(doc_comments.join("\n"));
+    }
+
     Ok(attributes_vec)
 }
 
@@ -3951,6 +3965,17 @@ fn parse_address_block(
                     attributes = attrs;
                 }
             }
+            for module in &modules {
+                if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon) {
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidModule,
+                        (
+                            module.name.loc(),
+                            "Cannot define 'module' label in address block"
+                        )
+                    ));
+                }
+            }
 
             if in_migration_mode {
                 let loc = context.tokens.current_token_loc();
@@ -4193,6 +4218,14 @@ fn parse_use_alias(context: &mut Context) -> Result<Option<Name>, Box<Diagnostic
 //                  )
 //              )*
 //          "}"
+//          |
+//          <DocComments> ( "spec" | "module") (<LeadingNameAccess>::)?<ModuleName> ";"
+//          ( <Attributes>
+//              ( <FriendDecl> | <SpecBlock> |
+//                <DocComments> <ModuleMemberModifiers>
+//                    (<ConstantDecl> | <StructDecl> | <FunctionDecl> | <UseDecl>) )
+//              )
+//          )*
 //
 // Due to parsing error recovery, while parsing a module the parser may advance past the end of the
 // current module and encounter the next module which also should be parsed. At the point of
@@ -4203,7 +4236,6 @@ fn parse_module(
     attributes: Vec<Attributes>,
     context: &mut Context,
 ) -> Result<(ModuleDefinition, Option<Vec<Attributes>>), Box<Diagnostic>> {
-    context.tokens.match_doc_comments();
     let start_loc = context.tokens.start_loc();
 
     let is_spec_module = if context.tokens.peek() == Tok::Spec {
@@ -4225,12 +4257,42 @@ fn parse_module(
         }
         (LeadingNameAccess_::Name(name), _) => (None, ModuleName(name)),
     };
-    consume_token(context.tokens, Tok::LBrace)?;
+    let definition_mode: ModuleDefinitionMode;
+    match context.tokens.peek() {
+        Tok::LBrace => {
+            definition_mode = ModuleDefinitionMode::Braces;
+            consume_token(context.tokens, Tok::LBrace)?;
+        }
+        Tok::Semicolon => {
+            context.env.check_feature(
+                context.current_package,
+                FeatureGate::ModuleLabel,
+                name.loc(),
+            );
+            definition_mode = ModuleDefinitionMode::Semicolon;
+            consume_token(context.tokens, Tok::Semicolon)?;
+        }
+        _ => {
+            return Err(unexpected_token_error(
+                context.tokens,
+                "'{' or ':' after the module name",
+            ));
+        }
+    }
 
     let mut members = vec![];
     let mut next_mod_attributes = None;
     let mut stop_parsing = false;
     while context.tokens.peek() != Tok::RBrace {
+        // If we are in semicolon mode, EOF is a fine place to stop.
+        // If we see the `module` keyword, this is most-likely someone defining a second module
+        // (erroneously), so we also bail in that case.
+        if matches!(definition_mode, ModuleDefinitionMode::Semicolon)
+            && (context.tokens.peek() == Tok::EOF || context.tokens.peek() == Tok::Module)
+        {
+            stop_parsing = true;
+            break;
+        }
         context.stop_set.union(&MODULE_MEMBER_OR_MODULE_START_SET);
         match parse_module_member(context) {
             Ok(m) => {
@@ -4279,6 +4341,7 @@ fn parse_module(
         name,
         is_spec_module,
         members,
+        definition_mode,
     };
 
     Ok((def, next_mod_attributes))
@@ -4309,7 +4372,6 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
     match context.tokens.peek() {
         // Top-level specification constructs
         Tok::Invariant => {
-            context.tokens.match_doc_comments();
             let spec_string = consume_spec_string(context)?;
             consume_token(context.tokens, Tok::Semicolon)?;
             Ok(ModuleMember::Spec(spec_string))
@@ -4317,7 +4379,6 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
         Tok::Spec => {
             match context.tokens.lookahead() {
                 Ok(Tok::Fun) | Ok(Tok::Native) => {
-                    context.tokens.match_doc_comments();
                     context.tokens.advance()?;
                     // Add an extra check for better error message
                     // if old syntax is used
@@ -4342,7 +4403,6 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
             attributes, context,
         )?)),
         _ => {
-            context.tokens.match_doc_comments();
             let start_loc = context.tokens.start_loc();
             let modifiers = parse_module_member_modifiers(context)?;
             let tok = context.tokens.peek();
@@ -4482,7 +4542,7 @@ fn consume_spec_string(context: &mut Context) -> Result<Spanned<String>, Box<Dia
 // Parse a file:
 //      File =
 //          (<Attributes> (<AddressBlock> | <Module> ))*
-fn parse_file(context: &mut Context) -> Result<Vec<Definition>, Box<Diagnostic>> {
+fn parse_file(context: &mut Context) -> Vec<Definition> {
     let mut defs = vec![];
     while context.tokens.peek() != Tok::EOF {
         if let Err(diag) = parse_file_def(context, &mut defs) {
@@ -4492,7 +4552,7 @@ fn parse_file(context: &mut Context) -> Result<Vec<Definition>, Box<Diagnostic>>
             skip_to_next_desired_tok_or_eof(context, &TokenSet::from(&[Tok::Spec, Tok::Module]));
         }
     }
-    Ok(defs)
+    defs
 }
 
 fn parse_file_def(
@@ -4504,6 +4564,19 @@ fn parse_file_def(
         Tok::Spec | Tok::Module => {
             loop {
                 let (module, next_mod_attributes) = parse_module(attributes, context)?;
+                if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon) {
+                    if let Some(prev) = defs.last() {
+                        let msg =
+                            "Cannot define a 'module' label form in a file with multiple modules";
+                        let mut diag = diag!(Declarations::InvalidModule, (module.name.loc(), msg));
+                        diag.add_secondary_label((prev.name_loc(), "Previous definition here"));
+                        diag.add_note(
+                            "Either move each 'module' label and definitions into its own file or \
+                            define each as 'module <name> { contents }'",
+                        );
+                        context.env.add_diag(diag);
+                    }
+                }
                 defs.push(Definition::Module(module));
                 let Some(attrs) = next_mod_attributes else {
                     // no attributes returned from parse_module - just keep parsing next module
@@ -4535,8 +4608,8 @@ pub fn parse_file_string(
         Err(err) => Err(Diagnostics::from(vec![*err])),
         Ok(..) => Ok(()),
     }?;
-    match parse_file(&mut Context::new(env, &mut tokens, package)) {
-        Err(err) => Err(Diagnostics::from(vec![*err])),
-        Ok(def) => Ok((def, tokens.check_and_get_doc_comments(env))),
-    }
+    Ok((
+        parse_file(&mut Context::new(env, &mut tokens, package)),
+        tokens.check_and_get_doc_comments(env),
+    ))
 }

@@ -292,7 +292,7 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![2, 1, 1, 1]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     #[tokio::test]
@@ -303,7 +303,7 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     #[tokio::test]
@@ -314,7 +314,7 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![1, 1, 1, 1]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     #[tokio::test]
@@ -325,7 +325,7 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![5, 5, 5, 5]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     fn basic_setup() -> (Arc<Context>, Vec<CommittedSubDag>) {
@@ -356,8 +356,11 @@ mod tests {
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
-            let subdag =
-                dag_builder.get_subdag(leader, last_committed_rounds.clone(), commit_index);
+            let (subdag, _commit) = dag_builder.get_sub_dag_and_commit(
+                leader,
+                last_committed_rounds.clone(),
+                commit_index,
+            );
             for block in subdag.blocks.iter() {
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);

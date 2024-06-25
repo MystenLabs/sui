@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
-import type { SuiClient } from '@mysten/sui.js/client';
-import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
-import { graphql } from '@mysten/sui.js/graphql/schemas/2024.4';
-import { fromB64, normalizeSuiAddress } from '@mysten/sui.js/utils';
+import { bcs } from '@mysten/sui/bcs';
+import type { SuiClient } from '@mysten/sui/client';
+import { SuiGraphQLClient } from '@mysten/sui/graphql';
+import { graphql } from '@mysten/sui/graphql/schemas/2024.4';
+import { fromB64, normalizeSuiAddress } from '@mysten/sui/utils';
 
 import { ZkSendLink } from './claim.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
@@ -27,35 +27,7 @@ const ListCreatedLinksQuery = graphql(`
 					timestamp
 				}
 				digest
-				kind {
-					__typename
-					... on ProgrammableTransactionBlock {
-						inputs(first: 10) {
-							nodes {
-								__typename
-								... on Pure {
-									bytes
-								}
-							}
-						}
-						transactions(first: 10) {
-							nodes {
-								__typename
-								... on MoveCallTransaction {
-									module
-									functionName
-									package
-									arguments {
-										__typename
-										... on Input {
-											ix
-										}
-									}
-								}
-							}
-						}
-					}
-				}
+				bcs
 			}
 		}
 	}
@@ -109,35 +81,43 @@ export async function listCreatedLinks({
 	const links = (
 		await Promise.all(
 			transactionBlocks.nodes.map(async (node) => {
-				if (node.kind?.__typename !== 'ProgrammableTransactionBlock') {
-					throw new Error('Invalid transaction block');
-				}
-
-				const fn = node.kind.transactions.nodes.find(
-					(fn) =>
-						fn.__typename === 'MoveCallTransaction' &&
-						fn.package === packageId &&
-						fn.module === 'zk_bag' &&
-						fn.functionName === 'new',
-				);
-
-				if (fn?.__typename !== 'MoveCallTransaction') {
+				if (!node.bcs) {
 					return null;
 				}
 
-				const addressArg = fn.arguments[1];
+				const kind = bcs.SenderSignedData.parse(fromB64(node.bcs))?.[0]?.intentMessage.value.V1
+					.kind;
 
-				if (addressArg.__typename !== 'Input') {
+				if (!kind.ProgrammableTransaction) {
+					return null;
+				}
+
+				const { inputs, commands } = kind.ProgrammableTransaction;
+
+				const fn = commands.find(
+					(command) =>
+						command.MoveCall?.package === packageId &&
+						command.MoveCall.module === 'zk_bag' &&
+						command.MoveCall.function === 'new',
+				);
+
+				if (!fn?.MoveCall) {
+					return null;
+				}
+
+				const addressArg = fn.MoveCall.arguments[1];
+
+				if (addressArg.$kind !== 'Input') {
 					throw new Error('Invalid address argument');
 				}
 
-				const input = node.kind.inputs.nodes[addressArg.ix];
+				const input = inputs[addressArg.Input];
 
-				if (input.__typename !== 'Pure') {
+				if (!input.Pure) {
 					throw new Error('Expected Address input to be a Pure value');
 				}
 
-				const address = bcs.Address.parse(fromB64(input.bytes as string));
+				const address = bcs.Address.fromBase64(input.Pure.bytes);
 
 				const link = new ZkSendLink({
 					network,

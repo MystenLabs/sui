@@ -1,0 +1,37 @@
+processed 4 tasks
+
+task 0 'publish'. lines 1-11:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::MonoTooMany'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x1::MonoTooMany,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 1 'publish'. lines 13-23:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::MonoTooFew'. Got VMError: {
+    major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
+    sub_status: None,
+    location: 0x1::MonoTooFew,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 2 'publish'. lines 25-35:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::PolyTooMany'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x1::PolyTooMany,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 3 'publish'. lines 37-47:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::PolyTooFew'. Got VMError: {
+    major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
+    sub_status: None,
+    location: 0x1::PolyTooFew,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
