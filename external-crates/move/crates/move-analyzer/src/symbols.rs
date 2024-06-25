@@ -491,7 +491,7 @@ impl fmt::Display for DefInfo {
             ) => {
                 let type_args_str =
                     datatype_type_args_to_ide_string(type_args, /* verbose */ true);
-                let abilities_str = abilities_to_id_string(abilities);
+                let abilities_str = abilities_to_ide_string(abilities);
                 if field_names.is_empty() {
                     write!(
                         f,
@@ -523,7 +523,7 @@ impl fmt::Display for DefInfo {
             Self::Enum(mod_ident, name, visibility, type_args, abilities, variants, _) => {
                 let type_args_str =
                     datatype_type_args_to_ide_string(type_args, /* verbose */ true);
-                let abilities_str = abilities_to_id_string(abilities);
+                let abilities_str = abilities_to_ide_string(abilities);
                 if variants.is_empty() {
                     write!(
                         f,
@@ -877,7 +877,7 @@ fn fun_type_to_ide_string(fun_type: &FunType) -> String {
     .to_string()
 }
 
-fn abilities_to_id_string(abilities: &AbilitySet) -> String {
+fn abilities_to_ide_string(abilities: &AbilitySet) -> String {
     if abilities.is_empty() {
         "".to_string()
     } else {
