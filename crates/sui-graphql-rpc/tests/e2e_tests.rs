@@ -887,4 +887,21 @@ mod tests {
     async fn test_query_complexity_metrics() {
         test_query_complexity_metrics_impl().await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_health_check() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        println!("Cluster started");
+        cluster
+            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
+            .await;
+        test_health_check_impl().await;
+    }
 }
