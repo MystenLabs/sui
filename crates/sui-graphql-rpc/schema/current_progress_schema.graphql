@@ -3241,13 +3241,14 @@ type ServiceConfig {
 	"""
 	requestTimeoutMs: Int!
 	"""
-	Maximum mutation payload size in bytes. This is the maximum size allowed for a transaction
-	plus the Base64 overhead, plus the max query payload size allowed, plus the size of
-	signatures.
+	The maximum bytes allowed for the JSON object in the request body of a GraphQL mutation.
+	It is the value of the maximum transaction bytes (including the signatures) allowed by the
+	protocol, plus the Base64 overhead (4/3 of the original string), plus the max query
+	payload size allowed.
 	"""
 	maxMutationPayloadSize: Int!
 	"""
-	Maximum length of a query payload string.
+	The maximum bytes allowed for the JSON object in the request body of a GraphQL read query.
 	"""
 	maxQueryPayloadSize: Int!
 	"""
