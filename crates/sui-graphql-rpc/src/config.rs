@@ -6,70 +6,28 @@ use crate::types::big_int::BigInt;
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt::Display, time::Duration};
+use sui_graphql_config::GraphQLConfig;
 use sui_json_rpc::name_service::NameServiceConfig;
-// TODO: calculate proper cost limits
-
-/// These values are set to support TS SDK shim layer queries for json-rpc compatibility.
-const MAX_QUERY_NODES: u32 = 300;
-const MAX_QUERY_PAYLOAD_SIZE: u32 = 5_000;
-
-const MAX_QUERY_DEPTH: u32 = 20;
-const MAX_OUTPUT_NODES: u64 = 100_000; // Maximum number of output nodes allowed in the response
-const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
-const DEFAULT_PAGE_SIZE: u64 = 20; // Default number of elements allowed on a page of a connection
-const MAX_PAGE_SIZE: u64 = 50; // Maximum number of elements allowed on a page of a connection
-
-/// The following limits reflect the max values set in the ProtocolConfig.
-const MAX_TYPE_ARGUMENT_DEPTH: u32 = 16;
-const MAX_TYPE_ARGUMENT_WIDTH: u32 = 32;
-const MAX_TYPE_NODES: u32 = 256;
-const MAX_MOVE_VALUE_DEPTH: u32 = 128;
-
-pub(crate) const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
-
-/// The time to wait for a transaction to be executed such that the effects can be returned to the
-/// GraphQL query. If the transaction takes longer than this time to execute, the query will return
-/// a timeout error, but the transaction will continue its execution.
-///
-/// It's the sum of pre+post quorum timeouts from [`sui_core::authority_aggregator::TimeoutConfig`]
-/// plus a small buffer of 10% rounded up: 60 + 7 => round_up(67 * 1.1) = 74
-/// <https://github.com/MystenLabs/sui/blob/eaf05fe5d293c06e3a2dfc22c87ba2aef419d8ea/crates/sui-core/src/authority_aggregator.rs#L84-L85>
-pub(crate) const DEFAULT_MUTATION_TIMEOUT_MS: u64 = 74_000;
-
-const DEFAULT_IDE_TITLE: &str = "Sui GraphQL IDE";
 
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 
-// Default values for the server connection configuration.
-pub(crate) const DEFAULT_SERVER_CONNECTION_PORT: u16 = 8000;
-pub(crate) const DEFAULT_SERVER_CONNECTION_HOST: &str = "127.0.0.1";
-pub(crate) const DEFAULT_SERVER_DB_URL: &str =
-    "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2";
-pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 10;
-pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
-pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
-pub(crate) const DEFAULT_WATERMARK_UPDATE_MS: u64 = 500;
-
 /// The combination of all configurations for the GraphQL service.
-#[derive(Serialize, Clone, Deserialize, Debug, Default)]
+#[GraphQLConfig]
+#[derive(Default)]
 pub struct ServerConfig {
-    #[serde(default)]
     pub service: ServiceConfig,
-    #[serde(default)]
     pub connection: ConnectionConfig,
-    #[serde(default)]
     pub internal_features: InternalFeatureConfig,
-    #[serde(default)]
     pub tx_exec_full_node: TxExecFullNodeConfig,
-    #[serde(default)]
     pub ide: Ide,
 }
 
 /// Configuration for connections for the RPC, passed in as command-line arguments. This configures
 /// specific connections between this service and other services, and might differ from instance to
 /// instance of the GraphQL service.
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
+#[GraphQLConfig]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ConnectionConfig {
     /// Port to bind the server to
     pub(crate) port: u16,
@@ -84,73 +42,63 @@ pub struct ConnectionConfig {
 /// Configuration on features supported by the GraphQL service, passed in a TOML-based file. These
 /// configurations are shared across fleets of the service, i.e. all testnet services will have the
 /// same `ServiceConfig`.
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
-#[serde(rename_all = "kebab-case")]
+#[GraphQLConfig]
+#[derive(Default)]
 pub struct ServiceConfig {
-    #[serde(default)]
     pub(crate) versions: Versions,
-
-    #[serde(default)]
     pub(crate) limits: Limits,
-
-    #[serde(default)]
     pub(crate) disabled_features: BTreeSet<FunctionalGroup>,
-
-    #[serde(default)]
     pub(crate) experiments: Experiments,
-
-    #[serde(default)]
     pub(crate) name_service: NameServiceConfig,
-
-    #[serde(default)]
     pub(crate) background_tasks: BackgroundTasksConfig,
-
-    #[serde(default)]
     pub(crate) zklogin: ZkLoginConfig,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "kebab-case")]
+#[GraphQLConfig]
 pub struct Versions {
-    #[serde(default)]
     versions: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
-#[serde(rename_all = "kebab-case")]
+#[GraphQLConfig]
 pub struct Limits {
-    #[serde(default)]
+    /// Maximum depth of nodes in the requests.
     pub max_query_depth: u32,
-    #[serde(default)]
+    /// Maximum number of nodes in the requests.
     pub max_query_nodes: u32,
-    #[serde(default)]
+    /// Maximum number of output nodes allowed in the response.
     pub max_output_nodes: u64,
-    #[serde(default)]
+    /// Maximum size (in bytes) of a GraphQL request.
     pub max_query_payload_size: u32,
-    #[serde(default)]
+    /// Queries whose EXPLAIN cost are more than this will be logged. Given in the units used by the
+    /// database (where 1.0 is roughly the cost of a sequential page access).
     pub max_db_query_cost: u64,
-    #[serde(default)]
+    /// Paginated queries will return this many elements if a page size is not provided.
     pub default_page_size: u64,
-    #[serde(default)]
+    /// Paginated queries can return at most this many elements.
     pub max_page_size: u64,
-    #[serde(default)]
+    /// Time (in milliseconds) to wait for a transaction to be executed and the results returned
+    /// from GraphQL. If the transaction takes longer than this time to execute, the request will
+    /// return a timeout error, but the transaction may continue executing.
     pub mutation_timeout_ms: u64,
-    #[serde(default)]
+    /// Time (in milliseconds) to wait for a read request from the GraphQL service. Requests that
+    /// take longer than this time to return a result will return a timeout error.
     pub request_timeout_ms: u64,
-    #[serde(default)]
+    /// Maximum amount of nesting among type arguments (type arguments nest when a type argument is
+    /// itself generic and has arguments).
     pub max_type_argument_depth: u32,
-    #[serde(default)]
+    /// Maximum number of type parameters a type can have.
     pub max_type_argument_width: u32,
-    #[serde(default)]
+    /// Maximum size of a fully qualified type.
     pub max_type_nodes: u32,
-    #[serde(default)]
+    /// Maximum deph of a move value.
     pub max_move_value_depth: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
-#[serde(rename_all = "kebab-case")]
+#[GraphQLConfig]
+#[derive(Copy)]
 pub struct BackgroundTasksConfig {
-    #[serde(default)]
+    /// How often the watermark task checks the indexer database to update the checkpoint and epoch
+    /// watermarks.
     pub watermark_update_ms: u64,
 }
 
@@ -194,21 +142,13 @@ impl Version {
     }
 }
 
-impl Display for Version {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.full)
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "kebab-case")]
+#[GraphQLConfig]
 pub struct Ide {
-    #[serde(default)]
     pub(crate) ide_title: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
-#[serde(rename_all = "kebab-case")]
+#[GraphQLConfig]
+#[derive(Default)]
 pub struct Experiments {
     // Add experimental flags here, to provide access to them through-out the GraphQL
     // implementation.
@@ -216,34 +156,26 @@ pub struct Experiments {
     test_flag: bool,
 }
 
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
+#[GraphQLConfig]
 pub struct InternalFeatureConfig {
-    #[serde(default)]
     pub(crate) query_limits_checker: bool,
-    #[serde(default)]
     pub(crate) feature_gate: bool,
-    #[serde(default)]
     pub(crate) logger: bool,
-    #[serde(default)]
     pub(crate) query_timeout: bool,
-    #[serde(default)]
     pub(crate) metrics: bool,
-    #[serde(default)]
     pub(crate) tracing: bool,
-    #[serde(default)]
     pub(crate) apollo_tracing: bool,
-    #[serde(default)]
     pub(crate) open_telemetry: bool,
 }
 
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
+#[GraphQLConfig]
+#[derive(Default)]
 pub struct TxExecFullNodeConfig {
-    #[serde(default)]
     pub(crate) node_rpc_url: Option<String>,
 }
 
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
-#[serde(rename_all = "kebab-case")]
+#[GraphQLConfig]
+#[derive(Default)]
 pub struct ZkLoginConfig {
     pub env: ZkLoginEnv,
 }
@@ -386,14 +318,6 @@ impl ConnectionConfig {
         }
     }
 
-    pub fn ci_integration_test_cfg() -> Self {
-        Self {
-            db_url: DEFAULT_SERVER_DB_URL.to_string(),
-            db_pool_size: 3,
-            ..Default::default()
-        }
-    }
-
     pub fn ci_integration_test_cfg_with_db_name(
         db_name: String,
         port: u16,
@@ -455,9 +379,9 @@ impl Limits {
 
 impl Ide {
     pub fn new(ide_title: Option<String>) -> Self {
-        Self {
-            ide_title: ide_title.unwrap_or_else(|| DEFAULT_IDE_TITLE.to_string()),
-        }
+        ide_title
+            .map(|ide_title| Ide { ide_title })
+            .unwrap_or_default()
     }
 }
 
@@ -484,7 +408,7 @@ impl Default for Versions {
 impl Default for Ide {
     fn default() -> Self {
         Self {
-            ide_title: DEFAULT_IDE_TITLE.to_string(),
+            ide_title: "Sui GraphQL IDE".to_string(),
         }
     }
 }
@@ -492,32 +416,43 @@ impl Default for Ide {
 impl Default for ConnectionConfig {
     fn default() -> Self {
         Self {
-            port: DEFAULT_SERVER_CONNECTION_PORT,
-            host: DEFAULT_SERVER_CONNECTION_HOST.to_string(),
-            db_url: DEFAULT_SERVER_DB_URL.to_string(),
-            db_pool_size: DEFAULT_SERVER_DB_POOL_SIZE,
-            prom_url: DEFAULT_SERVER_PROM_HOST.to_string(),
-            prom_port: DEFAULT_SERVER_PROM_PORT,
+            port: 8000,
+            host: "127.0.0.1".to_string(),
+            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
+            db_pool_size: 10,
+            prom_url: "0.0.0.0".to_string(),
+            prom_port: 9184,
         }
     }
 }
 
 impl Default for Limits {
     fn default() -> Self {
+        // Picked so that TS SDK shim layer queries all pass limit.
+        // TODO: calculate proper cost limits
         Self {
-            max_query_depth: MAX_QUERY_DEPTH,
-            max_query_nodes: MAX_QUERY_NODES,
-            max_output_nodes: MAX_OUTPUT_NODES,
-            max_query_payload_size: MAX_QUERY_PAYLOAD_SIZE,
-            max_db_query_cost: MAX_DB_QUERY_COST,
-            default_page_size: DEFAULT_PAGE_SIZE,
-            max_page_size: MAX_PAGE_SIZE,
-            mutation_timeout_ms: DEFAULT_MUTATION_TIMEOUT_MS,
-            request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
-            max_type_argument_depth: MAX_TYPE_ARGUMENT_DEPTH,
-            max_type_argument_width: MAX_TYPE_ARGUMENT_WIDTH,
-            max_type_nodes: MAX_TYPE_NODES,
-            max_move_value_depth: MAX_MOVE_VALUE_DEPTH,
+            max_query_depth: 20,
+            max_query_nodes: 300,
+            max_output_nodes: 100_000,
+            max_query_payload_size: 5_000,
+            max_db_query_cost: 20_000,
+            default_page_size: 20,
+            max_page_size: 50,
+            // This default was picked as the sum of pre- and post- quorum timeouts from
+            // [`sui_core::authority_aggregator::TimeoutConfig`], with a 10% buffer.
+            //
+            // <https://github.com/MystenLabs/sui/blob/eaf05fe5d293c06e3a2dfc22c87ba2aef419d8ea/crates/sui-core/src/authority_aggregator.rs#L84-L85>
+            mutation_timeout_ms: 74_000,
+            request_timeout_ms: 40_000,
+            // The following limits reflect the max values set in ProtocolConfig, at time of writing.
+            // <https://github.com/MystenLabs/sui/blob/333f87061f0656607b1928aba423fa14ca16899e/crates/sui-protocol-config/src/lib.rs#L1580>
+            max_type_argument_depth: 16,
+            // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1618>
+            max_type_argument_width: 32,
+            // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1622>
+            max_type_nodes: 256,
+            // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1988>
+            max_move_value_depth: 128,
         }
     }
 }
@@ -540,7 +475,7 @@ impl Default for InternalFeatureConfig {
 impl Default for BackgroundTasksConfig {
     fn default() -> Self {
         Self {
-            watermark_update_ms: DEFAULT_WATERMARK_UPDATE_MS,
+            watermark_update_ms: 500,
         }
     }
 }
@@ -548,6 +483,12 @@ impl Default for BackgroundTasksConfig {
 impl Default for ZkLoginEnv {
     fn default() -> Self {
         Self::Prod
+    }
+}
+
+impl Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.full)
     }
 }
 
@@ -686,6 +627,32 @@ mod tests {
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },
+            ..Default::default()
+        };
+
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_read_partial_in_service_config() {
+        let actual = ServiceConfig::read(
+            r#" disabled-features = ["analytics"]
+
+                [limits]
+                max-query-depth = 42
+                max-query-nodes = 320
+            "#,
+        )
+        .unwrap();
+
+        // When reading partially, the other parts will come from the default implementation.
+        let expect = ServiceConfig {
+            limits: Limits {
+                max_query_depth: 42,
+                max_query_nodes: 320,
+                ..Default::default()
+            },
+            disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             ..Default::default()
         };
 
