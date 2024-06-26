@@ -136,7 +136,6 @@ use crate::authority::authority_store_pruner::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
@@ -2848,7 +2847,6 @@ impl AuthorityState {
         supported_protocol_versions: SupportedProtocolVersions,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
-        checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
@@ -2867,12 +2865,7 @@ impl AuthorityState {
             .await?;
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&execution_lock);
-        self.check_system_consistency(
-            cur_epoch_store,
-            checkpoint_executor,
-            accumulator,
-            expensive_safety_check_config,
-        );
+        self.check_system_consistency(cur_epoch_store, accumulator, expensive_safety_check_config);
         self.maybe_reaccumulate_state_hash(
             cur_epoch_store,
             epoch_start_configuration
@@ -2965,7 +2958,6 @@ impl AuthorityState {
     fn check_system_consistency(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
-        checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) {
@@ -2996,7 +2988,6 @@ impl AuthorityState {
                 cur_epoch_store.epoch()
             );
             self.expensive_check_is_consistent_state(
-                checkpoint_executor,
                 accumulator,
                 cur_epoch_store,
                 cfg!(debug_assertions), // panic in debug mode only
@@ -3013,7 +3004,6 @@ impl AuthorityState {
 
     fn expensive_check_is_consistent_state(
         &self,
-        checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
         cur_epoch_store: &AuthorityPerEpochStore,
         panic: bool,
@@ -3051,7 +3041,7 @@ impl AuthorityState {
         }
 
         if !panic {
-            checkpoint_executor.set_inconsistent_state(is_inconsistent);
+            accumulator.set_inconsistent_state(is_inconsistent);
         }
     }
 

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.configMapName }}
+data: 
+  graphql.toml: | 
+{{- (.Files.Get "files/config/graphql.toml") | nindent 4 }}
