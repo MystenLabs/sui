@@ -22,6 +22,7 @@ use std::net::SocketAddr;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::error::UserInputError;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
@@ -38,6 +39,7 @@ use sui_types::{
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use url::Url;
+
 struct MyUserValidationMethod {}
 #[async_trait::async_trait]
 impl UserValidationMethod for MyUserValidationMethod {
@@ -236,7 +238,12 @@ async fn test_passkey_feature_deny() {
     let response = create_credential_and_sign_test_tx(&test_cluster, None, false, false).await;
     let tx = make_good_passkey_tx(response);
     let err = execute_tx(tx, &test_cluster).await.unwrap_err();
-    assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
+    assert!(matches!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::Unsupported(..)
+        }
+    ));
 }
 
 #[sim_test]
