@@ -382,6 +382,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         }
 
         // Read from the dag state to find the latest blocks.
+        // TODO: at the moment we don't look into the block manager for suspended blocks. Ideally we
+        // want in the future if we think we would like to tackle the majority of cases.
         let mut blocks = vec![];
         let dag_state = self.dag_state.read();
         for authority in authorities {
@@ -612,7 +614,7 @@ mod tests {
         fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
             todo!()
         }
-        async fn set_min_propose_round(&self, _round: Round) -> Result<(), CoreError> {
+        async fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
             todo!()
         }
     }

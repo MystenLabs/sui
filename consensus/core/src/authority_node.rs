@@ -489,6 +489,7 @@ mod tests {
         }
     }
 
+    // TODO: create a fixture
     async fn make_authority(
         index: AuthorityIndex,
         db_dir: &TempDir,

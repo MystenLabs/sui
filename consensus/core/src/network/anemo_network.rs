@@ -224,9 +224,11 @@ impl NetworkClient for AnemoClient {
             .await
             .map_err(|e: Status| {
                 if e.status() == StatusCode::RequestTimeout {
-                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks timeout: {e:?}"))
+                    ConsensusError::NetworkRequestTimeout(format!(
+                        "fetch_latest_blocks timeout: {e:?}"
+                    ))
                 } else {
-                    ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
+                    ConsensusError::NetworkRequest(format!("fetch_latest_blocks failed: {e:?}"))
                 }
             })?;
         let body = response.into_body();

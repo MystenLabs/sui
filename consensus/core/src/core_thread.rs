@@ -31,11 +31,6 @@ enum CoreThreadCommand {
     NewBlock(Round, oneshot::Sender<()>, bool),
     /// Request missing blocks that need to be synced.
     GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
-    /// Sets the minimum propose round for the proposer. This is primarily used when the node
-    /// is recovering and trying to figure out from the network its last proposed block/round and
-    /// set it accordingly to `[Core]`. It will also a force creating a new block for the `round + 1`
-    /// to ensure liveness.
-    SetMinProposeRound(Round, oneshot::Sender<()>),
 }
 
 #[derive(Error, Debug)]
@@ -60,7 +55,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     /// It is not a guarantee that produced blocks will be accepted by peers.
     fn set_consumer_availability(&self, available: bool) -> Result<(), CoreError>;
 
-    async fn set_min_propose_round(&self, round: Round) -> Result<(), CoreError>;
+    async fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError>;
 }
 
 pub(crate) struct CoreThreadHandle {
@@ -80,6 +75,7 @@ struct CoreThread {
     core: Core,
     receiver: Receiver<CoreThreadCommand>,
     rx_consumer_availability: watch::Receiver<bool>,
+    rx_last_known_proposed_round: watch::Receiver<Round>,
     context: Arc<Context>,
 }
 
@@ -109,13 +105,13 @@ impl CoreThread {
                             let _scope = monitored_scope("CoreThread::loop::get_missing");
                             sender.send(self.core.get_missing_blocks()).ok();
                         }
-                        CoreThreadCommand::SetMinProposeRound(round, sender) => {
-                            let _scope = monitored_scope("CoreThread::loop::set_min_propose_round");
-                            self.core.set_min_propose_round(round);
-                            self.core.new_block(round + 1, true)?;
-                            sender.send(()).ok();
-                        }
                     }
+                }
+                _ = self.rx_last_known_proposed_round.changed() => {
+                    let _scope = monitored_scope("CoreThread::loop::set_last_known_proposed_round");
+                    let round = *self.rx_last_known_proposed_round.borrow();
+                    self.core.set_last_known_proposed_round(round);
+                    self.core.new_block(round + 1, true)?;
                 }
                 _ = self.rx_consumer_availability.changed() => {
                     let _scope = monitored_scope("CoreThread::loop::set_consumer_availability");
@@ -139,6 +135,7 @@ pub(crate) struct ChannelCoreThreadDispatcher {
     context: Arc<Context>,
     sender: WeakSender<CoreThreadCommand>,
     tx_consumer_availability: Arc<watch::Sender<bool>>,
+    tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
 }
 
 impl ChannelCoreThreadDispatcher {
@@ -146,11 +143,14 @@ impl ChannelCoreThreadDispatcher {
         let (sender, receiver) =
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
         let (tx_consumer_availability, mut rx_consumer_availability) = watch::channel(false);
+        let (tx_last_known_proposed_round, mut rx_last_known_proposed_round) = watch::channel(0);
         rx_consumer_availability.mark_unchanged();
+        rx_last_known_proposed_round.mark_unchanged();
         let core_thread = CoreThread {
             core,
             receiver,
             rx_consumer_availability,
+            rx_last_known_proposed_round,
             context: context.clone(),
         };
 
@@ -171,6 +171,7 @@ impl ChannelCoreThreadDispatcher {
             context,
             sender: sender.downgrade(),
             tx_consumer_availability: Arc::new(tx_consumer_availability),
+            tx_last_known_proposed_round: Arc::new(tx_last_known_proposed_round),
         };
         let handle = CoreThreadHandle {
             join_handle,
@@ -223,11 +224,10 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
             .map_err(|e| Shutdown(e.to_string()))
     }
 
-    async fn set_min_propose_round(&self, round: Round) -> Result<(), CoreError> {
-        let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::SetMinProposeRound(round, sender))
-            .await;
-        receiver.await.map_err(|e| Shutdown(e.to_string()))
+    async fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError> {
+        self.tx_last_known_proposed_round
+            .send(round)
+            .map_err(|e| Shutdown(e.to_string()))
     }
 }
 

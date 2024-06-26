@@ -83,10 +83,10 @@ pub(crate) struct Core {
     block_signer: ProtocolKeyPair,
     /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
     dag_state: Arc<RwLock<DagState>>,
-    /// The minimum round after which the node should be able to propose. This is currently being used
-    /// to avoid equivocations during a node recovering from amnesia. When value is None it means that
+    /// The last known round for which the node has proposed. Any proposal should be for a round > of this.
+    /// This is currently being used to avoid equivocations during a node recovering from amnesia. When value is None it means that
     /// the last block sync mechanism is enabled, but it hasn't been initialised yet.
-    min_propose_round: Option<Round>,
+    last_known_proposed_round: Option<Round>,
 }
 
 impl Core {
@@ -155,7 +155,7 @@ impl Core {
             signals,
             block_signer,
             dag_state,
-            min_propose_round,
+            last_known_proposed_round: min_propose_round,
         }
         .recover()
     }
@@ -297,21 +297,21 @@ impl Core {
     }
 
     /// Sets the min propose round for the proposer allowing to propose blocks only for round numbers
-    /// `> min_propose_round`. At the moment is allowed to call the method only once leading to a panic
+    /// `> last_known_proposed_round`. At the moment is allowed to call the method only once leading to a panic
     /// if attempt to do multiple times.
-    pub(crate) fn set_min_propose_round(&mut self, round: Round) {
+    pub(crate) fn set_last_known_proposed_round(&mut self, round: Round) {
         assert!(
             self.context
                 .parameters
                 .is_sync_last_proposed_block_enabled(),
-            "Should not attempt to set the min propose round if "
+            "Should not attempt to set the last known proposed round if that has been already set"
         );
         assert!(
-            self.min_propose_round.is_none(),
-            "Attempted to set the min propose round more than once"
+            self.last_known_proposed_round.is_none(),
+            "Attempted to set the last known proposed round more than once"
         );
-        self.min_propose_round = Some(round);
-        info!("Set min propose round to {round}");
+        self.last_known_proposed_round = Some(round);
+        info!("Set last known proposed round to {round}");
     }
 
     // Attempts to create a new block, persist and propose it to all peers.
@@ -616,7 +616,7 @@ impl Core {
     /// Whether the core should propose new blocks.
     fn should_propose(&self) -> bool {
         let clock_round = self.threshold_clock.get_round();
-        let skip_proposing = if let Some(min_propose_round) = self.min_propose_round {
+        let skip_proposing = if let Some(min_propose_round) = self.last_known_proposed_round {
             if clock_round <= min_propose_round {
                 debug!("Skip proposing for round {clock_round} as min propose round is {min_propose_round}");
                 true
@@ -1407,7 +1407,7 @@ mod test {
 
         // Now set the min propose round which is the highest round for which the network informed
         // us that we do have proposed a block about.
-        core.set_min_propose_round(10);
+        core.set_last_known_proposed_round(10);
 
         let block = core.try_propose(true).expect("No error").unwrap();
         assert_eq!(block.round(), 11);
