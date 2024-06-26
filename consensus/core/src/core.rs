@@ -616,15 +616,16 @@ impl Core {
     /// Whether the core should propose new blocks.
     fn should_propose(&self) -> bool {
         let clock_round = self.threshold_clock.get_round();
-        let skip_proposing = if let Some(min_propose_round) = self.last_known_proposed_round {
-            if clock_round <= min_propose_round {
-                debug!("Skip proposing for round {clock_round} as min propose round is {min_propose_round}");
+        let skip_proposing = if let Some(last_known_proposed_round) = self.last_known_proposed_round
+        {
+            if clock_round <= last_known_proposed_round {
+                debug!("Skip proposing for round {clock_round} as last known proposed round is {last_known_proposed_round}");
                 true
             } else {
                 false
             }
         } else {
-            debug!("Skip proposing for round {clock_round}, min propose round has not been synced yet.");
+            debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
             true
         };
 
@@ -1405,7 +1406,7 @@ mod test {
         // Try to propose - no block should be produced.
         assert!(core.try_propose(true).unwrap().is_none());
 
-        // Now set the min propose round which is the highest round for which the network informed
+        // Now set the last known proposed round which is the highest round for which the network informed
         // us that we do have proposed a block about.
         core.set_last_known_proposed_round(10);
 
