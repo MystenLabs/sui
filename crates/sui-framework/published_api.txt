@@ -2042,7 +2042,7 @@ create_currency
 	public fun
 	0x2::coin
 create_regulated_currency_v2
-	public(package) fun
+	public fun
 	0x2::coin
 mint
 	public fun
@@ -2054,22 +2054,22 @@ burn
 	public entry fun
 	0x2::coin
 deny_list_v2_add
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_remove
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_most_recent_contains
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_enable_global_pause
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_disable_global_pause
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_most_recent_is_global_pause_enabled
-	public(package) fun
+	public fun
 	0x2::coin
 mint_and_transfer
 	public entry fun

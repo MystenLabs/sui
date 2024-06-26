@@ -236,7 +236,7 @@ module sui::coin {
         )
     }
 
-    public(package) fun create_regulated_currency_v2<T: drop>(
+    public fun create_regulated_currency_v2<T: drop>(
         witness: T,
         decimals: u8,
         symbol: vector<u8>,
@@ -295,7 +295,7 @@ module sui::coin {
         cap.total_supply.decrease_supply(balance)
     }
 
-    public(package) fun deny_list_v2_add<T>(
+    public fun deny_list_v2_add<T>(
         deny_list: &mut DenyList,
         _deny_cap: &mut DenyCapV2<T>,
         addr: address,
@@ -305,7 +305,7 @@ module sui::coin {
         deny_list.v2_add(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
-    public(package) fun deny_list_v2_remove<T>(
+    public fun deny_list_v2_remove<T>(
         deny_list: &mut DenyList,
         _deny_cap: &mut DenyCapV2<T>,
         addr: address,
@@ -315,7 +315,7 @@ module sui::coin {
         deny_list.v2_remove(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
-    public(package) fun deny_list_v2_most_recent_contains<T>(
+    public fun deny_list_v2_most_recent_contains<T>(
         deny_list: &DenyList,
         addr: address,
         ctx: &TxContext,
@@ -325,7 +325,7 @@ module sui::coin {
     }
 
     #[allow(unused_mut_parameter)]
-    public(package) fun deny_list_v2_enable_global_pause<T>(
+    public fun deny_list_v2_enable_global_pause<T>(
         deny_list: &mut DenyList,
         deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
@@ -336,7 +336,7 @@ module sui::coin {
     }
 
     #[allow(unused_mut_parameter)]
-    public(package) fun deny_list_v2_disable_global_pause<T>(
+    public fun deny_list_v2_disable_global_pause<T>(
         deny_list: &mut DenyList,
         deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
@@ -346,7 +346,7 @@ module sui::coin {
         deny_list.v2_disable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
     }
 
-    public(package) fun deny_list_v2_most_recent_is_global_pause_enabled<T>(
+    public fun deny_list_v2_most_recent_is_global_pause_enabled<T>(
         deny_list: &DenyList,
         ctx: &TxContext,
     ): bool {
