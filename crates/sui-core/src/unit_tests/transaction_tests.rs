@@ -1676,12 +1676,12 @@ async fn test_handle_soft_bundle_certificates() {
     for _i in 0..4 {
         let (address, keypair): (_, AccountKeyPair) = get_key_pair();
         let gas_object_id = ObjectID::random();
-        gas_object_ids.push(gas_object_id.clone());
 
         let obj = Object::with_id_owner_for_testing(gas_object_id, address);
         authority.insert_genesis_object(obj).await;
 
         senders.push((address, keypair));
+        gas_object_ids.push(gas_object_id);
     }
 
     let (authority, package) = publish_object_basics(authority).await;
@@ -1926,10 +1926,10 @@ async fn test_handle_soft_bundle_certificates_errors() {
             )
             .await;
         assert!(response.is_err());
-        assert!(match response.unwrap_err() {
-            SuiError::NoCertificateProvidedError { .. } => true,
-            _ => false,
-        })
+        assert_matches!(
+            response.unwrap_err(),
+            SuiError::NoCertificateProvidedError { .. }
+        );
     }
 
     // Case 1: submit a soft bundle with more txs than the limit.
@@ -1974,12 +1974,12 @@ async fn test_handle_soft_bundle_certificates_errors() {
             )
             .await;
         assert!(response.is_err());
-        assert!(match response.unwrap_err() {
+        assert_matches!(
+            response.unwrap_err(),
             SuiError::UserInputError {
                 error: UserInputError::TooManyTransactionsInSoftBundle { .. },
-            } => true,
-            _ => false,
-        })
+            }
+        );
     }
 
     // Case 2: submit a soft bundle with tx containing no shared object.
@@ -2020,12 +2020,12 @@ async fn test_handle_soft_bundle_certificates_errors() {
             )
             .await;
         assert!(response.is_err());
-        assert!(match response.unwrap_err() {
+        assert_matches!(
+            response.unwrap_err(),
             SuiError::UserInputError {
                 error: UserInputError::NoSharedObjectError { .. },
-            } => true,
-            _ => false,
-        })
+            }
+        );
     }
 
     // Case 3: submit a soft bundle with txs of different gas prices.
@@ -2105,12 +2105,12 @@ async fn test_handle_soft_bundle_certificates_errors() {
             )
             .await;
         assert!(response.is_err());
-        assert!(match response.unwrap_err() {
+        assert_matches!(
+            response.unwrap_err(),
             SuiError::UserInputError {
                 error: UserInputError::GasPriceMismatchError { .. },
-            } => true,
-            _ => false,
-        })
+            }
+        );
     }
 
     // Case 4: submit a soft bundle with txs whose consensus message has been processed.
@@ -2192,12 +2192,12 @@ async fn test_handle_soft_bundle_certificates_errors() {
             )
             .await;
         assert!(response.is_err());
-        assert!(match response.unwrap_err() {
+        assert_matches!(
+            response.unwrap_err(),
             SuiError::UserInputError {
                 error: UserInputError::CeritificateAlreadyProcessed { .. },
-            } => true,
-            _ => false,
-        })
+            }
+        );
     }
 }
 

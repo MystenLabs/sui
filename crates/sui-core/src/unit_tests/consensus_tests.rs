@@ -135,7 +135,7 @@ pub fn make_consensus_adapter_for_test(
             if self.1 {
                 self.0
                     .transaction_manager()
-                    .enqueue(transactions, &epoch_store);
+                    .enqueue(transactions, epoch_store);
             }
             Ok(())
         }
