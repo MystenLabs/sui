@@ -2732,18 +2732,6 @@ impl CertifiedTransaction {
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
-pub trait VersionedProtocolMessage {
-    /// Return version of message. Some messages depend on their enclosing messages to know the
-    /// version number, so not every implementor implements this.
-    fn message_version(&self) -> Option<u64> {
-        None
-    }
-
-    /// Check that the version of the message is the correct one to use at this protocol version.
-    /// Also checks whether the feauures used by the message are supported by the protocol config.
-    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult;
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord, Hash)]
 pub enum InputObjectKind {
     // A Move package, must be immutable.

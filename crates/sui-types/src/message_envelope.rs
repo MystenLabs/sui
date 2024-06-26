@@ -10,14 +10,13 @@ use crate::crypto::{
 use crate::error::SuiResult;
 use crate::executable_transaction::CertificateProof;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
-use crate::transaction::{SenderSignedData, VersionedProtocolMessage};
+use crate::transaction::SenderSignedData;
 use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentScope};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
-use sui_protocol_config::ProtocolConfig;
 
 pub trait Message {
     type DigestType: Clone + Debug;
@@ -88,13 +87,6 @@ impl<T: Message, S> Envelope<T, S> {
 
     pub fn data_mut_for_testing(&mut self) -> &mut T {
         &mut self.data
-    }
-}
-
-impl<T: Message + VersionedProtocolMessage, S> VersionedProtocolMessage for Envelope<T, S> {
-    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        self.data
-            .check_version_and_features_supported(protocol_config)
     }
 }
 
@@ -296,13 +288,6 @@ impl<T: Message, S> VerifiedEnvelope<T, S> {
     /// Remove the authority signatures `S` from this envelope.
     pub fn into_unsigned(self) -> VerifiedEnvelope<T, EmptySignInfo> {
         VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(self.into_inner().into_unsigned())
-    }
-}
-
-impl<T: Message + VersionedProtocolMessage, S> VersionedProtocolMessage for VerifiedEnvelope<T, S> {
-    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        self.inner()
-            .check_version_and_features_supported(protocol_config)
     }
 }
 
