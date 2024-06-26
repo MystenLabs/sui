@@ -265,6 +265,15 @@ mod test {
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
         }
+
+        async fn fetch_latest_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _authorities: Vec<AuthorityIndex>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Unimplemented")
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

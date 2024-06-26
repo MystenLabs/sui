@@ -210,6 +210,30 @@ impl NetworkClient for AnemoClient {
         let response = response.into_body();
         Ok((response.commits, response.certifier_blocks))
     }
+
+    async fn fetch_latest_blocks(
+        &self,
+        peer: AuthorityIndex,
+        authorities: Vec<AuthorityIndex>,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let request = FetchLatestBlocksRequest { authorities };
+        let response = client
+            .fetch_latest_blocks(anemo::Request::new(request).with_timeout(timeout))
+            .await
+            .map_err(|e: Status| {
+                if e.status() == StatusCode::RequestTimeout {
+                    ConsensusError::NetworkRequestTimeout(format!(
+                        "fetch_latest_blocks timeout: {e:?}"
+                    ))
+                } else {
+                    ConsensusError::NetworkRequest(format!("fetch_latest_blocks failed: {e:?}"))
+                }
+            })?;
+        let body = response.into_body();
+        Ok(body.blocks)
+    }
 }
 
 /// Proxies Anemo requests to NetworkService with actual handler implementation.
@@ -346,6 +370,36 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
             commits,
             certifier_blocks,
         }))
+    }
+
+    async fn fetch_latest_blocks(
+        &self,
+        request: anemo::Request<FetchLatestBlocksRequest>,
+    ) -> Result<anemo::Response<FetchLatestBlocksResponse>, anemo::rpc::Status> {
+        let Some(peer_id) = request.peer_id() else {
+            return Err(anemo::rpc::Status::new_with_message(
+                anemo::types::response::StatusCode::BadRequest,
+                "peer_id not found",
+            ));
+        };
+        let index = self.peer_map.get(peer_id).ok_or_else(|| {
+            anemo::rpc::Status::new_with_message(
+                anemo::types::response::StatusCode::BadRequest,
+                "peer not found",
+            )
+        })?;
+        let body = request.into_body();
+        let blocks = self
+            .service
+            .handle_fetch_latest_blocks(*index, body.authorities)
+            .await
+            .map_err(|e| {
+                anemo::rpc::Status::new_with_message(
+                    anemo::types::response::StatusCode::BadRequest,
+                    format!("{e}"),
+                )
+            })?;
+        Ok(Response::new(FetchLatestBlocksResponse { blocks }))
     }
 }
 
@@ -661,4 +715,15 @@ pub(crate) struct FetchCommitsResponse {
     commits: Vec<Bytes>,
     // Serialized SignedBlock that certify the last commit from above.
     certifier_blocks: Vec<Bytes>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchLatestBlocksRequest {
+    authorities: Vec<AuthorityIndex>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchLatestBlocksResponse {
+    // Serialized SignedBlocks.
+    blocks: Vec<Bytes>,
 }

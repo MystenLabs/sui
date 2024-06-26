@@ -246,6 +246,71 @@ impl NetworkClient for TonicClient {
         let response = response.into_inner();
         Ok((response.commits, response.certifier_blocks))
     }
+
+    async fn fetch_latest_blocks(
+        &self,
+        peer: AuthorityIndex,
+        authorities: Vec<AuthorityIndex>,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let mut request = Request::new(FetchLatestBlocksRequest {
+            authorities: authorities
+                .iter()
+                .map(|authority| authority.value() as u32)
+                .collect(),
+        });
+        request.set_timeout(timeout);
+        let mut stream = client
+            .fetch_latest_blocks(request)
+            .await
+            .map_err(|e| {
+                if e.code() == tonic::Code::DeadlineExceeded {
+                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks failed: {e:?}"))
+                } else {
+                    ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
+                }
+            })?
+            .into_inner();
+        let mut blocks = vec![];
+        let mut total_fetched_bytes = 0;
+        loop {
+            match stream.message().await {
+                Ok(Some(response)) => {
+                    for b in &response.blocks {
+                        total_fetched_bytes += b.len();
+                    }
+                    blocks.extend(response.blocks);
+                    if total_fetched_bytes > MAX_TOTAL_FETCHED_BYTES {
+                        info!(
+                            "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
+                            total_fetched_bytes, MAX_TOTAL_FETCHED_BYTES,
+                        );
+                        break;
+                    }
+                }
+                Ok(None) => {
+                    break;
+                }
+                Err(e) => {
+                    if blocks.is_empty() {
+                        if e.code() == tonic::Code::DeadlineExceeded {
+                            return Err(ConsensusError::NetworkRequestTimeout(format!(
+                                "fetch_blocks failed mid-stream: {e:?}"
+                            )));
+                        }
+                        return Err(ConsensusError::NetworkRequest(format!(
+                            "fetch_blocks failed mid-stream: {e:?}"
+                        )));
+                    } else {
+                        warn!("fetch_blocks failed mid-stream: {e:?}");
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(blocks)
+    }
 }
 
 // Tonic channel wrapped with layers.
@@ -495,6 +560,52 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             commits,
             certifier_blocks,
         }))
+    }
+
+    type FetchLatestBlocksStream =
+        Iter<std::vec::IntoIter<Result<FetchLatestBlocksResponse, tonic::Status>>>;
+
+    async fn fetch_latest_blocks(
+        &self,
+        request: Request<FetchLatestBlocksRequest>,
+    ) -> Result<Response<Self::FetchLatestBlocksStream>, tonic::Status> {
+        let Some(peer_index) = request
+            .extensions()
+            .get::<PeerInfo>()
+            .map(|p| p.authority_index)
+        else {
+            return Err(tonic::Status::internal("PeerInfo not found"));
+        };
+        let inner = request.into_inner();
+
+        // Convert the authority indexes and validate them
+        let mut authorities = vec![];
+        for authority in inner.authorities.into_iter() {
+            let Some(authority) = self
+                .context
+                .committee
+                .to_authority_index(authority as usize)
+            else {
+                return Err(tonic::Status::internal(format!(
+                    "Invalid authority index provided {authority}"
+                )));
+            };
+            authorities.push(authority);
+        }
+
+        let blocks = self
+            .service
+            .handle_fetch_latest_blocks(peer_index, authorities)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+        let responses: std::vec::IntoIter<Result<FetchLatestBlocksResponse, tonic::Status>> =
+            chunk_blocks(blocks, MAX_FETCH_RESPONSE_BYTES)
+                .into_iter()
+                .map(|blocks| Ok(FetchLatestBlocksResponse { blocks }))
+                .collect::<Vec<_>>()
+                .into_iter();
+        let stream = iter(responses);
+        Ok(Response::new(stream))
     }
 }
 
@@ -1004,6 +1115,19 @@ pub(crate) struct FetchCommitsResponse {
     // Serialized SignedBlock that certify the last commit from above.
     #[prost(bytes = "bytes", repeated, tag = "2")]
     certifier_blocks: Vec<Bytes>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchLatestBlocksRequest {
+    #[prost(uint32, repeated, tag = "1")]
+    authorities: Vec<u32>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchLatestBlocksResponse {
+    // The response of the requested blocks as Serialized SignedBlock.
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    blocks: Vec<Bytes>,
 }
 
 fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {

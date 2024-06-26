@@ -83,6 +83,10 @@ pub(crate) struct Core {
     block_signer: ProtocolKeyPair,
     /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
     dag_state: Arc<RwLock<DagState>>,
+    /// The last known round for which the node has proposed. Any proposal should be for a round > of this.
+    /// This is currently being used to avoid equivocations during a node recovering from amnesia. When value is None it means that
+    /// the last block sync mechanism is enabled, but it hasn't been initialised yet.
+    last_known_proposed_round: Option<Round>,
 }
 
 impl Core {
@@ -129,6 +133,13 @@ impl Core {
             last_included_ancestors[ancestor.author] = Some(*ancestor);
         }
 
+        let min_propose_round = if context.parameters.is_sync_last_proposed_block_enabled() {
+            None
+        } else {
+            // if the sync is disabled then we practically don't want to impose any restriction.
+            Some(0)
+        };
+
         Self {
             context: context.clone(),
             threshold_clock: ThresholdClock::new(0, context.clone()),
@@ -144,6 +155,7 @@ impl Core {
             signals,
             block_signer,
             dag_state,
+            last_known_proposed_round: min_propose_round,
         }
         .recover()
     }
@@ -282,6 +294,24 @@ impl Core {
             return self.try_propose(force);
         }
         Ok(None)
+    }
+
+    /// Sets the min propose round for the proposer allowing to propose blocks only for round numbers
+    /// `> last_known_proposed_round`. At the moment is allowed to call the method only once leading to a panic
+    /// if attempt to do multiple times.
+    pub(crate) fn set_last_known_proposed_round(&mut self, round: Round) {
+        assert!(
+            self.context
+                .parameters
+                .is_sync_last_proposed_block_enabled(),
+            "Should not attempt to set the last known proposed round if that has been already set"
+        );
+        assert!(
+            self.last_known_proposed_round.is_none(),
+            "Attempted to set the last known proposed round more than once"
+        );
+        self.last_known_proposed_round = Some(round);
+        info!("Set last known proposed round to {round}");
     }
 
     // Attempts to create a new block, persist and propose it to all peers.
@@ -585,7 +615,21 @@ impl Core {
 
     /// Whether the core should propose new blocks.
     fn should_propose(&self) -> bool {
-        self.consumer_availability
+        let clock_round = self.threshold_clock.get_round();
+        let skip_proposing = if let Some(last_known_proposed_round) = self.last_known_proposed_round
+        {
+            if clock_round <= last_known_proposed_round {
+                debug!("Skip proposing for round {clock_round} as last known proposed round is {last_known_proposed_round}");
+                true
+            } else {
+                false
+            }
+        } else {
+            debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
+            true
+        };
+
+        self.consumer_availability && !skip_proposing
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
@@ -717,6 +761,11 @@ impl CoreSignals {
         // When there is only one authority in committee, it is unnecessary to broadcast
         // the block which will fail anyway without subscribers to the signal.
         if self.context.committee.size() > 1 {
+            if block.round() == GENESIS_ROUND {
+                debug!("Ignoring broadcasting genesis block to peers");
+                return Ok(());
+            }
+
             if let Err(err) = self.tx_block_broadcast.send(block) {
                 warn!("Couldn't broadcast the block to any receiver: {err}");
                 return Err(ConsensusError::Shutdown);
@@ -849,6 +898,7 @@ mod test {
     use tokio::time::sleep;
 
     use super::*;
+    use crate::test_dag_builder::DagBuilder;
     use crate::{
         block::{genesis_blocks, TestBlock},
         block_verifier::NoopBlockVerifier,
@@ -1283,6 +1333,93 @@ mod test {
         let last_commit = store.read_last_commit().unwrap();
         assert!(last_commit.is_none());
         assert_eq!(dag_state.read().last_commit_index(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_core_set_min_propose_round() {
+        telemetry_subscribers::init_for_testing();
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context.with_parameters(Parameters {
+            sync_last_proposed_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        }));
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
+            context.clone(),
+            dag_state.clone(),
+        ));
+
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        // Need at least one subscriber to the block broadcast channel.
+        let _block_receiver = signal_receivers.block_broadcast_receiver();
+
+        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            CommitConsumer::new(sender.clone(), 0, 0),
+            dag_state.clone(),
+            store.clone(),
+            leader_schedule.clone(),
+        );
+
+        let mut core = Core::new(
+            context.clone(),
+            leader_schedule,
+            transaction_consumer,
+            block_manager,
+            true,
+            commit_observer,
+            signals,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
+        );
+
+        // No new block should have been produced
+        assert_eq!(
+            core.last_proposed_round(),
+            GENESIS_ROUND,
+            "No block should have been created other than genesis"
+        );
+
+        // Trying to explicitly propose a block will not produce anything
+        assert!(core.try_propose(true).unwrap().is_none());
+
+        // Create blocks for the whole network - even "our" node in order to replicate an "amnesia" recovery.
+        let mut builder = DagBuilder::new(context.clone());
+        builder.layers(1..=10).build();
+
+        let blocks = builder.blocks.values().cloned().collect::<Vec<_>>();
+
+        // Process all the blocks
+        assert!(core.add_blocks(blocks).unwrap().is_empty());
+
+        // Try to propose - no block should be produced.
+        assert!(core.try_propose(true).unwrap().is_none());
+
+        // Now set the last known proposed round which is the highest round for which the network informed
+        // us that we do have proposed a block about.
+        core.set_last_known_proposed_round(10);
+
+        let block = core.try_propose(true).expect("No error").unwrap();
+        assert_eq!(block.round(), 11);
+        assert_eq!(block.ancestors().len(), 4);
+
+        // Our last ancestored included should be genesis. We do not update the last proposed block via the
+        // normal block processing path to keep it simple.
+        let our_ancestor_included = block.ancestors().iter().find(|block_ref: &&BlockRef| {
+            block_ref.author == context.own_index && block_ref.round == GENESIS_ROUND
+        });
+        assert!(our_ancestor_included.is_some());
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

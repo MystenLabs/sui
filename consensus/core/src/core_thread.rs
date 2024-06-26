@@ -54,6 +54,8 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     /// This is only used by core to decide if it should propose new blocks.
     /// It is not a guarantee that produced blocks will be accepted by peers.
     fn set_consumer_availability(&self, available: bool) -> Result<(), CoreError>;
+
+    fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError>;
 }
 
 pub(crate) struct CoreThreadHandle {
@@ -73,6 +75,7 @@ struct CoreThread {
     core: Core,
     receiver: Receiver<CoreThreadCommand>,
     rx_consumer_availability: watch::Receiver<bool>,
+    rx_last_known_proposed_round: watch::Receiver<Round>,
     context: Arc<Context>,
 }
 
@@ -104,6 +107,12 @@ impl CoreThread {
                         }
                     }
                 }
+                _ = self.rx_last_known_proposed_round.changed() => {
+                    let _scope = monitored_scope("CoreThread::loop::set_last_known_proposed_round");
+                    let round = *self.rx_last_known_proposed_round.borrow();
+                    self.core.set_last_known_proposed_round(round);
+                    self.core.new_block(round + 1, true)?;
+                }
                 _ = self.rx_consumer_availability.changed() => {
                     let _scope = monitored_scope("CoreThread::loop::set_consumer_availability");
                     let available = *self.rx_consumer_availability.borrow();
@@ -126,6 +135,7 @@ pub(crate) struct ChannelCoreThreadDispatcher {
     context: Arc<Context>,
     sender: WeakSender<CoreThreadCommand>,
     tx_consumer_availability: Arc<watch::Sender<bool>>,
+    tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
 }
 
 impl ChannelCoreThreadDispatcher {
@@ -133,11 +143,14 @@ impl ChannelCoreThreadDispatcher {
         let (sender, receiver) =
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
         let (tx_consumer_availability, mut rx_consumer_availability) = watch::channel(false);
+        let (tx_last_known_proposed_round, mut rx_last_known_proposed_round) = watch::channel(0);
         rx_consumer_availability.mark_unchanged();
+        rx_last_known_proposed_round.mark_unchanged();
         let core_thread = CoreThread {
             core,
             receiver,
             rx_consumer_availability,
+            rx_last_known_proposed_round,
             context: context.clone(),
         };
 
@@ -158,6 +171,7 @@ impl ChannelCoreThreadDispatcher {
             context,
             sender: sender.downgrade(),
             tx_consumer_availability: Arc::new(tx_consumer_availability),
+            tx_last_known_proposed_round: Arc::new(tx_last_known_proposed_round),
         };
         let handle = CoreThreadHandle {
             join_handle,
@@ -207,6 +221,12 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
     fn set_consumer_availability(&self, available: bool) -> Result<(), CoreError> {
         self.tx_consumer_availability
             .send(available)
+            .map_err(|e| Shutdown(e.to_string()))
+    }
+
+    fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError> {
+        self.tx_last_known_proposed_round
+            .send(round)
             .map_err(|e| Shutdown(e.to_string()))
     }
 }
