@@ -162,6 +162,7 @@ module std::vector {
     // === Macros ===
 
     /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
+    /// Does not preserve the order of elements in the vector (starts from the end of the vector).
     public macro fun destroy<$T>($v: vector<$T>, $f: |$T|) {
         let mut v = $v;
         while (!v.is_empty()) {
@@ -170,15 +171,50 @@ module std::vector {
         v.destroy_empty();
     }
 
+    /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
+    /// Preserve the order of elements in the vector.
+    public macro fun do<$T>($v: vector<$T>, $f: |$T|) {
+        let mut v = $v;
+        v.reverse();
+        while (!v.is_empty()) {
+            $f(v.pop_back());
+        };
+        v.destroy_empty();
+    }
+
+    /// Perform an action `f` on each element of the vector `v`. The vector is not modified.
+    public macro fun do_ref<$T>($v: &vector<$T>, $f: |&$T|) {
+        let v = $v;
+        let mut i = 0;
+        let len = v.length();
+        while (i < len) {
+            $f(&v[i]);
+            i = i + 1;
+        };
+    }
+
+    /// Perform an action `f` on each element of the vector `v`. The function `f` takes a mutable
+    /// reference.
+    public macro fun do_mut<$T>($v: &mut vector<$T>, $f: |&mut $T|) {
+        let mut v = $v;
+        let mut i = 0;
+        let len = v.length();
+        while (i < len) {
+            $f(&mut v[i]);
+            i = i + 1;
+        };
+    }
+
     /// Map the vector `v` to a new vector by applying the function `f` to each element.
+    /// Preserve the order of elements in the vector, first is called first.
     public macro fun map<$T, $U>($v: vector<$T>, $f: |$T| -> $U): vector<$U> {
         let mut r = vector[];
         let mut v = $v;
+        v.reverse();
         while (!v.is_empty()) {
             r.push_back($f(v.pop_back()));
         };
         v.destroy_empty();
-        r.reverse();
         r
     }
 

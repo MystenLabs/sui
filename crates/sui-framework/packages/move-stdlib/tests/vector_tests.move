@@ -591,6 +591,25 @@ module std::vector_tests {
     }
 
     #[test]
+    fun test_do_macro() {
+        let mut acc = 0;
+        vector[10, 20, 30, 40].do!(|e| acc = acc + e);
+        assert!(acc == 100);
+
+        let mut vec = vector[10, 20];
+        vec.do!(|e| acc = acc + e);
+        assert!(vector[10, 20] == vec);
+
+        let mut acc = 0;
+        vector[10, 20, 30, 40].do_ref!(|e| acc = acc + *e);
+        assert!(acc == 100);
+
+        let mut vec = vector[10, 20, 30, 40];
+        vec.do_mut!(|e| *e = *e + 1);
+        assert!(vec == vector[11, 21, 31, 41]);
+    }
+
+    #[test]
     fun test_map_macro() {
         let r = vector[0, 1, 2, 3];
         assert!(r.map!(|e| e + 1) == vector[1, 2, 3, 4]);
