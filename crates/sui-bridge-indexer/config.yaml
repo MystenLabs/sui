@@ -1,26 +1,26 @@
 # config.yaml format:
 
 # URL of the remote store
-remote_store_url: https://checkpoints.testnet.sui.io
+# remote_store_url: <url>
 # URL for Ethereum RPC
-eth_rpc_url: https://rpc-sepolia.flashbots.net/
+# eth_rpc_url: <url>
 # Database connection URL
-db_url: postgres://postgres:postgrespw@localhost:5432
+# db_url: <url>
 # Path to the checkpoints
-checkpoints_path: ./checkpoints
+# checkpoints_path: <path>
 # Number of concurrent operations
-concurrency: 10
+# concurrency: 1
 # Bridge genesis checkpoint in SUI, for testnet = 43917829
-bridge_genesis_checkpoint: 43917829
+# bridge_genesis_checkpoint: <sui bridge genesis checkpoint>
 # Ethereum to Sui bridge contract address
-eth_sui_bridge_contract_address: 0xAE68F87938439afEEDd6552B0E83D2CbC2473623
+# eth_sui_bridge_contract_address: <contract_address>
 # Starting block number
-start_block: 5997013
+# start_block: <indexing_start_block>
 # Client metric URL
-metric_url: 0.0.0.0
+# metric_url: <url>
 # Client metric port
-metric_port: 9009
+# metric_port: <port>
 # checkpoint size of each backfill worker, use 432000 for 1 worker per day, assume 5 checkpoint per second
-back_fill_lot_size: 10000
+# back_fill_lot_size: <backfill lot size>
 # Optional starting checkpoint for realtime ingestion task
-resume_from_checkpoint: 68000000
+# resume_from_checkpoint: <Sui checkpoint>
