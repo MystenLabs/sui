@@ -3555,15 +3555,8 @@ impl AuthorityPerEpochStore {
         batch: &mut DBBatch,
         checkpoint: &PendingCheckpointV2,
     ) -> SuiResult {
-        if let Some(pending) = self.get_pending_checkpoint(&checkpoint.height())? {
-            if pending.roots() != checkpoint.roots() {
-                panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old roots: {:?}, new roots: {:?}", checkpoint.height(), pending.roots(), checkpoint.roots());
-            }
-            debug!(
-                checkpoint_commit_height = checkpoint.height(),
-                "Ignoring duplicate checkpoint notification",
-            );
-            return Ok(());
+        if let Some(_pending) = self.get_pending_checkpoint(&checkpoint.height())? {
+            panic!("duplicate checkpoint notification",);
         }
         debug!(
             checkpoint_commit_height = checkpoint.height(),
