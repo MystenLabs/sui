@@ -20,7 +20,11 @@ module test::return_expression {
 
         return { a + b };
 
-        return ({ a + b }, first_return_value, second_return_value);
+        return (
+            { a + b },
+            first_return_value,
+            second_return_value,
+        );
 
         return if (some_value) {
                 some_value
