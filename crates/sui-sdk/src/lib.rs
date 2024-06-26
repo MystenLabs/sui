@@ -237,7 +237,7 @@ impl SuiClientBuilder {
                 builder = builder.ping_interval(duration)
             }
 
-            Some(builder.build(url).await?)
+            builder.build(url).await.ok()
         } else {
             None
         };
@@ -359,8 +359,10 @@ impl SuiClientBuilder {
         let rpc_methods = Self::parse_methods(&rpc_spec)?;
 
         let subscriptions = if let Some(ws) = ws {
-            let rpc_spec: Value = ws.request("rpc.discover", rpc_params![]).await?;
-            Self::parse_methods(&rpc_spec)?
+            match ws.request("rpc.discover", rpc_params![]).await {
+                Ok(rpc_spec) => Self::parse_methods(&rpc_spec)?,
+                Err(_) => Vec::new(),
+            }
         } else {
             Vec::new()
         };
