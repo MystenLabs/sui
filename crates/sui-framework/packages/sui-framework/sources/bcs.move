@@ -103,7 +103,7 @@ module sui::bcs {
         let mut value: $T = 0;
         let mut i: $I = 0;
         let bits = $bits;
-        while (i <= bits) {
+        while (i < bits) {
             let byte = bcs.bytes.pop_back() as $T;
             value = value + (byte << (i as u8));
             i = i + 8;
@@ -146,7 +146,7 @@ module sui::bcs {
     /// See more here: https://en.wikipedia.org/wiki/LEB128
     public fun peel_vec_length(bcs: &mut BCS): u64 {
         let (mut total, mut shift, mut len) = (0u64, 0, 0);
-        while (true) {
+        loop {
             assert!(len <= 4, ELenOutOfRange);
             let byte = bcs.bytes.pop_back() as u64;
             len = len + 1;
