@@ -3,7 +3,6 @@
 
 #[test_only]
 module sui::bcs_tests {
-
     use sui::bcs::{Self, BCS, to_bytes, new};
     use std::unit_test::assert_eq;
 
@@ -14,7 +13,6 @@ module sui::bcs_tests {
     const U128_MAX: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
     const U256_MAX: u256 =
         0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
-
 
     public struct Info has copy, drop {
         a: bool,
