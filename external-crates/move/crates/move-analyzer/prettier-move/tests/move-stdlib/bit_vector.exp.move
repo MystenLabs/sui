@@ -100,7 +100,8 @@ module std::bit_vector {
             index = index + 1;
         };
 
-        index - start_index
+        index -
+        start_index
     }
 
     #[test_only]

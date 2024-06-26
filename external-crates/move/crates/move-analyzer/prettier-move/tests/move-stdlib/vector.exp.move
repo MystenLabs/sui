@@ -97,7 +97,8 @@ module std::vector {
 
     /// Return `true` if the vector `v` has no elements and `false` otherwise.
     public fun is_empty<Element>(v: &vector<Element>): bool {
-        v.length() == 0
+        v.length() ==
+        0
     }
 
     /// Return true if `e` is in the vector `v`.
@@ -157,7 +158,8 @@ module std::vector {
         v.push_back(e);
         while (i < len) {
             v.swap(i, len);
-            i = i + 1
+            i = i +
+            1
         }
     }
 

@@ -109,7 +109,8 @@ module sui::bag {
 
     /// Returns true iff the bag is empty (if `length` returns `0`)
     public fun is_empty(bag: &Bag): bool {
-        bag.size == 0
+        bag.size ==
+        0
     }
 
     /// Destroys an empty bag

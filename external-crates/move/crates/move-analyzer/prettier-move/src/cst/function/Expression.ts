@@ -146,10 +146,10 @@ function printAssignExpression(path: AstPath<Node>, options: ParserOptions, prin
  * Print `unary_expression` node.
  */
 function printUnaryExpression(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return group([
+	return [
 		path.call(print, 'nonFormattingChildren', 0),
 		path.call(print, 'nonFormattingChildren', 1),
-	]);
+	];
 }
 
 /**
@@ -160,16 +160,13 @@ function printBinaryExpression(path: AstPath<Node>, options: ParserOptions, prin
 	const shouldBreak = rhs!.startsOnNewLine || false;
 	let breakSymbol: Doc = line;
 
-	return group(
-		[
-			path.call(print, 'nonFormattingChildren', 0), // lhs
-			' ',
-			path.call(print, 'nonFormattingChildren', 1), // operator
-			breakSymbol,
-			path.call(print, 'nonFormattingChildren', 2), // rhs
-		],
-		{ shouldBreak },
-	);
+	return [
+		path.call(print, 'nonFormattingChildren', 0), // lhs
+		' ',
+		path.call(print, 'nonFormattingChildren', 1), // operator
+		breakSymbol,
+		path.call(print, 'nonFormattingChildren', 2), // rhs
+	];
 }
 
 /**
@@ -288,15 +285,19 @@ function printAnnotateExpression(path: AstPath<Node>, options: ParserOptions, pr
 
 /**
  * Print `cast_expression` node.
+ * Inside:
+ * - `expression`
+ * - `type`
  */
 function printCastExpression(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return group([
-		path.node.childCount == 5 ? '(' : '',
-		path.call(print, 'nonFormattingChildren', 0), // expression
-		' as ',
-		path.call(print, 'nonFormattingChildren', 1), // type
-		path.node.childCount == 5 ? ')' : '',
-	]);
+	const parens = path.node.child(0)?.text == '(';
+	const children = path.map(print, 'nonFormattingChildren');
+
+	if (parens) {
+		return ['(', join(' as ', children), ')'];
+	}
+
+	return join(' as ', children);
 }
 
 /**
@@ -307,14 +308,17 @@ export function printIndexExpression(
 	options: ParserOptions,
 	print: printFn,
 ): Doc {
-	return group([
-		path.call(print, 'nonFormattingChildren', 0), // lhs
-		'[',
-		indent(softline),
-		indent(path.call(print, 'nonFormattingChildren', 1)), // index
-		softline,
-		']',
-	]);
+	return group(
+		[
+			path.call(print, 'nonFormattingChildren', 0), // lhs
+			'[',
+			indent(softline),
+			indent(path.call(print, 'nonFormattingChildren', 1)), // index
+			softline,
+			']',
+		],
+		{ shouldBreak: false },
+	);
 }
 
 /**
@@ -333,7 +337,7 @@ export function printBlock(
 	);
 
 	if (!hasNonEmptyLine) {
-		return ['{}'];
+		return '{}';
 	}
 
 	return block({
@@ -351,21 +355,29 @@ export function printBlock(
  * @see [This Issue](https://github.com/prettier/prettier/issues/15710#issuecomment-1836701758)
  */
 function printDotExpression(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
+	const nodes = path.node.nonFormattingChildren;
 	const children = path.map(print, 'nonFormattingChildren');
+	const isChain = nodes[0]?.type === Expression.DotExpression || path.node.parent?.type === Expression.DotExpression;
 
 	if (children.length < 2) {
 		return path.node.type;
 	}
 
-	const parts = [
-		children[0]!, // lhs
-		indent(softline),
-		indent(['.', children[1]!]), // rhs
-	];
+	if (isChain) {
+		const parts = [
+			children[0]!, // lhs
+			indent(softline),
+			indent(['.', children[1]!]), // rhs
+		];
 
-	// start a group if the parent is not a `dot_expression`, this way we either break the
-	// whole chain of `dot_expression` or none of them
-	return path.node.parent?.type !== Expression.DotExpression ? group(parts) : parts;
+		// start a group if the parent is not a `dot_expression`, this way we either break the
+		// whole chain of `dot_expression` or none of them
+		return path.node.parent?.type !== Expression.DotExpression
+			? group(parts, { shouldBreak: false })
+			: parts;
+	}
+
+	return [children[0]!, '.', children[1]!];
 }
 
 /**

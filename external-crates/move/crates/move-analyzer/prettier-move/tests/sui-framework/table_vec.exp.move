@@ -35,7 +35,8 @@ module sui::table_vec {
 
     /// Return if the TableVec is empty or not.
     public fun is_empty<Element: store>(t: &TableVec<Element>): bool {
-        t.length() == 0
+        t.length() ==
+        0
     }
 
     #[syntax(index)]

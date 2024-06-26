@@ -158,8 +158,7 @@ module prettier::expression {
             id: object::new(ctx),
             name: AnotherStruct {
                 params: vector[
-                    b"world"
-                        .to_string(),
+                    b"world".to_string(),
                 ],
             },
         };
@@ -233,8 +232,7 @@ module prettier::expression {
         (expr: Type);
         (
             really_long_expression: ReallyLongType
-        )
-            .say_something();
+        ).say_something();
         let a = (
             call_expression(): Type
         );

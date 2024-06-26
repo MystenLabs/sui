@@ -576,7 +576,8 @@ module sui::kiosk {
 
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
     public fun has_access(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
-        object::id(self) == cap.`for`
+        object::id(self) ==
+        cap.`for`
     }
 
     /// Access the `UID` using the `KioskOwnerCap`.
