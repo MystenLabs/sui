@@ -169,4 +169,38 @@ module std::option_tests {
         let v: vector<u64> = option::none().to_vec();
         assert!(v.is_empty());
     }
+
+    // === Macros ===
+
+    #[test]
+    fun do_destroy() {
+        let mut counter = 0;
+        option::some(5).destroy!(|x| counter = x);
+        option::some(10).do!(|x| counter = counter + x);
+
+        assert!(counter == 15);
+    }
+
+    #[test]
+    fun do_ref_mut() {
+        let mut counter = 0;
+        option::some(10).do_mut!(|x| *x = 100);
+        option::some(5).do_ref!(|x| counter = *x);
+
+        assert!(counter == 100);
+    }
+
+    #[test]
+    fun map_map_ref() {
+        assert!(option::some(5).map!(|x| vector[x]) == option::some(vector[6]));
+        assert!(option::some(5).map_ref!(|x| vector[*x]) == option::some(vector[6]));
+        assert!(option::none<u8>().map!(|x| vector[x]) == option::none());
+        assert!(option::none<u8>().map_ref!(|x| vector[*x]) == option::none());
+    }
+
+    #[test]
+    fun destroy_or() {
+        assert!(option::none().destroy_or!(10) == 10);
+        assert!(option::some(5).destroy_or!(10) == 5);
+    }
 }
