@@ -149,9 +149,9 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 // Version 51: Switch to DKG V1.
 // Version 52: Emit `CommitteeMemberUrlUpdateEvent` when updating bridge node url.
 //             std::config native functions.
-<<<<<<< HEAD
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
 //             Enable soft bundle in devnet and testnet.
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 //             Core macro visibility in sui core framework.
@@ -167,6 +167,10 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 >>>>>>> 43070af820 (rebase)
 //             Add support for passkey in devnet.
 >>>>>>> 76a6eb2f98 (add protocol config, simtest)
+=======
+//             Add support for passkey in devnet.
+
+>>>>>>> 7bb7af4712 (rebase after another feature)
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -530,6 +534,7 @@ struct FeatureFlags {
     // If true, enable the coin deny list V2.
     #[serde(skip_serializing_if = "is_false")]
     enable_coin_deny_list_v2: bool,
+
     // Enable passkey auth (SIP-9)
     #[serde(skip_serializing_if = "is_false")]
     passkey_auth: bool,
@@ -2483,7 +2488,8 @@ impl ProtocolConfig {
                         cfg.max_accumulated_txn_cost_per_object_in_checkpoint = Some(100);
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::TotalTxCount;
-                    
+                    }
+
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.passkey_auth = true;
                     }
@@ -2664,8 +2670,8 @@ impl ProtocolConfig {
     pub fn set_enable_soft_bundle_for_testing(&mut self, val: bool) {
         self.feature_flags.soft_bundle = val;
     }
-    
-   pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
+
+    pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.passkey_auth = val
     }
 }
