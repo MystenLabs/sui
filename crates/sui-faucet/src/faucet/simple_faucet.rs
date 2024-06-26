@@ -1178,7 +1178,6 @@ mod tests {
         assert_eq!(discarded, faucet.metrics.total_discarded_coins.get());
     }
 
-    //
     #[tokio::test]
     async fn test_init_gas_queue() {
         let test_cluster = TestClusterBuilder::new().build().await;
