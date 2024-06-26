@@ -2455,6 +2455,13 @@ impl ProtocolConfig {
 
                     cfg.config_read_setting_impl_cost_base = Some(100);
                     cfg.config_read_setting_impl_cost_per_byte = Some(40);
+
+                    // Turn on shared object congestion control in devnet.
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.max_accumulated_txn_cost_per_object_in_checkpoint = Some(100);
+                        cfg.feature_flags.per_object_congestion_control_mode =
+                            PerObjectCongestionControlMode::TotalTxCount;
+                    }
                 }
                 // Use this template when making changes:
                 //
