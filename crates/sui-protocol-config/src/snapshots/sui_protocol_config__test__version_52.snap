@@ -59,6 +59,7 @@ feature_flags:
   fresh_vm_on_framework_upgrade: true
   prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
   mysticeti_num_leaders_per_round: 1
+  soft_bundle: true
   enable_coin_deny_list_v2: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
@@ -293,4 +294,4 @@ consensus_max_transactions_in_block_bytes: 6291456
 max_deferral_rounds_for_congestion_control: 10
 min_checkpoint_interval_ms: 200
 checkpoint_summary_version_specific_data: 1
-
+max_soft_bundle_size: 5

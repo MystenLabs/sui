@@ -103,6 +103,58 @@ pub async fn test_certificates(
     certificates
 }
 
+pub fn make_consensus_adapter_for_test(
+    state: Arc<AuthorityState>,
+    execute: bool,
+) -> Arc<ConsensusAdapter> {
+    let metrics = ConsensusAdapterMetrics::new_test();
+
+    #[derive(Clone)]
+    struct SubmitDirectly(Arc<AuthorityState>, bool);
+
+    #[async_trait::async_trait]
+    impl SubmitToConsensus for SubmitDirectly {
+        async fn submit_to_consensus(
+            &self,
+            transactions: &[ConsensusTransaction],
+            epoch_store: &Arc<AuthorityPerEpochStore>,
+        ) -> SuiResult {
+            let sequenced_transactions = transactions
+                .iter()
+                .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
+                .collect();
+            let transactions = epoch_store
+                .process_consensus_transactions_for_tests(
+                    sequenced_transactions,
+                    &Arc::new(CheckpointServiceNoop {}),
+                    self.0.get_object_cache_reader().as_ref(),
+                    &self.0.metrics,
+                    true,
+                )
+                .await?;
+            if self.1 {
+                self.0
+                    .transaction_manager()
+                    .enqueue(transactions, epoch_store);
+            }
+            Ok(())
+        }
+    }
+    let epoch_store = state.epoch_store_for_testing();
+    // Make a new consensus adapter instance.
+    Arc::new(ConsensusAdapter::new(
+        Arc::new(SubmitDirectly(state.clone(), execute)),
+        state.name,
+        Arc::new(ConnectionMonitorStatusForTests {}),
+        100_000,
+        100_000,
+        None,
+        None,
+        metrics,
+        epoch_store.protocol_config().clone(),
+    ))
+}
+
 #[tokio::test]
 async fn submit_transaction_to_consensus_adapter() {
     telemetry_subscribers::init_for_testing();
@@ -119,46 +171,8 @@ async fn submit_transaction_to_consensus_adapter() {
         .unwrap();
     let epoch_store = state.epoch_store_for_testing();
 
-    let metrics = ConsensusAdapterMetrics::new_test();
-
-    #[derive(Clone)]
-    struct SubmitDirectly(Arc<AuthorityState>);
-
-    #[async_trait::async_trait]
-    impl SubmitToConsensus for SubmitDirectly {
-        async fn submit_to_consensus(
-            &self,
-            transactions: &[ConsensusTransaction],
-            epoch_store: &Arc<AuthorityPerEpochStore>,
-        ) -> SuiResult {
-            let sequenced_transactions = transactions
-                .iter()
-                .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
-                .collect();
-            epoch_store
-                .process_consensus_transactions_for_tests(
-                    sequenced_transactions,
-                    &Arc::new(CheckpointServiceNoop {}),
-                    self.0.get_object_cache_reader().as_ref(),
-                    &self.0.metrics,
-                    true,
-                )
-                .await?;
-            Ok(())
-        }
-    }
     // Make a new consensus adapter instance.
-    let adapter = Arc::new(ConsensusAdapter::new(
-        Arc::new(SubmitDirectly(state.clone())),
-        state.name,
-        Arc::new(ConnectionMonitorStatusForTests {}),
-        100_000,
-        100_000,
-        None,
-        None,
-        metrics,
-        epoch_store.protocol_config().clone(),
-    ));
+    let adapter = make_consensus_adapter_for_test(state.clone(), false);
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).

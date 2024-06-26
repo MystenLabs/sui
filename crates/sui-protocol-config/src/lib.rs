@@ -150,6 +150,7 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 // Version 52: Emit `CommitteeMemberUrlUpdateEvent` when updating bridge node url.
 //             std::config native functions.
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
+//             Enable soft bundle in devnet and testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2447,6 +2448,11 @@ impl ProtocolConfig {
                     }
                 }
                 52 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.soft_bundle = true;
+                        cfg.max_soft_bundle_size = Some(5);
+                    }
+
                     cfg.config_read_setting_impl_cost_base = Some(100);
                     cfg.config_read_setting_impl_cost_per_byte = Some(40);
                 }
@@ -2605,6 +2611,10 @@ impl ProtocolConfig {
 
     pub fn set_mysticeti_num_leaders_per_round_for_testing(&mut self, val: Option<usize>) {
         self.feature_flags.mysticeti_num_leaders_per_round = val;
+    }
+
+    pub fn set_enable_soft_bundle_for_testing(&mut self, val: bool) {
+        self.feature_flags.soft_bundle = val;
     }
 }
 

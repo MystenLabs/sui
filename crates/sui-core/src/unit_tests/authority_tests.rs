@@ -4158,7 +4158,7 @@ pub async fn init_state_with_ids_and_object_basics<
     publish_object_basics(state).await
 }
 
-async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityState>, ObjectRef) {
+pub async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityState>, ObjectRef) {
     use sui_move_build::BuildConfig;
 
     // add object_basics package object to genesis, since lots of test use it
@@ -5729,7 +5729,7 @@ async fn test_publish_not_a_package_dependency() {
     )
 }
 
-fn create_gas_objects(num: u32, owner: SuiAddress) -> Vec<Object> {
+pub fn create_gas_objects(num: u32, owner: SuiAddress) -> Vec<Object> {
     let mut objects = vec![];
     for _ in 0..num {
         let gas_object_id = ObjectID::random();
