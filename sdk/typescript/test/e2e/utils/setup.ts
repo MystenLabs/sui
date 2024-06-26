@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
+import { resolve } from 'path';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
@@ -31,13 +32,45 @@ export const DEFAULT_RECIPIENT_2 =
 export const DEFAULT_GAS_BUDGET = 10000000;
 export const DEFAULT_SEND_AMOUNT = 1000;
 
+class TestPackageRegistry {
+	static registries: Map<string, TestPackageRegistry> = new Map();
+
+	static forUrl(url: string) {
+		if (!this.registries.has(url)) {
+			this.registries.set(url, new TestPackageRegistry());
+		}
+		return this.registries.get(url)!;
+	}
+
+	#packages: Map<string, string>;
+
+	constructor() {
+		this.#packages = new Map();
+	}
+
+	async getPackage(path: string, toolbox?: TestToolbox) {
+		if (!this.#packages.has(path)) {
+			this.#packages.set(path, (await publishPackage(path, toolbox)).packageId);
+		}
+
+		return this.#packages.get(path)!;
+	}
+}
+
 export class TestToolbox {
 	keypair: Ed25519Keypair;
 	client: SuiClient;
+	registry: TestPackageRegistry;
 
-	constructor(keypair: Ed25519Keypair, client: SuiClient) {
+	constructor(keypair: Ed25519Keypair, url: string = DEFAULT_FULLNODE_URL) {
 		this.keypair = keypair;
-		this.client = client;
+		this.client = new SuiClient({
+			transport: new SuiHTTPTransport({
+				url,
+				WebSocketConstructor: WebSocket as never,
+			}),
+		});
+		this.registry = TestPackageRegistry.forUrl(url);
 	}
 
 	address() {
@@ -53,6 +86,20 @@ export class TestToolbox {
 
 	public async getActiveValidators() {
 		return (await this.client.getLatestSuiSystemState()).activeValidators;
+	}
+
+	public async getPackage(path: string) {
+		return this.registry.getPackage(path, this);
+	}
+
+	async mintNft(name: string = 'Test NFT') {
+		const packageId = await this.getPackage(resolve(__dirname, '../data/demo-bear'));
+		return (tx: Transaction) => {
+			return tx.moveCall({
+				target: `${packageId}::demo_bear::new`,
+				arguments: [tx.pure.string(name)],
+			});
+		};
 	}
 }
 
@@ -100,7 +147,7 @@ export async function setupWithFundedAddress(
 			retryIf: () => true,
 		},
 	);
-	return new TestToolbox(keypair, client);
+	return new TestToolbox(keypair, rpcURL);
 }
 
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {

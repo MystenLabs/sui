@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { resolve } from 'path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OwnedObjectRef } from '../../src/client';
 import { Transaction } from '../../src/transactions';
 import { CachingTransactionExecutor } from '../../src/transactions/executor/caching';
 import { normalizeSuiAddress } from '../../src/utils';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 describe('CachingTransactionExecutor', async () => {
 	let toolbox: TestToolbox;
@@ -18,13 +19,12 @@ describe('CachingTransactionExecutor', async () => {
 	let receiveObjectId: OwnedObjectRef;
 
 	beforeAll(async () => {
-		const packagePath = __dirname + '/./data/tto';
-		rawPackageId = (await publishPackage(packagePath)).packageId;
+		toolbox = await setup();
+		rawPackageId = packageId = await toolbox.getPackage(resolve(__dirname, './data/tto'));
 		packageId = normalizeSuiAddress(rawPackageId);
 	});
 
 	beforeEach(async () => {
-		toolbox = await setup();
 		executor = new CachingTransactionExecutor({
 			client: toolbox.client,
 		});

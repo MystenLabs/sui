@@ -9,6 +9,7 @@ import type { SuiClient } from '../../client/index.js';
 import type { Signer } from '../../cryptography/index.js';
 import type { ObjectCacheOptions } from '../ObjectCache.js';
 import { Transaction } from '../Transaction.js';
+import { TransactionDataBuilder } from '../TransactionData.js';
 import { CachingTransactionExecutor } from './caching.js';
 import { ParallelQueue, SerialQueue } from './queue.js';
 import { getGasCoinFromEffects } from './serial.js';
@@ -225,7 +226,16 @@ export class ParallelTransactionExecutor {
 					BigInt(gasUsed.storageCost) -
 					BigInt(gasUsed.storageRebate);
 
-				if (gasCoin.balance >= this.#minimumCoinBalance) {
+				let usesGasCoin = false;
+				new TransactionDataBuilder(transaction.getData()).mapArguments((arg) => {
+					if (arg.$kind === 'GasCoin') {
+						usesGasCoin = true;
+					}
+
+					return arg;
+				});
+
+				if (!usesGasCoin && gasCoin.balance >= this.#minimumCoinBalance) {
 					this.#coinPool.push({
 						id: gasResult.ref.objectId,
 						version: gasResult.ref.version,
