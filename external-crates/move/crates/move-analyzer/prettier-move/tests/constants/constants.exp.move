@@ -22,8 +22,7 @@ module test::constants {
         b"hello, cruel world. you have been there a long time.";
 
     const C: u64 = {
-        100 +
-        200 // trailing comment in a block
+        100 + 200 // trailing comment in a block
     };
 
     const X: u8 = 5 + 100 / 2 * 3;

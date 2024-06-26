@@ -137,13 +137,11 @@ module sui::tx_context {
 
     #[test_only]
     public fun increment_epoch_number(self: &mut TxContext) {
-        self.epoch = self.epoch +
-        1
+        self.epoch = self.epoch + 1
     }
 
     #[test_only]
     public fun increment_epoch_timestamp(self: &mut TxContext, delta_ms: u64) {
-        self.epoch_timestamp_ms = self.epoch_timestamp_ms +
-        delta_ms
+        self.epoch_timestamp_ms = self.epoch_timestamp_ms + delta_ms
     }
 }

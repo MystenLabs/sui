@@ -104,8 +104,7 @@ module sui::table {
     public fun is_empty<K: copy + drop + store, V: store>(
         table: &Table<K, V>,
     ): bool {
-        table.size ==
-        0
+        table.size == 0
     }
 
     /// Destroys an empty table

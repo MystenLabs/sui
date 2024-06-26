@@ -86,8 +86,7 @@ module foo::bar {
         let stop = $stop;
         while (i < stop) {
             $body(i);
-            i = i +
-            1
+            i = i + 1
         }
     }
 
@@ -97,8 +96,7 @@ module foo::bar {
         let n = v.length();
         while (i < n) {
             $body(v.borrow(i));
-            i = i +
-            1
+            i = i + 1
         }
     }
 

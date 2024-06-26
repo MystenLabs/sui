@@ -162,8 +162,7 @@ module sui::package {
 
     /// Check whether type belongs to the same package as the publisher object.
     public fun from_package<T>(self: &Publisher): bool {
-        type_name::get_with_original_ids<T>().get_address() ==
-        self.package
+        type_name::get_with_original_ids<T>().get_address() == self.package
     }
 
     /// Check whether a type belongs to the same module as the publisher object.

@@ -296,16 +296,11 @@ module sui::hex {
 
     fun decode_byte(hex: u8): u8 {
         if (48 <= hex && hex < 58) {
-            hex -
-            48
+            hex - 48
         } else if (65 <= hex && hex < 71) {
-            10 +
-            hex -
-            65
+            10 + hex - 65
         } else if (97 <= hex && hex < 103) {
-            10 +
-            hex -
-            97
+            10 + hex - 97
         } else {
             abort ENotValidHexCharacter
         }

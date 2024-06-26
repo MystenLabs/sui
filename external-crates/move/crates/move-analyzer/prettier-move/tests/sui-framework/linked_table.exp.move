@@ -223,8 +223,7 @@ module sui::linked_table {
     public fun is_empty<K: copy + drop + store, V: store>(
         table: &LinkedTable<K, V>,
     ): bool {
-        table.size ==
-        0
+        table.size == 0
     }
 
     /// Destroys an empty table

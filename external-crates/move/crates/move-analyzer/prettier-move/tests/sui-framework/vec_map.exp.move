@@ -106,8 +106,7 @@ module sui::vec_map {
 
     /// Return true if `self` has 0 elements, false otherwise
     public fun is_empty<K: copy, V>(self: &VecMap<K, V>): bool {
-        self.size() ==
-        0
+        self.size() == 0
     }
 
     /// Destroy an empty map. Aborts if `self` is not empty

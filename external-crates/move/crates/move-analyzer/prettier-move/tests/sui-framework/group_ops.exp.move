@@ -27,8 +27,7 @@ module sui::group_ops {
     }
 
     public fun equal<G>(e1: &Element<G>, e2: &Element<G>): bool {
-        &e1.bytes ==
-        &e2.bytes
+        &e1.bytes == &e2.bytes
     }
 
     // Fails if the bytes are not a valid group element and 'is_trusted' is false.
