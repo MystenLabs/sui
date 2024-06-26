@@ -260,7 +260,7 @@ function printExpressionList(path: AstPath<Node>, options: ParserOptions, print:
 		ifBreak(','), // trailing comma
 		softline,
 		')',
-	]);
+	], { shouldBreak: shouldBreakFirstChild(path) });
 }
 
 /**
