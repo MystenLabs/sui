@@ -464,10 +464,10 @@ impl Default for Limits {
             // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1988>
             max_move_value_depth: 128,
             // This value is set to be the size of the max transaction bytes allowed + base64
-            // overhead + the max query payload overhead.
-            // The base64 overhead is roughly 1/3 of the original string.
+            // overhead (roughly 1/3 of the original string). This is rounded up.
+            //
             // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1578>
-            max_mutation_payload_size: (128 * 1024 * 4) / 3 + DEFAULT_MAX_QUERY_PAYLOAD_SIZE,
+            max_mutation_payload_size: (128u32 * 1024u32 * 4u32).div_ceil(3),
         }
     }
 }
