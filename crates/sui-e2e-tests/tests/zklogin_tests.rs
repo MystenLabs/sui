@@ -12,7 +12,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::crypto::Signature;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::utils::load_test_vectors;
@@ -78,7 +78,12 @@ async fn test_zklogin_feature_deny() {
         .await
         .unwrap_err();
 
-    assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
+    assert!(matches!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::Unsupported(..)
+        }
+    ));
 }
 
 #[sim_test]

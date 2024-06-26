@@ -357,10 +357,7 @@ impl ValidatorService {
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
-        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
-        // This must be the first thing to check before anything else, because the transaction
-        // may not even be valid to access for any other checks.
-        transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+        Self::transaction_validity_check(&epoch_store, &transaction)?;
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
@@ -838,8 +835,10 @@ impl ValidatorService {
         if !epoch_store.randomness_state_enabled()
             && transaction.transaction_data().uses_randomness()
         {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "randomness is not enabled on this network".to_string(),
+            return Err(SuiError::UserInputError {
+                error: UserInputError::Unsupported(
+                    "randomness is not enabled on this network".to_string(),
+                ),
             });
         }
         Ok(())
