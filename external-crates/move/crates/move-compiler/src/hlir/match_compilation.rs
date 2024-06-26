@@ -88,16 +88,16 @@ pub(super) fn compile_match(
     subject: T::Exp,
     arms: Spanned<Vec<T::MatchArm>>,
 ) -> T::Exp {
-    let arms_loc = arms.loc;
+    let loc = arms.loc;
     // NB: `from` also flattens `or` and converts constants into guards.
-    let (pattern_matrix, arms) = PatternMatrix::from(context, subject.ty.clone(), arms.value);
+    let (pattern_matrix, arms) = PatternMatrix::from(context, loc, subject.ty.clone(), arms.value);
 
     let mut compilation_results: BTreeMap<usize, WorkResult> = BTreeMap::new();
 
     let (mut initial_binders, init_subject, match_subject) = {
-        let subject_var = context.new_match_var("unpack_subject".to_string(), arms_loc);
+        let subject_var = context.new_match_var("unpack_subject".to_string(), loc);
         let subject_loc = subject.exp.loc;
-        let match_var = context.new_match_var("match_subject".to_string(), arms_loc);
+        let match_var = context.new_match_var("match_subject".to_string(), loc);
 
         let subject_entry = FringeEntry {
             var: subject_var,
@@ -122,7 +122,7 @@ pub(super) fn compile_match(
         };
 
         let subject_borrow = {
-            let lhs_loc = arms_loc;
+            let lhs_loc = loc;
             let lhs_lvalue = make_lvalue(match_var, Mutability::Imm, subject_borrow_rhs.ty.clone());
             let binder = T::SequenceItem_::Bind(
                 sp(lhs_loc, vec![lhs_lvalue]),
@@ -241,7 +241,7 @@ pub(super) fn compile_match(
         ice_assert!(
             context.env,
             redefined.is_none(),
-            arms_loc,
+            loc,
             "Match work queue went awry"
         );
     }
@@ -251,7 +251,7 @@ pub(super) fn compile_match(
         hlir_context: context,
         output_type: result_type,
         arms: &arms,
-        arms_loc,
+        arms_loc: loc,
         results: &mut compilation_results,
     };
     let match_exp = resolve_result(&mut resolution_context, &init_subject, match_start);
