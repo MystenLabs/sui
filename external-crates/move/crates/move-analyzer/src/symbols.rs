@@ -2915,7 +2915,7 @@ pub fn def_ide_location(def_loc: &Loc, symbols: &Symbols) -> Location {
     // TODO: Do we need beginning and end of the definition? Does not seem to make a
     // difference from the IDE perspective as the cursor goes to the beginning anyway (at
     // least in VSCode).
-    let span = symbols.files.position_opt(&def_loc).unwrap();
+    let span = symbols.files.position_opt(def_loc).unwrap();
     let range = Range {
         start: span.start.into(),
         end: span.end.into(),
@@ -3013,7 +3013,7 @@ pub fn on_references_request(context: &Context, request: &Request) {
                     }
                     locs
                 })
-                .and_then(|locs| Some(serde_json::to_value(locs).unwrap()))
+                .map(|locs| serde_json::to_value(locs).unwrap())
         },
     );
 }
