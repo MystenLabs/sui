@@ -652,6 +652,7 @@ sui-swarm = { path = "crates/sui-swarm" }
 sui-swarm-config = { path = "crates/sui-swarm-config" }
 sui-telemetry = { path = "crates/sui-telemetry" }
 sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
+sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
 sui-rest-api = { path = "crates/sui-rest-api" }
 sui-tool = { path = "crates/sui-tool" }

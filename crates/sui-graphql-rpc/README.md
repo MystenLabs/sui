@@ -68,6 +68,6 @@ For local dev, it might be useful to spin up an indexer as well. Instructions ar
 
 ## Compatibility with json-rpc
 
-`cargo run --bin sui -- start --with-indexer --with-graphql --pg-db-name sui_indexer_v2`
+`cargo run --bin sui-test-validator -- --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125`
 
 `pnpm --filter @mysten/graphql-transport test:e2e`
