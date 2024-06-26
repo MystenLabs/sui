@@ -60,6 +60,7 @@ pub struct PasskeyAuthenticator {
     intent: Intent,
 
     /// Valid digest parsed from the last 32 bytes of `client_data_json.challenge`.
+    #[serde(skip)]
     digest: [u8; DefaultHash::OUTPUT_SIZE],
 
     /// Initialization of bytes for passkey in serialized form.
