@@ -8,6 +8,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::error::UserInputError;
 use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::{
     base_types::SuiAddress,
@@ -50,7 +51,12 @@ async fn test_upgraded_multisig_feature_deny() {
 
     let err = do_upgraded_multisig_test().await.unwrap_err();
 
-    assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
+    assert!(matches!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::Unsupported(..)
+        }
+    ));
 }
 
 #[sim_test]

@@ -50,7 +50,7 @@ use std::{
     iter,
 };
 use strum::IntoStaticStr;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::ProtocolConfig;
 use tap::Pipe;
 use tracing::trace;
 
@@ -429,142 +429,35 @@ impl EndOfEpochTransactionKind {
         match self {
             Self::ChangeEpoch(_) => (),
             Self::AuthenticatorStateCreate | Self::AuthenticatorStateExpire(_) => {
-                // Transaction should have been rejected earlier (or never formed).
-                assert!(config.enable_jwk_consensus_updates());
+                if !config.enable_jwk_consensus_updates() {
+                    return Err(UserInputError::Unsupported(
+                        "authenticator state updates not enabled".to_string(),
+                    ));
+                }
             }
             Self::RandomnessStateCreate => {
-                // Transaction should have been rejected earlier (or never formed).
-                assert!(config.random_beacon());
+                if !config.random_beacon() {
+                    return Err(UserInputError::Unsupported(
+                        "random beacon not enabled".to_string(),
+                    ));
+                }
             }
             Self::DenyListStateCreate => {
-                // Transaction should have been rejected earlier (or never formed).
-                assert!(config.enable_coin_deny_list_v1());
+                if !config.enable_coin_deny_list_v1() {
+                    return Err(UserInputError::Unsupported(
+                        "coin deny list not enabled".to_string(),
+                    ));
+                }
             }
             Self::BridgeStateCreate(_) | Self::BridgeCommitteeInit(_) => {
-                // Transaction should have been rejected earlier (or never formed).
-                assert!(config.enable_bridge());
+                if !config.enable_bridge() {
+                    return Err(UserInputError::Unsupported(
+                        "bridge not enabled".to_string(),
+                    ));
+                }
             }
         }
         Ok(())
-    }
-}
-
-impl VersionedProtocolMessage for TransactionKind {
-    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        // When adding new cases, they must be guarded by a feature flag and return
-        // UnsupportedFeatureError if the flag is not set.
-        match &self {
-            TransactionKind::ChangeEpoch(_)
-            | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_) => Ok(()),
-            TransactionKind::ProgrammableTransaction(pt) => {
-                // NB: we don't use the `receiving_objects` method here since we don't want to check
-                // for any validity requirements such as duplicate receiving inputs at this point.
-                if !protocol_config.receiving_objects_supported() {
-                    let has_receiving_objects = pt
-                        .inputs
-                        .iter()
-                        .any(|arg| !arg.receiving_objects().is_empty());
-                    if has_receiving_objects {
-                        return Err(SuiError::UnsupportedFeatureError {
-                            error: format!(
-                                "receiving objects is not supported at {:?}",
-                                protocol_config.version
-                            ),
-                        });
-                    }
-                }
-                Ok(())
-            }
-            TransactionKind::AuthenticatorStateUpdate(_) => {
-                if protocol_config.enable_jwk_consensus_updates() {
-                    Ok(())
-                } else {
-                    Err(SuiError::UnsupportedFeatureError {
-                        error: "authenticator state updates not enabled".to_string(),
-                    })
-                }
-            }
-            TransactionKind::RandomnessStateUpdate(_) => {
-                if protocol_config.random_beacon() {
-                    Ok(())
-                } else {
-                    Err(SuiError::UnsupportedFeatureError {
-                        error: "randomness state updates not enabled".to_string(),
-                    })
-                }
-            }
-            TransactionKind::EndOfEpochTransaction(txns) => {
-                if !protocol_config.end_of_epoch_transaction_supported() {
-                    Err(SuiError::UnsupportedFeatureError {
-                        error: "EndOfEpochTransaction is not supported".to_string(),
-                    })
-                } else {
-                    for tx in txns {
-                        match tx {
-                            EndOfEpochTransactionKind::ChangeEpoch(_) => (),
-                            EndOfEpochTransactionKind::AuthenticatorStateCreate
-                            | EndOfEpochTransactionKind::AuthenticatorStateExpire(_) => {
-                                if !protocol_config.enable_jwk_consensus_updates() {
-                                    return Err(SuiError::UnsupportedFeatureError {
-                                        error: "authenticator state updates not enabled"
-                                            .to_string(),
-                                    });
-                                }
-                            }
-                            EndOfEpochTransactionKind::RandomnessStateCreate => {
-                                if !protocol_config.random_beacon() {
-                                    return Err(SuiError::UnsupportedFeatureError {
-                                        error: "random beacon not enabled".to_string(),
-                                    });
-                                }
-                            }
-                            EndOfEpochTransactionKind::DenyListStateCreate => {
-                                if !protocol_config.enable_coin_deny_list_v1() {
-                                    return Err(SuiError::UnsupportedFeatureError {
-                                        error: "coin deny list not enabled".to_string(),
-                                    });
-                                }
-                            }
-                            EndOfEpochTransactionKind::BridgeStateCreate(_) => {
-                                if !protocol_config.enable_bridge() {
-                                    return Err(SuiError::UnsupportedFeatureError {
-                                        error: "bridge not enabled".to_string(),
-                                    });
-                                }
-                            }
-                            EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
-                                if !protocol_config.enable_bridge() {
-                                    return Err(SuiError::UnsupportedFeatureError {
-                                        error: "bridge not enabled".to_string(),
-                                    });
-                                }
-                            }
-                        }
-                    }
-
-                    Ok(())
-                }
-            }
-            TransactionKind::ConsensusCommitPrologueV2(_) => {
-                if protocol_config.include_consensus_digest_in_prologue() {
-                    Ok(())
-                } else {
-                    Err(SuiError::UnsupportedFeatureError {
-                        error: "ConsensusCommitPrologueV2 is not supported".to_string(),
-                    })
-                }
-            }
-            TransactionKind::ConsensusCommitPrologueV3(_) => {
-                if protocol_config.record_consensus_determined_version_assignments_in_prologue() {
-                    Ok(())
-                } else {
-                    Err(SuiError::UnsupportedFeatureError {
-                        error: "ConsensusCommitPrologueV3 is not supported".to_string(),
-                    })
-                }
-            }
-        }
     }
 }
 
@@ -616,7 +509,17 @@ impl CallArg {
                     }
                 );
             }
-            CallArg::Object(_) => (),
+            CallArg::Object(o) => match o {
+                ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. } => (),
+                ObjectArg::Receiving(_) => {
+                    if !config.receiving_objects_supported() {
+                        return Err(UserInputError::Unsupported(format!(
+                            "receiving objects is not supported at {:?}",
+                            config.version
+                        )));
+                    }
+                }
+            },
         }
         Ok(())
     }
@@ -1429,12 +1332,27 @@ impl TransactionKind {
             // and no validity or limit checks are performed.
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_)
-            | TransactionKind::ConsensusCommitPrologueV2(_)
-            | TransactionKind::ConsensusCommitPrologueV3(_) => (),
+            | TransactionKind::ConsensusCommitPrologue(_) => (),
+            TransactionKind::ConsensusCommitPrologueV2(_) => {
+                if !config.include_consensus_digest_in_prologue() {
+                    return Err(UserInputError::Unsupported(
+                        "ConsensusCommitPrologueV2 is not supported".to_string(),
+                    ));
+                }
+            }
+            TransactionKind::ConsensusCommitPrologueV3(_) => {
+                if !config.record_consensus_determined_version_assignments_in_prologue() {
+                    return Err(UserInputError::Unsupported(
+                        "ConsensusCommitPrologueV3 is not supported".to_string(),
+                    ));
+                }
+            }
             TransactionKind::EndOfEpochTransaction(txns) => {
-                // The transaction should have been rejected earlier if the feature is not enabled.
-                assert!(config.end_of_epoch_transaction_supported());
+                if !config.end_of_epoch_transaction_supported() {
+                    return Err(UserInputError::Unsupported(
+                        "EndOfEpochTransaction is not supported".to_string(),
+                    ));
+                }
 
                 for tx in txns {
                     tx.validity_check(config)?;
@@ -1442,12 +1360,18 @@ impl TransactionKind {
             }
 
             TransactionKind::AuthenticatorStateUpdate(_) => {
-                // The transaction should have been rejected earlier if the feature is not enabled.
-                assert!(config.enable_jwk_consensus_updates());
+                if !config.enable_jwk_consensus_updates() {
+                    return Err(UserInputError::Unsupported(
+                        "authenticator state updates not enabled".to_string(),
+                    ));
+                }
             }
             TransactionKind::RandomnessStateUpdate(_) => {
-                // The transaction should have been rejected earlier if the feature is not enabled.
-                assert!(config.random_beacon());
+                if !config.random_beacon() {
+                    return Err(UserInputError::Unsupported(
+                        "randomness state updates not enabled".to_string(),
+                    ));
+                }
             }
         };
         Ok(())
@@ -1564,42 +1488,8 @@ pub enum TransactionExpiration {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum TransactionData {
     V1(TransactionDataV1),
-}
-
-impl VersionedProtocolMessage for TransactionData {
-    fn message_version(&self) -> Option<u64> {
-        Some(match self {
-            Self::V1(_) => 1,
-        })
-    }
-
-    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        // First check the gross version
-        let (message_version, supported) = match self {
-            Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
-            // Suppose we add V2 at protocol version 7, then we must change this to:
-            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
-            // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
-            //
-            // Suppose we remove support for V1 after protocol version 12: we can do it like so:
-            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, 12)),
-        };
-
-        if !supported.is_version_supported(protocol_config.version) {
-            return Err(SuiError::WrongMessageVersion {
-                error: format!(
-                    "TransactionDataV{} is not supported at {:?}. (Supported range is {:?}",
-                    message_version, protocol_config.version, supported
-                ),
-            });
-        }
-
-        // Now check interior versioned data
-        self.kind()
-            .check_version_and_features_supported(protocol_config)?;
-
-        Ok(())
-    }
+    // When new variants are introduced, it is important that we check version support
+    // in the validity_check function based on the protocol config.
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -1972,6 +1862,12 @@ impl TransactionData {
             gas_price,
             sponsor,
         )
+    }
+
+    pub fn message_version(&self) -> u64 {
+        match self {
+            TransactionData::V1(_) => 1,
+        }
     }
 
     pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, Vec<ObjectRef>) {
@@ -2373,16 +2269,28 @@ impl SenderSignedData {
     }
 
     fn check_user_signature_protocol_compatibility(&self, config: &ProtocolConfig) -> SuiResult {
-        if !config.zklogin_auth() && self.has_zklogin_sig() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "zklogin is not enabled on this network".to_string(),
-            });
-        }
-
-        if !config.supports_upgraded_multisig() && self.has_upgraded_multisig() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "upgraded multisig format not enabled on this network".to_string(),
-            });
+        for sig in &self.inner().tx_signatures {
+            match sig {
+                GenericSignature::MultiSig(_) => {
+                    if !config.supports_upgraded_multisig() {
+                        return Err(SuiError::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "upgraded multisig format not enabled on this network".to_string(),
+                            ),
+                        });
+                    }
+                }
+                GenericSignature::ZkLoginAuthenticator(_) => {
+                    if !config.zklogin_auth() {
+                        return Err(SuiError::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "zklogin is not enabled on this network".to_string(),
+                            ),
+                        });
+                    }
+                }
+                GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
+            }
         }
 
         Ok(())
@@ -2429,45 +2337,9 @@ impl SenderSignedData {
         );
 
         tx_data
-            .check_version_and_features_supported(config)
-            .map_err(Into::<SuiError>::into)?;
-        tx_data
             .validity_check(config)
             .map_err(Into::<SuiError>::into)?;
 
-        Ok(())
-    }
-}
-
-impl VersionedProtocolMessage for SenderSignedData {
-    fn message_version(&self) -> Option<u64> {
-        self.transaction_data().message_version()
-    }
-
-    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        self.transaction_data()
-            .check_version_and_features_supported(protocol_config)?;
-
-        // This code does nothing right now. Its purpose is to cause a compiler error when a
-        // new signature type is added.
-        //
-        // When adding a new signature type, check if current_protocol_version
-        // predates support for the new type. If it does, return
-        // SuiError::WrongMessageVersion
-        for sig in &self.inner().tx_signatures {
-            match sig {
-                GenericSignature::MultiSig(_) => {
-                    if !protocol_config.supports_upgraded_multisig() {
-                        return Err(SuiError::UnsupportedFeatureError {
-                            error: "multisig format not enabled on this network".to_string(),
-                        });
-                    }
-                }
-                GenericSignature::Signature(_)
-                | GenericSignature::MultiSigLegacy(_)
-                | GenericSignature::ZkLoginAuthenticator(_) => (),
-            }
-        }
         Ok(())
     }
 }
