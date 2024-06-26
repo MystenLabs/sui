@@ -875,7 +875,7 @@ mod tests {
             todo!()
         }
 
-        async fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
+        fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
             todo!()
         }
     }

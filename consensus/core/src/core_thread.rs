@@ -55,7 +55,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     /// It is not a guarantee that produced blocks will be accepted by peers.
     fn set_consumer_availability(&self, available: bool) -> Result<(), CoreError>;
 
-    async fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError>;
+    fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError>;
 }
 
 pub(crate) struct CoreThreadHandle {
@@ -224,7 +224,7 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
             .map_err(|e| Shutdown(e.to_string()))
     }
 
-    async fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError> {
+    fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError> {
         self.tx_last_known_proposed_round
             .send(round)
             .map_err(|e| Shutdown(e.to_string()))

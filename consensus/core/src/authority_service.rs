@@ -614,7 +614,7 @@ mod tests {
         fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
             todo!()
         }
-        async fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
+        fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
             todo!()
         }
     }
