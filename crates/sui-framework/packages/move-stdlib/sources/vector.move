@@ -237,7 +237,7 @@ module std::vector {
     public macro fun filter<$T: drop>($v: vector<$T>, $f: |&$T| -> bool): vector<$T> {
         let mut r = vector[];
         let mut v = $v;
-        r.reverse();
+        v.reverse();
         while (!v.is_empty()) {
             let e = v.pop_back();
             if ($f(&e)) r.push_back(e);
