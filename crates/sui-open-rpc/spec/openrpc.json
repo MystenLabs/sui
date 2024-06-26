@@ -7855,8 +7855,7 @@
         "type": "object",
         "required": [
           "authenticator_data",
-          "client_data_json",
-          "digest"
+          "client_data_json"
         ],
         "properties": {
           "authenticator_data": {
@@ -7871,17 +7870,6 @@
           "client_data_json": {
             "description": "`clientDataJSON` contains a JSON-compatible UTF-8 encoded string of the client data which is passed to the authenticator by the client during the authentication request (see [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))",
             "type": "string"
-          },
-          "digest": {
-            "description": "Valid digest parsed from the last 32 bytes of `client_data_json.challenge`.",
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            },
-            "maxItems": 32,
-            "minItems": 32
           }
         }
       },
