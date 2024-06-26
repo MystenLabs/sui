@@ -102,7 +102,7 @@ impl UseDefTest {
         };
 
         if let Some(guard_def) = maybe_convert_for_guard(
-            &def,
+            def,
             use_file_path,
             &Position::new(*use_line, use_def.col_start()),
             symbols,
