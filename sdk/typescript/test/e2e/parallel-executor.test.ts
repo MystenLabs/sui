@@ -56,7 +56,7 @@ describe('ParallelTransactionExecutor', () => {
 
 		const txbs = Array.from({ length: 10 }, () => {
 			const txb = new Transaction();
-			txb.transferObjects([txb.splitCoins(txb.gas, [1])[0]], toolbox.address());
+			txb.transferObjects([txb.gas], toolbox.address());
 			return txb;
 		});
 
