@@ -644,7 +644,7 @@ impl From<SerializableSequencedConsensusTransactionKind> for SequencedConsensusT
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Debug, Ord, PartialOrd)]
 pub enum SequencedConsensusTransactionKey {
     External(ConsensusTransactionKey),
     System(TransactionDigest),

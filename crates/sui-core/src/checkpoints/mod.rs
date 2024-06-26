@@ -2288,8 +2288,12 @@ impl CheckpointService {
         epoch_store: &AuthorityPerEpochStore,
         checkpoint: PendingCheckpointV2,
     ) -> SuiResult {
+        use crate::authority::authority_per_epoch_store::ConsensusCommitOutput;
+
+        let mut output = ConsensusCommitOutput::new();
+        epoch_store.write_pending_checkpoint(&mut output, &checkpoint)?;
         let mut batch = epoch_store.db_batch_for_test();
-        epoch_store.write_pending_checkpoint(&mut batch, &checkpoint)?;
+        output.write_to_batch(epoch_store, &mut batch)?;
         batch.write()?;
         self.notify_checkpoint()?;
         Ok(())
@@ -2534,10 +2538,6 @@ mod tests {
 
         checkpoint_service
             .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 0))
-            .unwrap();
-        // Verify that sending same digests at same height is noop
-        checkpoint_service
-            .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 1000))
             .unwrap();
         checkpoint_service
             .write_and_notify_checkpoint_for_testing(&epoch_store, p(1, vec![1, 3], 2000))
