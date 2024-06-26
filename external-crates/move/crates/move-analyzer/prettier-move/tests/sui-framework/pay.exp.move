@@ -81,8 +81,7 @@ module sui::pay {
         while (i < len) {
             let coin = coins.pop_back();
             self.join(coin);
-            i = i +
-            1
+            i = i + 1
         };
         // safe because we've drained the vector
         coins.destroy_empty()

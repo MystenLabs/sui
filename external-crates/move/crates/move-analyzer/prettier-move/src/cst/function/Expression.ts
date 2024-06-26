@@ -160,13 +160,13 @@ function printBinaryExpression(path: AstPath<Node>, options: ParserOptions, prin
 	const shouldBreak = rhs!.startsOnNewLine || false;
 	let breakSymbol: Doc = line;
 
-	return [
+	return group([
 		path.call(print, 'nonFormattingChildren', 0), // lhs
 		' ',
 		path.call(print, 'nonFormattingChildren', 1), // operator
 		breakSymbol,
 		path.call(print, 'nonFormattingChildren', 2), // rhs
-	];
+	], { shouldBreak });
 }
 
 /**

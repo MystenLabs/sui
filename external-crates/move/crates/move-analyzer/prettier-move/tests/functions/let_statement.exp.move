@@ -16,9 +16,7 @@ module prettier::let_statement {
             let a = 1;
             let b = 2;
             let c = 3;
-            a +
-            b +
-            c
+            a + b + c
         };
 
         let v = vector[

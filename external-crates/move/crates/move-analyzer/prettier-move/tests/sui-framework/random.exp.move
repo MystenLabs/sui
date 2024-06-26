@@ -98,10 +98,7 @@ module sui::random {
         let epoch = ctx.epoch();
         let inner = self.load_inner_mut();
         if (
-            inner.randomness_round ==
-            0 &&
-            inner.epoch ==
-            0 &&
+            inner.randomness_round == 0 && inner.epoch == 0 &&
             inner.random_bytes.is_empty()
         ) {
             // First update should be for round zero.
@@ -176,8 +173,7 @@ module sui::random {
         // Fill the generator's buffer if needed.
         let num_of_bytes = num_of_bytes as u64;
         if (
-            vector::length(&g.buffer) <
-            (num_of_bytes - vector::length(&result))
+            vector::length(&g.buffer) < (num_of_bytes - vector::length(&result))
         ) {
             fill_buffer(g);
         };
@@ -237,8 +233,7 @@ module sui::random {
 
     /// Generate a boolean.
     public fun generate_bool(g: &mut RandomGenerator): bool {
-        (u256_from_bytes(g, 1) & 1) ==
-        1
+        (u256_from_bytes(g, 1) & 1) == 1
     }
 
     // Helper function to generate a random u128 in [min, max] using a random number with num_of_bytes bytes.
@@ -260,8 +255,7 @@ module sui::random {
         // [min, max].
         let range_size = (max - min) as u256 + 1;
         let rand = u256_from_bytes(g, num_of_bytes);
-        min +
-        (rand % range_size as u128)
+        min + (rand % range_size as u128)
     }
 
     /// Generate a random u128 in [min, max] (with a bias of 2^{-64}).
