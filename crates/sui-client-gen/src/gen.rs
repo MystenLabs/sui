@@ -676,10 +676,10 @@ impl<'env> FunctionsGen<'env> {
 
     /// Generates a TS type for a function's parameter type. Used in the `<..>Args` interface.
     fn param_type_to_field_type(&self, ty: &Type) -> js::Tokens {
-        let object_arg = &self.framework.import("util", "ObjectArg");
         let generic_arg = &self.framework.import("util", "GenericArg");
-        let transaction_argument =
-            &js::import("@mysten/sui.js/transactions", "TransactionArgument");
+        let transaction_argument = &js::import("@mysten/sui/transactions", "TransactionArgument");
+        let transaction_object_input =
+            &js::import("@mysten/sui/transactions", "TransactionObjectInput");
 
         match ty {
             Type::Primitive(ty) => match ty {
@@ -711,7 +711,7 @@ impl<'env> FunctionsGen<'env> {
                     "0x1::option::Option" => {
                         quote!(($(self.param_type_to_field_type(&ts[0])) | $(transaction_argument) | null))
                     }
-                    _ => quote!($object_arg),
+                    _ => quote!($transaction_object_input),
                 }
             }
             Type::Reference(_, ty) => self.param_type_to_field_type(ty),
@@ -791,7 +791,7 @@ impl<'env> FunctionsGen<'env> {
         }
     }
 
-    fn param_to_txb_arg(
+    fn param_to_tx_arg(
         &self,
         ty: Type,
         arg_field_name: String,
@@ -826,11 +826,11 @@ impl<'env> FunctionsGen<'env> {
         let ty_tok = gen_bcs_def_for_type(&ty, self.env, &type_param_names, self.type_origin_table);
 
         if self.is_pure(&ty) {
-            quote!($pure(txb, $arg_field_name, $ty_tok))
+            quote!($pure(tx, $arg_field_name, $ty_tok))
         } else if let Some(ty) = self.is_option(&ty) {
             let ty_tok =
                 gen_bcs_def_for_type(ty, self.env, &type_param_names, self.type_origin_table);
-            quote!($option(txb, $ty_tok, $arg_field_name))
+            quote!($option(tx, $ty_tok, $arg_field_name))
         } else {
             match ty {
                 Type::TypeParameter(_) => {
@@ -840,7 +840,7 @@ impl<'env> FunctionsGen<'env> {
                         &type_param_names,
                         self.type_origin_table,
                     );
-                    quote!($generic(txb, $ty_tok, $arg_field_name))
+                    quote!($generic(tx, $ty_tok, $arg_field_name))
                 }
                 Type::Vector(ty) => {
                     let ty_tok = gen_bcs_def_for_type(
@@ -849,10 +849,10 @@ impl<'env> FunctionsGen<'env> {
                         &type_param_names,
                         self.type_origin_table,
                     );
-                    quote!($vector(txb, $ty_tok, $arg_field_name))
+                    quote!($vector(tx, $ty_tok, $arg_field_name))
                 }
                 _ => {
-                    quote!($obj(txb, $arg_field_name))
+                    quote!($obj(tx, $arg_field_name))
                 }
             }
         }
@@ -881,7 +881,7 @@ impl<'env> FunctionsGen<'env> {
         func: &FunctionEnv,
         tokens: &mut Tokens<JavaScript>,
     ) -> Result<()> {
-        let transaction_block = &js::import("@mysten/sui.js/transactions", "TransactionBlock");
+        let transaction = &js::import("@mysten/sui/transactions", "Transaction");
         let published_at = &js::import("..", "PUBLISHED_AT");
 
         func.get_type_parameter_count();
@@ -894,7 +894,7 @@ impl<'env> FunctionsGen<'env> {
 
         quote_in! { *tokens =>
             export function $(FunctionsGen::fun_name(func))(
-                txb: $transaction_block,
+                tx: $transaction,
                 $(gen_type_args_param(type_arg_count, None::<&str>, ","))
                 $(match param_field_names.len() {
                     0 => (),
@@ -902,7 +902,7 @@ impl<'env> FunctionsGen<'env> {
                     _ => args: $(FunctionsGen::fun_arg_if_name(func))
                 })
             ) {
-                return txb.moveCall({
+                return tx.moveCall({
                     target: $[str]($($published_at)::$[const](func.get_full_name_str())),
                     $(match type_arg_count {
                         0 => (),
@@ -911,13 +911,13 @@ impl<'env> FunctionsGen<'env> {
                     })
                     arguments: [
                         $(if param_field_names.len() == 1 {
-                            $(self.param_to_txb_arg(
+                            $(self.param_to_tx_arg(
                                 param_field_names[0].1.clone(), param_field_names[0].0.clone(),
                                 func_type_param_names, single_param
                             ))
                         } else {
                             $(for (field_name, type_) in param_field_names join (, ) =>
-                                $(self.param_to_txb_arg(
+                                $(self.param_to_tx_arg(
                                     type_, "args.".to_string() + &field_name,
                                     func_type_param_names.clone(), single_param
                                 ))
@@ -1456,8 +1456,8 @@ impl<'env, 'a> StructsGen<'env, 'a> {
         let assert_fields_with_types_args_match = &self
             .framework
             .import("reified", "assertFieldsWithTypesArgsMatch");
-        let sui_parsed_data = &js::import("@mysten/sui.js/client", "SuiParsedData");
-        let sui_client = &js::import("@mysten/sui.js/client", "SuiClient");
+        let sui_parsed_data = &js::import("@mysten/sui/client", "SuiParsedData");
+        let sui_client = &js::import("@mysten/sui/client", "SuiClient");
         let bcs = &js::import("@mysten/bcs", "bcs");
         let bcs_type = &js::import("@mysten/bcs", "BcsType");
         let from_b64 = &js::import("@mysten/bcs", "fromB64");
