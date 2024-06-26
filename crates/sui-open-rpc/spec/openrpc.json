@@ -1408,6 +1408,8 @@
                 "check_zklogin_id_cost_base": null,
                 "check_zklogin_issuer_cost_base": null,
                 "checkpoint_summary_version_specific_data": null,
+                "config_read_setting_impl_cost_base": null,
+                "config_read_setting_impl_cost_per_byte": null,
                 "consensus_bad_nodes_stake_threshold": null,
                 "consensus_max_transaction_size_bytes": null,
                 "consensus_max_transactions_in_block_bytes": null,

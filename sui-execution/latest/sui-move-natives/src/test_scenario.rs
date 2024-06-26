@@ -30,12 +30,15 @@ use std::{
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
+    config,
     digests::{ObjectDigest, TransactionDigest},
+    dynamic_field::DynamicFieldInfo,
     execution::DynamicallyLoadedObjectMetadata,
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
     storage::ChildObjectResolver,
+    TypeTag,
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -133,9 +136,10 @@ pub fn end_transaction(
             ));
         }
     };
+    let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let all_active_child_objects = object_runtime_ref
         .all_active_child_objects()
-        .map(|(id, _, _)| *id)
+        .map(|child| *child.id)
         .collect::<BTreeSet<_>>();
     let inventories = &mut object_runtime_ref.test_inventories;
     let mut new_object_values = IndexMap::new();
@@ -167,6 +171,7 @@ pub fn end_transaction(
     let mut created = vec![];
     let mut written = vec![];
     for (id, (owner, ty, value)) in writes {
+        // write configs to cache
         new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
         transferred.push((id, owner));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
@@ -229,7 +234,9 @@ pub fn end_transaction(
     find_all_wrapped_objects(
         context,
         &mut all_wrapped,
-        object_runtime_ref.all_active_child_objects(),
+        object_runtime_ref
+            .all_active_child_objects()
+            .map(|child| (child.id, child.ty, child.copied_value)),
     );
     // mark as "incorrect" if a shared/imm object was wrapped or is a child object
     incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
@@ -251,6 +258,23 @@ pub fn end_transaction(
 
     // new input objects are remaining taken objects not written/deleted
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let mut config_settings = vec![];
+    for child in object_runtime_ref.all_active_child_objects() {
+        let s: StructTag = child.move_type.clone().into();
+        let is_setting = DynamicFieldInfo::is_dynamic_field(&s)
+            && matches!(&s.type_params[1], TypeTag::Struct(s) if config::is_setting(s));
+        if is_setting {
+            config_settings.push((
+                *child.owner,
+                *child.id,
+                child.move_type.clone(),
+                child.copied_value,
+            ));
+        }
+    }
+    for (config, setting, ty, value) in config_settings {
+        object_runtime_ref.config_setting_cache_insert(config, setting, ty, value)
+    }
     object_runtime_ref.state.input_objects = object_runtime_ref
         .test_inventories
         .taken

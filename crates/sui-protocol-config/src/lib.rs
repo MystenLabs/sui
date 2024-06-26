@@ -148,6 +148,7 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 //             Set number of leaders per round for Mysticeti commits.
 // Version 51: Switch to DKG V1.
 // Version 52: Emit `CommitteeMemberUrlUpdateEvent` when updating bridge node url.
+//             std::config native functions.
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -910,6 +911,13 @@ pub struct ProtocolConfig {
     address_to_u256_cost_base: Option<u64>,
     // Cost params for the Move native function `address::from_u256(u256): address`
     address_from_u256_cost_base: Option<u64>,
+
+    // `config` module
+    // Cost params for the Move native function `read_setting_impl<Name: copy + drop + store,
+    // SettingValue: key + store, SettingDataValue: store, Value: copy + drop + store,
+    // >(config: address, name: address, current_epoch: u64): Option<Value>`
+    config_read_setting_impl_cost_base: Option<u64>,
+    config_read_setting_impl_cost_per_byte: Option<u64>,
 
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -1686,6 +1694,11 @@ impl ProtocolConfig {
             // Cost params for the Move native function `address::from_u256(u256): address`
             address_from_u256_cost_base: Some(52),
 
+            // `config` module
+            // Cost params for the Move native function `read_setting_impl``
+            config_read_setting_impl_cost_base: None,
+            config_read_setting_impl_cost_per_byte: None,
+
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
             dynamic_field_hash_type_and_key_cost_base: Some(100),
@@ -2433,7 +2446,10 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_coin_deny_list_v2 = true;
                     }
                 }
-                52 => {}
+                52 => {
+                    cfg.config_read_setting_impl_cost_base = Some(100);
+                    cfg.config_read_setting_impl_cost_per_byte = Some(40);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
