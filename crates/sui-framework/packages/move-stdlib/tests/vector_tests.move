@@ -584,14 +584,14 @@ module std::vector_tests {
     // === Macros ===
 
     #[test]
-    fun test_destroy() {
+    fun test_destroy_macro() {
         let mut acc = 0;
         vector[10, 20, 30, 40].destroy!(|e| acc = acc + e);
         assert!(acc == 100);
     }
 
     #[test]
-    fun test_map() {
+    fun test_map_macro() {
         let r = vector[0, 1, 2, 3];
         assert!(r.map!(|e| e + 1) == vector[1, 2, 3, 4]);
 
@@ -600,13 +600,27 @@ module std::vector_tests {
     }
 
     #[test]
-    fun filter() {
+    fun filter_macro() {
         let r = vector[0, 1, 2, 3];
         assert!(r.filter!(|e| *e % 2 == 0) == vector[0, 2]);
     }
 
     #[test]
-    fun any_all() {
+    fun partition_macro() {
+        let r = vector<u64>[0, 1, 2, 3];
+        let (even, odd) = r.partition!(|e| (*e % 2) == 0);
+        assert!(even == vector[0, 2]);
+        assert!(odd == vector[1, 3]);
+    }
+
+    #[test]
+    fun fold_macro() {
+        let r = vector[0, 1, 2, 3];
+        assert!(r.fold!(10, |acc, e| acc + e) == 16);
+    }
+
+    #[test]
+    fun any_all_macro() {
         assert!(vector[0, 1, 2, 3].any!(|e| *e == 2));
         assert!(!vector[0, 1, 2, 3].any!(|e| *e == 4));
         assert!(vector[0, 1, 2, 3].all!(|e| *e < 4));

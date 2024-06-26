@@ -209,6 +209,36 @@ module std::vector {
         r
     }
 
+    /// Split the vector `v` into two vectors by applying the function `f` to each element.
+    /// Return a tuple containing two vectors: the first containing the elements for which `f` returns `true`,
+    /// and the second containing the elements for which `f` returns `false`.
+    public macro fun partition<$T>($v: vector<$T>, $f: |&$T| -> bool): (vector<$T>, vector<$T>) {
+        let mut r1 = vector[];
+        let mut r2 = vector[];
+        let mut v = $v;
+        while (!v.is_empty()) {
+            let e = v.pop_back();
+            if ($f(&e)) r1.push_back(e)
+            else r2.push_back(e);
+        };
+        v.destroy_empty();
+        r1.reverse();
+        r2.reverse();
+        (r1, r2)
+    }
+
+    /// Reduce the vector `v` to a single value by applying the function `f` to each element.
+    /// Similar to `fold_left` in Rust and `reduce` in Python and JavaScript.
+    public macro fun fold<$T, $Acc>($v: vector<$T>, $init: $Acc, $f: |$Acc, $T| -> $Acc): $Acc {
+        let mut acc = $init;
+        let mut v = $v;
+        while (!v.is_empty()) {
+            acc = $f(acc, v.pop_back());
+        };
+        v.destroy_empty();
+        acc
+    }
+
     /// Whether any element in the vector `v` satisfies the predicate `f`.
     public macro fun any<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
         let v = $v;
