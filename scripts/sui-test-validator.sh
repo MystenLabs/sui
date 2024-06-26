@@ -16,11 +16,17 @@ You can also use the following options to start the local network with more feat
 # holds the args names
 named_args=()
 config_dir=false;
+indexer_port_set=false;
+with_indexer=false;
 
 # Iterate over all arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
        
+        --with-indexer)
+            with_indexer=true
+            shift # Remove argument from processing
+            ;;
         --config-dir=*)
             value="${1#*=}"
             named_args+=("--network.config=$value")
@@ -50,11 +56,13 @@ while [[ $# -gt 0 ]]; do
         --indexer-rpc-port=*)
             port_value="${1#*=}"
             named_args+=("--with-indexer=$port_value")
+            indexer_port_set=true
             shift # Remove argument from processing
             ;;
         --indexer-rpc-port)
             if [[ -n $2 && $2 != --* ]]; then
                 named_args+=("--with-indexer=$2")
+                indexer_port_set=true
                 shift # Remove value from processing
             fi
             shift # Remove argument from processing
@@ -77,6 +85,10 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ $indexer_port_set = false ]] && [[ $with_indexer = true ]]; then
+  named_args+=("--with-indexer")
+fi
 
 # Basic command that replicates the command line arguments of sui-test-validator
 cmd="sui start --with-faucet --force-regenesis"
