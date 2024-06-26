@@ -213,6 +213,19 @@ module std::option {
         else none()
     }
 
+    /// Return `None` if the value is `None`, otherwise return `Option<T>` if the predicate `f` returns true.
+    public macro fun filter<$T: drop>($o: Option<$T>, $f: |&$T| -> bool): Option<$T> {
+        let o = $o;
+        if (o.is_some() && $f(o.borrow())) o
+        else none()
+    }
+
+    /// Return `false` if the value is `None`, otherwise return the result of the predicate `f`.
+    public macro fun is_some_and<$T>($o: &Option<$T>, $f: |&$T| -> bool): bool {
+        let o = $o;
+        o.is_some() && $f(o.borrow())
+    }
+
     /// Destroy `Option<T>` and return the value inside if it holds one, or `default` otherwise.
     /// Equivalent to Rust's `t.unwrap_or(default)`.
     ///

@@ -199,6 +199,19 @@ module std::option_tests {
     }
 
     #[test]
+    fun filter() {
+        assert!(option::some(5).filter!(|x| *x == 5) == option::some(5));
+        assert!(option::some(5).filter!(|x| *x == 6) == option::none());
+    }
+
+    #[test]
+    fun is_some_and() {
+        assert!(option::some(5).is_some_and!(|x| *x == 5));
+        assert!(!option::some(5).is_some_and!(|x| *x == 6));
+        assert!(!option::none().is_some_and!(|x| *x == 5));
+    }
+
+    #[test]
     fun destroy_or() {
         assert!(option::none().destroy_or!(10) == 10);
         assert!(option::some(5).destroy_or!(10) == 5);
