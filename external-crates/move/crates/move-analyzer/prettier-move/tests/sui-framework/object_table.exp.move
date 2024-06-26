@@ -94,7 +94,8 @@ module sui::object_table {
     public fun is_empty<K: copy + drop + store, V: key + store>(
         table: &ObjectTable<K, V>,
     ): bool {
-        table.size == 0
+        table.size ==
+        0
     }
 
     /// Destroys an empty table

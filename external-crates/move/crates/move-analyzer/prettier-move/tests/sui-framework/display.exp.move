@@ -228,16 +228,14 @@ module sui::display_tests {
         let mut display = display::new<Capy>(&pub, test.ctx());
 
         display.add(b"name".to_string(), b"Capy {name}".to_string());
-        display
-            .add(
-                b"link".to_string(),
-                b"https://capy.art/capy/{id}".to_string(),
-            );
-        display
-            .add(
-                b"image".to_string(),
-                b"https://api.capy.art/capy/{id}/svg".to_string(),
-            );
+        display.add(
+            b"link".to_string(),
+            b"https://capy.art/capy/{id}".to_string(),
+        );
+        display.add(
+            b"image".to_string(),
+            b"https://api.capy.art/capy/{id}/svg".to_string(),
+        );
         display.add(b"description".to_string(), b"A Lovely Capy".to_string());
 
         pub.burn_publisher();

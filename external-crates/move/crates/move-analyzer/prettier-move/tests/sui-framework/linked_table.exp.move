@@ -74,8 +74,10 @@ module sui::linked_table {
         let prev = option::none();
         let next = if (old_head.is_some()) {
             let old_head_k = old_head.destroy_some();
-            field::borrow_mut<K, Node<K, V>>(&mut table.id, old_head_k)
-                .prev = option::some(k);
+            field::borrow_mut<K, Node<K, V>>(
+                &mut table.id,
+                old_head_k,
+            ).prev = option::some(k);
             option::some(old_head_k)
         } else {
             option::none()
@@ -97,8 +99,10 @@ module sui::linked_table {
         let old_tail = table.tail.swap_or_fill(k);
         let prev = if (old_tail.is_some()) {
             let old_tail_k = old_tail.destroy_some();
-            field::borrow_mut<K, Node<K, V>>(&mut table.id, old_tail_k)
-                .next = option::some(k);
+            field::borrow_mut<K, Node<K, V>>(
+                &mut table.id,
+                old_tail_k,
+            ).next = option::some(k);
             option::some(old_tail_k)
         } else {
             option::none()
@@ -163,12 +167,16 @@ module sui::linked_table {
         let Node<K, V> { prev, next, value } = field::remove(&mut table.id, k);
         table.size = table.size - 1;
         if (prev.is_some()) {
-            field::borrow_mut<K, Node<K, V>>(&mut table.id, *prev.borrow())
-                .next = next
+            field::borrow_mut<K, Node<K, V>>(
+                &mut table.id,
+                *prev.borrow(),
+            ).next = next
         };
         if (next.is_some()) {
-            field::borrow_mut<K, Node<K, V>>(&mut table.id, *next.borrow())
-                .prev = prev
+            field::borrow_mut<K, Node<K, V>>(
+                &mut table.id,
+                *next.borrow(),
+            ).prev = prev
         };
         if (table.head.borrow() == &k) table.head = next;
         if (table.tail.borrow() == &k) table.tail = prev;
@@ -215,7 +223,8 @@ module sui::linked_table {
     public fun is_empty<K: copy + drop + store, V: store>(
         table: &LinkedTable<K, V>,
     ): bool {
-        table.size == 0
+        table.size ==
+        0
     }
 
     /// Destroys an empty table

@@ -74,7 +74,9 @@ module std::string {
     public fun insert(s: &mut String, at: u64, o: String) {
         let bytes = &s.bytes;
         assert!(
-            at <= bytes.length() && internal_is_char_boundary(bytes, at),
+            at <=
+            bytes.length() &&
+            internal_is_char_boundary(bytes, at),
             EINVALID_INDEX,
         );
         let l = s.length();
@@ -92,7 +94,11 @@ module std::string {
         let bytes = &s.bytes;
         let l = bytes.length();
         assert!(
-            j <= l && i <= j && internal_is_char_boundary(bytes, i) &&
+            j <=
+            l &&
+            i <=
+            j &&
+            internal_is_char_boundary(bytes, i) &&
             internal_is_char_boundary(bytes, j),
             EINVALID_INDEX,
         );

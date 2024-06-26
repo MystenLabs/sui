@@ -13,7 +13,8 @@ module prettier::simple_function {
         fourth_breakable_parameter: u64,
         fifth_breakable_parameter: u64,
     ): u64 {
-        first_breakable_parameter + second_breakable_parameter +
+        first_breakable_parameter +
+        second_breakable_parameter +
         third_breakable_parameter +
         fourth_breakable_parameter +
         fifth_breakable_parameter

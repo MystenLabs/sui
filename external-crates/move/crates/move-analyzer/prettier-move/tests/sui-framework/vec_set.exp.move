@@ -52,7 +52,8 @@ module sui::vec_set {
 
     /// Return true if `self` has 0 elements, false otherwise
     public fun is_empty<K: copy + drop>(self: &VecSet<K>): bool {
-        size(self) == 0
+        size(self) ==
+        0
     }
 
     /// Unpack `self` into vectors of keys.

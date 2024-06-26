@@ -313,8 +313,7 @@ module sui::coin {
     ) {
         let `type` = type_name::into_string(type_name::get_with_original_ids<
             T,
-        >())
-            .into_bytes();
+        >()).into_bytes();
         deny_list::add(
             deny_list,
             DENY_LIST_COIN_INDEX,
@@ -333,8 +332,7 @@ module sui::coin {
     ) {
         let `type` = type_name::into_string(type_name::get_with_original_ids<
             T,
-        >())
-            .into_bytes();
+        >()).into_bytes();
         deny_list::remove(
             deny_list,
             DENY_LIST_COIN_INDEX,

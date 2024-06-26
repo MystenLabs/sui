@@ -189,7 +189,8 @@ module sui::kiosk_extension {
     ) {
         assert!(is_installed<Ext>(self), EExtensionNotInstalled);
         assert!(
-            can_place<Ext>(self) || can_lock<Ext>(self),
+            can_place<Ext>(self) ||
+            can_lock<Ext>(self),
             EExtensionNotAllowed,
         );
 
@@ -224,13 +225,19 @@ module sui::kiosk_extension {
 
     /// Check whether an extension of type `Ext` can `place` into Kiosk.
     public fun can_place<Ext: drop>(self: &Kiosk): bool {
-        is_enabled<Ext>(self) && extension<Ext>(self).permissions & PLACE != 0
+        is_enabled<Ext>(self) &&
+        extension<Ext>(self).permissions &
+        PLACE !=
+        0
     }
 
     /// Check whether an extension of type `Ext` can `lock` items in Kiosk.
     /// Locking also enables `place`.
     public fun can_lock<Ext: drop>(self: &Kiosk): bool {
-        is_enabled<Ext>(self) && extension<Ext>(self).permissions & LOCK != 0
+        is_enabled<Ext>(self) &&
+        extension<Ext>(self).permissions &
+        LOCK !=
+        0
     }
 
     // === Internal ===

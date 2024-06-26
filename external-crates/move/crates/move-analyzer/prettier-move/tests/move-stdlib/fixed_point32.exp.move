@@ -106,6 +106,7 @@ module std::fixed_point32 {
 
     /// Returns true if the ratio is zero.
     public fun is_zero(num: FixedPoint32): bool {
-        num.value == 0
+        num.value ==
+        0
     }
 }
