@@ -89,9 +89,10 @@ export type BlockOptions = {
 export function block({ path, print, options, shouldBreak, skipChildren }: BlockOptions) {
 	const length = path.node.nonFormattingChildren.length;
 	const firstNonEmpty = path.node.namedAndEmptyLineChildren.findIndex((e) => !e.isEmptyLine);
+	const lastNonEmpty = path.node.namedAndEmptyLineChildren.reverse().findIndex((e) => !e.isEmptyLine);
 	const children = path
 		.map(print, 'namedAndEmptyLineChildren')
-		.slice(firstNonEmpty)
+		.slice(firstNonEmpty, lastNonEmpty === 0 ? undefined : -lastNonEmpty)
 		.slice(skipChildren);
 
 	if (length == 0) {
