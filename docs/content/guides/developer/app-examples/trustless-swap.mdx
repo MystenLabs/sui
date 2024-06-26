@@ -961,18 +961,21 @@ In this final part of the app example, you will build a frontend (UI) that allow
 
 ### Prerequisites
 
-{@include: ../../../../snippets/app-examples-swap-source.mdx}
+{@include: ../../../snippets/app-examples-swap-source.mdx}
 
-Before getting started, make sure you:
+Before getting started, make sure you have:
 
-- Understand [the mechanism behind the Escrow smart contract backend](#escrow).
-- Check out [indexing service guide](#backend) to learn how we index on-chain data and API endpoints exposed to serve data query requests.
-- Install [`pnpm` through this guide](https://pnpm.io/installation) as we will use it as our package manager.
-- Check out [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui with Typescript.
-- Check out [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
-- Check out [React Router](https://reactrouter.com/en/main) as we use it to navigate between different routes in our UI website.
-- `dApp Kit` provides a set of hooks for making query and mutation calls to Sui blockchain. These hooks are thin wrappers around query and mutation hooks from `@tanstack/react-query`. Please check out [@tanstack/react-query](https://tanstack.com/query/latest/docs/framework/react/overview) to learn the basic usage for managing, caching, mutating server state.
-- This project is bootstrapped through `pnpm create @mysten/dapp`. Please check out [@mysten/create-dapp](https://sdk.mystenlabs.com/dapp-kit/create-dapp) for how to scaffold a React.js Sui dApp project quickly.
+- [Completed the smart contracts](#smart-contracts) and understand their design.
+- [Implemented the backend](#backend) to learn how to index on-chain data and expose it through an API.
+- [Installed `pnpm`](https://pnpm.io/installation) as it will be used as the package manager.
+
+:::tip Additional resources
+
+- Tooling: [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript). For basic usage on how to interact with Sui with Typescript.
+- Tooling: [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit). To learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
+- Tooling: [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp). This is used within this project to quickly scaffold a React-based Sui dApp.
+
+:::
 
 ### Overview
 
@@ -1024,6 +1027,15 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 	</React.StrictMode>,
 );
 ```
+
+Note that `dApp Kit` provides a set of hooks for making query and mutation calls to the Sui blockchain. These hooks are thin wrappers around query and mutation hooks from `@tanstack/react-query`.
+
+:::tip Additional resources
+
+- Docs: [React Router](https://reactrouter.com/en/main). Used to navigate between different routes in the website.
+- Docs: [TanStack Query](https://tanstack.com/query/latest/docs/framework/react/overview).
+
+:::
 
 ### Connect wallet
 
