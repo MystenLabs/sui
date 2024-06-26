@@ -172,6 +172,7 @@ impl TypingAnalysisContext<'_> {
         def_type: N::Type,
         with_let: bool,
         mutable: bool,
+        arm_binder: bool,
     ) {
         if self.traverse_only {
             return;
@@ -205,8 +206,10 @@ impl TypingAnalysisContext<'_> {
                 ident_type_def_loc,
             ),
         );
-        self.def_info
-            .insert(*loc, DefInfo::Local(*name, def_type, with_let, mutable));
+        self.def_info.insert(
+            *loc,
+            DefInfo::Local(*name, def_type, with_let, mutable, arm_binder),
+        );
     }
 
     /// Add a use for and identifier whose definition is expected to be local to a function, and
@@ -581,6 +584,7 @@ impl TypingAnalysisContext<'_> {
                 match_pat.ty.clone(),
                 false,
                 matches!(mut_, E::Mutability::Mut(_)),
+                false,
             ),
             UA::Or(pat1, pat2) => {
                 self.process_match_patterm(pat1);
@@ -593,6 +597,7 @@ impl TypingAnalysisContext<'_> {
                     match_pat.ty.clone(),
                     false,
                     false,
+                    false,
                 );
                 self.process_match_patterm(pat);
             }
@@ -603,7 +608,7 @@ impl TypingAnalysisContext<'_> {
     fn process_match_arm(&mut self, sp!(_, arm): &mut T::MatchArm) {
         self.process_match_patterm(&mut arm.pattern);
         arm.binders.iter_mut().for_each(|(var, ty)| {
-            self.add_local_def(&var.loc, &var.value.name, ty.clone(), false, false);
+            self.add_local_def(&var.loc, &var.value.name, ty.clone(), false, false, true);
         });
 
         // Enum guard variables are re-defined to reflect the fact that they have different
@@ -615,25 +620,31 @@ impl TypingAnalysisContext<'_> {
         // making it possible to have two entries in the map for the same location (the location
         // has to be "reverted" back when serving go-to-def to support jump to the right location).
         if let Some(exp) = &mut arm.guard {
-            let new_scope = self.expression_scope.clone();
-            let previous_scope = std::mem::replace(&mut self.expression_scope, new_scope);
+            // let new_scope = self.expression_scope.clone();
+            // let previous_scope = std::mem::replace(&mut self.expression_scope, new_scope);
 
-            for (var, ty) in &arm.binders {
-                let new_ty = sp(
-                    ty.loc,
-                    N::Type_::Ref(false, Box::new(sp(ty.loc, ty.value.base_type_()))),
-                );
-                let reverted_loc = Loc::new(
-                    var.loc.file_hash(),
-                    std::u32::MAX - var.loc.start(),
-                    std::u32::MAX - var.loc.end(),
-                );
-                self.add_local_def(&reverted_loc, &var.value.name, new_ty, false, false);
-            }
+            // for (var, ty) in &arm.binders {
+            //     let new_ty = sp(
+            //         ty.loc,
+            //         N::Type_::Ref(false, Box::new(sp(ty.loc, ty.value.base_type_()))),
+            //     );
+            //     let reverted_loc = Loc::new(
+            //         var.loc.file_hash(),
+            //         std::u32::MAX - var.loc.start(),
+            //         std::u32::MAX - var.loc.end(),
+            //     );
+            //     self.add_local_def(&reverted_loc, &var.value.name, new_ty, false, false);
+            // }
 
             self.visit_exp(exp);
+            let guard_loc = exp.exp.loc;
+            self.compiler_info
+                .guards
+                .entry(guard_loc.file_hash())
+                .or_default()
+                .insert(guard_loc);
 
-            let _inner_scope = std::mem::replace(&mut self.expression_scope, previous_scope);
+            // let _inner_scope = std::mem::replace(&mut self.expression_scope, previous_scope);
         }
         self.visit_exp(&mut arm.rhs);
     }
@@ -870,6 +881,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 ptype.clone(),
                 false, /* with_let */
                 matches!(mutability, E::Mutability::Mut(_)),
+                false,
             );
         }
 
@@ -908,6 +920,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                                 *ty.clone(),
                                 !for_unpack, // (only for simple definition, e.g., `let t = 1;``)
                                 mut_.is_some_and(|m| matches!(m, E::Mutability::Mut(_))),
+                                false,
                             );
                         }
                         LValueKind::Assign => self.add_local_use_def(&var.value.name, &var.loc),

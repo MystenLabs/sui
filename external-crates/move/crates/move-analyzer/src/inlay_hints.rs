@@ -3,7 +3,7 @@
 
 use crate::{
     context::Context,
-    symbols::{on_hover_markup, type_to_ide_string, DefInfo, Symbols},
+    symbols::{on_hover_markup, type_to_ide_string, DefInfo, SymbolicatorRunner, Symbols},
 };
 use lsp_server::Request;
 use lsp_types::{
@@ -13,7 +13,8 @@ use lsp_types::{
 use move_compiler::{naming::ast as N, shared::Identifier};
 
 /// Handles inlay hints request of the language server
-pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Symbols) {
+pub fn on_inlay_hint_request(context: &Context, request: &Request) {
+    let symbols_map = &context.symbols.lock().unwrap();
     let parameters = serde_json::from_value::<InlayHintParams>(request.params.clone())
         .expect("could not deserialize inlay hints request");
 
@@ -24,39 +25,45 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
     );
     let mut hints: Vec<InlayHint> = vec![];
 
-    if context.inlay_type_hints {
-        if let Some(file_defs) = symbols.file_mods.get(&fpath) {
-            for mod_defs in file_defs {
-                for untyped_def_loc in mod_defs.untyped_defs() {
-                    let start_position = symbols.files.start_position(untyped_def_loc);
-                    if let Some(DefInfo::Local(_, t, _, _)) = symbols.def_info(untyped_def_loc) {
-                        let colon_label = InlayHintLabelPart {
-                            value: ": ".to_string(),
-                            tooltip: None,
-                            location: None,
-                            command: None,
-                        };
-                        let type_label = InlayHintLabelPart {
-                            value: type_to_ide_string(t, /* verbose */ true),
-                            tooltip: None,
-                            location: None,
-                            command: None,
-                        };
-                        let h = InlayHint {
-                            position: start_position.into(),
-                            label: InlayHintLabel::LabelParts(vec![colon_label, type_label]),
-                            kind: Some(InlayHintKind::TYPE),
-                            text_edits: None,
-                            tooltip: additional_hint_info(t, symbols),
-                            padding_left: None,
-                            padding_right: None,
-                            data: None,
-                        };
-                        hints.push(h);
+    if let Some(symbols) =
+        SymbolicatorRunner::root_dir(&fpath).and_then(|pkg_path| symbols_map.get(&pkg_path))
+    {
+        if context.inlay_type_hints {
+            if let Some(file_defs) = symbols.file_mods.get(&fpath) {
+                for mod_defs in file_defs {
+                    for untyped_def_loc in mod_defs.untyped_defs() {
+                        let start_position = symbols.files.start_position(untyped_def_loc);
+                        if let Some(DefInfo::Local(_, t, _, _, _)) =
+                            symbols.def_info(untyped_def_loc)
+                        {
+                            let colon_label = InlayHintLabelPart {
+                                value: ": ".to_string(),
+                                tooltip: None,
+                                location: None,
+                                command: None,
+                            };
+                            let type_label = InlayHintLabelPart {
+                                value: type_to_ide_string(t, /* verbose */ true),
+                                tooltip: None,
+                                location: None,
+                                command: None,
+                            };
+                            let h = InlayHint {
+                                position: start_position.into(),
+                                label: InlayHintLabel::LabelParts(vec![colon_label, type_label]),
+                                kind: Some(InlayHintKind::TYPE),
+                                text_edits: None,
+                                tooltip: additional_hint_info(t, symbols),
+                                padding_left: None,
+                                padding_right: None,
+                                data: None,
+                            };
+                            hints.push(h);
+                        }
                     }
                 }
-            }
-        };
+            };
+        }
     }
 
     let response = lsp_server::Response::new_ok(request.id.clone(), hints);

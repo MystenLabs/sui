@@ -68,7 +68,7 @@ mut_var: &mut u64
 -- test 2 -------------------
 use line: 4, use_ndx: 1
 Use: 'mut_var', start: 25, end: 32
-Def: 'INVALID DEF IDENT', line: 9, def char: 0
+Def: 'mut_var', line: 4, def char: 12
 TypeDef: no info
 On Hover:
 mut_var: &u64
@@ -487,7 +487,7 @@ s: Enums::variant_match::SomeStruct
 -- test 25 -------------------
 use line: 23, use_ndx: 5
 Use: 'num1', start: 55, end: 59
-Def: 'INVALID DEF IDENT', line: 36, def char: 0
+Def: 'num1', line: 23, def char: 30
 TypeDef: no info
 On Hover:
 num1: &u64
@@ -495,7 +495,7 @@ num1: &u64
 -- test 26 -------------------
 use line: 23, use_ndx: 6
 Use: 's', start: 62, end: 63
-Def: 'INVALID DEF IDENT', line: 36, def char: 0
+Def: 's', line: 23, def char: 46
 TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
 s: &Enums::variant_match::SomeStruct
@@ -503,7 +503,7 @@ s: &Enums::variant_match::SomeStruct
 -- test 27 -------------------
 use line: 23, use_ndx: 8
 Use: 'num1', start: 79, end: 83
-Def: 'INVALID DEF IDENT', line: 36, def char: 0
+Def: 'num1', line: 23, def char: 30
 TypeDef: no info
 On Hover:
 num1: &u64

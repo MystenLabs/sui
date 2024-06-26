@@ -15,6 +15,8 @@ pub struct CompilerInfo {
     /// Locations of binders in enum variants that are expanded from an ellipsis (and should
     /// not be displayed in any way by the IDE)
     pub ellipsis_binders: BTreeSet<Loc>,
+    /// Locations of guard expressions
+    pub guards: BTreeMap<FileHash, BTreeSet<Loc>>,
 }
 
 impl CompilerInfo {
@@ -85,5 +87,16 @@ impl CompilerInfo {
                 }
             })
         })
+    }
+
+    pub fn inside_guard(&self, fhash: FileHash, loc: &Loc) -> bool {
+        self.guards
+            .get(&fhash)
+            .and_then(|guard_locs| {
+                guard_locs
+                    .iter()
+                    .find_map(|gloc| if gloc.contains(loc) { Some(()) } else { None })
+            })
+            .is_some()
     }
 }

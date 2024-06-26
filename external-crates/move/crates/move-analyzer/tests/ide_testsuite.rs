@@ -10,7 +10,10 @@ use std::{
 };
 
 use json_comments::StripComments;
-use move_analyzer::symbols::{def_info_doc_string, get_symbols, Symbols, UseDefMap};
+use lsp_types::Position;
+use move_analyzer::symbols::{
+    def_info_doc_string, get_symbols, maybe_convert_for_guard, Symbols, UseDefMap,
+};
 use move_command_line_common::testing::{
     add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT,
 };
@@ -98,15 +101,32 @@ impl UseDefTest {
             return Ok(());
         };
 
-        writeln!(
-            output,
-            "On Hover:\n{}",
-            if let Some(s) = def_info_doc_string(def) {
-                format!("{}\n\n{}", def, s)
-            } else {
-                format!("{}", def)
-            }
-        )?;
+        if let Some(guard_def) = maybe_convert_for_guard(
+            &def,
+            use_file_path,
+            &Position::new(*use_line, use_def.col_start()),
+            symbols,
+        ) {
+            writeln!(
+                output,
+                "On Hover:\n{}",
+                if let Some(s) = def_info_doc_string(&guard_def) {
+                    format!("{}\n\n{}", guard_def, s)
+                } else {
+                    format!("{}", guard_def)
+                }
+            )?;
+        } else {
+            writeln!(
+                output,
+                "On Hover:\n{}",
+                if let Some(s) = def_info_doc_string(def) {
+                    format!("{}\n\n{}", def, s)
+                } else {
+                    format!("{}", def)
+                }
+            )?;
+        };
         Ok(())
     }
 }
