@@ -345,8 +345,11 @@ pub struct AuthorityEpochTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
 
-    /// Signatures over transaction effects that were executed in the current epoch.
-    /// Store this to avoid re-signing the same effects twice.
+    /// Signatures over transaction effects that we have signed and returned to users.
+    /// We store this to avoid re-signing the same effects twice.
+    /// Note that this may contain signatures for effects from previous epochs, in the case
+    /// that a user requests a signature for effects from a previous epoch. However, the
+    /// signature is still epoch-specific and so is stored in the epoch store.
     effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
     /// Signatures of transaction certificates that are executed locally.
@@ -1177,6 +1180,18 @@ impl AuthorityPerEpochStore {
         if !matches!(tx_key, TransactionKey::Digest(_)) {
             self.executed_digests_notify_read.notify(tx_key, tx_digest);
         }
+        Ok(())
+    }
+
+    pub fn insert_effects_signature(
+        &self,
+        tx_digest: &TransactionDigest,
+        effects_signature: &AuthoritySignInfo,
+    ) -> SuiResult {
+        let tables = self.tables()?;
+        tables
+            .effects_signatures
+            .insert(tx_digest, effects_signature)?;
         Ok(())
     }
 

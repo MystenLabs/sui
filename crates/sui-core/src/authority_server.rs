@@ -591,8 +591,10 @@ impl ValidatorService {
                     .then(|| self.state.get_transaction_output_objects(&effects))
                     .and_then(Result::ok);
 
+                let signed_effects = self.state.sign_effects(effects, epoch_store)?;
+
                 Ok::<_, SuiError>(HandleCertificateResponseV3 {
-                    effects: effects.into_inner(),
+                    effects: signed_effects.into_inner(),
                     events,
                     input_objects,
                     output_objects,

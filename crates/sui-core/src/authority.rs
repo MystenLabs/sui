@@ -1068,7 +1068,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<VerifiedSignedTransactionEffects> {
+    ) -> SuiResult<TransactionEffects> {
         let _metrics_guard = if certificate.contains_shared_object() {
             self.metrics
                 .execute_certificate_latency_shared_object
@@ -1089,8 +1089,7 @@ impl AuthorityState {
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
         }
 
-        let effects = self.notify_read_effects(certificate).await?;
-        self.sign_effects(effects, epoch_store)
+        self.notify_read_effects(certificate).await
     }
 
     /// Internal logic to execute a certificate.
@@ -1406,8 +1405,12 @@ impl AuthorityState {
 
         let output_keys = inner_temporary_store.get_output_keys(effects);
 
-        // Only need to sign effects if we are a validator.
-        let effects_sig = if self.is_validator(epoch_store) {
+        // Only need to sign effects if we are a validator, and if the executed_in_epoch_table is not yet enabled.
+        // TODO: once executed_in_epoch_table is enabled everywhere, we can remove the code below entirely.
+        let should_sign_effects =
+            self.is_validator(epoch_store) && !epoch_store.executed_in_epoch_table_enabled();
+
+        let effects_sig = if should_sign_effects {
             Some(AuthoritySignInfo::new(
                 epoch_store.epoch(),
                 effects,
@@ -4000,28 +4003,28 @@ impl AuthorityState {
                 // to return either an effects certificate, -or- a proof of inclusion in a checkpoint. In
                 // the case above, the Quorum Driver would return a proof of inclusion in the final
                 // checkpoint, and this code would no longer be necessary.
-                //
-                // Alternatively, some of the confusion around re-signing could be resolved if
-                // CertifiedTransactionEffects included both the epoch in which the transaction became
-                // final, as well as the epoch at which the effects were certified. In this case, there
-                // would be nothing terribly odd about the validators from epoch N certifying that a
-                // given TX became final in epoch N - 1. The confusion currently arises from the fact that
-                // the epoch field in AuthoritySignInfo is overloaded both to identify the provenance of
-                // the authority's signature, as well as to identify in which epoch the transaction was
-                // executed.
                 debug!(
                     ?tx_digest,
                     epoch=?epoch_store.epoch(),
                     "Re-signing the effects with the current epoch"
                 );
-                SignedTransactionEffects::new(
+
+                let sig = AuthoritySignInfo::new(
                     epoch_store.epoch(),
-                    effects,
-                    &*self.secret,
+                    &effects,
+                    Intent::sui_app(IntentScope::TransactionEffects),
                     self.name,
-                )
+                    &*self.secret,
+                );
+
+                let effects = SignedTransactionEffects::new_from_data_and_sig(effects, sig.clone());
+
+                epoch_store.insert_effects_signature(&tx_digest, &sig)?;
+
+                effects
             }
         };
+
         Ok(VerifiedSignedTransactionEffects::new_unchecked(
             signed_effects,
         ))
