@@ -522,7 +522,7 @@ To achieve this, in the next step you [create an indexing service](#backend).
 
 ## Backend indexer {#backend}
 
-With the contract adapted to emit events, we can now write an indexer that keeps track of all active `Escrow` objects and exposes an API for querying objects by sender or recipient. The indexer will be backed by a Prisma DB with the following schema:
+With the contract adapted to emit events, you can now write an indexer that keeps track of all active `Escrow` objects and exposes an API for querying objects by sender or recipient. The indexer will be backed by a Prisma DB with the following schema:
 
 ```ts
 // prisma/schema.prisma
@@ -673,7 +673,7 @@ const runEventJob = async (client: SuiClient, tracker: EventTracker, cursor: Sui
 };
 ```
 
-The callback that gets called is responsible for reading the event and updating the database accordingly. For demo purposes, because we are using sqlite, we need to issue a separate `UPSERT` to the database for each escrowed object, but in a production setting, requests to the database should be batched to minimise round-trips to the database.
+The callback that gets called is responsible for reading the event and updating the database accordingly. For demo purposes, SQLite is being used, and so you need to issue a separate `UPSERT` to the database for each escrowed object, but in a production setting, requests to the database should be batched to minimise round-trips to the database.
 
 ```ts
 // indexer/escrow-handler.ts
@@ -759,7 +759,7 @@ export const handleEscrowObjects = async (events: SuiEvent[], type: string) => {
 
 ### API service
 
-The data that is captured by our indexer can then be served over an API, so that a front-end can read it. We will implement our API in TypeScript, to run on Node, using Express.
+The data that is captured by our indexer can then be served over an API, so that a front-end can read it. You will now implement the API in TypeScript, to run on Node, using Express.
 
 #### API design
 
