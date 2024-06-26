@@ -580,4 +580,36 @@ module std::vector_tests {
         assert!(b"hello_world".to_ascii_string().length() == 11);
         assert!(b"hello_world".try_to_ascii_string().is_some());
     }
+
+    // === Macros ===
+
+    #[test]
+    fun test_destroy() {
+        let mut acc = 0;
+        vector[10, 20, 30, 40].destroy!(|e| acc = acc + e);
+        assert!(acc == 100);
+    }
+
+    #[test]
+    fun test_map() {
+        let r = vector[0, 1, 2, 3];
+        assert!(r.map!(|e| e + 1) == vector[1, 2, 3, 4]);
+
+        let r = vector[0, 1, 2, 3];
+        assert!(r.map_ref!(|e| *e * 2) == vector[0, 2, 4, 6]);
+    }
+
+    #[test]
+    fun filter() {
+        let r = vector[0, 1, 2, 3];
+        assert!(r.filter!(|e| *e % 2 == 0) == vector[0, 2]);
+    }
+
+    #[test]
+    fun any_all() {
+        assert!(vector[0, 1, 2, 3].any!(|e| *e == 2));
+        assert!(!vector[0, 1, 2, 3].any!(|e| *e == 4));
+        assert!(vector[0, 1, 2, 3].all!(|e| *e < 4));
+        assert!(!vector[0, 1, 2, 3].all!(|e| *e < 3));
+    }
 }

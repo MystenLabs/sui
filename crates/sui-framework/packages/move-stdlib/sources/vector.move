@@ -158,4 +158,78 @@ module std::vector {
         v.swap(i, last_idx);
         v.pop_back()
     }
+
+    // === Macros ===
+
+    /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
+    public macro fun destroy<$T>($v: vector<$T>, $f: |$T|) {
+        let mut v = $v;
+        while (!v.is_empty()) {
+            $f(v.pop_back());
+        };
+        v.destroy_empty();
+    }
+
+    /// Map the vector `v` to a new vector by applying the function `f` to each element.
+    public macro fun map<$T, $U>($v: vector<$T>, $f: |$T| -> $U): vector<$U> {
+        let mut r = vector[];
+        let mut v = $v;
+        while (!v.is_empty()) {
+            r.push_back($f(v.pop_back()));
+        };
+        v.destroy_empty();
+        r.reverse();
+        r
+    }
+
+    /// Map the vector `v` to a new vector by applying the function `f` to each element.
+    public macro fun map_ref<$T, $U>($v: &vector<$T>, $f: |&$T| -> $U): vector<$U> {
+        let v = $v;
+        let mut r = vector[];
+        let mut i = 0;
+        let len = v.length();
+        while (i < len) {
+            r.push_back($f(&v[i]));
+            i = i + 1;
+        };
+        r
+    }
+
+    /// Filter the vector `v` by applying the function `f` to each element.
+    /// Return a new vector containing only the elements for which `f` returns `true`.
+    public macro fun filter<$T: drop>($v: vector<$T>, $f: |&$T| -> bool): vector<$T> {
+        let mut r = vector[];
+        let mut v = $v;
+        while (!v.is_empty()) {
+            let e = v.pop_back();
+            if ($f(&e)) r.push_back(e);
+        };
+        v.destroy_empty();
+        r.reverse();
+        r
+    }
+
+    /// Whether any element in the vector `v` satisfies the predicate `f`.
+    public macro fun any<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
+        let v = $v;
+        let mut i = 0;
+        let len = v.length();
+        while (i < len) {
+            if ($f(&v[i])) return true;
+            i = i + 1;
+        };
+        false
+    }
+
+    /// Whether all elements in the vector `v` satisfy the predicate `f`.
+    public macro fun all<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
+        let v = $v;
+        let mut i = 0;
+        let len = v.length();
+        while (i < len) {
+            if (!$f(&v[i])) return false;
+            i = i + 1;
+        };
+        true
+    }
 }
