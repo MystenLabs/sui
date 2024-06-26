@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
-use tokio::time::{self, Duration};
+use tokio::time::{self, Duration, Instant};
 use tracing::error;
 
 const ETH_LOG_QUERY_MAX_BLOCK_RANGE: u64 = 1000;
@@ -161,6 +161,7 @@ where
                 new_finalized_block,
             );
             more_blocks = end_block < new_finalized_block;
+            let timer = Instant::now();
             let Ok(Ok(events)) = retry_with_max_elapsed_time!(
                 eth_client.get_events_in_range(contract_address, start_block, end_block),
                 Duration::from_secs(600)
@@ -168,6 +169,13 @@ where
                 error!("Failed to get events from eth client after retry");
                 continue;
             };
+            tracing::info!(
+                ?contract_address,
+                start_block,
+                end_block,
+                "Querying eth events took {:?}",
+                timer.elapsed()
+            );
             let len = events.len();
             let last_block = events.last().map(|e| e.block_number);
 

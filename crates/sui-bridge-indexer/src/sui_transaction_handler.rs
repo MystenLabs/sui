@@ -3,6 +3,7 @@
 
 use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::{update_sui_progress_store, write, PgPool};
+use crate::types::RetrievedTransaction;
 use crate::{BridgeDataSource, TokenTransfer, TokenTransferData, TokenTransferStatus};
 use anyhow::Result;
 use futures::StreamExt;
@@ -13,7 +14,7 @@ use sui_bridge::events::{
     MoveTokenDepositedEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
 };
 
-use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 
 use sui_types::BRIDGE_ADDRESS;
 use tracing::{error, info};
@@ -23,7 +24,7 @@ pub(crate) const COMMIT_BATCH_SIZE: usize = 10;
 pub async fn handle_sui_transcations_loop(
     pg_pool: PgPool,
     rx: mysten_metrics::metered_channel::Receiver<(
-        Vec<SuiTransactionBlockResponse>,
+        Vec<RetrievedTransaction>,
         Option<TransactionDigest>,
     )>,
     metrics: BridgeIndexerMetrics,
@@ -68,38 +69,25 @@ pub async fn handle_sui_transcations_loop(
 }
 
 fn process_transctions(
-    resp: Vec<SuiTransactionBlockResponse>,
+    txes: Vec<RetrievedTransaction>,
     metrics: &BridgeIndexerMetrics,
 ) -> Result<Vec<TokenTransfer>> {
-    resp.into_iter()
-        .map(|r| into_token_transfers(r, metrics))
+    txes.into_iter()
+        .map(|tx| into_token_transfers(tx, metrics))
         .collect::<Result<Vec<_>>>()
         .map(|v| v.into_iter().flatten().collect())
 }
 
 pub fn into_token_transfers(
-    resp: SuiTransactionBlockResponse,
+    tx: RetrievedTransaction,
     metrics: &BridgeIndexerMetrics,
 ) -> Result<Vec<TokenTransfer>> {
     let mut transfers = Vec::new();
-    let tx_digest = resp.digest;
-    let events = resp.events.ok_or(anyhow::anyhow!(
-        "Expected events in SuiTransactionBlockResponse: {:?}",
-        tx_digest
-    ))?;
-    let checkpoint_num = resp.checkpoint.ok_or(anyhow::anyhow!(
-        "Expected checkpoint in SuiTransactionBlockResponse: {:?}",
-        tx_digest
-    ))?;
-    let timestamp_ms = resp.timestamp_ms.ok_or(anyhow::anyhow!(
-        "Expected timestamp_ms in SuiTransactionBlockResponse: {:?}",
-        tx_digest
-    ))?;
-    let effects = resp.effects.ok_or(anyhow::anyhow!(
-        "Expected effects in SuiTransactionBlockResponse: {:?}",
-        tx_digest
-    ))?;
-    for ev in events.data {
+    let tx_digest = tx.tx_digest;
+    let timestamp_ms = tx.timestamp_ms;
+    let checkpoint_num = tx.checkpoint;
+    let effects = tx.effects;
+    for ev in tx.events.data {
         if ev.type_.address != BRIDGE_ADDRESS {
             continue;
         }

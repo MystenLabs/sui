@@ -15,6 +15,7 @@ pub mod schema;
 pub mod sui_transaction_handler;
 pub mod sui_transaction_queries;
 pub mod sui_worker;
+pub mod types;
 
 #[derive(Clone)]
 pub struct TokenTransfer {

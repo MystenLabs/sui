@@ -11,13 +11,14 @@ use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use sui_bridge::error::BridgeResult;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::retry_with_max_elapsed_time;
 use sui_bridge::types::EthLog;
 use tokio::task::JoinHandle;
 use tokio::time::{self, Duration};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::metrics::BridgeIndexerMetrics;
 
@@ -121,6 +122,7 @@ where
             // Each query does at most ETH_LOG_QUERY_MAX_BLOCK_RANGE blocks.
             let end_block =
                 std::cmp::min(start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1, new_block);
+            let timer = Instant::now();
             let Ok(Ok(events)) = retry_with_max_elapsed_time!(
                 eth_client.get_events_in_range(contract_address, start_block, end_block),
                 Duration::from_secs(30)
@@ -128,6 +130,13 @@ where
                 error!("Failed to get events from eth client after retry");
                 continue;
             };
+            info!(
+                ?contract_address,
+                start_block,
+                end_block,
+                "Querying eth events took {:?}",
+                timer.elapsed()
+            );
             let len = events.len();
             let last_block = events.last().map(|e| e.block_number);
 
