@@ -25,6 +25,5 @@ module prettier::dot_expression {
         ]);
 
         board.place(2, 0); // white: Ko Rule!
-
     }
 }
