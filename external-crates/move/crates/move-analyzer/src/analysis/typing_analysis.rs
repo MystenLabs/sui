@@ -620,31 +620,24 @@ impl TypingAnalysisContext<'_> {
         // making it possible to have two entries in the map for the same location (the location
         // has to be "reverted" back when serving go-to-def to support jump to the right location).
         if let Some(exp) = &mut arm.guard {
-            // let new_scope = self.expression_scope.clone();
-            // let previous_scope = std::mem::replace(&mut self.expression_scope, new_scope);
-
-            // for (var, ty) in &arm.binders {
-            //     let new_ty = sp(
-            //         ty.loc,
-            //         N::Type_::Ref(false, Box::new(sp(ty.loc, ty.value.base_type_()))),
-            //     );
-            //     let reverted_loc = Loc::new(
-            //         var.loc.file_hash(),
-            //         std::u32::MAX - var.loc.start(),
-            //         std::u32::MAX - var.loc.end(),
-            //     );
-            //     self.add_local_def(&reverted_loc, &var.value.name, new_ty, false, false);
-            // }
-
             self.visit_exp(exp);
+            // Enum guard variables have different type (immutable reference) than variables in
+            // patterns and in the RHS of the match arm. However, at the AST level they share
+            // the same definition, stored in the IDE in a map key-ed on the definition's location.
+            // In order to display (on hover) two different types for these variables, we do
+            // the following:
+            // - remember which `DefInfo::LocalDef`s represent match arm definition (above)
+            // - remember which region represents a guard expression (below)
+            // - when processing on-hover, we see if for a give use the definition is a
+            //   match arm definition and if this use is inside guard block; if both these
+            //   conditions hold, we change the displayed info for this variable to reflect
+            //   it being an immutable reference
             let guard_loc = exp.exp.loc;
             self.compiler_info
                 .guards
                 .entry(guard_loc.file_hash())
                 .or_default()
                 .insert(guard_loc);
-
-            // let _inner_scope = std::mem::replace(&mut self.expression_scope, previous_scope);
         }
         self.visit_exp(&mut arm.rhs);
     }
