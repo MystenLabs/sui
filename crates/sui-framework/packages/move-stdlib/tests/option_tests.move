@@ -184,16 +184,17 @@ module std::option_tests {
     #[test]
     fun do_ref_mut() {
         let mut counter = 0;
-        option::some(10).do_mut!(|x| *x = 100);
-        option::some(5).do_ref!(|x| counter = *x);
+        let mut opt = option::some(5);
+        opt.do_mut!(|x| *x = 100);
+        opt.do_ref!(|x| counter = *x);
 
         assert!(counter == 100);
     }
 
     #[test]
     fun map_map_ref() {
-        assert!(option::some(5).map!(|x| vector[x]) == option::some(vector[6]));
-        assert!(option::some(5).map_ref!(|x| vector[*x]) == option::some(vector[6]));
+        assert!(option::some(5).map!(|x| vector[x]) == option::some(vector[5]));
+        assert!(option::some(5).map_ref!(|x| vector[*x]) == option::some(vector[5]));
         assert!(option::none<u8>().map!(|x| vector[x]) == option::none());
         assert!(option::none<u8>().map_ref!(|x| vector[*x]) == option::none());
     }
