@@ -1119,6 +1119,15 @@ impl AuthorityState {
             .read_objects_for_execution(certificate, epoch_store)
             .await?;
 
+        let expected_effects_digest = expected_effects_digest.or_else(|| {
+            // We could be re-executing a previously executed but uncommitted transaction, perhaps after
+            // restarting with a new binary. In this situation, if we have published an effects signature,
+            // we must be sure not to equivocate.
+            epoch_store
+                .get_signed_effects_digest(tx_digest)
+                .expect("read cannot fail")
+        });
+
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
         // very common to receive the same tx multiple times simultaneously due to gossip, so we
@@ -1436,6 +1445,7 @@ impl AuthorityState {
         epoch_store.insert_tx_key_and_effects_signature(
             &tx_key,
             tx_digest,
+            &effects.digest(),
             effects_sig.as_ref(),
         )?;
 
@@ -4018,7 +4028,7 @@ impl AuthorityState {
 
                 let effects = SignedTransactionEffects::new_from_data_and_sig(effects, sig.clone());
 
-                epoch_store.insert_effects_signature(&tx_digest, &sig)?;
+                epoch_store.insert_effects_signature(&tx_digest, effects.digest(), &sig)?;
 
                 effects
             }
