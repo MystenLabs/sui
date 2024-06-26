@@ -585,7 +585,7 @@ module std::vector_tests {
 
     #[test]
     fun test_destroy_macro() {
-        vector<u8>[].destroy!(|e| assert!(false)); // very funky
+        vector<u8>[].destroy!(|_| assert!(false)); // very funky
 
         let mut acc = 0;
         vector[10, 20, 30, 40].destroy!(|e| acc = acc + e);
@@ -594,15 +594,15 @@ module std::vector_tests {
 
     #[test]
     fun test_do_macro() {
-        vector<u8>[].do!(|e| assert!(false)); // should never run
-        vector<u8>[].do_ref!(|e| assert!(false));
-        vector<u8>[].do_mut!(|e| assert!(false));
+        vector<u8>[].do!(|_| assert!(false)); // should never run
+        vector<u8>[].do_ref!(|_| assert!(false));
+        vector<u8>[].do_mut!(|_| assert!(false));
 
         let mut acc = 0;
         vector[10, 20, 30, 40].do!(|e| acc = acc + e);
         assert!(acc == 100);
 
-        let mut vec = vector[10, 20];
+        let vec = vector[10, 20];
         vec.do!(|e| acc = acc + e);
         assert!(vector[10, 20] == vec);
 

@@ -196,7 +196,7 @@ module std::vector {
     /// Perform an action `f` on each element of the vector `v`. The function `f` takes a mutable
     /// reference.
     public macro fun do_mut<$T>($v: &mut vector<$T>, $f: |&mut $T|) {
-        let mut v = $v;
+        let v = $v;
         let mut i = 0;
         let len = v.length();
         while (i < len) {
