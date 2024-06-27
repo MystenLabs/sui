@@ -49,6 +49,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     progress_store,
-   sui_progress_store, token_transfer,
+    sui_progress_store,
+    token_transfer,
     token_transfer_data,
 );
