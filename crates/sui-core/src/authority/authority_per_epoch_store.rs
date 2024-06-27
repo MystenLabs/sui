@@ -1152,18 +1152,26 @@ impl AuthorityPerEpochStore {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn insert_tx_cert_and_effects_signature(
+    pub fn insert_tx_cert_sig(
+        &self,
+        tx_digest: &TransactionDigest,
+        cert_sig: &AuthorityStrongQuorumSignInfo,
+    ) -> SuiResult {
+        let tables = self.tables()?;
+        Ok(tables
+            .transaction_cert_signatures
+            .insert(tx_digest, cert_sig)?)
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn insert_tx_key_and_effects_signature(
         &self,
         tx_key: &TransactionKey,
         tx_digest: &TransactionDigest,
-        cert_sig: Option<&AuthorityStrongQuorumSignInfo>,
         effects_signature: Option<&AuthoritySignInfo>,
     ) -> SuiResult {
         let tables = self.tables()?;
         let mut batch = self.tables()?.effects_signatures.batch();
-        if let Some(cert_sig) = cert_sig {
-            batch.insert_batch(&tables.transaction_cert_signatures, [(tx_digest, cert_sig)])?;
-        }
 
         if self.executed_in_epoch_table_enabled() {
             batch.insert_batch(&tables.executed_in_epoch, [(tx_digest, ())])?;

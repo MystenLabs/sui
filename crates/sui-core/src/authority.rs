@@ -1433,10 +1433,9 @@ impl AuthorityState {
 
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
-        epoch_store.insert_tx_cert_and_effects_signature(
+        epoch_store.insert_tx_key_and_effects_signature(
             &tx_key,
             tx_digest,
-            certificate.certificate_sig(),
             effects_sig.as_ref(),
         )?;
 
