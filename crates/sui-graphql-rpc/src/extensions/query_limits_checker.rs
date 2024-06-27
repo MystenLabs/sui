@@ -4,21 +4,24 @@
 use crate::config::{Limits, ServiceConfig};
 use crate::error::{code, graphql_error, graphql_error_at_pos};
 use crate::metrics::Metrics;
-use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
 use async_graphql::extensions::{Extension, ExtensionContext, ExtensionFactory};
+use async_graphql::extensions::{NextParseQuery, NextValidation};
 use async_graphql::parser::types::{
     Directive, ExecutableDocument, Field, FragmentDefinition, OperationType, Selection,
     SelectionSet,
 };
 // use async_graphql::{value, Name, Pos, Positioned, Response, ServerResult, Variables};
-use async_graphql::{value, Name, Pos, Positioned, Response, ServerResult, Value, Variables};
+use async_graphql::{
+    value, Name, Pos, Positioned, Response, ServerError, ServerResult, ValidationResult, Value,
+    Variables,
+};
 use async_graphql_value::Value as GqlValue;
 use axum::headers;
 use axum::http::HeaderName;
 use axum::http::HeaderValue;
 use once_cell::sync::Lazy;
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -137,34 +140,127 @@ impl Extension for QueryLimitsChecker {
             .iter()
             .find(|(_, operation)| operation.node.ty == OperationType::Mutation);
 
-        let is_mutation = mutation_node.is_some();
-
         // this is a map of type node position, (tx_bytes, signatures) bytes for all nodes of type
         // executeTransactionBlock
-        let mut tx_bytes_sigs = BTreeMap::new();
+        // let mut tx_bytes_sigs = BTreeMap::new();
+        let mut tx_bytes_sigs_len = 0;
 
-        // A few checks in case it is a mutation
-        if is_mutation {
+        let query_len = query.len();
+        let variables_len = variables.to_string().len();
+
+        // There are two main checks that we need to first do in case of a mutation &
+        // dryRunTransactinBlock
+        //
+        //  1. Check if the txBytes+signatures for each executeTransactionBlock node are larger than
+        //     the allowed max_mutation_payload_size (defined by the protocol config).
+        //  2. Check if the read part of the query (so query minus the txBytes and signatures) is
+        //     larger than the max_query_payload_size.
+        //
+        //  The same checks are also done for queries that have dryRunTransactionBlock nodes
+        //  (except there's no signatures in dryRunTransactionBlock type)
+
+        if let Some((_, mutation)) = mutation_node {
             // get the mutation node and the selection set
-            let mutation_selection_set =
-                mutation_node.map(|(_, operation)| &operation.node.selection_set);
+            let selection_set = &mutation.node.selection_set;
 
             // the number of bytes for the tx_bytes and signatures strings
             // Case 1: check if the txBytes for each executeTransactionBlock node is larger than
             // the allowed limit
-            if let Some(selection_set) = mutation_selection_set {
-                for x in selection_set.node.items.iter() {
-                    if let Selection::Field(f) = &x.node {
-                        if f.node.name.node == "executeTransactionBlock"
-                            || f.node.name.node == "dryRunTransactionBlock"
-                        {
-                            // we know this has always two arguments as per the schema
-                            let tx_bytes_arg = &f.node.arguments[0].1.node;
-                            let sigs_arg = &f.node.arguments[1].1.node;
-                            let tx_bytes_len = get_value_str_len(tx_bytes_arg, variables);
-                            let sigs_len = get_value_str_len(sigs_arg, variables);
+            for node in selection_set.node.items.iter() {
+                if let Selection::Field(f) = &node.node {
+                    if f.node.name.node == "executeTransactionBlock" {
+                        // we know this has always two arguments as per the schema
 
-                            // Check it the txBytes is larger than the allowed limit
+                        // the order of these args could differ, so we search them by name
+                        let mut tx_bytes_len = 0;
+                        let mut sigs_len = 0;
+
+                        for arg in &f.node.arguments {
+                            if arg.0.node == "txBytes" {
+                                tx_bytes_len = get_value_str_len(&arg.1.node, variables);
+                            } else {
+                                sigs_len = get_value_str_len(&arg.1.node, variables);
+                            }
+                        }
+
+                        // Check it the txBytes + sigs is larger than the allowed limit
+                        if (tx_bytes_len + sigs_len) > cfg.limits.max_mutation_payload_size as usize
+                        {
+                            metrics
+                                .request_metrics
+                                .query_payload_too_large_size
+                                .observe(tx_bytes_len as f64);
+                            info!(
+                                query_id = %query_id,
+                                session_id = %session_id,
+                                error_code = code::BAD_USER_INPUT,
+                                "Mutation payload (txBytes + signatures) size is too large: {}",
+                                tx_bytes_len + sigs_len
+                            );
+                            return Err(graphql_error_at_pos(
+                                    code::BAD_USER_INPUT,
+                                    format!(
+                                        "Mutation payload (txBytes + signatures) size of {} node is too large. The maximum allowed is {} bytes",
+                                        f.node.name.node,
+                                        cfg.limits.max_mutation_payload_size
+                                    ),
+                                    f.pos
+                                ));
+                        }
+                        tx_bytes_sigs_len += tx_bytes_len + sigs_len;
+                    }
+                }
+            }
+
+            // Case 2: check if the read part of the query (so query minus the txBytes and signatures) is larger
+            // than the max query payload size. Given that the query.len() does not include the
+            // resolved variables, it is totally OK to use it here.
+
+            // sum up the query length and the variables length (because variables are not resolved
+            // in the query string), and then subtract the txBytes and signatures length. This
+            // value is the "read" part of the query
+            if query_len + variables_len - tx_bytes_sigs_len
+                > cfg.limits.max_query_payload_size as usize
+            {
+                info!(
+                    query_id = %query_id,
+                    session_id = %session_id,
+                    error_cod_ = code::BAD_USER_INPUT,
+                    "Query payload is too large: {}",
+                    query_len + variables_len - tx_bytes_sigs_len
+                );
+                return Err(graphql_error(
+                    code::BAD_USER_INPUT,
+                    format!(
+                        "Mutation payload txBytes + sigantures size OK. The read part of the request is too \
+                        large. Maximum allowed is {}",
+                        cfg.limits.max_query_payload_size
+                    ),
+                ));
+            }
+        } else {
+            let query_node = doc
+                .operations
+                .iter()
+                .find(|(_, operation)| operation.node.ty == OperationType::Query);
+
+            // Check if the query has dryRunTransactionBlock nodes, and if so check the txBytes
+            // size for each node does not exceed max_mutation_payload_size
+            let mut dry_run_tx_bytes_len = 0;
+            if let Some((_, operation)) = query_node {
+                let selection_set = &operation.node.selection_set;
+                for node in selection_set.node.items.iter() {
+                    if let Selection::Field(f) = &node.node {
+                        if f.node.name.node == "dryRunTransactionBlock" {
+                            let mut tx_bytes_len = 0;
+
+                            for arg in &f.node.arguments {
+                                if arg.0.node == "txBytes" {
+                                    tx_bytes_len = get_value_str_len(&arg.1.node, variables);
+                                    dry_run_tx_bytes_len += tx_bytes_len;
+                                }
+                            }
+                            // Check it the txBytes + sigs is larger than the allowed limit
                             if tx_bytes_len > cfg.limits.max_mutation_payload_size as usize {
                                 metrics
                                     .request_metrics
@@ -174,113 +270,47 @@ impl Extension for QueryLimitsChecker {
                                     query_id = %query_id,
                                     session_id = %session_id,
                                     error_cod_ = code::BAD_USER_INPUT,
-                                    "Mutation payload txBytes size is too large: {}",
+                                    "The txBytes payload in dryRun is too large: {}",
                                     tx_bytes_len
                                 );
                                 return Err(graphql_error_at_pos(
                                     code::BAD_USER_INPUT,
                                     format!(
-                                        "Mutation payload txBytes size of {} node is too large. The maximum allowed is {} bytes",
+                                        "The payload txBytes size of {} node is too large. The maximum allowed is {} bytes",
                                         f.node.name.node,
                                         cfg.limits.max_mutation_payload_size
                                     ),
                                     f.pos
                                 ));
                             }
-                            tx_bytes_sigs.insert(f.pos, (tx_bytes_len, sigs_len));
                         }
                     }
                 }
             }
 
-            // Case 2: check if the read part of the query (so query minus the txBytes and signatures) is larger
-            // than the max query payload size. Given that the query.len() does not include the
-            // resolved variables, it is totally OK to use it here
-            // However, if variables are used, it can be that the txBytes + signatures are larger
-            // than the whole query, so we need to check that as well
-            let all_tx_bytes = tx_bytes_sigs
-                .iter()
-                .fold(0, |acc, (_, (tx_bytes, _))| acc + tx_bytes);
-            let all_sigs_bytes = tx_bytes_sigs
-                .iter()
-                .fold(0, |acc, (_, (_, sigs_bytes))| acc + sigs_bytes);
-
-            // in this case, variables are most likely not used (or their size is small)
-            if query.len() > (all_tx_bytes + all_sigs_bytes) {
-                if (query.len() - all_tx_bytes - all_sigs_bytes)
-                    > cfg.limits.max_query_payload_size as usize
-                {
-                    info!(
-                        query_id = %query_id,
-                        session_id = %session_id,
-                        error_cod_ = code::BAD_USER_INPUT,
-                        "Query payload is too large: {}",
-                        query.len()
-                    );
-                    return Err(graphql_error(
-                        code::BAD_USER_INPUT,
-                        format!(
-                        "Mutation payload txBytes size OK. The read part of the request is too \
-                        large. Maximum allowed is {}",
-                        cfg.limits.max_query_payload_size
-                    ),
-                    ));
-                }
-            } else {
-                // in this case, variables are most likely used, so we just check the read part of the
-                // query
-                if query.len() > cfg.limits.max_query_payload_size as usize {
-                    info!(
-                        query_id = %query_id,
-                        session_id = %session_id,
-                        error_cod_ = code::BAD_USER_INPUT,
-                        "Query payload is too large: {}",
-                        query.len()
-                    );
-                    return Err(graphql_error(
-                        code::BAD_USER_INPUT,
-                        format!(
-                            "Query payload is too large. The read part of the request is too \
-                            large. Maximum allowed is {}",
-                            cfg.limits.max_query_payload_size
-                        ),
-                    ));
-                }
-            }
-        }
-
-        let query_len = query.len();
-        let mut vars_bytes = 0;
-        for v in variables.iter() {
-            if let Ok(json) = v.1.clone().into_json() {
-                vars_bytes += sizeof_val(&json);
-            }
-        }
-
-        // check if the read query is larger than the max query payload size
-        // if we do not have variables, then we just check the query_len
-        // if we have variables, then we add their bytes to query_len,
-        if !is_mutation {
-            if (variables.len() == 0 && query_len > cfg.limits.max_query_payload_size as usize)
-                || (variables.len() != 0
-                    && (query_len + vars_bytes) > cfg.limits.max_query_payload_size as usize)
+            // check if the read query is larger than the max query payload size
+            // if we do not have variables, then we just check the query_len
+            // if we have variables, then we add their bytes to query_len and substract dry run tx
+            // bytes
+            if query_len + variables_len - dry_run_tx_bytes_len
+                > cfg.limits.max_query_payload_size as usize
             {
                 metrics
                     .request_metrics
                     .query_payload_too_large_size
-                    .observe(query_len as f64);
+                    .observe((query_len + variables_len - dry_run_tx_bytes_len) as f64);
                 info!(
                     query_id = %query_id,
                     session_id = %session_id,
                     error_code = code::BAD_USER_INPUT,
                     "Query payload is too large: {}",
-                    query_len
+                    query_len + variables_len - dry_run_tx_bytes_len
                 );
 
                 return Err(graphql_error(
                     code::BAD_USER_INPUT,
                     format!(
-                        "Query payload is too large. The maximum allowed is {} bytes",
+                        "Read query payload is too large. The maximum allowed is {} bytes",
                         cfg.limits.max_query_payload_size
                     ),
                 ));
@@ -324,6 +354,7 @@ impl Extension for QueryLimitsChecker {
             )?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
         }
+        let query_len = query.len();
         if ctx.data_opt::<ShowUsage>().is_some() {
             *self.validation_result.lock().await = Some(ValidationRes {
                 input_nodes: running_costs.input_nodes,
@@ -352,6 +383,19 @@ impl Extension for QueryLimitsChecker {
             .query_payload_size
             .observe(query_len as f64);
         Ok(doc)
+    }
+
+    /// Called at validation query.
+    async fn validation(
+        &self,
+        ctx: &ExtensionContext<'_>,
+        next: NextValidation<'_>,
+    ) -> Result<ValidationResult, Vec<ServerError>> {
+        let result = next.run(ctx).await;
+        if let Ok(result) = result {
+            println!("Query complexity: {}", result.complexity);
+        }
+        result
     }
 }
 
@@ -612,36 +656,12 @@ fn is_connection(f: &Positioned<Field>) -> bool {
 fn get_value_str_len(arg: &GqlValue, variables: &Variables) -> usize {
     match arg {
         GqlValue::String(s) => s.len(),
+        GqlValue::List(arr) => arr.iter().map(|v| get_value_str_len(v, variables)).sum(),
         // the variables are expected to be strings
-        GqlValue::Variable(v) => {
-            if let Some(Value::String(s)) = variables.get(v) {
-                s.len()
-            } else {
-                0
-            }
-        }
+        GqlValue::Variable(v) => match variables.get(v) {
+            Some(value) => get_value_str_len(&value.clone().into_value(), variables),
+            None => 0,
+        },
         _ => 0,
     }
-}
-
-// rough estimate of a json Value size
-// <https://stackoverflow.com/questions/76454260/rust-serde-get-runtime-heap-size-of-vecserde-jsonvalue>
-fn sizeof_val(v: &serde_json::Value) -> usize {
-    std::mem::size_of::<serde_json::Value>()
-        + match v {
-            serde_json::Value::Null => 0,
-            serde_json::Value::Bool(_) => 0,
-            serde_json::Value::Number(_) => 0, // Incorrect if arbitrary_precision is enabled. oh well
-            serde_json::Value::String(s) => s.capacity(),
-            serde_json::Value::Array(a) => a.iter().map(sizeof_val).sum(),
-            serde_json::Value::Object(o) => o
-                .iter()
-                .map(|(k, v)| {
-                    std::mem::size_of::<String>()
-                        + k.capacity()
-                        + sizeof_val(v)
-                        + std::mem::size_of::<usize>() * 3 // As a crude approximation, I pretend each map entry has 3 words of overhead
-                })
-                .sum(),
-        }
 }
