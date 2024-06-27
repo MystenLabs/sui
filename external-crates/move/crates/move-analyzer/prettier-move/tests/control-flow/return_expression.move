@@ -19,6 +19,17 @@ module test::return_expression {
 
         return { a + b };
 
+        return vector[
+            first_return_value,
+            second_return_value,
+            third_return_value
+        ];
+
+        if (cond) {
+            do_something_very_very_nasty_and_its_super_long_too_hahahahaa()
+        }
+        else return;
+
         return (
             { a + b },
             first_return_value,
@@ -31,6 +42,9 @@ module test::return_expression {
         else {
             some_other_value
         };
+
+        return if (some_value) some_value
+        else some_other_value;
 
         return (
             very_very_long_if_condition_very_very_long_if_condition_very_very_long_if_condition_very_very_long_if_condition,

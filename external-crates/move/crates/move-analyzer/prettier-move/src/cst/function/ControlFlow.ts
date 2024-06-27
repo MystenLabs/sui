@@ -119,7 +119,7 @@ function printIfExpression(path: AstPath<Node>, options: ParserOptions, print: p
 			group(
 				elseBranch?.isList || trueBranch?.type === 'block'
 					? [' else ', printed]
-					: [line, 'else ', printed],
+					: [ifBreak(' ', line, { groupId }), 'else ', printed],
 				{ shouldBreak },
 			),
 		);
