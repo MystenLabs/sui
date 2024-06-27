@@ -2857,7 +2857,11 @@ impl AuthorityPerEpochStore {
             checkpoint_service,
             cache_reader,
             &ConsensusCommitInfo::new_for_test(
-                self.get_highest_pending_checkpoint_height() + 1,
+                if self.randomness_state_enabled() {
+                    self.get_highest_pending_checkpoint_height() / 2 + 1
+                } else {
+                    self.get_highest_pending_checkpoint_height() + 1
+                },
                 0,
                 skip_consensus_commit_prologue_in_test,
             ),

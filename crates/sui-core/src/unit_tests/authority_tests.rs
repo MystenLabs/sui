@@ -5984,6 +5984,8 @@ async fn test_consensus_handler_per_object_congestion_control_using_tx_count() {
 //   4. Consensus commit prologue contains cancelled transaction version assignment.
 #[sim_test]
 async fn test_consensus_handler_congestion_control_transaction_cancellation() {
+    telemetry_subscribers::init_for_testing();
+
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Test setup. We will create some shared object transactions with one that will be cancelled at round 3.
