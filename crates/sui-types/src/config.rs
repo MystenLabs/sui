@@ -38,7 +38,7 @@ pub struct Setting<V> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SettingData<V> {
     pub newer_value_epoch: u64,
-    pub newer_value: V,
+    pub newer_value: Option<V>,
     pub older_value_opt: Option<V>,
 }
 
@@ -105,7 +105,7 @@ impl<V> SettingData<V> {
             None => true,
         };
         if use_newer_value {
-            Some(&self.newer_value)
+            self.newer_value.as_ref()
         } else {
             self.older_value_opt.as_ref()
         }
