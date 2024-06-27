@@ -1857,20 +1857,12 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
 
     assert!(effects.status.is_ok());
     assert_eq!(effects.gas_object().object_id(), gas_obj_id);
-    let package = effects
-        .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::Immutable))
-        .unwrap();
-
     let cap = effects
         .created()
         .iter()
         .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
         .unwrap();
 
-    // Hacky for now: we need to add the correct `published-at` field to the Move toml file.
-    // In the future once we have automated address management replace this logic!
     let tmp_dir = tempfile::tempdir().unwrap();
     fs_extra::dir::copy(
         &package_path,
@@ -1880,28 +1872,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     .unwrap();
     let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
     upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
-    let mut move_toml = std::fs::File::options()
-        .read(true)
-        .write(true)
-        .open(&upgrade_pkg_path)
-        .unwrap();
     upgrade_pkg_path.pop();
-
-    let mut buf = String::new();
-    move_toml.read_to_string(&mut buf).unwrap();
-
-    // Add a `published-at = "0x<package_object_id>"` to the Move manifest.
-    let mut lines: Vec<String> = buf.split('\n').map(|x| x.to_string()).collect();
-    let idx = lines.iter().position(|s| s == "[package]").unwrap();
-    lines.insert(
-        idx + 1,
-        format!(
-            "published-at = \"{}\"",
-            package.reference.object_id.to_hex_uncompressed()
-        ),
-    );
-    let new = lines.join("\n");
-    move_toml.write_at(new.as_bytes(), 0).unwrap();
 
     // Create a new build config for the upgrade. Initialize its lock file
     // to the package we published.
@@ -1965,6 +1936,127 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         expect_upgrade_version.value(),
         localnet.version.parse::<u64>().unwrap(),
     );
+    Ok(())
+}
+
+#[sim_test]
+async fn test_package_management_on_upgrade_command_conflict() -> Result<(), anyhow::Error> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_upgrade");
+    let build_config_publish = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config: build_config_publish.clone(),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    let package = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    // Set up a temporary working directory  for upgrading.
+    let tmp_dir = tempfile::tempdir().unwrap();
+    fs_extra::dir::copy(
+        &package_path,
+        tmp_dir.path(),
+        &fs_extra::dir::CopyOptions::default(),
+    )
+    .unwrap();
+    let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
+    upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
+    let mut move_toml = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(&upgrade_pkg_path)
+        .unwrap();
+    upgrade_pkg_path.pop();
+    let mut buf = String::new();
+    move_toml.read_to_string(&mut buf).unwrap();
+    let mut lines: Vec<String> = buf.split('\n').map(|x| x.to_string()).collect();
+    let idx = lines.iter().position(|s| s == "[package]").unwrap();
+    // Purposely add a conflicting `published-at` address to the Move manifest.
+    lines.insert(idx + 1, "published-at = \"0xbad\"".to_string());
+    let new = lines.join("\n");
+    move_toml.write_at(new.as_bytes(), 0).unwrap();
+
+    // Create a new build config for the upgrade. Initialize its lock file to the package we published.
+    let build_config_upgrade = BuildConfig::new_for_testing().config;
+    let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
+    upgrade_lock_file_path.push("Move.lock");
+    let publish_lock_file_path = build_config_publish.lock_file.unwrap();
+    std::fs::copy(
+        publish_lock_file_path.clone(),
+        upgrade_lock_file_path.clone(),
+    )?;
+
+    // Now run the upgrade
+    let upgrade_response = SuiClientCommands::Upgrade {
+        package_path: upgrade_pkg_path,
+        upgrade_capability: cap.reference.object_id,
+        build_config: build_config_upgrade.clone(),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await;
+
+    let err_string = upgrade_response.unwrap_err().to_string();
+    let err_string = err_string.replace(&package.object_id().to_string(), "<elided-for-test>");
+
+    let expect = expect![[r#"
+        Conflicting published package address: `Move.toml` contains published-at address 0xbad but `Move.lock` file contains published-at address <elided-for-test>. You may want to:
+
+                         - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
+                         - update the `Move.lock` address using the `sui manage-package` command to be the same as the `Move.toml`; OR
+                         - check that your `sui active-env` (currently localnet) corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
+                         - contact the maintainer if this package is a dependency and request resolving the conflict."#]];
+    expect.assert_eq(&err_string);
     Ok(())
 }
 

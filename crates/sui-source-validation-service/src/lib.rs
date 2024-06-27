@@ -151,6 +151,15 @@ pub async fn verify_package(
     package_path: impl AsRef<Path>,
 ) -> anyhow::Result<(Network, AddressLookup)> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    // TODO(rvantonder): use config RPC URL instead of hardcoded URLs
+    let network_url = match network {
+        Network::Mainnet => MAINNET_URL,
+        Network::Testnet => TESTNET_URL,
+        Network::Devnet => DEVNET_URL,
+        Network::Localnet => LOCALNET_URL,
+    };
+    let client = SuiClientBuilder::default().build(network_url).await?;
+    let chain_id = client.read_api().get_chain_identifier().await?;
     let mut config =
         resolve_lock_file_path(MoveBuildConfig::default(), Some(package_path.as_ref()))?;
     config.lint_flag = LintFlag::LEVEL_NONE;
@@ -159,16 +168,10 @@ pub async fn verify_package(
         config,
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
         print_diags_to_stderr: false,
+        chain_id: Some(chain_id),
     };
     let compiled_package = build_config.build(package_path.as_ref())?;
 
-    let network_url = match network {
-        Network::Mainnet => MAINNET_URL,
-        Network::Testnet => TESTNET_URL,
-        Network::Devnet => DEVNET_URL,
-        Network::Localnet => LOCALNET_URL,
-    };
-    let client = SuiClientBuilder::default().build(network_url).await?;
     BytecodeSourceVerifier::new(client.read_api())
         .verify_package(
             &compiled_package,

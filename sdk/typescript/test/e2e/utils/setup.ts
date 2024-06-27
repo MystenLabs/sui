@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
-import { resolve } from 'path';
+import { tmpdir } from 'os';
+import path, { resolve } from 'path';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
@@ -61,8 +62,9 @@ export class TestToolbox {
 	keypair: Ed25519Keypair;
 	client: SuiClient;
 	registry: TestPackageRegistry;
+	configPath: string;
 
-	constructor(keypair: Ed25519Keypair, url: string = DEFAULT_FULLNODE_URL) {
+	constructor(keypair: Ed25519Keypair, url: string = DEFAULT_FULLNODE_URL, configPath: string) {
 		this.keypair = keypair;
 		this.client = new SuiClient({
 			transport: new SuiHTTPTransport({
@@ -71,6 +73,7 @@ export class TestToolbox {
 			}),
 		});
 		this.registry = TestPackageRegistry.forUrl(url);
+		this.configPath = configPath;
 	}
 
 	address() {
@@ -115,12 +118,14 @@ export function getClient(url = DEFAULT_FULLNODE_URL): SuiClient {
 export async function setup(options: { graphQLURL?: string; rpcURL?: string } = {}) {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
-	return setupWithFundedAddress(keypair, address, options);
+	const configPath = path.join(tmpdir(), 'client.yaml');
+	return setupWithFundedAddress(keypair, address, configPath, options);
 }
 
 export async function setupWithFundedAddress(
 	keypair: Ed25519Keypair,
 	address: string,
+	configPath: string,
 	{ rpcURL }: { graphQLURL?: string; rpcURL?: string } = {},
 ) {
 	const client = getClient(rpcURL);
@@ -147,7 +152,9 @@ export async function setupWithFundedAddress(
 			retryIf: () => true,
 		},
 	);
-	return new TestToolbox(keypair, rpcURL);
+
+	execSync(`${SUI_BIN} client --yes --client.config ${configPath}`, { encoding: 'utf-8' });
+	return new TestToolbox(keypair, rpcURL, configPath);
 }
 
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {
