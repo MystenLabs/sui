@@ -24,11 +24,11 @@ use sui_sdk::SuiClientBuilder;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::task::JoinHandle;
 
+use mysten_metrics::metered_channel::channel;
 use sui_bridge_indexer::config::IndexerConfig;
 use sui_config::Config;
 use tokio::sync::oneshot;
 use tracing::info;
-use mysten_metrics::metered_channel::channel;
 
 #[derive(Parser, Clone, Debug)]
 struct Args {
