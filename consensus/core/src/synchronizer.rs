@@ -796,7 +796,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 context.metrics.node_metrics.last_own_block_round.set(highest_round as i64);
 
                 info!("{} out of {} total stake returned acceptable results for our own last block with highest round {}", total_stake, context.committee.total_stake(), highest_round);
-                if let Err(err) = core_dispatcher.set_min_propose_round(highest_round).await {
+                if let Err(err) = core_dispatcher.set_last_known_proposed_round(highest_round) {
                     warn!("Error received while calling dispatcher, probably dispatcher is shutting down, will now exit: {err:?}");
                 }
             }));
@@ -1023,7 +1023,7 @@ mod tests {
     struct MockCoreThreadDispatcher {
         add_blocks: Mutex<Vec<VerifiedBlock>>,
         missing_blocks: Mutex<BTreeSet<BlockRef>>,
-        min_proposed_round_calls: Mutex<Vec<Round>>,
+        last_known_proposed_round: parking_lot::Mutex<Vec<Round>>,
     }
 
     impl MockCoreThreadDispatcher {
@@ -1037,8 +1037,8 @@ mod tests {
             lock.extend(block_refs);
         }
 
-        async fn get_min_propose_round_calls(&self) -> Vec<Round> {
-            let lock = self.min_proposed_round_calls.lock().await;
+        async fn get_last_own_proposed_round(&self) -> Vec<Round> {
+            let lock = self.last_known_proposed_round.lock();
             lock.clone()
         }
     }
@@ -1070,7 +1070,7 @@ mod tests {
         }
 
         fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError> {
-            let mut lock = self.min_proposed_round_calls.lock().await;
+            let mut lock = self.last_known_proposed_round.lock();
             lock.push(round);
             Ok(())
         }
