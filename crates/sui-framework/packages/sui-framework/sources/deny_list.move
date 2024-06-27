@@ -98,13 +98,11 @@ module sui::deny_list {
     ) {
         let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
         let setting_name = AddressKey(addr);
-        let next_epoch_entry = per_type_config.entry!<_, AddressKey, bool>(
+        per_type_config.remove_for_current_epoch<_, AddressKey, bool>(
             &mut ConfigWriteCap(),
             setting_name,
-            |_deny_list, _cap, _ctx| false,
             ctx,
         );
-        *next_epoch_entry = false;
     }
 
     public(package) fun v2_most_recent_contains(
