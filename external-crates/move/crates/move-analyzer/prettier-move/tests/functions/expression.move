@@ -25,15 +25,12 @@ module prettier::expression {
         call();
         call(1, 2, 3, 4, 5);
         call(Struct {}, Struct {});
-        call(Struct {
-            a: 1,
-            b: 2,
-            c: 3,
-        });
+        call(Struct { a: 1, b: 2, c: 3 });
         call(Struct { a: 1 }, Struct { a: 1 });
         call(
-            nested_call(
-            deeply_nested_call()), haha());
+            nested_call(deeply_nested_call()),
+            haha(),
+        );
         call(nested_call(LongStruct { a: 1 }));
     }
 
@@ -88,7 +85,8 @@ module prettier::expression {
         // leading comment
         say_something_really_long;
 
-        say_something_really_long + say_something_really_long + say_something_really_long && say_something_really_long + say_something_really_long + say_something_really_long;
+        say_something_really_long + say_something_really_long + say_something_really_long &&
+        say_something_really_long + say_something_really_long + say_something_really_long;
 
         say_something_really_long > less_than_or_equal_to &&
         say_something_really_long < greater_than_or_equal_to;
@@ -111,12 +109,24 @@ module prettier::expression {
     fun pack_expression() {
         Positional();
         Positional(1000, vector[10, 20, 30]);
-        PackMe {}
-        PackReallyShort {}
-        PackWithF { field: 10 }
+        PackMe {};
+        PackReallyShort {};
+        PackWithF { field: 10 };
         PackMyStruct { id: object::new(ctx), name: b"hello".to_string() };
         PackMyStruct<WithTypeParameters> { id: object::new(ctx), name: b"hello".to_string() };
-        PackMyStruct { id: object::new(ctx), name: AnotherStruct { params: vector[b"world".to_string()] } };
+        PackMyStruct {
+            id: object::new(ctx),
+            name: AnotherStruct { params: vector[b"world".to_string()] },
+        };
+
+        // bind unpack really
+        let Slice {
+            mut kek,
+            prev: lprev,
+            next: lnext,
+            keys: mut lkeys,
+            vals: mut lvals,
+        } = left;
     }
 
     fun vector_expression() {
@@ -124,8 +134,8 @@ module prettier::expression {
         vector[b"say_something_familiar", b"to_me"];
         vector[vector[10], vector[20]];
         vector[vector[10], vector[20], vector[30]];
-        vector<A,S,T>[];
-        vector<T<Extra,Long,Type,Arguments>>[MyStructT];
+        vector<A>[S, T];
+        vector<T<Extra, Long, Type, Arguments>>[MyStructT];
     }
 
     fun unit_expression() {
@@ -140,7 +150,7 @@ module prettier::expression {
 
     fun expression_list() {
         (expr1, expr2, expr3);
-        (expr1, expr2, expr3,);
+        (expr1, expr2, expr3);
         (expr1, expr2, expr3, expr4, expr5);
         (expr1, (expr2, expr3, expr4), expr5);
         (expr1, (expr2, expr3, expr4, expr5), expr6);
@@ -171,7 +181,7 @@ module prettier::expression {
     fun block() {
         {};
         { say_something(); };
-        { should_this_be_so_long_or_not(); }
+        { should_this_be_so_long_or_not(); };
         {
             say_something();
             say_something_else();
@@ -182,7 +192,8 @@ module prettier::expression {
         );
         {
             {
-                say_something(); }
+                say_something();
+            };
             say_something_else();
             say_something_more();
             {};

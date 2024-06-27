@@ -1,6 +1,6 @@
 {
   "name": "prettier-plugin-move",
-  "version": "0.0.9",
+  "version": "0.0.14",
   "license": "Apache-2.0",
   "keywords": [
     "prettier",
@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "prettier": "^3.3.2",
-    "prettier-plugin-move": "link:",
     "web-tree-sitter": "0.20.8"
   },
   "devDependencies": {

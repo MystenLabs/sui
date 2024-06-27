@@ -250,18 +250,20 @@ function printBindFields(path: AstPath<Node>, options: ParserOptions, print: pri
  */
 function printBindField(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	const nonFormatting = path.node.nonFormattingChildren;
-	const isMut = path.node.child(0)?.text === 'mut' || false;
+	const isMut = !!path.node.children.find((c) => c.text === 'mut');
 	const rename = nonFormatting.length == 2;
 
+	if (nonFormatting.length == 1) {
+		return group([
+			isMut ? 'mut ' : '',
+			nonFormatting[0]!.text
+		]);
+	}
+
 	return group([
-		isMut ? 'mut ' : '', // mut
-		// variable_identifier
-		// path.call(print, 'nonFormattingChildren', 0), // field_identifier
 		nonFormatting[0]!.text,
-		// _bind
-		// TODO: come back to this
-		// path.call(print, 'nonFormattingChildren', 1) : '',
-		rename ? ': ' + nonFormatting[1]!.text : '',
+		isMut ? ': mut ' : ': ',
+		nonFormatting[1]!.text
 	]);
 }
 
