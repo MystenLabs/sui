@@ -55,6 +55,7 @@
       { "source": "/build/zk_login", "destination": "/concepts/cryptography/zklogin", "permanent": true },
       { "source": "/build/package-upgrades", "destination": "/concepts/sui-move-concepts/packages/upgrade", "permanent": true },
       { "source": "/build/custom-upgrade-policy", "destination": "/concepts/sui-move-concepts/packages/custom-policies", "permanent": true },
+      { "source": "/build/automated-address-management", "destination": "/concepts/sui-move-concepts/packages/automated-address-management", "permanent": true },
       { "source": "/build/cli-client", "destination": "/references/cli/client", "permanent": true },
       { "source": "/build/connect-sui-network", "destination": "/guides/developer/getting-started/connect", "permanent": true },
       { "source": "/build/prog-trans-ts-sdk", "destination": "/guides/developer/sui-101/building-ptb", "permanent": true },

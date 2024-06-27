@@ -377,7 +377,22 @@ The result includes an **Object changes** section with two pieces of information
 
 You can identify the different objects using the `Object.objectType` value in the response. The `UpgradeCap` entry has a value of `String("0x2::package::UpgradeCap")` and the `objectType` for the package reads `String("<PACKAGE-ID>::sui_package::<MODULE-NAME>")`
 
-To make sure your other packages can use this package as a dependency, you must update the manifest (Move.toml file) for your package to include this information.
+To make sure your other packages can use this package as a dependency, you must update the `Move.toml` manifest file for your package to include this information.
+
+<Tabs>
+
+<TabItem value="automated-address-management" label="Automated Addresses">
+
+Add an entry for the package in the `[addresses]` section that points to the value of the on-chain ID:
+
+```toml
+[addresses]
+sui_package = "<ORIGINAL-PACKAGE-ID>"
+```
+
+</TabItem>
+
+<TabItem value="manual-address-management" label="Manual Addresses">
 
 Update the alias address and add a new `published-at` entry in the `[package]` section, both pointing to the value of the on-chain ID:
 
@@ -391,9 +406,29 @@ published-at = "<ORIGINAL-PACKAGE-ID>"
 sui_package = "<ORIGINAL-PACKAGE-ID>"
 ```
 
-The `published-at` value allows the Move compiler to verify dependencies against on-chain versions of those packages.
+</TabItem>
 
-After a while, you decide to upgrade your `sui_package` to include some requested features. Before running the `upgrade` command, you need to edit the manifest again. In the `[addresses]` section, you update the `sui_package` address value to `0x0` again so the validator issues a new address for the upgrade package. You can leave the `published-at` value the same, because it is only read by the toolchain when publishing a dependent package. The saved manifest now resembles the following:
+</Tabs>
+
+
+After a while, you decide to upgrade your `sui_package` to include some requested features. Before running the `upgrade` command, you need to edit the manifest again.
+
+<Tabs>
+
+<TabItem value="automated-address-management" label="Automated Addresses">
+
+In the `[addresses]` section, you update the `sui_package` address value to `0x0` again so the validator issues a new address for the upgrade package.
+
+```toml
+[addresses]
+sui_package = "0x0"
+```
+
+</TabItem>
+
+<TabItem value="manual-address-management" label="Manual Addresses">
+
+In the `[addresses]` section, you update the `sui_package` address value to `0x0` again so the validator issues a new address for the upgrade package. You can leave the `published-at` value the same, because it is only read by the toolchain when publishing a dependent package. The saved manifest now resembles the following:
 
 ```toml
 [package]
@@ -404,6 +439,11 @@ published-at = "<ORIGINAL-PACKAGE-ID>"
 [addresses]
 sui_package = "0x0"
 ```
+
+</TabItem>
+
+</Tabs>
+
 
 With the new manifest and code in place, it's time to use the `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` ID (the `<UPGRADE-CAP-ID>` value from the example) to the `--upgrade-capability` flag.
 
@@ -496,7 +536,23 @@ Array [
 
 ```
 
-The result provides a new ID for the upgraded package. As was the case before the upgrade, you need to include that information in your manifest so any of your other packages that depend on your `sui_package` know where to find the on-chain bytecode for verification. Edit your manifest once again to provide the upgraded package ID for the `published-at` value, and return the original `sui_package` ID value in the `[addresses]` section:
+The result provides a new ID for the upgraded package.
+
+<Tabs>
+
+<TabItem value="automated-address-management" label="Automated Addresses">
+
+After upgrading, return the original `sui_package` ID value in the `[addresses]` section:
+
+```toml
+[addresses]
+sui_package = "<ORIGINAL-PACKAGE-ID>"
+```
+</TabItem>
+
+<TabItem value="manual-address-management" label="Manual Addresses">
+
+So that any of your other packages that depend on your `sui_package` know where to find the on-chain bytecode for verification, edit your manifest once again to provide the upgraded package ID for the `published-at` value, and return the original `sui_package` ID value in the `[addresses]` section:
 
 
 ```toml
@@ -509,4 +565,10 @@ published-at = "<UPGRADED-PACKAGE-ID>"
 sui_package = "<ORIGINAL-PACKAGE-ID>"
 ```
 
-The `published-at` value changes with every upgrade. The ID for the `sui_package` in the `[addresses]` section always points to the original package ID after upgrading. You must always change that value back to `0x0`, however, before running the `upgrade` command so the validator knows to create a new ID for the upgrade.
+Note the `published-at` value changes with every upgrade and needs to be updated after every upgrade.
+
+</TabItem>
+
+</Tabs>
+
+The ID for the `sui_package` in the `[addresses]` section always points to the original package ID after upgrading. You must always change that value back to `0x0`, however, before running the `upgrade` command so the validator knows to create a new ID for the upgrade.
