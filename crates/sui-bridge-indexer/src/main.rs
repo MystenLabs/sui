@@ -15,7 +15,7 @@ use sui_bridge::eth_client::EthClient;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::eth_worker::EthBridgeWorker;
 use sui_bridge_indexer::postgres_manager::{
-    get_connection_pool, read_sui_progress_store, PgProgressStore,
+    get_connection_pool, read_sui_progress_store, PgProgressStore, Task, Tasks,
 };
 use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
@@ -23,7 +23,6 @@ use sui_bridge_indexer::sui_worker::SuiBridgeWorker;
 use sui_bridge_indexer::{config, config::load_config, metrics::BridgeIndexerMetrics};
 use sui_data_ingestion_core::{DataIngestionMetrics, IndexerExecutor, ReaderOptions, WorkerPool};
 use sui_sdk::SuiClientBuilder;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::task::JoinHandle;
 
 use sui_types::digests::TransactionDigest;
@@ -191,7 +190,7 @@ async fn start_processing_sui_checkpoints(
     let updated_tasks = progress_store.tasks()?;
     // Start latest checkpoint worker
     // Tasks are ordered in checkpoint descending order, realtime update task always come first
-    // task won't be empty here, ok to unwrap.
+    // tasks won't be empty here, ok to unwrap.
     let (realtime_task, backfill_tasks) = updated_tasks.split_first().unwrap();
     let ingestion_metrics_clone = ingestion_metrics.clone();
     let indexer_meterics_clone = indexer_meterics.clone();
