@@ -328,8 +328,10 @@ impl<'a> TestAuthorityBuilder<'a> {
 
         // Set up randomness with no-op consensus (DKG will not complete).
         if epoch_store.randomness_state_enabled() {
-            let consensus_client =
-                Box::new(MockConsensusClient::new(state.clone(), ConsensusMode::Noop));
+            let consensus_client = Box::new(MockConsensusClient::new(
+                Arc::downgrade(&state),
+                ConsensusMode::Noop,
+            ));
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
                 consensus_client,
