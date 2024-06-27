@@ -101,9 +101,6 @@ pub async fn execute_certificate_with_execution_error(
     if with_shared {
         if fake_consensus {
             send_consensus(authority, &certificate).await;
-            if let Some(fullnode) = fullnode {
-                send_consensus(fullnode, &certificate).await;
-            }
         } else {
             // Just set object locks directly if send_consensus is not requested.
             authority
@@ -115,17 +112,17 @@ pub async fn execute_certificate_with_execution_error(
                     )],
                 )
                 .await?;
-            if let Some(fullnode) = fullnode {
-                fullnode
-                    .epoch_store_for_testing()
-                    .assign_shared_object_versions_for_tests(
-                        fullnode.get_object_cache_reader().as_ref(),
-                        &vec![VerifiedExecutableTransaction::new_from_certificate(
-                            certificate.clone(),
-                        )],
-                    )
-                    .await?;
-            }
+        }
+        if let Some(fullnode) = fullnode {
+            fullnode
+                .epoch_store_for_testing()
+                .assign_shared_object_versions_for_tests(
+                    fullnode.get_object_cache_reader().as_ref(),
+                    &vec![VerifiedExecutableTransaction::new_from_certificate(
+                        certificate.clone(),
+                    )],
+                )
+                .await?;
         }
     }
 
