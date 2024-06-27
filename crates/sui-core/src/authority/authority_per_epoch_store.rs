@@ -2875,7 +2875,7 @@ impl AuthorityPerEpochStore {
         let mut batch = self.db_batch()?;
         self.process_consensus_transaction_shared_object_versions(
             cache_reader,
-            &transactions,
+            transactions,
             None,
             &BTreeMap::new(),
             &mut batch,
