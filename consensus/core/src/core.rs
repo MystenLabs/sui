@@ -205,7 +205,7 @@ impl Core {
         }
 
         debug!(
-            "Core recovery complete with last block {:?}",
+            "Core recovery completed with last proposed block {:?}",
             self.last_proposed_block
         );
 

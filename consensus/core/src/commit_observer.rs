@@ -121,7 +121,7 @@ impl CommitObserver {
             .scan_commits(((last_processed_commit_index + 1)..=CommitIndex::MAX).into())
             .expect("Scanning commits should not fail");
 
-        debug!("Recovering commit observer from {last_processed_commit_index} with last commit {:?} and {} unsent commits", last_commit, unsent_commits.len());
+        debug!("Recovering commit observer after index {last_processed_commit_index} with last commit {:?} and {} unsent commits", last_commit, unsent_commits.len());
 
         // Resend all the committed subdags to the consensus output channel
         // for all the commits above the last processed index.
@@ -157,7 +157,7 @@ impl CommitObserver {
         }
 
         debug!(
-            "Commit observer recovery complete, took {:?}",
+            "Commit observer recovery completed, took {:?}",
             now.elapsed()
         );
     }
