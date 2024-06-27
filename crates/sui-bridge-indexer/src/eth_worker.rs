@@ -16,16 +16,18 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
+use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::types::EthLog;
 use sui_bridge::{eth_client::EthClient, eth_syncer::EthSyncer};
 use tokio::task::JoinHandle;
 use tracing::info;
 use tracing::log::error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct EthBridgeWorker {
     provider: Arc<Provider<Http>>,
     pg_pool: PgPool,
+    bridge_metrics: Arc<BridgeMetrics>,
     metrics: BridgeIndexerMetrics,
     bridge_address: EthAddress,
     config: Config,
@@ -34,6 +36,7 @@ pub struct EthBridgeWorker {
 impl EthBridgeWorker {
     pub fn new(
         pg_pool: PgPool,
+        bridge_metrics: Arc<BridgeMetrics>,
         metrics: BridgeIndexerMetrics,
         config: Config,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -47,6 +50,7 @@ impl EthBridgeWorker {
         Ok(Self {
             provider,
             pg_pool,
+            bridge_metrics,
             metrics,
             bridge_address,
             config,
@@ -69,7 +73,7 @@ impl EthBridgeWorker {
 
         let (_task_handles, eth_events_rx, _) =
             EthSyncer::new(eth_client, finalized_contract_addresses)
-                .run()
+                .run(self.bridge_metrics.clone())
                 .await
                 .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
@@ -114,7 +118,7 @@ impl EthBridgeWorker {
             self.provider.clone(),
             unfinalized_contract_addresses.clone(),
         )
-        .run()
+        .run(self.metrics.clone())
         .await
         .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
@@ -146,6 +150,11 @@ async fn process_eth_events(
     mut eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
     finalized: bool,
 ) {
+    let progress_gauge = if finalized {
+        metrics.last_committed_eth_block.clone()
+    } else {
+        metrics.last_committed_unfinalized_eth_block.clone()
+    };
     while let Some((_, _, logs)) = eth_events_rx.recv().await {
         for log in logs.iter() {
             let eth_bridge_event = EthBridgeEvent::try_from_eth_log(log);
@@ -240,8 +249,11 @@ async fn process_eth_events(
                 }
             };
 
+            // TODO: we either scream here or keep retrying this until we succeed
             if let Err(e) = write(&pg_pool, vec![transfer]) {
                 error!("Error writing token transfer to database: {:?}", e);
+            } else {
+                progress_gauge.set(block_number as i64);
             }
         }
     }
