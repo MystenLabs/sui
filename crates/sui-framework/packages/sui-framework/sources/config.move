@@ -24,13 +24,13 @@ module sui::config {
         id: UID,
     }
 
-    public struct Setting<Value: copy + drop + store> has store {
+    public struct Setting<Value: copy + drop + store> has store, drop {
         data: Option<SettingData<Value>>,
     }
 
-    public struct SettingData<Value: copy + drop + store> has store {
+    public struct SettingData<Value: copy + drop + store> has store, drop {
         newer_value_epoch: u64,
-        newer_value: Value,
+        newer_value: Option<Value>,
         older_value_opt: Option<Value>,
     }
 
@@ -43,6 +43,7 @@ module sui::config {
         transfer::share_object(new<WriteCap>(cap, ctx))
     }
 
+    #[allow(unused_mut_parameter)]
     public(package) fun add_for_current_epoch<
         WriteCap,
         Name: copy + drop + store,
@@ -52,19 +53,18 @@ module sui::config {
         _cap: &mut WriteCap,
         name: Name,
         value: Value,
-        _ctx: &mut TxContext,
-    ): Option<Value> {
-        let epoch = _ctx.epoch();
+        ctx: &mut TxContext,
+    ) {
+        let epoch = ctx.epoch();
         if (!field::exists_(&config.id, name)) {
             let sobj = Setting {
                 data: option::some(SettingData {
                     newer_value_epoch: epoch,
-                    newer_value: value,
+                    newer_value: option::some(value),
                     older_value_opt: option::none(),
                 }),
             };
             field::add(&mut config.id, name, sobj);
-            option::none()
         } else {
             let sobj: &mut Setting<Value> = field::borrow_mut(&mut config.id, name);
             let SettingData {
@@ -72,14 +72,62 @@ module sui::config {
                 newer_value,
                 older_value_opt,
             } = sobj.data.extract();
-            assert!(epoch > newer_value_epoch, EAlreadySetForEpoch);
+            let older_value_opt =
+                if (epoch > newer_value_epoch) {
+                    // if the `newer_value` is for a previous epoch, move it to `older_value_opt`
+                    newer_value
+                } else {
+                    // the current epoch cannot be less than the `newer_value_epoch`
+                    assert!(epoch == newer_value_epoch);
+                    // if the `newer_value` is for the current epoch, then the option must be `none`
+                    assert!(newer_value.is_none(), EAlreadySetForEpoch);
+                    older_value_opt
+                };
             sobj.data.fill(SettingData {
                 newer_value_epoch: epoch,
-                newer_value: value,
-                older_value_opt: option::some(newer_value),
-            });
-            older_value_opt
+                newer_value: option::some(value),
+                older_value_opt,
+            })
         }
+    }
+
+    #[allow(unused_mut_parameter)]
+    public(package) fun remove_for_current_epoch<
+        WriteCap,
+        Name: copy + drop + store,
+        Value: copy + drop + store,
+    >(
+        config: &mut Config<WriteCap>,
+        _cap: &mut WriteCap,
+        name: Name,
+        ctx: &mut TxContext,
+    ): Option<Value> {
+        let epoch = ctx.epoch();
+        let sobj: &mut Setting<Value> = field::borrow_mut(&mut config.id, name);
+        let SettingData {
+            newer_value_epoch,
+            newer_value,
+            older_value_opt,
+        } = sobj.data.extract();
+        let older_value_opt =
+            if (epoch > newer_value_epoch) {
+                // if the `newer_value` is for a previous epoch, move it to `older_value_opt`
+                newer_value
+            } else {
+                // the current epoch cannot be less than the `newer_value_epoch`
+                assert!(epoch == newer_value_epoch);
+                older_value_opt
+            };
+        let older_value_opt_is_none = older_value_opt.is_none();
+        sobj.data.fill(SettingData {
+            newer_value_epoch: epoch,
+            newer_value: option::none(),
+            older_value_opt,
+        });
+        if (older_value_opt_is_none) {
+            field::remove<_, Setting<Value>>(&mut config.id, name);
+        };
+        newer_value
     }
 
     public(package) fun exists_with_type<
@@ -106,7 +154,8 @@ module sui::config {
         field::exists_with_type<_, Setting<Value>>(&config.id, name) && {
             let epoch = ctx.epoch();
             let sobj: &Setting<Value> = field::borrow(&config.id, name);
-            epoch == sobj.data.borrow().newer_value_epoch
+            epoch == sobj.data.borrow().newer_value_epoch &&
+            sobj.data.borrow().newer_value.is_some()
         }
     }
 
@@ -125,7 +174,8 @@ module sui::config {
         let sobj: &mut Setting<Value> = field::borrow_mut(&mut config.id, name);
         let data = sobj.data.borrow_mut();
         assert!(data.newer_value_epoch == epoch, ENotSetForEpoch);
-        &mut data.newer_value
+        assert!(data.newer_value.is_some(), ENotSetForEpoch);
+        data.newer_value.borrow_mut()
     }
 
     public(package) fun borrow_most_recent<
@@ -137,7 +187,9 @@ module sui::config {
         name: Name,
     ): &Value {
         let sobj: &Setting<Value> = field::borrow(&config.id, name);
-        &sobj.data.borrow().newer_value
+        let data = sobj.data.borrow();
+        assert!(data.newer_value.is_some(), ENotSetForEpoch);
+        data.newer_value.borrow()
     }
 
     public(package) macro fun entry<
