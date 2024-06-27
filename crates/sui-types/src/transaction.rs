@@ -2289,6 +2289,15 @@ impl SenderSignedData {
                         });
                     }
                 }
+                GenericSignature::PasskeyAuthenticator(_) => {
+                    if !config.passkey_auth() {
+                        return Err(SuiError::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "passkey is not enabled on this network".to_string(),
+                            ),
+                        });
+                    }
+                }
                 GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
             }
         }

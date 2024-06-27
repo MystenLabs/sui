@@ -1331,6 +1331,7 @@
                 "no_extraneous_module_bytes": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
+                "passkey_auth": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "random_beacon": false,
                 "receive_objects": false,
@@ -6496,6 +6497,18 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "PasskeyAuthenticator"
+            ],
+            "properties": {
+              "PasskeyAuthenticator": {
+                "$ref": "#/components/schemas/PasskeyAuthenticator"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -7837,6 +7850,29 @@
           }
         }
       },
+      "PasskeyAuthenticator": {
+        "description": "An passkey authenticator with parsed fields. See field defition below. Can be initialized from [struct RawPasskeyAuthenticator].",
+        "type": "object",
+        "required": [
+          "authenticator_data",
+          "client_data_json"
+        ],
+        "properties": {
+          "authenticator_data": {
+            "description": "`authenticatorData` is a bytearray that encodes [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) structure returned by the authenticator attestation response as is.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "client_data_json": {
+            "description": "`clientDataJSON` contains a JSON-compatible UTF-8 encoded string of the client data which is passed to the authenticator by the client during the authentication request (see [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))",
+            "type": "string"
+          }
+        }
+      },
       "ProtocolConfig": {
         "type": "object",
         "required": [
@@ -7978,6 +8014,18 @@
             "properties": {
               "ZkLogin": {
                 "$ref": "#/components/schemas/ZkLoginPublicIdentifier"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Passkey"
+            ],
+            "properties": {
+              "Passkey": {
+                "$ref": "#/components/schemas/Base64"
               }
             },
             "additionalProperties": false
