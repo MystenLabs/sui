@@ -53,7 +53,7 @@ impl Weight {
         self.0
     }
 
-    pub async fn is_sampled(&self) -> bool {
+    pub fn is_sampled(&self) -> bool {
         let mut rng = rand::thread_rng();
         let sample = rand::distributions::Uniform::new(0.0, 1.0).sample(&mut rng);
         sample <= self.value()
@@ -201,6 +201,11 @@ pub struct PolicyConfig {
     #[serde(default = "default_channel_capacity")]
     pub channel_capacity: usize,
     #[serde(default = "default_spam_sample_rate")]
+    /// Note that this sample policy is applied on top of the
+    /// endpoint-specific sample policy (not configurable) which
+    /// weighs endpoints by the relative effort required to serve
+    /// them. Therefore a sample rate of N will yield an actual
+    /// sample rate <= N.
     pub spam_sample_rate: Weight,
     #[serde(default = "default_dry_run")]
     pub dry_run: bool,
