@@ -147,7 +147,7 @@ async fn start_processing_sui_checkpoints(
             // if resume_from_checkpoint, use it for the latest task, if not set, use bridge_genesis_checkpoint
             let start_from_cp = config
                 .resume_from_checkpoint
-                .unwrap_or_else(|| config.bridge_genesis_checkpoint);
+                .unwrap_or(config.bridge_genesis_checkpoint);
             progress_store.register_task(new_task_name(), start_from_cp, i64::MAX)?;
 
             // Create backfill tasks
@@ -173,7 +173,7 @@ async fn start_processing_sui_checkpoints(
                             target_cp - config.back_fill_lot_size,
                             target_cp as i64,
                         )?;
-                        target_cp = target_cp - config.back_fill_lot_size;
+                        target_cp -= config.back_fill_lot_size;
                     }
                     task.target_checkpoint = target_cp;
                     progress_store.update_task(task)?;
