@@ -34,8 +34,8 @@ use crate::{
         core::{
             self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
-        dependency_ordering, deprecation_warnings, expand, infinite_instantiations, macro_expand,
-        match_analysis, recursive_datatypes,
+        dependency_ordering, expand, infinite_instantiations, macro_expand, match_analysis,
+        recursive_datatypes,
         syntax_methods::validate_syntax_methods,
     },
     FullyCompiledProgram,

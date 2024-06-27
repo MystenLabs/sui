@@ -184,7 +184,7 @@ impl<'env> Context<'env> {
         info: NamingProgramInfo,
     ) -> Self {
         let global_use_funs = UseFunsScope::global(&info);
-        let deprecations = Deprecations::index_deprecations(env, &info);
+        let deprecations = Deprecations::new(env, &info);
         let debug = TypingDebugFlags {
             match_counterexample: false,
             autocomplete_resolution: false,
