@@ -39,8 +39,12 @@ module sui::config {
     }
 
     #[allow(lint(share_owned))]
-    public(package) fun create<WriteCap>(cap: &mut WriteCap, ctx: &mut TxContext) {
-        transfer::share_object(new<WriteCap>(cap, ctx))
+    public(package) fun share<WriteCap>(config: Config<WriteCap>) {
+        transfer::share_object(config)
+    }
+
+    public(package) fun transfer<WriteCap>(config: Config<WriteCap>, owner: address) {
+        transfer::transfer(config, owner)
     }
 
     #[allow(unused_mut_parameter)]

@@ -244,7 +244,7 @@ module sui::coin {
         description: vector<u8>,
         icon_url: Option<Url>,
         allow_global_pause: bool,
-        ctx: &mut TxContext
+        ctx: &mut TxContext,
     ): (TreasuryCap<T>, DenyCapV2<T>, CoinMetadata<T>) {
         let (treasury_cap, metadata) = create_currency(
             witness,

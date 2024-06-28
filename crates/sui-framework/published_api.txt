@@ -1867,7 +1867,10 @@ SettingData
 new
 	public(package) fun
 	0x2::config
-create
+share
+	public(package) fun
+	0x2::config
+transfer
 	public(package) fun
 	0x2::config
 add_for_current_epoch

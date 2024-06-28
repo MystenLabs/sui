@@ -13,10 +13,14 @@ module sui::config_tests {
     public struct WriteCap() has drop;
     public struct Wrapped<T>(T) has copy, drop, store;
 
+    fun config_create<WriteCap>(cap: &mut WriteCap, ctx: &mut TxContext) {
+        sui::config::share(sui::config::new(cap, ctx))
+    }
+
     #[test]
     fun test_all() {
         let mut ts = ts::begin(SENDER);
-        config::create(&mut WriteCap(), ts.ctx());
+        config_create(&mut WriteCap(), ts.ctx());
         ts.next_tx(SENDER);
         let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
         let n1 = b"hello";
@@ -133,7 +137,7 @@ module sui::config_tests {
     #[test, expected_failure(abort_code = sui::config::EAlreadySetForEpoch)]
     fun add_for_current_epoch_aborts_in_same_epoch() {
         let mut ts = ts::begin(SENDER);
-        config::create(&mut WriteCap(), ts.ctx());
+        config_create(&mut WriteCap(), ts.ctx());
         ts.next_tx(SENDER);
         let mut config: Config<WriteCap> = ts.take_shared();
         config.add_for_current_epoch(&mut WriteCap(), false, 0u8, ts.ctx());
@@ -144,7 +148,7 @@ module sui::config_tests {
     #[test, expected_failure(abort_code = sui::config::ENotSetForEpoch)]
     fun borrow_for_current_epoch_mut_aborts_in_new_epoch() {
         let mut ts = ts::begin(SENDER);
-        config::create(&mut WriteCap(), ts.ctx());
+        config_create(&mut WriteCap(), ts.ctx());
         ts.next_tx(SENDER);
         let mut config: Config<WriteCap> = ts.take_shared();
         let n = 1u64;
@@ -165,7 +169,7 @@ module sui::config_tests {
     #[test]
     fun read_setting_none() {
         let mut ts = ts::begin(SENDER);
-        config::create(&mut WriteCap(), ts.ctx());
+        config_create(&mut WriteCap(), ts.ctx());
         ts.next_tx(SENDER);
         let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
         let n = b"hello";
@@ -265,7 +269,7 @@ module sui::config_tests {
     #[test]
     fun test_remove_doesnt_fail_on_duplicate() {
         let mut ts = ts::begin(SENDER);
-        config::create(&mut WriteCap(), ts.ctx());
+        config_create(&mut WriteCap(), ts.ctx());
         ts.next_tx(SENDER);
         let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
         let n = b"hello";
@@ -342,7 +346,7 @@ module sui::config_tests {
     #[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
     fun test_remove_fail_on_type_mismatch() {
         let mut ts = ts::begin(SENDER);
-        config::create(&mut WriteCap(), ts.ctx());
+        config_create(&mut WriteCap(), ts.ctx());
         ts.next_tx(SENDER);
         let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
         let n = b"hello";
@@ -356,7 +360,7 @@ module sui::config_tests {
     #[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
     fun test_add_fail_on_type_mismatch() {
         let mut ts = ts::begin(SENDER);
-        config::create(&mut WriteCap(), ts.ctx());
+        config_create(&mut WriteCap(), ts.ctx());
         ts.next_tx(SENDER);
         let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
         let n = b"hello";
@@ -379,7 +383,7 @@ module sui::config_tests {
     #[test]
     fun test_removed_value() {
         let mut ts = ts::begin(SENDER);
-        config::create(&mut WriteCap(), ts.ctx());
+        config_create(&mut WriteCap(), ts.ctx());
         ts.next_tx(SENDER);
         let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
         let n = b"hello";

@@ -9,7 +9,8 @@ title: Module `0x2::config`
 -  [Struct `SettingData`](#0x2_config_SettingData)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_config_new)
--  [Function `create`](#0x2_config_create)
+-  [Function `share`](#0x2_config_share)
+-  [Function `transfer`](#0x2_config_transfer)
 -  [Function `add_for_current_epoch`](#0x2_config_add_for_current_epoch)
 -  [Function `remove_for_current_epoch`](#0x2_config_remove_for_current_epoch)
 -  [Function `exists_with_type`](#0x2_config_exists_with_type)
@@ -178,13 +179,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_create"></a>
+<a name="0x2_config_share"></a>
 
-## Function `create`
+## Function `share`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_create">create</a>&lt;WriteCap&gt;(cap: &<b>mut</b> WriteCap, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_share">share</a>&lt;WriteCap&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;)
 </code></pre>
 
 
@@ -193,8 +194,32 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_create">create</a>&lt;WriteCap&gt;(cap: &<b>mut</b> WriteCap, ctx: &<b>mut</b> TxContext) {
-    <a href="../sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="../sui-framework/config.md#0x2_config_new">new</a>&lt;WriteCap&gt;(cap, ctx))
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_share">share</a>&lt;WriteCap&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <a href="../sui-framework/config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;) {
+    <a href="../sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="../sui-framework/config.md#0x2_config">config</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_config_transfer"></a>
+
+## Function `transfer`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a>&lt;WriteCap&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, owner: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a>&lt;WriteCap&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <a href="../sui-framework/config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;, owner: <b>address</b>) {
+    <a href="../sui-framework/transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="../sui-framework/config.md#0x2_config">config</a>, owner)
 }
 </code></pre>
 
