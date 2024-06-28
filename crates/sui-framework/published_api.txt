@@ -2065,10 +2065,10 @@ deny_list_v2_add
 deny_list_v2_remove
 	public(package) fun
 	0x2::coin
-v2_contains_current_epoch
+deny_list_v2_contains_current_epoch
 	public(package) fun
 	0x2::coin
-v2_contains_next_epoch
+deny_list_v2_contains_next_epoch
 	public(package) fun
 	0x2::coin
 deny_list_v2_enable_global_pause

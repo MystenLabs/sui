@@ -38,7 +38,7 @@ module sui::config_tests {
             assert!(!config.exists_with_type<_, _, u8>(n2));
             assert!(!config.exists_with_type_for_current_epoch<_, _, u8>(n2, ts.ctx()));
             assert!(config.borrow_for_current_epoch_mut(&mut WriteCap(), n1, ts.ctx()) == 112u8);
-            assert!(config.read_newer_setting(n1) == 112u8);
+            assert!(config.read_newer_setting(n1) == option::some(112u8));
             assert!(config::read_setting<_, u8>(id, n1, ts.ctx()).is_none());
             assert!(config::read_setting<_, u8>(id, n2, ts.ctx()).is_none());
 
@@ -46,7 +46,7 @@ module sui::config_tests {
             // n1 -- epoch0 --> 224
             *config.borrow_for_current_epoch_mut(&mut WriteCap(), n1, ts.ctx()) = 224u8;
             assert!(config.borrow_for_current_epoch_mut(&mut WriteCap(), n1, ts.ctx()) == 224u8);
-            assert!(config.read_newer_setting(n1) == 224u8);
+            assert!(config.read_newer_setting(n1) ==  option::some(224u8));
             assert!(config::read_setting<_, u8>(id, n1, ts.ctx()).is_none());
             assert!(config::read_setting<_, u8>(id, n2, ts.ctx()).is_none());
             ts::return_shared(config);
@@ -61,7 +61,7 @@ module sui::config_tests {
             assert!(!config.exists_with_type_for_current_epoch<_, _, u8>(n1, ts.ctx()));
             assert!(!config.exists_with_type<_, _, u8>(n2));
             assert!(!config.exists_with_type_for_current_epoch<_, _, u8>(n2, ts.ctx()));
-            assert!(config.read_newer_setting(n1) == 224u8);
+            assert!(config.read_newer_setting(n1) ==  option::some(224u8));
             assert!(config::read_setting<_, u8>(id, n1, ts.ctx()).destroy_some() == 224u8);
             assert!(config::read_setting<_, u8>(id, n2, ts.ctx()).is_none());
 
@@ -74,7 +74,7 @@ module sui::config_tests {
             assert!(!config.exists_with_type<_, _, u8>(n2));
             assert!(!config.exists_with_type_for_current_epoch<_, _, u8>(n2, ts.ctx()));
             assert!(config.borrow_for_current_epoch_mut(&mut WriteCap(), n1, ts.ctx()) == 0u8);
-            assert!(config.read_newer_setting(n1) == 0u8);
+            assert!(config.read_newer_setting(n1) ==  option::some(0u8));
             assert!(config::read_setting<_, u8>(id, n1, ts.ctx()).destroy_some() == 224u8);
             assert!(config::read_setting<_, u8>(id, n2, ts.ctx()).is_none());
 
@@ -88,9 +88,9 @@ module sui::config_tests {
             assert!(config.exists_with_type<_, _, u8>(n2));
             assert!(config.exists_with_type_for_current_epoch<_, _, u8>(n2, ts.ctx()));
             assert!(config.borrow_for_current_epoch_mut(&mut WriteCap(), n1, ts.ctx()) == 0u8);
-            assert!(config.read_newer_setting(n1) == 0u8);
+            assert!(config.read_newer_setting(n1) == option::some(0u8));
             assert!(config.borrow_for_current_epoch_mut(&mut WriteCap(), n2, ts.ctx()) == 2u8);
-            assert!(config.read_newer_setting(n2) == 2u8);
+            assert!(config.read_newer_setting(n2) == option::some(2u8));
             assert!(config::read_setting<_, u8>(id, n1, ts.ctx()).destroy_some() == 224u8);
             assert!(config::read_setting<_, u8>(id, n2, ts.ctx()).is_none());
             ts::return_shared(config);
@@ -120,8 +120,8 @@ module sui::config_tests {
             assert!(!config.exists_with_type_for_current_epoch<_, _, u8>(n1, ts.ctx()));
             assert!(config.exists_with_type<_, _, u8>(n2));
             assert!(!config.exists_with_type_for_current_epoch<_, _, u8>(n2, ts.ctx()));
-            assert!(config.read_newer_setting(n1) == 0u8);
-            assert!(config.read_newer_setting(n2) == 2u8);
+            assert!(config.read_newer_setting(n1) ==  option::some(0u8));
+            assert!(config.read_newer_setting(n2) ==  option::some(2u8));
             assert!(config::read_setting<_, u8>(id, n1, ts.ctx()).destroy_some() == 0u8);
             assert!(config::read_setting<_, u8>(id, n2, ts.ctx()).destroy_some() == 2u8);
             ts::return_shared(config);
@@ -151,12 +151,12 @@ module sui::config_tests {
         config.add_for_current_epoch(&mut WriteCap(), n, b"hello", ts.ctx());
         assert!(config.exists_with_type<_, _, vector<u8>>(n));
         assert!(config.exists_with_type_for_current_epoch<_, _, vector<u8>>(n, ts.ctx()));
-        assert!(config.read_newer_setting(n) == b"hello");
+        assert!(config.read_newer_setting(n) ==  option::some(b"hello"));
 
         ts.next_epoch(SENDER);
         assert!(config.exists_with_type<_, _, vector<u8>>(n));
         assert!(!config.exists_with_type_for_current_epoch<_, _, vector<u8>>(n, ts.ctx()));
-        assert!(config.read_newer_setting(n) == b"hello");
+        assert!(config.read_newer_setting(n) ==  option::some(b"hello"));
         // aborts
         config.borrow_for_current_epoch_mut<_, _, vector<u8>>(&mut WriteCap(), n, ts.ctx());
         abort 0
