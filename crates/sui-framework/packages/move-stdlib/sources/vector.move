@@ -170,7 +170,7 @@ module std::vector {
     }
 
     /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
-    /// Preserve the order of elements in the vector.
+    /// Preserves the order of elements in the vector.
     public macro fun do<$T>($v: vector<$T>, $f: |$T|) {
         let mut v = $v;
         v.reverse();
