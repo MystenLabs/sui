@@ -45,7 +45,7 @@ To restore from a RocksDB snapshot, follow these steps:
 1. Place the snapshot into the directory that the `db-config` value points to in your fullnode.yaml file. For example, if the `db-config` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command:
 
    You can use the aws cli (provided you have credentials to associate with the download):
-   `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive`.
+   `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive --request-payer`.
    
    An alternative is to use `sui-tool` to copy the files:
    ```
