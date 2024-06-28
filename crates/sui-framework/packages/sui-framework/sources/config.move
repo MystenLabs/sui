@@ -48,7 +48,7 @@ module sui::config {
     }
 
     #[allow(unused_mut_parameter)]
-    public(package) fun add_for_current_epoch<
+    public(package) fun add_for_next_epoch<
         WriteCap,
         Name: copy + drop + store,
         Value: copy + drop + store,
@@ -98,7 +98,7 @@ module sui::config {
     }
 
     #[allow(unused_mut_parameter)]
-    public(package) fun remove_for_current_epoch<
+    public(package) fun remove_for_next_epoch<
         WriteCap,
         Name: copy + drop + store,
         Value: copy + drop + store,
@@ -149,7 +149,7 @@ module sui::config {
     }
 
     #[allow(unused_mut_parameter)]
-    public(package) fun exists_with_type_for_current_epoch<
+    public(package) fun exists_with_type_for_next_epoch<
         WriteCap,
         Name: copy + drop + store,
         Value: copy + drop + store,
@@ -167,7 +167,7 @@ module sui::config {
     }
 
     #[allow(unused_mut_parameter)]
-    public(package) fun borrow_for_current_epoch_mut<
+    public(package) fun borrow_for_next_epoch_mut<
         WriteCap,
         Name: copy + drop + store,
         Value: copy + drop + store,
@@ -185,7 +185,7 @@ module sui::config {
         data.newer_value.borrow_mut()
     }
 
-    public(package) fun read_newer_setting<
+    public(package) fun read_setting_for_next_epoch<
         WriteCap,
         Name: copy + drop + store,
         Value: copy + drop + store,
@@ -214,11 +214,11 @@ module sui::config {
         let cap = $cap;
         let name = $name;
         let ctx = $ctx;
-        if (!config.exists_with_type_for_current_epoch<_, _, $Value>(name, ctx)) {
+        if (!config.exists_with_type_for_next_epoch<_, _, $Value>(name, ctx)) {
             let initial = $initial_for_next_epoch(config, cap, ctx);
-            config.add_for_current_epoch(cap, name, initial, ctx);
+            config.add_for_next_epoch(cap, name, initial, ctx);
         };
-        config.borrow_for_current_epoch_mut(cap, name, ctx)
+        config.borrow_for_next_epoch_mut(cap, name, ctx)
     }
 
     public(package) macro fun update<
@@ -238,13 +238,13 @@ module sui::config {
         let name = $name;
         let ctx = $ctx;
         let old_value_opt =
-            if (!config.exists_with_type_for_current_epoch<_, _, $Value>(name, ctx)) {
+            if (!config.exists_with_type_for_next_epoch<_, _, $Value>(name, ctx)) {
                 let initial = $initial_for_next_epoch(config, cap, ctx);
-                config.add_for_current_epoch(cap, name, initial, ctx)
+                config.add_for_next_epoch(cap, name, initial, ctx)
             } else {
                 option::none()
             };
-        $update_for_next_epoch(old_value_opt, config.borrow_for_current_epoch_mut(cap, name, ctx));
+        $update_for_next_epoch(old_value_opt, config.borrow_for_next_epoch_mut(cap, name, ctx));
     }
 
     public(package) fun read_setting<Name: copy + drop + store, Value: copy + drop + store>(

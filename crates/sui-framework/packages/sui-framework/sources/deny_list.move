@@ -98,7 +98,7 @@ module sui::deny_list {
     ) {
         let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
         let setting_name = AddressKey(addr);
-        per_type_config.remove_for_current_epoch<_, AddressKey, bool>(
+        per_type_config.remove_for_next_epoch<_, AddressKey, bool>(
             &mut ConfigWriteCap(),
             setting_name,
             ctx,
@@ -127,7 +127,7 @@ module sui::deny_list {
         if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
         let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
         let setting_name = AddressKey(addr);
-        per_type_config.read_newer_setting(setting_name).destroy_or!(false)
+        per_type_config.read_setting_for_next_epoch(setting_name).destroy_or!(false)
     }
 
     // public(package) fun v2_per_type_contains(
@@ -191,7 +191,7 @@ module sui::deny_list {
         if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
         let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
         let setting_name = GlobalPauseKey();
-        per_type_config.read_newer_setting(setting_name).destroy_or!(false)
+        per_type_config.read_setting_for_next_epoch(setting_name).destroy_or!(false)
     }
 
     // public(package) fun v2_per_type_is_global_pause_enabled(

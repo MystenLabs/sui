@@ -1873,22 +1873,22 @@ share
 transfer
 	public(package) fun
 	0x2::config
-add_for_current_epoch
+add_for_next_epoch
 	public(package) fun
 	0x2::config
-remove_for_current_epoch
+remove_for_next_epoch
 	public(package) fun
 	0x2::config
 exists_with_type
 	public(package) fun
 	0x2::config
-exists_with_type_for_current_epoch
+exists_with_type_for_next_epoch
 	public(package) fun
 	0x2::config
-borrow_for_current_epoch_mut
+borrow_for_next_epoch_mut
 	public(package) fun
 	0x2::config
-read_newer_setting
+read_setting_for_next_epoch
 	public(package) fun
 	0x2::config
 read_setting

@@ -395,7 +395,7 @@ meaningless to add them to the deny list.
 ) {
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.per_type_config_entry!(per_type_index, per_type_key, ctx);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
-    per_type_config.remove_for_current_epoch&lt;_, <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>, bool&gt;(
+    per_type_config.remove_for_next_epoch&lt;_, <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>, bool&gt;(
         &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(),
         setting_name,
         ctx,
@@ -464,7 +464,7 @@ meaningless to add them to the deny list.
     <b>if</b> (!<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(per_type_index, per_type_key)) <b>return</b> <b>false</b>;
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
-    per_type_config.read_newer_setting(setting_name).destroy_or!(<b>false</b>)
+    per_type_config.read_setting_for_next_epoch(setting_name).destroy_or!(<b>false</b>)
 }
 </code></pre>
 
@@ -601,7 +601,7 @@ meaningless to add them to the deny list.
     <b>if</b> (!<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(per_type_index, per_type_key)) <b>return</b> <b>false</b>;
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a>();
-    per_type_config.read_newer_setting(setting_name).destroy_or!(<b>false</b>)
+    per_type_config.read_setting_for_next_epoch(setting_name).destroy_or!(<b>false</b>)
 }
 </code></pre>
 
