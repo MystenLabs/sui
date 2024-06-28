@@ -4,9 +4,8 @@
 use anyhow::Result;
 use clap::*;
 use mysten_metrics::spawn_logged_monitored_task;
-use mysten_metrics::{spawn_monitored_task, start_prometheus_server};
+use mysten_metrics::start_prometheus_server;
 use prometheus::Registry;
-use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::PathBuf;
@@ -14,22 +13,15 @@ use std::sync::Arc;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::eth_worker::EthBridgeWorker;
-use sui_bridge_indexer::postgres_manager::{
-    get_connection_pool, read_sui_progress_store, PgProgressStore, Task, Tasks,
-};
+use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
 use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
-use sui_bridge_indexer::sui_worker::SuiBridgeWorker;
-use sui_bridge_indexer::{config, config::load_config, metrics::BridgeIndexerMetrics};
-use sui_data_ingestion_core::{DataIngestionMetrics, IndexerExecutor, ReaderOptions, WorkerPool};
+use sui_bridge_indexer::{config::load_config, metrics::BridgeIndexerMetrics};
+use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_sdk::SuiClientBuilder;
 use tokio::task::JoinHandle;
 
-use sui_types::digests::TransactionDigest;
-use mysten_metrics::metered_channel::channel;
-use sui_bridge_indexer::config::IndexerConfig;
-use sui_config::Config;
-use tokio::sync::oneshot;
+use sui_bridge_indexer::sui_checkpoint_ingestion::SuiCheckpointSyncer;
 use tracing::info;
 
 #[derive(Parser, Clone, Debug)]
@@ -113,13 +105,10 @@ async fn main() -> Result<()> {
         )
         .await?;
     } else {
-        start_processing_sui_checkpoints(
-            &config_clone,
-            db_url,
-            indexer_meterics,
-            ingestion_metrics,
-        )
-        .await?;
+        let pg_pool = get_connection_pool(db_url.clone());
+        SuiCheckpointSyncer::new(pg_pool, config.bridge_genesis_checkpoint)
+            .start(&config_clone, indexer_meterics, ingestion_metrics)
+            .await?;
     }
     // We are not waiting for the sui tasks to finish here, which is ok.
     futures::future::join_all(handles).await;
@@ -127,145 +116,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn start_processing_sui_checkpoints(
-    config: &IndexerConfig,
-    db_url: String,
-    indexer_meterics: BridgeIndexerMetrics,
-    ingestion_metrics: DataIngestionMetrics,
-) -> Result<(), anyhow::Error> {
-    // metrics init
-    let pg_pool = get_connection_pool(db_url.clone());
-    let progress_store = PgProgressStore::new(pg_pool, config.bridge_genesis_checkpoint);
-
-    // Update tasks first
-    let tasks = progress_store.tasks()?;
-    // checkpoint workers
-    match tasks.latest_checkpoint_task() {
-        None => {
-            // No task in database, start latest checkpoint task and backfill tasks
-            // if resume_from_checkpoint, use it for the latest task, if not set, use bridge_genesis_checkpoint
-            let start_from_cp = config
-                .resume_from_checkpoint
-                .unwrap_or(config.bridge_genesis_checkpoint);
-            progress_store.register_task(new_task_name(), start_from_cp, i64::MAX)?;
-
-            // Create backfill tasks
-            if start_from_cp != config.bridge_genesis_checkpoint {
-                let mut current_cp = config.bridge_genesis_checkpoint;
-                while current_cp < start_from_cp {
-                    let target_cp = min(current_cp + config.back_fill_lot_size, start_from_cp);
-                    progress_store.register_task(new_task_name(), current_cp, target_cp as i64)?;
-                    current_cp = target_cp;
-                }
-            }
-        }
-        Some(mut task) => {
-            match config.resume_from_checkpoint {
-                Some(cp) if task.checkpoint < cp => {
-                    // Scenario 1: resume_from_checkpoint is set, and it's > current checkpoint
-                    // create new task from resume_from_checkpoint to u64::MAX
-                    // Update old task to finish at resume_from_checkpoint
-                    let mut target_cp = cp;
-                    while target_cp - task.checkpoint > config.back_fill_lot_size {
-                        progress_store.register_task(
-                            new_task_name(),
-                            target_cp - config.back_fill_lot_size,
-                            target_cp as i64,
-                        )?;
-                        target_cp -= config.back_fill_lot_size;
-                    }
-                    task.target_checkpoint = target_cp;
-                    progress_store.update_task(task)?;
-                    progress_store.register_task(new_task_name(), cp, i64::MAX)?;
-                }
-                _ => {
-                    // Scenario 2: resume_from_checkpoint is set, but it's < current checkpoint or not set
-                    // ignore resume_from_checkpoint, resume all task as it is.
-                }
-            }
-        }
-    }
-
-    // get updated tasks and start workers
-    let updated_tasks = progress_store.tasks()?;
-    // Start latest checkpoint worker
-    // Tasks are ordered in checkpoint descending order, realtime update task always come first
-    // tasks won't be empty here, ok to unwrap.
-    let (realtime_task, backfill_tasks) = updated_tasks.split_first().unwrap();
-    let ingestion_metrics_clone = ingestion_metrics.clone();
-    let indexer_meterics_clone = indexer_meterics.clone();
-    let db_url_clone = db_url.clone();
-    let progress_store_clone = progress_store.clone();
-    let config_clone = config.clone();
-    let backfill_tasks = backfill_tasks.to_vec();
-    let handle = spawn_monitored_task!(async {
-        for backfill_task in backfill_tasks {
-            start_executor(
-                progress_store_clone.clone(),
-                ingestion_metrics_clone.clone(),
-                indexer_meterics_clone.clone(),
-                &config_clone,
-                db_url_clone.clone(),
-                &backfill_task,
-            )
-            .await
-            .expect("Backfill task failed");
-        }
-    });
-    start_executor(
-        progress_store,
-        ingestion_metrics,
-        indexer_meterics,
-        config,
-        db_url,
-        realtime_task,
-    )
-    .await?;
-    tokio::try_join!(handle)?;
-    Ok(())
-}
-
-async fn start_executor(
-    progress_store: PgProgressStore,
-    ingestion_metrics: DataIngestionMetrics,
-    indexer_meterics: BridgeIndexerMetrics,
-    config: &Config,
-    db_url: String,
-    task: &Task,
-) -> Result<(), anyhow::Error> {
-    let (_exit_sender, exit_receiver) = oneshot::channel();
-    let mut executor = IndexerExecutor::new_with_upper_limit(
-        progress_store,
-        1, /* workflow types */
-        ingestion_metrics,
-        task.target_checkpoint,
-    );
-
-    let indexer_metrics_cloned = indexer_meterics.clone();
-
-    let worker_pool = WorkerPool::new(
-        SuiBridgeWorker::new(vec![], db_url, indexer_metrics_cloned),
-        task.task_name.clone(),
-        config.concurrency as usize,
-    );
-    executor.register(worker_pool).await?;
-    executor
-        .run(
-            config.checkpoints_path.clone().into(),
-            Some(config.remote_store_url.clone()),
-            vec![], // optional remote store access options
-            ReaderOptions::default(),
-            exit_receiver,
-        )
-        .await?;
-    Ok(())
-}
-
-fn new_task_name() -> String {
-    format!("bridge worker - {}", TransactionDigest::random())
-}
-
-async fn start_processing_sui_checkpoints_by_querying_txns(
+async fn start_processing_sui_checkpoints_by_querying_txes(
     sui_rpc_url: String,
     db_url: String,
     indexer_metrics: BridgeIndexerMetrics,

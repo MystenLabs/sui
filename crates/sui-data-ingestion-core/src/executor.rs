@@ -28,19 +28,10 @@ pub struct IndexerExecutor<P> {
     pool_progress_sender: mpsc::Sender<(String, CheckpointSequenceNumber)>,
     pool_progress_receiver: mpsc::Receiver<(String, CheckpointSequenceNumber)>,
     metrics: DataIngestionMetrics,
-    max_checkpoint: CheckpointSequenceNumber,
 }
 
 impl<P: ProgressStore> IndexerExecutor<P> {
     pub fn new(progress_store: P, number_of_jobs: usize, metrics: DataIngestionMetrics) -> Self {
-        Self::new_with_upper_limit(progress_store, number_of_jobs, metrics, u64::MAX)
-    }
-    pub fn new_with_upper_limit(
-        progress_store: P,
-        number_of_jobs: usize,
-        metrics: DataIngestionMetrics,
-        max_checkpoint: CheckpointSequenceNumber,
-    ) -> Self {
         let (pool_progress_sender, pool_progress_receiver) =
             mpsc::channel(number_of_jobs * MAX_CHECKPOINTS_IN_PROGRESS);
         Self {
@@ -50,7 +41,6 @@ impl<P: ProgressStore> IndexerExecutor<P> {
             pool_progress_sender,
             pool_progress_receiver,
             metrics,
-            max_checkpoint,
         }
     }
 
@@ -90,7 +80,7 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         for pool in std::mem::take(&mut self.pools) {
             spawn_monitored_task!(pool);
         }
-        while reader_checkpoint_number <= self.max_checkpoint {
+        loop {
             tokio::select! {
                 _ = &mut exit_receiver => break,
                 Some((task_name, sequence_number)) = self.pool_progress_receiver.recv() => {
