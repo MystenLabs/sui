@@ -149,11 +149,15 @@ fn consistent_value_before_current_epoch(
     };
     let [newer_value_epoch, newer_value, older_value_opt]: [Value; 3] = unpack_struct(data)?;
     let newer_value_epoch: u64 = newer_value_epoch.value_as()?;
-    if current_epoch > newer_value_epoch {
-        option_some(value_ty, newer_value)
+    debug_assert!(
+        unpack_option(newer_value.copy_value()?, value_ty)?.is_some()
+            || unpack_option(older_value_opt.copy_value()?, value_ty)?.is_some()
+    );
+    Ok(if current_epoch > newer_value_epoch {
+        newer_value
     } else {
-        Ok(older_value_opt)
-    }
+        older_value_opt
+    })
 }
 
 fn unpack_struct<const N: usize>(s: Value) -> PartialVMResult<[Value; N]> {
@@ -181,12 +185,5 @@ fn unpack_option(option: Value, type_param: &Type) -> PartialVMResult<Option<Val
 fn option_none(type_param: &Type) -> PartialVMResult<Value> {
     Ok(Value::struct_(Struct::pack(vec![Vector::empty(
         type_param,
-    )?])))
-}
-
-fn option_some(type_param: &Type, value: Value) -> PartialVMResult<Value> {
-    Ok(Value::struct_(Struct::pack(vec![Vector::pack(
-        type_param,
-        vec![value],
     )?])))
 }

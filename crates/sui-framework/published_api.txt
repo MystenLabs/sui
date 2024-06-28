@@ -1873,6 +1873,9 @@ create
 add_for_current_epoch
 	public(package) fun
 	0x2::config
+remove_for_current_epoch
+	public(package) fun
+	0x2::config
 exists_with_type
 	public(package) fun
 	0x2::config
