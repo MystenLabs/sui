@@ -8,5 +8,5 @@ MoveStdlibChain = { id = "0x1" }
 
 AMM = { local = "../move/amm" }
 Examples = { local = "../move/examples" }
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "mainnet-v1.22.0" }
-MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "mainnet-v1.22.0" }
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+MoveStdlib = { local = "../../../crates/sui-framework/packages/move-stdlib" }
