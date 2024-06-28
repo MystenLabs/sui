@@ -115,8 +115,7 @@ module sui::deny_list {
         if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
         let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
         let setting_name = AddressKey(addr);
-        config::read_setting(object::id(per_type_config), setting_name, ctx)
-            .destroy_with_default(false)
+        config::read_setting(object::id(per_type_config), setting_name, ctx).destroy_or!(false)
     }
 
     public(package) fun v2_contains_next_epoch(
@@ -128,7 +127,7 @@ module sui::deny_list {
         if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
         let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
         let setting_name = AddressKey(addr);
-        per_type_config.read_newer_setting(setting_name).destroy_with_default(false)
+        per_type_config.read_newer_setting(setting_name).destroy_or!(false)
     }
 
     // public(package) fun v2_per_type_contains(
@@ -181,8 +180,7 @@ module sui::deny_list {
         if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
         let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
         let setting_name = GlobalPauseKey();
-        config::read_setting(object::id(per_type_config), setting_name, ctx)
-            .destroy_with_default(false)
+        config::read_setting(object::id(per_type_config), setting_name, ctx).destroy_or!(false)
     }
 
     public(package) fun v2_is_global_pause_enabled_next_epoch(
@@ -193,7 +191,7 @@ module sui::deny_list {
         if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
         let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
         let setting_name = GlobalPauseKey();
-        per_type_config.read_newer_setting(setting_name).destroy_with_default(false)
+        per_type_config.read_newer_setting(setting_name).destroy_or!(false)
     }
 
     // public(package) fun v2_per_type_is_global_pause_enabled(

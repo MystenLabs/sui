@@ -900,7 +900,7 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
     description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     icon_url: Option&lt;Url&gt;,
     allow_global_pause: bool,
-    ctx: &<b>mut</b> TxContext
+    ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     <b>let</b> (treasury_cap, metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency">create_currency</a>(
         witness,

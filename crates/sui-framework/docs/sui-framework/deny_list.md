@@ -432,8 +432,7 @@ meaningless to add them to the deny list.
     <b>if</b> (!<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(per_type_index, per_type_key)) <b>return</b> <b>false</b>;
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
-    <a href="../sui-framework/config.md#0x2_config_read_setting">config::read_setting</a>(<a href="../sui-framework/object.md#0x2_object_id">object::id</a>(per_type_config), setting_name, ctx)
-        .destroy_with_default(<b>false</b>)
+    <a href="../sui-framework/config.md#0x2_config_read_setting">config::read_setting</a>(<a href="../sui-framework/object.md#0x2_object_id">object::id</a>(per_type_config), setting_name, ctx).destroy_or!(<b>false</b>)
 }
 </code></pre>
 
@@ -465,7 +464,7 @@ meaningless to add them to the deny list.
     <b>if</b> (!<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(per_type_index, per_type_key)) <b>return</b> <b>false</b>;
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
-    per_type_config.read_newer_setting(setting_name).destroy_with_default(<b>false</b>)
+    per_type_config.read_newer_setting(setting_name).destroy_or!(<b>false</b>)
 }
 </code></pre>
 
@@ -571,8 +570,7 @@ meaningless to add them to the deny list.
     <b>if</b> (!<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(per_type_index, per_type_key)) <b>return</b> <b>false</b>;
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a>();
-    <a href="../sui-framework/config.md#0x2_config_read_setting">config::read_setting</a>(<a href="../sui-framework/object.md#0x2_object_id">object::id</a>(per_type_config), setting_name, ctx)
-        .destroy_with_default(<b>false</b>)
+    <a href="../sui-framework/config.md#0x2_config_read_setting">config::read_setting</a>(<a href="../sui-framework/object.md#0x2_object_id">object::id</a>(per_type_config), setting_name, ctx).destroy_or!(<b>false</b>)
 }
 </code></pre>
 
@@ -603,7 +601,7 @@ meaningless to add them to the deny list.
     <b>if</b> (!<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(per_type_index, per_type_key)) <b>return</b> <b>false</b>;
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a>();
-    per_type_config.read_newer_setting(setting_name).destroy_with_default(<b>false</b>)
+    per_type_config.read_newer_setting(setting_name).destroy_or!(<b>false</b>)
 }
 </code></pre>
 
