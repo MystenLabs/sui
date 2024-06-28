@@ -26,3 +26,22 @@ CREATE TABLE epochs
     -- of the epoch
     epoch_commitments               bytea
 );
+
+-- Table storing the protocol configs for each protocol version.
+-- Examples include gas schedule, transaction limits, etc.
+CREATE TABLE protocol_configs
+(
+    protocol_version                BIGINT       NOT NULL,
+    config_name                     TEXT         NOT NULL,
+    config_value                    TEXT,
+    PRIMARY KEY(protocol_version, config_name)
+);
+
+-- Table storing the feature flags for each protocol version.
+CREATE TABLE feature_flags
+(
+    protocol_version                BIGINT       NOT NULL,
+    flag_name                       TEXT         NOT NULL,
+    flag_value                      BOOLEAN      NOT NULL,
+    PRIMARY KEY(protocol_version, flag_name)
+);
