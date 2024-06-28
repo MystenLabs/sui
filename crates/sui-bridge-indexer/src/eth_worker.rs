@@ -17,7 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
 use sui_bridge::metrics::BridgeMetrics;
-use sui_bridge::types::EthLog;
+use sui_bridge::types::EthEvent;
 use sui_bridge::{eth_client::EthClient, eth_syncer::EthSyncer};
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -143,11 +143,11 @@ impl EthBridgeWorker {
     }
 }
 
-async fn process_eth_events(
+async fn process_eth_events<E: EthEvent>(
     provider: Arc<Provider<Http>>,
     pg_pool: PgPool,
     metrics: BridgeIndexerMetrics,
-    mut eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
+    mut eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<E>)>,
     finalized: bool,
 ) {
     let progress_gauge = if finalized {
@@ -156,23 +156,21 @@ async fn process_eth_events(
         metrics.last_committed_unfinalized_eth_block.clone()
     };
     while let Some((_, _, logs)) = eth_events_rx.recv().await {
+        // TODO: This for-loop can be optimzied to group tx / block info
+        // and reduce the queries issued to eth full node
         for log in logs.iter() {
-            let eth_bridge_event = EthBridgeEvent::try_from_eth_log(log);
+            let eth_bridge_event = EthBridgeEvent::try_from_log(log.log());
             if eth_bridge_event.is_none() {
                 continue;
             }
             metrics.total_eth_bridge_transactions.inc();
             let bridge_event = eth_bridge_event.unwrap();
-            let block_number = log.block_number;
-            let block = provider.get_block(log.block_number).await.unwrap().unwrap();
+            let block_number = log.block_number();
+            let block = provider.get_block(block_number).await.unwrap().unwrap();
             let timestamp = block.timestamp.as_u64() * 1000;
-            let transaction = provider
-                .get_transaction(log.tx_hash)
-                .await
-                .unwrap()
-                .unwrap();
+            let tx_hash = log.tx_hash();
+            let transaction = provider.get_transaction(tx_hash).await.unwrap().unwrap();
             let gas = transaction.gas;
-            let tx_hash = log.tx_hash;
 
             let transfer: TokenTransfer = match bridge_event {
                 EthBridgeEvent::EthSuiBridgeEvents(bridge_event) => match bridge_event {
