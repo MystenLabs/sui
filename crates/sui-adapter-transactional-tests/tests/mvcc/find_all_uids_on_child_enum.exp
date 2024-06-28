@@ -63,18 +63,18 @@ task 9 'programmable'. lines 243-244:
 mutated: object(_), object(2,9)
 gas summary: computation_cost: 500000, storage_cost: 2234400,  storage_rebate: 1233936, non_refundable_storage_fee: 12464
 
-task 10 'programmable'. lines 246-250:
+task 10 'programmable'. lines 246-251:
 mutated: object(_), object(2,9)
 gas summary: computation_cost: 500000, storage_cost: 2234400,  storage_rebate: 1233936, non_refundable_storage_fee: 12464
 
-task 11 'programmable'. lines 252-253:
+task 11 'programmable'. lines 252-255:
 Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 15, instruction: 12, function_name: Some("check_") }, 0) in command 0
 Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 15, instruction: 12, function_name: Some("check_") }, 0) in command 0
 
-task 12 'programmable'. lines 255-256:
+task 12 'programmable'. lines 256-259:
 Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
 Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
 
-task 13 'programmable'. lines 258-259:
+task 13 'programmable'. lines 260-261:
 Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 15, instruction: 20, function_name: Some("check_") }, 0) in command 0
 Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 15, instruction: 20, function_name: Some("check_") }, 0) in command 0
