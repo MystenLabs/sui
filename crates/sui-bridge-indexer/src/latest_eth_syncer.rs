@@ -15,7 +15,7 @@ use std::time::Instant;
 use sui_bridge::error::BridgeResult;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::retry_with_max_elapsed_time;
-use sui_bridge::types::EthLog;
+use sui_bridge::types::RawEthLog;
 use tokio::task::JoinHandle;
 use tokio::time::{self, Duration};
 use tracing::{error, info};
@@ -57,7 +57,7 @@ where
         metrics: BridgeIndexerMetrics,
     ) -> BridgeResult<(
         Vec<JoinHandle<()>>,
-        mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
+        mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<RawEthLog>)>,
     )> {
         let (eth_evnets_tx, eth_events_rx) = mysten_metrics::metered_channel::channel(
             ETH_EVENTS_CHANNEL_SIZE,
@@ -91,13 +91,14 @@ where
         contract_address: EthAddress,
         mut start_block: u64,
         provider: Arc<Provider<Http>>,
-        events_sender: mysten_metrics::metered_channel::Sender<(EthAddress, u64, Vec<EthLog>)>,
+        events_sender: mysten_metrics::metered_channel::Sender<(EthAddress, u64, Vec<RawEthLog>)>,
         eth_client: Arc<EthClient<P>>,
         metrics: BridgeIndexerMetrics,
     ) {
         tracing::info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
+        let mut interval = time::interval(BLOCK_QUERY_INTERVAL);
+        interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
-            let mut interval = time::interval(BLOCK_QUERY_INTERVAL);
             interval.tick().await;
             let Ok(Ok(new_block)) = retry_with_max_elapsed_time!(
                 provider.get_block_number(),
@@ -124,7 +125,7 @@ where
                 std::cmp::min(start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1, new_block);
             let timer = Instant::now();
             let Ok(Ok(events)) = retry_with_max_elapsed_time!(
-                eth_client.get_events_in_range(contract_address, start_block, end_block),
+                eth_client.get_raw_events_in_range(contract_address, start_block, end_block),
                 Duration::from_secs(600)
             ) else {
                 error!("Failed to get events from eth client after retry");
