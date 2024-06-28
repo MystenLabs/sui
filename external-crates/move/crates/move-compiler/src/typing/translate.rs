@@ -3865,7 +3865,7 @@ fn module_call(
     argloc: Loc,
     args: Vec<T::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
-    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
+    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt, None);
     let (call, ret_ty) = module_call_impl(context, loc, m, f, fty, argloc, args);
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
@@ -4287,7 +4287,7 @@ fn macro_module_call(
     argloc: Loc,
     nargs: Vec<N::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
-    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
+    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt, None);
     let args = nargs
         .into_iter()
         .map(|e| macro_expand::EvalStrategy::ByName(convert_macro_arg_to_block(context, e)))
