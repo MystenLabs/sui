@@ -349,8 +349,9 @@ export interface RegisterEnokiWalletsOptions extends EnokiClientConfig {
 export function registerEnokiWallets({
 	providers,
 	client,
-	windowFeatures,
+
 	network = 'mainnet',
+	windowFeatures = defaultWindowFeatures,
 	...config
 }: RegisterEnokiWalletsOptions) {
 	const walletsApi = getWallets();
@@ -396,4 +397,13 @@ export function registerEnokiWallets({
 
 export function isEnokiWallet(wallet: Wallet): wallet is EnokiWallet {
 	return !!wallet.id?.startsWith('enoki:');
+}
+
+export function defaultWindowFeatures() {
+	const width = 500;
+	const height = 800;
+	const left = (screen.width - width) / 2;
+	const top = (screen.height - height) / 4;
+
+	return `popup=1;toolbar=0;status=0;resizable=1,width=${width},height=${height},top=${top},left=${left}`;
 }

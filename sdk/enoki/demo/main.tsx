@@ -42,13 +42,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 									'705781974144-cltddr1ggjnuc3kaimtc881r2n5bderc.apps.googleusercontent.com',
 							},
 						},
-						windowFeatures: () => {
-							const width = 500;
-							const height = 800;
-							const left = (screen.width - width) / 2;
-							const top = (screen.height - height) / 4;
-							return `popup=1;toolbar=0;status=0;resizable=1,width=${width},height=${height},top=${top},left=${left}`;
-						},
 					}}
 				>
 					<WalletProvider autoConnect={true}>
