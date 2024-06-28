@@ -168,6 +168,8 @@ def extract_notes(commit, seen):
         notes = match.group(1)
 
     if pr in seen:
+        # a PR can be in multiple commits if it's from a rebase,
+        # so we only want to process it once
         return pr, result
 
     start = 0
