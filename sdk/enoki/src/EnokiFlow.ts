@@ -1,11 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiClient } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import type { Transaction } from '@mysten/sui/transactions';
-import { TransactionDataBuilder } from '@mysten/sui/transactions';
 import { fromB64, toB64 } from '@mysten/sui/utils';
 import type { ZkLoginSignatureInputs } from '@mysten/sui/zklogin';
 import { decodeJwt } from 'jose';
@@ -59,6 +56,9 @@ const createStorageKeys = (apiKey: string) => ({
 	SESSION: `@enoki/flow/session/${apiKey}`,
 });
 
+/**
+ * @deprecated Use `registerEnokiWallets` instead
+ */
 export class EnokiFlow {
 	#storageKeys: { STATE: string; SESSION: string };
 	#enokiClient: EnokiClient;
@@ -114,21 +114,6 @@ export class EnokiFlow {
 		extraParams?: Record<string, unknown>;
 	}) {
 		const ephemeralKeyPair = new Ed25519Keypair();
-		// const { epoch, epochDurationMs, epochStartTimestampMs } = await new SuiClient({
-		// 	url: getFullnodeUrl(input.network ?? 'mainnet'),
-		// }).getLatestSuiSystemState();
-		// const additionalEpochs = 2;
-
-		// const maxEpoch = Number(epoch) + additionalEpochs;
-
-		// const epochEstimatedEndTimestamp = Number(epochStartTimestampMs) + Number(epochDurationMs);
-
-		// const estimatedExpiration =
-		// 	Number(epochEstimatedEndTimestamp) + additionalEpochs * Number(epochDurationMs);
-
-		// const randomness = generateRandomness();
-
-		// const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
 		const { nonce, randomness, maxEpoch, estimatedExpiration } =
 			await this.#enokiClient.createZkLoginNonce({
 				network: input.network,
@@ -330,105 +315,5 @@ export class EnokiFlow {
 			proof: zkp.proof,
 			ephemeralKeypair: Ed25519Keypair.fromSecretKey(fromB64(zkp.ephemeralKeyPair)),
 		});
-	}
-
-	async sponsorTransaction({
-		network,
-		transaction,
-		client,
-	}: {
-		network?: EnokiNetwork;
-		transaction: Transaction;
-		client: SuiClient;
-	}) {
-		const session = await this.getSession();
-
-		if (!session || !session.jwt) {
-			throw new Error('Missing required data for sponsorship.');
-		}
-
-		const transactionKindBytes = await transaction.build({
-			onlyTransactionKind: true,
-			client,
-		});
-
-		return await this.#enokiClient.createSponsoredTransaction({
-			jwt: session.jwt,
-			network,
-			transactionKindBytes: toB64(transactionKindBytes),
-		});
-	}
-
-	async executeTransaction({
-		network,
-		bytes,
-		digest,
-		client,
-	}: {
-		network?: EnokiNetwork;
-		bytes: string;
-		digest: string;
-		client: SuiClient;
-	}) {
-		const keypair = await this.getKeypair({ network });
-		const userSignature = await keypair.signTransaction(fromB64(bytes));
-
-		await this.#enokiClient.executeSponsoredTransaction({
-			digest,
-			signature: userSignature.signature,
-		});
-
-		// TODO: Should the parent just do this?
-		await client.waitForTransaction({
-			digest,
-			options: { showRawEffects: true },
-		});
-
-		return {
-			digest,
-			signature: userSignature.signature,
-			bytes,
-		};
-	}
-
-	async executeSignedTransaction({
-		bytes,
-		signature,
-		client,
-	}: {
-		network?: EnokiNetwork;
-		signature: string;
-		bytes: string;
-		client: SuiClient;
-	}) {
-		const digest = TransactionDataBuilder.getDigestFromBytes(fromB64(bytes));
-		await this.#enokiClient.executeSponsoredTransaction({
-			digest,
-			signature,
-		});
-
-		// TODO: Should the parent just do this?
-		await client.waitForTransaction({
-			digest,
-		});
-
-		return { digest, bytes, signature };
-	}
-
-	async sponsorAndExecuteTransaction({
-		network,
-		transaction,
-		client,
-	}: {
-		network?: EnokiNetwork;
-		transaction: Transaction;
-		client: SuiClient;
-	}) {
-		const { bytes, digest } = await this.sponsorTransaction({
-			network,
-			transaction,
-			client,
-		});
-		return await this.executeTransaction({ network, bytes, digest, client });
 	}
 }

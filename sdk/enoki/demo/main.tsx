@@ -28,8 +28,19 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 					useSuiClientContext={useSuiClientContext as never}
 					config={{
 						apiKey: 'enoki_public_b995248de4faffd13864f12cd8539a8d',
-						clientIds: {
-							google: '705781974144-cltddr1ggjnuc3kaimtc881r2n5bderc.apps.googleusercontent.com',
+						providers: {
+							google: {
+								clientId:
+									'705781974144-cltddr1ggjnuc3kaimtc881r2n5bderc.apps.googleusercontent.com',
+							},
+							facebook: {
+								clientId:
+									'705781974144-cltddr1ggjnuc3kaimtc881r2n5bderc.apps.googleusercontent.com',
+							},
+							twitch: {
+								clientId:
+									'705781974144-cltddr1ggjnuc3kaimtc881r2n5bderc.apps.googleusercontent.com',
+							},
 						},
 					}}
 				>

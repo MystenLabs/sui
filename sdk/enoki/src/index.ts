@@ -11,3 +11,8 @@ export {
 } from './stores.js';
 export { createDefaultEncryption, type Encryption } from './encryption.js';
 export { EnokiKeypair, EnokiPublicKey } from './EnokiKeypair.js';
+export {
+	isEnokiWallet,
+	registerEnokiWallets,
+	type RegisterEnokiWalletsOptions,
+} from './wallet/index.js';

@@ -16,11 +16,13 @@ export interface EnokiFlowProviderProps extends EnokiFlowConfig {
 	children: ReactNode;
 }
 
+/** @deprecated use EnokiWalletProvider instead  */
 export function EnokiFlowProvider({ children, ...config }: EnokiFlowProviderProps) {
 	const [enokiFlow] = useState(() => new EnokiFlow(config));
 	return <EnokiFlowContext.Provider value={enokiFlow}>{children}</EnokiFlowContext.Provider>;
 }
 
+/** @deprecated use EnokiFlowProvider and dapp-kit wallet hooks instead */
 export function useEnokiFlow() {
 	const context = useContext(EnokiFlowContext);
 	if (!context) {
@@ -29,16 +31,19 @@ export function useEnokiFlow() {
 	return context;
 }
 
+/** @deprecated use EnokiFlowProvider and dapp-kit wallet hooks instead */
 export function useZkLogin() {
 	const flow = useEnokiFlow();
 	return useStore(flow.$zkLoginState);
 }
 
+/** @deprecated use EnokiFlowProvider and dapp-kit wallet hooks instead */
 export function useZkLoginSession() {
 	const flow = useEnokiFlow();
 	return useStore(flow.$zkLoginSession).value;
 }
 
+/** @deprecated use EnokiFlowProvider and dapp-kit wallet hooks instead */
 export function useAuthCallback() {
 	const flow = useEnokiFlow();
 	const [state, setState] = useState<string | null>(null);
@@ -73,7 +78,6 @@ export function useAuthCallback() {
 export const EnokiWalletContext = createContext<{
 	wallets: ReturnType<typeof registerEnokiWallets>['wallets'];
 	client: SuiClient;
-	flow: EnokiFlow;
 } | null>(null);
 
 export function EnokiWalletProvider({
@@ -87,7 +91,7 @@ export function EnokiWalletProvider({
 }) {
 	const { client, network } = useSuiClientContext();
 
-	const { wallets, unregister, flow } = useMemo(
+	const { wallets, unregister } = useMemo(
 		() => registerEnokiWallets({ ...config, client, network }),
 		[client, config, network],
 	);
@@ -99,7 +103,7 @@ export function EnokiWalletProvider({
 	}, [unregister]);
 
 	return (
-		<EnokiWalletContext.Provider value={{ wallets, flow, client }}>
+		<EnokiWalletContext.Provider value={{ wallets, client }}>
 			{children}
 		</EnokiWalletContext.Provider>
 	);
@@ -110,9 +114,5 @@ export function useEnokiWallets() {
 	if (!context) {
 		throw new Error('Missing `EnokiWalletContext` provider');
 	}
-	const { flow, wallets } = context;
-	return {
-		wallets,
-		flow,
-	};
+	return context;
 }

@@ -11,7 +11,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { useState } from 'react';
 
 import { useEnokiWallets } from '../src/react.js';
-import { EnokiWallet } from '../src/wallet/index.js';
+import { isEnokiWallet } from '../src/wallet/index.js';
 
 export function App() {
 	const { mutate: connect } = useConnectWallet();
@@ -23,14 +23,14 @@ export function App() {
 
 	return (
 		<div>
-			<ConnectButton walletFilter={(wallet) => !(wallet instanceof EnokiWallet)} />
+			<ConnectButton walletFilter={(wallet) => !isEnokiWallet(wallet)} />
 			<button
 				disabled={!!currentAccount}
 				onClick={() => {
 					connect({ wallet: wallets.google! });
 				}}
 			>
-				{currentAccount?.address ?? 'Login with Google'}
+				{currentAccount?.address ?? 'Sign in with Google'}
 			</button>
 
 			{currentAccount && (
