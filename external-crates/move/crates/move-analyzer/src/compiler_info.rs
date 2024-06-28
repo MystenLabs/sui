@@ -89,14 +89,11 @@ impl CompilerInfo {
         })
     }
 
-    pub fn inside_guard(&self, fhash: FileHash, loc: &Loc) -> bool {
+    pub fn inside_guard(&self, fhash: FileHash, loc: &Loc, gloc: &Loc) -> bool {
         self.guards
             .get(&fhash)
-            .and_then(|guard_locs| {
-                guard_locs
-                    .iter()
-                    .find_map(|gloc| if gloc.contains(loc) { Some(()) } else { None })
-            })
+            .and_then(|guard_locs| guard_locs.get(gloc))
             .is_some()
+            && gloc.contains(loc)
     }
 }

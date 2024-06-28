@@ -379,6 +379,28 @@
           "use_ndx": 6
         }
       }
+    ],
+    // tests if a nested pattern var is displayed correctly (it's inside outer guard
+    // but should only be displayed as immutable reference when inside inner guard)
+    "nested_guard.move": [
+      {
+        "UseDefTest": {
+          "use_line": 3,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 3,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 3,
+          "use_ndx": 4
+        }
+      }
     ]
   }
 }

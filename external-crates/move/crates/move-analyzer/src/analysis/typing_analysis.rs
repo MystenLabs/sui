@@ -172,7 +172,7 @@ impl TypingAnalysisContext<'_> {
         def_type: N::Type,
         with_let: bool,
         mutable: bool,
-        arm_binder: bool,
+        guard_loc: Option<Loc>,
     ) {
         if self.traverse_only {
             return;
@@ -208,7 +208,7 @@ impl TypingAnalysisContext<'_> {
         );
         self.def_info.insert(
             *loc,
-            DefInfo::Local(*name, def_type, with_let, mutable, arm_binder),
+            DefInfo::Local(*name, def_type, with_let, mutable, guard_loc),
         );
     }
 
@@ -584,7 +584,7 @@ impl TypingAnalysisContext<'_> {
                 match_pat.ty.clone(),
                 false,
                 matches!(mut_, E::Mutability::Mut(_)),
-                false,
+                None,
             ),
             UA::Or(pat1, pat2) => {
                 self.process_match_patterm(pat1);
@@ -597,7 +597,7 @@ impl TypingAnalysisContext<'_> {
                     match_pat.ty.clone(),
                     false,
                     false,
-                    false,
+                    None,
                 );
                 self.process_match_patterm(pat);
             }
@@ -607,18 +607,18 @@ impl TypingAnalysisContext<'_> {
 
     fn process_match_arm(&mut self, sp!(_, arm): &mut T::MatchArm) {
         self.process_match_patterm(&mut arm.pattern);
+        let guard_loc = arm.guard.as_ref().map(|exp| exp.exp.loc);
         arm.binders.iter_mut().for_each(|(var, ty)| {
-            self.add_local_def(&var.loc, &var.value.name, ty.clone(), false, false, true);
+            self.add_local_def(
+                &var.loc,
+                &var.value.name,
+                ty.clone(),
+                false,
+                false,
+                guard_loc.clone(),
+            );
         });
 
-        // Enum guard variables are re-defined to reflect the fact that they have different
-        // type (immutable reference) than variables in patterns and in RHS of the match arm.
-        // These re-definitions share the same location as the original definitions. At the same
-        // time, symbolicator stores information to be displayed on hover (e.g. type) in a map
-        // keyed on the definition's location. In order to have two definitions with the same
-        // location have two different type, we have to use a trick when one location is "reverted",
-        // making it possible to have two entries in the map for the same location (the location
-        // has to be "reverted" back when serving go-to-def to support jump to the right location).
         if let Some(exp) = &mut arm.guard {
             self.visit_exp(exp);
             // Enum guard variables have different type (immutable reference) than variables in
@@ -626,10 +626,11 @@ impl TypingAnalysisContext<'_> {
             // the same definition, stored in the IDE in a map key-ed on the definition's location.
             // In order to display (on hover) two different types for these variables, we do
             // the following:
-            // - remember which `DefInfo::LocalDef`s represent match arm definition (above)
+            // - remember which `DefInfo::LocalDef`s represent match arm definition (above) and what
+            //   is the position of their arm's guard
             // - remember which region represents a guard expression (below)
-            // - when processing on-hover, we see if for a give use the definition is a
-            //   match arm definition and if this use is inside guard block; if both these
+            // - when processing on-hover, we see if for a given use the definition is a
+            //   match arm definition and if this use is inside a correct guard block; if both these
             //   conditions hold, we change the displayed info for this variable to reflect
             //   it being an immutable reference
             let guard_loc = exp.exp.loc;
@@ -874,7 +875,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 ptype.clone(),
                 false, /* with_let */
                 matches!(mutability, E::Mutability::Mut(_)),
-                false,
+                None,
             );
         }
 
@@ -913,7 +914,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                                 *ty.clone(),
                                 !for_unpack, // (only for simple definition, e.g., `let t = 1;``)
                                 mut_.is_some_and(|m| matches!(m, E::Mutability::Mut(_))),
-                                false,
+                                None,
                             );
                         }
                         LValueKind::Assign => self.add_local_use_def(&var.value.name, &var.loc),

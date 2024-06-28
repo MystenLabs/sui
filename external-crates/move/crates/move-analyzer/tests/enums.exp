@@ -81,6 +81,31 @@ TypeDef: no info
 On Hover:
 mut_var: &mut u64
 
+== nested_guard.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 2
+Use: 'nested_var', start: 30, end: 40
+Def: 'nested_var', line: 3, def char: 30
+TypeDef: no info
+On Hover:
+nested_var: bool
+
+-- test 1 -------------------
+use line: 3, use_ndx: 3
+Use: 'nested_var', start: 47, end: 57
+Def: 'nested_var', line: 3, def char: 30
+TypeDef: no info
+On Hover:
+nested_var: &bool
+
+-- test 2 -------------------
+use line: 3, use_ndx: 4
+Use: 'nested_var', start: 62, end: 72
+Def: 'nested_var', line: 3, def char: 30
+TypeDef: no info
+On Hover:
+nested_var: bool
+
 == nested_match.move ========================================================
 -- test 0 -------------------
 use line: 14, use_ndx: 2

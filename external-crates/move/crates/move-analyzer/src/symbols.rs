@@ -251,8 +251,9 @@ pub enum DefInfo {
         bool,
         /// Should displayed definition be preceded by `mut`?
         bool,
-        /// Is it an enum arm's binder variable definition
-        bool,
+        /// Location of enum's guard expression (if any) in case
+        /// this local definition represents match pattern's variable
+        Option<Loc>,
     ),
     Const(
         /// Defining module
@@ -3029,12 +3030,12 @@ pub fn maybe_convert_for_guard(
     position: &Position,
     symbols: &Symbols,
 ) -> Option<DefInfo> {
-    let DefInfo::Local(name, ty, is_let, is_mut, arm_binder) = def_info else {
+    let DefInfo::Local(name, ty, is_let, is_mut, guard_loc) = def_info else {
         return None;
     };
-    if !arm_binder {
+    let Some(gloc) = guard_loc else {
         return None;
-    }
+    };
     let Some(fhash) = symbols.file_hash(use_fpath) else {
         return None;
     };
@@ -3042,12 +3043,12 @@ pub fn maybe_convert_for_guard(
         return None;
     };
     let loc = Loc::new(fhash, byte_idx, byte_idx);
-    if symbols.compiler_info.inside_guard(fhash, &loc) {
+    if symbols.compiler_info.inside_guard(fhash, &loc, gloc) {
         let new_ty = sp(
             ty.loc,
             Type_::Ref(false, Box::new(sp(ty.loc, ty.value.base_type_()))),
         );
-        return Some(DefInfo::Local(*name, new_ty, *is_let, *is_mut, *arm_binder));
+        return Some(DefInfo::Local(*name, new_ty, *is_let, *is_mut, *guard_loc));
     }
     None
 }
