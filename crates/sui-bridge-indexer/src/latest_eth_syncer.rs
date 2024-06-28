@@ -96,8 +96,9 @@ where
         metrics: BridgeIndexerMetrics,
     ) {
         tracing::info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
+        let mut interval = time::interval(BLOCK_QUERY_INTERVAL);
+        interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
-            let mut interval = time::interval(BLOCK_QUERY_INTERVAL);
             interval.tick().await;
             let Ok(Ok(new_block)) = retry_with_max_elapsed_time!(
                 provider.get_block_number(),
