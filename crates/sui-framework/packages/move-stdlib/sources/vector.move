@@ -184,15 +184,15 @@ module std::vector {
         v.length().do!(|i| $f(&v[i]))
     }
 
-    /// Perform an action `f` on each element of the vector `v`. The function `f` takes a mutable
-    /// reference.
+    /// Perform an action `f` on each element of the vector `v`.
+    /// The function `f` takes a mutable reference to the element.
     public macro fun do_mut<$T>($v: &mut vector<$T>, $f: |&mut $T|) {
         let v = $v;
         v.length().do!(|i| $f(&mut v[i]))
     }
 
     /// Map the vector `v` to a new vector by applying the function `f` to each element.
-    /// Preserve the order of elements in the vector, first is called first.
+    /// Preserves the order of elements in the vector, first is called first.
     public macro fun map<$T, $U>($v: vector<$T>, $f: |$T| -> $U): vector<$U> {
         let v = $v;
         let mut r = vector[];
@@ -201,7 +201,7 @@ module std::vector {
     }
 
     /// Map the vector `v` to a new vector by applying the function `f` to each element.
-    /// Preserve the order of elements in the vector, first is called first.
+    /// Preserves the order of elements in the vector, first is called first.
     public macro fun map_ref<$T, $U>($v: &vector<$T>, $f: |&$T| -> $U): vector<$U> {
         let v = $v;
         let mut r = vector[];
@@ -239,29 +239,22 @@ module std::vector {
     }
 
     /// Whether any element in the vector `v` satisfies the predicate `f`.
-    /// Does not preserve the order of elements in the vector.
+    /// If the vector is empty, returns `false`.
     public macro fun any<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
         let v = $v;
-        let mut i = 0;
-        let len = v.length();
-        while (i < len) {
-            if ($f(&v[i])) return true;
-            i = i + 1;
-        };
-        false
+        'a: {
+            v.do_ref!(|e| if ($f(e)) return 'a true);
+            false
+        }
     }
 
     /// Whether all elements in the vector `v` satisfy the predicate `f`.
     /// If the vector is empty, returns `true`.
-    /// Does not preserve the order of elements in the vector.
     public macro fun all<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
         let v = $v;
-        let mut i = 0;
-        let len = v.length();
-        while (i < len) {
-            if (!$f(&v[i])) return false;
-            i = i + 1;
-        };
-        true
+        'a: {
+            v.do_ref!(|e| if (!$f(e)) return 'a false);
+            true
+        }
     }
 }
