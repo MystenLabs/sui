@@ -1432,6 +1432,12 @@ peel_bool
 peel_u8
 	public fun
 	0x2::bcs
+peel_u16
+	public fun
+	0x2::bcs
+peel_u32
+	public fun
+	0x2::bcs
 peel_u64
 	public fun
 	0x2::bcs
@@ -1456,10 +1462,19 @@ peel_vec_u8
 peel_vec_vec_u8
 	public fun
 	0x2::bcs
+peel_vec_u16
+	public fun
+	0x2::bcs
+peel_vec_u32
+	public fun
+	0x2::bcs
 peel_vec_u64
 	public fun
 	0x2::bcs
 peel_vec_u128
+	public fun
+	0x2::bcs
+peel_vec_u256
 	public fun
 	0x2::bcs
 peel_option_address
@@ -1471,10 +1486,19 @@ peel_option_bool
 peel_option_u8
 	public fun
 	0x2::bcs
+peel_option_u16
+	public fun
+	0x2::bcs
+peel_option_u32
+	public fun
+	0x2::bcs
 peel_option_u64
 	public fun
 	0x2::bcs
 peel_option_u128
+	public fun
+	0x2::bcs
+peel_option_u256
 	public fun
 	0x2::bcs
 Element
