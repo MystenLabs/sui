@@ -80,4 +80,9 @@ module std::string_tests {
         s.insert(1, b"xy".to_string());
         assert!(s == b"axybcd".to_string())
     }
+
+    #[test]
+    fun test_into_bytes() {
+        assert!(b"abcd" == b"abcd".to_string().into_bytes())
+    }
 }
