@@ -916,9 +916,12 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn state_accumulator_v2_enabled(&self) -> bool {
-        self.epoch_start_configuration
-            .flags()
-            .contains(&EpochFlag::StateAccumulatorV2Enabled)
+        let flag = match self.get_chain_identifier().chain() {
+            Chain::Unknown | Chain::Testnet => EpochFlag::StateAccumulatorV2EnabledTestnet,
+            Chain::Mainnet => EpochFlag::StateAccumulatorV2EnabledMainnet,
+        };
+
+        self.epoch_start_configuration.flags().contains(&flag)
     }
 
     /// Returns `&Arc<EpochStartConfiguration>`
