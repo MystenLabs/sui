@@ -264,6 +264,12 @@
       },
       {
         "UseDefTest": {
+          "use_line": 4,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
           "use_line": 5,
           "use_ndx": 0
         }

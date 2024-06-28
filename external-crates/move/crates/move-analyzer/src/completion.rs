@@ -544,7 +544,7 @@ pub fn on_completion_request(
             }
         }
         None => {
-            eprintln!("failed completion for {:?} (package root not foune)", path);
+            eprintln!("failed completion for {:?} (package root not found)", path);
             vec![]
         }
     };

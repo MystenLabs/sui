@@ -2430,8 +2430,8 @@ impl<'a> ParsingSymbolicator<'a> {
             }
             MP::Name(_, chain) => self.chain_symbols(chain),
             MP::Or(m1, m2) => {
-                self.match_pattern_symbols(m1);
                 self.match_pattern_symbols(m2);
+                self.match_pattern_symbols(m1);
             }
             MP::At(_, m) => self.match_pattern_symbols(m),
             MP::Literal(_) => (),
@@ -3033,17 +3033,11 @@ pub fn maybe_convert_for_guard(
     let DefInfo::Local(name, ty, is_let, is_mut, guard_loc) = def_info else {
         return None;
     };
-    let Some(gloc) = guard_loc else {
-        return None;
-    };
-    let Some(fhash) = symbols.file_hash(use_fpath) else {
-        return None;
-    };
-    let Some(byte_idx) = lsp_position_to_byte_index(&symbols.files, fhash, position) else {
-        return None;
-    };
+    let gloc = (*guard_loc)?;
+    let fhash = symbols.file_hash(use_fpath)?;
+    let byte_idx = lsp_position_to_byte_index(&symbols.files, fhash, position)?;
     let loc = Loc::new(fhash, byte_idx, byte_idx);
-    if symbols.compiler_info.inside_guard(fhash, &loc, gloc) {
+    if symbols.compiler_info.inside_guard(fhash, &loc, &gloc) {
         let new_ty = sp(
             ty.loc,
             Type_::Ref(false, Box::new(sp(ty.loc, ty.value.base_type_()))),

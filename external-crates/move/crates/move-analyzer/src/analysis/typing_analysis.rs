@@ -63,12 +63,7 @@ impl TypingAnalysisContext<'_> {
     /// Returns the `lsp_types::Position` start for a location, but may fail if we didn't see the
     /// definition already.
     fn file_start_position_opt(&self, loc: &Loc) -> Option<Position> {
-        self.files
-            .file_start_position_opt(loc)
-            .map(|p| lsp_types::Position {
-                line: p.position.line_offset() as u32,
-                character: p.position.column_offset() as u32,
-            })
+        self.files.file_start_position_opt(loc).map(|p| p.into())
     }
 
     /// Returns the `lsp_types::Position` start for a location, but may fail if we didn't see the
@@ -578,29 +573,16 @@ impl TypingAnalysisContext<'_> {
                 }
             }
             UA::Constant(mod_ident, name) => self.add_const_use_def(mod_ident, name),
-            UA::Binder(mut_, var) => self.add_local_def(
-                &var.loc,
-                &var.value.name,
-                match_pat.ty.clone(),
-                false,
-                matches!(mut_, E::Mutability::Mut(_)),
-                None,
-            ),
             UA::Or(pat1, pat2) => {
                 self.process_match_patterm(pat1);
                 self.process_match_patterm(pat2);
             }
-            UA::At(var, pat) => {
-                self.add_local_def(
-                    &var.loc,
-                    &var.value.name,
-                    match_pat.ty.clone(),
-                    false,
-                    false,
-                    None,
-                );
-                self.process_match_patterm(pat);
-            }
+            // variable definition in `At` is added when `T::MatchArm_.binders`
+            // is processed in `process_match_arm`
+            UA::At(_, pat) => self.process_match_patterm(pat),
+            // variable definition in `Binder`` is added when `T::MatchArm_.binders`
+            // is processed in `process_match_arm`
+            UA::Binder(_, _) => (),
             UA::Literal(_) | UA::Wildcard | UA::ErrorPat => (),
         }
     }

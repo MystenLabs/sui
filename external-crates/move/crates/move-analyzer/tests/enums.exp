@@ -9,13 +9,21 @@ bound_var: u64
 
 -- test 1 -------------------
 use line: 4, use_ndx: 1
-Use: 'bound_var', start: 36, end: 45
+Use: 'bound_var', start: 38, end: 47
+Def: 'bound_var', line: 4, def char: 12
+TypeDef: no info
+On Hover:
+bound_var: &u64
+
+-- test 2 -------------------
+use line: 4, use_ndx: 2
+Use: 'bound_var', start: 57, end: 66
 Def: 'bound_var', line: 4, def char: 12
 TypeDef: no info
 On Hover:
 bound_var: u64
 
--- test 2 -------------------
+-- test 3 -------------------
 use line: 5, use_ndx: 0
 Use: 'another_var', start: 12, end: 23
 Def: 'another_var', line: 5, def char: 12
@@ -23,7 +31,7 @@ TypeDef: no info
 On Hover:
 another_var: u64
 
--- test 3 -------------------
+-- test 4 -------------------
 use line: 5, use_ndx: 1
 Use: 'another_var', start: 27, end: 38
 Def: 'another_var', line: 5, def char: 12
