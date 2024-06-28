@@ -158,4 +158,103 @@ module std::vector {
         v.swap(i, last_idx);
         v.pop_back()
     }
+
+    // === Macros ===
+
+    /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
+    /// Does not preserve the order of elements in the vector (starts from the end of the vector).
+    public macro fun destroy<$T>($v: vector<$T>, $f: |$T|) {
+        let mut v = $v;
+        while (!v.is_empty()) $f(v.pop_back());
+        v.destroy_empty();
+    }
+
+    /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
+    /// Preserves the order of elements in the vector.
+    public macro fun do<$T>($v: vector<$T>, $f: |$T|) {
+        let mut v = $v;
+        v.reverse();
+        while (!v.is_empty()) $f(v.pop_back());
+        v.destroy_empty();
+    }
+
+    /// Perform an action `f` on each element of the vector `v`. The vector is not modified.
+    public macro fun do_ref<$T>($v: &vector<$T>, $f: |&$T|) {
+        let v = $v;
+        v.length().do!(|i| $f(&v[i]))
+    }
+
+    /// Perform an action `f` on each element of the vector `v`.
+    /// The function `f` takes a mutable reference to the element.
+    public macro fun do_mut<$T>($v: &mut vector<$T>, $f: |&mut $T|) {
+        let v = $v;
+        v.length().do!(|i| $f(&mut v[i]))
+    }
+
+    /// Map the vector `v` to a new vector by applying the function `f` to each element.
+    /// Preserves the order of elements in the vector, first is called first.
+    public macro fun map<$T, $U>($v: vector<$T>, $f: |$T| -> $U): vector<$U> {
+        let v = $v;
+        let mut r = vector[];
+        v.do!(|e| r.push_back($f(e)));
+        r
+    }
+
+    /// Map the vector `v` to a new vector by applying the function `f` to each element.
+    /// Preserves the order of elements in the vector, first is called first.
+    public macro fun map_ref<$T, $U>($v: &vector<$T>, $f: |&$T| -> $U): vector<$U> {
+        let v = $v;
+        let mut r = vector[];
+        v.do_ref!(|e| r.push_back($f(e)));
+        r
+    }
+
+    /// Filter the vector `v` by applying the function `f` to each element.
+    /// Return a new vector containing only the elements for which `f` returns `true`.
+    public macro fun filter<$T: drop>($v: vector<$T>, $f: |&$T| -> bool): vector<$T> {
+        let v = $v;
+        let mut r = vector[];
+        v.do!(|e| if ($f(&e)) r.push_back(e));
+        r
+    }
+
+    /// Split the vector `v` into two vectors by applying the function `f` to each element.
+    /// Return a tuple containing two vectors: the first containing the elements for which `f` returns `true`,
+    /// and the second containing the elements for which `f` returns `false`.
+    public macro fun partition<$T>($v: vector<$T>, $f: |&$T| -> bool): (vector<$T>, vector<$T>) {
+        let v = $v;
+        let mut r1 = vector[];
+        let mut r2 = vector[];
+        v.do!(|e| if ($f(&e)) r1.push_back(e) else r2.push_back(e));
+        (r1, r2)
+    }
+
+    /// Reduce the vector `v` to a single value by applying the function `f` to each element.
+    /// Similar to `fold_left` in Rust and `reduce` in Python and JavaScript.
+    public macro fun fold<$T, $Acc>($v: vector<$T>, $init: $Acc, $f: |$Acc, $T| -> $Acc): $Acc {
+        let v = $v;
+        let mut acc = $init;
+        v.do!(|e| acc = $f(acc, e));
+        acc
+    }
+
+    /// Whether any element in the vector `v` satisfies the predicate `f`.
+    /// If the vector is empty, returns `false`.
+    public macro fun any<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
+        let v = $v;
+        'any: {
+            v.do_ref!(|e| if ($f(e)) return 'any true);
+            false
+        }
+    }
+
+    /// Whether all elements in the vector `v` satisfy the predicate `f`.
+    /// If the vector is empty, returns `true`.
+    public macro fun all<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
+        let v = $v;
+        'all: {
+            v.do_ref!(|e| if (!$f(e)) return 'all false);
+            true
+        }
+    }
 }
