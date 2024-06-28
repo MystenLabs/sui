@@ -28,45 +28,22 @@ To follow along with this guide, set your new Move package to `counter`.
 
 ### `Counter` struct
 
-```move
-public struct Counter has key {
-  id: UID,
-  owner: address,
-  value: u64
-}
-```
+{@inject: examples/distributed-counter/counter/sources/counter.move#struct=Counter noComments}
+
 - The `Counter` type stores the address of its `owner`, its current `value`, and its own `id`.
 
 ### Creating `Counter`
 
-```move
-public fun create(ctx: &mut TxContext) {
-  transfer::share_object(Counter {
-    id: object::new(ctx),
-    owner: ctx.sender(),
-    value: 0
-  })
-}
-```
+{@inject: examples/distributed-counter/counter/sources/counter.move#fun=create noComments}
 
 In the `create` function, a new `Counter` object is created and [shared](../../../concepts/object-ownership/shared.mdx). 
 
 ### Incrementing and Reseting `Counter`
 
-```move 
-public fun increment(counter: &mut Counter) {
-  counter.value = counter.value + 1;
-}
-```
-
+{@inject: examples/distributed-counter/counter/sources/counter.move#fun=increment noComments}
 The `increment` function accepts a mutable reference to any shared `Counter` object and will increments its `value` field.
 
-```move 
-public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
-  assert!(counter.owner == ctx.sender(), 0);
-  counter.value = value;
-}
-```
+{@inject: examples/distributed-counter/counter/sources/counter.move#fun=set_value noComments}
 
 The `set_value` function accepts a mutable reference to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. This function can only be ran by the `Counter`'s `owner`.
 
@@ -80,36 +57,7 @@ Learn more about taking [object references as input](../../../concepts/sui-move-
 
 The final module should look like this
 
-```move
-module counter::counter {
-  /// A shared counter.
-  public struct Counter has key {
-    id: UID,
-    owner: address,
-    value: u64
-  }
-
-  /// Create and share a Counter object.
-  public fun create(ctx: &mut TxContext) {
-    transfer::share_object(Counter {
-      id: object::new(ctx),
-      owner: ctx.sender(),
-      value: 0
-    })
-  }
-
-  /// Increment a counter by 1.
-  public fun increment(counter: &mut Counter) {
-    counter.value = counter.value + 1;
-  }
-
-  /// Set value (only runnable by the Counter owner)
-  public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
-    assert!(counter.owner == ctx.sender(), 0);
-    counter.value = value;
-  }
-}
-```
+{@inject: examples/distributed-counter/counter/sources/counter.move noComments}
 
 ### Deployment {#deployment}
 
@@ -340,10 +288,7 @@ yarn create @mysten/dapp --template react-client-dapp
 
 Add the `packageId` value you saved from [deploying your package](#deployment) to a new `src/constants.ts` file in your project:
 
-```typescript
-export const COUNTER_PACKAGE_ID =
-  "0x7b6a8f5782e57cd948dc75ee098b73046a79282183d51eefb83d31ec95c312aa";
-```
+{@inject: examples/distributed-counter/counter-app/src/constants.ts noComments}
 
 ### Creating `Counter`
 
@@ -476,68 +421,8 @@ export function CreateCounter(props: { onCreated: (id: string) => void }) {
 
 Now that your users can create counters, you need a way to route to them. Routing in a React app can be complex, but this example keeps it basic. Set up your `src/App.tsx` file so that you render the `CreateCounter` component by default, and if you want to display a specific counter you can put its ID into the hash portion of the URL.
 
-```tsx
-import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
-import { isValidSuiObjectId } from '@mysten/sui/utils';
-import { useState } from 'react';
-import { Box, Container, Flex, Heading } from "@radix-ui/themes";
-import { CreateCounter } from './CreateCounter';
-import { Counter } from './Counter';
 
-
-export default function App() {
-  const currentAccount = useCurrentAccount();
-  const [counterId, setCounter] = useState(() => {
-    const hash = window.location.hash.slice(1);
-    return isValidSuiObjectId(hash) ? hash : null;
-  });
-
-  return (
-    <>
-      <Flex
-        position="sticky"
-        px="4"
-        py="2"
-        justify="between"
-        style={{
-          borderBottom: "1px solid var(--gray-a2)",
-        }}
-      >
-        <Box>
-          <Heading>dApp Starter Template</Heading>
-        </Box>
-
-        <Box>
-          <ConnectButton />
-        </Box>
-      </Flex>
-      <Container>
-        <Container
-          mt="5"
-          pt="2"
-          px="4"
-          style={{ background: "var(--gray-a2)", minHeight: 500 }}
-        >
-          {currentAccount ? (
-            counterId ? (
-              <Counter id={counterId} />
-            ) : (
-              <CreateCounter
-                onCreated={(id) => {
-                  window.location.hash = id;
-                  setCounter(id);
-                }}
-              />
-            )
-          ) : (
-            <Heading>Please connect your wallet</Heading>
-          )}
-        </Container>
-      </Container>
-    </>
-  );
-}
-```
+{@inject: examples/distributed-counter/counter-app/src/App.tsx noComments}
 
 This sets up your app to read the hash from the URL, and get the counter's ID if the hash is a valid object ID. Then, it either renders a `Counter` (which you define in the next step) if you have a counter ID, or the `CreateCounter` button from the previous step. When a counter is created, you update the URL, and set the counter ID.
 
