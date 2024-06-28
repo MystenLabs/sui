@@ -370,7 +370,7 @@ must be at a valid utf8 char boundary.
     <b>let</b> bytes = &s.bytes;
     <b>assert</b>!(
         at &lt;= bytes.<a href="../move-stdlib/string.md#0x1_string_length">length</a>() && <a href="../move-stdlib/string.md#0x1_string_internal_is_char_boundary">internal_is_char_boundary</a>(bytes, at),
-        <a href="../move-stdlib/string.md#0x1_string_EInvalidIndex">EInvalidIndex</a>
+        <a href="../move-stdlib/string.md#0x1_string_EInvalidIndex">EInvalidIndex</a>,
     );
     <b>let</b> l = s.<a href="../move-stdlib/string.md#0x1_string_length">length</a>();
     <b>let</b> <b>mut</b> front = s.<a href="../move-stdlib/string.md#0x1_string_substring">substring</a>(0, at);
@@ -412,7 +412,7 @@ guaranteeing that the result is valid utf8.
         i &lt;= j &&
         <a href="../move-stdlib/string.md#0x1_string_internal_is_char_boundary">internal_is_char_boundary</a>(bytes, i) &&
         <a href="../move-stdlib/string.md#0x1_string_internal_is_char_boundary">internal_is_char_boundary</a>(bytes, j),
-        <a href="../move-stdlib/string.md#0x1_string_EInvalidIndex">EInvalidIndex</a>
+        <a href="../move-stdlib/string.md#0x1_string_EInvalidIndex">EInvalidIndex</a>,
     );
     <a href="../move-stdlib/string.md#0x1_string_String">String</a> { bytes: <a href="../move-stdlib/string.md#0x1_string_internal_sub_string">internal_sub_string</a>(bytes, i, j) }
 }
@@ -552,9 +552,7 @@ if no occurrence found.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/string.md#0x1_string_bytes">bytes</a>(s: &<a href="../move-stdlib/string.md#0x1_string_String">String</a>): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
-    s.<a href="../move-stdlib/string.md#0x1_string_as_bytes">as_bytes</a>()
-}
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/string.md#0x1_string_bytes">bytes</a>(s: &<a href="../move-stdlib/string.md#0x1_string_String">String</a>): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; { s.<a href="../move-stdlib/string.md#0x1_string_as_bytes">as_bytes</a>() }
 </code></pre>
 
 
