@@ -286,7 +286,7 @@ fn resolve_published_at(
     graph: &ResolvedGraph,
     id_map: &BTreeMap<AccountAddress, PM::PackageName>,
 ) -> BTreeMap<AccountAddress, AccountAddress> {
-    let (_, dependency_ids) = gather_published_ids(graph);
+    let (_, dependency_ids) = gather_published_ids(graph, None);
 
     let mut published_at: BTreeMap<AccountAddress, AccountAddress> = BTreeMap::new();
     for (pkg_id, name) in id_map {
