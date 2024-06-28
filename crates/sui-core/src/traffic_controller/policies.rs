@@ -7,13 +7,16 @@ use std::{collections::HashMap, net::IpAddr, sync::Arc};
 use count_min_sketch::CountMinSketch32;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
-use std::collections::VecDeque;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::time::Duration;
 use std::time::{Instant, SystemTime};
 use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, Weight};
 use tracing::info;
+
+const HIGHEST_RATES_CAPACITY: usize = 20;
 
 /// The type of request client.
 #[derive(Hash, Eq, PartialEq, Debug)]
@@ -24,6 +27,12 @@ enum ClientType {
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 struct SketchKey(IpAddr, ClientType);
+
+struct HighestRates {
+    direct: BinaryHeap<Reverse<(IpAddr, u64)>>,
+    proxied: BinaryHeap<Reverse<(IpAddr, u64)>>,
+    capacity: usize,
+}
 
 pub struct TrafficSketch {
     /// Circular buffer Count Min Sketches representing a sliding window
@@ -40,6 +49,15 @@ pub struct TrafficSketch {
     update_interval: Duration,
     last_reset_time: Instant,
     current_sketch_index: usize,
+    /// Used for metrics collection and logging purposes,
+    /// as CountMinSketch does not provide this directly.
+    /// Note that this is an imperfect metric, since we preserve
+    /// the highest N rates (by unique IP) that we have seen,
+    /// but update rates (down or up) as they change so that
+    /// the metric is not monotonic and reflects recent traffic.
+    /// However, this should only lead to inaccuracy edge cases
+    /// with very low traffic.
+    highest_rates: HighestRates,
 }
 
 impl TrafficSketch {
@@ -49,6 +67,7 @@ impl TrafficSketch {
         sketch_capacity: usize,
         sketch_probability: f64,
         sketch_tolerance: f64,
+        highest_rates_capacity: usize,
     ) -> Self {
         // intentionally round down via integer division. We can't have a partial sketch
         let num_sketches = window_size.as_secs() / update_interval.as_secs();
@@ -101,6 +120,11 @@ impl TrafficSketch {
             update_interval,
             last_reset_time: Instant::now(),
             current_sketch_index: 0,
+            highest_rates: HighestRates {
+                direct: BinaryHeap::with_capacity(highest_rates_capacity),
+                proxied: BinaryHeap::with_capacity(highest_rates_capacity),
+                capacity: highest_rates_capacity,
+            },
         }
     }
 
@@ -116,13 +140,75 @@ impl TrafficSketch {
         self.sketches[self.current_sketch_index].increment(key);
     }
 
-    fn get_request_rate(&self, key: &SketchKey) -> f64 {
+    fn get_request_rate(&mut self, key: &SketchKey) -> f64 {
         let count: u32 = self
             .sketches
             .iter()
             .map(|sketch| sketch.estimate(key))
             .sum();
-        count as f64 / self.window_size.as_secs() as f64
+        let rate = count as f64 / self.window_size.as_secs() as f64;
+        self.update_highest_rates(key, rate);
+        rate
+    }
+
+    fn update_highest_rates(&mut self, key: &SketchKey, rate: f64) {
+        match key.1 {
+            ClientType::Direct => {
+                Self::update_highest_rate(
+                    &mut self.highest_rates.direct,
+                    key.0,
+                    rate,
+                    self.highest_rates.capacity,
+                );
+            }
+            ClientType::ThroughFullnode => {
+                Self::update_highest_rate(
+                    &mut self.highest_rates.proxied,
+                    key.0,
+                    rate,
+                    self.highest_rates.capacity,
+                );
+            }
+        }
+    }
+
+    fn update_highest_rate(
+        rate_heap: &mut BinaryHeap<Reverse<(IpAddr, u64)>>,
+        ip_addr: IpAddr,
+        rate: f64,
+        capacity: usize,
+    ) {
+        // Remove previous instance of this IPAddr so that we
+        // can update with new rate
+        rate_heap.retain(|&Reverse((key, _))| key != ip_addr);
+
+        let rate = rate as u64;
+        if rate_heap.len() < capacity {
+            rate_heap.push(Reverse((ip_addr, rate)));
+        } else if let Some(&Reverse((_, smallest_score))) = rate_heap.peek() {
+            if rate > smallest_score {
+                rate_heap.pop();
+                rate_heap.push(Reverse((ip_addr, rate)));
+            }
+        }
+    }
+
+    pub fn highest_direct_rate(&self) -> Option<(IpAddr, u64)> {
+        self.highest_rates
+            .direct
+            .iter()
+            .map(|Reverse(v)| v)
+            .max_by(|a, b| a.1.partial_cmp(&b.1).expect("Failed to compare rates"))
+            .copied()
+    }
+
+    pub fn highest_proxied_rate(&self) -> Option<(IpAddr, u64)> {
+        self.highest_rates
+            .proxied
+            .iter()
+            .map(|Reverse(v)| v)
+            .max_by(|a, b| a.1.partial_cmp(&b.1).expect("Failed to compare rates"))
+            .copied()
     }
 
     fn rotate_window(&mut self) {
@@ -252,6 +338,7 @@ impl FreqThresholdPolicy {
             sketch_capacity,
             sketch_probability,
             sketch_tolerance,
+            HIGHEST_RATES_CAPACITY,
         );
         Self {
             config,
@@ -259,6 +346,14 @@ impl FreqThresholdPolicy {
             client_threshold,
             proxied_client_threshold,
         }
+    }
+
+    pub fn highest_direct_rate(&self) -> Option<(IpAddr, u64)> {
+        self.sketch.highest_direct_rate()
+    }
+
+    pub fn highest_proxied_rate(&self) -> Option<(IpAddr, u64)> {
+        self.sketch.highest_proxied_rate()
     }
 
     fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
