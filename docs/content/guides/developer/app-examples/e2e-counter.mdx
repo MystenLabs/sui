@@ -18,7 +18,13 @@ Before getting started, make sure you have:
 
 ## Smart contracts {#smart-contracts}
 
-In this part of the guide, you will write the Move contracts that create, increment, and reset counters. The first step is to [set up a Move package](../first-app/write-package.mdx) for storing your Move modules. In this guide, the Move package will be labeled: `counter`.
+In this part of the guide, you will write the Move contracts that create, increment, and reset counters. The first step is to [set up a Move package](../first-app/write-package.mdx) for storing your Move modules.
+
+:::note
+
+To follow along with this guide, set your new Move package to `counter`.
+
+:::
 
 ### `Counter` struct
 
@@ -30,7 +36,6 @@ public struct Counter has key {
 }
 ```
 - The `Counter` type stores the address of its `owner`, its current `value`, and its own `id`.
-
 
 ### Creating `Counter`
 
@@ -54,7 +59,7 @@ public fun increment(counter: &mut Counter) {
 }
 ```
 
-The `increment` function accepts a [mutable reference](/todo) to any shared `Counter` object and will increments its `value` field.
+The `increment` function accepts a mutable reference to any shared `Counter` object and will increments its `value` field.
 
 ```move 
 public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
@@ -63,7 +68,13 @@ public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
 }
 ```
 
-The `set_value` function accepts a [mutable reference](/todo) to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. This function can only be ran by the `Counter`'s `owner`.
+The `set_value` function accepts a mutable reference to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. This function can only be ran by the `Counter`'s `owner`.
+
+:::tip Additional resources
+
+Learn more about taking [object references as input](../../../concepts/sui-move-concepts.mdx#entry-points)
+
+:::
 
 ## Finished package
 
@@ -272,7 +283,7 @@ To turn this into a complete dApp, you need to [create a frontend](#frontend).
 In this final part of the app example, you will build a frontend (UI) that allows end-users to create, increment, and reset `Counter` objects.
 
 
-:::info
+:::note
 
 To skip building the frontend and test out your newly deployed package, you can create this example using the following template and [connect your deployed package](#connecting-your-package): 
 
@@ -463,13 +474,15 @@ export function CreateCounter(props: { onCreated: (id: string) => void }) {
 
 ### Set up routing
 
-Now that your users can create counters, you need a way to route to them. Routing in a React app can be complex, but this example keeps it basic. Set up your App so that you render the `CreateCounter` component by default, and if you want to display a specific counter you can put its ID into the hash portion of the URL.
+Now that your users can create counters, you need a way to route to them. Routing in a React app can be complex, but this example keeps it basic. Set up your `src/App.tsx` file so that you render the `CreateCounter` component by default, and if you want to display a specific counter you can put its ID into the hash portion of the URL.
 
 ```tsx
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
 import { isValidSuiObjectId } from '@mysten/sui/utils';
 import { useState } from 'react';
 import { Box, Container, Flex, Heading } from "@radix-ui/themes";
+import { CreateCounter } from './CreateCounter';
+import { Counter } from './Counter';
 
 
 export default function App() {
@@ -609,7 +622,18 @@ import { COUNTER_PACKAGE_ID } from './constants';
 export function Counter({ id }: { id: string }) {
   const currentAccount = useCurrentAccount();
   const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction({
+    execute: async ({ bytes, signature }) =>
+      await suiClient.executeTransactionBlock({
+        transactionBlock: bytes,
+        signature,
+        options: {
+          // Raw effects are required so the effects can be reported back to the wallet
+          showRawEffects: true,
+          showEffects: true,
+        },
+      }),
+  });	
 
   // ...
 
