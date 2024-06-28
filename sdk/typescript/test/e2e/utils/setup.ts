@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
+import { tmpdir } from 'os';
+import path, { resolve } from 'path';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
@@ -31,13 +33,47 @@ export const DEFAULT_RECIPIENT_2 =
 export const DEFAULT_GAS_BUDGET = 10000000;
 export const DEFAULT_SEND_AMOUNT = 1000;
 
+class TestPackageRegistry {
+	static registries: Map<string, TestPackageRegistry> = new Map();
+
+	static forUrl(url: string) {
+		if (!this.registries.has(url)) {
+			this.registries.set(url, new TestPackageRegistry());
+		}
+		return this.registries.get(url)!;
+	}
+
+	#packages: Map<string, string>;
+
+	constructor() {
+		this.#packages = new Map();
+	}
+
+	async getPackage(path: string, toolbox?: TestToolbox) {
+		if (!this.#packages.has(path)) {
+			this.#packages.set(path, (await publishPackage(path, toolbox)).packageId);
+		}
+
+		return this.#packages.get(path)!;
+	}
+}
+
 export class TestToolbox {
 	keypair: Ed25519Keypair;
 	client: SuiClient;
+	registry: TestPackageRegistry;
+	configPath: string;
 
-	constructor(keypair: Ed25519Keypair, client: SuiClient) {
+	constructor(keypair: Ed25519Keypair, url: string = DEFAULT_FULLNODE_URL, configPath: string) {
 		this.keypair = keypair;
-		this.client = client;
+		this.client = new SuiClient({
+			transport: new SuiHTTPTransport({
+				url,
+				WebSocketConstructor: WebSocket as never,
+			}),
+		});
+		this.registry = TestPackageRegistry.forUrl(url);
+		this.configPath = configPath;
 	}
 
 	address() {
@@ -54,6 +90,20 @@ export class TestToolbox {
 	public async getActiveValidators() {
 		return (await this.client.getLatestSuiSystemState()).activeValidators;
 	}
+
+	public async getPackage(path: string) {
+		return this.registry.getPackage(path, this);
+	}
+
+	async mintNft(name: string = 'Test NFT') {
+		const packageId = await this.getPackage(resolve(__dirname, '../data/demo-bear'));
+		return (tx: Transaction) => {
+			return tx.moveCall({
+				target: `${packageId}::demo_bear::new`,
+				arguments: [tx.pure.string(name)],
+			});
+		};
+	}
 }
 
 export function getClient(url = DEFAULT_FULLNODE_URL): SuiClient {
@@ -68,12 +118,14 @@ export function getClient(url = DEFAULT_FULLNODE_URL): SuiClient {
 export async function setup(options: { graphQLURL?: string; rpcURL?: string } = {}) {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
-	return setupWithFundedAddress(keypair, address, options);
+	const configPath = path.join(tmpdir(), 'client.yaml');
+	return setupWithFundedAddress(keypair, address, configPath, options);
 }
 
 export async function setupWithFundedAddress(
 	keypair: Ed25519Keypair,
 	address: string,
+	configPath: string,
 	{ rpcURL }: { graphQLURL?: string; rpcURL?: string } = {},
 ) {
 	const client = getClient(rpcURL);
@@ -100,7 +152,9 @@ export async function setupWithFundedAddress(
 			retryIf: () => true,
 		},
 	);
-	return new TestToolbox(keypair, client);
+
+	execSync(`${SUI_BIN} client --yes --client.config ${configPath}`, { encoding: 'utf-8' });
+	return new TestToolbox(keypair, rpcURL, configPath);
 }
 
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {

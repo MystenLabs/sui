@@ -6,18 +6,25 @@ import { type Transaction } from '@mysten/sui/transactions';
 import { toB64 } from '@mysten/sui/utils';
 import { useQuery } from '@tanstack/react-query';
 
-import { RequestType, type DappPreflightRequest, type DappPreflightResponse } from './types';
+import {
+	RequestType,
+	type DappPreflightRequest,
+	type DappPreflightResponse,
+	type Network,
+} from './types';
 
 export function useDappPreflight({
 	requestType,
 	origin,
 	transaction,
 	requestId,
+	network,
 }: {
 	requestType: RequestType;
 	origin?: string;
 	transaction?: Transaction;
 	requestId: string;
+	network: Network;
 }) {
 	const { request } = useAppsBackend();
 	const client = useSuiClient();
@@ -31,6 +38,7 @@ export function useDappPreflight({
 			}
 
 			const body: DappPreflightRequest = {
+				network,
 				requestType,
 				origin,
 			};

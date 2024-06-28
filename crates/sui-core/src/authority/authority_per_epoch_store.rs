@@ -345,8 +345,11 @@ pub struct AuthorityEpochTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
 
-    /// Signatures over transaction effects that were executed in the current epoch.
-    /// Store this to avoid re-signing the same effects twice.
+    /// Signatures over transaction effects that we have signed and returned to users.
+    /// We store this to avoid re-signing the same effects twice.
+    /// Note that this may contain signatures for effects from previous epochs, in the case
+    /// that a user requests a signature for effects from a previous epoch. However, the
+    /// signature is still epoch-specific and so is stored in the epoch store.
     effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
     /// Signatures of transaction certificates that are executed locally.
@@ -922,9 +925,12 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn state_accumulator_v2_enabled(&self) -> bool {
-        self.epoch_start_configuration
-            .flags()
-            .contains(&EpochFlag::StateAccumulatorV2Enabled)
+        let flag = match self.get_chain_identifier().chain() {
+            Chain::Unknown | Chain::Testnet => EpochFlag::StateAccumulatorV2EnabledTestnet,
+            Chain::Mainnet => EpochFlag::StateAccumulatorV2EnabledMainnet,
+        };
+
+        self.epoch_start_configuration.flags().contains(&flag)
     }
 
     pub fn executed_in_epoch_table_enabled(&self) -> bool {
@@ -1149,18 +1155,26 @@ impl AuthorityPerEpochStore {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn insert_tx_cert_and_effects_signature(
+    pub fn insert_tx_cert_sig(
+        &self,
+        tx_digest: &TransactionDigest,
+        cert_sig: &AuthorityStrongQuorumSignInfo,
+    ) -> SuiResult {
+        let tables = self.tables()?;
+        Ok(tables
+            .transaction_cert_signatures
+            .insert(tx_digest, cert_sig)?)
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn insert_tx_key_and_effects_signature(
         &self,
         tx_key: &TransactionKey,
         tx_digest: &TransactionDigest,
-        cert_sig: Option<&AuthorityStrongQuorumSignInfo>,
         effects_signature: Option<&AuthoritySignInfo>,
     ) -> SuiResult {
         let tables = self.tables()?;
         let mut batch = self.tables()?.effects_signatures.batch();
-        if let Some(cert_sig) = cert_sig {
-            batch.insert_batch(&tables.transaction_cert_signatures, [(tx_digest, cert_sig)])?;
-        }
 
         if self.executed_in_epoch_table_enabled() {
             batch.insert_batch(&tables.executed_in_epoch, [(tx_digest, ())])?;
@@ -1177,6 +1191,18 @@ impl AuthorityPerEpochStore {
         if !matches!(tx_key, TransactionKey::Digest(_)) {
             self.executed_digests_notify_read.notify(tx_key, tx_digest);
         }
+        Ok(())
+    }
+
+    pub fn insert_effects_signature(
+        &self,
+        tx_digest: &TransactionDigest,
+        effects_signature: &AuthoritySignInfo,
+    ) -> SuiResult {
+        let tables = self.tables()?;
+        tables
+            .effects_signatures
+            .insert(tx_digest, effects_signature)?;
         Ok(())
     }
 

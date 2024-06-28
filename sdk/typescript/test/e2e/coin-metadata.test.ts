@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { resolve } from 'path';
+import { beforeAll, describe, expect, it } from 'vitest';
 
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 describe('Test Coin Metadata', () => {
 	let toolbox: TestToolbox;
 	let packageId: string;
 
-	beforeEach(async () => {
+	beforeAll(async () => {
 		toolbox = await setup();
-		const packagePath = __dirname + '/./data/coin_metadata';
-		({ packageId } = await publishPackage(packagePath));
+		const packagePath = resolve(__dirname, './data/coin_metadata');
+		packageId = await toolbox.getPackage(packagePath);
 	});
 
 	it('Test accessing coin metadata', async () => {

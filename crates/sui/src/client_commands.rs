@@ -49,15 +49,16 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
-    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
+    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies,
 };
-use sui_package_management::LockCommand;
+use sui_package_management::{LockCommand, PublishedAtError};
 use sui_replay::ReplayToolCommand;
 use sui_sdk::{
     apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
     wallet_context::WalletContext,
-    SuiClient, SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
+    SuiClient, SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0,
+    SUI_TESTNET_URL,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -866,6 +867,11 @@ impl SuiClientCommands {
                         .map_err(|e| SuiError::ModulePublishFailure {
                             error: format!("Failed to canonicalize package path: {}", e),
                         })?;
+                let env_alias = context
+                    .config
+                    .get_active_env()
+                    .map(|e| e.alias.clone())
+                    .ok();
                 let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
                     upgrade_package(
                         client.read_api(),
@@ -874,6 +880,7 @@ impl SuiClientCommands {
                         upgrade_capability,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
+                        env_alias,
                     )
                     .await?;
                 let tx_kind = client
@@ -1022,7 +1029,7 @@ impl SuiClientCommands {
 
                     (_, package_path) => {
                         let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
-                        let package = compile_package_simple(build_config, &package_path)?;
+                        let package = compile_package_simple(build_config, &package_path, None)?;
                         let name = package
                             .package
                             .compiled_package_info
@@ -1385,8 +1392,7 @@ impl SuiClientCommands {
                         let network = match env.rpc.as_str() {
                             SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v1/gas",
                             SUI_TESTNET_URL => "https://faucet.testnet.sui.io/v1/gas",
-                            // TODO when using sui-test-validator, and 5003 when using sui start
-                            SUI_LOCAL_NETWORK_URL => "http://127.0.0.1:9123/gas",
+                            SUI_LOCAL_NETWORK_URL | SUI_LOCAL_NETWORK_URL_0 => "http://127.0.0.1:9123/gas",
                             _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
                         };
                         network.to_string()
@@ -1558,10 +1564,17 @@ impl SuiClientCommands {
                 }
 
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
+                let chain_id = context
+                    .get_client()
+                    .await?
+                    .read_api()
+                    .get_chain_identifier()
+                    .await?;
                 let compiled_package = BuildConfig {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
+                    chain_id: Some(chain_id),
                 }
                 .build(&package_path)?;
 
@@ -1601,15 +1614,22 @@ impl SuiClientCommands {
 fn compile_package_simple(
     build_config: MoveBuildConfig,
     package_path: &Path,
+    chain_id: Option<String>,
 ) -> Result<CompiledPackage, anyhow::Error> {
     let config = BuildConfig {
         config: resolve_lock_file_path(build_config, Some(package_path))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
+        chain_id: chain_id.clone(),
     };
     let resolution_graph = config.resolution_graph(package_path)?;
 
-    Ok(build_from_resolution_graph(resolution_graph, false, false)?)
+    Ok(build_from_resolution_graph(
+        resolution_graph,
+        false,
+        false,
+        chain_id,
+    )?)
 }
 
 pub(crate) async fn upgrade_package(
@@ -1619,6 +1639,7 @@ pub(crate) async fn upgrade_package(
     upgrade_capability: ObjectID,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
+    env_alias: Option<String>,
 ) -> Result<(ObjectID, Vec<Vec<u8>>, PackageDependencies, [u8; 32], u8), anyhow::Error> {
     let (dependencies, compiled_modules, compiled_package, package_id) = compile_package(
         read_api,
@@ -1631,12 +1652,28 @@ pub(crate) async fn upgrade_package(
 
     let package_id = package_id.map_err(|e| match e {
         PublishedAtError::NotPresent => {
-            anyhow!("No 'published-at' field in manifest for package to be upgraded.")
+            anyhow!("No 'published-at' field in Move.toml or 'published-id' in Move.lock for package to be upgraded.")
         }
         PublishedAtError::Invalid(v) => anyhow!(
-            "Invalid 'published-at' field in manifest of package to be upgraded. \
+            "Invalid 'published-at' field in Move.toml or 'published-id' in Move.lock of package to be upgraded. \
                          Expected an on-chain address, but found: {v:?}"
         ),
+        PublishedAtError::Conflict {
+            id_lock,
+            id_manifest,
+        } => {
+            let env_alias = format!("(currently {})", env_alias.unwrap_or_default());
+            anyhow!(
+                "Conflicting published package address: `Move.toml` contains published-at address \
+                 {id_manifest} but `Move.lock` file contains published-at address {id_lock}. \
+                 You may want to:
+
+                 - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
+                 - update the `Move.lock` address using the `sui manage-package` command to be the same as the `Move.toml`; OR
+                 - check that your `sui active-env` {env_alias} corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
+                 - contact the maintainer if this package is a dependency and request resolving the conflict."
+            )
+        }
     })?;
 
     let resp = read_api
@@ -1691,13 +1728,16 @@ pub(crate) async fn compile_package(
     let config = resolve_lock_file_path(build_config, Some(package_path))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
+    let chain_id = read_api.get_chain_identifier().await.ok();
     let config = BuildConfig {
         config,
         run_bytecode_verifier,
         print_diags_to_stderr,
+        chain_id,
     };
     let resolution_graph = config.resolution_graph(package_path)?;
-    let (package_id, dependencies) = gather_published_ids(&resolution_graph);
+    let chain_id = read_api.get_chain_identifier().await.ok();
+    let (package_id, dependencies) = gather_published_ids(&resolution_graph, chain_id.clone());
     check_invalid_dependencies(&dependencies.invalid)?;
     if !with_unpublished_dependencies {
         check_unpublished_dependencies(&dependencies.unpublished)?;
@@ -1706,6 +1746,7 @@ pub(crate) async fn compile_package(
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
+        chain_id,
     )?;
     let protocol_config = read_api.get_protocol_config(None).await?;
 

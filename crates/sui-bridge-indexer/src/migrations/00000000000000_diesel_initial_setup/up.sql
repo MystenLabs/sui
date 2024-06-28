@@ -39,3 +39,9 @@ CREATE TABLE progress_store
     task_name                   TEXT          PRIMARY KEY,
     checkpoint                  BIGINT        NOT NULL
 );
+
+CREATE TABLE sui_progress_store
+(
+    id                           INT          PRIMARY KEY, -- dummy value
+    txn_digest                   bytea        NOT NULL
+);

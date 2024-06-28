@@ -6,7 +6,6 @@ module coin_metadata::test {
     use sui::coin;
     use sui::transfer;
     use sui::url;
-    use sui::tx_context::{Self, TxContext};
 
     public struct TEST has drop {}
 

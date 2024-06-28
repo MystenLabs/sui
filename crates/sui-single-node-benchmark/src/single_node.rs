@@ -168,8 +168,6 @@ impl SingleValidator {
                     .execute_certificate(&cert, &self.epoch_store)
                     .await
                     .unwrap()
-                    .into_inner()
-                    .into_data()
             }
             Component::ValidatorWithoutConsensus | Component::ValidatorWithFakeConsensus => {
                 let response = self
