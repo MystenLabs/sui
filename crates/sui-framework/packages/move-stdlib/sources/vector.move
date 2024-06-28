@@ -165,9 +165,7 @@ module std::vector {
     /// Does not preserve the order of elements in the vector (starts from the end of the vector).
     public macro fun destroy<$T>($v: vector<$T>, $f: |$T|) {
         let mut v = $v;
-        while (!v.is_empty()) {
-            $f(v.pop_back());
-        };
+        while (!v.is_empty()) $f(v.pop_back());
         v.destroy_empty();
     }
 
@@ -176,45 +174,29 @@ module std::vector {
     public macro fun do<$T>($v: vector<$T>, $f: |$T|) {
         let mut v = $v;
         v.reverse();
-        while (!v.is_empty()) {
-            $f(v.pop_back());
-        };
+        while (!v.is_empty()) $f(v.pop_back());
         v.destroy_empty();
     }
 
     /// Perform an action `f` on each element of the vector `v`. The vector is not modified.
     public macro fun do_ref<$T>($v: &vector<$T>, $f: |&$T|) {
         let v = $v;
-        let mut i = 0;
-        let len = v.length();
-        while (i < len) {
-            $f(&v[i]);
-            i = i + 1;
-        };
+        v.length().do!(|i| $f(&v[i]))
     }
 
     /// Perform an action `f` on each element of the vector `v`. The function `f` takes a mutable
     /// reference.
     public macro fun do_mut<$T>($v: &mut vector<$T>, $f: |&mut $T|) {
         let v = $v;
-        let mut i = 0;
-        let len = v.length();
-        while (i < len) {
-            $f(&mut v[i]);
-            i = i + 1;
-        };
+        v.length().do!(|i| $f(&mut v[i]))
     }
 
     /// Map the vector `v` to a new vector by applying the function `f` to each element.
     /// Preserve the order of elements in the vector, first is called first.
     public macro fun map<$T, $U>($v: vector<$T>, $f: |$T| -> $U): vector<$U> {
+        let v = $v;
         let mut r = vector[];
-        let mut v = $v;
-        v.reverse();
-        while (!v.is_empty()) {
-            r.push_back($f(v.pop_back()));
-        };
-        v.destroy_empty();
+        v.do!(|e| r.push_back($f(e)));
         r
     }
 
@@ -223,26 +205,16 @@ module std::vector {
     public macro fun map_ref<$T, $U>($v: &vector<$T>, $f: |&$T| -> $U): vector<$U> {
         let v = $v;
         let mut r = vector[];
-        let mut i = 0;
-        let len = v.length();
-        while (i < len) {
-            r.push_back($f(&v[i]));
-            i = i + 1;
-        };
+        v.do_ref!(|e| r.push_back($f(e)));
         r
     }
 
     /// Filter the vector `v` by applying the function `f` to each element.
     /// Return a new vector containing only the elements for which `f` returns `true`.
     public macro fun filter<$T: drop>($v: vector<$T>, $f: |&$T| -> bool): vector<$T> {
+        let v = $v;
         let mut r = vector[];
-        let mut v = $v;
-        v.reverse();
-        while (!v.is_empty()) {
-            let e = v.pop_back();
-            if ($f(&e)) r.push_back(e);
-        };
-        v.destroy_empty();
+        v.do!(|e| if ($f(&e)) r.push_back(e));
         r
     }
 
@@ -250,30 +222,19 @@ module std::vector {
     /// Return a tuple containing two vectors: the first containing the elements for which `f` returns `true`,
     /// and the second containing the elements for which `f` returns `false`.
     public macro fun partition<$T>($v: vector<$T>, $f: |&$T| -> bool): (vector<$T>, vector<$T>) {
+        let v = $v;
         let mut r1 = vector[];
         let mut r2 = vector[];
-        let mut v = $v;
-        while (!v.is_empty()) {
-            let e = v.pop_back();
-            if ($f(&e)) r1.push_back(e)
-            else r2.push_back(e);
-        };
-        v.destroy_empty();
-        r1.reverse();
-        r2.reverse();
+        v.do!(|e| if ($f(&e)) r1.push_back(e) else r2.push_back(e));
         (r1, r2)
     }
 
     /// Reduce the vector `v` to a single value by applying the function `f` to each element.
     /// Similar to `fold_left` in Rust and `reduce` in Python and JavaScript.
     public macro fun fold<$T, $Acc>($v: vector<$T>, $init: $Acc, $f: |$Acc, $T| -> $Acc): $Acc {
+        let v = $v;
         let mut acc = $init;
-        let mut v = $v;
-        v.reverse();
-        while (!v.is_empty()) {
-            acc = $f(acc, v.pop_back());
-        };
-        v.destroy_empty();
+        v.do!(|e| acc = $f(acc, e));
         acc
     }
 
