@@ -1,24 +1,280 @@
 ---
 title: Distributed Counter
+hide_table_of_contents: true
 ---
 
-This example walks you through building a basic distributed counter app, covering the full end-to-end flow connecting your Move code to your client app. The app allows you to create counters that anyone can increment, but only the owner can reset. This example assumes you already have a React App set with dApp Kit, and it's required `Providers` as described in [Client App with Sui TypeScript SDK](../first-app/client-tssdk.mdx).
+This example walks you through building a basic distributed counter app, covering the full end-to-end flow of building your Sui Move module and connecting it your React Sui Dapp. The app allows you to create counters that anyone can increment, but only the owner can reset. 
 
-{@include: ../../../snippets/info-pnpm-required.mdx}
+The guide is split into two parts:
 
-If haven't followed Client App with Sui TypeScript SDK, run the following command in a terminal or console to scaffold a new app:
+1. [Smart Contracts](#smart-contracts): The Move code set ups the `Counter` structure and logic.
+1. [Frontend](#frontend): A UI that enables users to create, increment, and reset `Counter` objects.
 
-```bash
-pnpm create @mysten/dapp --template react-client-dapp
+## What you need
+
+Before getting started, make sure you have:
+
+- [Installed the latest version of Sui](../getting-started/sui-install.mdx).
+
+## Smart contracts {#smart-contracts}
+
+In this part of the guide, you will write the Move contracts that create, increment, and reset counters. The first step is to [set up a Move package](../first-app/write-package.mdx) for storing your Move modules. In this guide, the Move package will be labeled: `counter`.
+
+### `Counter` struct
+
+```move
+public struct Counter has key {
+  id: UID,
+  owner: address,
+  value: u64
+}
+```
+- The `Counter` type stores the address of its `owner`, its current `value`, and its own `id`.
+
+
+### Creating `Counter`
+
+```move
+public fun create(ctx: &mut TxContext) {
+  transfer::share_object(Counter {
+    id: object::new(ctx),
+    owner: ctx.sender(),
+    value: 0
+  })
+}
 ```
 
-or
+In the `create` function, a new `Counter` object is created and [shared](../../../concepts/object-ownership/shared.mdx). 
 
-```bash
-yarn create @mysten/dapp --template react-client-dapp
+### Incrementing and Reseting `Counter`
+
+```move 
+public fun increment(counter: &mut Counter) {
+  counter.value = counter.value + 1;
+}
 ```
 
-To get a head start, you can automatically create this example using the following `template` value instead:
+The `increment` function accepts a [mutable reference](/todo) to any shared `Counter` object and will increments its `value` field.
+
+```move 
+public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
+  assert!(counter.owner == ctx.sender(), 0);
+  counter.value = value;
+}
+```
+
+The `set_value` function accepts a [mutable reference](/todo) to any shared `Counter` object, the `value` to set its `value` field, and the `ctx` which contains the `sender` of the transaction. This function can only be ran by the `Counter`'s `owner`.
+
+## Finished package
+
+The final module should look like this
+
+```move
+module counter::counter {
+  /// A shared counter.
+  public struct Counter has key {
+    id: UID,
+    owner: address,
+    value: u64
+  }
+
+  /// Create and share a Counter object.
+  public fun create(ctx: &mut TxContext) {
+    transfer::share_object(Counter {
+      id: object::new(ctx),
+      owner: ctx.sender(),
+      value: 0
+    })
+  }
+
+  /// Increment a counter by 1.
+  public fun increment(counter: &mut Counter) {
+    counter.value = counter.value + 1;
+  }
+
+  /// Set value (only runnable by the Counter owner)
+  public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
+    assert!(counter.owner == ctx.sender(), 0);
+    counter.value = value;
+  }
+}
+```
+
+### Deployment {#deployment}
+
+{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+
+Next, configure the Sui CLI to use `testnet` as the active environment, as well. If you haven't already set up a `testnet` environment you can do so by running the following command in a terminal or console:
+
+```bash
+sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
+```
+
+Run the following command to activate the `testnet` environment:
+
+```bash
+sui client switch --env testnet
+```
+
+{@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
+
+The output of this command contains a `packageID` value that you need to save to use the package.
+
+```bash
+UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING counter
+Successfully verified dependencies on-chain against source.
+Transaction Digest: 2KoMzVKjnh8HcXCfX2cJFDAoJmcaVcfbqW42TzjTA9b3
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Data                                                                                             │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Sender: 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654                                   │
+│ Gas Owner: 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654                                │
+│ Gas Budget: 10033200 MIST                                                                                    │
+│ Gas Price: 1000 MIST                                                                                         │
+│ Gas Payment:                                                                                                 │
+│  ┌──                                                                                                         │
+│  │ ID: 0x0fcc6d770d80aa409a9645e78ac4810be6400919ac7f507bddd2f9d279da509f                                    │
+│  │ Version: 47482285                                                                                         │
+│  │ Digest: 2NffEKhxrAyZHnZ1q3QV8oYYF94PNW8L6wcvepQthoSs                                                      │
+│  └──                                                                                                         │
+│                                                                                                              │
+│ Transaction Kind: Programmable                                                                               │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Input Objects                                                                                            │ │
+│ ├──────────────────────────────────────────────────────────────────────────────────────────────────────────┤ │
+│ │ 0   Pure Arg: Type: address, Value: "0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654" │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭─────────────────────────────────────────────────────────────────────────╮                                  │
+│ │ Commands                                                                │                                  │
+│ ├─────────────────────────────────────────────────────────────────────────┤                                  │
+│ │ 0  Publish:                                                             │                                  │
+│ │  ┌                                                                      │                                  │
+│ │  │ Dependencies:                                                        │                                  │
+│ │  │   0x0000000000000000000000000000000000000000000000000000000000000001 │                                  │
+│ │  │   0x0000000000000000000000000000000000000000000000000000000000000002 │                                  │
+│ │  └                                                                      │                                  │
+│ │                                                                         │                                  │
+│ │ 1  TransferObjects:                                                     │                                  │
+│ │  ┌                                                                      │                                  │
+│ │  │ Arguments:                                                           │                                  │
+│ │  │   Result 0                                                           │                                  │
+│ │  │ Address: Input  0                                                    │                                  │
+│ │  └                                                                      │                                  │
+│ ╰─────────────────────────────────────────────────────────────────────────╯                                  │
+│                                                                                                              │
+│ Signatures:                                                                                                  │
+│    LvrMcNomdIVIT+Z7+bEXfTB1NWe5Bcrkkx7JUdNdxuEYy+aYP+TchQBuFeAnK6CAEvqo7LzHcgZDyliURBN6DA==                  │
+│                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: 2KoMzVKjnh8HcXCfX2cJFDAoJmcaVcfbqW42TzjTA9b3                                              │
+│ Status: Success                                                                                   │
+│ Executed Epoch: 414                                                                               │
+│                                                                                                   │
+│ Created Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x7530c33e4cf3345236601d69303e3fab84efc294194a810dc1cfea13c009e77f                         │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 )  │
+│  │ Version: 47482286                                                                              │
+│  │ Digest: 5aEez7HkJ82Xs5ZArPHJF6Ty38UtprsCvEiyy22hBVRE                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0x7b6a8f5782e57cd948dc75ee098b73046a79282183d51eefb83d31ec95c312aa                         │
+│  │ Owner: Immutable                                                                               │
+│  │ Version: 1                                                                                     │
+│  │ Digest: FKAZc1cmQ9FUYudDQBjZPTb1uXDnekKRUbAALuVnwURC                                           │
+│  └──                                                                                              │
+│ Mutated Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x0fcc6d770d80aa409a9645e78ac4810be6400919ac7f507bddd2f9d279da509f                         │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 )  │
+│  │ Version: 47482286                                                                              │
+│  │ Digest: A6TH6ja5TM4S6nZBwB14AB17ZgixCijYX1aNMGHF3syv                                           │
+│  └──                                                                                              │
+│ Gas Object:                                                                                       │
+│  ┌──                                                                                              │
+│  │ ID: 0x0fcc6d770d80aa409a9645e78ac4810be6400919ac7f507bddd2f9d279da509f                         │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 )  │
+│  │ Version: 47482286                                                                              │
+│  │ Digest: A6TH6ja5TM4S6nZBwB14AB17ZgixCijYX1aNMGHF3syv                                           │
+│  └──                                                                                              │
+│ Gas Cost Summary:                                                                                 │
+│    Storage Cost: 8033200 MIST                                                                     │
+│    Computation Cost: 1000000 MIST                                                                 │
+│    Storage Rebate: 978120 MIST                                                                    │
+│    Non-refundable Storage Fee: 9880 MIST                                                          │
+│                                                                                                   │
+│ Transaction Dependencies:                                                                         │
+│    3Hry5CyWQUTNV5nRZTNxoWyfN9zxBEcwsYkXUyTHCrmE                                                   │
+│    6c3hAbXwoKqSv8Grf4wv7VAJYpT7UnPxV3zqeRjmN1JY                                                   │
+│    D3G6iDXJTcdg2XBJrgsFnu1CveMfSTLRU772PzvEs529                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────╮
+│ No transaction block events │
+╰─────────────────────────────╯
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Object Changes                                                                                   │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Created Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0x7530c33e4cf3345236601d69303e3fab84efc294194a810dc1cfea13c009e77f                  │
+│  │ Sender: 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654                    │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 ) │
+│  │ ObjectType: 0x2::package::UpgradeCap                                                          │
+│  │ Version: 47482286                                                                             │
+│  │ Digest: 5aEez7HkJ82Xs5ZArPHJF6Ty38UtprsCvEiyy22hBVRE                                          │
+│  └──                                                                                             │
+│ Mutated Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0x0fcc6d770d80aa409a9645e78ac4810be6400919ac7f507bddd2f9d279da509f                  │
+│  │ Sender: 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654                    │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 ) │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                    │
+│  │ Version: 47482286                                                                             │
+│  │ Digest: A6TH6ja5TM4S6nZBwB14AB17ZgixCijYX1aNMGHF3syv                                          │
+│  └──                                                                                             │
+│ Published Objects:                                                                               │
+│  ┌──                                                                                             │
+│  │ PackageID: 0x7b6a8f5782e57cd948dc75ee098b73046a79282183d51eefb83d31ec95c312aa                 │
+│  │ Version: 1                                                                                    │
+│  │ Digest: FKAZc1cmQ9FUYudDQBjZPTb1uXDnekKRUbAALuVnwURC                                          │
+│  │ Modules: counter                                                                              │
+│  └──                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Balance Changes                                                                                   │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ┌──                                                                                              │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 )  │
+│  │ CoinType: 0x2::sui::SUI                                                                        │
+│  │ Amount: -8055080                                                                               │
+│  └──                                                                                              │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+Store the `PackageID` value you receive in your own response to [connect to your frontend](#connecting-your-package).
+
+### Next steps
+
+Well done. You have written and deployed the Move package! 🚀
+
+To turn this into a complete dApp, you need to [create a frontend](#frontend).
+
+
+## Frontend {#frontend}
+
+In this final part of the app example, you will build a frontend (UI) that allows end-users to create, increment, and reset `Counter` objects.
+
+
+:::info
+
+To skip building the frontend and test out your newly deployed package, you can create this example using the following template and [connect your deployed package](#connecting-your-package): 
 
 ```bash
 pnpm create @mysten/dapp --template react-e2e-counter
@@ -30,129 +286,57 @@ or
 yarn create @mysten/dapp --template react-e2e-counter
 ```
 
-## Adding a Move module
+:::
 
-The first element you need is a Move package to interact with. This example doesn't go in-depth on the Move code itself, but covers how to deploy it, and connect it to your dApp.
+### Prerequisites
 
-First, create a new `move` directory at the root of your project to place your Move code and then make it the active directory:
+Before getting started, make sure you have:
 
-```bash
-mkdir move
-cd move
-```
+- [Deployed the complete `counter` Move module](#smart-contracts) and understand its design.
+- Installed [`pnpm`](https://pnpm.io/installation) or [`yarn`](https://classic.yarnpkg.com/lang/en/docs/install/#mac-stable) as it will be used as the package manager.
 
-Next, use the [Sui Client CLI](references/cli/client.mdx) to generate a new Move package. If you have [Sui installed](guides/developer/getting-started/sui-install.mdx), the Sui CLI is on your system. Run the following command in your terminal or console:
+:::tip Additional resources
 
-```bash
-sui move new counter
-```
-
-This creates a new, empty Move package in a new `move/counter` directory with a [Move.toml](https://move-book.com/concepts/manifest.html) file, and an empty `sources` directory.
-
-Add your Move code under `sources` by creating a new `counter.move` file:
-
-```move
-module counter::counter {
-    /// A shared counter.
-    public struct Counter has key {
-        id: UID,
-        owner: address,
-        value: u64
-    }
-
-    /// Create and share a Counter object.
-    public fun create(ctx: &mut TxContext) {
-        transfer::share_object(Counter {
-            id: object::new(ctx),
-            owner: ctx.sender(),
-            value: 0
-        })
-    }
-
-    /// Increment a counter by 1.
-    public fun increment(counter: &mut Counter) {
-        counter.value = counter.value + 1;
-    }
-
-    /// Set value (only runnable by the Counter owner)
-    public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
-        assert!(counter.owner == ctx.sender(), 0);
-        counter.value = value;
-    }
-}
-```
-
-Now that you have your Move code, you need to publish it. The Client App with Sui TypeScript SDK example and the app template use `testnet` by default, so configure your code to match the network you want to deploy to.
-
-First, update the Sui dependency in Move.toml by changing the `rev` from `framework/testnet` to `framework/devnet`.
-
-```toml
-...
-[dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/devnet" }
-...
-```
-
-Next, configure the Sui CLI to use `devnet` as the active environment, as well. If you haven't already set up a `devnet` environment you can do so by running the following command in a terminal or console:
-
-```bash
-sui client new-env --alias devnet --rpc https://fullnode.devnet.sui.io:443
-```
-
-Run the following command to activate the `devnet` environment:
-
-```bash
-sui client switch --env devnet
-```
-
-Now, publish your Move code with the following command:
-
-{@include: ../../../snippets/info-gas-budget.mdx}
-
-```bash
-sui client publish --gas-budget 10000000 counter
-```
-
-:::info
-
-See [Sui Client CLI](/references/cli/client.mdx) for more information about `client` commands in the Sui CLI.
+- Tooling: [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript). For basic usage on how to interact with Sui with Typescript.
+- Tooling: [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit). To learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
+- Tooling: [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp). This is used within this project to quickly scaffold a React-based Sui dApp.
 
 :::
 
-The output of this command contains a `packageId` value that you need to save to use the package.
+### Overview
+
+The UI design consists of two parts:
+
+- A button for users to create new `Counter` objects
+- A `Counter` UI for users to view the `value`, and to increment and reset the `Counter` object.
+
+
+### Scaffold a new app
+
+The first step is to set up the Client App. Run the following command to scaffold a new app.
 
 ```bash
------ Object changes ----
-Array [
-    Object {
-        ...
-    },
-    Object {
-        ...
-    },
-    Object {
-        "type": String("published"),
-        "packageId": String("0xcd16d38ec30a4ad609336b51f6859a6b1014c50801b47845ac7a251e436cccf7"),
-        "version": String("1"),
-        "digest": String("4bCjupBDiaANmBySAtxuAdXEvGdKW4wrya6sbmRvynEe"),
-        "modules": Array [
-            String("counter"),
-        ],
-    },
-]
------ Balance changes ----
+pnpm create @mysten/dapp --template react-client-dapp
 ```
 
-Add the `packageId` value you receive in your own response to a new `constants.ts` file in your project:
+or
 
 ```bash
+yarn create @mysten/dapp --template react-client-dapp
+```
+
+### Connecting your deployed package {#connecting-your-package}
+
+Add the `packageId` value you saved from [deploying your package](#deployment) to a new `src/constants.ts` file in your project:
+
+```typescript
 export const COUNTER_PACKAGE_ID =
-  "0xcd16d38ec30a4ad609336b51f6859a6b1014c50801b47845ac7a251e436cccf7";
+  "0x7b6a8f5782e57cd948dc75ee098b73046a79282183d51eefb83d31ec95c312aa";
 ```
 
-## Creating a counter
+### Creating `Counter`
 
-Now that you've published your Move code, you can start building your UI to use your Move package. You need a way to create a new `Counter` object. Do this by creating a new `CreateCounter` component:
+You need a way to create a new `Counter` object. Do this by creating a new `CreateCounter` component in the new `src/CreateCounter.tsx` file:
 
 ```ts
 export function CreateCounter(props: { onCreated: (id: string) => void }) {
@@ -293,7 +477,7 @@ function create() {
 }
 ```
 
-## Set up routing
+### Set up routing
 
 Now that your users can create counters, you need a way to route to them. Routing in a React app can be complex, but this example keeps it basic. Set up your App so that you render the `CreateCounter` component by default, and if you want to display a specific counter you can put its ID into the hash portion of the URL.
 
@@ -335,7 +519,9 @@ export default function App() {
 
 This sets up your app to read the hash from the URL, and get the counter's ID if the hash is a valid object ID. Then, it either renders a `Counter` (which you define in the next step) if you have a counter ID, or the `CreateCounter` button from the previous step. When a counter is created, you update the URL, and set the counter ID.
 
-## Building your counter user interface
+### Building your counter user interface
+
+Create a new file: `src/Counter.tsx`.
 
 For your counter, you want to display three elements:
 
