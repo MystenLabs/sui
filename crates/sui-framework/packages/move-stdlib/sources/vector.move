@@ -242,8 +242,8 @@ module std::vector {
     /// If the vector is empty, returns `false`.
     public macro fun any<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
         let v = $v;
-        'a: {
-            v.do_ref!(|e| if ($f(e)) return 'a true);
+        'any: {
+            v.do_ref!(|e| if ($f(e)) return 'any true);
             false
         }
     }
@@ -252,8 +252,8 @@ module std::vector {
     /// If the vector is empty, returns `true`.
     public macro fun all<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
         let v = $v;
-        'a: {
-            v.do_ref!(|e| if (!$f(e)) return 'a false);
+        'all: {
+            v.do_ref!(|e| if (!$f(e)) return 'all false);
             true
         }
     }
