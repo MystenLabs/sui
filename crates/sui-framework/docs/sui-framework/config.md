@@ -15,7 +15,7 @@ title: Module `0x2::config`
 -  [Function `exists_with_type`](#0x2_config_exists_with_type)
 -  [Function `exists_with_type_for_current_epoch`](#0x2_config_exists_with_type_for_current_epoch)
 -  [Function `borrow_for_current_epoch_mut`](#0x2_config_borrow_for_current_epoch_mut)
--  [Function `borrow_most_recent`](#0x2_config_borrow_most_recent)
+-  [Function `read_newer_setting`](#0x2_config_read_newer_setting)
 -  [Function `read_setting`](#0x2_config_read_setting)
 -  [Function `read_setting_impl`](#0x2_config_read_setting_impl)
 
@@ -436,13 +436,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_borrow_most_recent"></a>
+<a name="0x2_config_read_newer_setting"></a>
 
-## Function `borrow_most_recent`
+## Function `read_newer_setting`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_borrow_most_recent">borrow_most_recent</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, name: Name): &Value
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_newer_setting">read_newer_setting</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, name: Name): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -451,18 +451,18 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_borrow_most_recent">borrow_most_recent</a>&lt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_newer_setting">read_newer_setting</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
 &gt;(
     <a href="../sui-framework/config.md#0x2_config">config</a>: &<a href="../sui-framework/config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
     name: Name,
-): &Value {
+): Option&lt;Value&gt; {
+    <b>if</b> (!field::exists_with_type&lt;_, <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     <b>let</b> sobj: &<a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt; = field::borrow(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name);
     <b>let</b> data = sobj.data.borrow();
-    <b>assert</b>!(data.newer_value.is_some(), <a href="../sui-framework/config.md#0x2_config_ENotSetForEpoch">ENotSetForEpoch</a>);
-    data.newer_value.borrow()
+    data.newer_value
 }
 </code></pre>
 

@@ -105,18 +105,30 @@ module sui::deny_list {
         );
     }
 
-    public(package) fun v2_most_recent_contains(
+    public(package) fun v2_contains_current_epoch(
         deny_list: &DenyList,
         per_type_index: u64,
         per_type_key: vector<u8>,
         addr: address,
-        _ctx: &TxContext,
+        ctx: &TxContext,
     ): bool {
         if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
         let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
         let setting_name = AddressKey(addr);
-        if (!per_type_config.exists_with_type<_, _, bool>(setting_name)) return false;
-        *per_type_config.borrow_most_recent(setting_name)
+        config::read_setting(object::id(per_type_config), setting_name, ctx)
+            .destroy_with_default(false)
+    }
+
+    public(package) fun v2_contains_next_epoch(
+        deny_list: &DenyList,
+        per_type_index: u64,
+        per_type_key: vector<u8>,
+        addr: address,
+    ): bool {
+        if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
+        let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
+        let setting_name = AddressKey(addr);
+        per_type_config.read_newer_setting(setting_name).destroy_with_default(false)
     }
 
     // public(package) fun v2_per_type_contains(
@@ -160,17 +172,28 @@ module sui::deny_list {
         *next_epoch_entry = false;
     }
 
-    public(package) fun v2_most_recent_is_global_pause_enabled(
+    public(package) fun v2_is_global_pause_enabled_current_epoch(
         deny_list: &DenyList,
         per_type_index: u64,
         per_type_key: vector<u8>,
-        _ctx: &TxContext,
+        ctx: &TxContext,
     ): bool {
         if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
         let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
         let setting_name = GlobalPauseKey();
-        if (!per_type_config.exists_with_type<_, _, bool>(setting_name)) return false;
-        *per_type_config.borrow_most_recent(setting_name)
+        config::read_setting(object::id(per_type_config), setting_name, ctx)
+            .destroy_with_default(false)
+    }
+
+    public(package) fun v2_is_global_pause_enabled_next_epoch(
+        deny_list: &DenyList,
+        per_type_index: u64,
+        per_type_key: vector<u8>,
+    ): bool {
+        if (!deny_list.per_type_exists(per_type_index, per_type_key)) return false;
+        let per_type_config = deny_list.borrow_per_type_config(per_type_index, per_type_key);
+        let setting_name = GlobalPauseKey();
+        per_type_config.read_newer_setting(setting_name).destroy_with_default(false)
     }
 
     // public(package) fun v2_per_type_is_global_pause_enabled(

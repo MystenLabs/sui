@@ -38,10 +38,12 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 -  [Function `burn`](#0x2_coin_burn)
 -  [Function `deny_list_v2_add`](#0x2_coin_deny_list_v2_add)
 -  [Function `deny_list_v2_remove`](#0x2_coin_deny_list_v2_remove)
--  [Function `deny_list_v2_most_recent_contains`](#0x2_coin_deny_list_v2_most_recent_contains)
+-  [Function `v2_contains_current_epoch`](#0x2_coin_v2_contains_current_epoch)
+-  [Function `v2_contains_next_epoch`](#0x2_coin_v2_contains_next_epoch)
 -  [Function `deny_list_v2_enable_global_pause`](#0x2_coin_deny_list_v2_enable_global_pause)
 -  [Function `deny_list_v2_disable_global_pause`](#0x2_coin_deny_list_v2_disable_global_pause)
--  [Function `deny_list_v2_most_recent_is_global_pause_enabled`](#0x2_coin_deny_list_v2_most_recent_is_global_pause_enabled)
+-  [Function `deny_list_v2_is_global_pause_enabled_current_epoch`](#0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch)
+-  [Function `deny_list_v2_is_global_pause_enabled_next_epoch`](#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
 -  [Function `update_name`](#0x2_coin_update_name)
 -  [Function `update_symbol`](#0x2_coin_update_symbol)
@@ -1074,13 +1076,13 @@ accordingly.
 
 </details>
 
-<a name="0x2_coin_deny_list_v2_most_recent_contains"></a>
+<a name="0x2_coin_v2_contains_current_epoch"></a>
 
-## Function `deny_list_v2_most_recent_contains`
+## Function `v2_contains_current_epoch`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_most_recent_contains">deny_list_v2_most_recent_contains</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_v2_contains_current_epoch">v2_contains_current_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -1089,13 +1091,41 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_most_recent_contains">deny_list_v2_most_recent_contains</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_v2_contains_current_epoch">v2_contains_current_epoch</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
     addr: <b>address</b>,
     ctx: &TxContext,
 ): bool {
     <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_most_recent_contains(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr, ctx)
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/coin.md#0x2_coin_v2_contains_current_epoch">v2_contains_current_epoch</a>(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_v2_contains_next_epoch"></a>
+
+## Function `v2_contains_next_epoch`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_v2_contains_next_epoch">v2_contains_next_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_v2_contains_next_epoch">v2_contains_next_epoch</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
+    addr: <b>address</b>,
+): bool {
+    <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/coin.md#0x2_coin_v2_contains_next_epoch">v2_contains_next_epoch</a>(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr)
 }
 </code></pre>
 
@@ -1163,13 +1193,13 @@ accordingly.
 
 </details>
 
-<a name="0x2_coin_deny_list_v2_most_recent_is_global_pause_enabled"></a>
+<a name="0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch"></a>
 
-## Function `deny_list_v2_most_recent_is_global_pause_enabled`
+## Function `deny_list_v2_is_global_pause_enabled_current_epoch`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_most_recent_is_global_pause_enabled">deny_list_v2_most_recent_is_global_pause_enabled</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch">deny_list_v2_is_global_pause_enabled_current_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -1178,12 +1208,39 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_most_recent_is_global_pause_enabled">deny_list_v2_most_recent_is_global_pause_enabled</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch">deny_list_v2_is_global_pause_enabled_current_epoch</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
     ctx: &TxContext,
 ): bool {
     <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_most_recent_is_global_pause_enabled(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx)
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_is_global_pause_enabled_current_epoch(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch"></a>
+
+## Function `deny_list_v2_is_global_pause_enabled_next_epoch`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
+): bool {
+    <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_is_global_pause_enabled_next_epoch(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty)
 }
 </code></pre>
 

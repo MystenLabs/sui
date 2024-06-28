@@ -181,18 +181,18 @@ module sui::config {
         data.newer_value.borrow_mut()
     }
 
-    public(package) fun borrow_most_recent<
+    public(package) fun read_newer_setting<
         WriteCap,
         Name: copy + drop + store,
         Value: copy + drop + store,
     >(
         config: &Config<WriteCap>,
         name: Name,
-    ): &Value {
+    ): Option<Value> {
+        if (!field::exists_with_type<_, Setting<Value>>(&config.id, name)) return option::none();
         let sobj: &Setting<Value> = field::borrow(&config.id, name);
         let data = sobj.data.borrow();
-        assert!(data.newer_value.is_some(), ENotSetForEpoch);
-        data.newer_value.borrow()
+        data.newer_value
     }
 
     public(package) macro fun entry<
