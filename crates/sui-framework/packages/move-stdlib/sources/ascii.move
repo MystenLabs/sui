@@ -44,27 +44,15 @@ module std::ascii {
     /// `Some(<ascii_string>)` if the `bytes` contains all valid ASCII
     /// characters. Otherwise returns `None`.
     public fun try_string(bytes: vector<u8>): Option<String> {
-        let len = bytes.length();
-        let mut i = 0;
-        while (i < len) {
-            let possible_byte = bytes[i];
-            if (!is_valid_char(possible_byte)) return option::none();
-            i = i + 1;
-        };
-        option::some(String { bytes })
+        let is_valid = bytes.all!(|byte| is_valid_char(*byte));
+        if (is_valid) option::some(String { bytes })
+        else option::none()
     }
 
     /// Returns `true` if all characters in `string` are printable characters
     /// Returns `false` otherwise. Not all `String`s are printable strings.
     public fun all_characters_printable(string: &String): bool {
-        let len = string.bytes.length();
-        let mut i = 0;
-        while (i < len) {
-            let byte = string.bytes[i];
-            if (!is_printable_char(byte)) return false;
-            i = i + 1;
-        };
-        true
+        string.bytes.all!(|byte| is_printable_char(*byte))
     }
 
     /// Push a `Char` to the end of the `string`.
@@ -90,20 +78,14 @@ module std::ascii {
     /// Insert the `other` string at the `at` index of `string`.
     public fun insert(s: &mut String, at: u64, o: String) {
         assert!(at <= s.length(), EInvalidIndex);
-        let mut bytes = o.into_bytes();
-        while (!bytes.is_empty()) {
-            s.bytes.insert(bytes.pop_back(), at);
-        };
+        o.into_bytes().destroy!(|e| s.bytes.insert(e, at));
     }
 
     /// Copy the slice of the `string` from `i` to `j` into a new `String`.
-    public fun substring(string: &String, mut i: u64, j: u64): String {
+    public fun substring(string: &String, i: u64, j: u64): String {
         assert!(i <= j && j <= string.length(), EInvalidIndex);
         let mut bytes = vector[];
-        while (i < j) {
-            bytes.push_back(string.bytes[i]);
-            i = i + 1;
-        };
+        i.range_do!(j, |i| bytes.push_back(string.bytes[i]));
         String { bytes }
     }
 
@@ -144,15 +126,13 @@ module std::ascii {
 
     /// Convert a `string` to its uppercase equivalent.
     public fun to_uppercase(string: &String): String {
-        let mut bytes = vector[];
-        string.length().do!(|i| bytes.push_back(char_to_uppercase(string.bytes[i])));
+        let bytes = string.as_bytes().map_ref!(|byte| char_to_uppercase(*byte));
         String { bytes }
     }
 
     /// Convert a `string` to its lowercase equivalent.
     public fun to_lowercase(string: &String): String {
-        let mut bytes = vector[];
-        string.length().do!(|i| bytes.push_back(char_to_lowercase(string.bytes[i])));
+        let bytes = string.as_bytes().map_ref!(|byte| char_to_lowercase(*byte));
         String { bytes }
     }
 

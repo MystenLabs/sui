@@ -186,11 +186,8 @@ Tries to create a new string from a sequence of bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/string.md#0x1_string_try_utf8">try_utf8</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): Option&lt;<a href="../move-stdlib/string.md#0x1_string_String">String</a>&gt; {
-    <b>if</b> (<a href="../move-stdlib/string.md#0x1_string_internal_check_utf8">internal_check_utf8</a>(&bytes)) {
-        <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="../move-stdlib/string.md#0x1_string_String">String</a> { bytes })
-    } <b>else</b> {
-        <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>()
-    }
+    <b>if</b> (<a href="../move-stdlib/string.md#0x1_string_internal_check_utf8">internal_check_utf8</a>(&bytes)) <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="../move-stdlib/string.md#0x1_string_String">String</a> { bytes })
+    <b>else</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>()
 }
 </code></pre>
 

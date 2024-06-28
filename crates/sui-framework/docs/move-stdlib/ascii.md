@@ -196,14 +196,9 @@ characters. Otherwise returns <code>None</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_try_string">try_string</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): Option&lt;<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>&gt; {
-    <b>let</b> len = bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>();
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; len) {
-        <b>let</b> possible_byte = bytes[i];
-        <b>if</b> (!<a href="../move-stdlib/ascii.md#0x1_ascii_is_valid_char">is_valid_char</a>(possible_byte)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
-        i = i + 1;
-    };
-    <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> { bytes })
+    <b>let</b> is_valid = bytes.all!(|byte| <a href="../move-stdlib/ascii.md#0x1_ascii_is_valid_char">is_valid_char</a>(*byte));
+    <b>if</b> (is_valid) <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> { bytes })
+    <b>else</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>()
 }
 </code></pre>
 
@@ -229,14 +224,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_all_characters_printable">all_characters_printable</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): bool {
-    <b>let</b> len = <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>();
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; len) {
-        <b>let</b> byte = <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i];
-        <b>if</b> (!<a href="../move-stdlib/ascii.md#0x1_ascii_is_printable_char">is_printable_char</a>(byte)) <b>return</b> <b>false</b>;
-        i = i + 1;
-    };
-    <b>true</b>
+    <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes.all!(|byte| <a href="../move-stdlib/ascii.md#0x1_ascii_is_printable_char">is_printable_char</a>(*byte))
 }
 </code></pre>
 
@@ -362,10 +350,7 @@ Insert the <code>other</code> string at the <code>at</code> index of <code><a hr
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_insert">insert</a>(s: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, at: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, o: <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>) {
     <b>assert</b>!(at &lt;= s.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(), <a href="../move-stdlib/ascii.md#0x1_ascii_EInvalidIndex">EInvalidIndex</a>);
-    <b>let</b> <b>mut</b> bytes = o.<a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">into_bytes</a>();
-    <b>while</b> (!bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_is_empty">is_empty</a>()) {
-        s.bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_insert">insert</a>(bytes.pop_back(), at);
-    };
+    o.<a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">into_bytes</a>().destroy!(|e| s.bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_insert">insert</a>(e, at));
 }
 </code></pre>
 
@@ -389,13 +374,10 @@ Copy the slice of the <code><a href="../move-stdlib/string.md#0x1_string">string
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_substring">substring</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, <b>mut</b> i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, j: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_substring">substring</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, j: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> {
     <b>assert</b>!(i &lt;= j && j &lt;= <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(), <a href="../move-stdlib/ascii.md#0x1_ascii_EInvalidIndex">EInvalidIndex</a>);
     <b>let</b> <b>mut</b> bytes = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <b>while</b> (i &lt; j) {
-        bytes.push_back(<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i]);
-        i = i + 1;
-    };
+    i.range_do!(j, |i| bytes.push_back(<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i]));
     <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> { bytes }
 }
 </code></pre>
@@ -576,8 +558,7 @@ Convert a <code><a href="../move-stdlib/string.md#0x1_string">string</a></code> 
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_to_uppercase">to_uppercase</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> {
-    <b>let</b> <b>mut</b> bytes = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>().do!(|i| bytes.push_back(<a href="../move-stdlib/ascii.md#0x1_ascii_char_to_uppercase">char_to_uppercase</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i])));
+    <b>let</b> bytes = <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>().map_ref!(|byte| <a href="../move-stdlib/ascii.md#0x1_ascii_char_to_uppercase">char_to_uppercase</a>(*byte));
     <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> { bytes }
 }
 </code></pre>
@@ -603,8 +584,7 @@ Convert a <code><a href="../move-stdlib/string.md#0x1_string">string</a></code> 
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_to_lowercase">to_lowercase</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> {
-    <b>let</b> <b>mut</b> bytes = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>().do!(|i| bytes.push_back(<a href="../move-stdlib/ascii.md#0x1_ascii_char_to_lowercase">char_to_lowercase</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i])));
+    <b>let</b> bytes = <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>().map_ref!(|byte| <a href="../move-stdlib/ascii.md#0x1_ascii_char_to_lowercase">char_to_lowercase</a>(*byte));
     <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> { bytes }
 }
 </code></pre>

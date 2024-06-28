@@ -39,11 +39,8 @@ module std::string {
 
     /// Tries to create a new string from a sequence of bytes.
     public fun try_utf8(bytes: vector<u8>): Option<String> {
-        if (internal_check_utf8(&bytes)) {
-            option::some(String { bytes })
-        } else {
-            option::none()
-        }
+        if (internal_check_utf8(&bytes)) option::some(String { bytes })
+        else option::none()
     }
 
     /// Returns a reference to the underlying byte vector.
