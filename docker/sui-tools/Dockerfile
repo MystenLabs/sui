@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y libpq5 libpq-dev ca-certificates
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/stress /usr/local/bin
 COPY --from=builder /sui/target/release/sui-bridge /usr/local/bin
+COPY --from=builder /sui/target/release/bridge-indexer /usr/local/bin
 COPY --from=builder /sui/target/release/sui-bridge-cli /usr/local/bin
 COPY --from=builder /sui/target/release/sui-analytics-indexer /usr/local/bin
 COPY --from=builder /sui/target/release/sui-proxy /usr/local/bin

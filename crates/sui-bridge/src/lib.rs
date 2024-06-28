@@ -41,12 +41,12 @@ pub mod e2e_tests;
 macro_rules! retry_with_max_elapsed_time {
     ($func:expr, $max_elapsed_time:expr) => {{
         // The following delay sequence (in secs) will be used, applied with jitter
-        // 0.4, 0.8, 1.6, 3.2, 6.4, 12.8, 25.6, 30, 30, 30 ...
+        // 0.4, 0.8, 1.6, 3.2, 6.4, 12.8, 25.6, 30, 60, 120, 120 ...
         let backoff = backoff::ExponentialBackoff {
             initial_interval: Duration::from_millis(400),
             randomization_factor: 0.1,
             multiplier: 2.0,
-            max_interval: Duration::from_secs(30),
+            max_interval: Duration::from_secs(120),
             max_elapsed_time: Some($max_elapsed_time),
             ..Default::default()
         };

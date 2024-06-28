@@ -51,8 +51,14 @@ pub enum EpochFlag {
     _ObjectLockSplitTablesDeprecated,
 
     WritebackCacheEnabled,
-    StateAccumulatorV2Enabled,
+
+    // This flag was "burned" because it was deployed with a broken version of the code. The
+    // new flags below are required to enable state accumulator v2
+    _StateAccumulatorV2EnabledDeprecated,
+
     ExecutedInEpochTable,
+    StateAccumulatorV2EnabledTestnet,
+    StateAccumulatorV2EnabledMainnet,
 }
 
 impl EpochFlag {
@@ -62,7 +68,7 @@ impl EpochFlag {
 
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
     pub fn default_for_no_config() -> Vec<Self> {
-        Self::default_flags_impl(&Default::default(), false)
+        Self::default_flags_impl(&Default::default(), true)
     }
 
     fn default_flags_impl(
@@ -79,7 +85,9 @@ impl EpochFlag {
         }
 
         if enable_state_accumulator_v2 {
-            new_flags.push(EpochFlag::StateAccumulatorV2Enabled);
+            new_flags.push(EpochFlag::StateAccumulatorV2EnabledTestnet);
+            // TODO: enable on mainnet
+            // new_flags.push(EpochFlag::StateAccumulatorV2EnabledMainnet);
         }
 
         new_flags
@@ -100,8 +108,16 @@ impl fmt::Display for EpochFlag {
                 write!(f, "ObjectLockSplitTables (DEPRECATED)")
             }
             EpochFlag::WritebackCacheEnabled => write!(f, "WritebackCacheEnabled"),
-            EpochFlag::StateAccumulatorV2Enabled => write!(f, "StateAccumulatorV2Enabled"),
+            EpochFlag::_StateAccumulatorV2EnabledDeprecated => {
+                write!(f, "StateAccumulatorV2EnabledDeprecated (DEPRECATED)")
+            }
             EpochFlag::ExecutedInEpochTable => write!(f, "ExecutedInEpochTable"),
+            EpochFlag::StateAccumulatorV2EnabledTestnet => {
+                write!(f, "StateAccumulatorV2EnabledTestnet")
+            }
+            EpochFlag::StateAccumulatorV2EnabledMainnet => {
+                write!(f, "StateAccumulatorV2EnabledMainnet")
+            }
         }
     }
 }

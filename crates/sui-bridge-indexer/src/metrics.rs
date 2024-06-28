@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::{
+    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
+    Registry,
+};
 
 #[derive(Clone, Debug)]
 pub struct BridgeIndexerMetrics {
@@ -14,6 +17,10 @@ pub struct BridgeIndexerMetrics {
     pub(crate) total_eth_token_deposited: IntCounter,
     pub(crate) total_eth_token_transfer_claimed: IntCounter,
     pub(crate) total_eth_bridge_txn_other: IntCounter,
+    pub(crate) last_committed_sui_checkpoint: IntGauge,
+    pub(crate) last_committed_eth_block: IntGauge,
+    pub(crate) last_synced_unfinalized_eth_block: IntGauge,
+    pub(crate) last_committed_unfinalized_eth_block: IntGauge,
 }
 
 impl BridgeIndexerMetrics {
@@ -70,6 +77,30 @@ impl BridgeIndexerMetrics {
             total_eth_bridge_txn_other: register_int_counter_with_registry!(
                 "total_eth_bridge_txn_other",
                 "Total number of other eth bridge transactions",
+                registry,
+            )
+            .unwrap(),
+            last_committed_sui_checkpoint: register_int_gauge_with_registry!(
+                "last_committed_sui_checkpoint",
+                "The latest sui checkpoint that indexer committed to DB",
+                registry,
+            )
+            .unwrap(),
+            last_committed_eth_block: register_int_gauge_with_registry!(
+                "last_committed_eth_block",
+                "The latest eth block that indexer committed to DB",
+                registry,
+            )
+            .unwrap(),
+            last_synced_unfinalized_eth_block: register_int_gauge_with_registry!(
+                "last_synced_unfinalized_eth_block",
+                "The latest unfinalized block that indexer synced",
+                registry,
+            )
+            .unwrap(),
+            last_committed_unfinalized_eth_block: register_int_gauge_with_registry!(
+                "last_committed_unfinalized_eth_block",
+                "The latest unfinalized block that indexer comitted to DB",
                 registry,
             )
             .unwrap(),

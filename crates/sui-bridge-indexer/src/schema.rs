@@ -10,6 +10,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    sui_progress_store (id) {
+        id -> Int4,
+        txn_digest -> Bytea,
+    }
+}
+
+diesel::table! {
     token_transfer (chain_id, nonce, status) {
         chain_id -> Int4,
         nonce -> Int8,
@@ -38,4 +45,9 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(progress_store, token_transfer, token_transfer_data,);
+diesel::allow_tables_to_appear_in_same_query!(
+    progress_store,
+    sui_progress_store,
+    token_transfer,
+    token_transfer_data,
+);

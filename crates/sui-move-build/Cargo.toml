@@ -18,6 +18,7 @@ sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "su
 serde-reflection.workspace = true
 sui-types.workspace = true
 sui-protocol-config.workspace = true
+sui-package-management.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

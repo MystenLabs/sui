@@ -165,12 +165,13 @@ async fn process_raw_request<L: Logger>(
                 return blocked_response;
             }
         }
-        let response = process_request(request, api_version, service.call_data()).await;
 
         // handle response tallying
+        let response = process_request(request, api_version, service.call_data()).await;
         if let Some(traffic_controller) = &service.traffic_controller {
             handle_traffic_resp(traffic_controller.clone(), client, &response);
         }
+
         response
     } else if let Ok(_batch) = serde_json::from_str::<Vec<&RawValue>>(raw_request) {
         MethodResponse::error(
@@ -207,6 +208,14 @@ fn handle_traffic_resp(
         direct: client,
         through_fullnode: None,
         error_weight: error.map(normalize).unwrap_or(Weight::zero()),
+        // For now, count everything as spam with equal weight
+        // on the rpc node side, including gas-charging endpoints
+        // such as `sui_executeTransactionBlock`, as this can enable
+        // node operators who wish to rate limit their transcation
+        // traffic and incentivize high volume clients to choose a
+        // suitable rpc provider (or run their own). Later we may want
+        // to provide a weight distribution based on the method being called.
+        spam_weight: Weight::one(),
         timestamp: SystemTime::now(),
     });
 }

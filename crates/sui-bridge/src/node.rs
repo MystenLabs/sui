@@ -85,7 +85,7 @@ async fn start_client_components(
     let mut all_handles = vec![];
     let (task_handles, eth_events_rx, _) =
         EthSyncer::new(client_config.eth_client.clone(), eth_contracts_to_watch)
-            .run()
+            .run(metrics.clone())
             .await
             .expect("Failed to start eth syncer");
     all_handles.extend(task_handles);

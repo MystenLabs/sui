@@ -8,6 +8,7 @@
 
 use crate::error::BridgeResult;
 use crate::eth_client::EthClient;
+use crate::metrics::BridgeMetrics;
 use crate::retry_with_max_elapsed_time;
 use crate::types::EthLog;
 use ethers::types::Address as EthAddress;
@@ -16,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
-use tokio::time::{self, Duration};
+use tokio::time::{self, Duration, Instant};
 use tracing::error;
 
 const ETH_LOG_QUERY_MAX_BLOCK_RANGE: u64 = 1000;
@@ -45,6 +46,7 @@ where
 
     pub async fn run(
         self,
+        metrics: Arc<BridgeMetrics>,
     ) -> BridgeResult<(
         Vec<JoinHandle<()>>,
         mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
@@ -62,13 +64,19 @@ where
             watch::channel(last_finalized_block);
         let mut task_handles = vec![];
         let eth_client_clone = self.eth_client.clone();
+        let metrics_clone = metrics.clone();
         task_handles.push(spawn_logged_monitored_task!(
-            Self::run_finalized_block_refresh_task(last_finalized_block_tx, eth_client_clone)
+            Self::run_finalized_block_refresh_task(
+                last_finalized_block_tx,
+                eth_client_clone,
+                metrics_clone
+            )
         ));
         for (contract_address, start_block) in self.contract_addresses {
             let eth_evnets_tx_clone = eth_evnets_tx.clone();
             let last_finalized_block_rx_clone = last_finalized_block_rx.clone();
             let eth_client_clone = self.eth_client.clone();
+            let metrics_clone = metrics.clone();
             task_handles.push(spawn_logged_monitored_task!(
                 Self::run_event_listening_task(
                     contract_address,
@@ -76,6 +84,7 @@ where
                     last_finalized_block_rx_clone,
                     eth_evnets_tx_clone,
                     eth_client_clone,
+                    metrics_clone,
                 )
             ));
         }
@@ -85,6 +94,7 @@ where
     async fn run_finalized_block_refresh_task(
         last_finalized_block_sender: watch::Sender<u64>,
         eth_client: Arc<EthClient<P>>,
+        metrics: Arc<BridgeMetrics>,
     ) {
         tracing::info!("Starting finalized block refresh task.");
         let mut last_block_number = 0;
@@ -101,6 +111,7 @@ where
                 continue;
             };
             tracing::debug!("Last finalized block: {}", new_value);
+            metrics.last_finalized_eth_block.set(new_value as i64);
 
             // TODO add a metrics for the last finalized block
 
@@ -122,6 +133,7 @@ where
         mut last_finalized_block_receiver: watch::Receiver<u64>,
         events_sender: mysten_metrics::metered_channel::Sender<(EthAddress, u64, Vec<EthLog>)>,
         eth_client: Arc<EthClient<P>>,
+        metrics: Arc<BridgeMetrics>,
     ) {
         tracing::info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
         let mut more_blocks = false;
@@ -149,6 +161,7 @@ where
                 new_finalized_block,
             );
             more_blocks = end_block < new_finalized_block;
+            let timer = Instant::now();
             let Ok(Ok(events)) = retry_with_max_elapsed_time!(
                 eth_client.get_events_in_range(contract_address, start_block, end_block),
                 Duration::from_secs(600)
@@ -156,7 +169,15 @@ where
                 error!("Failed to get events from eth client after retry");
                 continue;
             };
+            tracing::info!(
+                ?contract_address,
+                start_block,
+                end_block,
+                "Querying eth events took {:?}",
+                timer.elapsed()
+            );
             let len = events.len();
+            let last_block = events.last().map(|e| e.block_number);
 
             // Note 1: we always events to the channel even when it is empty. This is because of
             // how `eth_getLogs` api is designed - we want cursor to move forward continuously.
@@ -175,6 +196,9 @@ where
                     end_block,
                     "Observed {len} new Eth events",
                 );
+            }
+            if let Some(last_block) = last_block {
+                metrics.last_synced_eth_block.set(last_block as i64);
             }
             start_block = end_block + 1;
         }
@@ -234,7 +258,7 @@ mod tests {
         );
         let (_handles, mut logs_rx, mut finalized_block_rx) =
             EthSyncer::new(Arc::new(client), addresses)
-                .run()
+                .run(Arc::new(BridgeMetrics::new_for_testing()))
                 .await
                 .unwrap();
 
@@ -324,7 +348,7 @@ mod tests {
 
         let (_handles, mut logs_rx, mut finalized_block_rx) =
             EthSyncer::new(Arc::new(client), addresses)
-                .run()
+                .run(Arc::new(BridgeMetrics::new_for_testing()))
                 .await
                 .unwrap();
 
@@ -461,7 +485,7 @@ mod tests {
 
         let (_handles, mut logs_rx, mut finalized_block_rx) =
             EthSyncer::new(Arc::new(client), addresses)
-                .run()
+                .run(Arc::new(BridgeMetrics::new_for_testing()))
                 .await
                 .unwrap();
 

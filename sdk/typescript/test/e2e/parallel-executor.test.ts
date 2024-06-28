@@ -11,8 +11,13 @@ import { setup, TestToolbox } from './utils/setup';
 
 let toolbox: TestToolbox;
 let executor: ParallelTransactionExecutor;
+
 beforeAll(async () => {
 	toolbox = await setup();
+
+	// Creates bear package
+	await toolbox.mintNft();
+
 	executor = new ParallelTransactionExecutor({
 		client: toolbox.client,
 		signer: toolbox.keypair,
@@ -54,11 +59,13 @@ describe('ParallelTransactionExecutor', () => {
 			});
 		});
 
-		const txbs = Array.from({ length: 10 }, () => {
+		const txbs = [];
+
+		for (let i = 0; i < 10; i++) {
 			const txb = new Transaction();
-			txb.transferObjects([txb.splitCoins(txb.gas, [1])[0]], toolbox.address());
-			return txb;
-		});
+			txb.transferObjects([await toolbox.mintNft()], toolbox.address());
+			txbs.push(txb);
+		}
 
 		const results = await Promise.all(txbs.map((txb) => executor.executeTransaction(txb)));
 

@@ -389,15 +389,11 @@ impl StateAccumulator {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         metrics: Arc<StateAccumulatorMetrics>,
     ) -> Self {
-        if cfg!(msim) {
-            if epoch_store.state_accumulator_v2_enabled() {
-                return StateAccumulator::V2(StateAccumulatorV2::new(store, metrics));
-            } else {
-                return StateAccumulator::V1(StateAccumulatorV1::new(store, metrics));
-            }
+        if epoch_store.state_accumulator_v2_enabled() {
+            StateAccumulator::V2(StateAccumulatorV2::new(store, metrics))
+        } else {
+            StateAccumulator::V1(StateAccumulatorV1::new(store, metrics))
         }
-
-        StateAccumulator::V1(StateAccumulatorV1::new(store, metrics))
     }
 
     pub fn new_for_tests(

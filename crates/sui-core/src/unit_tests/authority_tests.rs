@@ -2342,14 +2342,14 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         gas_object.compute_object_reference(),
         &authority_state,
     );
-    let signed_effects = authority_state
+    let effects = authority_state
         .execute_certificate(
             &certified_transfer_transaction,
             &authority_state.epoch_store_for_testing(),
         )
         .await
         .unwrap();
-    signed_effects.into_message().status().unwrap();
+    effects.status().unwrap();
 }
 
 #[tokio::test]
@@ -2396,7 +2396,7 @@ async fn test_handle_confirmation_transaction_ok() {
         )
         .await
         .unwrap();
-    signed_effects.into_message().status().unwrap();
+    signed_effects.status().unwrap();
     // Key check: the ownership has changed
 
     let new_account = authority_state
@@ -2453,14 +2453,14 @@ async fn test_handle_confirmation_transaction_idempotent() {
         &authority_state,
     );
 
-    let signed_effects = authority_state
+    let effects = authority_state
         .execute_certificate(
             &certified_transfer_transaction,
             &authority_state.epoch_store_for_testing(),
         )
         .await
         .unwrap();
-    assert_eq!(signed_effects.data().status(), &ExecutionStatus::Success);
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
 
     let signed_effects2 = authority_state
         .execute_certificate(
@@ -2469,10 +2469,10 @@ async fn test_handle_confirmation_transaction_idempotent() {
         )
         .await
         .unwrap();
-    assert_eq!(signed_effects2.data().status(), &ExecutionStatus::Success);
+    assert_eq!(signed_effects2.status(), &ExecutionStatus::Success);
 
     // this is valid because we're checking the authority state does not change the certificate
-    assert_eq!(signed_effects, signed_effects2);
+    assert_eq!(effects, signed_effects2);
 
     // Now check the transaction info request is also the same
     let info = authority_state
@@ -2482,10 +2482,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
         .await
         .unwrap();
 
-    assert_eq!(
-        info.status.into_effects_for_testing(),
-        signed_effects.into_inner()
-    );
+    assert_eq!(info.status.into_effects_for_testing().data(), &effects);
 }
 
 #[tokio::test]
@@ -2614,8 +2611,7 @@ async fn test_move_call_insufficient_gas() {
             &authority_state.epoch_store_for_testing(),
         )
         .await
-        .unwrap()
-        .into_message();
+        .unwrap();
     let gas_used = effects.gas_cost_summary().net_gas_usage() as u64;
     let kind_of_rebate_to_remove = effects.gas_cost_summary().storage_cost / 2;
 
@@ -2978,7 +2974,7 @@ async fn test_idempotent_reversed_confirmation() {
         .await;
     assert!(result2.is_ok());
     assert_eq!(
-        result1.unwrap().into_message(),
+        result1.unwrap(),
         result2
             .unwrap()
             .status
@@ -3264,11 +3260,10 @@ async fn test_transfer_sui_no_amount() {
         .unwrap();
 
     let certificate = init_certified_transaction(transaction.into(), &authority_state);
-    let signed_effects = authority_state
+    let effects = authority_state
         .execute_certificate(&certificate, &authority_state.epoch_store_for_testing())
         .await
         .unwrap();
-    let effects = signed_effects.into_message();
     // Check that the transaction was successful, and the gas object is the only mutated object,
     // and got transferred. Also check on its version and new balance.
     assert!(effects.status().is_ok());
@@ -3310,11 +3305,10 @@ async fn test_transfer_sui_with_amount() {
     );
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
-    let signed_effects = authority_state
+    let effects = authority_state
         .execute_certificate(&certificate, &authority_state.epoch_store_for_testing())
         .await
         .unwrap();
-    let effects = signed_effects.into_message();
     // Check that the transaction was successful, the gas object remains in the original owner,
     // and an amount is split out and send to the recipient.
     assert!(effects.status().is_ok());
@@ -3435,8 +3429,7 @@ async fn test_store_revert_wrap_move_call() {
     let wrap_effects = authority_state
         .execute_certificate(&wrap_cert, &authority_state.epoch_store_for_testing())
         .await
-        .unwrap()
-        .into_message();
+        .unwrap();
 
     assert!(wrap_effects.status().is_ok());
     assert_eq!(wrap_effects.created().len(), 1);
@@ -3523,8 +3516,7 @@ async fn test_store_revert_unwrap_move_call() {
     let unwrap_effects = authority_state
         .execute_certificate(&unwrap_cert, &authority_state.epoch_store_for_testing())
         .await
-        .unwrap()
-        .into_message();
+        .unwrap();
 
     assert!(unwrap_effects.status().is_ok());
     assert_eq!(unwrap_effects.deleted().len(), 1);
@@ -3778,8 +3770,7 @@ async fn test_store_revert_add_ofield() {
     let add_effects = authority_state
         .execute_certificate(&add_cert, &authority_state.epoch_store_for_testing())
         .await
-        .unwrap()
-        .into_message();
+        .unwrap();
 
     assert!(add_effects.status().is_ok());
     assert_eq!(add_effects.created().len(), 1);
@@ -3894,8 +3885,7 @@ async fn test_store_revert_remove_ofield() {
             &authority_state.epoch_store_for_testing(),
         )
         .await
-        .unwrap()
-        .into_message();
+        .unwrap();
 
     assert!(remove_effects.status().is_ok());
     let outer_v2 = find_by_id(&remove_effects.mutated(), outer_v0.0).unwrap();
