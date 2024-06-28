@@ -149,6 +149,10 @@ fn consistent_value_before_current_epoch(
     };
     let [newer_value_epoch, newer_value, older_value_opt]: [Value; 3] = unpack_struct(data)?;
     let newer_value_epoch: u64 = newer_value_epoch.value_as()?;
+    debug_assert!(
+        unpack_option(newer_value.copy_value()?, value_ty)?.is_some()
+            || unpack_option(older_value_opt.copy_value()?, value_ty)?.is_some()
+    );
     Ok(if current_epoch > newer_value_epoch {
         newer_value
     } else {

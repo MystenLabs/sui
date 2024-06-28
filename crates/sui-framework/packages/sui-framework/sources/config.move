@@ -54,7 +54,7 @@ module sui::config {
         name: Name,
         value: Value,
         ctx: &mut TxContext,
-    ) {
+    ): Option<Value> {
         let epoch = ctx.epoch();
         if (!field::exists_(&config.id, name)) {
             let sobj = Setting {
@@ -65,6 +65,7 @@ module sui::config {
                 }),
             };
             field::add(&mut config.id, name, sobj);
+            option::none()
         } else {
             let sobj: &mut Setting<Value> = field::borrow_mut(&mut config.id, name);
             let SettingData {
@@ -72,22 +73,23 @@ module sui::config {
                 newer_value,
                 older_value_opt,
             } = sobj.data.extract();
-            let older_value_opt =
+            let (older_value_opt, removed_value) =
                 if (epoch > newer_value_epoch) {
                     // if the `newer_value` is for a previous epoch, move it to `older_value_opt`
-                    newer_value
+                    (move newer_value, move older_value_opt)
                 } else {
                     // the current epoch cannot be less than the `newer_value_epoch`
                     assert!(epoch == newer_value_epoch);
                     // if the `newer_value` is for the current epoch, then the option must be `none`
                     assert!(newer_value.is_none(), EAlreadySetForEpoch);
-                    older_value_opt
+                    (move older_value_opt, option::none())
                 };
             sobj.data.fill(SettingData {
                 newer_value_epoch: epoch,
                 newer_value: option::some(value),
                 older_value_opt,
-            })
+            });
+            removed_value
         }
     }
 
@@ -103,20 +105,21 @@ module sui::config {
         ctx: &mut TxContext,
     ): Option<Value> {
         let epoch = ctx.epoch();
+        if (!field::exists_(&config.id, name)) return option::none();
         let sobj: &mut Setting<Value> = field::borrow_mut(&mut config.id, name);
         let SettingData {
             newer_value_epoch,
             newer_value,
             older_value_opt,
         } = sobj.data.extract();
-        let older_value_opt =
+        let (older_value_opt, removed_value) =
             if (epoch > newer_value_epoch) {
                 // if the `newer_value` is for a previous epoch, move it to `older_value_opt`
-                newer_value
+                (move newer_value, option::none())
             } else {
                 // the current epoch cannot be less than the `newer_value_epoch`
                 assert!(epoch == newer_value_epoch);
-                older_value_opt
+                (move older_value_opt, move newer_value)
             };
         let older_value_opt_is_none = older_value_opt.is_none();
         sobj.data.fill(SettingData {
@@ -127,7 +130,7 @@ module sui::config {
         if (older_value_opt_is_none) {
             field::remove<_, Setting<Value>>(&mut config.id, name);
         };
-        newer_value
+        removed_value
     }
 
     public(package) fun exists_with_type<

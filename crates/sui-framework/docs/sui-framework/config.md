@@ -208,7 +208,7 @@ title: Module `0x2::config`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_add_for_current_epoch">add_for_current_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_add_for_current_epoch">add_for_current_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -227,7 +227,7 @@ title: Module `0x2::config`
     name: Name,
     value: Value,
     ctx: &<b>mut</b> TxContext,
-) {
+): Option&lt;Value&gt; {
     <b>let</b> epoch = ctx.epoch();
     <b>if</b> (!field::exists_(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name)) {
         <b>let</b> sobj = <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a> {
@@ -238,6 +238,7 @@ title: Module `0x2::config`
             }),
         };
         field::add(&<b>mut</b> <a href="../sui-framework/config.md#0x2_config">config</a>.id, name, sobj);
+        <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>()
     } <b>else</b> {
         <b>let</b> sobj: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt; = field::borrow_mut(&<b>mut</b> <a href="../sui-framework/config.md#0x2_config">config</a>.id, name);
         <b>let</b> <a href="../sui-framework/config.md#0x2_config_SettingData">SettingData</a> {
@@ -245,22 +246,23 @@ title: Module `0x2::config`
             newer_value,
             older_value_opt,
         } = sobj.data.extract();
-        <b>let</b> older_value_opt =
+        <b>let</b> (older_value_opt, removed_value) =
             <b>if</b> (epoch &gt; newer_value_epoch) {
                 // <b>if</b> the `newer_value` is for a previous epoch, <b>move</b> it <b>to</b> `older_value_opt`
-                newer_value
+                (<b>move</b> newer_value, <b>move</b> older_value_opt)
             } <b>else</b> {
                 // the current epoch cannot be less than the `newer_value_epoch`
                 <b>assert</b>!(epoch == newer_value_epoch);
                 // <b>if</b> the `newer_value` is for the current epoch, then the <a href="../move-stdlib/option.md#0x1_option">option</a> must be `none`
                 <b>assert</b>!(newer_value.is_none(), <a href="../sui-framework/config.md#0x2_config_EAlreadySetForEpoch">EAlreadySetForEpoch</a>);
-                older_value_opt
+                (<b>move</b> older_value_opt, <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>())
             };
         sobj.data.fill(<a href="../sui-framework/config.md#0x2_config_SettingData">SettingData</a> {
             newer_value_epoch: epoch,
             newer_value: <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(value),
             older_value_opt,
-        })
+        });
+        removed_value
     }
 }
 </code></pre>
@@ -295,20 +297,21 @@ title: Module `0x2::config`
     ctx: &<b>mut</b> TxContext,
 ): Option&lt;Value&gt; {
     <b>let</b> epoch = ctx.epoch();
+    <b>if</b> (!field::exists_(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     <b>let</b> sobj: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt; = field::borrow_mut(&<b>mut</b> <a href="../sui-framework/config.md#0x2_config">config</a>.id, name);
     <b>let</b> <a href="../sui-framework/config.md#0x2_config_SettingData">SettingData</a> {
         newer_value_epoch,
         newer_value,
         older_value_opt,
     } = sobj.data.extract();
-    <b>let</b> older_value_opt =
+    <b>let</b> (older_value_opt, removed_value) =
         <b>if</b> (epoch &gt; newer_value_epoch) {
             // <b>if</b> the `newer_value` is for a previous epoch, <b>move</b> it <b>to</b> `older_value_opt`
-            newer_value
+            (<b>move</b> newer_value, <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>())
         } <b>else</b> {
             // the current epoch cannot be less than the `newer_value_epoch`
             <b>assert</b>!(epoch == newer_value_epoch);
-            older_value_opt
+            (<b>move</b> older_value_opt, <b>move</b> newer_value)
         };
     <b>let</b> older_value_opt_is_none = older_value_opt.is_none();
     sobj.data.fill(<a href="../sui-framework/config.md#0x2_config_SettingData">SettingData</a> {
@@ -319,7 +322,7 @@ title: Module `0x2::config`
     <b>if</b> (older_value_opt_is_none) {
         field::remove&lt;_, <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<b>mut</b> <a href="../sui-framework/config.md#0x2_config">config</a>.id, name);
     };
-    newer_value
+    removed_value
 }
 </code></pre>
 

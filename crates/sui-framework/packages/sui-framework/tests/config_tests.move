@@ -6,6 +6,7 @@ module sui::config_tests {
 
     use sui::config::{Self, Config};
     use sui::test_scenario as ts;
+    use std::unit_test::assert_eq;
 
     const SENDER: address = @42;
 
@@ -97,12 +98,16 @@ module sui::config_tests {
 
         // check that read_setting is not updated until next epoch
         ts.next_tx(SENDER);
-        assert!(config::read_setting<_, u8>(id, n1, ts.ctx()).destroy_some() == 224u8);
-        assert!(config::read_setting<_, u8>(id, n2, ts.ctx()).is_none());
+        {
+            assert!(config::read_setting<_, u8>(id, n1, ts.ctx()).destroy_some() == 224u8);
+            assert!(config::read_setting<_, u8>(id, n2, ts.ctx()).is_none());
+        };
 
         ts.next_epoch(SENDER);
-        assert!(config::read_setting<_, u8>(id, n1, ts.ctx()).destroy_some() == 0u8);
-        assert!(config::read_setting<_, u8>(id, n2, ts.ctx()).destroy_some() == 2u8);
+        {
+            assert!(config::read_setting<_, u8>(id, n1, ts.ctx()).destroy_some() == 0u8);
+            assert!(config::read_setting<_, u8>(id, n2, ts.ctx()).destroy_some() == 2u8);
+        };
 
         ts.next_tx(SENDER);
         {
@@ -201,6 +206,240 @@ module sui::config_tests {
             assert!(config::read_setting<_, u8>(id, w, ts.ctx()).is_none());
         };
 
+        // remove the setting, but still readable this epoch
+        ts.next_tx(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            // still some
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_some());
+            // still none
+            assert!(config::read_setting<_, bool>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, u64>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, u8>(id, w, ts.ctx()).is_none());
+            ts::return_shared(config);
+        };
+
+        // should now be none
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            // now none
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            // still none
+            assert!(config::read_setting<_, bool>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, u64>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, u8>(id, w, ts.ctx()).is_none());
+            ts::return_shared(config);
+        };
+
+        // still none
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            // now none
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            // still none
+            assert!(config::read_setting<_, bool>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, u64>(id, n, ts.ctx()).is_none());
+            assert!(config::read_setting<_, u8>(id, w, ts.ctx()).is_none());
+            ts::return_shared(config);
+        };
+
         ts.end();
     }
+
+    #[test]
+    fun test_remove_doesnt_fail_on_duplicate() {
+        let mut ts = ts::begin(SENDER);
+        config::create(&mut WriteCap(), ts.ctx());
+        ts.next_tx(SENDER);
+        let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
+        let n = b"hello";
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            ts::return_shared(config);
+        };
+
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            ts::return_shared(config);
+        };
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            ts::return_shared(config);
+        };
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_some());
+            ts::return_shared(config);
+        };
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_some());
+            ts::return_shared(config);
+        };
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            ts::return_shared(config);
+        };
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            ts::return_shared(config);
+        };
+
+        ts.end();
+    }
+
+    #[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+    fun test_remove_fail_on_type_mismatch() {
+        let mut ts = ts::begin(SENDER);
+        config::create(&mut WriteCap(), ts.ctx());
+        ts.next_tx(SENDER);
+        let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
+        let n = b"hello";
+        ts.next_epoch(SENDER);
+        let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+        config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+        config.remove_for_current_epoch<_, _, bool>(&mut WriteCap(), n, ts.ctx());
+        abort 0
+    }
+
+    #[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+    fun test_add_fail_on_type_mismatch() {
+        let mut ts = ts::begin(SENDER);
+        config::create(&mut WriteCap(), ts.ctx());
+        ts.next_tx(SENDER);
+        let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
+        let n = b"hello";
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            ts.next_epoch(SENDER);
+            ts::return_shared(config);
+        };
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.remove_for_current_epoch<_, _, bool>(&mut WriteCap(), n, ts.ctx());
+            abort 0
+        }
+    }
+
+    #[test]
+    fun test_removed_value() {
+        let mut ts = ts::begin(SENDER);
+        config::create(&mut WriteCap(), ts.ctx());
+        ts.next_tx(SENDER);
+        let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
+        let n = b"hello";
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            let removed_value =
+                config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            assert_eq!(removed_value, option::none());
+            ts::return_shared(config);
+        };
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            let removed_value =
+                config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 1, ts.ctx());
+            assert_eq!(removed_value, option::none());
+            ts::return_shared(config);
+        };
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            let removed_value =
+                config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 2, ts.ctx());
+            assert_eq!(removed_value, option::some(0));
+            ts::return_shared(config);
+        };
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            let removed_value =
+                config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            assert_eq!(removed_value, option::none());
+            let removed_value =
+                config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 3, ts.ctx());
+            assert_eq!(removed_value, option::none());
+            ts::return_shared(config);
+        };
+
+
+        ts.next_epoch(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            let removed_value =
+                config.add_for_current_epoch<_, _, u8>(&mut WriteCap(), n, 4, ts.ctx());
+            assert_eq!(removed_value, option::some(2));
+            let removed_value =
+                config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            assert_eq!(removed_value, option::some(4));
+            let removed_value =
+                config.remove_for_current_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            assert_eq!(removed_value, option::none());
+            ts::return_shared(config);
+        };
+
+        ts.end();
+    }
+
+
 }
