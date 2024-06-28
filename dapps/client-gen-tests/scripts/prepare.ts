@@ -69,7 +69,17 @@ async function main() {
 	}
 
 	// generate client code
-	run('cargo', ['run', '--bin', 'sui', 'client-gen', '-m', 'tests/gen.toml', '-o', 'tests/gen']);
+	run('cargo', [
+		'run',
+		'--bin',
+		'sui',
+		'client-gen',
+		'-m',
+		'tests/gen.toml',
+		'-o',
+		'tests/gen',
+		'--clean',
+	]);
 
 	// replace package id in generated client code
 	let indexPath = './tests/gen/examples/index.ts';

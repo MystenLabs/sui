@@ -5,9 +5,6 @@
 	"type": "module",
 	"scripts": {
 		"build:scripts": "tsup scripts/prepare.ts --out-dir dist --format esm",
-		"generate:example": "cargo run --bin sui client-gen -m examples/gen.toml -o examples/gen",
-		"generate:tests": "cargo run --bin sui client-gen -m tests/gen.toml -o tests/gen",
-		"generate:move": "cargo run --bin sui move build -p move/amm && cargo run --bin sui move build -p move/examples",
 		"run:prepare-script": "pnpm build:scripts && node dist/prepare.js",
 		"type-check": "pnpm turbo build && tsc -b",
 		"test:e2e": "pnpm run:prepare-script && pnpm type-check && vitest run tests",
