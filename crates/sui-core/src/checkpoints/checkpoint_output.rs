@@ -112,6 +112,9 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
             debug!(
                 "Checkpoint at sequence {checkpoint_seq} is already certified, skipping signature submission to consensus",
             );
+            self.metrics
+                .last_skipped_checkpoint_signature_submission
+                .set(checkpoint_seq as i64);
         }
 
         if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms {

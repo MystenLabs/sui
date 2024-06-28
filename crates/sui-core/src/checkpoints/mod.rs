@@ -2307,6 +2307,9 @@ impl CheckpointServiceNotify for CheckpointService {
                     checkpoint_seq = sequence,
                     "Ignore checkpoint signature from {} - already certified", signer,
                 );
+                self.metrics
+                    .last_ignored_checkpoint_signature_received
+                    .set(sequence as i64);
                 return Ok(());
             }
         }
