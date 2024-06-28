@@ -10,7 +10,7 @@ use move_model::model::{DatatypeId, FieldEnv, FunctionEnv, GlobalEnv, ModuleEnv,
 use move_model::symbol::{Symbol, SymbolPool};
 use move_model::ty::{PrimitiveType, Type};
 
-use crate::model_builder::TypeOriginTable;
+use crate::model_builder::{TypeOriginTable, VersionTable};
 
 #[rustfmt::skip]
 const JS_RESERVED_WORDS: [&str; 64] = [
@@ -104,6 +104,7 @@ pub struct StructClassImportCtx<'env, 'a> {
     is_top_level: bool,
     is_source: bool,
     top_level_pkg_names: &'a BTreeMap<AccountAddress, move_symbol_pool::Symbol>,
+    is_structs_gen: bool,
 }
 
 impl<'env, 'a> StructClassImportCtx<'env, 'a> {
@@ -112,6 +113,7 @@ impl<'env, 'a> StructClassImportCtx<'env, 'a> {
         module: &'env ModuleEnv,
         is_source: bool,
         top_level_pkg_names: &'a BTreeMap<AccountAddress, move_symbol_pool::Symbol>,
+        is_structs_gen: bool,
     ) -> Self {
         StructClassImportCtx {
             reserved_names: reserved_names
@@ -122,10 +124,27 @@ impl<'env, 'a> StructClassImportCtx<'env, 'a> {
             is_top_level: top_level_pkg_names.contains_key(module.self_address()),
             is_source,
             top_level_pkg_names,
+            is_structs_gen,
         }
     }
 
-    pub fn from_module(
+    pub fn for_func_gen(
+        module: &'env ModuleEnv,
+        is_source: bool,
+        top_level_pkg_names: &'a BTreeMap<AccountAddress, move_symbol_pool::Symbol>,
+    ) -> Self {
+        let reserved_names = vec![];
+        let is_structs_gen = false;
+        StructClassImportCtx::new(
+            reserved_names,
+            module,
+            is_source,
+            top_level_pkg_names,
+            is_structs_gen,
+        )
+    }
+
+    pub fn for_struct_gen(
         module: &'env ModuleEnv,
         is_source: bool,
         top_level_pkg_names: &'a BTreeMap<AccountAddress, move_symbol_pool::Symbol>,
@@ -141,7 +160,15 @@ impl<'env, 'a> StructClassImportCtx<'env, 'a> {
             .map(|enm| enm.get_name().display(module.env.symbol_pool()).to_string());
 
         let reserved_names = struct_names.chain(enum_names).collect();
-        StructClassImportCtx::new(reserved_names, module, is_source, top_level_pkg_names)
+        let is_structs_gen = true;
+
+        StructClassImportCtx::new(
+            reserved_names,
+            module,
+            is_source,
+            top_level_pkg_names,
+            is_structs_gen,
+        )
     }
 
     /// Returns the import path for a struct. If the struct is defined in the current module,
@@ -153,7 +180,11 @@ impl<'env, 'a> StructClassImportCtx<'env, 'a> {
             && strct.module_env.get_id() == self.module.get_id()
         {
             // if the struct is defined in the current module, we don't need to import anything
-            None
+            if self.is_structs_gen {
+                None
+            } else {
+                Some(format!("./structs"))
+            }
         } else if strct.module_env.self_address() == self.module.self_address() {
             // if the struct is defined in a different module in the same package, we use
             // the short version of the import path
@@ -247,10 +278,7 @@ impl<'env, 'a> StructClassImportCtx<'env, 'a> {
     }
 }
 
-pub fn get_full_name_with_address(
-    strct: &StructEnv,
-    type_origin_table: &TypeOriginTable,
-) -> String {
+fn get_origin_pkg_addr(strct: &StructEnv, type_origin_table: &TypeOriginTable) -> AccountAddress {
     let addr = strct.module_env.self_address();
     let types = type_origin_table.get(addr).unwrap_or_else(|| {
         panic!(
@@ -259,8 +287,6 @@ pub fn get_full_name_with_address(
         )
     });
     let origin_addr = types.get(&strct.get_full_name_str()).unwrap_or_else(|| {
-        println!("strct {}", strct.get_full_name_str());
-        println!("types: {:#?}", type_origin_table);
         panic!(
             "unable to find origin address for struct {} in package {}. \
             check consistency between original id and published at for this package.",
@@ -269,11 +295,63 @@ pub fn get_full_name_with_address(
         )
     });
 
+    *origin_addr
+}
+
+fn get_full_name_with_address_str(
+    strct: &StructEnv,
+    type_origin_table: &TypeOriginTable,
+) -> String {
+    let origin_pkg_addr = get_origin_pkg_addr(strct, type_origin_table);
     format!(
         "{}::{}",
-        origin_addr.to_hex_literal(),
+        origin_pkg_addr.to_hex_literal(),
         strct.get_full_name_str()
     )
+}
+
+fn gen_full_name_with_address(
+    strct: &StructEnv,
+    type_origin_table: &TypeOriginTable,
+    version_table: &VersionTable,
+    open_quote: bool,
+    as_type: bool,
+) -> js::Tokens {
+    let origin_pkg_addr = get_origin_pkg_addr(strct, type_origin_table);
+    let self_addr = strct.module_env.self_address();
+    let versions = version_table.get(&self_addr).unwrap_or_else(|| {
+        panic!(
+            "expected version table to exist for packge {}",
+            self_addr.to_hex_literal()
+        )
+    });
+    let version = versions.get(&origin_pkg_addr).unwrap_or_else(|| {
+        panic!(
+            "expected version to exist for package {} in package {}",
+            origin_pkg_addr.to_hex_literal(),
+            self_addr.to_hex_literal()
+        )
+    });
+    let pkg_import = js::import("../index", format!("PKG_V{}", version.value()));
+
+    // `${PKG_V1}::module::name`
+    let mut toks = js::Tokens::new();
+    if open_quote {
+        toks.append(Item::OpenQuote(true));
+    }
+    toks.append(Item::Literal(ItemStr::from("${")));
+    if as_type {
+        quote_in!(toks => typeof $pkg_import)
+    } else {
+        quote_in!(toks => $pkg_import);
+    }
+    toks.append(Item::Literal(ItemStr::from("}")));
+    quote_in!(toks => ::$(strct.get_full_name_str()));
+    if open_quote {
+        toks.append(Item::CloseQuote);
+    }
+
+    toks
 }
 
 pub fn gen_package_init_ts(modules: &[ModuleEnv], framework: &FrameworkImportCtx) -> js::Tokens {
@@ -397,7 +475,7 @@ fn gen_bcs_def_for_type(
     ty: &Type,
     env: &GlobalEnv,
     type_param_names: &Vec<QuoteItem>,
-    type_origin_table: &TypeOriginTable,
+    import_ctx: &mut StructClassImportCtx,
 ) -> js::Tokens {
     let mut toks = js::Tokens::new();
     toks.append(Item::OpenQuote(true));
@@ -407,7 +485,7 @@ fn gen_bcs_def_for_type(
         ty: &Type,
         env: &GlobalEnv,
         type_param_names: &Vec<QuoteItem>,
-        type_origin_table: &TypeOriginTable,
+        import_ctx: &mut StructClassImportCtx,
     ) {
         match ty {
             Type::TypeParameter(idx) => match &type_param_names[*idx as usize] {
@@ -423,14 +501,17 @@ fn gen_bcs_def_for_type(
                 todo_panic_if_enum(&module_env, sid);
 
                 let struct_env = module_env.into_struct(*sid);
+                let class = import_ctx.get_class(&struct_env);
 
-                quote_in! { *toks => $(get_full_name_with_address(&struct_env, type_origin_table)) };
+                toks.append(Item::Literal(ItemStr::from("${")));
+                quote_in! { *toks => $(class).$$typeName };
+                toks.append(Item::Literal(ItemStr::from("}")));
 
                 if !ts.is_empty() {
                     quote_in! { *toks => < };
                     let len = ts.len();
                     for (i, ty) in ts.iter().enumerate() {
-                        inner(toks, ty, env, type_param_names, type_origin_table);
+                        inner(toks, ty, env, type_param_names, import_ctx);
                         if i != len - 1 {
                             quote_in! { *toks => , };
                             toks.space()
@@ -441,7 +522,7 @@ fn gen_bcs_def_for_type(
             }
             Type::Vector(ty) => {
                 quote_in! { *toks => vector< };
-                inner(toks, ty, env, type_param_names, type_origin_table);
+                inner(toks, ty, env, type_param_names, import_ctx);
                 quote_in! { *toks => > };
             }
             Type::Primitive(ty) => match ty {
@@ -460,28 +541,28 @@ fn gen_bcs_def_for_type(
         }
     }
 
-    inner(&mut toks, ty, env, type_param_names, type_origin_table);
+    inner(&mut toks, ty, env, type_param_names, import_ctx);
     toks.append(Item::CloseQuote);
 
     toks
 }
 
-pub struct FunctionsGen<'env> {
+pub struct FunctionsGen<'env, 'a> {
     env: &'env GlobalEnv,
     framework: FrameworkImportCtx,
-    type_origin_table: &'env TypeOriginTable,
+    import_ctx: StructClassImportCtx<'env, 'a>,
 }
 
-impl<'env> FunctionsGen<'env> {
+impl<'env, 'a> FunctionsGen<'env, 'a> {
     pub fn new(
         env: &'env GlobalEnv,
         framework: FrameworkImportCtx,
-        type_origin_table: &'env TypeOriginTable,
+        import_ctx: StructClassImportCtx<'env, 'a>,
     ) -> Self {
         FunctionsGen {
             env,
             framework,
-            type_origin_table,
+            import_ctx,
         }
     }
 
@@ -489,8 +570,8 @@ impl<'env> FunctionsGen<'env> {
         self.env.symbol_pool()
     }
 
-    fn get_full_name_with_address(&self, strct: &StructEnv) -> String {
-        get_full_name_with_address(strct, self.type_origin_table)
+    fn gen_bcs_def_for_type(&mut self, ty: &Type, type_param_names: &Vec<QuoteItem>) -> js::Tokens {
+        gen_bcs_def_for_type(ty, self.env, type_param_names, &mut self.import_ctx)
     }
 
     fn field_name_from_type(&self, ty: &Type, type_param_names: Vec<Symbol>) -> Result<String> {
@@ -703,7 +784,7 @@ impl<'env> FunctionsGen<'env> {
 
                 let strct = module.get_struct(*sid);
 
-                match self.get_full_name_with_address(&strct).as_ref() {
+                match strct.get_full_name_with_address().as_ref() {
                     "0x1::string::String" | "0x1::ascii::String" => {
                         quote!(string | $transaction_argument)
                     }
@@ -753,7 +834,7 @@ impl<'env> FunctionsGen<'env> {
 
                 let strct = module.get_struct(*sid);
 
-                match self.get_full_name_with_address(&strct).as_ref() {
+                match strct.get_full_name_with_address().as_ref() {
                     "0x1::string::String" | "0x1::ascii::String" => true,
                     "0x2::object::ID" => true,
                     "0x1::option::Option" => self.is_pure(&ts[0]),
@@ -765,7 +846,7 @@ impl<'env> FunctionsGen<'env> {
     }
 
     // returns Option's type argument if the type is Option
-    fn is_option<'a>(&self, ty: &'a Type) -> Option<&'a Type> {
+    fn is_option<'b>(&self, ty: &'b Type) -> Option<&'b Type> {
         match ty {
             Type::Datatype(mid, sid, ts) => {
                 let module = self.env.get_module(*mid);
@@ -773,7 +854,7 @@ impl<'env> FunctionsGen<'env> {
 
                 let strct = module.get_struct(*sid);
 
-                match self.get_full_name_with_address(&strct).as_ref() {
+                match strct.get_full_name_with_address().as_ref() {
                     "0x1::option::Option" => Some(&ts[0]),
                     _ => None,
                 }
@@ -792,7 +873,7 @@ impl<'env> FunctionsGen<'env> {
     }
 
     fn param_to_tx_arg(
-        &self,
+        &mut self,
         ty: Type,
         arg_field_name: String,
         func_type_param_names: Vec<Symbol>,
@@ -823,32 +904,21 @@ impl<'env> FunctionsGen<'env> {
         };
 
         let ty = self.type_strip_ref(ty);
-        let ty_tok = gen_bcs_def_for_type(&ty, self.env, &type_param_names, self.type_origin_table);
+        let ty_tok = self.gen_bcs_def_for_type(&ty, &type_param_names);
 
         if self.is_pure(&ty) {
             quote!($pure(tx, $arg_field_name, $ty_tok))
         } else if let Some(ty) = self.is_option(&ty) {
-            let ty_tok =
-                gen_bcs_def_for_type(ty, self.env, &type_param_names, self.type_origin_table);
+            let ty_tok = self.gen_bcs_def_for_type(ty, &type_param_names);
             quote!($option(tx, $ty_tok, $arg_field_name))
         } else {
             match ty {
                 Type::TypeParameter(_) => {
-                    let ty_tok = gen_bcs_def_for_type(
-                        &ty,
-                        self.env,
-                        &type_param_names,
-                        self.type_origin_table,
-                    );
+                    let ty_tok = self.gen_bcs_def_for_type(&ty, &type_param_names);
                     quote!($generic(tx, $ty_tok, $arg_field_name))
                 }
                 Type::Vector(ty) => {
-                    let ty_tok = gen_bcs_def_for_type(
-                        &ty,
-                        self.env,
-                        &type_param_names,
-                        self.type_origin_table,
-                    );
+                    let ty_tok = self.gen_bcs_def_for_type(&ty, &type_param_names);
                     quote!($vector(tx, $ty_tok, $arg_field_name))
                 }
                 _ => {
@@ -877,7 +947,7 @@ impl<'env> FunctionsGen<'env> {
 
     /// Generates a function binding for a function.
     pub fn gen_fun_binding(
-        &self,
+        &mut self,
         func: &FunctionEnv,
         tokens: &mut Tokens<JavaScript>,
     ) -> Result<()> {
@@ -943,6 +1013,7 @@ pub struct StructsGen<'env, 'a> {
     import_ctx: StructClassImportCtx<'env, 'a>,
     framework: FrameworkImportCtx,
     type_origin_table: &'env TypeOriginTable,
+    version_table: &'env VersionTable,
 }
 
 impl<'env, 'a> StructsGen<'env, 'a> {
@@ -951,17 +1022,38 @@ impl<'env, 'a> StructsGen<'env, 'a> {
         import_ctx: StructClassImportCtx<'env, 'a>,
         framework: FrameworkImportCtx,
         type_origin_table: &'env TypeOriginTable,
+        version_table: &'env VersionTable,
     ) -> Self {
         StructsGen {
             env,
             import_ctx,
             framework,
             type_origin_table,
+            version_table,
         }
     }
 
-    fn get_full_name_with_address(&self, strct: &StructEnv) -> String {
-        get_full_name_with_address(strct, self.type_origin_table)
+    fn get_full_name_with_address_str(&self, strct: &StructEnv) -> String {
+        get_full_name_with_address_str(strct, self.type_origin_table)
+    }
+
+    fn gen_full_name_with_address(
+        &self,
+        strct: &StructEnv,
+        open_quote: bool,
+        as_type: bool,
+    ) -> js::Tokens {
+        gen_full_name_with_address(
+            strct,
+            self.type_origin_table,
+            self.version_table,
+            open_quote,
+            as_type,
+        )
+    }
+
+    fn gen_bcs_def_for_type(&mut self, ty: &Type, type_param_names: &Vec<QuoteItem>) -> js::Tokens {
+        gen_bcs_def_for_type(ty, self.env, type_param_names, &mut self.import_ctx)
     }
 
     fn symbol_pool(&self) -> &SymbolPool {
@@ -1329,9 +1421,9 @@ impl<'env, 'a> StructsGen<'env, 'a> {
             export function is$(&struct_name)(type: string): boolean {
                 type = $compress_sui_type(type);
                 $(if type_params.is_empty() {
-                    return type === $[str]($[const](self.get_full_name_with_address(strct)))
+                    return type === $(self.gen_full_name_with_address(strct, true, false))
                 } else {
-                    return type.startsWith($[str]($[const](self.get_full_name_with_address(strct))<))
+                    return type.startsWith($(self.gen_full_name_with_address(strct, true, false)) + '<')
                 });
             }
         }
@@ -1549,13 +1641,11 @@ impl<'env, 'a> StructsGen<'env, 'a> {
 
         // `0x2::foo::Bar<${ToTypeStr<ToTypeArgument<T>>}, ${ToTypeStr<ToPhantomTypeArgument<P>>}>`
         let reified_full_type_name_as_toks = match type_params.len() {
-            0 => quote!($[str]($[const](self.get_full_name_with_address(strct)))),
+            0 => quote!($(self.gen_full_name_with_address(strct, true, true))),
             _ => {
                 let mut toks = js::Tokens::new();
                 toks.append(Item::OpenQuote(true));
-                toks.append(Item::Literal(ItemStr::from(
-                    self.get_full_name_with_address(strct),
-                )));
+                quote_in!(toks => $(self.gen_full_name_with_address(strct, false, true)));
                 toks.append(Item::Literal(ItemStr::from("<")));
                 for (idx, param) in type_params_str.iter().enumerate() {
                     let is_phantom = strct.is_phantom_parameter(idx);
@@ -1590,13 +1680,11 @@ impl<'env, 'a> StructsGen<'env, 'a> {
 
         // `0x2::foo::Bar<${ToTypeStr<T>}, ${ToTypeStr<P>}>`
         let static_full_type_name_as_toks = &match type_params.len() {
-            0 => quote!($[str]($[const](self.get_full_name_with_address(strct)))),
+            0 => quote!($(self.gen_full_name_with_address(strct, true, true))),
             _ => {
                 let mut toks = js::Tokens::new();
                 toks.append(Item::OpenQuote(true));
-                toks.append(Item::Literal(ItemStr::from(
-                    self.get_full_name_with_address(strct),
-                )));
+                quote_in!(toks => $(self.gen_full_name_with_address(strct, false, true)));
                 toks.append(Item::Literal(ItemStr::from("<")));
                 for (idx, param) in type_params_str.iter().enumerate() {
                     toks.append(Item::Literal(ItemStr::from("${")));
@@ -1618,7 +1706,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
             }
         };
 
-        let is_option = self.get_full_name_with_address(strct) == "0x1::option::Option";
+        let is_option = self.get_full_name_with_address_str(strct) == "0x1::option::Option";
 
         quote_in! { *tokens =>
             export type $(&struct_name)Reified$(self.gen_params_toks(
@@ -1632,7 +1720,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
         tokens.push();
         quote_in! { *tokens =>
             export class $(&struct_name)$(self.gen_params_toks(strct, type_params_str.clone(), &extends_type_argument, &extends_phantom_type_argument)) implements $struct_class {
-                static readonly $$typeName = $[str]($[const](self.get_full_name_with_address(strct)));
+                static readonly $$typeName = $(self.gen_full_name_with_address(strct, true, false));
                 static readonly $$numTypeParams = $(type_params.len());$['\n']
 
                 $(if is_option {
@@ -1915,7 +2003,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
                                         let field_strct = field_module.get_struct(sid);
 
                                         // handle special types
-                                        match self.get_full_name_with_address(&field_strct).as_ref() {
+                                        match self.get_full_name_with_address_str(&field_strct).as_ref() {
                                             "0x1::string::String" | "0x1::ascii::String" => {
                                                 quote_in!(*toks => $name: $this_name,)
                                             }
@@ -1929,7 +2017,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
                                                 quote_in!(*toks => $name: $this_name, )
                                             }
                                             "0x1::option::Option" => {
-                                                let type_name = gen_bcs_def_for_type(&field.get_type(), self.env, &type_param_names, self.type_origin_table);
+                                                let type_name = self.gen_bcs_def_for_type(&field.get_type(), &type_param_names);
                                                 quote_in!(*toks => $name: $field_to_json<$field_type_param>($type_name, $this_name),)
                                             }
                                             _ => {
@@ -1946,7 +2034,7 @@ impl<'env, 'a> StructsGen<'env, 'a> {
                                         }
                                     },
                                     Type::Vector(_) => {
-                                        let type_name = gen_bcs_def_for_type(&field.get_type(), self.env, &type_param_names, self.type_origin_table);
+                                        let type_name = self.gen_bcs_def_for_type(&field.get_type(), &type_param_names);
 
                                         quote_in!(*toks => $name: $field_to_json<$field_type_param>($type_name, $this_name),)
                                     }

@@ -37,16 +37,19 @@ struct DependencyTOML<'a>(PM::PackageName, &'a PM::InternalDependency);
 struct SubstTOML<'a>(&'a PM::Substitution);
 
 pub type TypeOriginTable = BTreeMap<AccountAddress, BTreeMap<String, AccountAddress>>;
+pub type VersionTable = BTreeMap<AccountAddress, BTreeMap<AccountAddress, SequenceNumber>>;
 
 pub struct ModelResult {
     /// Move model for packages defined in gen.toml
     pub env: GlobalEnv,
     /// Map from id to package name
     pub id_map: BTreeMap<AccountAddress, PM::PackageName>,
-    /// Map from original package id to the published at id
+    /// Map from original package ID to the published at ID
     pub published_at: BTreeMap<AccountAddress, AccountAddress>,
-    /// Map from original package id to type origins
+    /// Map from original package ID to type origins
     pub type_origin_table: TypeOriginTable,
+    /// Map from original package ID to all versions referenced by type origins
+    pub version_table: VersionTable,
 }
 
 pub async fn build_models<Progress: Write>(
@@ -170,12 +173,14 @@ async fn build_source_model<Progress: Write>(
         progress_output,
     )
     .await?;
+    let version_table = resolve_version_table(cache, &type_origin_table).await?;
 
     Ok(ModelResult {
         env: source_env,
         id_map: source_id_map,
         published_at: source_published_at,
         type_origin_table,
+        version_table,
     })
 }
 
@@ -239,12 +244,14 @@ async fn build_on_chain_model<Progress: Write>(
         progress_output,
     )
     .await?;
+    let version_table = resolve_version_table(cache, &type_origin_table).await?;
 
     Ok(ModelResult {
         env: on_chain_env,
         id_map: on_chain_id_map,
         published_at: on_chain_published_at,
         type_origin_table,
+        version_table,
     })
 }
 
@@ -415,7 +422,7 @@ async fn resolve_type_origin_table<Progress: Write>(
     published_at: &BTreeMap<AccountAddress, AccountAddress>,
     model: &GlobalEnv,
     progress_output: &mut Progress,
-) -> Result<BTreeMap<AccountAddress, BTreeMap<String, AccountAddress>>> {
+) -> Result<TypeOriginTable> {
     let mut type_origin_table = BTreeMap::new();
     let mut packages_to_fetch = vec![];
     for (addr, name) in id_map.iter() {
@@ -476,6 +483,38 @@ async fn resolve_type_origin_table<Progress: Write>(
     }
 
     Ok(type_origin_table)
+}
+
+async fn resolve_version_table(
+    cache: &mut PackageCache<'_>,
+    type_origin_table: &TypeOriginTable,
+) -> Result<VersionTable> {
+    // this is slow and inefficient but can be made faster by fetching package versions
+    // from an index (if there is such an index) or using graphql api
+    let mut version_table = BTreeMap::new();
+    let mut packages_to_fetch = vec![];
+    for (_, origins) in type_origin_table.iter() {
+        for origin in origins.values() {
+            packages_to_fetch.push(*origin);
+        }
+    }
+    // pre-fetch
+    cache.get_multi(packages_to_fetch).await?;
+
+    for (original_id, origins) in type_origin_table.iter() {
+        let mut versions = BTreeMap::new();
+        versions.insert(*original_id, 1.into());
+        for (_, origin) in origins.iter() {
+            if origin == &AccountAddress::ZERO {
+                continue;
+            }
+            let pkg = cache.get(*origin).await?;
+            versions.insert(*origin, pkg.version);
+        }
+        version_table.insert(*original_id, versions);
+    }
+
+    Ok(version_table)
 }
 
 impl<'a> fmt::Display for DependencyTOML<'a> {
