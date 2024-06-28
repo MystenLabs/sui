@@ -489,6 +489,8 @@ Now that your users can create counters, you need a way to route to them. Routin
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
 import { isValidSuiObjectId } from '@mysten/sui/utils';
 import { useState } from 'react';
+import { Box, Container, Flex, Heading } from "@radix-ui/themes";
+
 
 export default function App() {
   const currentAccount = useCurrentAccount();
@@ -559,6 +561,8 @@ For your counter, you want to display three elements:
 ```tsx
 import { useCurrentAccount, useSuiClientQuery } from '@mysten/dapp-kit';
 import { SuiObjectData } from '@mysten/sui/client';
+import { Button, Flex, Heading, Text } from "@radix-ui/themes";
+
 
 export function Counter({ id }: { id: string }) {
   const currentAccount = useCurrentAccount();
@@ -610,6 +614,7 @@ This snippet has a few new concepts to examine. It uses the `useSuiClientQuery` 
 The code also adds an `executeMoveCall` function that still needs implementing. This works just like the `create` function you used to create the counter. Instead of using a callback prop like you did for `CreateCounter`, you can use the refetch provided by `useSuiClientQuery` to reload your `Counter` object after you've executed your PTB.
 
 ```tsx
+import { Button, Flex, Heading, Text } from "@radix-ui/themes";
 import {
 	useCurrentAccount,
 	useSignAndExecuteTransaction,
