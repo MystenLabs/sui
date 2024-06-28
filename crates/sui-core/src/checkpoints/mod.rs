@@ -41,6 +41,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::time::Duration;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
@@ -859,7 +860,7 @@ pub struct CheckpointBuilder {
     notify: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     effects_store: Arc<dyn TransactionCacheRead>,
-    accumulator: Arc<StateAccumulator>,
+    accumulator: Weak<StateAccumulator>,
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
     metrics: Arc<CheckpointMetrics>,
@@ -897,7 +898,7 @@ impl CheckpointBuilder {
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
         effects_store: Arc<dyn TransactionCacheRead>,
-        accumulator: Arc<StateAccumulator>,
+        accumulator: Weak<StateAccumulator>,
         output: Box<dyn CheckpointOutput>,
         exit: watch::Receiver<()>,
         notify_aggregator: Arc<Notify>,
@@ -980,7 +981,7 @@ impl CheckpointBuilder {
                     continue;
                 }
 
-                // Min interval has elasped, we can now coalesce and build a checkpoint.
+                // Min interval has elapsed, we can now coalesce and build a checkpoint.
                 last_height = Some(height);
                 last_timestamp = Some(current_timestamp);
                 debug!(
@@ -1432,19 +1433,24 @@ impl CheckpointBuilder {
                 let committee = system_state_obj.get_current_epoch_committee().committee;
 
                 // This must happen after the call to augment_epoch_last_checkpoint,
-                // otherwise we will not capture the change_epoch tx
-                let acc = self.accumulator.accumulate_checkpoint(
-                    effects.clone(),
-                    sequence_number,
-                    &self.epoch_store,
-                )?;
-                self.accumulator
-                    .accumulate_running_root(&self.epoch_store, sequence_number, Some(acc))
-                    .await?;
-                let root_state_digest = self
-                    .accumulator
-                    .digest_epoch(self.epoch_store.clone(), sequence_number)
-                    .await?;
+                // otherwise we will not capture the change_epoch tx.
+                let root_state_digest = {
+                    let state_acc = self
+                        .accumulator
+                        .upgrade()
+                        .expect("No checkpoints should be getting built after local configuration");
+                    let acc = state_acc.accumulate_checkpoint(
+                        effects.clone(),
+                        sequence_number,
+                        &self.epoch_store,
+                    )?;
+                    state_acc
+                        .accumulate_running_root(&self.epoch_store, sequence_number, Some(acc))
+                        .await?;
+                    state_acc
+                        .digest_epoch(self.epoch_store.clone(), sequence_number)
+                        .await?
+                };
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
@@ -1606,7 +1612,7 @@ impl CheckpointBuilder {
 
                 let existing_effects = self
                     .epoch_store
-                    .effects_signatures_exists(effect.dependencies().iter())?;
+                    .transactions_executed_in_cur_epoch(effect.dependencies().iter())?;
 
                 for (dependency, effects_signature_exists) in
                     effect.dependencies().iter().zip(existing_effects.iter())
@@ -2213,7 +2219,7 @@ impl CheckpointService {
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         effects_store: Arc<dyn TransactionCacheRead>,
-        accumulator: Arc<StateAccumulator>,
+        accumulator: Weak<StateAccumulator>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
         metrics: Arc<CheckpointMetrics>,
@@ -2398,7 +2404,7 @@ mod tests {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_min_checkpoint_interval_ms(100);
+        protocol_config.set_min_checkpoint_interval_ms_for_testing(100);
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
             .build()
@@ -2503,15 +2509,17 @@ mod tests {
         let checkpoint_store = CheckpointStore::new(ckpt_dir.path());
         let epoch_store = state.epoch_store_for_testing();
 
-        let accumulator =
-            StateAccumulator::new(state.get_accumulator_store().clone(), &epoch_store);
+        let accumulator = Arc::new(StateAccumulator::new_for_tests(
+            state.get_accumulator_store().clone(),
+            &epoch_store,
+        ));
 
         let (checkpoint_service, _exit) = CheckpointService::spawn(
             state.clone(),
             checkpoint_store,
             epoch_store.clone(),
             store,
-            Arc::new(accumulator),
+            Arc::downgrade(&accumulator),
             Box::new(output),
             Box::new(certified_output),
             CheckpointMetrics::new_for_tests(),
@@ -2754,10 +2762,9 @@ mod tests {
         let effects = e(digest, dependencies, gas_used);
         store.insert(digest, effects.clone());
         epoch_store
-            .insert_tx_cert_and_effects_signature(
+            .insert_tx_key_and_effects_signature(
                 &TransactionKey::Digest(digest),
                 &digest,
-                None,
                 Some(&AuthoritySignInfo::new(
                     epoch_store.epoch(),
                     &effects,

@@ -581,7 +581,7 @@ impl LocalExec {
     }
 
     #[allow(clippy::disallowed_methods)]
-    pub fn download_child_object(
+    pub fn download_object_by_upper_bound(
         &self,
         object_id: &ObjectID,
         version_upper_bound: VersionNumber,
@@ -1463,6 +1463,12 @@ impl LocalExec {
             .iter()
             .map(|obj_ref| obj_ref.to_object_ref())
             .collect();
+        let receiving_objs = orig_tx
+            .transaction_data()
+            .receiving_objects()
+            .into_iter()
+            .map(|(obj_id, version, _)| (obj_id, version))
+            .collect();
 
         let epoch_id = effects.executed_epoch;
         let chain = chain_from_chain_id(self.fetcher.get_chain_id().await?.as_str());
@@ -1484,6 +1490,7 @@ impl LocalExec {
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects: SuiTransactionBlockEffects::V1(effects),
+            receiving_objs,
             // Find the protocol version for this epoch
             // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
             protocol_version: self.get_protocol_config(epoch_id, chain).await?.version,
@@ -1539,6 +1546,12 @@ impl LocalExec {
             .collect();
         let gas_data = orig_tx.transaction_data().gas_data();
         let gas_object_refs: Vec<_> = gas_data.clone().payment.into_iter().collect();
+        let receiving_objs = orig_tx
+            .transaction_data()
+            .receiving_objects()
+            .into_iter()
+            .map(|(obj_id, version, _)| (obj_id, version))
+            .collect();
 
         let epoch_id = dp.node_state_dump.executed_epoch;
 
@@ -1563,6 +1576,7 @@ impl LocalExec {
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects,
+            receiving_objs,
             protocol_version: protocol_config.version,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
@@ -1742,6 +1756,10 @@ impl LocalExec {
             .resolve_download_input_objects(tx_info, deleted_shared_refs)
             .await?;
 
+        // Fetch the receiving objects
+        self.multi_download_and_store(&tx_info.receiving_objs)
+            .await?;
+
         // Prep the object runtime for dynamic fields
         // Download the child objects accessed at the version right before the execution of this TX
         let loaded_child_refs = self.fetch_loaded_child_refs(&tx_info.tx_digest).await?;
@@ -1793,7 +1811,7 @@ impl ChildObjectResolver for LocalExec {
             child_version_upper_bound: SequenceNumber,
         ) -> SuiResult<Option<Object>> {
             let child_object =
-                match self_.download_child_object(child, child_version_upper_bound)? {
+                match self_.download_object_by_upper_bound(child, child_version_upper_bound)? {
                     None => return Ok(None),
                     Some(o) => o,
                 };
@@ -1842,7 +1860,9 @@ impl ChildObjectResolver for LocalExec {
             receiving_object_id: &ObjectID,
             receive_object_at_version: SequenceNumber,
         ) -> SuiResult<Option<Object>> {
-            let recv_object = match self_.get_object(receiving_object_id)? {
+            let recv_object = match self_
+                .download_object_by_upper_bound(receiving_object_id, receive_object_at_version)?
+            {
                 None => return Ok(None),
                 Some(o) => o,
             };

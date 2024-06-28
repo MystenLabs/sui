@@ -7,7 +7,6 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    diagnostics::PositionInfo,
     expansion::ast::{
         AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability, TargetKind,
     },
@@ -1062,9 +1061,9 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         } => {
             let line_no = context
                 .env
-                .file_mapping()
+                .mapped_files()
                 .start_position(&line_number_loc)
-                .line;
+                .user_line();
 
             // Clamp line number to u16::MAX -- so if the line number exceeds u16::MAX, we don't
             // record the line number essentially.

@@ -1019,11 +1019,13 @@ module sui::test_scenario_tests {
         abort 42
     }
 
-/* uncomment me after next release
     public struct E1(u64) has copy, drop;
 
     #[test]
     fun test_events() {
+        use sui::event;
+        use sui::test_utils::assert_eq;
+
         // calling test_scenario::end should dump events emitted during previous txes
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
@@ -1047,5 +1049,4 @@ module sui::test_scenario_tests {
         assert_eq(effects.num_user_events(), 1);
         assert_eq(event::num_events(), 0);
     }
-*/
 }

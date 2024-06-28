@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cmp::Ordering;
 use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
@@ -990,109 +989,7 @@ impl AuthorityStore {
         Ok(())
     }
 
-    pub(crate) async fn acquire_transaction_locks(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        owned_input_objects: &[ObjectRef],
-        transaction: VerifiedSignedTransaction,
-    ) -> SuiResult {
-        let tx_digest = *transaction.digest();
-        if epoch_store.object_lock_split_tables_enabled() {
-            self.acquire_transaction_locks_v2(epoch_store, owned_input_objects, transaction)
-                .await
-        } else {
-            self.acquire_transaction_locks_v1(epoch_store, owned_input_objects, tx_digest)
-                .await
-        }
-    }
-
-    /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
-    async fn acquire_transaction_locks_v1(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
-    ) -> SuiResult {
-        let epoch = epoch_store.epoch();
-        // Other writers may be attempting to acquire locks on the same objects, so a mutex is
-        // required.
-        // TODO: replace with optimistic db_transactions (i.e. set lock to tx if none)
-        let _mutexes = self.acquire_locks(owned_input_objects).await;
-
-        trace!(?owned_input_objects, "acquire_locks");
-        let mut locks_to_write = Vec::new();
-
-        let locks = self
-            .perpetual_tables
-            .live_owned_object_markers
-            .multi_get(owned_input_objects)?;
-
-        for ((i, lock), obj_ref) in locks.into_iter().enumerate().zip(owned_input_objects) {
-            // The object / version must exist, and therefore lock initialized.
-            if lock.is_none() {
-                let latest_lock = self.get_latest_live_version_for_object_id(obj_ref.0)?;
-                fp_bail!(UserInputError::ObjectVersionUnavailableForConsumption {
-                    provided_obj_ref: *obj_ref,
-                    current_version: latest_lock.1
-                }
-                .into());
-            }
-            // Safe to unwrap as it is checked above
-            let lock = lock.unwrap().map(|l| l.migrate().into_inner());
-
-            if let Some(LockDetailsDeprecated {
-                epoch: previous_epoch,
-                tx_digest: previous_tx_digest,
-            }) = &lock
-            {
-                fp_ensure!(
-                    &epoch >= previous_epoch,
-                    SuiError::ObjectLockedAtFutureEpoch {
-                        obj_refs: owned_input_objects.to_vec(),
-                        locked_epoch: *previous_epoch,
-                        new_epoch: epoch,
-                        locked_by_tx: *previous_tx_digest,
-                    }
-                );
-                // Lock already set to different transaction from the same epoch.
-                // If the lock is set in a previous epoch, it's ok to override it.
-                if previous_epoch == &epoch && previous_tx_digest != &tx_digest {
-                    // TODO: add metrics here
-                    info!(prev_tx_digest = ?previous_tx_digest,
-                          cur_tx_digest = ?tx_digest,
-                          "Cannot acquire lock: conflicting transaction!");
-                    return Err(SuiError::ObjectLockConflict {
-                        obj_ref: *obj_ref,
-                        pending_transaction: *previous_tx_digest,
-                    });
-                }
-                if &epoch == previous_epoch {
-                    // Exactly the same epoch and same transaction, nothing to lock here.
-                    continue;
-                } else {
-                    info!(prev_epoch =? previous_epoch, cur_epoch =? epoch, "Overriding an old lock from previous epoch");
-                    // Fall through and override the old lock.
-                }
-            }
-            let obj_ref = owned_input_objects[i];
-            let lock_details = LockDetailsDeprecated { epoch, tx_digest };
-            locks_to_write.push((obj_ref, Some(lock_details.into())));
-        }
-
-        if !locks_to_write.is_empty() {
-            trace!(?locks_to_write, "Writing locks");
-            let mut batch = self.perpetual_tables.live_owned_object_markers.batch();
-            batch.insert_batch(
-                &self.perpetual_tables.live_owned_object_markers,
-                locks_to_write,
-            )?;
-            batch.write()?;
-        }
-
-        Ok(())
-    }
-
-    async fn acquire_transaction_locks_v2(
+    pub async fn acquire_transaction_locks(
         &self,
         epoch_store: &AuthorityPerEpochStore,
         owned_input_objects: &[ObjectRef],
@@ -1183,18 +1080,6 @@ impl AuthorityStore {
         obj_ref: ObjectRef,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiLockResult {
-        if epoch_store.object_lock_split_tables_enabled() {
-            self.get_lock_v2(obj_ref, epoch_store)
-        } else {
-            self.get_lock_v1(obj_ref, epoch_store.epoch())
-        }
-    }
-
-    fn get_lock_v2(
-        &self,
-        obj_ref: ObjectRef,
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiLockResult {
         if self
             .perpetual_tables
             .live_owned_object_markers
@@ -1219,43 +1104,6 @@ impl AuthorityStore {
         } else {
             Ok(ObjectLockStatus::Initialized)
         }
-    }
-
-    fn get_lock_v1(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
-        Ok(
-            if let Some(lock_info) = self
-                .perpetual_tables
-                .live_owned_object_markers
-                .get(&obj_ref)?
-            {
-                match lock_info {
-                    Some(lock_info) => {
-                        let lock_info = lock_info.migrate().into_inner();
-                        match Ord::cmp(&lock_info.epoch, &epoch_id) {
-                            // If the object was locked in a previous epoch, we can say that it's
-                            // no longer locked and is considered as just Initialized.
-                            Ordering::Less => ObjectLockStatus::Initialized,
-                            Ordering::Equal => ObjectLockStatus::LockedToTx {
-                                locked_by_tx: lock_info,
-                            },
-                            Ordering::Greater => {
-                                return Err(SuiError::ObjectLockedAtFutureEpoch {
-                                    obj_refs: vec![obj_ref],
-                                    locked_epoch: lock_info.epoch,
-                                    new_epoch: epoch_id,
-                                    locked_by_tx: lock_info.tx_digest,
-                                });
-                            }
-                        }
-                    }
-                    None => ObjectLockStatus::Initialized,
-                }
-            } else {
-                ObjectLockStatus::LockedAtDifferentVersion {
-                    locked_ref: self.get_latest_live_version_for_object_id(obj_ref.0)?,
-                }
-            },
-        )
     }
 
     /// Returns UserInputError::ObjectNotFound if no lock records found for this object.
@@ -1333,27 +1181,26 @@ impl AuthorityStore {
     ) -> SuiResult {
         trace!(?objects, "initialize_locks");
 
-        let locks = live_object_marker_table.multi_get(objects)?;
+        let live_object_markers = live_object_marker_table.multi_get(objects)?;
 
         if !is_force_reset {
-            // If any locks exist and are not None, return errors for them
-            // Note that if epoch_store.object_lock_split_tables_enabled() is true, we don't
-            // check if there is a pre-existing lock. this is because initializing the live
+            // If any live_object_markers exist and are not None, return errors for them
+            // Note we don't check if there is a pre-existing lock. this is because initializing the live
             // object marker will not overwrite the lock and cause the validator to equivocate.
-            let existing_locks: Vec<ObjectRef> = locks
+            let existing_live_object_markers: Vec<ObjectRef> = live_object_markers
                 .iter()
                 .zip(objects)
                 .filter_map(|(lock_opt, objref)| {
                     lock_opt.clone().flatten().map(|_tx_digest| *objref)
                 })
                 .collect();
-            if !existing_locks.is_empty() {
+            if !existing_live_object_markers.is_empty() {
                 info!(
-                    ?existing_locks,
-                    "Cannot initialize locks because some exist already"
+                    ?existing_live_object_markers,
+                    "Cannot initialize live_object_markers because some exist already"
                 );
                 return Err(SuiError::ObjectLockAlreadyInitialized {
-                    refs: existing_locks,
+                    refs: existing_live_object_markers,
                 });
             }
         }

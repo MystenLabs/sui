@@ -458,7 +458,7 @@ async fn fetch_certificates_v1_basic() {
 
     // Send out a batch of certificate V2s.
     let mut cert_v2_config = latest_protocol_version();
-    cert_v2_config.set_narwhal_certificate_v2(true);
+    cert_v2_config.set_narwhal_certificate_v2_for_testing(true);
     let mut certs = Vec::new();
     for cert in certificates.iter().skip(num_written).take(8) {
         certs.push(fixture.certificate(&cert_v2_config, cert.header()));

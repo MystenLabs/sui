@@ -23,6 +23,7 @@ use sui_bridge::types::CertifiedBridgeAction;
 use sui_bridge::types::VerifiedCertifiedBridgeAction;
 use sui_bridge::utils::publish_and_register_coins_return_add_coins_on_sui_action;
 use sui_bridge::utils::wait_for_server_to_be_up;
+use sui_config::genesis::Genesis;
 use sui_config::local_ip_utils::get_available_port;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
@@ -208,6 +209,10 @@ impl TestCluster {
 
     pub fn get_validator_pubkeys(&self) -> Vec<AuthorityName> {
         self.swarm.active_validators().map(|v| v.name()).collect()
+    }
+
+    pub fn get_genesis(&self) -> Genesis {
+        self.swarm.config().genesis.clone()
     }
 
     pub fn stop_node(&self, name: &AuthorityName) {

@@ -9,7 +9,7 @@ mod write_store;
 
 use crate::base_types::{TransactionDigest, VersionNumber};
 use crate::committee::EpochId;
-use crate::error::SuiError;
+use crate::error::{ExecutionError, SuiError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use crate::move_package::MovePackage;
 use crate::transaction::{SenderSignedData, TransactionDataAPI, TransactionKey};
@@ -32,6 +32,10 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 pub use write_store::WriteStore;
+
+pub use read_store::AccountOwnedObjectInfo;
+pub use read_store::CoinInfo;
+pub use read_store::RestDynamicFieldInfo;
 
 /// A potential input to a transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -202,6 +206,11 @@ pub trait Storage {
         &mut self,
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     );
+
+    fn check_coin_deny_list(
+        &self,
+        written_objects: &BTreeMap<ObjectID, Object>,
+    ) -> Result<(), ExecutionError>;
 }
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    clever_error_rendering::render_clever_error_opt,
     client_ptb::ptb::PTB,
     displays::Pretty,
     key_identity::{get_identity_address, KeyIdentity},
@@ -42,20 +43,22 @@ use sui_json_rpc_types::{
     Coin, DryRunTransactionBlockResponse, DynamicFieldPage, SuiCoinMetadata, SuiData,
     SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
     SuiObjectResponseQuery, SuiParsedData, SuiProtocolConfigValue, SuiRawData,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
-    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
+    gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies,
 };
-use sui_package_management::LockCommand;
+use sui_package_management::{LockCommand, PublishedAtError};
 use sui_replay::ReplayToolCommand;
 use sui_sdk::{
     apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
     wallet_context::WalletContext,
-    SuiClient, SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
+    SuiClient, SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0,
+    SUI_TESTNET_URL,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -63,6 +66,7 @@ use sui_types::{
     digests::TransactionDigest,
     dynamic_field::DynamicFieldInfo,
     error::SuiError,
+    gas::GasCostSummary,
     gas_coin::GasCoin,
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
@@ -662,7 +666,7 @@ impl SuiClientCommands {
         self,
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
-        let ret = Ok(match self {
+        let ret = match self {
             SuiClientCommands::ProfileTransaction {
                 tx_digest,
                 profile_output,
@@ -863,6 +867,11 @@ impl SuiClientCommands {
                         .map_err(|e| SuiError::ModulePublishFailure {
                             error: format!("Failed to canonicalize package path: {}", e),
                         })?;
+                let env_alias = context
+                    .config
+                    .get_active_env()
+                    .map(|e| e.alias.clone())
+                    .ok();
                 let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
                     upgrade_package(
                         client.read_api(),
@@ -871,6 +880,7 @@ impl SuiClientCommands {
                         upgrade_capability,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
+                        env_alias,
                     )
                     .await?;
                 let tx_kind = client
@@ -1019,7 +1029,7 @@ impl SuiClientCommands {
 
                     (_, package_path) => {
                         let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
-                        let package = compile_package_simple(build_config, &package_path)?;
+                        let package = compile_package_simple(build_config, &package_path, None)?;
                         let name = package
                             .package
                             .compiled_package_info
@@ -1382,8 +1392,7 @@ impl SuiClientCommands {
                         let network = match env.rpc.as_str() {
                             SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v1/gas",
                             SUI_TESTNET_URL => "https://faucet.testnet.sui.io/v1/gas",
-                            // TODO when using sui-test-validator, and 5003 when using sui start
-                            SUI_LOCAL_NETWORK_URL => "http://127.0.0.1:9123/gas",
+                            SUI_LOCAL_NETWORK_URL | SUI_LOCAL_NETWORK_URL_0 => "http://127.0.0.1:9123/gas",
                             _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
                         };
                         network.to_string()
@@ -1555,10 +1564,17 @@ impl SuiClientCommands {
                 }
 
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
+                let chain_id = context
+                    .get_client()
+                    .await?
+                    .read_api()
+                    .get_chain_identifier()
+                    .await?;
                 let compiled_package = BuildConfig {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
+                    chain_id: Some(chain_id),
                 }
                 .build(&package_path)?;
 
@@ -1582,8 +1598,9 @@ impl SuiClientCommands {
                 ptb.execute(context).await?;
                 SuiClientCommandResult::NoOutput
             }
-        });
-        ret
+        };
+        let client = context.get_client().await?;
+        Ok(ret.prerender_clever_errors(client.read_api()).await)
     }
 
     pub fn switch_env(config: &mut SuiClientConfig, env: &str) -> Result<(), anyhow::Error> {
@@ -1597,15 +1614,22 @@ impl SuiClientCommands {
 fn compile_package_simple(
     build_config: MoveBuildConfig,
     package_path: &Path,
+    chain_id: Option<String>,
 ) -> Result<CompiledPackage, anyhow::Error> {
     let config = BuildConfig {
         config: resolve_lock_file_path(build_config, Some(package_path))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
+        chain_id: chain_id.clone(),
     };
     let resolution_graph = config.resolution_graph(package_path)?;
 
-    Ok(build_from_resolution_graph(resolution_graph, false, false)?)
+    Ok(build_from_resolution_graph(
+        resolution_graph,
+        false,
+        false,
+        chain_id,
+    )?)
 }
 
 pub(crate) async fn upgrade_package(
@@ -1615,6 +1639,7 @@ pub(crate) async fn upgrade_package(
     upgrade_capability: ObjectID,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
+    env_alias: Option<String>,
 ) -> Result<(ObjectID, Vec<Vec<u8>>, PackageDependencies, [u8; 32], u8), anyhow::Error> {
     let (dependencies, compiled_modules, compiled_package, package_id) = compile_package(
         read_api,
@@ -1627,12 +1652,28 @@ pub(crate) async fn upgrade_package(
 
     let package_id = package_id.map_err(|e| match e {
         PublishedAtError::NotPresent => {
-            anyhow!("No 'published-at' field in manifest for package to be upgraded.")
+            anyhow!("No 'published-at' field in Move.toml or 'published-id' in Move.lock for package to be upgraded.")
         }
         PublishedAtError::Invalid(v) => anyhow!(
-            "Invalid 'published-at' field in manifest of package to be upgraded. \
+            "Invalid 'published-at' field in Move.toml or 'published-id' in Move.lock of package to be upgraded. \
                          Expected an on-chain address, but found: {v:?}"
         ),
+        PublishedAtError::Conflict {
+            id_lock,
+            id_manifest,
+        } => {
+            let env_alias = format!("(currently {})", env_alias.unwrap_or_default());
+            anyhow!(
+                "Conflicting published package address: `Move.toml` contains published-at address \
+                 {id_manifest} but `Move.lock` file contains published-at address {id_lock}. \
+                 You may want to:
+
+                 - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
+                 - update the `Move.lock` address using the `sui manage-package` command to be the same as the `Move.toml`; OR
+                 - check that your `sui active-env` {env_alias} corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
+                 - contact the maintainer if this package is a dependency and request resolving the conflict."
+            )
+        }
     })?;
 
     let resp = read_api
@@ -1687,13 +1728,16 @@ pub(crate) async fn compile_package(
     let config = resolve_lock_file_path(build_config, Some(package_path))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
+    let chain_id = read_api.get_chain_identifier().await.ok();
     let config = BuildConfig {
         config,
         run_bytecode_verifier,
         print_diags_to_stderr,
+        chain_id,
     };
     let resolution_graph = config.resolution_graph(package_path)?;
-    let (package_id, dependencies) = gather_published_ids(&resolution_graph);
+    let chain_id = read_api.get_chain_identifier().await.ok();
+    let (package_id, dependencies) = gather_published_ids(&resolution_graph, chain_id.clone());
     check_invalid_dependencies(&dependencies.invalid)?;
     if !with_unpublished_dependencies {
         check_unpublished_dependencies(&dependencies.unpublished)?;
@@ -1702,6 +1746,7 @@ pub(crate) async fn compile_package(
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
+        chain_id,
     )?;
     let protocol_config = read_api.get_protocol_config(None).await?;
 
@@ -2203,6 +2248,42 @@ impl SuiClientCommandResult {
             _ => None,
         }
     }
+
+    pub async fn prerender_clever_errors(mut self, read_api: &ReadApi) -> Self {
+        match &mut self {
+            SuiClientCommandResult::DryRun(DryRunTransactionBlockResponse { effects, .. })
+            | SuiClientCommandResult::TransactionBlock(SuiTransactionBlockResponse {
+                effects: Some(effects),
+                ..
+            }) => prerender_clever_errors(effects, read_api).await,
+
+            SuiClientCommandResult::TransactionBlock(SuiTransactionBlockResponse {
+                effects: None,
+                ..
+            }) => (),
+            SuiClientCommandResult::ActiveAddress(_)
+            | SuiClientCommandResult::ActiveEnv(_)
+            | SuiClientCommandResult::Addresses(_)
+            | SuiClientCommandResult::Balance(_, _)
+            | SuiClientCommandResult::ChainIdentifier(_)
+            | SuiClientCommandResult::DynamicFieldQuery(_)
+            | SuiClientCommandResult::Envs(_, _)
+            | SuiClientCommandResult::Gas(_)
+            | SuiClientCommandResult::NewAddress(_)
+            | SuiClientCommandResult::NewEnv(_)
+            | SuiClientCommandResult::NoOutput
+            | SuiClientCommandResult::Object(_)
+            | SuiClientCommandResult::Objects(_)
+            | SuiClientCommandResult::RawObject(_)
+            | SuiClientCommandResult::SerializedSignedTransaction(_)
+            | SuiClientCommandResult::SerializedUnsignedTransaction(_)
+            | SuiClientCommandResult::Switch(_)
+            | SuiClientCommandResult::SyncClientState
+            | SuiClientCommandResult::VerifyBytecodeMeter { .. }
+            | SuiClientCommandResult::VerifySource => (),
+        }
+        self
+    }
 }
 
 #[derive(Serialize)]
@@ -2567,7 +2648,10 @@ pub async fn execute_dry_run(
         .dry_run_transaction_block(dry_run_tx_data)
         .await
         .map_err(|e| anyhow!("Dry run failed: {e}"))?;
-    Ok(SuiClientCommandResult::DryRun(response))
+    let resp = SuiClientCommandResult::DryRun(response)
+        .prerender_clever_errors(client.read_api())
+        .await;
+    Ok(resp)
 }
 
 /// Call a dry run with the transaction data to estimate the gas budget.
@@ -2593,12 +2677,23 @@ pub async fn estimate_gas_budget(
         bail!("Could not automatically determine the gas budget. Please supply one using the --gas-budget flag.")
     };
 
-    let safe_overhead = GAS_SAFE_OVERHEAD * client.read_api().get_reference_gas_price().await?;
-    let computation_cost_with_overhead =
-        dry_run.effects.gas_cost_summary().computation_cost + safe_overhead;
+    let rgp = client.read_api().get_reference_gas_price().await?;
 
-    let gas_usage = dry_run.effects.gas_cost_summary().net_gas_usage() + safe_overhead as i64;
-    Ok(computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 }))
+    Ok(estimate_gas_budget_from_gas_cost(
+        dry_run.effects.gas_cost_summary(),
+        rgp,
+    ))
+}
+
+pub fn estimate_gas_budget_from_gas_cost(
+    gas_cost_summary: &GasCostSummary,
+    reference_gas_price: u64,
+) -> u64 {
+    let safe_overhead = GAS_SAFE_OVERHEAD * reference_gas_price;
+    let computation_cost_with_overhead = gas_cost_summary.computation_cost + safe_overhead;
+
+    let gas_usage = gas_cost_summary.net_gas_usage() + safe_overhead as i64;
+    computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 })
 }
 
 /// Queries the protocol config for the maximum gas allowed in a transaction.
@@ -2706,17 +2801,32 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             ))
         } else {
             let transaction = Transaction::new(sender_signed_data);
-            let response = context.execute_transaction_may_fail(transaction).await?;
+            let mut response = context.execute_transaction_may_fail(transaction).await?;
+            if let Some(effects) = response.effects.as_mut() {
+                prerender_clever_errors(effects, client.read_api()).await;
+            }
             let effects = response.effects.as_ref().ok_or_else(|| {
                 anyhow!("Effects from SuiTransactionBlockResult should not be empty")
             })?;
-            if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+            if let SuiExecutionStatus::Failure { error } = effects.status() {
                 return Err(anyhow!(
-                    "Error executing transaction: {:#?}",
-                    effects.status()
+                    "Error executing transaction '{}': {error}",
+                    response.digest
                 ));
             }
             Ok(SuiClientCommandResult::TransactionBlock(response))
+        }
+    }
+}
+
+pub(crate) async fn prerender_clever_errors(
+    effects: &mut SuiTransactionBlockEffects,
+    read_api: &ReadApi,
+) {
+    let SuiTransactionBlockEffects::V1(effects) = effects;
+    if let SuiExecutionStatus::Failure { error } = &mut effects.status {
+        if let Some(rendered) = render_clever_error_opt(error, read_api).await {
+            *error = rendered;
         }
     }
 }

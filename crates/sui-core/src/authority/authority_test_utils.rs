@@ -55,6 +55,8 @@ pub async fn certify_transaction(
 ) -> Result<VerifiedCertificate, SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
+    // TODO: Move this check to a more appropriate place.
+    transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
     let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     let response = authority
@@ -90,7 +92,8 @@ pub async fn execute_certificate_with_execution_error(
     // for testing and regression detection.
     // We must do this before sending to consensus, otherwise consensus may already
     // lead to transaction execution and state change.
-    let state_acc = StateAccumulator::new(authority.get_accumulator_store().clone(), &epoch_store);
+    let state_acc =
+        StateAccumulator::new_for_tests(authority.get_accumulator_store().clone(), &epoch_store);
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()

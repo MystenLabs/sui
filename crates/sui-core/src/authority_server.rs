@@ -28,6 +28,9 @@ use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
     SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
 };
+use sui_types::messages_grpc::{
+    HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
+};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, PolicyConfig, RemoteFirewallConfig, Weight};
@@ -53,6 +56,7 @@ use crate::{
     consensus_adapter::ConnectionMonitorStatusForTests,
     traffic_controller::metrics::TrafficControllerMetrics,
 };
+use nonempty::{nonempty, NonEmpty};
 use tonic::transport::server::TcpConnectInfo;
 
 #[cfg(test)]
@@ -97,6 +101,21 @@ pub struct AuthorityServer {
 }
 
 impl AuthorityServer {
+    pub fn new_for_test_with_consensus_adapter(
+        address: Multiaddr,
+        state: Arc<AuthorityState>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+    ) -> Self {
+        let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
+
+        Self {
+            address,
+            state,
+            consensus_adapter,
+            metrics,
+        }
+    }
+
     pub fn new_for_test(
         address: Multiaddr,
         state: Arc<AuthorityState>,
@@ -113,15 +132,7 @@ impl AuthorityServer {
             ConsensusAdapterMetrics::new_test(),
             state.epoch_store_for_testing().protocol_config().clone(),
         ));
-
-        let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
-
-        Self {
-            address,
-            state,
-            consensus_adapter,
-            metrics,
-        }
+        Self::new_for_test_with_consensus_adapter(address, state, consensus_adapter)
     }
 
     pub async fn spawn_for_test(self) -> Result<AuthorityServerHandle, io::Error> {
@@ -335,7 +346,7 @@ impl ValidatorService {
     async fn handle_transaction(
         &self,
         request: tonic::Request<Transaction>,
-    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
+    ) -> WrappedServiceResponse<HandleTransactionResponse> {
         let Self {
             state,
             consensus_adapter,
@@ -346,10 +357,7 @@ impl ValidatorService {
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
-        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
-        // This must be the first thing to check before anything else, because the transaction
-        // may not even be valid to access for any other checks.
-        transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+        Self::transaction_validity_check(&epoch_store, &transaction)?;
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
@@ -406,17 +414,24 @@ impl ValidatorService {
             // to save more CPU.
             return Err(error.into());
         }
-        Ok(tonic::Response::new(info))
+        Ok((tonic::Response::new(info), Weight::zero()))
     }
 
-    async fn handle_certificate(
+    // In addition to the response from handling the certificates,
+    // returns a bool indicating whether the request should be tallied
+    // toward spam count. In general, this should be set to true for
+    // requests that are read-only and thus do not consume gas, such
+    // as when the transaction is already executed.
+    async fn handle_certificates(
         &self,
-        request: HandleCertificateRequestV3,
+        certificates: NonEmpty<CertifiedTransaction>,
+        include_events: bool,
+        include_input_objects: bool,
+        include_output_objects: bool,
+        _include_auxiliary_data: bool,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         wait_for_effects: bool,
-    ) -> Result<Option<HandleCertificateResponseV3>, tonic::Status> {
-        let certificate = request.certificate;
-
+    ) -> Result<(Option<Vec<HandleCertificateResponseV3>>, Weight), tonic::Status> {
         // Validate if cert can be executed
         // Fullnode does not serve handle_certificate call.
         fp_ensure!(
@@ -424,7 +439,7 @@ impl ValidatorService {
             SuiError::FullNodeCantHandleCertificate.into()
         );
 
-        let shared_object_tx = certificate.contains_shared_object();
+        let shared_object_tx = certificates[0].contains_shared_object();
 
         let _metrics_guard = if wait_for_effects {
             if shared_object_tx {
@@ -442,56 +457,68 @@ impl ValidatorService {
                 .start_timer()
         };
 
-        // 1) Check if cert already executed
-        let tx_digest = *certificate.digest();
-        if let Some(signed_effects) = self
-            .state
-            .get_signed_effects_and_maybe_resign(&tx_digest, epoch_store)?
-        {
-            let events = if request.include_events {
-                if let Some(digest) = signed_effects.events_digest() {
-                    Some(self.state.get_transaction_events(digest)?)
+        // 1) Check if the certificate is already executed.
+        //    This is only needed when we have only one certificate (not a soft bundle).
+        //    When multiple certificates are provided, we will either submit all of them or none of them to consensus.
+        if certificates.len() == 1 {
+            let tx_digest = *certificates[0].digest();
+
+            if let Some(signed_effects) = self
+                .state
+                .get_signed_effects_and_maybe_resign(&tx_digest, epoch_store)?
+            {
+                let events = if include_events {
+                    if let Some(digest) = signed_effects.events_digest() {
+                        Some(self.state.get_transaction_events(digest)?)
+                    } else {
+                        None
+                    }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
+                };
 
-            return Ok(Some(HandleCertificateResponseV3 {
-                effects: signed_effects.into_inner(),
-                events,
-                input_objects: None,
-                output_objects: None,
-                auxiliary_data: None,
-            }));
+                return Ok((
+                    Some(vec![HandleCertificateResponseV3 {
+                        effects: signed_effects.into_inner(),
+                        events,
+                        input_objects: None,
+                        output_objects: None,
+                        auxiliary_data: None,
+                    }]),
+                    Weight::one(),
+                ));
+            };
         }
 
-        // 2) Verify the cert.
+        // 2) Verify the certificates.
         // Check system overload
-        let overload_check_res = self.state.check_system_overload(
-            &self.consensus_adapter,
-            certificate.data(),
-            self.state.check_system_overload_at_execution(),
-        );
-        if let Err(error) = overload_check_res {
-            self.metrics
-                .num_rejected_cert_during_overload
-                .with_label_values(&[error.as_ref()])
-                .inc();
-            return Err(error.into());
+        for certificate in &certificates {
+            let overload_check_res = self.state.check_system_overload(
+                &self.consensus_adapter,
+                certificate.data(),
+                self.state.check_system_overload_at_execution(),
+            );
+            if let Err(error) = overload_check_res {
+                self.metrics
+                    .num_rejected_cert_during_overload
+                    .with_label_values(&[error.as_ref()])
+                    .inc();
+                return Err(error.into());
+            }
         }
 
-        // code block within reconfiguration lock
-        let certificate = {
-            let certificate = {
-                let _timer = self.metrics.cert_verification_latency.start_timer();
-                epoch_store
-                    .signature_verifier
-                    .verify_cert(certificate)
-                    .await?
-            };
+        let verified_certificates = {
+            let _timer = self.metrics.cert_verification_latency.start_timer();
+            epoch_store
+                .signature_verifier
+                .multi_verify_certs(certificates.into())
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?
+        };
 
+        {
+            // code block within reconfiguration lock
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
             if !reconfiguration_lock.should_accept_user_certs() {
                 self.metrics.num_rejected_cert_in_epoch_boundary.inc();
@@ -501,158 +528,327 @@ impl ValidatorService {
             // 3) All certificates are sent to consensus (at least by some authorities)
             // For shared objects this will wait until either timeout or we have heard back from consensus.
             // For owned objects this will return without waiting for certificate to be sequenced
-            // First do quick dirty non-async check
-            if !epoch_store.is_tx_cert_consensus_message_processed(&certificate)? {
+            // First do quick dirty non-async check.
+            if !epoch_store
+                .is_all_tx_certs_consensus_message_processed(verified_certificates.iter())?
+            {
                 let _metrics_guard = if shared_object_tx {
                     Some(self.metrics.consensus_latency.start_timer())
                 } else {
                     None
                 };
-                let transaction = ConsensusTransaction::new_certificate_message(
-                    &self.state.name,
-                    certificate.clone().into(),
-                );
-                self.consensus_adapter.submit(
-                    transaction,
+                let transactions = verified_certificates
+                    .iter()
+                    .map(|certificate| {
+                        ConsensusTransaction::new_certificate_message(
+                            &self.state.name,
+                            certificate.clone().into(),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                self.consensus_adapter.submit_batch(
+                    &transactions,
                     Some(&reconfiguration_lock),
                     epoch_store,
                 )?;
                 // Do not wait for the result, because the transaction might have already executed.
                 // Instead, check or wait for the existence of certificate effects below.
             }
-            drop(reconfiguration_lock);
-            certificate
-        };
+        }
 
         if !wait_for_effects {
             // It is useful to enqueue owned object transaction for execution locally,
             // even when we are not returning effects to user
-            if !certificate.contains_shared_object() {
-                self.state
-                    .enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
+            let certificates_without_shared_objects = verified_certificates
+                .iter()
+                .filter(|certificate| !certificate.contains_shared_object())
+                .cloned()
+                .collect::<Vec<_>>();
+            if !certificates_without_shared_objects.is_empty() {
+                self.state.enqueue_certificates_for_execution(
+                    certificates_without_shared_objects,
+                    epoch_store,
+                );
             }
-            return Ok(None);
+            return Ok((None, Weight::zero()));
         }
 
-        // 4) Execute the certificate if it contains only owned object transactions, or wait for
-        // the execution results if it contains shared objects.
-        let effects = self
-            .state
-            .execute_certificate(&certificate, epoch_store)
-            .await?;
-        let events = if request.include_events {
-            if let Some(digest) = effects.events_digest() {
-                Some(self.state.get_transaction_events(digest)?)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        // 4) Execute the certificates immediately if they contain only owned object transactions,
+        // or wait for the execution results if it contains shared objects.
+        let responses = futures::future::try_join_all(verified_certificates.into_iter().map(
+            |certificate| async move {
+                let effects = self
+                    .state
+                    .execute_certificate(&certificate, epoch_store)
+                    .await?;
+                let events = if include_events {
+                    if let Some(digest) = effects.events_digest() {
+                        Some(self.state.get_transaction_events(digest)?)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
 
-        let input_objects = request
-            .include_input_objects
-            .then(|| self.state.get_transaction_input_objects(&effects))
-            .and_then(Result::ok);
+                let input_objects = include_input_objects
+                    .then(|| self.state.get_transaction_input_objects(&effects))
+                    .and_then(Result::ok);
 
-        let output_objects = request
-            .include_output_objects
-            .then(|| self.state.get_transaction_output_objects(&effects))
-            .and_then(Result::ok);
+                let output_objects = include_output_objects
+                    .then(|| self.state.get_transaction_output_objects(&effects))
+                    .and_then(Result::ok);
 
-        Ok(Some(HandleCertificateResponseV3 {
-            effects: effects.into_inner(),
-            events,
-            input_objects,
-            output_objects,
-            auxiliary_data: None, // We don't have any aux data generated presently
-        }))
+                let signed_effects = self.state.sign_effects(effects, epoch_store)?;
+                epoch_store.insert_tx_cert_sig(certificate.digest(), certificate.auth_sig())?;
+
+                Ok::<_, SuiError>(HandleCertificateResponseV3 {
+                    effects: signed_effects.into_inner(),
+                    events,
+                    input_objects,
+                    output_objects,
+                    auxiliary_data: None, // We don't have any aux data generated presently
+                })
+            },
+        ))
+        .await?;
+
+        Ok((Some(responses), Weight::zero()))
     }
 }
+
+type WrappedServiceResponse<T> = Result<(tonic::Response<T>, Weight), tonic::Status>;
 
 impl ValidatorService {
     async fn transaction_impl(
         &self,
         request: tonic::Request<Transaction>,
-    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
+    ) -> WrappedServiceResponse<HandleTransactionResponse> {
         self.handle_transaction(request).await
     }
 
     async fn submit_certificate_impl(
         &self,
         request: tonic::Request<CertifiedTransaction>,
-    ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
+    ) -> WrappedServiceResponse<SubmitCertificateResponse> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
         Self::transaction_validity_check(&epoch_store, certificate.data())?;
 
         let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
-        let request = HandleCertificateRequestV3 {
-            certificate,
-            include_events: true,
-            include_input_objects: false,
-            include_output_objects: false,
-            include_auxiliary_data: false,
-        };
-        self.handle_certificate(request, &epoch_store, false)
-            .instrument(span)
-            .await
-            .map(|executed| {
+        self.handle_certificates(
+            nonempty![certificate],
+            true,
+            false,
+            false,
+            false,
+            &epoch_store,
+            false,
+        )
+        .instrument(span)
+        .await
+        .map(|(executed, spam_weight)| {
+            (
                 tonic::Response::new(SubmitCertificateResponse {
-                    executed: executed.map(Into::into),
-                })
-            })
+                    executed: executed.map(|mut x| x.remove(0)).map(Into::into),
+                }),
+                spam_weight,
+            )
+        })
     }
 
     async fn handle_certificate_v2_impl(
         &self,
         request: tonic::Request<CertifiedTransaction>,
-    ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
+    ) -> WrappedServiceResponse<HandleCertificateResponseV2> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
         Self::transaction_validity_check(&epoch_store, certificate.data())?;
 
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
-        let request = HandleCertificateRequestV3 {
-            certificate,
-            include_events: true,
-            include_input_objects: false,
-            include_output_objects: false,
-            include_auxiliary_data: false,
-        };
-        self.handle_certificate(request, &epoch_store, true)
-            .instrument(span)
-            .await
-            .map(|v| {
+        self.handle_certificates(
+            nonempty![certificate],
+            true,
+            false,
+            false,
+            false,
+            &epoch_store,
+            true,
+        )
+        .instrument(span)
+        .await
+        .map(|(resp, spam_weight)| {
+            (
                 tonic::Response::new(
-                    v.expect(
+                    resp.expect(
                         "handle_certificate should not return none with wait_for_effects=true",
                     )
+                    .remove(0)
                     .into(),
-                )
-            })
+                ),
+                spam_weight,
+            )
+        })
     }
 
     async fn handle_certificate_v3_impl(
         &self,
         request: tonic::Request<HandleCertificateRequestV3>,
-    ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
+    ) -> WrappedServiceResponse<HandleCertificateResponseV3> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let request = request.into_inner();
         Self::transaction_validity_check(&epoch_store, request.certificate.data())?;
 
         let span = error_span!("handle_certificate_v3", tx_digest = ?request.certificate.digest());
-
-        self.handle_certificate(request, &epoch_store, true)
-            .instrument(span)
-            .await
-            .map(|v| {
+        self.handle_certificates(
+            nonempty![request.certificate],
+            request.include_events,
+            request.include_input_objects,
+            request.include_output_objects,
+            request.include_auxiliary_data,
+            &epoch_store,
+            true,
+        )
+        .instrument(span)
+        .await
+        .map(|(resp, spam_weight)| {
+            (
                 tonic::Response::new(
-                    v.expect(
+                    resp.expect(
                         "handle_certificate should not return none with wait_for_effects=true",
-                    ),
-                )
-            })
+                    )
+                    .remove(0),
+                ),
+                spam_weight,
+            )
+        })
+    }
+
+    async fn soft_bundle_validity_check(
+        &self,
+        certificates: &NonEmpty<CertifiedTransaction>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Result<(), tonic::Status> {
+        let protocol_config = epoch_store.protocol_config();
+        let node_config = &self.state.config;
+
+        // Soft Bundle MUST be enabled both in protocol config and local node config.
+        //
+        // The local node config is by default enabled, but can be turned off by the node operator.
+        // This acts an extra safety measure where a validator node have the choice to turn this feature off,
+        // without having to upgrade the entire network.
+        fp_ensure!(
+            protocol_config.soft_bundle() && node_config.enable_soft_bundle,
+            SuiError::UnsupportedFeatureError {
+                error: "Soft Bundle".to_string()
+            }
+            .into()
+        );
+
+        // Enforce these checks per [SIP-19](https://github.com/sui-foundation/sips/blob/main/sips/sip-19.md):
+        // - All certs must access at least one shared object.
+        // - All certs must not be already executed.
+        // - All certs must have the same gas price.
+        // - Number of certs must not exceed the max allowed.
+        fp_ensure!(
+            certificates.len() as u64 <= protocol_config.max_soft_bundle_size(),
+            SuiError::UserInputError {
+                error: UserInputError::TooManyTransactionsInSoftBundle {
+                    limit: protocol_config.max_soft_bundle_size()
+                }
+            }
+            .into()
+        );
+        let mut gas_price = None;
+        for certificate in certificates {
+            let tx_digest = *certificate.digest();
+            fp_ensure!(
+                certificate.contains_shared_object(),
+                SuiError::UserInputError {
+                    error: UserInputError::NoSharedObjectError { digest: tx_digest }
+                }
+                .into()
+            );
+            fp_ensure!(
+                !self.state.is_tx_already_executed(&tx_digest)?,
+                SuiError::UserInputError {
+                    error: UserInputError::AlreadyExecutedError { digest: tx_digest }
+                }
+                .into()
+            );
+            if let Some(gas) = gas_price {
+                fp_ensure!(
+                    gas == certificate.gas_price(),
+                    SuiError::UserInputError {
+                        error: UserInputError::GasPriceMismatchError {
+                            digest: tx_digest,
+                            expected: gas,
+                            actual: certificate.gas_price()
+                        }
+                    }
+                    .into()
+                );
+            } else {
+                gas_price = Some(certificate.gas_price());
+            }
+        }
+
+        // For Soft Bundle, if at this point we know at least one certificate has already been processed,
+        // reject the entire bundle.  Otherwise, submit all certificates in one request.
+        // This is not a strict check as there may be race conditions where one or more certificates are
+        // already being processed by another actor, and we could not know it.
+        fp_ensure!(
+            !epoch_store.is_any_tx_certs_consensus_message_processed(certificates.iter())?,
+            SuiError::UserInputError {
+                error: UserInputError::CeritificateAlreadyProcessed
+            }
+            .into()
+        );
+
+        Ok(())
+    }
+
+    async fn handle_soft_bundle_certificates_v3_impl(
+        &self,
+        request: tonic::Request<HandleSoftBundleCertificatesRequestV3>,
+    ) -> WrappedServiceResponse<HandleSoftBundleCertificatesResponseV3> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let request = request.into_inner();
+
+        let certificates = NonEmpty::from_vec(request.certificates)
+            .ok_or_else(|| SuiError::NoCertificateProvidedError)?;
+        for certificate in &certificates {
+            // CRITICAL: DO NOT USE `certificates` BEFORE THIS CHECK.
+            // This must be the first thing to check before anything else, because the transaction
+            // may not even be valid to access for any other checks.
+            // We need to check this first because we haven't verified the cert signature.
+            Self::transaction_validity_check(&epoch_store, certificate.data())?;
+        }
+
+        // Now that individual certificates are valid, we check if the bundle is valid.
+        self.soft_bundle_validity_check(&certificates, &epoch_store)
+            .await?;
+
+        let span = error_span!("handle_soft_bundle_certificates_v3");
+        self.handle_certificates(
+            certificates,
+            request.include_events,
+            request.include_input_objects,
+            request.include_output_objects,
+            request.include_auxiliary_data,
+            &epoch_store,
+            request.wait_for_effects,
+        )
+        .instrument(span)
+        .await
+        .map(|(resp, spam_weight)| {
+            (
+                tonic::Response::new(HandleSoftBundleCertificatesResponseV3 {
+                    responses: resp.unwrap_or_default(),
+                }),
+                spam_weight,
+            )
+        })
     }
 
     fn transaction_validity_check(
@@ -668,8 +864,10 @@ impl ValidatorService {
         if !epoch_store.randomness_state_enabled()
             && transaction.transaction_data().uses_randomness()
         {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "randomness is not enabled on this network".to_string(),
+            return Err(SuiError::UserInputError {
+                error: UserInputError::Unsupported(
+                    "randomness is not enabled on this network".to_string(),
+                ),
             });
         }
         Ok(())
@@ -678,49 +876,48 @@ impl ValidatorService {
     async fn object_info_impl(
         &self,
         request: tonic::Request<ObjectInfoRequest>,
-    ) -> Result<tonic::Response<ObjectInfoResponse>, tonic::Status> {
+    ) -> WrappedServiceResponse<ObjectInfoResponse> {
         let request = request.into_inner();
         let response = self.state.handle_object_info_request(request).await?;
-        Ok(tonic::Response::new(response))
+        Ok((tonic::Response::new(response), Weight::one()))
     }
 
     async fn transaction_info_impl(
         &self,
         request: tonic::Request<TransactionInfoRequest>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> WrappedServiceResponse<TransactionInfoResponse> {
         let request = request.into_inner();
         let response = self.state.handle_transaction_info_request(request).await?;
-        Ok(tonic::Response::new(response))
+        Ok((tonic::Response::new(response), Weight::one()))
     }
 
     async fn checkpoint_impl(
         &self,
         request: tonic::Request<CheckpointRequest>,
-    ) -> Result<tonic::Response<CheckpointResponse>, tonic::Status> {
+    ) -> WrappedServiceResponse<CheckpointResponse> {
         let request = request.into_inner();
         let response = self.state.handle_checkpoint_request(&request)?;
-        Ok(tonic::Response::new(response))
+        Ok((tonic::Response::new(response), Weight::one()))
     }
 
     async fn checkpoint_v2_impl(
         &self,
         request: tonic::Request<CheckpointRequestV2>,
-    ) -> Result<tonic::Response<CheckpointResponseV2>, tonic::Status> {
+    ) -> WrappedServiceResponse<CheckpointResponseV2> {
         let request = request.into_inner();
         let response = self.state.handle_checkpoint_request_v2(&request)?;
-        Ok(tonic::Response::new(response))
+        Ok((tonic::Response::new(response), Weight::one()))
     }
 
     async fn get_system_state_object_impl(
         &self,
         _request: tonic::Request<SystemStateRequest>,
-    ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
+    ) -> WrappedServiceResponse<SuiSystemState> {
         let response = self
             .state
             .get_object_cache_reader()
             .get_sui_system_state_object_unsafe()?;
-
-        Ok(tonic::Response::new(response))
+        Ok((tonic::Response::new(response), Weight::one()))
     }
 
     async fn handle_traffic_req(&self, client: Option<IpAddr>) -> Result<(), tonic::Status> {
@@ -739,12 +936,15 @@ impl ValidatorService {
     fn handle_traffic_resp<T>(
         &self,
         client: Option<IpAddr>,
-        response: &Result<tonic::Response<T>, tonic::Status>,
-    ) {
-        let error: Option<SuiError> = if let Err(status) = response {
-            Some(SuiError::from(status.clone()))
-        } else {
-            None
+        wrapped_response: WrappedServiceResponse<T>,
+    ) -> Result<tonic::Response<T>, tonic::Status> {
+        let (error, spam_weight, unwrapped_response) = match wrapped_response {
+            Ok((result, spam_weight)) => (None, spam_weight.clone(), Ok(result)),
+            Err(status) => (
+                Some(SuiError::from(status.clone())),
+                Weight::zero(),
+                Err(status.clone()),
+            ),
         };
 
         if let Some(traffic_controller) = self.traffic_controller.clone() {
@@ -752,9 +952,11 @@ impl ValidatorService {
                 direct: client,
                 through_fullnode: None,
                 error_weight: error.map(normalize).unwrap_or(Weight::zero()),
+                spam_weight,
                 timestamp: SystemTime::now(),
             })
         }
+        unwrapped_response
     }
 }
 
@@ -772,7 +974,7 @@ fn make_tonic_request_for_testing<T>(message: T) -> tonic::Request<T> {
 
 // TODO: refine error matching here
 fn normalize(err: SuiError) -> Weight {
-    match err {
+    match dbg!(err) {
         SuiError::UserInputError { .. }
         | SuiError::InvalidSignature { .. }
         | SuiError::SignerSignatureAbsent { .. }
@@ -791,7 +993,7 @@ fn normalize(err: SuiError) -> Weight {
 macro_rules! handle_with_decoration {
     ($self:ident, $func_name:ident, $request:ident) => {{
         if $self.client_id_source.is_none() {
-            return $self.$func_name($request).await;
+            return $self.$func_name($request).await.map(|(result, _)| result);
         }
 
         let client = match $self.client_id_source.as_ref().unwrap() {
@@ -855,11 +1057,10 @@ macro_rules! handle_with_decoration {
 
         // check if either IP is blocked, in which case return early
         $self.handle_traffic_req(client.clone()).await?;
-        // handle request
-        let response = $self.$func_name($request).await;
-        // handle response tallying
-        $self.handle_traffic_resp(client, &response);
-        response
+
+        // handle traffic tallying
+        let wrapped_response = $self.$func_name($request).await;
+        $self.handle_traffic_resp(client, wrapped_response)
     }};
 }
 
@@ -911,6 +1112,13 @@ impl Validator for ValidatorService {
         request: tonic::Request<HandleCertificateRequestV3>,
     ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
         handle_with_decoration!(self, handle_certificate_v3_impl, request)
+    }
+
+    async fn handle_soft_bundle_certificates_v3(
+        &self,
+        request: tonic::Request<HandleSoftBundleCertificatesRequestV3>,
+    ) -> Result<tonic::Response<HandleSoftBundleCertificatesResponseV3>, tonic::Status> {
+        handle_with_decoration!(self, handle_soft_bundle_certificates_v3_impl, request)
     }
 
     async fn object_info(

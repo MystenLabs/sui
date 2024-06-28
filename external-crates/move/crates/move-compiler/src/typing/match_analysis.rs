@@ -45,12 +45,13 @@ struct MatchCompiler<'ctx, 'env> {
 impl TypingVisitorContext for MatchCompiler<'_, '_> {
     fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
+        let eloc = exp.exp.loc;
         if let E::Match(subject, arms) = &exp.exp.value {
             debug_print!(self.context.debug.match_counterexample,
                 ("subject" => subject),
                 (lines "arms" => &arms.value)
             );
-            if invalid_match(self.context, subject, arms) {
+            if invalid_match(self.context, eloc, subject, arms) {
                 debug_print!(
                     self.context.debug.match_counterexample,
                     (msg "counterexample found")
@@ -93,12 +94,13 @@ pub fn function_body_(context: &mut Context, b_: &mut T::FunctionBody_) {
 /// error.
 fn invalid_match(
     context: &mut Context,
+    loc: Loc,
     subject: &T::Exp,
     arms: &Spanned<Vec<T::MatchArm>>,
 ) -> bool {
     let arms_loc = arms.loc;
     let (pattern_matrix, _arms) =
-        PatternMatrix::from(context, subject.ty.clone(), arms.value.clone());
+        PatternMatrix::from(context, loc, subject.ty.clone(), arms.value.clone());
 
     let mut counterexample_matrix = pattern_matrix.clone();
     let has_guards = counterexample_matrix.has_guards();
@@ -547,9 +549,17 @@ fn find_counterexample_impl(
                     None
                 }
             }
-        } else {
-            assert!(matrix.is_empty());
+        } else if matrix.is_empty() {
             Some(make_wildcards(arity as usize))
+        } else {
+            // An error case: no entry on the fringe but no
+            if !context.env.has_errors() {
+                context.env.add_diag(ice!((
+                    matrix.loc,
+                    "Non-empty matrix with non errors but no type"
+                )));
+            }
+            None
         };
         debug_print!(context.debug.match_counterexample, (opt "result" => &result; sdbg));
         result

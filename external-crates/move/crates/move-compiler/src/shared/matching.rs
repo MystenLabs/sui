@@ -48,6 +48,7 @@ pub struct PatternArm {
 #[derive(Clone, Debug)]
 pub struct PatternMatrix {
     pub tys: Vec<Type>,
+    pub loc: Loc,
     pub patterns: Vec<PatternArm>,
 }
 
@@ -445,6 +446,7 @@ impl PatternMatrix {
     ///       index for all of them.
     pub fn from<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
         context: &mut MC,
+        loc: Loc,
         subject_ty: Type,
         arms: Vec<T::MatchArm>,
     ) -> (PatternMatrix, Vec<T::Exp>) {
@@ -484,7 +486,7 @@ impl PatternMatrix {
                 });
             }
         }
-        (PatternMatrix { tys, patterns }, rhss)
+        (PatternMatrix { tys, loc, patterns }, rhss)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -541,6 +543,7 @@ impl PatternMatrix {
     ) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
+        let loc = self.loc;
         for entry in &self.patterns {
             if let Some((mut new_bindings, arm)) =
                 entry.specialize_variant(context, ctor_name, &arg_types)
@@ -554,7 +557,7 @@ impl PatternMatrix {
             .cloned()
             .chain(self.tys.clone().into_iter().skip(1))
             .collect::<Vec<_>>();
-        let matrix = PatternMatrix { tys, patterns };
+        let matrix = PatternMatrix { tys, loc, patterns };
         (bindings, matrix)
     }
 
@@ -565,6 +568,7 @@ impl PatternMatrix {
     ) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
+        let loc = self.loc;
         for entry in &self.patterns {
             if let Some((mut new_bindings, arm)) = entry.specialize_struct(context, &arg_types) {
                 bindings.append(&mut new_bindings);
@@ -576,13 +580,14 @@ impl PatternMatrix {
             .cloned()
             .chain(self.tys.clone().into_iter().skip(1))
             .collect::<Vec<_>>();
-        let matrix = PatternMatrix { tys, patterns };
+        let matrix = PatternMatrix { tys, loc, patterns };
         (bindings, matrix)
     }
 
     pub fn specialize_literal(&self, lit: &Value) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
+        let loc = self.loc;
         for entry in &self.patterns {
             if let Some((mut new_bindings, arm)) = entry.specialize_literal(lit) {
                 bindings.append(&mut new_bindings);
@@ -590,13 +595,14 @@ impl PatternMatrix {
             }
         }
         let tys = self.tys[1..].to_vec();
-        let matrix = PatternMatrix { tys, patterns };
+        let matrix = PatternMatrix { tys, loc, patterns };
         (bindings, matrix)
     }
 
     pub fn specialize_default(&self) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
+        let loc = self.loc;
         for entry in &self.patterns {
             if let Some((mut new_bindings, arm)) = entry.specialize_default() {
                 bindings.append(&mut new_bindings);
@@ -604,7 +610,7 @@ impl PatternMatrix {
             }
         }
         let tys = self.tys[1..].to_vec();
-        let matrix = PatternMatrix { tys, patterns };
+        let matrix = PatternMatrix { tys, loc, patterns };
         (bindings, matrix)
     }
 

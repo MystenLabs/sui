@@ -48,7 +48,7 @@ use sui_types::sui_serde::{
 use sui_types::transaction::{
     Argument, CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisObject,
     InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
-    TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
+    TransactionData, TransactionDataAPI, TransactionKind,
 };
 use sui_types::type_resolver::{get_layout_from_struct_tag, LayoutResolver};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -1447,9 +1447,7 @@ impl SuiTransactionBlockData {
         data: TransactionData,
         module_cache: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
-        let message_version = data
-            .message_version()
-            .expect("TransactionData defines message_version()");
+        let message_version = data.message_version();
         let sender = data.sender();
         let gas_data = SuiGasData {
             payment: data
@@ -1479,9 +1477,7 @@ impl SuiTransactionBlockData {
         data: TransactionData,
         package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<Self, anyhow::Error> {
-        let message_version = data
-            .message_version()
-            .expect("TransactionData defines message_version()");
+        let message_version = data.message_version();
         let sender = data.sender();
         let gas_data = SuiGasData {
             payment: data
@@ -2320,40 +2316,6 @@ pub enum SuiObjectArg {
         version: SequenceNumber,
         digest: ObjectDigest,
     },
-}
-
-#[serde_as]
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "LoadedChildObject", rename_all = "camelCase")]
-pub struct SuiLoadedChildObject {
-    object_id: ObjectID,
-    #[schemars(with = "AsSequenceNumber")]
-    #[serde_as(as = "AsSequenceNumber")]
-    sequence_number: SequenceNumber,
-}
-
-impl SuiLoadedChildObject {
-    pub fn new(object_id: ObjectID, sequence_number: SequenceNumber) -> Self {
-        Self {
-            object_id,
-            sequence_number,
-        }
-    }
-
-    pub fn object_id(&self) -> ObjectID {
-        self.object_id
-    }
-
-    pub fn sequence_number(&self) -> SequenceNumber {
-        self.sequence_number
-    }
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
-#[serde(rename_all = "camelCase", rename = "LoadedChildObjectsResponse")]
-pub struct SuiLoadedChildObjectsResponse {
-    pub loaded_child_objects: Vec<SuiLoadedChildObject>,
 }
 
 #[derive(Clone)]

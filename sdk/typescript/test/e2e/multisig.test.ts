@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { tmpdir } from 'os';
+import path from 'path';
 import { fromB64 } from '@mysten/bcs';
 import { describe, expect, it } from 'vitest';
 
@@ -43,7 +45,8 @@ describe('MultiSig with zklogin signature', () => {
 			],
 		});
 		let multisigAddr = multiSigPublicKey.toSuiAddress();
-		let toolbox = await setupWithFundedAddress(kp, multisigAddr);
+		const configPath = path.join(tmpdir(), 'client.yaml');
+		let toolbox = await setupWithFundedAddress(kp, multisigAddr, configPath);
 
 		// construct a transfer from the multisig address.
 		const tx = new Transaction();

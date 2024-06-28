@@ -6,12 +6,18 @@ use crate::models::TokenTransferData as DBTokenTransferData;
 use std::fmt::{Display, Formatter};
 
 pub mod config;
+pub mod eth_worker;
+pub mod latest_eth_syncer;
 pub mod metrics;
 pub mod models;
-pub mod postgres_writer;
+pub mod postgres_manager;
 pub mod schema;
-pub mod worker;
+pub mod sui_transaction_handler;
+pub mod sui_transaction_queries;
+pub mod sui_worker;
+pub mod types;
 
+#[derive(Clone)]
 pub struct TokenTransfer {
     chain_id: u8,
     nonce: u64,
@@ -25,6 +31,7 @@ pub struct TokenTransfer {
     data: Option<TokenTransferData>,
 }
 
+#[derive(Clone)]
 pub struct TokenTransferData {
     sender_address: Vec<u8>,
     destination_chain: u8,
@@ -64,7 +71,9 @@ impl TokenTransfer {
     }
 }
 
+#[derive(Clone)]
 pub(crate) enum TokenTransferStatus {
+    DepositedUnfinalized,
     Deposited,
     Approved,
     Claimed,
@@ -73,6 +82,7 @@ pub(crate) enum TokenTransferStatus {
 impl Display for TokenTransferStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
+            TokenTransferStatus::DepositedUnfinalized => "DepositedUnfinalized",
             TokenTransferStatus::Deposited => "Deposited",
             TokenTransferStatus::Approved => "Approved",
             TokenTransferStatus::Claimed => "Claimed",
@@ -81,6 +91,7 @@ impl Display for TokenTransferStatus {
     }
 }
 
+#[derive(Clone)]
 enum BridgeDataSource {
     Sui,
     Eth,

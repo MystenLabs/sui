@@ -63,7 +63,7 @@ B0:
 B1:
 [4]	4: Branch(7)
 B2:
-[2]	5: LdConst[0](U64: 00000000..)
+[2]	5: LdConst[0](u64: 0)
 [2]	6: Abort
 B3:
 [4]	7: CopyLoc[0](x#0#0: u64)
@@ -74,7 +74,7 @@ B3:
 }
 
 Constants [
-	0 => u64: 0000000000000000
+	0 => u64: 0
 ]
 }
 Command `disassemble --package MoveStdlib --name signer`:

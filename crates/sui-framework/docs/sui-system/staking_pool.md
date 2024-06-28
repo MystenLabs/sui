@@ -517,6 +517,14 @@ A proportional amount of pool token withdraw is recorded and processed at epoch 
     staked_sui: <a href="staking_pool.md#0x3_staking_pool_StakedSui">StakedSui</a>,
     ctx: &TxContext
 ) : Balance&lt;SUI&gt; {
+    // stake is inactive
+    <b>if</b> (staked_sui.stake_activation_epoch &gt; ctx.epoch()) {
+        <b>let</b> principal = <a href="staking_pool.md#0x3_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
+        pool.pending_stake = pool.pending_stake - principal.value();
+
+        <b>return</b> principal
+    };
+
     <b>let</b> (pool_token_withdraw_amount, <b>mut</b> principal_withdraw) =
         <a href="staking_pool.md#0x3_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool, staked_sui);
     <b>let</b> principal_withdraw_amount = principal_withdraw.value();

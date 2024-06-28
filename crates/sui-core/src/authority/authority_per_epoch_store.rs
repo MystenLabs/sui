@@ -4,8 +4,8 @@
 use arc_swap::ArcSwapOption;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::dkg;
 use fastcrypto_tbls::nodes::PartyId;
+use fastcrypto_tbls::{dkg, dkg_v0};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
@@ -67,7 +67,10 @@ use crate::consensus_handler::{
     SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::epoch_metrics::EpochMetrics;
-use crate::epoch::randomness::{DkgStatus, RandomnessManager, RandomnessReporter};
+use crate::epoch::randomness::{
+    DkgStatus, RandomnessManager, RandomnessReporter, VersionedProcessedMessage,
+    VersionedUsedProcessedMessages,
+};
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::execution_cache::ObjectCacheRead;
 use crate::module_cache_metrics::ResolverMetrics;
@@ -97,6 +100,7 @@ use sui_types::messages_consensus::{
     check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey,
     ConsensusTransactionKind,
 };
+use sui_types::messages_consensus::{VersionedDkgConfimation, VersionedDkgMessage};
 use sui_types::storage::GetSharedLocks;
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
@@ -313,6 +317,8 @@ pub struct AuthorityPerEpochStore {
     pub(crate) metrics: Arc<EpochMetrics>,
     epoch_start_configuration: Arc<EpochStartConfiguration>,
 
+    executed_in_epoch_table_enabled: once_cell::sync::OnceCell<bool>,
+
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
 
@@ -339,12 +345,18 @@ pub struct AuthorityEpochTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
 
-    /// Signatures over transaction effects that were executed in the current epoch.
-    /// Store this to avoid re-signing the same effects twice.
+    /// Signatures over transaction effects that we have signed and returned to users.
+    /// We store this to avoid re-signing the same effects twice.
+    /// Note that this may contain signatures for effects from previous epochs, in the case
+    /// that a user requests a signature for effects from a previous epoch. However, the
+    /// signature is still epoch-specific and so is stored in the epoch store.
     effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
     /// Signatures of transaction certificates that are executed locally.
-    pub(crate) transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
+    transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
+
+    /// Transactions that were executed in the current epoch.
+    executed_in_epoch: DBMap<TransactionDigest, ()>,
 
     /// The tables below manage shared object locks / versions. There are three ways they can be
     /// updated:
@@ -501,12 +513,20 @@ pub struct AuthorityEpochTables {
 
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.
-    pub(crate) dkg_processed_messages: DBMap<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
+    pub(crate) dkg_processed_messages_v2: DBMap<PartyId, VersionedProcessedMessage>,
+    #[deprecated]
+    pub(crate) dkg_processed_messages: DBMap<PartyId, dkg_v0::ProcessedMessage<PkG, EncG>>,
+
     /// Records messages used to generate a DKG confirmation. Updated when enough DKG
     /// messages are received to progress to the next phase.
-    pub(crate) dkg_used_messages: DBMap<u64, dkg::UsedProcessedMessages<PkG, EncG>>,
+    pub(crate) dkg_used_messages_v2: DBMap<u64, VersionedUsedProcessedMessages>,
+    #[deprecated]
+    pub(crate) dkg_used_messages: DBMap<u64, dkg_v0::UsedProcessedMessages<PkG, EncG>>,
+
     /// Records confirmations received from other nodes. Updated when receiving a new
     /// dkg::Confirmation via consensus.
+    pub(crate) dkg_confirmations_v2: DBMap<PartyId, VersionedDkgConfimation>,
+    #[deprecated]
     pub(crate) dkg_confirmations: DBMap<PartyId, dkg::Confirmation<EncG>>,
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares.
@@ -714,6 +734,7 @@ impl AuthorityPerEpochStore {
             epoch_id
         );
         let epoch_start_configuration = Arc::new(epoch_start_configuration);
+        info!("epoch flags: {:?}", epoch_start_configuration.flags());
         metrics.current_epoch.set(epoch_id as i64);
         metrics
             .current_voting_right
@@ -774,13 +795,6 @@ impl AuthorityPerEpochStore {
             info!("authenticator_state disabled");
         }
 
-        let is_validator = committee.authority_index(&name).is_some();
-        if is_validator {
-            assert!(epoch_start_configuration
-                .flags()
-                .contains(&EpochFlag::InMemoryCheckpointRoots));
-        }
-
         let mut jwk_aggregator = JwkAggregator::new(committee.clone());
 
         for ((authority, id, jwk), _) in tables.pending_jwks.unbounded_iter().seek_to_first() {
@@ -812,6 +826,7 @@ impl AuthorityPerEpochStore {
             epoch_close_time: Default::default(),
             metrics,
             epoch_start_configuration,
+            executed_in_epoch_table_enabled: once_cell::sync::OnceCell::new(),
             execution_component,
             chain_identifier,
             jwk_aggregator,
@@ -891,8 +906,8 @@ impl AuthorityPerEpochStore {
             .is_some()
     }
 
-    pub fn coin_deny_list_state_enabled(&self) -> bool {
-        self.protocol_config().enable_coin_deny_list() && self.coin_deny_list_state_exists()
+    pub fn coin_deny_list_v1_enabled(&self) -> bool {
+        self.protocol_config().enable_coin_deny_list_v1() && self.coin_deny_list_state_exists()
     }
 
     pub fn bridge_exists(&self) -> bool {
@@ -910,9 +925,20 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn state_accumulator_v2_enabled(&self) -> bool {
-        self.epoch_start_configuration
-            .flags()
-            .contains(&EpochFlag::StateAccumulatorV2Enabled)
+        let flag = match self.get_chain_identifier().chain() {
+            Chain::Unknown | Chain::Testnet => EpochFlag::StateAccumulatorV2EnabledTestnet,
+            Chain::Mainnet => EpochFlag::StateAccumulatorV2EnabledMainnet,
+        };
+
+        self.epoch_start_configuration.flags().contains(&flag)
+    }
+
+    pub fn executed_in_epoch_table_enabled(&self) -> bool {
+        *self.executed_in_epoch_table_enabled.get_or_init(|| {
+            self.epoch_start_configuration
+                .flags()
+                .contains(&EpochFlag::ExecutedInEpochTable)
+        })
     }
 
     /// Returns `&Arc<EpochStartConfiguration>`
@@ -955,6 +981,29 @@ impl AuthorityPerEpochStore {
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
             chain_identifier,
+        )
+    }
+
+    pub fn new_at_next_epoch_for_testing(
+        &self,
+        backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
+        object_store: Arc<dyn ObjectStore + Send + Sync>,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+    ) -> Arc<Self> {
+        let next_epoch = self.epoch() + 1;
+        let next_committee = Committee::new(
+            next_epoch,
+            self.committee.voting_rights.iter().cloned().collect(),
+        );
+        self.new_at_next_epoch(
+            self.name,
+            next_committee,
+            self.epoch_start_configuration
+                .new_at_next_epoch_for_testing(),
+            backing_package_store,
+            object_store,
+            expensive_safety_check_config,
+            self.chain_identifier,
         )
     }
 
@@ -1106,31 +1155,36 @@ impl AuthorityPerEpochStore {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn insert_tx_cert_and_effects_signature(
+    pub fn insert_tx_cert_sig(
+        &self,
+        tx_digest: &TransactionDigest,
+        cert_sig: &AuthorityStrongQuorumSignInfo,
+    ) -> SuiResult {
+        let tables = self.tables()?;
+        Ok(tables
+            .transaction_cert_signatures
+            .insert(tx_digest, cert_sig)?)
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn insert_tx_key_and_effects_signature(
         &self,
         tx_key: &TransactionKey,
         tx_digest: &TransactionDigest,
-        cert_sig: Option<&AuthorityStrongQuorumSignInfo>,
         effects_signature: Option<&AuthoritySignInfo>,
     ) -> SuiResult {
+        let tables = self.tables()?;
         let mut batch = self.tables()?.effects_signatures.batch();
-        if let Some(cert_sig) = cert_sig {
-            batch.insert_batch(
-                &self.tables()?.transaction_cert_signatures,
-                [(tx_digest, cert_sig)],
-            )?;
+
+        if self.executed_in_epoch_table_enabled() {
+            batch.insert_batch(&tables.executed_in_epoch, [(tx_digest, ())])?;
         }
+
         if let Some(effects_signature) = effects_signature {
-            batch.insert_batch(
-                &self.tables()?.effects_signatures,
-                [(tx_digest, effects_signature)],
-            )?;
+            batch.insert_batch(&tables.effects_signatures, [(tx_digest, effects_signature)])?;
         }
         if !matches!(tx_key, TransactionKey::Digest(_)) {
-            batch.insert_batch(
-                &self.tables()?.transaction_key_to_digest,
-                [(tx_key, tx_digest)],
-            )?;
+            batch.insert_batch(&tables.transaction_key_to_digest, [(tx_key, tx_digest)])?;
         }
         batch.write()?;
 
@@ -1140,14 +1194,28 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn effects_signatures_exists<'a>(
+    pub fn insert_effects_signature(
+        &self,
+        tx_digest: &TransactionDigest,
+        effects_signature: &AuthoritySignInfo,
+    ) -> SuiResult {
+        let tables = self.tables()?;
+        tables
+            .effects_signatures
+            .insert(tx_digest, effects_signature)?;
+        Ok(())
+    }
+
+    pub fn transactions_executed_in_cur_epoch<'a>(
         &self,
         digests: impl IntoIterator<Item = &'a TransactionDigest>,
     ) -> SuiResult<Vec<bool>> {
-        Ok(self
-            .tables()?
-            .effects_signatures
-            .multi_contains_keys(digests)?)
+        let tables = self.tables()?;
+        if self.executed_in_epoch_table_enabled() {
+            Ok(tables.executed_in_epoch.multi_contains_keys(digests)?)
+        } else {
+            Ok(tables.effects_signatures.multi_contains_keys(digests)?)
+        }
     }
 
     pub fn get_effects_signature(
@@ -1401,17 +1469,6 @@ impl AuthorityPerEpochStore {
             .multi_get(digests)?
             .into_iter()
             .collect())
-    }
-
-    pub fn per_epoch_finalized_txns_enabled(&self) -> bool {
-        self.epoch_start_configuration
-            .flags()
-            .contains(&EpochFlag::PerEpochFinalizedTransactions)
-    }
-
-    pub fn object_lock_split_tables_enabled(&self) -> bool {
-        self.epoch_start_configuration
-            .object_lock_split_tables_enabled()
     }
 
     // For each id in objects_to_init, return the next version for that id as recorded in the
@@ -1822,6 +1879,40 @@ impl AuthorityPerEpochStore {
         ))
     }
 
+    /// Check whether any certificates were processed by consensus.
+    /// This handles multiple certificates at once.
+    pub fn is_any_tx_certs_consensus_message_processed<'a>(
+        &self,
+        certificates: impl Iterator<Item = &'a CertifiedTransaction>,
+    ) -> SuiResult<bool> {
+        let keys = certificates.map(|cert| {
+            SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                *cert.digest(),
+            ))
+        });
+        Ok(self
+            .check_consensus_messages_processed(keys)?
+            .into_iter()
+            .any(|processed| processed))
+    }
+
+    /// Check whether any certificates were processed by consensus.
+    /// This handles multiple certificates at once.
+    pub fn is_all_tx_certs_consensus_message_processed<'a>(
+        &self,
+        certificates: impl Iterator<Item = &'a VerifiedCertificate>,
+    ) -> SuiResult<bool> {
+        let keys = certificates.map(|cert| {
+            SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                *cert.digest(),
+            ))
+        });
+        Ok(self
+            .check_consensus_messages_processed(keys)?
+            .into_iter()
+            .all(|processed| processed))
+    }
+
     pub fn is_consensus_message_processed(
         &self,
         key: &SequencedConsensusTransactionKey,
@@ -1832,9 +1923,9 @@ impl AuthorityPerEpochStore {
             .contains_key(key)?)
     }
 
-    pub fn check_consensus_messages_processed<'a>(
+    pub fn check_consensus_messages_processed(
         &self,
-        keys: impl Iterator<Item = &'a SequencedConsensusTransactionKey>,
+        keys: impl Iterator<Item = SequencedConsensusTransactionKey>,
     ) -> SuiResult<Vec<bool>> {
         Ok(self
             .tables()?
@@ -1850,7 +1941,7 @@ impl AuthorityPerEpochStore {
 
         let unprocessed_keys_registrations = registrations
             .into_iter()
-            .zip(self.check_consensus_messages_processed(keys.iter())?)
+            .zip(self.check_consensus_messages_processed(keys.into_iter())?)
             .filter(|(_, processed)| !processed)
             .map(|(registration, _)| registration);
 
@@ -3415,12 +3506,17 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgMessage from {:?}",
                             authority.concise()
                         );
-                        match bcs::from_bytes(bytes) {
+                        let versioned_dkg_message = match self.protocol_config.dkg_version() {
+                            // old message was not an enum
+                            0 => bcs::from_bytes(bytes).map(VersionedDkgMessage::V0),
+                            _ => bcs::from_bytes(bytes),
+                        };
+                        match versioned_dkg_message {
                             Ok(message) => randomness_manager.add_message(authority, message)?,
                             Err(e) => {
                                 warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
-                                    authority.concise(),
+                                    authority.concise()
                                 );
                             }
                         }
@@ -3448,17 +3544,22 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgConfirmation from {:?}",
                             authority.concise()
                         );
-                        match bcs::from_bytes(bytes) {
-                            Ok(confirmation) => randomness_manager.add_confirmation(
-                                batch,
-                                authority,
-                                confirmation,
-                            )?,
+
+                        let versioned_dkg_confirmation = match self.protocol_config.dkg_version() {
+                            // old message was not an enum
+                            0 => bcs::from_bytes(bytes).map(VersionedDkgConfimation::V0),
+                            _ => bcs::from_bytes(bytes),
+                        };
+
+                        match versioned_dkg_confirmation {
+                            Ok(message) => {
+                                randomness_manager.add_confirmation(batch, authority, message)?
+                            }
                             Err(e) => {
                                 warn!(
-                                    "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
-                                    authority.concise(),
-                                );
+                                        "Failed to deserialize RandomnessDkgConfirmation from {:?}: {e:?}",
+                                        authority.concise(),
+                                    );
                             }
                         }
                     } else {

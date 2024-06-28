@@ -26,6 +26,7 @@ use test_cluster::TestClusterBuilder;
 use tokio::join;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 15000;
@@ -236,6 +237,11 @@ async fn wait_for_graphql_checkpoint_catchup(
     checkpoint: u64,
     base_timeout: Duration,
 ) {
+    info!(
+        "Waiting for graphql to catchup to checkpoint {}, base time out is {}",
+        checkpoint,
+        base_timeout.as_secs()
+    );
     let query = r#"
     {
         availableRange {
@@ -256,7 +262,7 @@ async fn wait_for_graphql_checkpoint_catchup(
                 .response_body_json();
 
             let current_checkpoint = resp["data"]["availableRange"]["last"].get("sequenceNumber");
-
+            info!("Current checkpoint: {:?}", current_checkpoint);
             // Indexer has not picked up any checkpoints yet
             let Some(current_checkpoint) = current_checkpoint else {
                 tokio::time::sleep(Duration::from_secs(1)).await;

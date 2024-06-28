@@ -29,7 +29,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -80,7 +80,7 @@ use sui_storage::IndexStore;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
-use sui_types::deny_list::DenyList;
+use sui_types::deny_list_v1::check_coin_deny_list_v1;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
@@ -136,7 +136,6 @@ use crate::authority::authority_store_pruner::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
@@ -162,6 +161,7 @@ pub use crate::checkpoints::checkpoint_executor::{
 
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
+use sui_types::deny_list_v2::check_coin_deny_list_v2_during_signing;
 use sui_types::execution_config_utils::to_binary_config;
 
 #[cfg(test)]
@@ -187,6 +187,10 @@ mod gas_tests;
 #[cfg(test)]
 #[path = "unit_tests/batch_verification_tests.rs"]
 mod batch_verification_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/coin_deny_list_tests.rs"]
+mod coin_deny_list_tests;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod authority_test_utils;
@@ -860,8 +864,22 @@ impl AuthorityState {
             &self.metrics.bytecode_verifier_metrics,
         )?;
 
-        if epoch_store.coin_deny_list_state_enabled() {
-            self.check_coin_deny(tx_data.sender(), &checked_input_objects, &receiving_objects)?;
+        if epoch_store.coin_deny_list_v1_enabled() {
+            check_coin_deny_list_v1(
+                tx_data.sender(),
+                &checked_input_objects,
+                &receiving_objects,
+                &self.get_object_store(),
+            )?;
+        }
+
+        if epoch_store.protocol_config().enable_coin_deny_list_v2() {
+            check_coin_deny_list_v2_during_signing(
+                tx_data.sender(),
+                &checked_input_objects,
+                &receiving_objects,
+                &self.get_object_store(),
+            )?;
         }
 
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
@@ -1050,7 +1068,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<VerifiedSignedTransactionEffects> {
+    ) -> SuiResult<TransactionEffects> {
         let _metrics_guard = if certificate.contains_shared_object() {
             self.metrics
                 .execute_certificate_latency_shared_object
@@ -1071,8 +1089,7 @@ impl AuthorityState {
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
         }
 
-        let effects = self.notify_read_effects(certificate).await?;
-        self.sign_effects(effects, epoch_store)
+        self.notify_read_effects(certificate).await
     }
 
     /// Internal logic to execute a certificate.
@@ -1388,8 +1405,12 @@ impl AuthorityState {
 
         let output_keys = inner_temporary_store.get_output_keys(effects);
 
-        // Only need to sign effects if we are a validator.
-        let effects_sig = if self.is_validator(epoch_store) {
+        // Only need to sign effects if we are a validator, and if the executed_in_epoch_table is not yet enabled.
+        // TODO: once executed_in_epoch_table is enabled everywhere, we can remove the code below entirely.
+        let should_sign_effects =
+            self.is_validator(epoch_store) && !epoch_store.executed_in_epoch_table_enabled();
+
+        let effects_sig = if should_sign_effects {
             Some(AuthoritySignInfo::new(
                 epoch_store.epoch(),
                 effects,
@@ -1412,10 +1433,9 @@ impl AuthorityState {
 
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
-        epoch_store.insert_tx_cert_and_effects_signature(
+        epoch_store.insert_tx_key_and_effects_signature(
             &tx_key,
             tx_digest,
-            certificate.certificate_sig(),
             effects_sig.as_ref(),
         )?;
 
@@ -1517,9 +1537,8 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
         let prepare_certificate_start_time = tokio::time::Instant::now();
 
-        // Cheap validity checks for a transaction, including input size limits.
+        // TODO: We need to move this to a more appropriate place to avoid redundant checks.
         let tx_data = certificate.data().transaction_data();
-        tx_data.check_version_and_features_supported(epoch_store.protocol_config())?;
         tx_data.validity_check(epoch_store.protocol_config())?;
 
         // The cost of partially re-auditing a transaction before execution is tolerated.
@@ -1647,7 +1666,6 @@ impl AuthorityState {
         Option<ObjectID>,
     )> {
         // Cheap validity checks for a transaction, including input size limits.
-        transaction.check_version_and_features_supported(epoch_store.protocol_config())?;
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
         let input_object_kinds = transaction.input_objects()?;
@@ -1867,7 +1885,6 @@ impl AuthorityState {
             vec![]
         };
 
-        transaction.check_version_and_features_supported(protocol_config)?;
         transaction.validity_check_no_gas_check(protocol_config)?;
 
         let input_object_kinds = transaction.input_objects()?;
@@ -2067,7 +2084,6 @@ impl AuthorityState {
                 digest,
                 timestamp_ms,
                 tx_coins,
-                &inner_temporary_store.loaded_runtime_objects,
             )
             .await
     }
@@ -2830,7 +2846,6 @@ impl AuthorityState {
         supported_protocol_versions: SupportedProtocolVersions,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
-        checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
@@ -2849,12 +2864,7 @@ impl AuthorityState {
             .await?;
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&execution_lock);
-        self.check_system_consistency(
-            cur_epoch_store,
-            checkpoint_executor,
-            accumulator,
-            expensive_safety_check_config,
-        );
+        self.check_system_consistency(cur_epoch_store, accumulator, expensive_safety_check_config);
         self.maybe_reaccumulate_state_hash(
             cur_epoch_store,
             epoch_start_configuration
@@ -2905,6 +2915,32 @@ impl AuthorityState {
         Ok(new_epoch_store)
     }
 
+    /// Advance the epoch store to the next epoch for testing only.
+    /// This only manually sets all the places where we have the epoch number.
+    /// It doesn't properly reconfigure the node, hence should be only used for testing.
+    pub async fn reconfigure_for_testing(&self) {
+        let mut execution_lock = self.execution_lock_for_reconfiguration().await;
+        let epoch_store = self.epoch_store_for_testing().clone();
+        let protocol_config = epoch_store.protocol_config().clone();
+        // The current protocol config used in the epoch store may have been overridden and diverged from
+        // the protocol config definitions. That override may have now been dropped when the initial guard was dropped.
+        // We reapply the override before creating the new epoch store, to make sure that
+        // the new epoch store has the same protocol config as the current one.
+        // Since this is for testing only, we mostly like to keep the protocol config the same
+        // across epochs.
+        let _guard =
+            ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone());
+        let new_epoch_store = epoch_store.new_at_next_epoch_for_testing(
+            self.get_backing_package_store().clone(),
+            self.get_object_store().clone(),
+            &self.config.expensive_safety_check_config,
+        );
+        let new_epoch = new_epoch_store.epoch();
+        self.transaction_manager.reconfigure(new_epoch);
+        self.epoch_store.store(new_epoch_store);
+        *execution_lock = new_epoch;
+    }
+
     /// This is a temporary method to be used when we enable simplified_unwrap_then_delete.
     /// It re-accumulates state hash for the new epoch if simplified_unwrap_then_delete is enabled.
     #[instrument(level = "error", skip_all)]
@@ -2921,7 +2957,6 @@ impl AuthorityState {
     fn check_system_consistency(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
-        checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) {
@@ -2952,7 +2987,6 @@ impl AuthorityState {
                 cur_epoch_store.epoch()
             );
             self.expensive_check_is_consistent_state(
-                checkpoint_executor,
                 accumulator,
                 cur_epoch_store,
                 cfg!(debug_assertions), // panic in debug mode only
@@ -2969,7 +3003,6 @@ impl AuthorityState {
 
     fn expensive_check_is_consistent_state(
         &self,
-        checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
         cur_epoch_store: &AuthorityPerEpochStore,
         panic: bool,
@@ -3007,7 +3040,7 @@ impl AuthorityState {
         }
 
         if !panic {
-            checkpoint_executor.set_inconsistent_state(is_inconsistent);
+            accumulator.set_inconsistent_state(is_inconsistent);
         }
     }
 
@@ -3533,15 +3566,6 @@ impl AuthorityState {
         }
     }
 
-    #[instrument(level = "trace", skip_all)]
-    pub fn loaded_child_object_versions(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
-        self.get_indexes()?
-            .loaded_child_object_versions(transaction_digest)
-    }
-
     pub async fn get_transactions_for_tests(
         self: &Arc<Self>,
         filter: Option<TransactionFilter>,
@@ -3978,28 +4002,28 @@ impl AuthorityState {
                 // to return either an effects certificate, -or- a proof of inclusion in a checkpoint. In
                 // the case above, the Quorum Driver would return a proof of inclusion in the final
                 // checkpoint, and this code would no longer be necessary.
-                //
-                // Alternatively, some of the confusion around re-signing could be resolved if
-                // CertifiedTransactionEffects included both the epoch in which the transaction became
-                // final, as well as the epoch at which the effects were certified. In this case, there
-                // would be nothing terribly odd about the validators from epoch N certifying that a
-                // given TX became final in epoch N - 1. The confusion currently arises from the fact that
-                // the epoch field in AuthoritySignInfo is overloaded both to identify the provenance of
-                // the authority's signature, as well as to identify in which epoch the transaction was
-                // executed.
                 debug!(
                     ?tx_digest,
                     epoch=?epoch_store.epoch(),
                     "Re-signing the effects with the current epoch"
                 );
-                SignedTransactionEffects::new(
+
+                let sig = AuthoritySignInfo::new(
                     epoch_store.epoch(),
-                    effects,
-                    &*self.secret,
+                    &effects,
+                    Intent::sui_app(IntentScope::TransactionEffects),
                     self.name,
-                )
+                    &*self.secret,
+                );
+
+                let effects = SignedTransactionEffects::new_from_data_and_sig(effects, sig.clone());
+
+                epoch_store.insert_effects_signature(&tx_digest, &sig)?;
+
+                effects
             }
         };
+
         Ok(VerifiedSignedTransactionEffects::new_unchecked(
             signed_effects,
         ))
@@ -4460,7 +4484,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Option<EndOfEpochTransactionKind> {
-        if !epoch_store.protocol_config().enable_coin_deny_list() {
+        if !epoch_store.protocol_config().enable_coin_deny_list_v1() {
             return None;
         }
 
@@ -4692,30 +4716,6 @@ impl AuthorityState {
             self.get_reconfig_api().revert_state_update(&digest)?;
         }
         info!("All uncommitted local transactions reverted");
-        Ok(())
-    }
-
-    fn check_coin_deny(
-        &self,
-        sender: SuiAddress,
-        input_objects: &CheckedInputObjects,
-        receiving_objects: &ReceivingObjects,
-    ) -> SuiResult {
-        let all_objects = input_objects
-            .inner()
-            .iter_objects()
-            .chain(receiving_objects.iter_objects());
-        let coin_types = all_objects
-            .filter_map(|obj| {
-                if obj.is_gas_coin() {
-                    None
-                } else {
-                    obj.coin_type_maybe()
-                        .map(|type_tag| type_tag.to_canonical_string(false))
-                }
-            })
-            .collect::<BTreeSet<_>>();
-        DenyList::check_coin_deny_list(sender, coin_types, &self.get_object_store())?;
         Ok(())
     }
 

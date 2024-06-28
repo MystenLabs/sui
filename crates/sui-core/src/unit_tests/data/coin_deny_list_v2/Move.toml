@@ -1,0 +1,10 @@
+[package]
+name = "coin_deny_list_v2"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+coin_deny_list_v2 = "0x0"

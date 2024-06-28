@@ -277,15 +277,12 @@ impl<'a> TestAuthorityBuilder<'a> {
         let rest_index = if self.disable_indexer {
             None
         } else {
-            let mut resolver = epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(&cache_traits.backing_package_store));
-
             Some(Arc::new(RestIndexStore::new(
                 path.join("rest_index"),
                 &authority_store,
                 &checkpoint_store,
-                resolver.as_mut(),
+                &epoch_store,
+                &cache_traits.backing_package_store,
             )))
         };
 

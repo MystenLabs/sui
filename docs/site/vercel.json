@@ -99,6 +99,7 @@
       { "source": "/concepts/sui-move-concepts/patterns/hot-potato", "destination": "https://examples.sui.io/patterns/hot-potato.html", "permanent": false },
       { "source": "/concepts/sui-move-concepts/patterns/id-pointer", "destination": "https://move-book.com/storage/uid-and-id.html", "permanent": true },
       { "source": "/concepts/sui-move-concepts/patterns/transferrable-witness", "destination": "https://move-book.com/programmability/witness-pattern.html", "permanent": true },
-      { "source": "/guides/developer/advanced/asset-tokenization", "destination": "/guides/developer/nft/asset-tokenization", "permanent": true }
+      { "source": "/guides/developer/advanced/asset-tokenization", "destination": "/guides/developer/nft/asset-tokenization", "permanent": true },
+      { "source": "/references/move/move-toml", "destination": "https://move-book.com/concepts/manifest.html", "permanent": true }
     ]
   }

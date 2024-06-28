@@ -622,7 +622,8 @@ Emergency op payload is just a single byte
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_blocklist_payload">extract_blocklist_payload</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_Blocklist">Blocklist</a> {
-    // blocklist payload should consist of one byte blocklist type, and list of 33 bytes ecdsa pub keys
+    // blocklist payload should consist of one byte blocklist type, and list of 20 bytes evm addresses
+    // derived from ECDSA <b>public</b> keys
     <b>let</b> <b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
     <b>let</b> blocklist_type = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
     <b>let</b> <b>mut</b> address_count = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();

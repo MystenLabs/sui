@@ -2,8 +2,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Context};
-use std::{collections::BTreeSet, fmt, str::FromStr};
+use anyhow::anyhow;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    str::FromStr,
+};
 
 use crate::lexer::*;
 use move_command_line_common::files::FileHash;
@@ -182,21 +186,32 @@ fn parse_dot_name<'input>(
 fn parse_account_address(
     tokens: &mut Lexer,
 ) -> Result<AccountAddress, ParseError<Loc, anyhow::Error>> {
-    if tokens.peek() != Tok::AccountAddressValue {
+    if !matches!(tokens.peek(), Tok::AccountAddressValue | Tok::NameValue) {
         return Err(ParseError::InvalidToken {
             location: current_token_loc(tokens),
             message: "expected Tok::AccountAddressValue".to_string(),
         });
     }
-    let addr = AccountAddress::from_hex_literal(tokens.content())
-        .with_context(|| {
-            format!(
-                "The address {:?} is of invalid length. Addresses are at most 32-bytes long",
-                tokens.content()
-            )
-        })
-        .unwrap();
+    let loc = current_token_loc(tokens);
+    let addr = parse_address_literal(tokens, tokens.content(), loc).unwrap();
     tokens.advance()?;
+    Ok(addr)
+}
+
+fn parse_address_literal(
+    lexer: &Lexer,
+    literal: &str,
+    location: Loc,
+) -> Result<AccountAddress, ParseError<Loc, anyhow::Error>> {
+    let Some(addr) = AccountAddress::from_hex_literal(literal)
+        .ok()
+        .or_else(|| lexer.resolve_named_address(literal))
+    else {
+        return Err(ParseError::InvalidToken {
+            location,
+            message: format!("Invalid address '{}'", literal),
+        });
+    };
     Ok(addr)
 }
 
@@ -740,6 +755,11 @@ fn parse_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error
             let exps = parse_comma_list(tokens, &[Tok::RParen], parse_exp, true)?;
             consume_token(tokens, Tok::RParen)?;
             Ok(Exp_::ExprList(exps))
+        }
+        Tok::At => {
+            tokens.advance()?;
+            let address = parse_account_address(tokens)?;
+            Ok(Exp_::address(address).value)
         }
         t => Err(ParseError::InvalidToken {
             location: current_token_loc(tokens),
@@ -1789,6 +1809,14 @@ fn parse_variant_decl(
 // }
 
 fn parse_module_ident(tokens: &mut Lexer) -> Result<ModuleIdent, ParseError<Loc, anyhow::Error>> {
+    if tokens.peek() == Tok::DotNameValue {
+        let start_loc = current_token_loc(tokens);
+        let module_dot_name = parse_dot_name(tokens)?;
+        let v: Vec<&str> = module_dot_name.split('.').collect();
+        assert!(v.len() == 2);
+        let address = parse_address_literal(tokens, v[0], start_loc)?;
+        return Ok(ModuleIdent::new(ModuleName(Symbol::from(v[1])), address));
+    }
     let a = parse_account_address(tokens)?;
     consume_token(tokens, Tok::Period)?;
     let m = parse_module_name(tokens)?;
@@ -1915,8 +1943,15 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
 pub fn parse_module_string(
     input: &str,
 ) -> Result<ModuleDefinition, ParseError<Loc, anyhow::Error>> {
+    parse_module_string_with_named_addresses(input, &BTreeMap::new())
+}
+
+pub fn parse_module_string_with_named_addresses(
+    input: &str,
+    named_addresses: &BTreeMap<String, AccountAddress>,
+) -> Result<ModuleDefinition, ParseError<Loc, anyhow::Error>> {
     let file_hash = FileHash::new(input);
-    let mut tokens = Lexer::new(file_hash, input);
+    let mut tokens = Lexer::new(file_hash, input, named_addresses);
     tokens.advance()?;
     let unit = parse_module(&mut tokens)?;
     consume_token(&mut tokens, Tok::EOF)?;

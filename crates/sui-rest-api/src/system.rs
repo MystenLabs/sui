@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{accept::AcceptFormat, reader::StateReader, RestError, Result};
-use axum::{extract::State, Json};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use sui_protocol_config::{ProtocolConfig, ProtocolConfigValue, ProtocolVersion};
 use sui_sdk2::types::{Address, ObjectId};
 
 pub const GET_SYSTEM_STATE_SUMMARY_PATH: &str = "/system";
@@ -433,4 +439,164 @@ impl From<sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateS
                 .collect(),
         }
     }
+}
+
+pub const GET_CURRENT_PROTOCOL_CONFIG_PATH: &str = "/system/protocol";
+
+pub async fn get_current_protocol_config(
+    accept: AcceptFormat,
+    State(state): State<StateReader>,
+) -> Result<(SupportedProtocolHeaders, Json<ProtocolConfigResponse>)> {
+    match accept {
+        AcceptFormat::Json => {}
+        _ => {
+            return Err(RestError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "invalid accept type",
+            ))
+        }
+    }
+
+    let current_protocol_version = state.get_system_state_summary()?.protocol_version;
+
+    let config = ProtocolConfig::get_for_version_if_supported(
+        current_protocol_version.into(),
+        state.inner().get_chain_identifier()?.chain(),
+    )
+    .ok_or_else(|| ProtocolNotFoundError::new(current_protocol_version))?;
+
+    Ok((supported_protocol_headers(), Json(config.into())))
+}
+
+pub const GET_PROTOCOL_CONFIG_PATH: &str = "/system/protocol/:version";
+
+pub async fn get_protocol_config(
+    Path(version): Path<u64>,
+    accept: AcceptFormat,
+    State(state): State<StateReader>,
+) -> Result<(SupportedProtocolHeaders, Json<ProtocolConfigResponse>)> {
+    match accept {
+        AcceptFormat::Json => {}
+        _ => {
+            return Err(RestError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "invalid accept type",
+            ))
+        }
+    }
+
+    let config = ProtocolConfig::get_for_version_if_supported(
+        version.into(),
+        state.inner().get_chain_identifier()?.chain(),
+    )
+    .ok_or_else(|| ProtocolNotFoundError::new(version))?;
+
+    Ok((supported_protocol_headers(), Json(config.into())))
+}
+
+#[derive(Debug)]
+pub struct ProtocolNotFoundError {
+    version: u64,
+}
+
+impl ProtocolNotFoundError {
+    pub fn new(version: u64) -> Self {
+        Self { version }
+    }
+}
+
+impl std::fmt::Display for ProtocolNotFoundError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Protocol version {} not found", self.version)
+    }
+}
+
+impl std::error::Error for ProtocolNotFoundError {}
+
+impl From<ProtocolNotFoundError> for crate::RestError {
+    fn from(value: ProtocolNotFoundError) -> Self {
+        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
+    }
+}
+
+/// Minimum supported protocol version by this node
+pub const X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION: &str = "x-sui-min-supported-protocol-version";
+/// Maximum supported protocol version by this node
+pub const X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION: &str = "x-sui-max-supported-protocol-version";
+
+type SupportedProtocolHeaders = [(&'static str, String); 2];
+
+fn supported_protocol_headers() -> SupportedProtocolHeaders {
+    [
+        (
+            X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION,
+            ProtocolVersion::MIN.as_u64().to_string(),
+        ),
+        (
+            X_SUI_MAX_SUPPORTED_PROTOCOL_VERSION,
+            ProtocolVersion::MAX.as_u64().to_string(),
+        ),
+    ]
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename = "ProtocolConfig")]
+pub struct ProtocolConfigResponse {
+    pub protocol_version: u64,
+    pub feature_flags: BTreeMap<String, bool>,
+    pub attributes: BTreeMap<String, String>,
+}
+
+impl From<ProtocolConfig> for ProtocolConfigResponse {
+    fn from(config: ProtocolConfig) -> Self {
+        let attributes = config
+            .attr_map()
+            .into_iter()
+            .filter_map(|(k, maybe_v)| {
+                maybe_v.map(move |v| {
+                    let v = match v {
+                        ProtocolConfigValue::u16(x) => x.to_string(),
+                        ProtocolConfigValue::u32(y) => y.to_string(),
+                        ProtocolConfigValue::u64(z) => z.to_string(),
+                        ProtocolConfigValue::f64(f) => f.to_string(),
+                    };
+                    (k, v)
+                })
+            })
+            .collect();
+        ProtocolConfigResponse {
+            protocol_version: config.version.as_u64(),
+            attributes,
+            feature_flags: config.feature_map(),
+        }
+    }
+}
+
+pub const GET_GAS_INFO_PATH: &str = "/system/gas";
+
+pub async fn get_gas_info(
+    accept: AcceptFormat,
+    State(state): State<StateReader>,
+) -> Result<Json<GasInfo>> {
+    match accept {
+        AcceptFormat::Json => {}
+        _ => {
+            return Err(RestError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "invalid accept type",
+            ))
+        }
+    }
+
+    let reference_gas_price = state.get_system_state_summary()?.reference_gas_price;
+
+    Ok(Json(GasInfo {
+        reference_gas_price,
+    }))
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct GasInfo {
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
+    reference_gas_price: u64,
 }

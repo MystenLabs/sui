@@ -7,6 +7,7 @@ use axum::{
 };
 
 pub mod accept;
+mod accounts;
 mod checkpoints;
 pub mod client;
 mod committee;
@@ -29,13 +30,38 @@ use mysten_network::callback::CallbackLayer;
 use reader::StateReader;
 use std::sync::Arc;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-use sui_types::storage::{ReadStore, RestStateReader};
+use sui_types::storage::RestStateReader;
 use tap::Pipe;
 pub use transactions::{ExecuteTransactionQueryParameters, TransactionExecutor};
 
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";
 pub const APPLICATION_JSON: &str = "application/json";
+
+#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Direction {
+    Ascending,
+    Descending,
+}
+
+pub struct Page<T, C> {
+    pub entries: response::ResponseContent<Vec<T>>,
+    pub cursor: Option<C>,
+}
+
+pub const DEFAULT_PAGE_SIZE: usize = 50;
+pub const MAX_PAGE_SIZE: usize = 100;
+
+impl<T: serde::Serialize, C: std::fmt::Display> axum::response::IntoResponse for Page<T, C> {
+    fn into_response(self) -> axum::response::Response {
+        let cursor = self
+            .cursor
+            .map(|cursor| [(crate::types::X_SUI_CURSOR, cursor.to_string())]);
+
+        (cursor, self.entries).into_response()
+    }
+}
 
 #[derive(Clone)]
 pub struct RestService {
@@ -87,10 +113,22 @@ impl RestService {
     pub fn into_router(self) -> Router {
         let executor = self.executor.clone();
         let metrics = self.metrics.clone();
-        let store = self.reader.inner().clone();
 
         Router::new()
             .route("/", get(info::node_info))
+            .route(health::HEALTH_PATH, get(health::health))
+            .route(
+                accounts::LIST_ACCOUNT_OWNED_OBJECTS_PATH,
+                get(accounts::list_account_owned_objects),
+            )
+            .route(
+                transactions::GET_TRANSACTION_PATH,
+                get(transactions::get_transaction),
+            )
+            .route(
+                transactions::LIST_TRANSACTIONS_PATH,
+                get(transactions::list_transactions),
+            )
             .route(
                 committee::GET_LATEST_COMMITTEE_PATH,
                 get(committee::get_latest_committee),
@@ -100,8 +138,33 @@ impl RestService {
                 system::GET_SYSTEM_STATE_SUMMARY_PATH,
                 get(system::get_system_state_summary),
             )
+            .route(
+                system::GET_CURRENT_PROTOCOL_CONFIG_PATH,
+                get(system::get_current_protocol_config),
+            )
+            .route(
+                system::GET_PROTOCOL_CONFIG_PATH,
+                get(system::get_protocol_config),
+            )
+            .route(system::GET_GAS_INFO_PATH, get(system::get_gas_info))
+            .route(
+                checkpoints::LIST_CHECKPOINT_PATH,
+                get(checkpoints::list_checkpoints),
+            )
+            .route(
+                checkpoints::GET_CHECKPOINT_PATH,
+                get(checkpoints::get_checkpoint),
+            )
+            .route(
+                checkpoints::GET_FULL_CHECKPOINT_PATH,
+                get(checkpoints::get_full_checkpoint),
+            )
+            .route(objects::GET_OBJECT_PATH, get(objects::get_object))
+            .route(
+                objects::GET_OBJECT_WITH_VERSION_PATH,
+                get(objects::get_object_with_version),
+            )
             .with_state(self.clone())
-            .merge(rest_router(store))
             .pipe(|router| {
                 if let Some(executor) = executor {
                     router.merge(execution_router(executor))
@@ -136,32 +199,6 @@ impl RestService {
             .await
             .unwrap();
     }
-}
-
-fn rest_router<S>(state: S) -> Router
-where
-    S: ReadStore + Clone + Send + Sync + 'static,
-{
-    Router::new()
-        .route(health::HEALTH_PATH, get(health::health::<S>))
-        .route(
-            checkpoints::GET_FULL_CHECKPOINT_PATH,
-            get(checkpoints::get_full_checkpoint::<S>),
-        )
-        .route(
-            checkpoints::GET_CHECKPOINT_PATH,
-            get(checkpoints::get_checkpoint::<S>),
-        )
-        .route(
-            checkpoints::GET_LATEST_CHECKPOINT_PATH,
-            get(checkpoints::get_latest_checkpoint::<S>),
-        )
-        .route(objects::GET_OBJECT_PATH, get(objects::get_object::<S>))
-        .route(
-            objects::GET_OBJECT_WITH_VERSION_PATH,
-            get(objects::get_object_with_version::<S>),
-        )
-        .with_state(state)
 }
 
 fn execution_router(executor: Arc<dyn TransactionExecutor>) -> Router {

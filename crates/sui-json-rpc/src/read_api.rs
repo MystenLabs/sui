@@ -30,7 +30,6 @@ use sui_json_rpc_types::{
     SuiTransactionBlock, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{SuiLoadedChildObject, SuiLoadedChildObjectsResponse};
 use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::key_value_store::TransactionKeyValueStore;
@@ -1010,32 +1009,6 @@ impl ReadApiServer for ReadApi {
             self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
                 .await
                 .map_err(Error::from)
-        })
-    }
-
-    #[instrument(skip(self))]
-    async fn get_loaded_child_objects(
-        &self,
-        digest: TransactionDigest,
-    ) -> RpcResult<SuiLoadedChildObjectsResponse> {
-        with_tracing!(async move {
-            Ok(SuiLoadedChildObjectsResponse {
-                loaded_child_objects: match self
-                    .state
-                    .loaded_child_object_versions(&digest)
-                    .map_err(|e| {
-                        error!(
-                            "Failed to get loaded child objects at {digest:?} with error: {e:?}"
-                        );
-                        Error::StateReadError(e)
-                    })? {
-                    Some(v) => v
-                        .into_iter()
-                        .map(|q| SuiLoadedChildObject::new(q.0, q.1))
-                        .collect::<Vec<_>>(),
-                    None => vec![],
-                },
-            })
         })
     }
 

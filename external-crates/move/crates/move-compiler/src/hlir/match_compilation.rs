@@ -88,16 +88,16 @@ pub(super) fn compile_match(
     subject: T::Exp,
     arms: Spanned<Vec<T::MatchArm>>,
 ) -> T::Exp {
-    let arms_loc = arms.loc;
+    let loc = arms.loc;
     // NB: `from` also flattens `or` and converts constants into guards.
-    let (pattern_matrix, arms) = PatternMatrix::from(context, subject.ty.clone(), arms.value);
+    let (pattern_matrix, arms) = PatternMatrix::from(context, loc, subject.ty.clone(), arms.value);
 
     let mut compilation_results: BTreeMap<usize, WorkResult> = BTreeMap::new();
 
     let (mut initial_binders, init_subject, match_subject) = {
-        let subject_var = context.new_match_var("unpack_subject".to_string(), arms_loc);
+        let subject_var = context.new_match_var("unpack_subject".to_string(), loc);
         let subject_loc = subject.exp.loc;
-        let match_var = context.new_match_var("match_subject".to_string(), arms_loc);
+        let match_var = context.new_match_var("match_subject".to_string(), loc);
 
         let subject_entry = FringeEntry {
             var: subject_var,
@@ -122,7 +122,7 @@ pub(super) fn compile_match(
         };
 
         let subject_borrow = {
-            let lhs_loc = arms_loc;
+            let lhs_loc = loc;
             let lhs_lvalue = make_lvalue(match_var, Mutability::Imm, subject_borrow_rhs.ty.clone());
             let binder = T::SequenceItem_::Bind(
                 sp(lhs_loc, vec![lhs_lvalue]),
@@ -241,7 +241,7 @@ pub(super) fn compile_match(
         ice_assert!(
             context.env,
             redefined.is_none(),
-            arms_loc,
+            loc,
             "Match work queue went awry"
         );
     }
@@ -251,7 +251,7 @@ pub(super) fn compile_match(
         hlir_context: context,
         output_type: result_type,
         arms: &arms,
-        arms_loc,
+        arms_loc: loc,
         results: &mut compilation_results,
     };
     let match_exp = resolve_result(&mut resolution_context, &init_subject, match_start);
@@ -487,9 +487,10 @@ fn resolve_result(
                 .unfold_to_type_name()
                 .and_then(|sp!(_, name)| name.datatype_name())
                 .unwrap();
+            // Bindings in the arm are always immutable
             let bindings = subject_binders
                 .into_iter()
-                .map(|(mut_, binder)| (binder, (mut_, subject.clone())))
+                .map(|(_mut, binder)| (binder, (Mutability::Imm, subject.clone())))
                 .collect();
 
             let sorted_variants: Vec<VariantName> = context.hlir_context.info.enum_variants(&m, &e);
@@ -530,9 +531,10 @@ fn resolve_result(
                 .unfold_to_type_name()
                 .and_then(|sp!(_, name)| name.datatype_name())
                 .unwrap();
+            // Bindings in the arm are always immutable
             let bindings = subject_binders
                 .into_iter()
-                .map(|(mut_, binder)| (binder, (mut_, subject.clone())))
+                .map(|(_mut, binder)| (binder, (Mutability::Imm, subject.clone())))
                 .collect();
             let unpack_exp = match unpack {
                 StructUnpack::Default(result_ndx) => {
@@ -564,9 +566,10 @@ fn resolve_result(
             Some(sp!(_, BuiltinTypeName_::Bool))
         ) && arms.len() == 2 =>
         {
+            // Bindings in the arm are always immutable
             let bindings = subject_binders
                 .into_iter()
-                .map(|(mut_, binder)| (binder, (mut_, subject.clone())))
+                .map(|(_mut, binder)| (binder, (Mutability::Imm, subject.clone())))
                 .collect();
             // If the literal switch for a boolean is saturated, no default case.
             let lit_subject = make_match_lit(subject.clone());
@@ -595,9 +598,10 @@ fn resolve_result(
             arms: map,
             default,
         } => {
+            // Bindings in the arm are always immutable
             let bindings = subject_binders
                 .into_iter()
-                .map(|(mut_, binder)| (binder, (mut_, subject.clone())))
+                .map(|(_mut, binder)| (binder, (Mutability::Imm, subject.clone())))
                 .collect();
             let lit_subject = make_match_lit(subject.clone());
 
@@ -672,6 +676,11 @@ fn make_guard_exp(
         guard,
         arm,
     } = arm;
+    // Bindings in the guard are always immutable
+    let bindings = bindings
+        .into_iter()
+        .map(|(x, (_mut, entry))| (x, (Mutability::Imm, entry)))
+        .collect();
     let guard_arm = make_arm(context, subject.clone(), arm);
     let body = make_if_else(*guard.unwrap(), guard_arm, cur_exp, result_ty);
     make_copy_bindings(bindings, body)
@@ -1047,7 +1056,6 @@ fn make_match_variant_unpack(
 }
 
 // Performs a struct unpack for the purpose of matching, where we are matching against an imm. ref.
-// Note that unpacking refs is a lie; this is
 fn make_match_struct_unpack(
     mident: ModuleIdent,
     struct_: DatatypeName,

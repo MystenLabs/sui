@@ -10,8 +10,9 @@ type BuyNLargeConfig = {
 	sheetDescription: string;
 	homeDescription: string;
 	homeImage: string;
+	backgroundColor: string;
 };
 
 export function useConfig() {
-	return useFeatureValue<BuyNLargeConfig | null>('buynlarge', null);
+	return useFeatureValue<BuyNLargeConfig[]>('buynlargev2', []);
 }

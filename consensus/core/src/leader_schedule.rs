@@ -530,7 +530,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_mysticeti_leader_scoring_and_schedule(false);
+            .set_mysticeti_leader_scoring_and_schedule_for_testing(false);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
@@ -640,7 +640,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold(33);
+            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
@@ -734,7 +734,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold(33);
+            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
@@ -763,7 +763,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold(33);
+            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
@@ -867,7 +867,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold(33);
+            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let leader_schedule = Arc::new(LeaderSchedule::new(
             context.clone(),

@@ -1,5 +1,25 @@
 # @mysten/wallet-standard
 
+## 0.12.10
+
+### Patch Changes
+
+- Updated dependencies [fef99d377f]
+  - @mysten/sui@1.2.0
+
+## 0.12.9
+
+### Patch Changes
+
+- 805ff4d4c2: Fix bug where transaction was passed as both transaction and transactionBlock to sui:signTransactionBlock
+
+## 0.12.8
+
+### Patch Changes
+
+- Updated dependencies [0dfff33b95]
+  - @mysten/sui@1.1.2
+
 ## 0.12.7
 
 ### Patch Changes

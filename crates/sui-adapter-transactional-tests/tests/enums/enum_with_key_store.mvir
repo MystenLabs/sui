@@ -1,0 +1,106 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --addresses test=0x0
+
+//# publish
+module 0x0.f {
+    import 0x2.transfer;
+    import 0x2.object;
+    import 0x2.dynamic_field;
+    import 0x2.dynamic_object_field;
+    import 0x2.tx_context;
+
+    enum X has store, key {
+        A { } 
+    }
+
+    public transfer() {
+        let x: Self.X;
+        label  l0:
+            x = X.A { };
+            transfer.transfer<Self.X>(move(x), 0x0);
+        return;
+    }
+
+    public share() {
+        let x: Self.X;
+        label  l0:
+            x = X.A { };
+            transfer.share_object<Self.X>(move(x));
+        return;
+    }
+
+    public public_transfer() {
+        let x: Self.X;
+        label  l0:
+            x = X.A { };
+            transfer.public_transfer<Self.X>(move(x), 0x0);
+        return;
+    }
+
+    public public_share() {
+        let x: Self.X;
+        label  l0:
+            x = X.A { };
+            transfer.public_share_object<Self.X>(move(x));
+        return;
+    }
+
+    public freezer() {
+        let x: Self.X;
+        label l0:
+            x = X.A { };
+            transfer.freeze_object<Self.X>(move(x));
+        return;
+    }
+
+    public public_freezer() {
+        let x: Self.X;
+        label l0:
+            x = X.A { };
+            transfer.public_freeze_object<Self.X>(move(x));
+        return;
+    }
+
+    public add_as_df(ctx: &mut tx_context.TxContext) {
+        let x: Self.X;
+        let id: object.UID;
+        label l0:
+            id = object.new(move(ctx));
+            x = X.A { };
+            dynamic_field.add<u64, Self.X>(&mut id, 0, move(x));
+            object.delete(move(id));
+        return;
+    
+    }
+
+    public dof_add(ctx: &mut tx_context.TxContext) {
+        let x: Self.X;
+        let id: object.UID;
+        label l0:
+            id = object.new(move(ctx));
+            x = X.A { };
+            dynamic_object_field.add<u64, Self.X>(&mut id, 0, move(x));
+            object.delete(move(id));
+        return;
+    }
+}
+
+//# set-address test object(1,0)
+
+//# run test::f::transfer
+
+//# run test::f::share
+
+//# run test::f::public_transfer
+
+//# run test::f::public_share
+
+//# run test::f::freezer
+
+//# run test::f::public_freezer
+
+//# run test::f::add_df
+
+//# run test::f::add_dof

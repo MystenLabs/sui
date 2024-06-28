@@ -293,7 +293,7 @@ impl SimpleVMTestAdapter {
 
         // save changeset
         // TODO support events
-        let (changeset, _events) = session.finish().0?;
+        let changeset = session.finish().0?;
         self.storage.apply(changeset).unwrap();
         Ok(res)
     }

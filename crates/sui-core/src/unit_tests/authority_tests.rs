@@ -2342,14 +2342,14 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         gas_object.compute_object_reference(),
         &authority_state,
     );
-    let signed_effects = authority_state
+    let effects = authority_state
         .execute_certificate(
             &certified_transfer_transaction,
             &authority_state.epoch_store_for_testing(),
         )
         .await
         .unwrap();
-    signed_effects.into_message().status().unwrap();
+    effects.status().unwrap();
 }
 
 #[tokio::test]
@@ -2396,7 +2396,7 @@ async fn test_handle_confirmation_transaction_ok() {
         )
         .await
         .unwrap();
-    signed_effects.into_message().status().unwrap();
+    signed_effects.status().unwrap();
     // Key check: the ownership has changed
 
     let new_account = authority_state
@@ -2453,14 +2453,14 @@ async fn test_handle_confirmation_transaction_idempotent() {
         &authority_state,
     );
 
-    let signed_effects = authority_state
+    let effects = authority_state
         .execute_certificate(
             &certified_transfer_transaction,
             &authority_state.epoch_store_for_testing(),
         )
         .await
         .unwrap();
-    assert_eq!(signed_effects.data().status(), &ExecutionStatus::Success);
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
 
     let signed_effects2 = authority_state
         .execute_certificate(
@@ -2469,10 +2469,10 @@ async fn test_handle_confirmation_transaction_idempotent() {
         )
         .await
         .unwrap();
-    assert_eq!(signed_effects2.data().status(), &ExecutionStatus::Success);
+    assert_eq!(signed_effects2.status(), &ExecutionStatus::Success);
 
     // this is valid because we're checking the authority state does not change the certificate
-    assert_eq!(signed_effects, signed_effects2);
+    assert_eq!(effects, signed_effects2);
 
     // Now check the transaction info request is also the same
     let info = authority_state
@@ -2482,10 +2482,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
         .await
         .unwrap();
 
-    assert_eq!(
-        info.status.into_effects_for_testing(),
-        signed_effects.into_inner()
-    );
+    assert_eq!(info.status.into_effects_for_testing().data(), &effects);
 }
 
 #[tokio::test]
@@ -2614,8 +2611,7 @@ async fn test_move_call_insufficient_gas() {
             &authority_state.epoch_store_for_testing(),
         )
         .await
-        .unwrap()
-        .into_message();
+        .unwrap();
     let gas_used = effects.gas_cost_summary().net_gas_usage() as u64;
     let kind_of_rebate_to_remove = effects.gas_cost_summary().storage_cost / 2;
 
@@ -2978,7 +2974,7 @@ async fn test_idempotent_reversed_confirmation() {
         .await;
     assert!(result2.is_ok());
     assert_eq!(
-        result1.unwrap().into_message(),
+        result1.unwrap(),
         result2
             .unwrap()
             .status
@@ -3264,11 +3260,10 @@ async fn test_transfer_sui_no_amount() {
         .unwrap();
 
     let certificate = init_certified_transaction(transaction.into(), &authority_state);
-    let signed_effects = authority_state
+    let effects = authority_state
         .execute_certificate(&certificate, &authority_state.epoch_store_for_testing())
         .await
         .unwrap();
-    let effects = signed_effects.into_message();
     // Check that the transaction was successful, and the gas object is the only mutated object,
     // and got transferred. Also check on its version and new balance.
     assert!(effects.status().is_ok());
@@ -3310,11 +3305,10 @@ async fn test_transfer_sui_with_amount() {
     );
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
-    let signed_effects = authority_state
+    let effects = authority_state
         .execute_certificate(&certificate, &authority_state.epoch_store_for_testing())
         .await
         .unwrap();
-    let effects = signed_effects.into_message();
     // Check that the transaction was successful, the gas object remains in the original owner,
     // and an amount is split out and send to the recipient.
     assert!(effects.status().is_ok());
@@ -3435,8 +3429,7 @@ async fn test_store_revert_wrap_move_call() {
     let wrap_effects = authority_state
         .execute_certificate(&wrap_cert, &authority_state.epoch_store_for_testing())
         .await
-        .unwrap()
-        .into_message();
+        .unwrap();
 
     assert!(wrap_effects.status().is_ok());
     assert_eq!(wrap_effects.created().len(), 1);
@@ -3523,8 +3516,7 @@ async fn test_store_revert_unwrap_move_call() {
     let unwrap_effects = authority_state
         .execute_certificate(&unwrap_cert, &authority_state.epoch_store_for_testing())
         .await
-        .unwrap()
-        .into_message();
+        .unwrap();
 
     assert!(unwrap_effects.status().is_ok());
     assert_eq!(unwrap_effects.deleted().len(), 1);
@@ -3778,8 +3770,7 @@ async fn test_store_revert_add_ofield() {
     let add_effects = authority_state
         .execute_certificate(&add_cert, &authority_state.epoch_store_for_testing())
         .await
-        .unwrap()
-        .into_message();
+        .unwrap();
 
     assert!(add_effects.status().is_ok());
     assert_eq!(add_effects.created().len(), 1);
@@ -3894,8 +3885,7 @@ async fn test_store_revert_remove_ofield() {
             &authority_state.epoch_store_for_testing(),
         )
         .await
-        .unwrap()
-        .into_message();
+        .unwrap();
 
     assert!(remove_effects.status().is_ok());
     let outer_v2 = find_by_id(&remove_effects.mutated(), outer_v0.0).unwrap();
@@ -4158,7 +4148,7 @@ pub async fn init_state_with_ids_and_object_basics<
     publish_object_basics(state).await
 }
 
-async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityState>, ObjectRef) {
+pub async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityState>, ObjectRef) {
     use sui_move_build::BuildConfig;
 
     // add object_basics package object to genesis, since lots of test use it
@@ -5729,7 +5719,7 @@ async fn test_publish_not_a_package_dependency() {
     )
 }
 
-fn create_gas_objects(num: u32, owner: SuiAddress) -> Vec<Object> {
+pub fn create_gas_objects(num: u32, owner: SuiAddress) -> Vec<Object> {
     let mut objects = vec![];
     for _ in 0..num {
         let gas_object_id = ObjectID::random();
@@ -5778,18 +5768,19 @@ async fn test_consensus_handler_per_object_congestion_control(
     // Create the cluster with controlled per object congestion control.
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config.set_per_object_congestion_control_mode(mode);
+    protocol_config.set_per_object_congestion_control_mode_for_testing(mode);
 
     match mode {
         PerObjectCongestionControlMode::None => unreachable!(),
         PerObjectCongestionControlMode::TotalGasBudget => {
-            protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(200_000_000);
+            protocol_config
+                .set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(200_000_000);
         }
         PerObjectCongestionControlMode::TotalTxCount => {
-            protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(2);
+            protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(2);
         }
     }
-    protocol_config.set_max_deferral_rounds_for_congestion_control(1000); // Set to a large number so that we don't hit this limit.
+    protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(1000); // Set to a large number so that we don't hit this limit.
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
@@ -6002,10 +5993,11 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // Create the cluster with controlled per object congestion control and cancellation.
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config
-        .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
-    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(100_000_000);
-    protocol_config.set_max_deferral_rounds_for_congestion_control(2);
+    protocol_config.set_per_object_congestion_control_mode_for_testing(
+        PerObjectCongestionControlMode::TotalGasBudget,
+    );
+    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(100_000_000);
+    protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(2);
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
@@ -6154,4 +6146,12 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     } else {
         panic!("First scheduled transaction must be a ConsensusCommitPrologueV3 transaction.");
     }
+}
+
+#[tokio::test]
+async fn test_single_authority_reconfigure() {
+    let state = TestAuthorityBuilder::new().build().await;
+    assert_eq!(state.epoch_store_for_testing().epoch(), 0);
+    state.reconfigure_for_testing().await;
+    assert_eq!(state.epoch_store_for_testing().epoch(), 1);
 }

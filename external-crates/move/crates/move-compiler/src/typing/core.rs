@@ -20,7 +20,7 @@ use crate::{
         Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
     },
     shared::{
-        ide::{IDEAnnotation, IDEInfo},
+        ide::{AutocompleteMethod, IDEAnnotation, IDEInfo},
         known_attributes::TestingAttribute,
         matching::{new_match_var_name, MatchContext},
         program_info::*,
@@ -721,17 +721,14 @@ impl<'env> Context<'env> {
     //********************************************
 
     /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
-    pub fn find_all_methods(
-        &mut self,
-        tn: &TypeName,
-    ) -> BTreeSet<(Spanned<ModuleIdent_>, FunctionName)> {
+    pub fn find_all_methods(&mut self, tn: &TypeName) -> Vec<AutocompleteMethod> {
         debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
         if !self
             .env
             .supports_feature(self.current_package(), FeatureGate::DotCall)
         {
             debug_print!(self.debug.autocomplete_resolution, (msg "dot call unsupported"));
-            return BTreeSet::new();
+            return vec![];
         }
         let cur_color = self.use_funs.last().unwrap().color;
         let mut result = BTreeSet::new();
@@ -742,39 +739,68 @@ impl<'env> Context<'env> {
             if let Some(names) = scope.use_funs.get(tn) {
                 let mut new_names = names
                     .iter()
-                    .map(|(_, _, use_fun)| use_fun.target_function)
+                    .map(|(_, method_name, use_fun)| {
+                        AutocompleteMethod::new(*method_name, use_fun.target_function)
+                    })
                     .collect();
                 result.append(&mut new_names);
             }
         });
-        debug_print!(self.debug.autocomplete_resolution, (lines "result" => &result; dbg));
-        result
+        let (same, mut different) = result
+            .clone()
+            .into_iter()
+            .partition::<Vec<_>, _>(|a| a.method_name == a.target_function.1.value());
+        // favor aliased completions over those where method name is the same as the target function
+        // name as the former are shadowing the latter - keep the latter only if the aliased set has
+        // no entry with the same target or with the same method name
+        let mut same_filtered = vec![];
+        'outer: for sa in same.into_iter() {
+            for da in different.iter() {
+                if da.method_name == sa.method_name
+                    || da.target_function.1.value() == sa.target_function.1.value()
+                {
+                    continue 'outer;
+                }
+            }
+            same_filtered.push(sa);
+        }
+
+        different.append(&mut same_filtered);
+        different.sort_by(|a1, a2| a1.method_name.cmp(&a2.method_name));
+        different
     }
 
     /// Find all valid fields in scope for a given `TypeName`. This is used for autocomplete.
-    pub fn find_all_fields(&mut self, tn: &TypeName) -> BTreeSet<Symbol> {
+    pub fn find_all_fields(&mut self, tn: &TypeName) -> Vec<(Symbol, N::Type)> {
         debug_print!(self.debug.autocomplete_resolution, (msg "fields"), ("name" => tn));
-        let fields = match &tn.value {
-            TypeName_::Multiple(_) => BTreeSet::new(),
-            // TODO(cswords): are there any valid builtin fielsd?
-            TypeName_::Builtin(_) => BTreeSet::new(),
-            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => BTreeSet::new(),
+        let fields_info = match &tn.value {
+            TypeName_::Multiple(_) => vec![],
+            // TODO(cswords): are there any valid builtin fields?
+            TypeName_::Builtin(_) => vec![],
+            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => vec![],
             TypeName_::ModuleType(m, n) => match self.datatype_kind(m, n) {
-                DatatypeKind::Enum => BTreeSet::new(),
+                DatatypeKind::Enum => vec![],
                 DatatypeKind::Struct => match &self.struct_definition(m, n).fields {
-                    N::StructFields::Native(_) => BTreeSet::new(),
+                    N::StructFields::Native(_) => vec![],
                     N::StructFields::Defined(is_positional, fields) => {
                         if *is_positional {
-                            (0..fields.len()).map(|n| format!("{}", n).into()).collect()
+                            fields
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, (_, _, (_, t)))| (format!("{}", idx).into(), t.clone()))
+                                .collect::<Vec<_>>()
                         } else {
-                            fields.key_cloned_iter().map(|(k, _)| k.value()).collect()
+                            fields
+                                .key_cloned_iter()
+                                .map(|(k, (_, t))| (k.value(), t.clone()))
+                                .collect::<Vec<_>>()
                         }
                     }
                 },
             },
         };
-        debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields; dbg));
-        fields
+        debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields_info; dbg));
+        fields_info
     }
 
     pub fn add_ide_info(&mut self, loc: Loc, info: IDEAnnotation) {
