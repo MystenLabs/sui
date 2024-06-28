@@ -101,7 +101,7 @@ impl SuiCheckpointSyncer {
             self.bridge_genesis_checkpoint,
             ingestion_metrics.clone(),
             indexer_meterics.clone(),
-            &config,
+            config,
             realtime_task,
         );
 
