@@ -597,7 +597,7 @@ impl TypingAnalysisContext<'_> {
                 ty.clone(),
                 false,
                 false,
-                guard_loc.clone(),
+                guard_loc,
             );
         });
 
