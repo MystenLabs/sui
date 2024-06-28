@@ -161,7 +161,7 @@ jobs:
           done
 
           # sui-pg is a special binary that is built with the indexer feature for sui start cmd
-          export binary='sui-pg' | tr -d $'\r')
+          export binary=$(echo "sui-pg" | tr -d $'\r')
           mv ./target/release/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }}
 
           mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
