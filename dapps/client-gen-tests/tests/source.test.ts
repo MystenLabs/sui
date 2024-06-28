@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiClient } from '@mysten/sui/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromB64 } from '@mysten/sui/utils';
@@ -10,6 +11,7 @@ import { expect, it } from 'vitest';
 import { initLoaderIfNeeded } from './gen/_framework/init-source';
 import { structClassLoaderSource } from './gen/_framework/loader';
 import { extractType, vector } from './gen/_framework/reified';
+import { PKG_V1 } from './gen/examples';
 import {
 	createBar,
 	createFoo,
@@ -44,13 +46,11 @@ import { SUI } from './gen/sui/sui/structs';
 import { newUnsafeFromBytes } from './gen/sui/url/functions';
 import { Url } from './gen/sui/url/structs';
 
-const keypair = Ed25519Keypair.fromSecretKey(
-	fromB64('AMVT58FaLF2tJtg/g8X2z1/vG0FvNn0jvRu9X2Wl8F+u').slice(1),
-); // address: 0x8becfafb14c111fc08adee6cc9afa95a863d1bf133f796626eec353f98ea8507
+// address: `0x26742415b810da62aa75858a8a2692d38c0fdba79e024d42131e6b9ec711e069`
+const PK = 'suiprivkey1qq427ctqdjt4yj6hzu7cqsr92jazswa0fk5p2960k7sk3v7glt6t5xnd5tq';
+const keypair = Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(PK).secretKey);
 
-const client = new SuiClient({
-	url: 'https://fullnode.testnet.sui.io:443/',
-});
+const client = new SuiClient({ url: getFullnodeUrl('localnet') });
 
 it('creates and decodes an object with object as type param', async () => {
 	const tx = new Transaction();
@@ -834,11 +834,10 @@ it('converts to json correctly', () => {
 	});
 
 	const exp: ReturnType<typeof obj.toJSON> = {
-		$typeName:
-			'0x8b699fdce543505aeb290ee1b6b5d20fcaa8e8b1a5fc137a8b3facdfa2902209::fixture::WithTwoGenerics',
+		$typeName: `${PKG_V1}::fixture::WithTwoGenerics`,
 		$typeArgs: [
-			'0x8b699fdce543505aeb290ee1b6b5d20fcaa8e8b1a5fc137a8b3facdfa2902209::fixture::WithSpecialTypes<0x2::sui::SUI, u64>',
-			'vector<0x8b699fdce543505aeb290ee1b6b5d20fcaa8e8b1a5fc137a8b3facdfa2902209::fixture::WithTwoGenerics<0x8b699fdce543505aeb290ee1b6b5d20fcaa8e8b1a5fc137a8b3facdfa2902209::fixture::Bar, u8>>',
+			`${PKG_V1}::fixture::WithSpecialTypes<0x2::sui::SUI, u64>`,
+			`vector<${PKG_V1}::fixture::WithTwoGenerics<${PKG_V1}::fixture::Bar, u8>>`,
 		],
 		genericField1: {
 			id: '0x1',

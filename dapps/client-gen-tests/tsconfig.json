@@ -1,6 +1,6 @@
 {
 	"extends": "../../sdk/build-scripts/tsconfig.shared.json",
-	"include": ["examples", "tests"],
+	"include": ["examples", "tests", "scripts"],
 	"compilerOptions": {
 		"noEmit": true,
 		"noUnusedParameters": false,

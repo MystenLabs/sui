@@ -4,12 +4,13 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
+		"build:scripts": "tsup scripts/prepare.ts --out-dir dist --format esm",
 		"generate:example": "cargo run --bin sui client-gen -m examples/gen.toml -o examples/gen",
 		"generate:tests": "cargo run --bin sui client-gen -m tests/gen.toml -o tests/gen",
 		"generate:move": "cargo run --bin sui move build -p move/amm && cargo run --bin sui move build -p move/examples",
-		"generate": "pnpm run generate:move && pnpm run generate:example && pnpm run generate:tests",
+		"run:prepare-script": "pnpm build:scripts && node dist/prepare.js",
 		"type-check": "pnpm turbo build && tsc -b",
-		"test:e2e": "pnpm generate && pnpm type-check && vitest run tests",
+		"test:e2e": "pnpm run:prepare-script && pnpm type-check && vitest run tests",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
 		"eslint:check": "eslint --max-warnings=0 .",
@@ -20,11 +21,12 @@
 	},
 	"dependencies": {
 		"@mysten/bcs": "workspace:*",
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"commander": "^11.0.0"
 	},
 	"devDependencies": {
 		"cross-env": "^7.0.3",
+		"tsup": "^8.1.0",
 		"vitest": "^0.33.0"
 	}
 }
