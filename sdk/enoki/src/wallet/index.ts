@@ -71,6 +71,7 @@ export class EnokiWallet implements Wallet {
 	#extraParams: Record<string, string> | undefined;
 	#network: EnokiNetwork;
 	#client;
+	#windowFeatures?: string | (() => string);
 
 	get id() {
 		return this.#id;
@@ -140,6 +141,7 @@ export class EnokiWallet implements Wallet {
 		extraParams,
 		client,
 		network,
+		windowFeatures,
 	}: {
 		icon: Wallet['icon'];
 		name: string;
@@ -150,6 +152,7 @@ export class EnokiWallet implements Wallet {
 		extraParams?: Record<string, string>;
 		client: SuiClient;
 		network: EnokiNetwork;
+		windowFeatures?: string | (() => string);
 	}) {
 		this.#accounts = [];
 		this.#events = mitt();
@@ -164,6 +167,7 @@ export class EnokiWallet implements Wallet {
 		this.#redirectUrl = redirectUrl;
 		this.#extraParams = extraParams;
 		this.#network = network;
+		this.#windowFeatures = windowFeatures;
 
 		this.#setAccount();
 	}
@@ -236,7 +240,11 @@ export class EnokiWallet implements Wallet {
 			return { accounts: this.accounts };
 		}
 
-		const popup = window.open();
+		const popup = window.open(
+			undefined,
+			'_blank',
+			typeof this.#windowFeatures === 'function' ? this.#windowFeatures() : this.#windowFeatures,
+		);
 		if (!popup) {
 			throw new Error('Failed to open popup');
 		}
@@ -330,11 +338,18 @@ export interface RegisterEnokiWalletsOptions extends EnokiClientConfig {
 	 * The network to use when building and executing transactions (default: 'mainnet')
 	 */
 	network?: string;
+
+	/**
+	 * The window features to use when opening the authorization popup.
+	 * https://developer.mozilla.org/en-US/docs/Web/API/Window/open#windowfeatures
+	 */
+	windowFeatures?: string | (() => string);
 }
 
 export function registerEnokiWallets({
 	providers,
 	client,
+	windowFeatures,
 	network = 'mainnet',
 	...config
 }: RegisterEnokiWalletsOptions) {
@@ -359,6 +374,7 @@ export function registerEnokiWallets({
 					redirectUrl,
 					extraParams,
 					network,
+					windowFeatures,
 				});
 				const unregister = walletsApi.register(wallet);
 
