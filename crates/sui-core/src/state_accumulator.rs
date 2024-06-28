@@ -5,7 +5,7 @@ use itertools::Itertools;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use serde::Serialize;
-use sui_protocol_config::{Chain, ProtocolConfig};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -389,9 +389,7 @@ impl StateAccumulator {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         metrics: Arc<StateAccumulatorMetrics>,
     ) -> Self {
-        if epoch_store.state_accumulator_v2_enabled()
-            && epoch_store.get_chain_identifier().chain() != Chain::Mainnet
-        {
+        if epoch_store.state_accumulator_v2_enabled() {
             StateAccumulator::V2(StateAccumulatorV2::new(store, metrics))
         } else {
             StateAccumulator::V1(StateAccumulatorV1::new(store, metrics))
