@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::config::Config;
 use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::PgPool;
