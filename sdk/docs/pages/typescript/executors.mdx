@@ -44,8 +44,8 @@ const [coin2] = tx1.splitCoins(tx2.gas, [1]);
 tx1.transferObjects([coin2], address2);
 
 const [{ digest: digest1 }, { digest: digest2 }] = await Promise.all([
-	executor.execute(tx1),
-	executor.execute(tx2),
+	executor.executeTransaction(tx1),
+	executor.executeTransaction(tx2),
 ]);
 ```
 
@@ -85,10 +85,15 @@ way that avoids conflicts between transactions using the same object ids.
   `200_000_000n`),
 - `minimumCoinBalance`: After executing a transaction, the the gasCoin will be reused unless it's
   balance is below this value (default `50_000_000n`),
+- `defaultBudget`: The default budget for transactions, which will be used if the transaction does
+  not specify a budget (default `minimumCoinBalance`),
 - `maxPoolSize`: The maximum number of gas coins to keep in the gas pool, which also limits the
   maximum number of concurrent transactions (default 50),
-- sourceCoins`: An array of coins to use to create the gas pool, defaults to using all coins owned
+- `sourceCoins`: An array of coins to use to create the gas pool, defaults to using all coins owned
   by the signer.
+- `epochBoundaryWindow` Time to wait before/after the expected epoch boundary before re-fetching the
+  gas pool (in milliseconds). Building transactions will be paused for up to 2x this duration around
+  each epoch boundary to ensure the gas price is up-to-date for the next epoch. (default `1000`)
 
 ```ts
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
@@ -109,8 +114,8 @@ const [coin2] = tx1.splitCoins(tx2.gas, [1]);
 tx1.transferObjects([coin2], address2);
 
 const [{ digest: digest1 }, { digest: digest2 }] = await Promise.all([
-	executor.execute(tx1),
-	executor.execute(tx2),
+	executor.executeTransaction(tx1),
+	executor.executeTransaction(tx2),
 ]);
 ```
 

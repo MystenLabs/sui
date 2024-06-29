@@ -4542,7 +4542,7 @@ fn consume_spec_string(context: &mut Context) -> Result<Spanned<String>, Box<Dia
 // Parse a file:
 //      File =
 //          (<Attributes> (<AddressBlock> | <Module> ))*
-fn parse_file(context: &mut Context) -> Result<Vec<Definition>, Box<Diagnostic>> {
+fn parse_file(context: &mut Context) -> Vec<Definition> {
     let mut defs = vec![];
     while context.tokens.peek() != Tok::EOF {
         if let Err(diag) = parse_file_def(context, &mut defs) {
@@ -4552,7 +4552,7 @@ fn parse_file(context: &mut Context) -> Result<Vec<Definition>, Box<Diagnostic>>
             skip_to_next_desired_tok_or_eof(context, &TokenSet::from(&[Tok::Spec, Tok::Module]));
         }
     }
-    Ok(defs)
+    defs
 }
 
 fn parse_file_def(
@@ -4608,8 +4608,8 @@ pub fn parse_file_string(
         Err(err) => Err(Diagnostics::from(vec![*err])),
         Ok(..) => Ok(()),
     }?;
-    match parse_file(&mut Context::new(env, &mut tokens, package)) {
-        Err(err) => Err(Diagnostics::from(vec![*err])),
-        Ok(def) => Ok((def, tokens.check_and_get_doc_comments(env))),
-    }
+    Ok((
+        parse_file(&mut Context::new(env, &mut tokens, package)),
+        tokens.check_and_get_doc_comments(env),
+    ))
 }

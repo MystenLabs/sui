@@ -15,7 +15,7 @@ use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_types::bridge::{BridgeChainId, TOKEN_ID_ETH};
 use tracing::info;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 async fn test_sui_bridge_paused() {
     telemetry_subscribers::init_for_testing();
 

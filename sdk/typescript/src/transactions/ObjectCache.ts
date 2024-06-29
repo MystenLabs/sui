@@ -182,14 +182,14 @@ export class ObjectCache {
 
 				if (cached.initialSharedVersion && !input.UnresolvedObject.initialSharedVersion) {
 					input.UnresolvedObject.initialSharedVersion = cached.initialSharedVersion;
-				}
+				} else {
+					if (cached.version && !input.UnresolvedObject.version) {
+						input.UnresolvedObject.version = cached.version;
+					}
 
-				if (cached.version && !input.UnresolvedObject.version) {
-					input.UnresolvedObject.version = cached.version;
-				}
-
-				if (cached.digest && !input.UnresolvedObject.digest) {
-					input.UnresolvedObject.digest = cached.digest;
+					if (cached.digest && !input.UnresolvedObject.digest) {
+						input.UnresolvedObject.digest = cached.digest;
+					}
 				}
 			}
 

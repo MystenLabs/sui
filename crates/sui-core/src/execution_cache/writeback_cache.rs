@@ -609,7 +609,13 @@ impl WritebackCache {
                         .unwrap_or(false);
 
                 if highest != cache_entry && !tombstone_possibly_pruned {
-                    tracing::error!("object_by_id cache is incoherent for {:?}", object_id);
+                    tracing::error!(
+                        ?highest,
+                        ?cache_entry,
+                        ?tombstone_possibly_pruned,
+                        "object_by_id cache is incoherent for {:?}",
+                        object_id
+                    );
                     panic!("object_by_id cache is incoherent for {:?}", object_id);
                 }
             }
@@ -1145,6 +1151,10 @@ impl WritebackCache {
             self.cached.object_by_id_cache.invalidate(object_id);
         }
 
+        for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
+            self.cached.object_by_id_cache.invalidate(object_id);
+        }
+
         // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
         Ok(())
     }
@@ -1350,6 +1360,7 @@ impl ObjectCacheRead for WritebackCache {
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(object_id, version_bound))]
     fn find_object_lt_or_eq_version(
         &self,
         object_id: ObjectID,
@@ -1374,6 +1385,9 @@ impl ObjectCacheRead for WritebackCache {
                                 .record_cache_negative_hit("object_lt_or_eq_version", $level);
                             return Ok(None);
                         }
+                    } else {
+                        self.metrics
+                            .record_cache_miss("object_lt_or_eq_version", $level);
                     }
                 }
             };
@@ -1600,6 +1614,10 @@ impl ObjectCacheRead for WritebackCache {
             },
         )?;
         Ok(())
+    }
+
+    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        self.store.perpetual_tables.get_highest_pruned_checkpoint()
     }
 }
 

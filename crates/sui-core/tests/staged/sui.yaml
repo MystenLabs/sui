@@ -467,6 +467,16 @@ ExecutionFailureStatus:
         STRUCT:
           - congested_objects:
               TYPENAME: CongestedObjects
+    34:
+      AddressDeniedForCoin:
+        STRUCT:
+          - address:
+              TYPENAME: SuiAddress
+          - coin_type: STR
+    35:
+      CoinTypeGlobalPause:
+        STRUCT:
+          - coin_type: STR
 ExecutionStatus:
   ENUM:
     0:

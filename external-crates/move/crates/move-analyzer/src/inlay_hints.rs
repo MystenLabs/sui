@@ -3,7 +3,7 @@
 
 use crate::{
     context::Context,
-    symbols::{on_hover_markup, type_to_ide_string, DefInfo, DefLoc, Symbols},
+    symbols::{on_hover_markup, type_to_ide_string, DefInfo, Symbols},
 };
 use lsp_server::Request;
 use lsp_types::{
@@ -26,13 +26,14 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
     let mut hints: Vec<InlayHint> = vec![];
 
     if context.inlay_type_hints {
-        if let Some(file_defs) = symbols.file_mods().get(&fpath) {
+        if let Some(file_defs) = symbols.file_mods.get(&fpath) {
             for mod_defs in file_defs {
                 for untyped_def_loc in mod_defs.untyped_defs() {
+                    let start_position = symbols.files.start_position(untyped_def_loc);
                     if let Some(DefInfo::Local(n, t, _, _)) = symbols.def_info(untyped_def_loc) {
                         let position = Position {
-                            line: untyped_def_loc.start().line,
-                            character: untyped_def_loc.start().character + n.len() as u32,
+                            line: start_position.line_offset() as u32,
+                            character: start_position.column_offset() as u32 + n.len() as u32,
                         };
                         let colon_label = InlayHintLabelPart {
                             value: ": ".to_string(),
@@ -41,7 +42,7 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
                             command: None,
                         };
                         let type_label = InlayHintLabelPart {
-                            value: type_to_ide_string(t),
+                            value: type_to_ide_string(t, /* verbose */ true),
                             tooltip: None,
                             location: None,
                             command: None,
@@ -94,7 +95,7 @@ fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayH
     };
 
     let Some(mod_defs) = symbols
-        .file_mods()
+        .file_mods
         .values()
         .flatten()
         .find(|m| m.ident() == &mod_ident.value)
@@ -106,8 +107,7 @@ fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayH
         return None;
     };
 
-    let struct_def_loc = DefLoc::new(mod_defs.fhash(), struct_def.name_start());
-    let Some(struct_def_info) = symbols.def_info(&struct_def_loc) else {
+    let Some(struct_def_info) = symbols.def_info(&struct_def.name_start()) else {
         return None;
     };
 

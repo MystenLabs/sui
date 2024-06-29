@@ -65,6 +65,16 @@ fn build_tonic_services(out_dir: &Path) {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            tonic_build::manual::Method::builder()
+                .name("fetch_latest_blocks")
+                .route_name("FetchLatestBlocks")
+                .input_type("crate::network::tonic_network::FetchLatestBlocksRequest")
+                .output_type("crate::network::tonic_network::FetchLatestBlocksResponse")
+                .codec_path(codec_path)
+                .server_streaming()
+                .build(),
+        )
         .build();
 
     tonic_build::manual::Builder::new()
@@ -106,6 +116,15 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("FetchCommits")
                 .request_type("crate::network::anemo_network::FetchCommitsRequest")
                 .response_type("crate::network::anemo_network::FetchCommitsResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("fetch_latest_blocks")
+                .route_name("FetchLatestBlocks")
+                .request_type("crate::network::anemo_network::FetchLatestBlocksRequest")
+                .response_type("crate::network::anemo_network::FetchLatestBlocksResponse")
                 .codec_path(codec_path)
                 .build(),
         )

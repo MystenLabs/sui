@@ -76,6 +76,9 @@ pub struct NodeConfig {
     #[serde(default = "default_enable_index_processing")]
     pub enable_index_processing: bool,
 
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub remove_deprecated_tables: bool,
+
     #[serde(default)]
     /// Determines the jsonrpc server type as either:
     /// - 'websocket' for a websocket based service (deprecated)
@@ -184,6 +187,9 @@ pub struct NodeConfig {
 
     #[serde(default = "bool_true")]
     pub state_accumulator_v2: bool,
+
+    #[serde(default = "bool_true")]
+    pub enable_soft_bundle: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

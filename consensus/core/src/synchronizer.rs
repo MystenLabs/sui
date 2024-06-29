@@ -874,6 +874,10 @@ mod tests {
         fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
             todo!()
         }
+
+        fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
+            todo!()
+        }
     }
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
@@ -956,6 +960,15 @@ mod tests {
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_latest_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _authorities: Vec<AuthorityIndex>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Bytes>> {
+            todo!()
         }
     }
 

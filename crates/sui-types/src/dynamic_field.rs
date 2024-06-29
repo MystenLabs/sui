@@ -41,6 +41,23 @@ pub struct Field<N, V> {
     pub value: V,
 }
 
+/// Rust version of the Move sui::dynamic_object_field::Wrapper type
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+pub struct DOFWrapper<N> {
+    pub name: N,
+}
+
+impl<N> MoveTypeTagTrait for DOFWrapper<N>
+where
+    N: MoveTypeTagTrait,
+{
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Struct(Box::new(DynamicFieldInfo::dynamic_object_field_wrapper(
+            N::get_type_tag(),
+        )))
+    }
+}
+
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]

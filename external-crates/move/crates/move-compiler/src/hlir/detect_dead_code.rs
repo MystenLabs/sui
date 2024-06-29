@@ -323,20 +323,22 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 _ => None,
             }
         }
-        E::Match(_subject, _arms) => {
-            context
-                .env
-                .add_diag(ice!((*eloc, "Found match in detect_dead_code")));
-            None
-        }
-        E::VariantMatch(subject, _, arms) => {
+        E::Match(subject, arms) => {
             if let Some(test_control_flow) = value(context, subject) {
                 context.report_value_error(test_control_flow);
                 return None;
             };
             let arm_somes = arms
+                .value
                 .iter()
-                .map(|(_, arm)| tail(context, arm))
+                .map(|sp!(_, arm)| {
+                    arm.guard
+                        .as_ref()
+                        .and_then(|guard| value(context, guard))
+                        .iter()
+                        .for_each(|flow| context.report_value_error(*flow));
+                    tail(context, &arm.rhs)
+                })
                 .collect::<Vec<_>>();
             if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
                 for arm_opt in arm_somes {
@@ -344,6 +346,12 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                     context.report_tail_error(sp(aloc, arm_error))
                 }
             }
+            None
+        }
+        E::VariantMatch(..) => {
+            context
+                .env
+                .add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
             None
         }
 
@@ -444,20 +452,22 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             }
             None
         }
-        E::Match(_subject, _arms) => {
-            context
-                .env
-                .add_diag(ice!((*eloc, "Found match in detect_dead_code")));
-            None
-        }
-        E::VariantMatch(subject, _, arms) => {
+        E::Match(subject, arms) => {
             if let Some(test_control_flow) = value(context, subject) {
                 context.report_value_error(test_control_flow);
                 return None;
             };
             let arm_somes = arms
+                .value
                 .iter()
-                .map(|(_, arm)| value(context, arm))
+                .map(|sp!(_, arm)| {
+                    arm.guard
+                        .as_ref()
+                        .and_then(|guard| value(context, guard))
+                        .iter()
+                        .for_each(|flow| context.report_value_error(*flow));
+                    value(context, &arm.rhs)
+                })
                 .collect::<Vec<_>>();
             if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
                 for arm_opt in arm_somes {
@@ -465,6 +475,12 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                     context.report_value_error(sp(aloc, arm_error))
                 }
             }
+            None
+        }
+        E::VariantMatch(_subject, _, _arms) => {
+            context
+                .env
+                .add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
             None
         }
         E::While(..) | E::Loop { .. } => statement(context, e),
@@ -614,25 +630,25 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 }
             }
         }
-        E::Match(_subject, _arms) => {
-            context
-                .env
-                .add_diag(ice!((*eloc, "Found match in detect_dead_code")));
-            None
-        }
-        E::VariantMatch(subject, _, arms) => {
+        E::Match(subject, arms) => {
             if let Some(test_control_flow) = value(context, subject) {
                 context.report_value_error(test_control_flow);
-                for (_, arm) in arms.iter() {
-                    statement(context, arm);
+                for sp!(_, arm) in arms.value.iter() {
+                    arm.guard
+                        .as_ref()
+                        .and_then(|guard| value(context, guard))
+                        .iter()
+                        .for_each(|flow| context.report_value_error(*flow));
+                    statement(context, &arm.rhs);
                 }
                 already_reported(*eloc)
             } else {
                 // if the test was okay but all arms both diverged, we need to report that for the
                 // purpose of trailing semicolons.
                 let arm_somes = arms
+                    .value
                     .iter()
-                    .map(|(_, arm)| statement(context, arm))
+                    .map(|sp!(_, arm)| statement(context, &arm.rhs))
                     .collect::<Vec<_>>();
                 if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
                     divergent(*eloc)
@@ -640,6 +656,12 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                     None
                 }
             }
+        }
+        E::VariantMatch(_subject, _, _arms) => {
+            context
+                .env
+                .add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
+            None
         }
         E::While(_, test, body) => {
             if let Some(test_control_flow) = value(context, test) {

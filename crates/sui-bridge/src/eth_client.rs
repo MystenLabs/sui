@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::abi::EthBridgeEvent;
 use crate::error::{BridgeError, BridgeResult};
-use crate::types::{BridgeAction, EthLog};
+use crate::metrics::BridgeMetrics;
+use crate::types::{BridgeAction, EthLog, RawEthLog};
 use ethers::providers::{Http, JsonRpcClient, Middleware, Provider};
 use ethers::types::TxHash;
 use ethers::types::{Block, Filter};
-use tap::TapFallible;
+use tap::{Tap, TapFallible};
 
 #[cfg(test)]
 use crate::eth_mock_provider::EthMockProvider;
@@ -17,17 +19,20 @@ use ethers::types::Address as EthAddress;
 pub struct EthClient<P> {
     provider: Provider<P>,
     contract_addresses: HashSet<EthAddress>,
+    metrics: Arc<BridgeMetrics>,
 }
 
 impl EthClient<Http> {
     pub async fn new(
         provider_url: &str,
         contract_addresses: HashSet<EthAddress>,
+        metrics: Arc<BridgeMetrics>,
     ) -> anyhow::Result<Self> {
         let provider = Provider::try_from(provider_url)?;
         let self_ = Self {
             provider,
             contract_addresses,
+            metrics,
         };
         self_.describe().await?;
         Ok(self_)
@@ -41,6 +46,7 @@ impl EthClient<EthMockProvider> {
         Self {
             provider,
             contract_addresses,
+            metrics: Arc::new(BridgeMetrics::new_for_testing()),
         }
     }
 }
@@ -71,11 +77,13 @@ where
             .provider
             .get_transaction_receipt(tx_hash)
             .await
+            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)?
             .ok_or(BridgeError::TxNotFound)?;
         let receipt_block_num = receipt.block_number.ok_or(BridgeError::ProviderError(
             "Provider returns log without block_number".into(),
         ))?;
+        // TODO: save the latest finalized block id so we don't have to query it every time
         let last_finalized_block_id = self.get_last_finalized_block_id().await?;
         if receipt_block_num.as_u64() > last_finalized_block_id {
             return Err(BridgeError::TxNotFinalized);
@@ -99,7 +107,7 @@ where
         let bridge_event = EthBridgeEvent::try_from_eth_log(&eth_log)
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
         bridge_event
-            .try_into_bridge_action(tx_hash, event_idx)
+            .try_into_bridge_action(tx_hash, event_idx)?
             .ok_or(BridgeError::BridgeEventNotActionable)
     }
 
@@ -107,7 +115,8 @@ where
         let block: Result<Option<Block<ethers::types::TxHash>>, ethers::prelude::ProviderError> =
             self.provider
                 .request("eth_getBlockByNumber", ("finalized", false))
-                .await;
+                .await
+                .tap(|_| self.metrics.eth_provider_queries.inc());
         let block = block?.ok_or(BridgeError::TransientProviderError(
             "Provider fails to return last finalized block".into(),
         ))?;
@@ -133,6 +142,7 @@ where
             .provider
             .get_logs(&filter)
             .await
+            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)
             .tap_err(|e| {
                 tracing::error!(
@@ -141,11 +151,17 @@ where
                     e
                 )
             })?;
+
+        // Safeguard check that all events are emitted from requested contract address
+        if logs.iter().any(|log| log.address != address) {
+            return Err(BridgeError::ProviderError(format!(
+                "Provider returns logs from different contract address (expected: {:?}): {:?}",
+                address, logs
+            )));
+        }
         if logs.is_empty() {
             return Ok(vec![]);
         }
-        // Safeguard check that all events are emitted from requested contract address
-        assert!(logs.iter().all(|log| log.address == address));
 
         let tasks = logs.into_iter().map(|log| self.get_log_tx_details(log));
         futures::future::join_all(tasks)
@@ -159,6 +175,45 @@ where
                     e
                 )
             })
+    }
+
+    // Note: query may fail if range is too big. Callsite is responsible
+    // for chunking the query.
+    pub async fn get_raw_events_in_range(
+        &self,
+        address: ethers::types::Address,
+        start_block: u64,
+        end_block: u64,
+    ) -> BridgeResult<Vec<RawEthLog>> {
+        let filter = Filter::new()
+            .from_block(start_block)
+            .to_block(end_block)
+            .address(address);
+        let logs = self
+            .provider
+            .get_logs(&filter)
+            .await
+            .tap(|_| self.metrics.eth_provider_queries.inc())
+            .map_err(BridgeError::from)
+            .tap_err(|e| {
+                tracing::error!(
+                    "get_events_in_range failed. Filter: {:?}. Error {:?}",
+                    filter,
+                    e
+                )
+            })?;
+        // Safeguard check that all events are emitted from requested contract address
+        logs.into_iter().map(
+            |log| {
+                if log.address != address {
+                    return Err(BridgeError::ProviderError(format!("Provider returns logs from different contract address (expected: {:?}): {:?}", address, log)));
+                }
+                Ok(RawEthLog {
+                block_number: log.block_number.ok_or(BridgeError::ProviderError("Provider returns log without block_number".into()))?.as_u64(),
+                tx_hash: log.transaction_hash.ok_or(BridgeError::ProviderError("Provider returns log without transaction_hash".into()))?,
+                log,
+            })}
+        ).collect::<Result<Vec<_>, _>>()
     }
 
     /// This function converts a `Log` to `EthLog`, to make sure the `block_num`, `tx_hash` and `log_index_in_tx`
@@ -186,6 +241,7 @@ where
             .provider
             .get_transaction_receipt(tx_hash)
             .await
+            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)?
             .ok_or(BridgeError::ProviderError(format!(
                 "Provide cannot find eth transaction for log: {:?})",

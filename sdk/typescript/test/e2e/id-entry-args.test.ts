@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { resolve } from 'path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { Transaction } from '../../src/transactions';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 describe('Test ID as args to entry functions', () => {
 	let toolbox: TestToolbox;
@@ -12,8 +13,7 @@ describe('Test ID as args to entry functions', () => {
 
 	beforeAll(async () => {
 		toolbox = await setup();
-		const packagePath = __dirname + '/./data/id_entry_args';
-		({ packageId } = await publishPackage(packagePath));
+		packageId = await toolbox.getPackage(resolve(__dirname, './data/id_entry_args'));
 	});
 
 	it('Test ID as arg to entry functions', async () => {

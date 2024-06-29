@@ -11,20 +11,20 @@ use axum::{
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
-use crate::Result;
+use crate::{reader::StateReader, Result};
 
 pub const HEALTH_PATH: &str = "/health";
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct Threshold {
-    threshold_seconds: Option<u32>,
+    pub threshold_seconds: Option<u32>,
 }
 
-pub async fn health<S: ReadStore>(
+pub async fn health(
     Query(Threshold { threshold_seconds }): Query<Threshold>,
-    State(state): State<S>,
+    State(state): State<StateReader>,
 ) -> Result<impl IntoResponse> {
-    let summary = state.get_latest_checkpoint()?;
+    let summary = state.inner().get_latest_checkpoint()?;
 
     // If we have a provided threshold, check that it's close to the current time
     if let Some(threshold_seconds) = threshold_seconds {

@@ -580,4 +580,91 @@ module std::vector_tests {
         assert!(b"hello_world".to_ascii_string().length() == 11);
         assert!(b"hello_world".try_to_ascii_string().is_some());
     }
+
+    // === Macros ===
+
+    #[test]
+    fun test_destroy_macro() {
+        vector<u8>[].destroy!(|_| assert!(false)); // very funky
+
+        let mut acc = 0;
+        vector[10, 20, 30, 40].destroy!(|e| acc = acc + e);
+        assert!(acc == 100);
+    }
+
+    #[test]
+    fun test_do_macro() {
+        vector<u8>[].do!(|_| assert!(false)); // should never run
+        vector<u8>[].do_ref!(|_| assert!(false));
+        vector<u8>[].do_mut!(|_| assert!(false));
+
+        let mut acc = 0;
+        vector[10, 20, 30, 40].do!(|e| acc = acc + e);
+        assert!(acc == 100);
+
+        let vec = vector[10, 20];
+        vec.do!(|e| acc = acc + e);
+        assert!(vector[10, 20] == vec);
+
+        let mut acc = 0;
+        vector[10, 20, 30, 40].do_ref!(|e| acc = acc + *e);
+        assert!(acc == 100);
+
+        let mut vec = vector[10, 20, 30, 40];
+        vec.do_mut!(|e| *e = *e + 1);
+        assert!(vec == vector[11, 21, 31, 41]);
+    }
+
+    #[test]
+    fun test_map_macro() {
+        let e = vector<u8>[];
+        assert!(e.map!(|e| e + 1) == vector[]);
+
+        let r = vector[0, 1, 2, 3];
+        assert!(r.map!(|e| e + 1) == vector[1, 2, 3, 4]);
+
+        let r = vector[0, 1, 2, 3];
+        assert!(r.map_ref!(|e| *e * 2) == vector[0, 2, 4, 6]);
+    }
+
+    #[test]
+    fun filter_macro() {
+        let e = vector<u8>[];
+        assert!(e.filter!(|e| *e % 2 == 0) == vector[]);
+
+        let r = vector[0, 1, 2, 3];
+        assert!(r.filter!(|e| *e % 2 == 0) == vector[0, 2]);
+    }
+
+    #[test]
+    fun partition_macro() {
+        let e = vector<u8>[];
+        let (even, odd) = e.partition!(|e| (*e % 2) == 0);
+        assert!(even == vector[]);
+        assert!(odd == vector[]);
+
+        let r = vector<u64>[0, 1, 2, 3];
+        let (even, odd) = r.partition!(|e| (*e % 2) == 0);
+        assert!(even == vector[0, 2]);
+        assert!(odd == vector[1, 3]);
+    }
+
+    #[test]
+    fun fold_macro() {
+        let e = vector<u8>[];
+        assert!(e.fold!(0, |acc, e| acc + e) == 0);
+
+        let r = vector[0, 1, 2, 3];
+        assert!(r.fold!(10, |acc, e| acc + e) == 16);
+    }
+
+    #[test]
+    fun any_all_macro() {
+        assert!(vector<u8>[].any!(|e| *e == 2) == false);
+        assert!(vector<u8>[].all!(|e| *e == 2) == true);
+        assert!(vector[0, 1, 2, 3].any!(|e| *e == 2));
+        assert!(!vector[0, 1, 2, 3].any!(|e| *e == 4));
+        assert!(vector[0, 1, 2, 3].all!(|e| *e < 4));
+        assert!(!vector[0, 1, 2, 3].all!(|e| *e < 3));
+    }
 }

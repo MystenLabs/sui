@@ -974,6 +974,7 @@ impl<'a> PTBBuilder<'a> {
                         ObjectID::from_address(upgrade_cap_id.into_inner()),
                         false, /* with_unpublished_dependencies */
                         false, /* skip_dependency_verification */
+                        None,
                     )
                     .await
                     .map_err(|e| err!(path_loc, "{e}"))?;

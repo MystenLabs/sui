@@ -258,7 +258,9 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             self.decl_ana_struct(&name, struct_def);
         }
         for (name, fun_def) in module_def.functions.key_cloned_iter() {
-            self.decl_ana_fun(&name, fun_def);
+            if fun_def.macro_.is_none() {
+                self.decl_ana_fun(&name, fun_def);
+            }
         }
         for (name, const_def) in module_def.constants.key_cloned_iter() {
             self.decl_ana_const(&name, const_def, compiled_module, source_map);
@@ -342,13 +344,17 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
 
         // Analyze all functions.
         for (name, fun_def) in module_def.functions.key_cloned_iter() {
-            self.def_ana_fun(&name, &fun_def.body);
+            if fun_def.macro_.is_none() {
+                self.def_ana_fun(&name, &fun_def.body);
+            }
         }
 
         // Propagate the impurity of functions: a Move function which calls an
         // impure Move function is also considered impure.
-        for (name, _) in module_def.functions.key_cloned_iter() {
-            self.qualified_by_module_from_name(&name.0);
+        for (name, f) in module_def.functions.key_cloned_iter() {
+            if f.macro_.is_none() {
+                self.qualified_by_module_from_name(&name.0);
+            }
         }
     }
 }

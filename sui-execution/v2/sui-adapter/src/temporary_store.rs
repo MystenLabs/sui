@@ -1164,6 +1164,13 @@ impl<'backing> Storage for TemporaryStore<'backing> {
     ) {
         TemporaryStore::save_wrapped_object_containers(self, wrapped_object_containers)
     }
+
+    fn check_coin_deny_list(
+        &self,
+        _written_objects: &BTreeMap<ObjectID, Object>,
+    ) -> Result<(), ExecutionError> {
+        unreachable!("Coin denylist v2 is not supported in sui-execution v2");
+    }
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {

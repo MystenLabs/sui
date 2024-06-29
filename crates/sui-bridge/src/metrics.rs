@@ -19,15 +19,22 @@ pub struct BridgeMetrics {
     pub(crate) err_requests: IntCounterVec,
     pub(crate) requests_inflight: IntGaugeVec,
 
+    pub last_synced_sui_checkpoint: IntGauge,
+    pub(crate) last_finalized_eth_block: IntGauge,
+    pub(crate) last_synced_eth_block: IntGauge,
+
     pub(crate) sui_watcher_received_events: IntCounter,
     pub(crate) sui_watcher_received_actions: IntCounter,
     pub(crate) sui_watcher_unrecognized_events: IntCounter,
     pub(crate) eth_watcher_received_events: IntCounter,
     pub(crate) eth_watcher_received_actions: IntCounter,
     pub(crate) eth_watcher_unrecognized_events: IntCounter,
+    pub(crate) action_executor_already_processed_actions: IntCounter,
     pub(crate) action_executor_signing_queue_received_actions: IntCounter,
+    pub(crate) action_executor_signing_queue_skipped_actions: IntCounter,
     pub(crate) action_executor_execution_queue_received_actions: IntCounter,
 
+    pub(crate) eth_provider_queries: IntCounter,
     pub(crate) gas_coin_balance: IntGauge,
 }
 
@@ -128,9 +135,21 @@ impl BridgeMetrics {
                 registry,
             )
             .unwrap(),
+            action_executor_already_processed_actions: register_int_counter_with_registry!(
+                "bridge_action_executor_already_processed_actions",
+                "Total number of already processed actions action executor",
+                registry,
+            )
+            .unwrap(),
             action_executor_signing_queue_received_actions: register_int_counter_with_registry!(
                 "bridge_action_executor_signing_queue_received_actions",
                 "Total number of received actions in action executor signing queue",
+                registry,
+            )
+            .unwrap(),
+            action_executor_signing_queue_skipped_actions: register_int_counter_with_registry!(
+                "bridge_action_executor_signing_queue_skipped_actions",
+                "Total number of skipped actions in action executor signing queue",
                 registry,
             )
             .unwrap(),
@@ -143,6 +162,30 @@ impl BridgeMetrics {
             gas_coin_balance: register_int_gauge_with_registry!(
                 "bridge_gas_coin_balance",
                 "Current balance of gas coin, in mist",
+                registry,
+            )
+            .unwrap(),
+            eth_provider_queries: register_int_counter_with_registry!(
+                "bridge_eth_provider_queries",
+                "Total number of queries issued to eth provider",
+                registry,
+            )
+            .unwrap(),
+            last_synced_sui_checkpoint: register_int_gauge_with_registry!(
+                "last_synced_sui_checkpoint",
+                "The latest sui checkpoint that indexer synced",
+                registry,
+            )
+            .unwrap(),
+            last_synced_eth_block: register_int_gauge_with_registry!(
+                "bridge_last_synced_eth_block",
+                "The latest finalized eth block that indexer synced",
+                registry,
+            )
+            .unwrap(),
+            last_finalized_eth_block: register_int_gauge_with_registry!(
+                "bridge_last_finalized_eth_block",
+                "The latest finalized eth block that indexer observed",
                 registry,
             )
             .unwrap(),

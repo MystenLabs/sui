@@ -14,7 +14,8 @@ use tokio::sync::{watch, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-/// Watermark task that periodically updates the current checkpoint and epoch values.
+/// Watermark task that periodically updates the current checkpoint, checkpoint timestamp, and
+/// epoch values.
 pub(crate) struct WatermarkTask {
     /// Thread-safe watermark that avoids writer starvation
     watermark: WatermarkLock,
@@ -34,6 +35,8 @@ pub(crate) type WatermarkLock = Arc<RwLock<Watermark>>;
 pub(crate) struct Watermark {
     /// The checkpoint upper-bound for the query.
     pub checkpoint: u64,
+    /// The checkpoint upper-bound timestamp for the query.
+    pub checkpoint_timestamp_ms: u64,
     /// The current epoch.
     pub epoch: u64,
 }
@@ -67,7 +70,7 @@ impl WatermarkTask {
                     return;
                 },
                 _ = tokio::time::sleep(self.sleep) => {
-                    let Watermark { checkpoint, epoch } = match Watermark::query(&self.db).await {
+                    let Watermark {checkpoint, epoch, checkpoint_timestamp_ms } = match Watermark::query(&self.db).await {
                         Ok(Some(watermark)) => watermark,
                         Ok(None) => continue,
                         Err(e) => {
@@ -81,6 +84,7 @@ impl WatermarkTask {
                     let prev_epoch = {
                         let mut w = self.watermark.write().await;
                         w.checkpoint = checkpoint;
+                        w.checkpoint_timestamp_ms = checkpoint_timestamp_ms;
                         mem::replace(&mut w.epoch, epoch)
                     };
 
@@ -107,17 +111,18 @@ impl Watermark {
         let w = lock.read().await;
         Self {
             checkpoint: w.checkpoint,
+            checkpoint_timestamp_ms: w.checkpoint_timestamp_ms,
             epoch: w.epoch,
         }
     }
 
     pub(crate) async fn query(db: &Db) -> Result<Option<Watermark>, Error> {
         use checkpoints::dsl;
-        let Some((checkpoint, epoch)): Option<(i64, i64)> = db
+        let Some((checkpoint, checkpoint_timestamp_ms, epoch)): Option<(i64, i64, i64)> = db
             .execute(move |conn| {
                 conn.first(move || {
                     dsl::checkpoints
-                        .select((dsl::sequence_number, dsl::epoch))
+                        .select((dsl::sequence_number, dsl::timestamp_ms, dsl::epoch))
                         .order_by(dsl::sequence_number.desc())
                 })
                 .optional()
@@ -127,9 +132,9 @@ impl Watermark {
         else {
             return Ok(None);
         };
-
         Ok(Some(Watermark {
             checkpoint: checkpoint as u64,
+            checkpoint_timestamp_ms: checkpoint_timestamp_ms as u64,
             epoch: epoch as u64,
         }))
     }

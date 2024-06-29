@@ -1,5 +1,37 @@
 # @mysten/enoki
 
+## 0.3.9
+
+### Patch Changes
+
+- Updated dependencies [fef99d377f]
+  - @mysten/sui@1.2.0
+  - @mysten/zklogin@0.7.9
+
+## 0.3.8
+
+### Patch Changes
+
+- Updated dependencies [0dfff33b95]
+  - @mysten/sui@1.1.2
+  - @mysten/zklogin@0.7.8
+
+## 0.3.7
+
+### Patch Changes
+
+- Updated dependencies [101f1ff4b8]
+  - @mysten/sui@1.1.1
+  - @mysten/zklogin@0.7.7
+
+## 0.3.6
+
+### Patch Changes
+
+- Updated dependencies [bae8f9683c]
+  - @mysten/sui@1.1.0
+  - @mysten/zklogin@0.7.6
+
 ## 0.3.5
 
 ### Patch Changes

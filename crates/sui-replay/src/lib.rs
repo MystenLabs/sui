@@ -90,8 +90,6 @@ pub enum ReplayToolCommand {
         tx_digest: String,
         #[arg(long, short)]
         show_effects: bool,
-        #[arg(long, short)]
-        diag: bool,
         /// Optional version of the executor to use, if not specified defaults to the one originally used for the transaction.
         #[arg(long, short, allow_hyphen_values = true)]
         executor_version: Option<i64>,
@@ -206,11 +204,8 @@ pub async fn execute_replay_command(
             let contents = std::fs::read_to_string(path)?;
             let sandbox_state: ExecutionSandboxState = serde_json::from_str(&contents)?;
             info!("Executing tx: {}", sandbox_state.transaction_info.tx_digest);
-            let sandbox_state = LocalExec::certificate_execute_with_sandbox_state(
-                &sandbox_state,
-                &sandbox_state.pre_exec_diag,
-            )
-            .await?;
+            let sandbox_state =
+                LocalExec::certificate_execute_with_sandbox_state(&sandbox_state).await?;
             sandbox_state.check_effects()?;
             info!("Execution finished successfully. Local and on-chain effects match.");
             None
@@ -330,12 +325,10 @@ pub async fn execute_replay_command(
                     let contents = std::fs::read_to_string(file).unwrap();
                     let sandbox_state: ExecutionSandboxState =
                         serde_json::from_str(&contents).unwrap();
-                    let sandbox_state = LocalExec::certificate_execute_with_sandbox_state(
-                        &sandbox_state,
-                        &sandbox_state.pre_exec_diag,
-                    )
-                    .await
-                    .unwrap();
+                    let sandbox_state =
+                        LocalExec::certificate_execute_with_sandbox_state(&sandbox_state)
+                            .await
+                            .unwrap();
                     sandbox_state.check_effects().unwrap();
                 }
             });
@@ -372,7 +365,6 @@ pub async fn execute_replay_command(
         ReplayToolCommand::ReplayTransaction {
             tx_digest,
             show_effects,
-            diag,
             executor_version,
             protocol_version,
         } => {
@@ -389,9 +381,6 @@ pub async fn execute_replay_command(
             )
             .await?;
 
-            if diag {
-                println!("{:#?}", sandbox_state.pre_exec_diag);
-            }
             if show_effects {
                 println!("{}", sandbox_state.local_exec_effects);
             }

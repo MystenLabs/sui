@@ -39,7 +39,7 @@ Response: {
         "sequenceNumber": 0
       },
       "last": {
-        "digest": "G88921srswDipbk4dprLESa5ah3zUBi63BAMKP5BKhFD",
+        "digest": "C3gNdxw7tLsULYLt541SEEY2vuyPYBimZwutcY8YQB1a",
         "sequenceNumber": 2
       }
     },
@@ -48,7 +48,7 @@ Response: {
       "sequenceNumber": 0
     },
     "last": {
-      "digest": "G88921srswDipbk4dprLESa5ah3zUBi63BAMKP5BKhFD",
+      "digest": "C3gNdxw7tLsULYLt541SEEY2vuyPYBimZwutcY8YQB1a",
       "sequenceNumber": 2
     }
   }

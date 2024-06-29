@@ -3,8 +3,9 @@
 
 use itertools::Itertools;
 use mysten_metrics::monitored_scope;
+use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use serde::Serialize;
-use sui_protocol_config::{Chain, ProtocolConfig};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -25,6 +26,24 @@ use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSet
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_tables::LiveObject;
 
+pub struct StateAccumulatorMetrics {
+    inconsistent_state: IntGauge,
+}
+
+impl StateAccumulatorMetrics {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        let this = Self {
+            inconsistent_state: register_int_gauge_with_registry!(
+                "accumulator_inconsistent_state",
+                "1 if accumulated live object set differs from StateAccumulator root state hash for the previous epoch",
+                registry
+            )
+            .unwrap(),
+        };
+        Arc::new(this)
+    }
+}
+
 pub enum StateAccumulator {
     V1(StateAccumulatorV1),
     V2(StateAccumulatorV2),
@@ -32,10 +51,12 @@ pub enum StateAccumulator {
 
 pub struct StateAccumulatorV1 {
     store: Arc<dyn AccumulatorStore>,
+    metrics: Arc<StateAccumulatorMetrics>,
 }
 
 pub struct StateAccumulatorV2 {
     store: Arc<dyn AccumulatorStore>,
+    metrics: Arc<StateAccumulatorMetrics>,
 }
 
 pub trait AccumulatorStore: ObjectStore + Send + Sync {
@@ -366,13 +387,40 @@ impl StateAccumulator {
     pub fn new(
         store: Arc<dyn AccumulatorStore>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        metrics: Arc<StateAccumulatorMetrics>,
     ) -> Self {
-        let chain = epoch_store.get_chain_identifier().chain();
-        if epoch_store.state_accumulator_v2_enabled() && chain != Chain::Mainnet {
-            StateAccumulator::V2(StateAccumulatorV2::new(store))
+        if epoch_store.state_accumulator_v2_enabled() {
+            StateAccumulator::V2(StateAccumulatorV2::new(store, metrics))
         } else {
-            StateAccumulator::V1(StateAccumulatorV1::new(store))
+            StateAccumulator::V1(StateAccumulatorV1::new(store, metrics))
         }
+    }
+
+    pub fn new_for_tests(
+        store: Arc<dyn AccumulatorStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Self {
+        Self::new(
+            store,
+            epoch_store,
+            StateAccumulatorMetrics::new(&Registry::new()),
+        )
+    }
+
+    pub fn metrics(&self) -> Arc<StateAccumulatorMetrics> {
+        match self {
+            StateAccumulator::V1(impl_v1) => impl_v1.metrics.clone(),
+            StateAccumulator::V2(impl_v2) => impl_v2.metrics.clone(),
+        }
+    }
+
+    pub fn set_inconsistent_state(&self, is_inconsistent_state: bool) {
+        match self {
+            StateAccumulator::V1(impl_v1) => &impl_v1.metrics,
+            StateAccumulator::V2(impl_v2) => &impl_v2.metrics,
+        }
+        .inconsistent_state
+        .set(is_inconsistent_state as i64);
     }
 
     /// Accumulates the effects of a single checkpoint and persists the accumulator.
@@ -380,7 +428,7 @@ impl StateAccumulator {
         &self,
         effects: Vec<TransactionEffects>,
         checkpoint_seq_num: CheckpointSequenceNumber,
-        epoch_store: Arc<AuthorityPerEpochStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Accumulator> {
         let _scope = monitored_scope("AccumulateCheckpoint");
         if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
@@ -525,8 +573,8 @@ impl StateAccumulator {
 }
 
 impl StateAccumulatorV1 {
-    pub fn new(store: Arc<dyn AccumulatorStore>) -> Self {
-        Self { store }
+    pub fn new(store: Arc<dyn AccumulatorStore>, metrics: Arc<StateAccumulatorMetrics>) -> Self {
+        Self { store, metrics }
     }
 
     /// Unions all checkpoint accumulators at the end of the epoch to generate the
@@ -615,8 +663,8 @@ impl StateAccumulatorV1 {
 }
 
 impl StateAccumulatorV2 {
-    pub fn new(store: Arc<dyn AccumulatorStore>) -> Self {
-        Self { store }
+    pub fn new(store: Arc<dyn AccumulatorStore>, metrics: Arc<StateAccumulatorMetrics>) -> Self {
+        Self { store, metrics }
     }
 
     pub async fn accumulate_running_root(
@@ -626,6 +674,28 @@ impl StateAccumulatorV2 {
         checkpoint_acc: Option<Accumulator>,
     ) -> SuiResult {
         let _scope = monitored_scope("AccumulateRunningRoot");
+        tracing::info!(
+            "accumulating running root for checkpoint {}",
+            checkpoint_seq_num
+        );
+
+        // For the last checkpoint of the epoch, this function will be called once by the
+        // checkpoint builder, and again by checkpoint executor.
+        //
+        // Normally this is fine, since the notify_read_running_root(checkpoint_seq_num - 1) will
+        // work normally. But if there is only one checkpoint in the epoch, that call will hang
+        // forever, since the previous checkpoint belongs to the previous epoch.
+        if epoch_store
+            .get_running_root_accumulator(&checkpoint_seq_num)?
+            .is_some()
+        {
+            debug!(
+                "accumulate_running_root {:?} {:?} already exists",
+                epoch_store.epoch(),
+                checkpoint_seq_num
+            );
+            return Ok(());
+        }
 
         let mut running_root = if checkpoint_seq_num == 0 {
             // we're at genesis and need to start from scratch

@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt};
+use std::fmt;
 
 use crate::{
     debug_display, diag, diagnostics::Diagnostic, expansion::ast as E, naming::ast as N,
@@ -31,6 +31,8 @@ pub enum IDEAnnotation {
     AutocompleteInfo(Box<AutocompleteInfo>),
     /// Match Missing Arm.
     MissingMatchArms(Box<MissingMatchArmsInfo>),
+    /// Ellipsis Match Arm.
+    EllipsisMatchEntries(Box<EllipsisMatchEntries>),
 }
 
 #[derive(Debug, Clone)]
@@ -47,13 +49,18 @@ pub struct MacroCallInfo {
     pub by_value_args: Vec<T::SequenceItem>,
 }
 
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct AutocompleteMethod {
+    pub method_name: Symbol,
+    pub target_function: (E::ModuleIdent, P::FunctionName),
+}
+
 #[derive(Debug, Clone)]
 pub struct AutocompleteInfo {
-    /// Methods that are valid autocompletes
-    pub methods: BTreeSet<(E::ModuleIdent, P::FunctionName)>,
-    /// Fields that are valid autocompletes (e.g., for a struct)
-    /// TODO: possibly extend this with type information?
-    pub fields: BTreeSet<Symbol>,
+    /// Methods that are valid auto-completes
+    pub methods: Vec<AutocompleteMethod>,
+    /// Fields that are valid auto-completes (e.g., for a struct) along with their types
+    pub fields: Vec<(Symbol, N::Type)>,
 }
 
 #[derive(Debug, Clone)]
@@ -104,9 +111,26 @@ pub enum PatternSuggestion {
     },
 }
 
+#[derive(Debug, Clone)]
+pub enum EllipsisMatchEntries {
+    /// A number of wildcards inserted for the ellipsis for a positional match.
+    Positional(Vec<Symbol>),
+    /// A list of symbols mappec to wildcards that  are added to a named match.
+    Named(Vec<Symbol>),
+}
+
 //*************************************************************************************************
 // Impls
 //*************************************************************************************************
+
+impl AutocompleteMethod {
+    pub fn new(method_name: Symbol, target_function: (E::ModuleIdent, P::FunctionName)) -> Self {
+        Self {
+            method_name,
+            target_function,
+        }
+    }
+}
 
 impl IDEInfo {
     pub fn new() -> Self {
@@ -176,8 +200,13 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                 let AutocompleteInfo { methods, fields } = *info;
                 let names = methods
                     .into_iter()
-                    .map(|(m, f)| format!("{m}::{f}"))
-                    .chain(fields.into_iter().map(|n| format!("{n}")))
+                    .map(
+                        |AutocompleteMethod {
+                             method_name,
+                             target_function: (mident, _),
+                         }| format!("{mident}::{method_name}"),
+                    )
+                    .chain(fields.into_iter().map(|(n, _)| format!("{n}")))
                     .collect::<Vec<_>>();
                 let msg = format!(
                     "Autocompletes to: {}",
@@ -189,6 +218,22 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                 let MissingMatchArmsInfo { arms } = *info;
                 let msg = format!("Missing arms: {}", format_oxford_list!("and", "'{}'", arms));
                 diag!(IDE::MissingMatchArms, (loc, msg))
+            }
+            IDEAnnotation::EllipsisMatchEntries(entries) => {
+                let entries = match *entries {
+                    EllipsisMatchEntries::Positional(entries) => entries
+                        .iter()
+                        .map(|name| format!("{}", name))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    EllipsisMatchEntries::Named(entries) => entries
+                        .iter()
+                        .map(|name| format!("{}: _", name))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                };
+                let msg = format!("Ellipsis expansion: {}", entries);
+                diag!(IDE::EllipsisExpansion, (loc, msg))
             }
         }
     }

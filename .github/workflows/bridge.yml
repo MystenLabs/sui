@@ -103,8 +103,8 @@ jobs:
   bridge-evm:
     name: bridge-evm-tests
     needs: diff
-    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
-    runs-on: [ ubuntu-latest ]
+    if: needs.diff.outputs.isSolidity == 'true'
+    runs-on: [ ubuntu-ghcloud ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - name: Install Foundry

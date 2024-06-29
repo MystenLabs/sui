@@ -42,7 +42,10 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let tag = attr.find_attr("tag").to_quote();
 
-    let methods = rpc_definition.methods.iter().map(|method|{
+    let methods = rpc_definition.methods.iter().flat_map(|method|{
+        if method.deprecated {
+            return None;
+        }
         let name = &method.name;
         let deprecated = method.deprecated;
         let doc = &method.doc;
@@ -69,19 +72,19 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
         };
 
         if method.is_pubsub {
-            quote! {
+            Some(quote! {
                 let mut inputs: Vec<sui_open_rpc::ContentDescriptor> = Vec::new();
                 #(#inputs)*
                 let result = #returns_ty
                 builder.add_subscription(#namespace, #name, inputs, result, #doc, #tag, #deprecated);
-            }
+            })
         } else {
-            quote! {
+            Some(quote! {
                 let mut inputs: Vec<sui_open_rpc::ContentDescriptor> = Vec::new();
                 #(#inputs)*
                 let result = #returns_ty
                 builder.add_method(#namespace, #name, inputs, result, #doc, #tag, #deprecated);
-            }
+            })
         }
     }).collect::<Vec<_>>();
 

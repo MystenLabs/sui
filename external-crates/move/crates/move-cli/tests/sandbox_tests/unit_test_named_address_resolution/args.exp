@@ -1,0 +1,104 @@
+Command `test -t 1`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING PackageBasics
+Running Move unit tests
+[ PASS    ] A::AModule::double_three
+[ FAIL    ] A::AModule::double_three_failure
+[ PASS    ] A::AModule::double_two
+[ FAIL    ] std::AModuleTestsShouldAllFail::abort_uncaught
+[ FAIL    ] std::AModuleTestsShouldAllFail::double_three_const_based_different_module_fail
+[ FAIL    ] std::AModuleTestsShouldAllFail::double_three_location_based_invalid
+[ FAIL    ] std::AModuleTestsShouldAllFail::double_three_should_fail
+[ FAIL    ] std::AModuleTestsShouldAllFail::double_three_should_fail_named_const
+
+Test failures:
+
+Failures in A::AModule:
+
+┌── double_three_failure ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in A::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test was not expected to error, but it aborted with error constant 'EIsThree' originating in the module A::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+Failures in std::AModuleTestsShouldAllFail:
+
+┌── abort_uncaught ──────
+│ error[E11001]: test failure
+│   ┌─ ./sources/BModule.move:7:9
+│   │
+│ 6 │     public fun abort_() {
+│   │                ------ In this function in B::BModule
+│ 7 │         abort EIsThree 
+│   │         ^^^^^^^^^^^^^^ Test was not expected to error, but it aborted with error constant 'EIsThree' originating in the module B::BModule rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_const_based_different_module_fail ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in A::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to abort with error constant 'EIsThree' originating in the module B::BModule but instead it aborted with error constant 'EIsThree' originating in the module A::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_location_based_invalid ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in A::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to abort with error constant 'EIsThree' originating in the module std::AModuleTestsShouldAllFail but instead it aborted with error constant 'EIsThree' originating in the module A::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_should_fail ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in A::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not abort with expected code. Expected test to abort with code 0, but instead it aborted with error constant 'EIsThree' originating in the module A::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_should_fail_named_const ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in A::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to abort with error constant 'ENotFound' originating in the module A::AModule but instead it aborted with error constant 'EIsThree' originating in the module A::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+Test result: FAILED. Total tests: 8; passed: 2; failed: 6
+warning[W10007]: issue with attribute value
+  ┌─ ./tests/AModuleTestsShouldAllFail.move:9:24
+  │
+9 │     #[expected_failure(abort_code = 0)]
+  │                        ^^^^^^^^^^   - Replace value with constant from expected module or add `location=...` attribute.
+  │                        │             
+  │                        WARNING: passes for an abort from any module.
+

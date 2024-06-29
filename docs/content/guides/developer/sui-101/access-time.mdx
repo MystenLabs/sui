@@ -9,29 +9,13 @@ You have options when needing to access network-based time for your transactions
 
 To access a prompt timestamp, you must pass a read-only reference of `sui::clock::Clock` as an entry function parameter in your transactions. An instance of `Clock` is provided at address `0x6`, no new instances can be created.
 
-Extract a unix timestamp in milliseconds from an instance of `Clock` using
+Use the `timestamp_ms` function from the `sui::clock` module to extract a unix timestamp in milliseconds.
 
-```move
-module sui::clock {
-    public fun timestamp_ms(clock: &Clock): u64;
-}
-```
+{@inject: crates/sui-framework/packages/sui-framework/sources/clock.move#fun=timestamp_ms noComments}
 
 The example below demonstrates an entry function that emits an event containing a timestamp from the `Clock`:
 
-```move
-module basics::clock {
-    use sui::{clock::Clock, event};
-
-    public struct TimeEvent has copy, drop, store {
-        timestamp_ms: u64,
-    }
-
-    entry fun access(clock: &Clock) {
-        event::emit(TimeEvent { timestamp_ms: clock.timestamp_ms() });
-    }
-}
-```
+{@inject: examples/move/basics/sources/clock.move#module=basics::clock noComments}
 
 A call to the previous entry function takes the following form, passing `0x6` as the address for the `Clock` parameter:
 
@@ -51,70 +35,21 @@ Transactions that use the clock must accept it as an **immutable reference** (no
 
 The following functions test `Clock`-dependent code by manually creating a `Clock` object and manipulating its timestamp. This is possible only in test code:
 
-```move
-module sui::clock {
-    #[test_only]
-    public fun create_for_testing(ctx: &mut TxContext);
+{@inject: crates/sui-framework/packages/sui-framework/sources/clock.move#fun=create_for_testing,share_for_testing,increment_for_testing,set_for_testing,destroy_for_testing noComments}
 
-    #[test_only]
-    public fun share_for_testing(clock: Clock);
+The next example presents a basic test that creates a Clock, increments it, and then checks its value:
 
-    #[test_only]
-    public fun increment_for_testing(clock: &mut Clock, tick: u64);
-
-    #[test_only]
-    public fun set_for_testing(clock: &mut Clock, timestamp_ms: u64);
-
-    #[test_only]
-    public fun destroy_for_testing(clock: Clock);
-}
-```
-
-The next example presents a simple test that creates a Clock, increments it, and then checks its value:
-
-```move
-module example::clock_tests {
-    use sui::clock::{Self, Clock};
-    use sui::tx_context;
-
-    #[test]
-    fun creating_a_clock_and_incrementing_it() {
-        let ctx = tx_context::dummy();
-        let clock = clock::create_for_testing(&mut ctx);
-
-        clock.increment_for_testing(42);
-        assert!(clock.timestamp_ms() == 42, 1);
-
-        clock.set_for_testing(50);
-        assert!(clock.timestamp_ms() == 50, 1);
-
-        clock.destroy_for_testing();
-    }
-}
-```
+{@inject: crates/sui-framework/packages/sui-framework/tests/clock_tests.move#module=sui::clock_tests noComments}
 
 ## Epoch timestamps
 
-You can use the following function to access the timestamp for the start of the current epoch for all transactions (including ones that do not go through consensus):
+Use the following function from the `sui::tx_context` module to access the timestamp for the start of the current epoch for all transactions (including ones that do not go through consensus):
 
-```move
-module sui::tx_context {
-    public fun epoch_timestamp_ms(ctx: &TxContext): u64;
-}
-```
+{@inject: crates/sui-framework/packages/sui-framework/sources/tx_context.move#fun=epoch_timestamp_ms noComments}
 
-The preceding function returns the point in time when the current epoch started, as a millisecond granularity unix timestamp in a u64. This value changes roughly **once every 24 hours**, when the epoch changes.
+The preceding function returns the point in time when the current epoch started, as a millisecond granularity unix timestamp in a `u64`. This value changes roughly **once every 24 hours**, when the epoch changes.
 
 Tests based on `sui::test_scenario` can use `later_epoch` (following code), to exercise time-sensitive code that uses `epoch_timestamp_ms` (previous code):
-
-```move
-module sui::test_scenario {
-    public fun later_epoch(
-        scenario: &mut Scenario,
-        delta_ms: u64,
-        sender: address,
-    ): TransactionEffects;
-}
-```
+{@inject: crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move#fun=later_epoch noComments}
 
 `later_epoch` behaves like `sui::test_scenario::next_epoch` (finishes the current transaction and epoch in the test scenario), but also increments the timestamp by `delta_ms` milliseconds to simulate the progress of time.

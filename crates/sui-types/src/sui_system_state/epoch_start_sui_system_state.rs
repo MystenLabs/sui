@@ -74,6 +74,21 @@ impl EpochStartSystemState {
     pub fn new_for_testing_with_epoch(epoch: EpochId) -> Self {
         Self::V1(EpochStartSystemStateV1::new_for_testing_with_epoch(epoch))
     }
+
+    pub fn new_at_next_epoch_for_testing(&self) -> Self {
+        // Only need to support the latest version for testing.
+        match self {
+            Self::V1(state) => Self::V1(EpochStartSystemStateV1 {
+                epoch: state.epoch + 1,
+                protocol_version: state.protocol_version,
+                reference_gas_price: state.reference_gas_price,
+                safe_mode: state.safe_mode,
+                epoch_start_timestamp_ms: state.epoch_start_timestamp_ms,
+                epoch_duration_ms: state.epoch_duration_ms,
+                active_validators: state.active_validators.clone(),
+            }),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -298,7 +313,7 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct EpochStartValidatorInfoV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey: narwhal_crypto::PublicKey,

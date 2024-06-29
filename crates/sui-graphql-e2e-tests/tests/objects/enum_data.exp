@@ -4,14 +4,11 @@ init:
 A: object(0,0)
 
 task 1 'publish'. lines 6-54:
-created: object(1,0), object(1,1)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 10510800,  storage_rebate: 0, non_refundable_storage_fee: 0
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: UNKNOWN_VERSION, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
 
 task 2 'programmable'. lines 56-58:
-created: object(2,0)
-mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 3032400,  storage_rebate: 0, non_refundable_storage_fee: 0
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
 
 task 3 'create-checkpoint'. lines 60-60:
 Checkpoint created: 1
@@ -30,259 +27,6 @@ Response: {
                     "asMoveObject": {
                       "contents": {
                         "type": {
-                          "repr": "0xb4cc5e74d9efa0c43467de1e1cec1e1863e2858f9e254803d882bd284481eb17::m::Foo"
-                        },
-                        "data": {
-                          "Struct": [
-                            {
-                              "name": "id",
-                              "value": {
-                                "UID": [
-                                  170,
-                                  175,
-                                  128,
-                                  92,
-                                  12,
-                                  96,
-                                  35,
-                                  54,
-                                  129,
-                                  252,
-                                  135,
-                                  6,
-                                  222,
-                                  151,
-                                  209,
-                                  233,
-                                  168,
-                                  162,
-                                  106,
-                                  21,
-                                  50,
-                                  91,
-                                  225,
-                                  66,
-                                  35,
-                                  113,
-                                  227,
-                                  152,
-                                  61,
-                                  98,
-                                  13,
-                                  201
-                                ]
-                              }
-                            },
-                            {
-                              "name": "f0",
-                              "value": {
-                                "ID": [
-                                  170,
-                                  175,
-                                  128,
-                                  92,
-                                  12,
-                                  96,
-                                  35,
-                                  54,
-                                  129,
-                                  252,
-                                  135,
-                                  6,
-                                  222,
-                                  151,
-                                  209,
-                                  233,
-                                  168,
-                                  162,
-                                  106,
-                                  21,
-                                  50,
-                                  91,
-                                  225,
-                                  66,
-                                  35,
-                                  113,
-                                  227,
-                                  152,
-                                  61,
-                                  98,
-                                  13,
-                                  201
-                                ]
-                              }
-                            },
-                            {
-                              "name": "f1",
-                              "value": {
-                                "Bool": true
-                              }
-                            },
-                            {
-                              "name": "f2",
-                              "value": {
-                                "Number": "42"
-                              }
-                            },
-                            {
-                              "name": "f3",
-                              "value": {
-                                "Number": "43"
-                              }
-                            },
-                            {
-                              "name": "f4",
-                              "value": {
-                                "String": "hello"
-                              }
-                            },
-                            {
-                              "name": "f5",
-                              "value": {
-                                "String": "world"
-                              }
-                            },
-                            {
-                              "name": "f6",
-                              "value": {
-                                "Vector": [
-                                  {
-                                    "Address": [
-                                      170,
-                                      175,
-                                      128,
-                                      92,
-                                      12,
-                                      96,
-                                      35,
-                                      54,
-                                      129,
-                                      252,
-                                      135,
-                                      6,
-                                      222,
-                                      151,
-                                      209,
-                                      233,
-                                      168,
-                                      162,
-                                      106,
-                                      21,
-                                      50,
-                                      91,
-                                      225,
-                                      66,
-                                      35,
-                                      113,
-                                      227,
-                                      152,
-                                      61,
-                                      98,
-                                      13,
-                                      201
-                                    ]
-                                  }
-                                ]
-                              }
-                            },
-                            {
-                              "name": "f7",
-                              "value": {
-                                "Option": {
-                                  "Number": "44"
-                                }
-                              }
-                            },
-                            {
-                              "name": "f8",
-                              "value": {
-                                "Variant": {
-                                  "name": "A",
-                                  "fields": []
-                                }
-                              }
-                            },
-                            {
-                              "name": "f9",
-                              "value": {
-                                "Variant": {
-                                  "name": "B",
-                                  "fields": []
-                                }
-                              }
-                            },
-                            {
-                              "name": "f10",
-                              "value": {
-                                "Variant": {
-                                  "name": "C",
-                                  "fields": [
-                                    {
-                                      "name": "pos0",
-                                      "value": {
-                                        "Number": "45"
-                                      }
-                                    }
-                                  ]
-                                }
-                              }
-                            },
-                            {
-                              "name": "f11",
-                              "value": {
-                                "Variant": {
-                                  "name": "D",
-                                  "fields": [
-                                    {
-                                      "name": "x",
-                                      "value": {
-                                        "Number": "46"
-                                      }
-                                    }
-                                  ]
-                                }
-                              }
-                            }
-                          ]
-                        },
-                        "json": {
-                          "id": "0xaaaf805c0c60233681fc8706de97d1e9a8a26a15325be1422371e3983d620dc9",
-                          "f0": "0xaaaf805c0c60233681fc8706de97d1e9a8a26a15325be1422371e3983d620dc9",
-                          "f1": true,
-                          "f2": 42,
-                          "f3": "43",
-                          "f4": "hello",
-                          "f5": "world",
-                          "f6": [
-                            "0xaaaf805c0c60233681fc8706de97d1e9a8a26a15325be1422371e3983d620dc9"
-                          ],
-                          "f7": 44,
-                          "f8": {
-                            "A": {}
-                          },
-                          "f9": {
-                            "B": {}
-                          },
-                          "f10": {
-                            "C": {
-                              "pos0": 45
-                            }
-                          },
-                          "f11": {
-                            "D": {
-                              "x": "46"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMoveObject": {
-                      "contents": {
-                        "type": {
                           "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
                         },
                         "data": {
@@ -291,38 +35,38 @@ Response: {
                               "name": "id",
                               "value": {
                                 "UID": [
-                                  230,
-                                  253,
-                                  176,
-                                  125,
-                                  168,
-                                  19,
-                                  18,
-                                  92,
-                                  67,
-                                  138,
-                                  108,
-                                  221,
-                                  122,
-                                  243,
-                                  132,
-                                  188,
-                                  120,
-                                  134,
-                                  92,
-                                  39,
-                                  61,
-                                  92,
-                                  70,
-                                  25,
+                                  83,
+                                  182,
+                                  54,
+                                  89,
+                                  244,
+                                  145,
+                                  11,
+                                  5,
+                                  99,
+                                  87,
+                                  90,
                                   133,
-                                  19,
-                                  69,
-                                  194,
-                                  150,
-                                  36,
-                                  249,
-                                  150
+                                  220,
+                                  163,
+                                  37,
+                                  79,
+                                  30,
+                                  180,
+                                  27,
+                                  214,
+                                  248,
+                                  35,
+                                  92,
+                                  242,
+                                  80,
+                                  142,
+                                  230,
+                                  193,
+                                  143,
+                                  66,
+                                  147,
+                                  171
                                 ]
                               }
                             },
@@ -333,7 +77,7 @@ Response: {
                                   {
                                     "name": "value",
                                     "value": {
-                                      "Number": "299999995967600"
+                                      "Number": "299999998012000"
                                     }
                                   }
                                 ]
@@ -342,9 +86,9 @@ Response: {
                           ]
                         },
                         "json": {
-                          "id": "0xe6fdb07da813125c438a6cdd7af384bc78865c273d5c4619851345c29624f996",
+                          "id": "0x53b63659f4910b0563575a85dca3254f1eb41bd6f8235cf2508ee6c18f4293ab",
                           "balance": {
-                            "value": "299999995967600"
+                            "value": "299999998012000"
                           }
                         }
                       }

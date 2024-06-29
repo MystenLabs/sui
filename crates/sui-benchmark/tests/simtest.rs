@@ -249,7 +249,7 @@ mod test {
         }
         state
             .database_for_testing()
-            .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
+            .prune_objects_and_compact_for_testing(state.get_checkpoint_store(), None)
             .await;
     }
 
@@ -453,15 +453,15 @@ mod test {
         );
 
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
-            config.set_per_object_congestion_control_mode(
+            config.set_per_object_congestion_control_mode_for_testing(
                 PerObjectCongestionControlMode::TotalGasBudget,
             );
-            config.set_max_accumulated_txn_cost_per_object_in_checkpoint(
+            config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
                 checkpoint_budget_factor
                     * DEFAULT_VALIDATOR_GAS_PRICE
                     * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
             );
-            config.set_max_deferral_rounds_for_congestion_control(max_deferral_rounds);
+            config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
             config
         });
 
@@ -700,7 +700,7 @@ mod test {
         let test_cluster = build_test_cluster(6, 20_000).await;
 
         // Network should continue as long as nodes are participating in DKG representing
-        // stake equal to 2f+1 PLUS proprotion of stake represented by the
+        // stake equal to 2f+1 PLUS proportion of stake represented by the
         // `random_beacon_reduction_allowed_delta` ProtocolConfig option.
         // In this case we make sure it still works with 5/6 validators.
         let eligible_nodes: HashSet<_> = test_cluster

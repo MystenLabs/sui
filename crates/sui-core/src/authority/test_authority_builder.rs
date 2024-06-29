@@ -10,6 +10,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::execution_cache::build_execution_cache;
 use crate::module_cache_metrics::ResolverMetrics;
+use crate::rest_index::RestIndexStore;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -275,8 +276,21 @@ impl<'a> TestAuthorityBuilder<'a> {
                 epoch_store
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
+                false,
             )))
         };
+        let rest_index = if self.disable_indexer {
+            None
+        } else {
+            Some(Arc::new(RestIndexStore::new(
+                path.join("rest_index"),
+                &authority_store,
+                &checkpoint_store,
+                &epoch_store,
+                &cache_traits.backing_package_store,
+            )))
+        };
+
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let authority_overload_config = self.authority_overload_config.unwrap_or_default();
@@ -303,6 +317,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             epoch_store,
             committee_store,
             index_store,
+            rest_index,
             checkpoint_store,
             &registry,
             genesis.objects(),

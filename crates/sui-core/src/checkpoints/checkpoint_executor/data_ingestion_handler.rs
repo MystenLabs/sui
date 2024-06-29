@@ -3,7 +3,7 @@
 
 use crate::checkpoints::CheckpointStore;
 use crate::execution_cache::{ObjectCacheRead, TransactionCacheRead};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_storage::blob::{Blob, BlobEncoding};
@@ -14,30 +14,29 @@ use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::storage::ObjectKey;
 
-pub(crate) fn store_checkpoint_locally(
-    path: PathBuf,
+pub(crate) fn load_checkpoint_data(
     checkpoint: VerifiedCheckpoint,
     object_cache_reader: &dyn ObjectCacheRead,
     transaction_cache_reader: &dyn TransactionCacheRead,
     checkpoint_store: Arc<CheckpointStore>,
-    transaction_digests: Vec<TransactionDigest>,
-) -> SuiResult {
+    transaction_digests: &[TransactionDigest],
+) -> SuiResult<CheckpointData> {
     let checkpoint_contents = checkpoint_store
         .get_checkpoint_contents(&checkpoint.content_digest)?
         .expect("checkpoint content has to be stored");
 
     let transactions = transaction_cache_reader
-        .multi_get_transaction_blocks(&transaction_digests)?
+        .multi_get_transaction_blocks(transaction_digests)?
         .into_iter()
-        .zip(&transaction_digests)
+        .zip(transaction_digests)
         .map(|(tx, digest)| tx.ok_or(SuiError::TransactionNotFound { digest: *digest }))
         .collect::<SuiResult<Vec<_>>>()?;
 
     let effects = transaction_cache_reader
-        .multi_get_executed_effects(&transaction_digests)?
+        .multi_get_executed_effects(transaction_digests)?
         .into_iter()
         .zip(transaction_digests)
-        .map(|(effects, digest)| effects.ok_or(SuiError::TransactionNotFound { digest }))
+        .map(|(effects, &digest)| effects.ok_or(SuiError::TransactionNotFound { digest }))
         .collect::<SuiResult<Vec<_>>>()?;
 
     let event_digests = effects
@@ -61,29 +60,11 @@ pub(crate) fn store_checkpoint_locally(
                 .cloned()
                 .expect("event was already checked to be present")
         });
-        // Note unwrapped_then_deleted contains **updated** versions.
-        let unwrapped_then_deleted_obj_ids = fx
-            .unwrapped_then_deleted()
-            .into_iter()
-            .map(|k| k.0)
-            .collect::<HashSet<_>>();
 
         let input_object_keys = fx
-            .input_shared_objects()
+            .modified_at_versions()
             .into_iter()
-            .map(|kind| {
-                let (id, version) = kind.id_and_version();
-                ObjectKey(id, version)
-            })
-            .chain(
-                fx.modified_at_versions()
-                    .into_iter()
-                    .map(|(object_id, version)| ObjectKey(object_id, version)),
-            )
-            .collect::<HashSet<_>>()
-            .into_iter()
-            // Unwrapped-then-deleted objects are not stored in state before the tx, so we have nothing to fetch.
-            .filter(|key| !unwrapped_then_deleted_obj_ids.contains(&key.0))
+            .map(|(object_id, version)| ObjectKey(object_id, version))
             .collect::<Vec<_>>();
 
         let input_objects = object_cache_reader
@@ -129,12 +110,19 @@ pub(crate) fn store_checkpoint_locally(
         };
         full_transactions.push(full_transaction);
     }
-    let file_name = format!("{}.chk", checkpoint.sequence_number);
     let checkpoint_data = CheckpointData {
         checkpoint_summary: checkpoint.into(),
         checkpoint_contents,
         transactions: full_transactions,
     };
+    Ok(checkpoint_data)
+}
+
+pub(crate) fn store_checkpoint_locally(
+    path: PathBuf,
+    checkpoint_data: &CheckpointData,
+) -> SuiResult {
+    let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
 
     std::fs::create_dir_all(&path).map_err(|err| {
         SuiError::FileIOError(format!(

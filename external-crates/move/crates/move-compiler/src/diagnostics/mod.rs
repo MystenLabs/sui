@@ -11,14 +11,14 @@ use crate::{
         WellKnownFilterName,
     },
     shared::{
-        ast_debug::AstDebug, known_attributes, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION,
-        FILTER_UNUSED_MUT_PARAM, FILTER_UNUSED_MUT_REF, FILTER_UNUSED_STRUCT_FIELD,
-        FILTER_UNUSED_TYPE_PARAMETER,
+        ast_debug::AstDebug,
+        files::{ByteSpan, FileByteSpan, FileId, MappedFiles},
+        known_attributes, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION, FILTER_UNUSED_MUT_PARAM,
+        FILTER_UNUSED_MUT_REF, FILTER_UNUSED_STRUCT_FIELD, FILTER_UNUSED_TYPE_PARAMETER,
     },
 };
 use codespan_reporting::{
     self as csr,
-    files::SimpleFiles,
     term::{
         emit,
         termcolor::{Buffer, ColorChoice, StandardStream, WriteColor},
@@ -26,17 +26,15 @@ use codespan_reporting::{
     },
 };
 use csr::files::Files;
-use move_command_line_common::{env::read_env_var, files::FileHash};
+use move_command_line_common::env::read_env_var;
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
     iter::FromIterator,
     ops::Range,
     path::PathBuf,
-    sync::Arc,
 };
 
 use self::codes::UnusedItem;
@@ -44,11 +42,6 @@ use self::codes::UnusedItem;
 //**************************************************************************************************
 // Types
 //**************************************************************************************************
-
-pub type FileId = usize;
-pub type FileName = Symbol;
-
-pub type FilesSourceText = HashMap<FileHash, (FileName, Arc<str>)>;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 #[must_use]
@@ -131,162 +124,17 @@ pub struct Migration {
     changes: BTreeMap<FileId, Vec<(ByteSpan, MigrationChange)>>,
 }
 
-/// A mapping from file ids to file contents along with the mapping of filehash to fileID.
-pub struct MappedFiles {
-    files: SimpleFiles<Symbol, Arc<str>>,
-    file_mapping: HashMap<FileHash, FileId>,
-}
-
-/// A file, and the line:column start, and line:column end that corresponds to a `Loc`
-#[allow(dead_code)]
-pub struct FilePosition {
-    pub file_id: FileId,
-    pub start: Position,
-    pub end: Position,
-}
-
-/// A position holds the byte offset  along with the  line and column location in a file.
-pub struct Position {
-    pub line: usize,
-    pub column: usize,
-    pub byte: usize,
-}
-
-/// A file, and the usize start and usize end that corresponds to a `Loc`
-pub struct FileByteSpan {
-    file_id: FileId,
-    byte_span: ByteSpan,
-}
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ByteSpan {
-    start: usize,
-    end: usize,
-}
-
-impl MappedFiles {
-    pub fn new(files: FilesSourceText) -> Self {
-        let mut simple_files = SimpleFiles::new();
-        let mut file_mapping = HashMap::new();
-        for (fhash, (fname, source)) in files {
-            let id = simple_files.add(fname, source);
-            file_mapping.insert(fhash, id);
-        }
-        Self {
-            files: simple_files,
-            file_mapping,
-        }
-    }
-
-    pub fn empty() -> Self {
-        Self {
-            files: SimpleFiles::new(),
-            file_mapping: HashMap::new(),
-        }
-    }
-
-    pub fn file_hash_to_file_id(&self, fhash: &FileHash) -> Option<FileId> {
-        self.file_mapping.get(fhash).copied()
-    }
-
-    pub fn add(&mut self, fhash: FileHash, fname: FileName, source: Arc<str>) {
-        let id = self.files.add(fname, source);
-        self.file_mapping.insert(fhash, id);
-    }
-}
-
-// This is abstracted into a trait for reuse by the Move Analyzer.
-
-pub trait PositionInfo {
-    type FileContents: AsRef<str>;
-    fn files(&self) -> &SimpleFiles<Symbol, Self::FileContents>;
-    fn file_mapping(&self) -> &HashMap<FileHash, FileId>;
-
-    fn filename(&self, fhash: &FileHash) -> &str {
-        let file_id = self.file_mapping().get(fhash).unwrap();
-        self.files().get(*file_id).unwrap().name()
-    }
-
-    fn start_position(&self, loc: &Loc) -> Position {
-        self.position(loc).start
-    }
-
-    fn end_position(&self, loc: &Loc) -> Position {
-        self.position(loc).end
-    }
-
-    fn position(&self, loc: &Loc) -> FilePosition {
-        self.position_opt(loc).unwrap()
-    }
-
-    fn byte_span(&self, loc: &Loc) -> FileByteSpan {
-        self.byte_span_opt(loc).unwrap()
-    }
-
-    fn start_position_opt(&self, loc: &Loc) -> Option<Position> {
-        self.position_opt(loc).map(|posn| posn.start)
-    }
-
-    fn end_position_opt(&self, loc: &Loc) -> Option<Position> {
-        self.position_opt(loc).map(|posn| posn.end)
-    }
-
-    fn position_opt(&self, loc: &Loc) -> Option<FilePosition> {
-        let start_loc = loc.start() as usize;
-        let end_loc = loc.end() as usize;
-        let file_id = *self.file_mapping().get(&loc.file_hash())?;
-        let start_file_loc = self.files().location(file_id, start_loc).ok()?;
-        let end_file_loc = self.files().location(file_id, end_loc).ok()?;
-        let posn = FilePosition {
-            file_id,
-            start: Position {
-                line: start_file_loc.line_number,
-                column: start_file_loc.column_number - 1,
-                byte: start_loc,
-            },
-            end: Position {
-                line: end_file_loc.line_number,
-                column: end_file_loc.column_number - 1,
-                byte: end_loc,
-            },
-        };
-        Some(posn)
-    }
-
-    fn byte_span_opt(&self, loc: &Loc) -> Option<FileByteSpan> {
-        let start = loc.start() as usize;
-        let end = loc.end() as usize;
-        let file_id = *self.file_mapping().get(&loc.file_hash())?;
-        let posn = FileByteSpan {
-            byte_span: ByteSpan { start, end },
-            file_id,
-        };
-        Some(posn)
-    }
-}
-
-impl PositionInfo for MappedFiles {
-    type FileContents = Arc<str>;
-    fn files(&self) -> &SimpleFiles<Symbol, Self::FileContents> {
-        &self.files
-    }
-
-    fn file_mapping(&self) -> &HashMap<FileHash, FileId> {
-        &self.file_mapping
-    }
-}
-
 //**************************************************************************************************
 // Diagnostic Reporting
 //**************************************************************************************************
 
-pub fn report_diagnostics(files: &FilesSourceText, diags: Diagnostics) -> ! {
+pub fn report_diagnostics(files: &MappedFiles, diags: Diagnostics) -> ! {
     let should_exit = true;
     report_diagnostics_impl(files, diags, should_exit);
     std::process::exit(1)
 }
 
-pub fn report_warnings(files: &FilesSourceText, warnings: Diagnostics) {
+pub fn report_warnings(files: &MappedFiles, warnings: Diagnostics) {
     if warnings.is_empty() {
         return;
     }
@@ -294,17 +142,17 @@ pub fn report_warnings(files: &FilesSourceText, warnings: Diagnostics) {
     report_diagnostics_impl(files, warnings, false)
 }
 
-fn report_diagnostics_impl(files: &FilesSourceText, diags: Diagnostics, should_exit: bool) {
+fn report_diagnostics_impl(files: &MappedFiles, diags: Diagnostics, should_exit: bool) {
     let color_choice = diags.env_color();
     let mut writer = StandardStream::stderr(color_choice);
-    output_diagnostics(&mut writer, files, diags);
+    render_diagnostics(&mut writer, files, diags);
     if should_exit {
         std::process::exit(1);
     }
 }
 
 pub fn unwrap_or_report_pass_diagnostics<T, Pass>(
-    files: &FilesSourceText,
+    files: &MappedFiles,
     res: Result<T, (Pass, Diagnostics)>,
 ) -> T {
     match res {
@@ -316,7 +164,7 @@ pub fn unwrap_or_report_pass_diagnostics<T, Pass>(
     }
 }
 
-pub fn unwrap_or_report_diagnostics<T>(files: &FilesSourceText, res: Result<T, Diagnostics>) -> T {
+pub fn unwrap_or_report_diagnostics<T>(files: &MappedFiles, res: Result<T, Diagnostics>) -> T {
     match res {
         Ok(t) => t,
         Err(diags) => {
@@ -327,7 +175,7 @@ pub fn unwrap_or_report_diagnostics<T>(files: &FilesSourceText, res: Result<T, D
 }
 
 pub fn report_diagnostics_to_buffer_with_env_color(
-    files: &FilesSourceText,
+    files: &MappedFiles,
     diags: Diagnostics,
 ) -> Vec<u8> {
     let ansi_color = match env_color() {
@@ -338,7 +186,7 @@ pub fn report_diagnostics_to_buffer_with_env_color(
 }
 
 pub fn report_diagnostics_to_buffer(
-    files: &FilesSourceText,
+    files: &MappedFiles,
     diags: Diagnostics,
     ansi_color: bool,
 ) -> Vec<u8> {
@@ -347,7 +195,21 @@ pub fn report_diagnostics_to_buffer(
     } else {
         Buffer::no_color()
     };
-    output_diagnostics(&mut writer, files, diags);
+    render_diagnostics(&mut writer, files, diags);
+    writer.into_inner()
+}
+
+pub fn report_diagnostics_to_buffer_with_mapped_files(
+    mapped_files: &MappedFiles,
+    diags: Diagnostics,
+    ansi_color: bool,
+) -> Vec<u8> {
+    let mut writer = if ansi_color {
+        Buffer::ansi()
+    } else {
+        Buffer::no_color()
+    };
+    render_diagnostics(&mut writer, mapped_files, diags);
     writer.into_inner()
 }
 
@@ -360,16 +222,7 @@ fn env_color() -> ColorChoice {
     }
 }
 
-fn output_diagnostics<W: WriteColor>(
-    writer: &mut W,
-    sources: &FilesSourceText,
-    diags: Diagnostics,
-) {
-    let mapping = MappedFiles::new(sources.clone());
-    render_diagnostics(writer, mapping, diags);
-}
-
-fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: Diagnostics) {
+fn render_diagnostics(writer: &mut dyn WriteColor, mapping: &MappedFiles, diags: Diagnostics) {
     let Diagnostics {
         diags: Some(mut diags),
         format,
@@ -387,8 +240,8 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: 
         loc1.cmp(loc2)
     });
     match format {
-        DiagnosticsFormat::Text => emit_diagnostics_text(writer, &mapping, diags),
-        DiagnosticsFormat::JSON => emit_diagnostics_json(writer, &mapping, diags),
+        DiagnosticsFormat::Text => emit_diagnostics_text(writer, mapping, diags),
+        DiagnosticsFormat::JSON => emit_diagnostics_json(writer, mapping, diags),
     }
 }
 
@@ -413,7 +266,7 @@ fn emit_diagnostics_text(
         }
         seen.insert(diag.clone());
         let rendered = render_diagnostic_text(mapped_files, diag);
-        emit(writer, &Config::default(), &mapped_files.files, &rendered).unwrap()
+        emit(writer, &Config::default(), mapped_files.files(), &rendered).unwrap()
     }
 }
 
@@ -475,7 +328,7 @@ fn emit_diagnostics_json(
 //**************************************************************************************************
 
 pub fn generate_migration_diff(
-    files: &FilesSourceText,
+    files: &MappedFiles,
     diags: &Diagnostics,
 ) -> Option<(Migration, /* Migration errors */ Diagnostics)> {
     match diags {
@@ -503,7 +356,7 @@ pub fn generate_migration_diff(
 }
 
 // Used in test harness for unit testing
-pub fn report_migration_to_buffer(files: &FilesSourceText, diags: Diagnostics) -> Vec<u8> {
+pub fn report_migration_to_buffer(files: &MappedFiles, diags: Diagnostics) -> Vec<u8> {
     let mut writer = Buffer::no_color();
     if let Some((mut diff, errors)) = generate_migration_diff(files, &diags) {
         let rendered_errors = report_diagnostics_to_buffer(files, errors, /* color */ false);
@@ -849,13 +702,12 @@ impl Diagnostic {
         let bloc = mapped_files.position(ploc);
         JsonDiagnostic {
             file: mapped_files
-                .files
-                .get(bloc.file_id)
-                .unwrap()
-                .name()
+                .file_path(&bloc.file_hash)
+                .to_string_lossy()
                 .to_string(),
-            line: bloc.start.line,
-            column: bloc.start.column,
+            // TODO: This line and column choice is a bit weird. Consider changing it.
+            line: bloc.start.user_line(),
+            column: bloc.start.column_offset(),
             level: format!("{:?}", info.severity()),
             category: info.category(),
             code: info.code(),
@@ -1112,10 +964,9 @@ impl UnprefixedWarningFilters {
 
 impl Migration {
     pub fn new(
-        sources: FilesSourceText,
+        mapped_files: MappedFiles,
         diags: Vec<Diagnostic>,
     ) -> (Migration, /* Migration errors */ Diagnostics) {
-        let mapped_files = MappedFiles::new(sources);
         let mut mig = Migration {
             changes: BTreeMap::new(),
             mapped_files,
@@ -1168,7 +1019,11 @@ impl Migration {
     }
 
     fn get_file_contents(&self, file_id: FileId) -> String {
-        self.mapped_files.files.source(file_id).unwrap().to_string()
+        self.mapped_files
+            .files()
+            .source(file_id)
+            .unwrap()
+            .to_string()
     }
 
     fn render_changes(source: String, changes: &mut [(ByteSpan, MigrationChange)]) -> String {
@@ -1236,7 +1091,7 @@ impl Migration {
         let mut names = self
             .changes
             .keys()
-            .map(|id| (*id, *self.mapped_files.files.get(*id).unwrap().name()))
+            .map(|id| (*id, *self.mapped_files.files().get(*id).unwrap().name()))
             .collect::<Vec<_>>();
         names.sort_by_key(|(_, name)| *name);
         for (file_id, name) in names {
@@ -1268,7 +1123,7 @@ impl Migration {
         let mut names = self
             .changes
             .keys()
-            .map(|id| (*id, *self.mapped_files.files.get(*id).unwrap().name()))
+            .map(|id| (*id, *self.mapped_files.files().get(*id).unwrap().name()))
             .collect::<Vec<_>>();
         names.sort_by_key(|(_, name)| *name);
         for (file_id, name) in names {

@@ -1,5 +1,29 @@
 # @mysten/sui.js
 
+## 1.2.0
+
+### Minor Changes
+
+- fef99d377f: Update parallel executor class to handle gasPrice and budgeting to remove extra rpc calls during execution"
+
+## 1.1.2
+
+### Patch Changes
+
+- 0dfff33b95: Fix bug that prevents coinWithBalance intent from being resolved
+
+## 1.1.1
+
+### Patch Changes
+
+- 101f1ff4b8: Fix coinWithBalance when passing balance using a number instead of a bigint
+
+## 1.1.0
+
+### Minor Changes
+
+- bae8f9683c: Remove address from parseSerializedSignature
+
 ## 1.0.5
 
 ### Patch Changes

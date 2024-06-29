@@ -143,11 +143,11 @@ impl ObjectStoreConfig {
         if let Some(key_id) = &self.aws_access_key_id {
             builder = builder.with_access_key_id(key_id);
         } else if let Ok(secret) = env::var("ARCHIVE_READ_AWS_ACCESS_KEY_ID") {
-            builder = builder.with_secret_access_key(secret);
+            builder = builder.with_access_key_id(secret);
         } else if let Ok(secret) = env::var("FORMAL_SNAPSHOT_WRITE_AWS_ACCESS_KEY_ID") {
-            builder = builder.with_secret_access_key(secret);
+            builder = builder.with_access_key_id(secret);
         } else if let Ok(secret) = env::var("DB_SNAPSHOT_READ_AWS_ACCESS_KEY_ID") {
-            builder = builder.with_secret_access_key(secret);
+            builder = builder.with_access_key_id(secret);
         }
 
         if let Some(secret) = &self.aws_secret_access_key {

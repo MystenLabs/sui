@@ -7,7 +7,7 @@ use crate::{
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
     get_latest_available_epoch, get_object, get_transaction_block, make_clients, pkg_dump,
     restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
-    GroupedObjectOutput, VerboseObjectOutput,
+    GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
 };
 use anyhow::Result;
 use futures::{future::join_all, StreamExt};
@@ -323,10 +323,9 @@ pub enum ToolCommand {
         /// value based on number of available logical cores.
         #[clap(long = "num-parallel-downloads")]
         num_parallel_downloads: Option<usize>,
-        /// If true, perform snapshot and checkpoint summary verification.
-        /// Defaults to true.
-        #[clap(long = "verify")]
-        verify: Option<bool>,
+        /// Verification mode to employ.
+        #[clap(long = "verify", default_value = "normal")]
+        verify: Option<SnapshotVerifyMode>,
         /// Network to download snapshot for. Defaults to "mainnet".
         /// If `--snapshot-bucket` or `--archive-bucket` is not specified,
         /// the value of this flag is used to construct default bucket names.
@@ -366,6 +365,13 @@ pub enum ToolCommand {
         /// and output will be reduced to necessary status information.
         #[clap(long = "verbose")]
         verbose: bool,
+
+        /// If provided, all checkpoint summaries from genesis to the end of the target epoch
+        /// will be downloaded and (if --verify is provided) full checkpoint chain verification
+        /// will be performed. If omitted, only end of epoch checkpoint summaries will be
+        /// downloaded, and (if --verify is provided) will be verified via committee signature.
+        #[clap(long = "all-checkpoints")]
+        all_checkpoints: bool,
     },
 
     #[clap(name = "replay")]
@@ -710,6 +716,7 @@ impl ToolCommand {
                 no_sign_request,
                 latest,
                 verbose,
+                all_checkpoints,
             } => {
                 if !verbose {
                     tracing_handle
@@ -908,7 +915,7 @@ impl ToolCommand {
                     );
                 }
 
-                let verify = verify.unwrap_or(true);
+                let verify = verify.unwrap_or_default();
                 download_formal_snapshot(
                     &path,
                     epoch_to_download,
@@ -918,6 +925,7 @@ impl ToolCommand {
                     num_parallel_downloads,
                     network,
                     verify,
+                    all_checkpoints,
                 )
                 .await?;
             }

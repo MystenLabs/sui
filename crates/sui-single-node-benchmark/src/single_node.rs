@@ -168,8 +168,6 @@ impl SingleValidator {
                     .execute_certificate(&cert, &self.epoch_store)
                     .await
                     .unwrap()
-                    .into_inner()
-                    .into_data()
             }
             Component::ValidatorWithoutConsensus | Component::ValidatorWithFakeConsensus => {
                 let response = self
@@ -278,7 +276,7 @@ impl SingleValidator {
             ckpt_receiver,
             validator.get_checkpoint_store().clone(),
             validator.clone(),
-            Arc::new(StateAccumulator::new(
+            Arc::new(StateAccumulator::new_for_tests(
                 validator.get_accumulator_store().clone(),
                 self.get_epoch_store(),
             )),
