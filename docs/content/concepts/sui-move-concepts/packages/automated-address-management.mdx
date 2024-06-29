@@ -15,9 +15,8 @@ Previously a `published-at` entry was **mandatory** in the `Move.toml` file, whi
 1. Switch to your active environment for the chain that your package is published on
       ```
       sui client --switch --env <YOUR-CHAIN-ENVIRONMENT>
-```
-
-2. Run the `manage-package` command with the data for your published package
+      ```
+1. Run the `manage-package` command with the data for your published package
       ```
       sui move manage-package --environment "$(sui client active-env)" \
                         --network-id "$(sui client chain-identifier)" \
