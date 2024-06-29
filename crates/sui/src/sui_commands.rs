@@ -601,21 +601,31 @@ async fn start(
         let epoch_duration_ms = epoch_duration_ms.unwrap_or(DEFAULT_EPOCH_DURATION_MS);
         swarm_builder = swarm_builder.with_epoch_duration_ms(epoch_duration_ms);
     } else {
-        // load from config dir that was passed, or generate a new genesis if there is no config
-        // dir passed and there is no config_dir in the default location
-        // and if a dir exists, then use that one
-        if let Some(config) = config.clone() {
-            swarm_builder = swarm_builder.dir(config);
-        } else if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
+        if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
             genesis(None, None, None, false, epoch_duration_ms, None, false).await?;
-            swarm_builder = swarm_builder.dir(sui_config_dir()?);
-        } else {
-            swarm_builder = swarm_builder.dir(sui_config_dir()?);
         }
+
         // Load the config of the Sui authority.
-        let network_config_path = config
-            .clone()
-            .unwrap_or(sui_config_dir()?.join(SUI_NETWORK_CONFIG));
+        // To keep compatibility with sui-test-validator where the user can pass a config
+        // directory, this checks if the config is a file or a directory
+        let network_config_path = if let Some(ref config) = config {
+            if config.is_dir() {
+                config.join(SUI_NETWORK_CONFIG)
+            } else if config.is_file()
+                && config
+                    .extension()
+                    .is_some_and(|ext| (ext == "yml" || ext == "yaml"))
+            {
+                config.clone()
+            } else {
+                config.join(SUI_NETWORK_CONFIG)
+            }
+        } else {
+            config
+                .clone()
+                .unwrap_or(sui_config_dir()?)
+                .join(SUI_NETWORK_CONFIG)
+        };
         let network_config: NetworkConfig =
             PersistedConfig::read(&network_config_path).map_err(|err| {
                 err.context(format!(
@@ -624,7 +634,9 @@ async fn start(
                 ))
             })?;
 
-        swarm_builder = swarm_builder.with_network_config(network_config);
+        swarm_builder = swarm_builder
+            .dir(sui_config_dir()?)
+            .with_network_config(network_config);
     }
 
     #[cfg(feature = "indexer")]
