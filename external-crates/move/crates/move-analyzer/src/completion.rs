@@ -512,6 +512,7 @@ pub fn on_completion_request(
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
 ) {
+    let symbols_map = &context.symbols.lock().unwrap();
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
         .expect("could not deserialize completion request");
@@ -533,10 +534,19 @@ pub fn on_completion_request(
                 LintLevel::None,
             ) {
                 Ok((Some(symbols), _)) => completion_items(pos, &path, &symbols),
-                _ => completion_items(pos, &path, &context.symbols.lock().unwrap()),
+                _ => {
+                    if let Some(symbols) = symbols_map.get(&pkg_path) {
+                        completion_items(pos, &path, symbols)
+                    } else {
+                        vec![]
+                    }
+                }
             }
         }
-        None => completion_items(pos, &path, &context.symbols.lock().unwrap()),
+        None => {
+            eprintln!("failed completion for {:?} (package root not found)", path);
+            vec![]
+        }
     };
 
     let result = serde_json::to_value(items).expect("could not serialize completion response");
