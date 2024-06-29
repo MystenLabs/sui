@@ -139,7 +139,13 @@ impl ProgrammableTransactionBuilder {
         Argument::Result(i as u16)
     }
 
-    /// Will fail to generate if given an empty ObjVec
+    /// Insert a new move call into the Programmable Transaction Block.
+    ///
+    /// If
+    /// * the move call needs data created in previous commands of the PTB, or/and
+    /// * it will create data to be used in later commands of the PTB,
+    ///
+    /// then consider using `ProgrammableTransactionBuilder::programmable_move_call` below.
     pub fn move_call(
         &mut self,
         package: ObjectID,
@@ -151,7 +157,7 @@ impl ProgrammableTransactionBuilder {
         let arguments = call_args
             .into_iter()
             .map(|a| self.input(a))
-            .collect::<Result<_, _>>()?;
+            .collect::<anyhow::Result<Vec<Argument>>>()?;
         self.command(Command::move_call(
             package,
             module,
@@ -162,6 +168,13 @@ impl ProgrammableTransactionBuilder {
         Ok(())
     }
 
+    /// Insert a new programmable move call into the Programmable Transaction Block being built.
+    ///
+    /// If the move call
+    /// * does not need data created in previous commands of the PTB, and
+    /// * it will not create data to be used in later commands of the PTB,
+    ///
+    /// then consider using `ProgrammableTransactionBuilder::move_call` above.
     pub fn programmable_move_call(
         &mut self,
         package: ObjectID,
