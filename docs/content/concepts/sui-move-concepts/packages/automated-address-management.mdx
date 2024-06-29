@@ -27,13 +27,12 @@ sui move manage-package --environment "$(sui client active-env)" \
                         --version-number 'VERSION-NUMBER'
 ```
 
-- `ORIGINAL-ADDRESS` should be the address your package was first published at. If you never upgraded your package, this the same address as your `published-at` address in the `Move.toml`
-- `LATEST-ADDRESS` should be the latest package address. If you never upgraded your package, it is the same as `ORIGINAL-ADDRESS`. If you upgraded your package, this is the same address as your current `published-at` address in the `Move.toml`.
-- `VERSION-NUMBER` is `1` if you never upgraded your package. Otherwise, it is a number greater than `1` depending on how many times you upgraded your package. In this case, look up the package at `LATEST-ADDRESS` to determine the version number.
+      - `ORIGINAL-ADDRESS` should be the address your package was first published at. If you never upgraded your package, this the same address as your `published-at` address in the `Move.toml`
+      - `LATEST-ADDRESS` should be the latest package address. If you never upgraded your package, it is the same as `ORIGINAL-ADDRESS`. If you upgraded your package, this is the same address as your current `published-at` address in the `Move.toml`.
+      - `VERSION-NUMBER` is `1` if you never upgraded your package. Otherwise, it is a number greater than `1` depending on how many times you upgraded your package. In this case, look up the package at `LATEST-ADDRESS` to determine the version number.
+1. Delete the `published-at` line in your `Move.toml`. Your package is now tracked. You can repeat the above steps to track addresses for additional environments.
 
-3. Delete the `published-at` line in your `Move.toml`. Your package is now tracked. You can repeat the above steps to track addresses for additional environments.
-
-## Package Upgrade Guidance
+## Package upgrade guidance
 
 - When [upgrading](./upgrade#upgrade-requirements), you need to retrieve the `UpgradeCap` ID of your published package. Automated address management does not track your `UpgradeCap`.
 
