@@ -35,15 +35,15 @@ sui move manage-package --environment "$(sui client active-env)" \
 
 ## Package Upgrade Guidance
 
-- When [upgrading](./upgrade#upgrade-requirements), you will need to retrieve the `UpgradeCap` ID of your published package. Automated address management does not track your `UpgradeCap`.
+- When [upgrading](./upgrade#upgrade-requirements), you need to retrieve the `UpgradeCap` ID of your published package. Automated address management does not track your `UpgradeCap`.
 
-- When [upgrading](./upgrade#example), you will first need to set the `[addresses]` value for your package to `0x0` in the `Move.toml`, and restore its ID with the `ORIGINAL-ADDRESS` after upgrading.
+- When [upgrading](./upgrade#example), you first need to set the `[addresses]` value for your package to `0x0` in the `Move.toml`, and restore its ID with the `ORIGINAL-ADDRESS` after upgrading.
 
 ## Troubleshooting
 
-Conflicting published package addresses may happen when the state of package data is inconsistent.
+Conflicting published package addresses might happen when the state of package data is inconsistent.
 
-For example, you may have an existing package with a `published-at` value in the `Move.toml`. The package is re-published for testing purposes, and is now tracked in `Move.lock` with automated address management. The address in the `Move.toml` and `Move.lock` now differ, and there will be an error the next time you try to publish or upgrade the package.
+For example, you might have an existing package with a `published-at` value in the `Move.toml`. The package is re-published for testing purposes, and is now tracked in `Move.lock` with automated address management. The address in the `Move.toml` and `Move.lock` now differ, and there will be an error the next time you try to publish or upgrade the package.
 
 Here are steps to remediate conflicting addresses:
 
@@ -51,7 +51,7 @@ Here are steps to remediate conflicting addresses:
   - Delete the `published-at` value in your `Move.toml` if this published address is no longer needed
   - Alternatively, follow the steps to [adopt automated address management](#adopting-automated-address-management-for-published-packages)
 
-- If the conflict is in a package that you do not maintain (e.g., a dependency), consider fixing the issue locally with the steps above, or contacting the maintainer to upstream changes.
+- If the conflict is in a package that you do not maintain (such as a dependency), consider fixing the issue locally with the steps above, or contacting the maintainer to upstream changes.
 
 ## Internal reference
 
