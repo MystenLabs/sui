@@ -3,12 +3,12 @@ processed 11 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 12-48:
+task 1 'publish'. lines 13-49:
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 19539600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'view-object'. lines 49-51:
+task 2 'view-object'. lines 50-52:
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::DenyCapV2<test::regulated_coin::REGULATED_COIN> {
@@ -20,35 +20,36 @@ Contents: sui::coin::DenyCapV2<test::regulated_coin::REGULATED_COIN> {
     allow_global_pause: false,
 }
 
-task 3 'run'. lines 52-54:
+task 3 'run'. lines 53-55:
 created: object(3,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
-task 4 'run'. lines 55-57:
+task 4 'run'. lines 56-58:
 events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 51, 98, 101, 102, 55, 99, 55, 54, 53, 56, 50, 52, 55, 51, 100, 97, 54, 49, 49, 50, 102, 50, 48, 55, 51, 56, 52, 54, 55, 52, 102, 50, 98, 101, 49, 51, 55, 100, 49, 54, 48, 48, 100, 57, 48, 101, 53, 53, 55, 102, 54, 49, 49, 48, 99, 100, 102, 53, 101, 54, 56, 52, 101, 57, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 109, 24, 236, 99, 254, 182, 140, 13, 147, 176, 159, 191, 147, 65, 224, 205, 34, 117, 213, 245, 234, 161, 224, 174, 12, 246, 80, 29, 144, 63, 192, 74] }
 created: object(4,0), object(4,1), object(4,2)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
-gas summary: computation_cost: 1000000, storage_cost: 12182800,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
+gas summary: computation_cost: 1000000, storage_cost: 12190400,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
 
-task 5 'run'. lines 58-60:
+task 5 'run'. lines 59-61:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6 'transfer-object'. lines 61-63:
+task 6 'transfer-object'. lines 62-64:
 Error: Error checking transaction input objects: AddressDeniedForCoin { address: @B, coin_type: "object(1,0)::regulated_coin::REGULATED_COIN" }
 
-task 7 'run'. lines 64-66:
+task 7 'run'. lines 65-67:
 Error: Error checking transaction input objects: AddressDeniedForCoin { address: @B, coin_type: "object(1,0)::regulated_coin::REGULATED_COIN" }
 
-task 8 'run'. lines 67-69:
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(4,1)
-gas summary: computation_cost: 1000000, storage_cost: 6855200,  storage_rebate: 6786648, non_refundable_storage_fee: 68552
+task 8 'run'. lines 68-70:
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+deleted: object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 4400400,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
 
-task 9 'run'. lines 70-72:
+task 9 'run'. lines 71-73:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 10 'transfer-object'. lines 73-73:
+task 10 'transfer-object'. lines 74-74:
 mutated: object(0,1), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 1459656, non_refundable_storage_fee: 14744

@@ -12,7 +12,6 @@
 //# publish --sender A
 module test::regulated_coin {
     use sui::coin;
-    use sui::deny_list::DenyList;
 
     public struct REGULATED_COIN has drop {}
 
