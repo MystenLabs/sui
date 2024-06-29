@@ -125,7 +125,7 @@ module std::string {
     #[deprecated(note = b"Use `std::string::as_bytes` instead.")]
     public fun bytes(s: &String): &vector<u8> { s.as_bytes() }
 
-    #[deprecated(note = b"Use `std::string::substring` function instead.")]
+    #[deprecated(note = b"Use `std::string::substring` instead.")]
     public fun sub_string(s: &String, i: u64, j: u64): String {
         s.substring(i, j)
     }
