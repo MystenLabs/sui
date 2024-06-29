@@ -36,7 +36,7 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request) {
 }
 
 fn inlay_hints(context: &Context, fpath: PathBuf) -> Option<Vec<InlayHint>> {
-    let symbols_map = &context.symbols.lock().unwrap();
+    let symbols_map = &context.symbols.lock().ok()?;
     let mut hints: Vec<InlayHint> = vec![];
     let symbols =
         SymbolicatorRunner::root_dir(&fpath).and_then(|pkg_path| symbols_map.get(&pkg_path))?;
