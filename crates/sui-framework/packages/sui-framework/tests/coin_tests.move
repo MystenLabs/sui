@@ -30,8 +30,8 @@ module sui::coin_tests {
 
         let decimals = metadata.get_decimals();
         let symbol_bytes = metadata.get_symbol<COIN_TESTS>().as_bytes();
-        let name_bytes = metadata.get_name<COIN_TESTS>().bytes();
-        let description_bytes = metadata.get_description<COIN_TESTS>().bytes();
+        let name_bytes = metadata.get_name<COIN_TESTS>().as_bytes();
+        let description_bytes = metadata.get_description<COIN_TESTS>().as_bytes();
         let icon_url = url::inner_url(metadata.get_icon_url<COIN_TESTS>().borrow()).as_bytes();
 
         assert!(decimals == 6);
@@ -47,8 +47,8 @@ module sui::coin_tests {
         treasury.update_icon_url<COIN_TESTS>(&mut metadata, b"new_icon_url".to_ascii_string());
 
         let symbol_bytes = metadata.get_symbol<COIN_TESTS>().as_bytes();
-        let name_bytes = metadata.get_name<COIN_TESTS>().bytes();
-        let description_bytes = metadata.get_description<COIN_TESTS>().bytes();
+        let name_bytes = metadata.get_name<COIN_TESTS>().as_bytes();
+        let description_bytes = metadata.get_description<COIN_TESTS>().as_bytes();
         let icon_url = url::inner_url(metadata.get_icon_url<COIN_TESTS>().borrow()).as_bytes();
 
         assert!(*symbol_bytes == b"NEW_COIN_TESTS");

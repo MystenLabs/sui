@@ -537,7 +537,6 @@ if no occurrence found.
 
 ## Function `bytes`
 
-[DEPRECATED]
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/string.md#0x1_string_bytes">bytes</a>(s: &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
@@ -560,7 +559,6 @@ if no occurrence found.
 
 ## Function `sub_string`
 
-[DEPRECATED]
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/string.md#0x1_string_sub_string">sub_string</a>(s: &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, j: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>

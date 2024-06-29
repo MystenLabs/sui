@@ -472,13 +472,13 @@ module capy::capy {
         /* expect [255, blue] */ {
             let Value { selector, name } = values.pop_back();
             assert!(selector == 255, 0);
-            assert!(string::bytes(&name) == &b"blue", 0);
+            assert!(name.as_bytes() == &b"blue", 0);
         };
 
         /* expect [127, red] */ {
             let Value { selector, name } = values.pop_back();
             assert!(selector == 127, 0);
-            assert!(string::bytes(&name) == &b"red", 0);
+            assert!(name.as_bytes() == &b"red", 0);
         };
 
         values.destroy_empty();
