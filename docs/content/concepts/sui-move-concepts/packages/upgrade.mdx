@@ -552,7 +552,7 @@ sui_package = "<ORIGINAL-PACKAGE-ID>"
 
 <TabItem value="manual-address-management" label="Manual Addresses">
 
-So that any of your other packages that depend on your `sui_package` know where to find the on-chain bytecode for verification, edit your manifest once again to provide the upgraded package ID for the `published-at` value, and return the original `sui_package` ID value in the `[addresses]` section:
+So that packages that depend on your `sui_package` know where to find the on-chain bytecode for verification, edit your manifest again. Provide the upgraded package ID for the `published-at` value and return the original `sui_package` ID value in the `[addresses]` section:
 
 
 ```toml

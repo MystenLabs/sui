@@ -55,7 +55,7 @@ Here are steps to remediate conflicting addresses:
 
 ## Internal reference
 
-This section is an overview of the schema and internal operation of tracked address in the `Move.lock` file. The ordinary developer does not need to understand these internals. It is a reference for those who want a complete interface or control to internal state tracking.
+This section is an overview of the schema and internal operation of tracked address in the `Move.lock` file. Most developers do not need to understand these internals. It is a reference for those who want a complete interface or control to internal state tracking.
 
 A concrete example of the schema and state you might find in a `Move.lock` file:
 
@@ -75,10 +75,11 @@ latest-published-id = "0xaee5759aedf6c533634cdd2de412f6e6dfc754a89b0ec554a735973
 published-version = "1"
 ```
 
-Notes:
+:::info
 
 - An `[env]` table contains entries for each environment. When a package is published for an active environment, an entry is added or updated.
  
-- An entry is added or updated based on its the `chain-id` of the environment. I.e., addresses are keyed by `chain-id`, not the `[env.NAME]` part. This is so that packages and their dependencies are resolved canonically by chain identifier: keying by `[env.NAME]` is not robust when users may choose arbitrary environment `NAME` aliases.
+- An entry is added or updated based on its the `chain-id` of the environment. As in, addresses are keyed by `chain-id`, not the `[env.NAME]` part. This is so that packages and their dependencies are resolved canonically by chain identifier: keying by `[env.NAME]` is not robust when users can choose arbitrary environment `NAME` aliases.
 
 - Key-value entries correspond to data explained in [adopting automated address management](#adopting-automated-address-management-for-published-packages). Use the `sui move manage-package` command as a frontend to manipulate these values.
+:::
