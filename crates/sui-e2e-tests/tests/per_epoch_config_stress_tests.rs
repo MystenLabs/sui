@@ -14,7 +14,6 @@ use test_cluster::{TestCluster, TestClusterBuilder};
 
 const DENY_ADDRESS: SuiAddress = SuiAddress::ZERO;
 
-#[ignore]
 #[sim_test]
 async fn per_epoch_config_stress_test() {
     let test_env = Arc::new(create_test_env().await);
