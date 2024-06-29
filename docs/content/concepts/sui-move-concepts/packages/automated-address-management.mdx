@@ -6,16 +6,15 @@ When you publish or upgrade a package, its address (also known as the package ID
 
 When you publish or upgrade your package on multiple chains (Mainnet, Testnet, Devnet) separate addresses for each chain are tracked for you. This tracking is based on your active environment (run `sui client active-env` if unsure). For example, if you set your active environment to an RPC connected to `testnet` and publish a package, the `Move.lock` records the address for that package and associates it with your active environment (`testnet`).
 
-Note that automated address management works for one package published to one or more chains. When you publish or upgrade, it uses the contents of the package's working directory. If a package is republished to a chain, addresses tracked for the previously published package will be overwritten for that chain.
+Note that automated address management works for one package published to one or more chains. When you publish or upgrade, address management uses the contents of the package's working directory. If a package is republished to a chain, addresses tracked for the previously published package are overwritten for that chain.
 
 ## Adopting automated address management for published packages
 
-Previously a `published-at` entry was **mandatory** in the `Move.toml` file, which sets the address of the latest published package. It is no longer required if this data is tracked in the `Move.lock` file. For an existing package, you'll need to add the necessary data to the `Move.lock` file so that it can be automatically tracked:
+Previously a `published-at` entry was **mandatory** in the `Move.toml` file, which sets the address of the latest published package. It is no longer required if this data is tracked in the `Move.lock` file. For an existing package, add the necessary data to the `Move.lock` file so that it can be automatically tracked:
 
 1. Switch to your active environment for the chain that your package is published on
-
-```
-sui client --switch --env <YOUR-CHAIN-ENVIRONMENT>
+      ```
+      sui client --switch --env <YOUR-CHAIN-ENVIRONMENT>
 ```
 
 2. Run the `manage-package` command with the data for your published package
