@@ -20,7 +20,7 @@ use crate::{
         VariantName,
     },
     shared::{
-        ide::{AutocompleteInfo, IDEAnnotation, MacroCallInfo},
+        ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, TypingProgramInfo},
@@ -3711,8 +3711,8 @@ fn ide_report_autocomplete(context: &mut Context, at_loc: &Loc, in_ty: &Type) {
     };
     let methods = context.find_all_methods(&tn);
     let fields = context.find_all_fields(&tn);
-    let info = AutocompleteInfo { methods, fields };
-    context.add_ide_info(*at_loc, IDEAnnotation::AutocompleteInfo(Box::new(info)));
+    let info = DotAutocompleteInfo { methods, fields };
+    context.add_ide_info(*at_loc, IDEAnnotation::DotAutocompleteInfo(Box::new(info)));
 }
 
 //**************************************************************************************************

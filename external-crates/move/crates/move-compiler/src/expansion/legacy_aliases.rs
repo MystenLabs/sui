@@ -19,8 +19,8 @@ type ScopeDepth = usize;
 
 #[derive(Clone, Debug)]
 pub struct AliasMap {
-    modules: UniqueMap<Name, (Option<ScopeDepth>, ModuleIdent)>,
-    members: UniqueMap<Name, (Option<ScopeDepth>, (ModuleIdent, Name))>,
+    pub modules: UniqueMap<Name, (Option<ScopeDepth>, ModuleIdent)>,
+    pub members: UniqueMap<Name, (Option<ScopeDepth>, (ModuleIdent, Name))>,
     // essentially a mapping from ScopeDepth => AliasSet, which are the unused aliases at that depth
     unused: Vec<AliasSet>,
 }

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_ir_types::location::Loc;
+use move_symbol_pool::Symbol;
 
 use crate::{
     diagnostics::Diagnostic,
@@ -10,7 +11,10 @@ use crate::{
     ice,
     shared::{unique_map::UniqueMap, unique_set::UniqueSet, *},
 };
-use std::{collections::BTreeSet, fmt};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
 #[derive(Clone, Debug)]
 pub struct AliasSet {
@@ -26,6 +30,9 @@ pub struct AliasMap {
     // For now, this excludes local variables because the only case where this can overlap is with
     // macro lambdas, but those have to have a leading `$` and cannot conflict with module members
     module_members: UniqueMap<Name, MemberEntry>,
+    // These are for caching resolution for IDE information.
+    all_leading_names: Option<BTreeMap<Symbol, LeadingAccessEntry>>,
+    all_module_members: Option<BTreeMap<Symbol, MemberEntry>>,
     previous: Option<Box<AliasMap>>,
 }
 
@@ -102,6 +109,8 @@ impl AliasMap {
             unused: BTreeSet::new(),
             leading_access: UniqueMap::new(),
             module_members: UniqueMap::new(),
+            all_leading_names: None,
+            all_module_members: None,
             previous: None,
         }
     }
@@ -203,6 +212,8 @@ impl AliasMap {
             unused,
             leading_access,
             module_members,
+            all_leading_names: None,
+            all_module_members: None,
             previous: None,
         };
 
@@ -250,6 +261,40 @@ impl AliasMap {
         }
         result
     }
+
+    /// Gets a map of all in-scope leading names, subject to shadowing, either from a cached value
+    /// or generated fresh.
+    pub fn get_all_leading_names(&mut self) -> &BTreeMap<Symbol, LeadingAccessEntry> {
+        if self.all_leading_names.is_none() {
+            let mut cur: Option<&Self> = Some(self);
+            let mut leading_names = BTreeMap::new();
+            while let Some(map) = cur {
+                for (name, entry) in map.leading_access.key_cloned_iter() {
+                    leading_names.entry(name.value).or_insert(*entry);
+                }
+                cur = map.previous.as_deref();
+            }
+            self.all_leading_names = Some(leading_names);
+        }
+        self.all_leading_names.as_ref().unwrap()
+    }
+
+    /// Gets a map of all in-scope member names, subject to shadowing, either from a cached value
+    /// or generated fresh.
+    pub fn get_all_member_names(&mut self) -> &BTreeMap<Symbol, MemberEntry> {
+        if self.all_module_members.is_none() {
+            let mut cur: Option<&Self> = Some(self);
+            let mut members = BTreeMap::new();
+            while let Some(map) = cur {
+                for (name, entry) in map.module_members.key_cloned_iter() {
+                    members.entry(name.value).or_insert(*entry);
+                }
+                cur = map.previous.as_deref();
+            }
+            self.all_module_members = Some(members);
+        }
+        self.all_module_members.as_ref().unwrap()
+    }
 }
 
 //**************************************************************************************************
@@ -262,6 +307,8 @@ impl fmt::Debug for AliasMap {
             unused,
             leading_access,
             module_members,
+            all_leading_names: _,
+            all_module_members: _,
             previous,
         } = self;
         writeln!(f, "AliasMap(\n  unused: [")?;
