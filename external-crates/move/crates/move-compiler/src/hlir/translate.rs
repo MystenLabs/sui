@@ -1606,7 +1606,7 @@ fn value(
             error_exp(eloc)
         }
         E::UnresolvedError => {
-            assert!(context.env.has_errors());
+            assert!(context.env.has_errors() || context.env.ide_mode());
             make_exp(HE::UnresolvedError)
         }
     };
