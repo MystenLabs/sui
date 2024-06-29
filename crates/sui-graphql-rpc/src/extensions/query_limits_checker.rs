@@ -4,18 +4,15 @@
 use crate::config::{Limits, ServiceConfig};
 use crate::error::{code, graphql_error, graphql_error_at_pos};
 use crate::metrics::Metrics;
+use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
 use async_graphql::extensions::{Extension, ExtensionContext, ExtensionFactory};
-use async_graphql::extensions::{NextParseQuery, NextValidation};
 use async_graphql::parser::types::{
     Directive, ExecutableDocument, Field, FragmentDefinition, OperationType, Selection,
     SelectionSet,
 };
 // use async_graphql::{value, Name, Pos, Positioned, Response, ServerResult, Variables};
-use async_graphql::{
-    value, Name, Pos, Positioned, Response, ServerError, ServerResult, ValidationResult, Value,
-    Variables,
-};
+use async_graphql::{value, Name, Pos, Positioned, Response, ServerResult, Value, Variables};
 use async_graphql_value::Value as GqlValue;
 use axum::headers;
 use axum::http::HeaderName;
@@ -383,19 +380,6 @@ impl Extension for QueryLimitsChecker {
             .query_payload_size
             .observe(query_len as f64);
         Ok(doc)
-    }
-
-    /// Called at validation query.
-    async fn validation(
-        &self,
-        ctx: &ExtensionContext<'_>,
-        next: NextValidation<'_>,
-    ) -> Result<ValidationResult, Vec<ServerError>> {
-        let result = next.run(ctx).await;
-        if let Ok(result) = result {
-            println!("Query complexity: {}", result.complexity);
-        }
-        result
     }
 }
 
