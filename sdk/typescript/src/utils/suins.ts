@@ -3,7 +3,7 @@
 
 const SUI_NS_NAME_REGEX =
 	/^(?!.*--)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*)?@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
-const SUI_NS_DOMAIN_REGEX = /^(?!.*--)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+sui$/i;
+const SUI_NS_DOMAIN_REGEX = /^(?!.*(^|[-.])($|[-.]))(?:[a-z0-9-]{0,63}\.)+sui$/i;
 const MAX_SUI_NS_NAME_LENGTH = 235;
 
 export function isValidSuiNSName(name: string): boolean {
