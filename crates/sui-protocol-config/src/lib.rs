@@ -2260,8 +2260,8 @@ impl ProtocolConfig {
                     cfg.feature_flags.shared_object_deletion = true;
 
                     cfg.consensus_max_transaction_size_bytes = Some(256 * 1024); // 256KB
-                    cfg.consensus_max_transactions_in_block_bytes = Some(500 * 1024);
-                    // 500 KB
+                    cfg.consensus_max_transactions_in_block_bytes = Some(256 * 1024);
+                    // 256KB
                 }
                 37 => {
                     cfg.feature_flags.reject_mutable_random_on_entry_functions = true;
