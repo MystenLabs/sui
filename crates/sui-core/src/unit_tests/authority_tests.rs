@@ -300,6 +300,103 @@ async fn test_dry_run_no_gas_big_transfer() {
     assert_eq!(*dry_run_res.effects.status(), SuiExecutionStatus::Success);
 }
 
+fn transaction_types() -> (Vec<TransactionKind>, Vec<TransactionKind>) {
+    let valid_transaction_kinds = vec![TransactionKind::ProgrammableTransaction({
+        ProgrammableTransactionBuilder::new().finish()
+    })];
+
+    let invalid_transaction_kinds = vec![
+        TransactionKind::ChangeEpoch(ChangeEpoch {
+            epoch: 0,
+            protocol_version: ProtocolVersion::new(0),
+            storage_charge: 0,
+            computation_charge: 0,
+            storage_rebate: 0,
+            non_refundable_storage_fee: 0,
+            epoch_start_timestamp_ms: 0,
+            system_packages: vec![],
+        }),
+        TransactionKind::Genesis(GenesisTransaction { objects: vec![] }),
+        TransactionKind::ConsensusCommitPrologue(ConsensusCommitPrologue {
+            epoch: 0,
+            round: 0,
+            commit_timestamp_ms: 0,
+        }),
+        TransactionKind::AuthenticatorStateUpdate(AuthenticatorStateUpdate {
+            epoch: 0,
+            round: 0,
+            new_active_jwks: vec![],
+            authenticator_obj_initial_shared_version: SequenceNumber::from(0),
+        }),
+        TransactionKind::EndOfEpochTransaction(vec![]),
+        TransactionKind::RandomnessStateUpdate(RandomnessStateUpdate {
+            epoch: 0,
+            randomness_round: 0,
+            random_bytes: vec![],
+            randomness_obj_initial_shared_version: SequenceNumber::from(0),
+        }),
+        TransactionKind::ConsensusCommitPrologueV2(ConsensusCommitPrologueV2 {
+            epoch: 0,
+            round: 0,
+            commit_timestamp_ms: 0,
+            consensus_commit_digest: ConsensusCommitDigest::ZERO,
+        }),
+    ];
+
+    // Match on all the transaction kinds here so that we know we need to update this test when a
+    // new transaction type is added.
+    match &valid_transaction_kinds[0] {
+        TransactionKind::ProgrammableTransaction(_)
+        | TransactionKind::ChangeEpoch(_)
+        | TransactionKind::Genesis(_)
+        | TransactionKind::ConsensusCommitPrologue(_)
+        | TransactionKind::AuthenticatorStateUpdate(_)
+        | TransactionKind::EndOfEpochTransaction(_)
+        | TransactionKind::RandomnessStateUpdate(_)
+        | TransactionKind::ConsensusCommitPrologueV2(_) => (),
+    }
+
+    (valid_transaction_kinds, invalid_transaction_kinds)
+}
+
+#[tokio::test]
+async fn test_dev_inspect_transaction_types() {
+    let (valid_transaction_kinds, invalid_transaction_kinds) = transaction_types();
+
+    let (sender, _): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (_validator, fullnode, _) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
+
+    for valid_tx in valid_transaction_kinds.into_iter() {
+        let rgp = fullnode.reference_gas_price_for_testing().unwrap();
+        let res = fullnode
+            .dev_inspect_transaction_block(sender, valid_tx, Some(rgp))
+            .await
+            .unwrap();
+        assert!(res.error.is_none());
+    }
+
+    for invalid_tx in invalid_transaction_kinds.into_iter() {
+        assert!(invalid_tx.is_system_tx());
+        let rgp = fullnode.reference_gas_price_for_testing().unwrap();
+        let res = fullnode
+            .dev_inspect_transaction_block(sender, invalid_tx, Some(rgp))
+            .await;
+        assert!(res.is_err());
+        // Note this or-pattern is because the `RandomnessStateUpdate` hits an object not found
+        // error before it hits the unsupported error.
+        assert!(matches!(
+            res.unwrap_err(),
+            SuiError::UserInputError {
+                error: UserInputError::Unsupported(_)
+            } | SuiError::UserInputError {
+                error: UserInputError::ObjectNotFound { .. }
+            }
+        ));
+    }
+}
+
 #[tokio::test]
 async fn test_dev_inspect_object_by_bytes() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -976,6 +1073,57 @@ async fn test_dev_inspect_on_validator() {
     )
     .await;
     assert!(result.is_err())
+}
+
+#[tokio::test]
+async fn test_dry_run_transaction_types() {
+    let (valid_transaction_kinds, invalid_transaction_kinds) = transaction_types();
+
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (_validator, fullnode, _) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
+    let gas_object = fullnode.get_object(&gas_object_id).await.unwrap().unwrap();
+
+    for valid_tx in valid_transaction_kinds.into_iter() {
+        let rgp = fullnode.reference_gas_price_for_testing().unwrap();
+        let tx_data = TransactionData::new(
+            valid_tx,
+            sender,
+            gas_object.compute_object_reference(),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+            rgp,
+        );
+        let tx = to_sender_signed_transaction(tx_data.clone(), &sender_key);
+        let digest = tx.digest();
+        let res = fullnode
+            .dry_exec_transaction(tx_data, *digest)
+            .await
+            .unwrap()
+            .0;
+        assert!(res.effects.status().is_ok());
+    }
+
+    for invalid_tx in invalid_transaction_kinds.into_iter() {
+        assert!(invalid_tx.is_system_tx());
+        let rgp = fullnode.reference_gas_price_for_testing().unwrap();
+        let tx_data = TransactionData::new(
+            invalid_tx,
+            sender,
+            gas_object.compute_object_reference(),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+            rgp,
+        );
+        let tx = to_sender_signed_transaction(tx_data.clone(), &sender_key);
+        let digest = tx.digest();
+        let res = fullnode.dry_exec_transaction(tx_data, *digest).await;
+
+        assert!(res.is_err());
+        assert!(matches!(
+            res.unwrap_err(),
+            SuiError::UnsupportedFeatureError { .. }
+        ));
+    }
 }
 
 #[tokio::test]
