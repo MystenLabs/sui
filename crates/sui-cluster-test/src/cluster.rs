@@ -260,6 +260,7 @@ impl Cluster for LocalNewCluster {
                 graphql_connection_config.clone(),
                 Some(fullnode_url.clone()),
                 /* cancellation_token */ None,
+                None,
             )
             .await;
         }
