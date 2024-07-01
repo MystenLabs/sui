@@ -139,6 +139,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             consensus_handler.last_executed_sub_dag_round() as Round,
             consensus_handler.last_executed_sub_dag_index() as CommitIndex,
         );
+        let monitor = consumer.monitor();
 
         // TODO(mysticeti): Investigate if we need to return potential errors from
         // AuthorityNode and add retries here?
@@ -172,7 +173,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         );
 
         // spin up the new mysticeti consensus handler to listen for committed sub dags
-        let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver);
+        let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver, monitor);
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);
     }

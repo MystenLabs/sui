@@ -31,6 +31,8 @@ mod threshold_clock;
 mod transaction;
 mod universal_committer;
 
+mod commit_consumer;
+mod commit_vote_monitor;
 #[cfg(test)]
 mod test_dag;
 #[cfg(test)]
@@ -40,7 +42,8 @@ mod test_dag_parser;
 
 pub use authority_node::ConsensusAuthority;
 pub use block::{BlockAPI, Round};
-pub use commit::{CommitConsumer, CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
+pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
+pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
 pub use transaction::{TransactionClient, TransactionVerifier, ValidationError};
 
 #[cfg(test)]

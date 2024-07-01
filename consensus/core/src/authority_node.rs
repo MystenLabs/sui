@@ -15,7 +15,8 @@ use crate::{
     block_verifier::SignedBlockVerifier,
     broadcaster::Broadcaster,
     commit_observer::CommitObserver,
-    commit_syncer::{CommitSyncer, CommitVoteMonitor},
+    commit_syncer::{CommitSyncer, CommitSyncerHandle},
+    commit_vote_monitor::CommitVoteMonitor,
     context::{Clock, Context},
     core::{Core, CoreSignals},
     core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
@@ -120,7 +121,7 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
-    commit_syncer: CommitSyncer<N::Client>,
+    commit_syncer_handle: CommitSyncerHandle,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
     // Only one of broadcaster and subscriber gets created, depending on
@@ -216,6 +217,7 @@ where
             ))
         };
 
+        let commit_consumer_monitor = commit_consumer.monitor();
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -244,23 +246,27 @@ where
         let leader_timeout_handle =
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+
         let synchronizer = Synchronizer::start(
             network_client.clone(),
             context.clone(),
             core_dispatcher.clone(),
             block_verifier.clone(),
+            commit_vote_monitor.clone(),
             dag_state.clone(),
         );
 
-        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let commit_syncer = CommitSyncer::new(
+        let commit_syncer_handle = CommitSyncer::new(
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
+            commit_consumer_monitor,
             network_client.clone(),
             block_verifier.clone(),
             dag_state.clone(),
-        );
+        )
+        .start();
 
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
@@ -297,7 +303,7 @@ where
             start_time,
             transaction_client: Arc::new(tx_client),
             synchronizer,
-            commit_syncer,
+            commit_syncer_handle,
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
@@ -314,7 +320,7 @@ where
 
         // First shutdown components calling into Core.
         self.synchronizer.stop().await;
-        self.commit_syncer.stop().await;
+        self.commit_syncer_handle.stop().await;
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
         // When using streaming, all subscribers to broadcasted blocks stop after this.
