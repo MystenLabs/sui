@@ -44,7 +44,7 @@ pub enum Condition {
 pub struct QueryResultValidation {
     // Threshold to report error on
     pub threshold: f64,
-    // Program will report error if threshold violates condition specifed by this
+    // Program will report error if threshold violates condition specified by this
     // field.
     pub failure_condition: Condition,
 }
