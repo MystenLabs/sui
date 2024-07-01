@@ -43,7 +43,7 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 
 use crate::errors::IndexerError;
-use crate::metrics::IndexerMetrics;
+use crate::metrics::{report_checkpoint_age, IndexerMetrics};
 
 use crate::db::ConnectionPool;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
@@ -120,13 +120,6 @@ where
     T: R2D2Connection + 'static,
 {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
-        let time_now_ms = chrono::Utc::now().timestamp_millis();
-        let cp_download_lag = time_now_ms - checkpoint.checkpoint_summary.timestamp_ms as i64;
-        info!(
-            "checkpoint download lag for cp {}: {} ms",
-            checkpoint.checkpoint_summary.sequence_number, cp_download_lag
-        );
-        self.metrics.download_lag_ms.set(cp_download_lag);
         self.metrics
             .max_downloaded_checkpoint_sequence_number
             .set(checkpoint.checkpoint_summary.sequence_number as i64);
@@ -134,10 +127,15 @@ where
             .downloaded_checkpoint_timestamp_ms
             .set(checkpoint.checkpoint_summary.timestamp_ms as i64);
         info!(
-            "Indexer lag: downloaded checkpoint {} with time now {} and checkpoint time {}",
+            "Checkpoint age: downloaded checkpoint {} with time now {} and checkpoint time {}",
             checkpoint.checkpoint_summary.sequence_number,
-            time_now_ms,
+            chrono::Utc::now().timestamp_millis(),
             checkpoint.checkpoint_summary.timestamp_ms
+        );
+        report_checkpoint_age(
+            &self.metrics.downloaded_checkpoint_age_ms,
+            checkpoint.checkpoint_summary.sequence_number,
+            checkpoint.checkpoint_summary.timestamp_ms,
         );
         let checkpoint_data = Self::index_checkpoint(
             self.state.clone().into(),
@@ -287,6 +285,7 @@ where
         let object_history_changes: TransactionObjectChangesToCommit =
             Self::index_objects_history(data.clone(), package_resolver.clone()).await?;
 
+        let cp_summary = data.checkpoint_summary.clone();
         let (checkpoint, db_transactions, db_events, db_indices, db_displays) = {
             let CheckpointData {
                 transactions,
@@ -315,10 +314,6 @@ where
                 db_displays,
             )
         };
-        let time_now_ms = chrono::Utc::now().timestamp_millis();
-        metrics
-            .index_lag_ms
-            .set(time_now_ms - checkpoint.timestamp_ms as i64);
         metrics
             .max_indexed_checkpoint_sequence_number
             .set(checkpoint.sequence_number as i64);
@@ -326,8 +321,15 @@ where
             .indexed_checkpoint_timestamp_ms
             .set(checkpoint.timestamp_ms as i64);
         info!(
-            "Indexer lag: indexed checkpoint {} with time now {} and checkpoint time {}",
-            checkpoint.sequence_number, time_now_ms, checkpoint.timestamp_ms
+            "Checkpoint age: indexed checkpoint {} with time now {} and checkpoint time {}",
+            checkpoint.sequence_number,
+            chrono::Utc::now().timestamp_millis(),
+            checkpoint.timestamp_ms
+        );
+        report_checkpoint_age(
+            &metrics.indexed_checkpoint_age_ms,
+            cp_summary.sequence_number,
+            cp_summary.timestamp_ms,
         );
 
         Ok(CheckpointDataToCommit {
