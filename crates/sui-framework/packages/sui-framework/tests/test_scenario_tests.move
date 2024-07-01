@@ -472,6 +472,82 @@ module sui::test_scenario_tests {
         scenario.end();
     }
 
+    // Make sure that we properly handle the case where we receive an object
+    // when dealing with allocated tickets.
+    #[test]
+    fun test_receive_object_multiple_in_row() {
+        let sender = @0x0;
+        let mut scenario = test_scenario::begin(sender);
+        let uid1 = scenario.new_object();
+        let uid2 = scenario.new_object();
+        let id1 = uid1.uid_to_inner();
+        let id1_addr = uid1.to_address();
+        {
+            let obj1 = Object { id: uid1, value: 10 };
+            let obj2 = Object { id: uid2, value: 20 };
+            transfer::public_transfer(obj1, sender);
+            transfer::public_transfer(obj2, id1_addr);
+        };
+        scenario.next_tx(sender);
+        {
+
+            let mut parent = scenario.take_from_sender_by_id<Object>(id1);
+            let t2 = test_scenario::most_recent_receiving_ticket<Object>(&id1);
+            let obj2 = transfer::receive(&mut parent.id, t2);
+            assert!(parent.value == 10, EValueMismatch);
+            assert!(obj2.value == 20, EValueMismatch);
+            scenario.return_to_sender(parent);
+            transfer::public_transfer(obj2, id1_addr);
+        };
+        scenario.next_tx(sender);
+        {
+
+            let mut parent = scenario.take_from_sender_by_id<Object>(id1);
+            let t2 = test_scenario::most_recent_receiving_ticket<Object>(&id1);
+            let obj2 = transfer::receive(&mut parent.id, t2);
+            assert!(parent.value == 10, EValueMismatch);
+            assert!(obj2.value == 20, EValueMismatch);
+            scenario.return_to_sender(parent);
+            transfer::public_transfer(obj2, id1_addr);
+        };
+        scenario.end();
+    }
+
+    // Make sure that we properly handle the case where we don't receive an
+    // object after allocating a ticket, and then receiving it in the next
+    // transaction.
+    #[test]
+    fun test_no_receive_object_then_use_next_tx() {
+        let sender = @0x0;
+        let mut scenario = test_scenario::begin(sender);
+        let uid1 = scenario.new_object();
+        let uid2 = scenario.new_object();
+        let id1 = uid1.uid_to_inner();
+        let id1_addr = uid1.to_address();
+        {
+            let obj1 = Object { id: uid1, value: 10 };
+            let obj2 = Object { id: uid2, value: 20 };
+            transfer::public_transfer(obj1, sender);
+            transfer::public_transfer(obj2, id1_addr);
+        };
+        scenario.next_tx(sender);
+        {
+
+            test_scenario::most_recent_receiving_ticket<Object>(&id1);
+        };
+        scenario.next_tx(sender);
+        {
+
+            let mut parent = scenario.take_from_sender_by_id<Object>(id1);
+            let t2 = test_scenario::most_recent_receiving_ticket<Object>(&id1);
+            let obj2 = transfer::receive(&mut parent.id, t2);
+            assert!(parent.value == 10, EValueMismatch);
+            assert!(obj2.value == 20, EValueMismatch);
+            scenario.return_to_sender(parent);
+            transfer::public_transfer(obj2, id1_addr);
+        };
+        scenario.end();
+    }
     // Try to receive an object that has been shared. We should be unable to
     // allocate the receiving ticket for this object.
     #[test]
