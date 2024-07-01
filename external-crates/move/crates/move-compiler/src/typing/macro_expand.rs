@@ -360,6 +360,7 @@ mod recolor_struct {
         pub fn add_lvalue(&mut self, sp!(_, lvalue_): &N::LValue) {
             match lvalue_ {
                 N::LValue_::Ignore => (),
+                N::LValue_::Error => (),
                 N::LValue_::Var { var, .. } => {
                     self.vars.insert(*var);
                 }
@@ -507,6 +508,7 @@ fn recolor_lvalues(ctx: &mut Recolor, lvalues: &mut N::LValueList) {
 fn recolor_lvalue(ctx: &mut Recolor, sp!(_, lvalue_): &mut N::LValue) {
     match lvalue_ {
         N::LValue_::Ignore => (),
+        N::LValue_::Error => (),
         N::LValue_::Var { var, .. } => recolor_var(ctx, var),
         N::LValue_::Unpack(_, _, _, lvalues) => {
             for (_, _, (_, lvalue)) in lvalues {
@@ -785,6 +787,7 @@ fn lvalues(context: &mut Context, sp!(_, lvs_): &mut N::LValueList) {
 fn lvalue(context: &mut Context, sp!(_, lv_): &mut N::LValue) {
     match lv_ {
         N::LValue_::Ignore => (),
+        N::LValue_::Error => (),
         N::LValue_::Var {
             var: sp!(_, v_), ..
         } => {
