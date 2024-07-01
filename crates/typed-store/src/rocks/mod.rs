@@ -699,8 +699,8 @@ impl MetricConf {
     pub fn with_sampling(self, read_interval: SamplingInterval) -> Self {
         Self {
             db_name: self.db_name,
-            read_sample_interval: read_interval,
-            write_sample_interval: SamplingInterval::default(),
+            read_sample_interval: read_interval.clone(),
+            write_sample_interval: read_interval,
             iter_sample_interval: SamplingInterval::default(),
         }
     }
@@ -1348,7 +1348,7 @@ impl DBBatch {
         let batch_size = self.batch.size_in_bytes();
 
         let perf_ctx = if self.write_sample_interval.sample() {
-            Some(RocksDBPerfContext)
+            Some(RocksDBPerfContext::default())
         } else {
             None
         };
