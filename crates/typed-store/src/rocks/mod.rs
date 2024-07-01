@@ -124,7 +124,7 @@ macro_rules! reopen {
     ( $db:expr, $($cf:expr;<$K:ty, $V:ty>),*) => {
         (
             $(
-                DBMap::<$K, $V>::reopen($db, Some($cf), &ReadWriteOptions::default()).expect(&format!("Cannot open {} CF.", $cf)[..])
+                DBMap::<$K, $V>::reopen($db, Some($cf), &ReadWriteOptions::default(), false).expect(&format!("Cannot open {} CF.", $cf)[..])
             ),*
         )
     };
@@ -727,32 +727,39 @@ pub struct DBMap<K, V> {
 unsafe impl<K: Send, V: Send> Send for DBMap<K, V> {}
 
 impl<K, V> DBMap<K, V> {
-    pub(crate) fn new(db: Arc<RocksDB>, opts: &ReadWriteOptions, opt_cf: &str) -> Self {
+    pub(crate) fn new(
+        db: Arc<RocksDB>,
+        opts: &ReadWriteOptions,
+        opt_cf: &str,
+        is_deprecated: bool,
+    ) -> Self {
         let db_cloned = db.clone();
         let db_metrics = DBMetrics::get();
         let db_metrics_cloned = db_metrics.clone();
         let cf = opt_cf.to_string();
         let (sender, mut recv) = tokio::sync::oneshot::channel();
-        tokio::task::spawn(async move {
-            let mut interval =
-                tokio::time::interval(Duration::from_millis(CF_METRICS_REPORT_PERIOD_MILLIS));
-            loop {
-                tokio::select! {
-                    _ = interval.tick() => {
-                        let db = db_cloned.clone();
-                        let cf = cf.clone();
-                        let db_metrics = db_metrics.clone();
-                        if let Err(e) = tokio::task::spawn_blocking(move || {
-                            Self::report_metrics(&db, &cf, &db_metrics);
-                        }).await {
-                            error!("Failed to log metrics with error: {}", e);
+        if !is_deprecated {
+            tokio::task::spawn(async move {
+                let mut interval =
+                    tokio::time::interval(Duration::from_millis(CF_METRICS_REPORT_PERIOD_MILLIS));
+                loop {
+                    tokio::select! {
+                        _ = interval.tick() => {
+                            let db = db_cloned.clone();
+                            let cf = cf.clone();
+                            let db_metrics = db_metrics.clone();
+                            if let Err(e) = tokio::task::spawn_blocking(move || {
+                                Self::report_metrics(&db, &cf, &db_metrics);
+                            }).await {
+                                error!("Failed to log metrics with error: {}", e);
+                            }
                         }
+                        _ = &mut recv => break,
                     }
-                    _ = &mut recv => break,
                 }
-            }
-            debug!("Returning the cf metric logging task for DBMap: {}", &cf);
-        });
+                debug!("Returning the cf metric logging task for DBMap: {}", &cf);
+            });
+        }
         DBMap {
             rocksdb: db.clone(),
             opts: opts.clone(),
@@ -782,7 +789,7 @@ impl<K, V> DBMap<K, V> {
         let cf_key = opt_cf.unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME);
         let cfs = vec![cf_key];
         let rocksdb = open_cf(path, db_options, metric_conf, &cfs)?;
-        Ok(DBMap::new(rocksdb, rw_options, cf_key))
+        Ok(DBMap::new(rocksdb, rw_options, cf_key, false))
     }
 
     /// Reopens an open database as a typed map operating under a specific column family.
@@ -800,8 +807,8 @@ impl<K, V> DBMap<K, V> {
     ///    /// Open the DB with all needed column families first.
     ///    let rocks = open_cf(tempdir().unwrap(), None, MetricConf::default(), &["First_CF", "Second_CF"]).unwrap();
     ///    /// Attach the column families to specific maps.
-    ///    let db_cf_1 = DBMap::<u32,u32>::reopen(&rocks, Some("First_CF"), &ReadWriteOptions::default()).expect("Failed to open storage");
-    ///    let db_cf_2 = DBMap::<u32,u32>::reopen(&rocks, Some("Second_CF"), &ReadWriteOptions::default()).expect("Failed to open storage");
+    ///    let db_cf_1 = DBMap::<u32,u32>::reopen(&rocks, Some("First_CF"), &ReadWriteOptions::default(), false).expect("Failed to open storage");
+    ///    let db_cf_2 = DBMap::<u32,u32>::reopen(&rocks, Some("Second_CF"), &ReadWriteOptions::default(), false).expect("Failed to open storage");
     ///    Ok(())
     ///    }
     /// ```
@@ -810,6 +817,7 @@ impl<K, V> DBMap<K, V> {
         db: &Arc<RocksDB>,
         opt_cf: Option<&str>,
         rw_options: &ReadWriteOptions,
+        is_deprecated: bool,
     ) -> Result<Self, TypedStoreError> {
         let cf_key = opt_cf
             .unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
@@ -818,7 +826,7 @@ impl<K, V> DBMap<K, V> {
         db.cf_handle(&cf_key)
             .ok_or_else(|| TypedStoreError::UnregisteredColumn(cf_key.clone()))?;
 
-        Ok(DBMap::new(db.clone(), rw_options, &cf_key))
+        Ok(DBMap::new(db.clone(), rw_options, &cf_key, is_deprecated))
     }
 
     pub fn batch(&self) -> DBBatch {
@@ -1278,11 +1286,11 @@ impl<K, V> DBMap<K, V> {
 /// async fn main() -> Result<(), Error> {
 /// let rocks = open_cf(tempfile::tempdir().unwrap(), None, MetricConf::default(), &["First_CF", "Second_CF"]).unwrap();
 ///
-/// let db_cf_1 = DBMap::reopen(&rocks, Some("First_CF"), &ReadWriteOptions::default())
+/// let db_cf_1 = DBMap::reopen(&rocks, Some("First_CF"), &ReadWriteOptions::default(), false)
 ///     .expect("Failed to open storage");
 /// let keys_vals_1 = (1..100).map(|i| (i, i.to_string()));
 ///
-/// let db_cf_2 = DBMap::reopen(&rocks, Some("Second_CF"), &ReadWriteOptions::default())
+/// let db_cf_2 = DBMap::reopen(&rocks, Some("Second_CF"), &ReadWriteOptions::default(), false)
 ///     .expect("Failed to open storage");
 /// let keys_vals_2 = (1000..1100).map(|i| (i, i.to_string()));
 ///

@@ -465,12 +465,13 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     };
                     db.map(|d| (d, rwopt_cfs))
                 }.expect(&format!("Cannot open DB at {:?}", path));
+                let deprecated_tables = vec![#(stringify!(#deprecated_cfs),)*];
                 let (
                         #(
                             #field_names
                         ),*
                 ) = (#(
-                        DBMap::#inner_types::reopen(&db, Some(stringify!(#cf_names)), rwopt_cfs.get(stringify!(#cf_names)).unwrap_or(&typed_store::rocks::ReadWriteOptions::default())).expect(&format!("Cannot open {} CF.", stringify!(#cf_names))[..])
+                        DBMap::#inner_types::reopen(&db, Some(stringify!(#cf_names)), rwopt_cfs.get(stringify!(#cf_names)).unwrap_or(&typed_store::rocks::ReadWriteOptions::default()), remove_deprecated_tables && deprecated_tables.contains(&stringify!(#cf_names))).expect(&format!("Cannot open {} CF.", stringify!(#cf_names))[..])
                     ),*);
 
                 if as_secondary_with_path.is_none() && remove_deprecated_tables {
@@ -887,7 +888,7 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                                 #field_names
                             ),*
                         ) = (#(
-                            SallyColumn::RocksDB((DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names)), rwopt_cfs.get(stringify!(#field_names)).unwrap_or(&typed_store::rocks::ReadWriteOptions::default())).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..]), typed_store::sally::SallyConfig::default()))
+                            SallyColumn::RocksDB((DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names)), rwopt_cfs.get(stringify!(#field_names)).unwrap_or(&typed_store::rocks::ReadWriteOptions::default()), false).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..]), typed_store::sally::SallyConfig::default()))
                             ),*);
 
                         Self {
