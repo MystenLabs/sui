@@ -69,6 +69,7 @@ pub fn derive_key_pair_from_path(
     }
 }
 
+// if 'path' is None, then using Ed25519 derivation path
 pub fn validate_path(
     key_scheme: &SignatureScheme,
     path: Option<DerivationPath>,
@@ -166,6 +167,7 @@ pub fn validate_path(
     }
 }
 
+// if 'derivation_path' is None, then using Ed25519 derivation path
 pub fn generate_new_key(
     key_scheme: SignatureScheme,
     derivation_path: Option<DerivationPath>,
