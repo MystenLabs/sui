@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::crypto::PasskeyPublicKeyAsBytes;
 use crate::crypto::PublicKey;
 use crate::crypto::Secp256r1SuiSignature;
 use crate::crypto::SuiSignatureInner;
@@ -193,7 +194,7 @@ impl PasskeyAuthenticator {
 
     /// Returns the public key of the passkey authenticator.
     pub fn get_pk(&self) -> SuiResult<PublicKey> {
-        Ok(PublicKey::Passkey((&self.pk).into()))
+        Ok(PublicKey::Passkey(PasskeyPublicKeyAsBytes::from(&self.pk)))
     }
 }
 

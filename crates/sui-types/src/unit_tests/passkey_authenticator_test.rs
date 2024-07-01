@@ -4,7 +4,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use super::to_signing_message;
-use crate::crypto::DefaultHash;
+use crate::crypto::{DefaultHash, PasskeyPublicKeyAsBytes};
 use crate::passkey_authenticator::{PasskeyAuthenticator, RawPasskeyAuthenticator};
 use crate::{
     base_types::{dbg_addr, ObjectID, SuiAddress},
@@ -18,6 +18,7 @@ use crate::{
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::rsa::{Base64UrlUnpadded, Encoding as _};
+use fastcrypto::secp256r1::Secp256r1PublicKey;
 use fastcrypto::{encoding::Base64, traits::ToFromBytes};
 use p256::pkcs8::DecodePublicKey;
 use passkey::{
@@ -100,7 +101,8 @@ async fn create_credential_and_sign_test_tx(
     let prefix = if y.unwrap()[31] % 2 == 0 { 0x02 } else { 0x03 };
     let mut pk_bytes = vec![prefix];
     pk_bytes.extend_from_slice(x.unwrap());
-    let pk = PublicKey::try_from_bytes(SignatureScheme::PasskeyAuthenticator, &pk_bytes).unwrap();
+    let r1_pk = Secp256r1PublicKey::from_bytes(pk_bytes.as_slice()).unwrap();
+    let pk = PublicKey::Passkey(PasskeyPublicKeyAsBytes::from(&r1_pk));
 
     // Derives its sui address and make a test transaction with it as sender.
     let sender = SuiAddress::from(&pk);
