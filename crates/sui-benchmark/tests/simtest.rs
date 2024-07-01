@@ -435,11 +435,19 @@ mod test {
     // Tests cluster liveness when shared object congestion control is on.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_shared_object_congestion_control() {
+        let mode;
         let checkpoint_budget_factor; // The checkpoint congestion control budget in respect to transaction budget.
+        let txn_count_limit; // When using transaction count as congestion control mode, the limit of transactions per object per commit.
         let max_deferral_rounds;
         {
             let mut rng = thread_rng();
+            mode = if rng.gen_bool(0.5) {
+                PerObjectCongestionControlMode::TotalGasBudget
+            } else {
+                PerObjectCongestionControlMode::TotalTxCount
+            };
             checkpoint_budget_factor = rng.gen_range(1..20);
+            txn_count_limit = rng.gen_range(1..=10);
             max_deferral_rounds = if rng.gen_bool(0.5) {
                 rng.gen_range(0..20) // Short deferral round (testing cancellation)
             } else {
@@ -448,19 +456,27 @@ mod test {
         }
 
         info!(
-            "test_simulated_load_shared_object_congestion_control setup. checkpoint_budget_factor: {:?}, max_deferral_rounds: {:?}.",
-            checkpoint_budget_factor, max_deferral_rounds
+            "test_simulated_load_shared_object_congestion_control setup.
+             mode: {:?}, checkpoint_budget_factor: {:?},
+             max_deferral_rounds: {:?},
+             txn_count_limit: {:?}",
+            mode, checkpoint_budget_factor, max_deferral_rounds, txn_count_limit
         );
 
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
-            config.set_per_object_congestion_control_mode_for_testing(
-                PerObjectCongestionControlMode::TotalGasBudget,
-            );
-            config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
-                checkpoint_budget_factor
-                    * DEFAULT_VALIDATOR_GAS_PRICE
-                    * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-            );
+            config.set_per_object_congestion_control_mode_for_testing(mode);
+            match mode {
+                PerObjectCongestionControlMode::None => panic!("Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"),
+                PerObjectCongestionControlMode::TotalGasBudget =>
+                config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
+                    checkpoint_budget_factor
+                        * DEFAULT_VALIDATOR_GAS_PRICE
+                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+                ),
+                PerObjectCongestionControlMode::TotalTxCount => config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
+                    txn_count_limit
+                ),
+            }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
             config
         });
