@@ -324,6 +324,8 @@ impl CheckpointReader {
         watcher
             .watch(&self.path, RecursiveMode::NonRecursive)
             .expect("Inotify watcher failed");
+        self.gc_processed_files(self.last_pruned_watermark)
+            .expect("Failed to clean the directory");
 
         loop {
             tokio::select! {
