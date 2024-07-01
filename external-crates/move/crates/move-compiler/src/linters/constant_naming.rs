@@ -12,20 +12,20 @@ use crate::{
     },
     expansion::ast::ModuleIdent,
     parser::ast::ConstantName,
-    shared::CompilationEnv,
+    shared::{program_info::TypingProgramInfo, CompilationEnv},
     typing::{
         ast as T,
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
 
-use super::{LinterDiagCategory, CONSTANT_NAMING_DIAG_CODE, LINT_WARNING_PREFIX};
+use super::{LinterDiagnosticCategory, CONSTANT_NAMING_DIAG_CODE, LINT_WARNING_PREFIX};
 
 /// Diagnostic information for constant naming violations.
 const CONSTANT_NAMING_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::Style as u8,
+    LinterDiagnosticCategory::Style as u8,
     CONSTANT_NAMING_DIAG_CODE,
     "constant should follow naming convention",
 );
