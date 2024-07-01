@@ -267,7 +267,21 @@ pub enum PublicKey {
     Secp256k1(Secp256k1PublicKeyAsBytes),
     Secp256r1(Secp256r1PublicKeyAsBytes),
     ZkLogin(ZkLoginPublicIdentifier),
-    Passkey(Secp256r1PublicKeyAsBytes),
+    Passkey(PasskeyPublicKeyAsBytes),
+}
+
+/// A wrapper struct to retrofit in [enum PublicKey] for passkey. This is
+/// defined as `flag || pk` based on the algorithm used to generate the key.
+#[derive(Clone, Debug, PartialEq, Eq, JsonSchema, Serialize, Deserialize)]
+pub struct PasskeyPublicKeyAsBytes(#[schemars(with = "Base64")] pub Vec<u8>);
+
+impl PasskeyPublicKeyAsBytes {
+    pub fn from(pk: &Secp256r1PublicKey) -> Self {
+        let mut bytes = Vec::new();
+        bytes.extend([SignatureScheme::Secp256r1.flag()]);
+        bytes.extend(pk.as_bytes());
+        Self(bytes)
+    }
 }
 
 /// A wrapper struct to retrofit in [enum PublicKey] for zkLogin.
@@ -328,10 +342,25 @@ impl EncodeDecodeBase64 for PublicKey {
                     )?)?;
                     Ok(PublicKey::Secp256r1((&pk).into()))
                 } else if x == &SignatureScheme::PasskeyAuthenticator.flag() {
-                    let pk = Secp256r1PublicKey::from_bytes(bytes.get(1..).ok_or(
-                        FastCryptoError::InputLengthWrong(Secp256r1PublicKey::LENGTH + 1),
-                    )?)?;
-                    Ok(PublicKey::Passkey((&pk).into()))
+                    match bytes.get(1) {
+                        Some(second) => {
+                            if second == &SignatureScheme::Secp256r1.flag() {
+                                // validates as a r1 pk
+                                let _ = Secp256r1PublicKey::from_bytes(bytes.get(2..).ok_or(
+                                    FastCryptoError::InputLengthWrong(
+                                        Secp256r1PublicKey::LENGTH + 1,
+                                    ),
+                                )?)?;
+                                Ok(PublicKey::Passkey(PasskeyPublicKeyAsBytes(
+                                    bytes[1..].to_vec(),
+                                )))
+                            } else {
+                                // currently only support r1 scheme inside passkey
+                                Err(FastCryptoError::InvalidInput)
+                            }
+                        }
+                        _ => Err(FastCryptoError::InvalidInput),
+                    }
                 } else {
                     Err(FastCryptoError::InvalidInput)
                 }
@@ -358,9 +387,6 @@ impl PublicKey {
                 (&Secp256k1PublicKey::from_bytes(key_bytes)?).into(),
             )),
             SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(
-                (&Secp256r1PublicKey::from_bytes(key_bytes)?).into(),
-            )),
-            SignatureScheme::PasskeyAuthenticator => Ok(PublicKey::Passkey(
                 (&Secp256r1PublicKey::from_bytes(key_bytes)?).into(),
             )),
             _ => Err(eyre!("Unsupported curve")),
