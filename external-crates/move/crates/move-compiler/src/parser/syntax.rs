@@ -2094,15 +2094,8 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                 pat
             }
             t @ (Tok::Mut | Tok::Identifier | Tok::NumValue)
-                if (if matches!(t, Tok::NumValue) {
-                    context
-                        .tokens
-                        .lookahead()
-                        .ok()
-                        .is_some_and(|tok| matches!(tok, Tok::ColonColon))
-                } else {
-                    true
-                }) =>
+                if !matches!(t, Tok::NumValue)
+                    || matches!(context.tokens.lookahead(), Ok(Tok::ColonColon)) =>
             {
                 ok_with_loc!(context, {
                     let mut_ = parse_mut_opt(context)?;
