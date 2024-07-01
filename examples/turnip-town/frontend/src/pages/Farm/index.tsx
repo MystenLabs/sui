@@ -43,7 +43,7 @@ const hasCollision = (x: number, y: number, characterWidth: number, _characterHe
             fromY: obstacle.y,
             toY: obstacle.y + obstacle.h
         }
-        
+
         const hasCollision = x >= collisions.fromX && x <= collisions.toX && y >= collisions.fromY && y <= collisions.toY
 
         if (hasCollision) {
@@ -249,7 +249,6 @@ const drawCrop = (ctx: CanvasRenderingContext2D, x: number, y: number, state: nu
     ctx.drawImage(CROP_SPRITES, pos.spriteX, pos.spriteY, pos.width, pos.height, pos.x, pos.y, pos.finalWidth, pos.finalHeight);
 }
 
-let i = 0;
 export function Farm () {
 
     useEffect(() => {
