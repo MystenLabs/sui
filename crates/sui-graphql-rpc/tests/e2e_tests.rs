@@ -1310,7 +1310,7 @@ mod tests {
         assert_eq!(
             err,
             vec![
-                "The payload txBytes size of  node is too large. The maximum allowed is 50 bytes"
+                "The payload txBytes size of dryRunTransactionBlock node is too large. The maximum allowed is 50 bytes"
                     .to_string()
             ]
         );
