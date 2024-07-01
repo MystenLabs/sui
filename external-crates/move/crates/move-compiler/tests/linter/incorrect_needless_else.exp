@@ -1,0 +1,22 @@
+warning[Lint W01012]: 
+  ┌─ tests/linter/incorrect_needless_else.move:7:16
+  │  
+7 │           } else {
+  │ ╭────────────────^
+8 │ │             // Intentionally left empty for testing
+9 │ │         };
+  │ ╰─────────^ Detected an empty `else` branch, which may be unnecessary.
+  │  
+  = This warning can be suppressed with '#[allow(lint(needless_else))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01012]: 
+   ┌─ tests/linter/incorrect_needless_else.move:19:16
+   │  
+19 │           } else {
+   │ ╭────────────────^
+20 │ │             // This else branch contains only a comment.
+21 │ │         };
+   │ ╰─────────^ Detected an empty `else` branch, which may be unnecessary.
+   │  
+   = This warning can be suppressed with '#[allow(lint(needless_else))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

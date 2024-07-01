@@ -1,0 +1,22 @@
+warning[Lint W00001]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+  ┌─ tests/custom_rules/needless_else.move:7:16
+  │  
+7 │           } else {
+  │ ╭────────────────^
+8 │ │             // Intentionally left empty for testing
+9 │ │         };
+  │ ╰─────────^ Detected an empty `else` branch, which may be unnecessary.
+  │  
+  = This warning can be suppressed with '#[allow(lint(needless_else))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+   ┌─ tests/custom_rules/needless_else.move:29:16
+   │  
+29 │           } else {
+   │ ╭────────────────^
+30 │ │             // This else branch contains only a comment.
+31 │ │         };
+   │ ╰─────────^ Detected an empty `else` branch, which may be unnecessary.
+   │  
+   = This warning can be suppressed with '#[allow(lint(needless_else))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
