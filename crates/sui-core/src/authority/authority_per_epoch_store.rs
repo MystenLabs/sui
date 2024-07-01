@@ -881,12 +881,12 @@ impl AuthorityPerEpochStore {
         self.randomness_reporter.get().cloned()
     }
 
-    pub fn set_randomness_manager(
+    pub async fn set_randomness_manager(
         &self,
         mut randomness_manager: RandomnessManager,
     ) -> SuiResult<()> {
         let reporter = randomness_manager.reporter();
-        let result = randomness_manager.start_dkg();
+        let result = randomness_manager.start_dkg().await;
         if self
             .randomness_manager
             .set(tokio::sync::Mutex::new(randomness_manager))
@@ -2948,13 +2948,36 @@ impl AuthorityPerEpochStore {
             checkpoint_service,
             cache_reader,
             &ConsensusCommitInfo::new_for_test(
-                self.get_highest_pending_checkpoint_height() + 1,
+                if self.randomness_state_enabled() {
+                    self.get_highest_pending_checkpoint_height() / 2 + 1
+                } else {
+                    self.get_highest_pending_checkpoint_height() + 1
+                },
                 0,
                 skip_consensus_commit_prologue_in_test,
             ),
             authority_metrics,
         )
         .await
+    }
+
+    #[cfg(any(test, feature = "test-utils"))]
+    pub async fn assign_shared_object_versions_for_tests(
+        self: &Arc<Self>,
+        cache_reader: &dyn ObjectCacheRead,
+        transactions: &[VerifiedExecutableTransaction],
+    ) -> SuiResult {
+        let mut batch = self.db_batch()?;
+        self.process_consensus_transaction_shared_object_versions(
+            cache_reader,
+            transactions,
+            None,
+            &BTreeMap::new(),
+            &mut batch,
+        )
+        .await?;
+        batch.write()?;
+        Ok(())
     }
 
     fn process_notifications(

@@ -5852,11 +5852,13 @@ async fn test_consensus_handler_per_object_congestion_control(
     }
 
     // Checks that deferral keys are formed correctly.
-    let commit_round = authority
-        .epoch_store_for_testing()
-        .get_highest_pending_checkpoint_height();
-    let deferred_txns = authority
-        .epoch_store_for_testing()
+    let epoch_store = authority.epoch_store_for_testing();
+    let commit_round = if epoch_store.randomness_state_enabled() {
+        epoch_store.get_highest_pending_checkpoint_height() / 2
+    } else {
+        epoch_store.get_highest_pending_checkpoint_height()
+    };
+    let deferred_txns = epoch_store
         .get_all_deferred_transactions_for_test()
         .unwrap();
     assert_eq!(deferred_txns.len(), 1);
@@ -5975,6 +5977,8 @@ async fn test_consensus_handler_per_object_congestion_control_using_tx_count() {
 //   4. Consensus commit prologue contains cancelled transaction version assignment.
 #[sim_test]
 async fn test_consensus_handler_congestion_control_transaction_cancellation() {
+    telemetry_subscribers::init_for_testing();
+
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Test setup. We will create some shared object transactions with one that will be cancelled at round 3.

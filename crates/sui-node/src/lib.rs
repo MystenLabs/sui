@@ -1233,13 +1233,15 @@ impl SuiNode {
         if epoch_store.randomness_state_enabled() {
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
-                consensus_adapter.clone(),
+                Box::new(consensus_adapter.clone()),
                 randomness_handle,
                 config.protocol_key_pair(),
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {
-                epoch_store.set_randomness_manager(randomness_manager)?;
+                epoch_store
+                    .set_randomness_manager(randomness_manager)
+                    .await?;
             }
         }
 
