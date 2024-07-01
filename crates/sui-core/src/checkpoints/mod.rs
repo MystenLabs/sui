@@ -45,7 +45,7 @@ use std::sync::Weak;
 use std::time::Duration;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::committee::StakeUnit;
+use sui_types::committee::{StakeUnit, QUORUM_THRESHOLD};
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -1844,6 +1844,13 @@ impl CheckpointAggregator {
                 });
                 self.current.as_mut().unwrap()
             };
+
+            expect_event!(
+                "receive_checkpoint_sig" {
+                    required_stake = QUORUM_THRESHOLD,
+                    seq = current.summary.sequence_number,
+                }
+            );
 
             let epoch_tables = self
                 .epoch_store

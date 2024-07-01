@@ -224,6 +224,13 @@ impl Committee {
             .is_ok()
     }
 
+    pub fn stake_of_authority(&self, name: &AuthorityName) -> Option<StakeUnit> {
+        let index = self.authority_index(name)?;
+        let entry = self.voting_rights[index as usize];
+        debug_assert_eq!(*name, entry.0);
+        Some(entry.1)
+    }
+
     // ===== Testing-only methods =====
     //
     pub fn new_simple_test_committee_of_size(size: usize) -> (Self, Vec<AuthorityKeyPair>) {
