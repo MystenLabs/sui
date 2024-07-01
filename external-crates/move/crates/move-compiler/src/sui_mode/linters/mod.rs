@@ -138,17 +138,15 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
     match level {
         LintLevel::None => vec![],
-        LintLevel::Default | LintLevel::All => {
-            vec![
-                share_owned::ShareOwnedVerifier.visitor(),
-                self_transfer::SelfTransferVerifier.visitor(),
-                custom_state_change::CustomStateChangeVerifier.visitor(),
-                coin_field::CoinFieldVisitor.visitor(),
-                freeze_wrapped::FreezeWrappedVisitor.visitor(),
-                collection_equality::CollectionEqualityVisitor.visitor(),
-                public_random::PublicRandomVisitor.visitor(),
-            ]
-        }
+        LintLevel::Default | LintLevel::All => vec![
+            share_owned::ShareOwnedVerifier.visitor(),
+            self_transfer::SelfTransferVerifier.visitor(),
+            custom_state_change::CustomStateChangeVerifier.visitor(),
+            coin_field::CoinFieldVisitor.visitor(),
+            freeze_wrapped::FreezeWrappedVisitor.visitor(),
+            collection_equality::CollectionEqualityVisitor.visitor(),
+            public_random::PublicRandomVisitor.visitor(),
+        ],
     }
 }
 
