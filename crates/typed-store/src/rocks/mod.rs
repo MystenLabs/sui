@@ -2336,43 +2336,43 @@ impl DBOptions {
     // Optimize tables receiving significant insertions.
     pub fn optimize_for_write_throughput(mut self) -> DBOptions {
         // Increase write buffer size to 256MiB.
-        let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
-            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
-            * 1024
-            * 1024;
-        self.options.set_write_buffer_size(write_buffer_size);
-        // Increase write buffers to keep to 6 before slowing down writes.
-        let max_write_buffer_number = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_NUMBER)
-            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_NUMBER);
-        self.options
-            .set_max_write_buffer_number(max_write_buffer_number.try_into().unwrap());
-        // Keep 1 write buffer so recent writes can be read from memory.
-        self.options
-            .set_max_write_buffer_size_to_maintain((write_buffer_size).try_into().unwrap());
-
-        // Increase compaction trigger for level 0 to 6.
-        let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
-            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
-        self.options.set_level_zero_file_num_compaction_trigger(
-            max_level_zero_file_num.try_into().unwrap(),
-        );
-        self.options.set_level_zero_slowdown_writes_trigger(
-            (max_level_zero_file_num * 4).try_into().unwrap(),
-        );
-        self.options
-            .set_level_zero_stop_writes_trigger((max_level_zero_file_num * 5).try_into().unwrap());
-
-        // Increase sst file size to 128MiB.
-        self.options.set_target_file_size_base(
-            read_size_from_env(ENV_VAR_TARGET_FILE_SIZE_BASE_MB)
-                .unwrap_or(DEFAULT_TARGET_FILE_SIZE_BASE_MB) as u64
-                * 1024
-                * 1024,
-        );
-
-        // Increase level 1 target size to 256MiB * 6 ~ 1.5GiB.
-        self.options
-            .set_max_bytes_for_level_base((write_buffer_size * max_level_zero_file_num) as u64);
+        // let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
+        //     .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
+        //     * 1024
+        //     * 1024;
+        // self.options.set_write_buffer_size(write_buffer_size);
+        // // Increase write buffers to keep to 6 before slowing down writes.
+        // let max_write_buffer_number = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_NUMBER)
+        //     .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_NUMBER);
+        // self.options
+        //     .set_max_write_buffer_number(max_write_buffer_number.try_into().unwrap());
+        // // Keep 1 write buffer so recent writes can be read from memory.
+        // self.options
+        //     .set_max_write_buffer_size_to_maintain((write_buffer_size).try_into().unwrap());
+        //
+        // // Increase compaction trigger for level 0 to 6.
+        // let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
+        //     .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
+        // self.options.set_level_zero_file_num_compaction_trigger(
+        //     max_level_zero_file_num.try_into().unwrap(),
+        // );
+        // self.options.set_level_zero_slowdown_writes_trigger(
+        //     (max_level_zero_file_num * 4).try_into().unwrap(),
+        // );
+        // self.options
+        //     .set_level_zero_stop_writes_trigger((max_level_zero_file_num * 5).try_into().unwrap());
+        //
+        // // Increase sst file size to 128MiB.
+        // self.options.set_target_file_size_base(
+        //     read_size_from_env(ENV_VAR_TARGET_FILE_SIZE_BASE_MB)
+        //         .unwrap_or(DEFAULT_TARGET_FILE_SIZE_BASE_MB) as u64
+        //         * 1024
+        //         * 1024,
+        // );
+        //
+        // // Increase level 1 target size to 256MiB * 6 ~ 1.5GiB.
+        // self.options
+        //     .set_max_bytes_for_level_base((write_buffer_size * max_level_zero_file_num) as u64);
 
         self
     }
