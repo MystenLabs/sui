@@ -8,17 +8,17 @@ If you haven't already, you need to [install Sui CLI](./sui-install.mdx) on your
 
 ## Start the local network
 
-To start the local network, run the following command after you installed Sui CLI.
+To start the local network, run the following command after you install Sui CLI.
 
 ```bash
 RUST_LOG="off,sui_node=info" sui start --with-faucet --force-regenesis
 ```
 
 This command:
-* calls the Sui CLI binary with two flags:
- * `--with-faucet` to start a faucet service
- * `--force-regenesis` to generate a new genesis and not persist the local network state
-* instructs Rust to set specific logging through the `RUST_LOG`=`off,sui_node=info` flags, which turns off logging for all components except `sui-node`. If you want to see more detailed logs, you can remove `RUST_LOG` from the command.
+* Calls the Sui CLI binary with two flags:
+ * `--with-faucet` to start a faucet service.
+ * `--force-regenesis` to generate a new genesis and not persist the local network state.
+* Instructs Rust to set specific logging through the `RUST_LOG`=`off,sui_node=info` flags, which turns off logging for all components except `sui-node`. If you want to see more detailed logs, you can remove `RUST_LOG` from the command.
 
 :::info
 Each time you start the network by passing `--force-regenesis`, the local network starts from a random genesis with no previous data, and the local network is not persisted. If you'd like to persist data, skip passing the `--force-regenesis` flag. For more details, see the [Persist local network state](#persist-local-network) section.
@@ -141,7 +141,7 @@ Sui CLI provides the `sui client faucet` command to get coins from the faucet. I
 
 :::info
 
-The `faucet` command uses the active address and the active network environment by default. If you need to pass in a different address or faucet server URL, check the `help` menu. If you're using a different network than a local network or the public ones (`fullnode.network.sui.io`), you will have to pass the URL to the faucet server.
+The `faucet` command uses the active address and the active network environment by default. If you need to pass in a different address or faucet server URL, check the `help` menu. If you're using a different network than a local network or the public ones (`fullnode.network.sui.io`), pass the URL to the faucet server.
 
 :::
 
