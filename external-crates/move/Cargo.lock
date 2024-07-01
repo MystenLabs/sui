@@ -1134,6 +1134,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
+name = "heuristic-graph-coloring"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49b668274fa5581eb527cef09a3e33028f8edee0faa6fa7853eff3271f0030f7"
+
+[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1747,6 +1753,7 @@ dependencies = [
  "codespan-reporting",
  "datatest-stable",
  "dunce",
+ "heuristic-graph-coloring",
  "hex",
  "lsp-types",
  "move-binary-format",
