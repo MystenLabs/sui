@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+pub(crate) mod coalesce_locals;
 mod constant_fold;
 mod eliminate_locals;
 mod forwarding_jumps;
@@ -64,7 +65,6 @@ pub fn optimize(
             debug_assert_eq!(count, opt_count);
             break;
         }
-
         // reset the count if something has changed
         if optimization(signature, locals, constants, cfg) {
             count = 0

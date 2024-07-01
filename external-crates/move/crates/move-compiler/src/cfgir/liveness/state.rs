@@ -10,7 +10,9 @@ use crate::{cfgir::absint::*, hlir::ast::Var};
 use std::{cmp::Ordering, collections::BTreeSet};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LivenessState(pub BTreeSet<Var>);
+pub struct LivenessState {
+    pub live_set: BTreeSet<Var>,
+}
 
 //**************************************************************************************************
 // impls
@@ -18,19 +20,21 @@ pub struct LivenessState(pub BTreeSet<Var>);
 
 impl LivenessState {
     pub fn initial() -> Self {
-        LivenessState(BTreeSet::new())
+        LivenessState {
+            live_set: BTreeSet::new(),
+        }
     }
 
     pub fn extend(&mut self, other: &Self) {
-        self.0.extend(other.0.iter().cloned());
+        self.live_set.extend(other.live_set.iter().cloned());
     }
 }
 
 impl AbstractDomain for LivenessState {
     fn join(&mut self, other: &Self) -> JoinResult {
-        let before = self.0.len();
+        let before = self.live_set.len();
         self.extend(other);
-        let after = self.0.len();
+        let after = self.live_set.len();
         match before.cmp(&after) {
             Ordering::Less => JoinResult::Changed,
             Ordering::Equal => JoinResult::Unchanged,

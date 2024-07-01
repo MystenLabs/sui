@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-mod state;
+pub(crate) mod state;
 
 use super::{
     absint::*,
@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 // Entry and trait bindings
 //**************************************************************************************************
 
-type PerCommandStates = BTreeMap<Label, VecDeque<LivenessState>>;
+pub type PerCommandStates = BTreeMap<Label, VecDeque<LivenessState>>;
 type ForwardIntersections = BTreeMap<Label, BTreeSet<Var>>;
 type FinalInvariants = BTreeMap<Label, LivenessState>;
 
@@ -69,7 +69,7 @@ impl AbstractInterpreter for Liveness {}
 // Analysis
 //**************************************************************************************************
 
-fn analyze(
+pub(crate) fn analyze(
     cfg: &mut MutForwardCFG,
     infinite_loop_starts: &BTreeSet<Label>,
 ) -> (FinalInvariants, PerCommandStates) {
@@ -113,7 +113,7 @@ fn lvalue(state: &mut LivenessState, sp!(_, l_): &LValue) {
     match l_ {
         L::Ignore => (),
         L::Var { var, .. } => {
-            state.0.remove(var);
+            state.live_set.remove(var);
         }
         L::Unpack(_, _, fields) => fields.iter().for_each(|(_, l)| lvalue(state, l)),
         L::UnpackVariant(_, _, _, _, _, fields) => {
@@ -133,7 +133,7 @@ fn exp(state: &mut LivenessState, parent_e: &Exp) {
         | E::ErrorConstant { .. } => (),
 
         E::BorrowLocal(_, var) | E::Copy { var, .. } | E::Move { var, .. } => {
-            state.0.insert(*var);
+            state.live_set.insert(*var);
         }
 
         E::ModuleCall(mcall) => mcall.arguments.iter().for_each(|e| exp(state, e)),
@@ -235,10 +235,10 @@ mod last_usage {
         );
         for idx in 0..len {
             let cmd = block.get_mut(idx).unwrap();
-            let cur_data = &command_states.get(idx).unwrap().0;
+            let cur_data = &command_states.get(idx).unwrap().live_set;
             let next_data = match command_states.get(idx + 1) {
-                Some(s) => &s.0,
-                None => &final_invariant.0,
+                Some(s) => &s.live_set,
+                None => &final_invariant.live_set,
             };
 
             let dropped_live = cur_data
@@ -436,7 +436,7 @@ fn build_forward_intersections(
             let mut states = cfg
                 .predecessors(*lbl)
                 .iter()
-                .map(|pred| &final_invariants.get(pred).unwrap().0);
+                .map(|pred| &final_invariants.get(pred).unwrap().live_set);
             let intersection = states
                 .next()
                 .map(|init| states.fold(init.clone(), |acc, s| &acc & s))
@@ -468,7 +468,7 @@ fn release_dead_refs_block(
     // Free references that were live in ALL predecessors and that have a value
     // (could not have a value due to errors)
     let dead_refs = forward_intersection
-        .difference(&cur_state.0)
+        .difference(&cur_state.live_set)
         .filter(|var| locals_pre_state.get_state(var).is_available())
         .map(|var| (var, locals.get(var).unwrap()))
         .filter(is_ref);
