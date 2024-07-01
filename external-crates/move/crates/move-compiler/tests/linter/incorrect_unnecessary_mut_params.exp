@@ -1,0 +1,8 @@
+warning[Lint W02017]: Detected a mutable parameter that is never modified or passed as mutable. Consider removing the 'mut' qualifier.
+  ┌─ tests/linter/incorrect_unnecessary_mut_params.move:8:41
+  │
+8 │     public fun not_modify_param(person: &mut Person) {
+  │                                         ^^^^^^^^^^^ The mutable parameter 'person' is never modified or passed as mutable. Consider removing the 'mut' qualifier.
+  │
+  = This warning can be suppressed with '#[allow(lint(unused_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
