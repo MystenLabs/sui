@@ -1,13 +1,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_symbol_pool::Symbol;
-
 use crate::{
     command_line::compiler::Visitor, diagnostics::codes::WarningFilter,
-    linters::constant_naming::ConstantNamingVisitor, typing::visitor::TypingVisitor,
+    linters::constant_naming::ConstantNamingVisitor,
+    linters::too_many_arguments::ExcessiveParametersCheck, typing::visitor::TypingVisitor,
 };
+use move_symbol_pool::Symbol;
+
 pub mod constant_naming;
+pub mod too_many_arguments;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
     // No linters
@@ -32,22 +35,28 @@ pub enum LinterDiagnosticCategory {
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
-
 pub const CONSTANT_NAMING_DIAG_CODE: u8 = 1;
 
-pub enum LinterDiagCategory {
-    Style,
-}
+pub const EXCESSIVE_PARAMS_FILTER_NAME: &str = "excessive_params";
+pub const EXCESSIVE_PARAMS_DIAG_CODE: u8 = 15;
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     (
         Some(ALLOW_ATTR_CATEGORY.into()),
-        vec![WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::Style as u8,
-            CONSTANT_NAMING_DIAG_CODE,
-            Some(CONSTANT_NAMING_FILTER_NAME),
-        )],
+        vec![
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagnosticCategory::Style as u8,
+                CONSTANT_NAMING_DIAG_CODE,
+                Some(CONSTANT_NAMING_FILTER_NAME),
+            ),
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagnosticCategory::Complexity as u8,
+                EXCESSIVE_PARAMS_DIAG_CODE,
+                Some(EXCESSIVE_PARAMS_FILTER_NAME),
+            ),
+        ],
     )
 }
 
@@ -56,9 +65,10 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
         LintLevel::None => vec![],
         LintLevel::Default => vec![],
         LintLevel::All => {
-            vec![constant_naming::ConstantNamingVisitor::visitor(
-                ConstantNamingVisitor,
-            )]
+            vec![
+                constant_naming::ConstantNamingVisitor::visitor(ConstantNamingVisitor),
+                too_many_arguments::ExcessiveParametersCheck::visitor(ExcessiveParametersCheck),
+            ]
         }
     }
 }

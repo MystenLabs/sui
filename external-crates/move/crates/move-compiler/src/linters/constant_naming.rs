@@ -19,13 +19,13 @@ use crate::{
     },
 };
 
-use super::{LinterDiagCategory, CONSTANT_NAMING_DIAG_CODE, LINT_WARNING_PREFIX};
+use super::{LinterDiagnosticCategory, CONSTANT_NAMING_DIAG_CODE, LINT_WARNING_PREFIX};
 
 /// Diagnostic information for constant naming violations.
 const CONSTANT_NAMING_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::Style as u8,
+    LinterDiagnosticCategory::Style as u8,
     CONSTANT_NAMING_DIAG_CODE,
     "constant should follow naming convention",
 );
