@@ -1,0 +1,18 @@
+warning[Lint W01013]: 
+  ┌─ tests/linter/incorrect_empty_loop.move:5:9
+  │  
+5 │ ╭         while (true) {
+6 │ │             // Intentionally left empty for testing
+7 │ │         }
+  │ ╰─────────^ Detected an empty loop expression potentially leading to an infinite loop.
+  │  
+  = This warning can be suppressed with '#[allow(lint(empty_loop))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01013]: 
+   ┌─ tests/linter/incorrect_empty_loop.move:11:9
+   │
+11 │         loop {}
+   │         ^^^^^^^ Detected an empty loop expression potentially leading to an infinite loop.
+   │
+   = This warning can be suppressed with '#[allow(lint(empty_loop))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
