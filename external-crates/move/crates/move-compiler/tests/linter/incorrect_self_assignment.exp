@@ -1,0 +1,8 @@
+warning[Lint W02013]: Explicit self-assignment detected. This operation is usually unnecessary and could indicate a typo or logical error.
+  ┌─ tests/linter/incorrect_self_assignment.move:8:9
+  │
+8 │         x = x;
+  │         ^^^^^ Explicit self-assignment detected for variable 'x'. Consider removing it to clarify intent.
+  │
+  = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
