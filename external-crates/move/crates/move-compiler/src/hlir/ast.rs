@@ -185,7 +185,7 @@ pub enum BaseType_ {
 }
 pub type BaseType = Spanned<BaseType_>;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
 pub enum SingleType_ {
     Base(BaseType),
     Ref(bool, BaseType),

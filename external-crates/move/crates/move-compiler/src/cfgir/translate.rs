@@ -11,10 +11,14 @@ use crate::{
     },
     diag,
     diagnostics::Diagnostics,
+    editions::FeatureGate,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName},
-    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv},
+    shared::{
+        ast_debug::AstDebug, program_info::TypingProgramInfo, string_utils::debug_print,
+        unique_map::UniqueMap, CompilationEnv,
+    },
     FullyCompiledProgram,
 };
 use cfgir::ast::LoopInfo;
@@ -41,8 +45,13 @@ enum NamedBlockType {
     Named,
 }
 
+struct CFGIRDebugFlags {
+    function_translation: bool,
+}
+
 struct Context<'env> {
     env: &'env mut CompilationEnv,
+    debug: CFGIRDebugFlags,
     info: &'env TypingProgramInfo,
     current_package: Option<Symbol>,
     label_count: usize,
@@ -53,8 +62,12 @@ struct Context<'env> {
 
 impl<'env> Context<'env> {
     pub fn new(env: &'env mut CompilationEnv, info: &'env TypingProgramInfo) -> Self {
+        let debug = CFGIRDebugFlags {
+            function_translation: false,
+        };
         Context {
             env,
+            debug,
             info,
             current_package: None,
             label_count: 0,
@@ -619,7 +632,11 @@ fn function_body(
     assert!(context.named_blocks.is_empty());
     let b_ = match tb_ {
         HB::Native => GB::Native,
-        HB::Defined { locals, body } => {
+        HB::Defined { mut locals, body } => {
+            debug_print!(
+                context.debug.function_translation,
+                (lines "body" => &body)
+            );
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
@@ -652,12 +669,36 @@ fn function_body(
                     &UniqueMap::new(),
                     &mut cfg,
                 );
+                if context
+                    .env
+                    .supports_feature(context.current_package, FeatureGate::Move2024Optimizations)
+                {
+                    locals = cfgir::optimize::coalesce_locals::optimize(
+                        signature,
+                        &infinite_loop_starts,
+                        locals,
+                        &mut cfg,
+                    );
+                    cfg.recompute();
+                    cfgir::optimize(
+                        context.env,
+                        context.current_package,
+                        signature,
+                        &locals,
+                        &UniqueMap::new(),
+                        &mut cfg,
+                    );
+                }
             }
 
             let block_info = block_info
                 .into_iter()
                 .filter(|(lbl, _info)| blocks.contains_key(lbl))
                 .collect();
+            debug_print!(
+                context.debug.function_translation,
+                (lines "translated" => &blocks)
+            );
             GB::Defined {
                 locals,
                 start,

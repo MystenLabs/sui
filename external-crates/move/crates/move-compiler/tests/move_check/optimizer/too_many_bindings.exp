@@ -1,0 +1,19 @@
+bug[ICE12002]: BYTECODE VERIFICATION FAILED
+  ┌─ tests/move_check/optimizer/too_many_bindings.move:1:11
+  │
+1 │ module a::m {
+  │           ^ ICE failed bytecode verifier: VMError {
+    major_status: TOO_MANY_LOCALS,
+    sub_status: None,
+    message: None,
+    exec_state: None,
+    location: Undefined,
+    indices: [
+        (
+            FunctionDefinition,
+            1,
+        ),
+    ],
+    offsets: [],
+}
+
