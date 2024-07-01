@@ -2440,6 +2440,15 @@ pub fn default_db_options() -> DBOptions {
     // Set memtable bloomfilter.
     opt.set_memtable_prefix_bloom_ratio(0.02);
 
+    // disable write slowdowns due to pending l0 files
+    opt.set_level_zero_slowdown_writes_trigger(-1);
+    // set write stall from pending files to a much higher number (default is 24)
+    opt.set_level_zero_stop_writes_trigger(1024);
+    // set soft pending compaction bytes to a much higher number (default is 64 GB)
+    opt.set_soft_pending_compaction_bytes_limit(2048 * 1024 * 1024 * 1024);
+    // set hard pending compaction bytes to a much higher number (default is 256 GB)
+    opt.set_hard_pending_compaction_bytes_limit(4096 * 1024 * 1024 * 1024);
+
     DBOptions {
         options: opt,
         rw_options: ReadWriteOptions::default(),
