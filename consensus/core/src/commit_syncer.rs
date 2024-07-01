@@ -198,9 +198,9 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         let (fetched_commit_range, blocks) = if fetched_commit_range.start() <= synced_commit_index + 1 {
                             fetched_blocks.pop_first().unwrap()
                         } else {
-                            metrics.commit_sync_gap_on_processing.inc();
                             // Found gap between earliest fetched block and latest synced block,
                             // so not sending additional blocks to Core.
+                            metrics.commit_sync_gap_on_processing.inc();
                             break 'fetched;
                         };
                         // Avoid sending to Core a whole batch of already synced blocks.
@@ -308,7 +308,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     return (commit_range.end(), commits, blocks);
                 }
                 Err(e) => {
-                    warn!("Failed to fetch: {}", e.to_string());
+                    warn!("Failed to fetch: {}", e);
                     let error: &'static str = e.into();
                     inner
                         .context
