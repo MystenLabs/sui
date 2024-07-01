@@ -51,7 +51,7 @@ impl SuiBridgeWorker {
         // TODO: right now this returns true for programmable transactions that
         //       have the bridge object as input. We can extend later to cover other cases
         let txn_data = tx.transaction.transaction_data();
-        if let TransactionKind::ProgrammableTransaction(_pt) = txn_data.kind() {
+        if let TransactionKind::ProgrammableTransaction(_) = txn_data.kind() {
             return tx
                 .input_objects
                 .iter()

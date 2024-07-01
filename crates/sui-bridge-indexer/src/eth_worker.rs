@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::Config;
+use crate::config::IndexerConfig;
 use crate::latest_eth_syncer::LatestEthSyncer;
 use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::get_latest_eth_token_transfer;
 use crate::postgres_manager::{write, PgPool};
 use crate::{BridgeDataSource, TokenTransfer, TokenTransferData, TokenTransferStatus};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use ethers::providers::Provider;
 use ethers::providers::{Http, Middleware};
 use ethers::types::Address as EthAddress;
@@ -30,7 +30,7 @@ pub struct EthBridgeWorker {
     bridge_metrics: Arc<BridgeMetrics>,
     metrics: BridgeIndexerMetrics,
     bridge_address: EthAddress,
-    config: Config,
+    config: IndexerConfig,
 }
 
 impl EthBridgeWorker {
@@ -38,8 +38,8 @@ impl EthBridgeWorker {
         pg_pool: PgPool,
         bridge_metrics: Arc<BridgeMetrics>,
         metrics: BridgeIndexerMetrics,
-        config: Config,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+        config: IndexerConfig,
+    ) -> Result<Self, anyhow::Error> {
         let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
 
         let provider = Arc::new(
@@ -75,7 +75,7 @@ impl EthBridgeWorker {
             EthSyncer::new(eth_client, finalized_contract_addresses)
                 .run(self.bridge_metrics.clone())
                 .await
-                .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
+                .map_err(|e| anyhow!(format!("{e:?}")))?;
 
         let provider_clone = self.provider.clone();
         let pg_pool_clone = self.pg_pool.clone();
@@ -120,7 +120,7 @@ impl EthBridgeWorker {
         )
         .run(self.metrics.clone())
         .await
-        .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
+        .map_err(|e| anyhow!(format!("{e:?}")))?;
 
         let provider_clone = self.provider.clone();
         let pg_pool_clone = self.pg_pool.clone();
