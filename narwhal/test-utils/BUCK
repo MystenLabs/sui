@@ -1,0 +1,53 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//crates/mysten-metrics:mysten-metrics",
+  "//crates/mysten-network:mysten-network",
+  "//crates/sui-protocol-config:sui-protocol-config",
+  "//crates/telemetry-subscribers:telemetry-subscribers",
+  "//third-party:anemo_0_0_0",
+  "//third-party:fastcrypto_0_1_8",
+  "//third-party:fdlimit_0_2_1",
+  "//third-party:indexmap_2_1_0",
+  "//third-party:itertools_0_10_5",
+  "//third-party:once_cell_1_18_0",
+  "//third-party:prometheus_0_13_3",
+  "//third-party:rand_0_8_5",
+  "//third-party:tempfile_3_8_0",
+  "//third-party:tokio_1_36_0",
+  "//third-party:tonic_0_11_0",
+  "//third-party:tracing_0_1_40"
+]
+# buckify!
+
+rust_library(
+    name = "narwhal-test-utils",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "config": "//narwhal/config:narwhal-config",
+        "crypto": "//narwhal/crypto:narwhal-crypto",
+        "executor": "//narwhal/executor:narwhal-executor",
+        "network": "//narwhal/network:narwhal-network",
+        "node": "//narwhal/node:narwhal-node",
+        "primary": "//narwhal/primary:narwhal-primary",
+        "storage": "//narwhal/storage:narwhal-storage",
+        "store": "//crates/typed-store:typed-store",
+        "types": "//narwhal/types:narwhal-types",
+        "worker": "//narwhal/worker:narwhal-worker",
+    },
+    env = {
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "narwhal-test-utils",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

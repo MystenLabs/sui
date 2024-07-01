@@ -1,0 +1,76 @@
+load("@prelude//toolchains:genrule.bzl", "system_genrule_toolchain")
+load("@prelude//toolchains:rust.bzl", "system_rust_toolchain")
+load("@prelude//toolchains:go.bzl", "system_go_toolchain")
+load("@prelude//toolchains:cxx.bzl", "system_cxx_toolchain")
+load(
+    "@prelude//toolchains:python.bzl",
+    "system_python_bootstrap_toolchain",
+    "system_python_toolchain",
+)
+load("@prelude-mysten//toolchains:podman.bzl", "system_podman_toolchain")
+load("@prelude-mysten//toolchains:buildah.bzl", "system_buildah_toolchain")
+load("@prelude-mysten//toolchains:mypkg.bzl", "system_mypkg_toolchain")
+load("@prelude-mysten//toolchains:gcloud.bzl", "system_gcloud_toolchain")
+
+
+system_genrule_toolchain(
+    name="genrule",
+    visibility=["PUBLIC"],
+)
+
+system_rust_toolchain(
+    name="rust",
+    default_edition="2021",
+    visibility=["PUBLIC"],
+)
+
+system_go_toolchain(
+    name="go",
+    go_root="/usr/local/go/bin",
+    visibility=["PUBLIC"],
+)
+
+system_cxx_toolchain(
+    name="cxx",
+    linker=select(
+        {
+            "config//os:macos": "clang++",
+            "config//os:linux": "clang++",
+        }
+    ),
+    visibility=["PUBLIC"],
+)
+
+system_python_bootstrap_toolchain(
+    name="python_bootstrap",
+    visibility=["PUBLIC"],
+)
+
+system_python_toolchain(
+    name="python",
+    visibility=["PUBLIC"],
+)
+
+system_podman_toolchain(
+    name="podman",
+    bin="/opt/homebrew/bin/podman",
+    visibility=["PUBLIC"],
+)
+
+system_buildah_toolchain(
+    name="buildah",
+    bin="/usr/bin/buildah",
+    visibility=["PUBLIC"],
+)
+
+system_mypkg_toolchain(
+    name="mypkg",
+    bin="/usr/local/bin/mypkg",
+    visibility=["PUBLIC"],
+)
+
+system_gcloud_toolchain(
+    name="gcloud",
+    bin="/usr/bin/gcloud",
+    visibility=["PUBLIC"],
+)

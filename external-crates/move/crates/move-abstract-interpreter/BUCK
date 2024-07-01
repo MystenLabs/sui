@@ -1,0 +1,27 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//external-crates/move/crates/move-binary-format:move-binary-format",
+  "//external-crates/move/crates/move-bytecode-verifier-meter:move-bytecode-verifier-meter"
+]
+# buckify!
+
+rust_library(
+    name = "move-abstract-interpreter",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "move-abstract-interpreter",
+        "CARGO_PKG_DESCRIPTION": "Move abstract interpreter",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[The Move Contributors]",
+        "CARGO_PKG_VERSION": "0.1.0",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

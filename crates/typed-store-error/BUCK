@@ -1,0 +1,27 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//third-party:serde_1_0_190",
+  "//third-party:thiserror_1_0_56"
+]
+# buckify!
+
+rust_library(
+    name = "typed-store-error",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_AUTHORS": "[Ade A. <ade@mystenlabs.com>]",
+        "CARGO_MANIFEST_DIR": "",
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "typed-store-error",
+        "CARGO_PKG_VERSION": "0.4.0",
+        "CARGO_PKG_DESCRIPTION": "error types for typed-store crate",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

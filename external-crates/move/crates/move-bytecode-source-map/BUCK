@@ -1,0 +1,33 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//external-crates/move/crates/move-binary-format:move-binary-format",
+  "//external-crates/move/crates/move-command-line-common:move-command-line-common",
+  "//external-crates/move/crates/move-core-types:move-core-types",
+  "//external-crates/move/crates/move-ir-types:move-ir-types",
+  "//external-crates/move/crates/move-symbol-pool:move-symbol-pool",
+  "//third-party:anyhow_1_0_81",
+  "//third-party:bcs_0_1_6",
+  "//third-party:serde_1_0_190"
+]
+# buckify!
+
+rust_library(
+    name = "move-bytecode-source-map",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_NAME": "move-bytecode-source-map",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

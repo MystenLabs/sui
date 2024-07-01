@@ -1,0 +1,27 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//third-party:const-str_0_5_6",
+  "//third-party:git-version_0_3_5"
+]
+# buckify!
+
+rust_library(
+    name = "bin-version",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_AUTHORS": "[]",
+        "CARGO_PKG_NAME": "bin-version",
+        "CARGO_PKG_VERSION": "1.26.0",
+        "CARGO_MANIFEST_DIR": "",
+        "OUT_DIR": "",
+        "CARGO_PKG_DESCRIPTION": "",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

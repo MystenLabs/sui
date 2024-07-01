@@ -1,0 +1,124 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//crates/bin-version:bin-version",
+  "//crates/mysten-metrics:mysten-metrics",
+  "//crates/sui-tls:sui-tls",
+  "//crates/sui-types:sui-types",
+  "//crates/telemetry-subscribers:telemetry-subscribers",
+  "//third-party:anyhow_1_0_81",
+  "//third-party:axum-server_0_5_1",
+  "//third-party:axum_0_6_20",
+  "//third-party:bytes_1_5_0",
+  "//third-party:clap_4_5_4",
+  "//third-party:const-str_0_5_6",
+  "//third-party:fastcrypto_0_1_8",
+  "//third-party:hex_0_4_3",
+  "//third-party:http-body_0_4_5",
+  "//third-party:hyper_0_14_26",
+  "//third-party:ipnetwork_0_20_0",
+  "//third-party:itertools_0_10_5",
+  "//third-party:multiaddr_0_17_0",
+  "//third-party:once_cell_1_18_0",
+  "//third-party:prometheus_0_13_3",
+  "//third-party:prost_0_12_3",
+  "//third-party:protobuf_2_28_0",
+  "//third-party:rand_0_8_5",
+  "//third-party:reqwest_0_11_20",
+  "//third-party:rustls-pemfile_1_0_2",
+  "//third-party:rustls_0_21_12",
+  "//third-party:serde_1_0_190",
+  "//third-party:serde_json_1_0_95",
+  "//third-party:serde_with_2_1_0",
+  "//third-party:serde_yaml_0_8_26",
+  "//third-party:snap_1_1_0",
+  "//third-party:tokio_1_36_0",
+  "//third-party:tower-http_0_3_5",
+  "//third-party:tower_0_4_13",
+  "//third-party:tracing_0_1_40"
+]
+build_deps = [
+  "//third-party:prost-build_0_12_3"
+]
+# buckify!
+
+rust_library(
+    name = "sui-proxy",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_MANIFEST_DIR": ".",
+        "CARGO_PKG_VERSION": "0.0.2",
+        "OUT_DIR": "$(location :sui-proxy-build-script-run[out_dir])",
+        "CARGO_PKG_NAME": "sui-proxy",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
+rustc_flags = [
+    "-C",
+    "target-feature=+crt-static",
+    # "-C",
+    # "opt-level=3",
+    "-C",
+    "debuginfo=1",
+    "-C",
+    "split-debuginfo=packed",
+    "-C",
+    "strip=debuginfo",
+    "-C",
+    "panic=abort",
+]
+
+rust_binary(
+    name = "sui-proxy-bin",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "sui-proxy": ":sui-proxy",
+    },
+    env = {
+        "OUT_DIR": "$(location :sui-proxy-build-script-run[out_dir])",
+        "CARGO_PKG_VERSION": "0.0.2",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_BIN": "sui-proxy",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_BIN_NAME": "sui-proxy",
+        "CARGO_PKG_NAME": "sui-proxy",
+    },
+    rustc_flags = rustc_flags,
+    crate_root = "src/main.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
+
+load("@prelude//rust:cargo_buildscript.bzl", "buildscript_run")
+
+rust_binary(
+    name = "sui-proxy-build-script-build",
+    srcs = glob(["**/*"]),
+    deps = deps + build_deps,
+    env = {
+        "CARGO_MANIFEST_DIR": "",
+        "OUT_DIR": "",
+    },
+    crate_root = "build.rs",
+    crate = "build_script_build",
+    edition = "2021",
+)
+
+buildscript_run(
+    name = "sui-proxy-build-script-run",
+    buildscript_rule = ":sui-proxy-build-script-build",
+    package_name = "sui-proxy",
+    version = "0.0.2",
+)
+

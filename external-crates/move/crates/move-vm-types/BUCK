@@ -1,0 +1,31 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//external-crates/move/crates/move-binary-format:move-binary-format",
+  "//external-crates/move/crates/move-core-types:move-core-types",
+  "//external-crates/move/crates/move-vm-profiler:move-vm-profiler",
+  "//third-party:bcs_0_1_6",
+  "//third-party:serde_1_0_190",
+  "//third-party:smallvec_1_13_2"
+]
+# buckify!
+
+rust_library(
+    name = "move-vm-types",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_NAME": "move-vm-types",
+        "CARGO_PKG_DESCRIPTION": "Types for Move VM",
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

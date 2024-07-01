@@ -1,0 +1,19 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+
+rust_library(
+    name = "move-borrow-graph",
+    srcs = glob(["**/*"]),
+    env = {
+        "CARGO_PKG_NAME": "move-borrow-graph",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.0.1",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_DESCRIPTION": "",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

@@ -1,0 +1,29 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//crates/sui-proc-macros:sui-proc-macros",
+  "//third-party:futures_0_3_29",
+  "//third-party:once_cell_1_18_0",
+  "//third-party:tracing_0_1_40"
+]
+# buckify!
+
+rust_library(
+    name = "sui-macros",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_NAME": "sui-macros",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.7.0",
+        "OUT_DIR": "",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

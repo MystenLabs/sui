@@ -1,0 +1,42 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//third-party:anemo_0_0_0",
+  "//third-party:bcs_0_1_6",
+  "//third-party:bytes_1_5_0",
+  "//third-party:eyre_0_6_8",
+  "//third-party:futures_0_3_29",
+  "//third-party:http_0_2_9",
+  "//third-party:multiaddr_0_17_0",
+  "//third-party:pin-project-lite_0_2_13",
+  "//third-party:serde_1_0_190",
+  "//third-party:snap_1_1_0",
+  "//third-party:tokio-stream_0_1_14",
+  "//third-party:tokio_1_36_0",
+  "//third-party:tonic-health_0_11_0",
+  "//third-party:tonic_0_11_0",
+  "//third-party:tower-http_0_3_5",
+  "//third-party:tower_0_4_13",
+  "//third-party:tracing_0_1_40"
+]
+# buckify!
+
+rust_library(
+    name = "mysten-network",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_NAME": "mysten-network",
+        "CARGO_PKG_VERSION": "0.2.0",
+        "CARGO_PKG_DESCRIPTION": "Mysten's network tooling",
+        "CARGO_MANIFEST_DIR": "",
+        "OUT_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Brandon Williams <brandon@mystenlabs.com>]",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

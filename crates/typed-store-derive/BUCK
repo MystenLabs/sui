@@ -1,0 +1,30 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//third-party:itertools_0_10_5",
+  "//third-party:proc-macro2_1_0_78",
+  "//third-party:quote_1_0_35",
+  "//third-party:syn_1_0_107"
+]
+# buckify!
+
+rust_library(
+    name = "typed-store-derive",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_NAME": "typed-store-derive",
+        "CARGO_PKG_VERSION": "0.3.0",
+        "CARGO_PKG_DESCRIPTION": "macros for the typed-store crate",
+        "OUT_DIR": "",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Ade A. <ade@mystenlabs.com>]",
+    },
+    crate_root = "src/lib.rs",
+    proc_macro = True,
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

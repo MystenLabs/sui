@@ -1,0 +1,27 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//external-crates/move/crates/move-binary-format:move-binary-format",
+  "//third-party:once_cell_1_18_0"
+]
+# buckify!
+
+rust_library(
+    name = "move-vm-config",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_NAME": "move-vm-config",
+        "CARGO_MANIFEST_DIR": "",
+        "OUT_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_DESCRIPTION": "",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

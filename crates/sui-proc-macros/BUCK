@@ -1,0 +1,30 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//crates/sui-enum-compat-util:sui-enum-compat-util",
+  "//third-party:proc-macro2_1_0_78",
+  "//third-party:quote_1_0_35",
+  "//third-party:syn_2_0_48"
+]
+# buckify!
+
+rust_library(
+    name = "sui-proc-macros",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_VERSION": "0.7.0",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "sui-proc-macros",
+    },
+    crate_root = "src/lib.rs",
+    proc_macro = True,
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
