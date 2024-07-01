@@ -585,10 +585,12 @@ fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<Comple
             }
             Some(Tok::Period) => {
                 items = dot(symbols, path, &pos);
-                if !items.is_empty() {
-                    // found dot completions - do not look for any other
-                    only_custom_items = true;
-                }
+                // whether completions have been found for the dot or not
+                // it makes no sense to try offering "dumb" autocompletion
+                // options here as they will not fit (an example would
+                // be dot completion of u64 variable without any methods
+                // with u64 receiver being visible)
+                only_custom_items = true;
             }
 
             Some(Tok::ColonColon) => {

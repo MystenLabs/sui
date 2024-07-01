@@ -7,7 +7,8 @@ use crate::{
 };
 use lsp_server::Request;
 use lsp_types::{
-    InlayHint, InlayHintKind, InlayHintLabel, InlayHintLabelPart, InlayHintParams, InlayHintTooltip,
+    InlayHint, InlayHintKind, InlayHintLabel, InlayHintLabelPart, InlayHintParams,
+    InlayHintTooltip, Position,
 };
 
 use move_compiler::{naming::ast as N, shared::Identifier};
@@ -23,7 +24,11 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request) {
         "inlay_hints_request (types: {}): {:?}",
         context.inlay_type_hints, fpath
     );
-    let hints = inlay_hints(context, fpath).unwrap_or_default();
+    let hints = if context.inlay_type_hints {
+        inlay_hints(context, fpath).unwrap_or_default()
+    } else {
+        vec![]
+    };
 
     let response = lsp_server::Response::new_ok(request.id.clone(), hints);
     if let Err(err) = context
@@ -44,7 +49,11 @@ fn inlay_hints(context: &Context, fpath: PathBuf) -> Option<Vec<InlayHint>> {
     for mod_defs in file_defs {
         for untyped_def_loc in mod_defs.untyped_defs() {
             let start_position = symbols.files.start_position(untyped_def_loc);
-            if let DefInfo::Local(_, t, _, _, _) = symbols.def_info(untyped_def_loc)? {
+            if let DefInfo::Local(n, t, _, _, _) = symbols.def_info(untyped_def_loc)? {
+                let position = Position {
+                    line: start_position.line_offset() as u32,
+                    character: start_position.column_offset() as u32 + n.len() as u32,
+                };
                 let colon_label = InlayHintLabelPart {
                     value: ": ".to_string(),
                     tooltip: None,
@@ -58,7 +67,7 @@ fn inlay_hints(context: &Context, fpath: PathBuf) -> Option<Vec<InlayHint>> {
                     command: None,
                 };
                 let h = InlayHint {
-                    position: start_position.into(),
+                    position,
                     label: InlayHintLabel::LabelParts(vec![colon_label, type_label]),
                     kind: Some(InlayHintKind::TYPE),
                     text_edits: None,
