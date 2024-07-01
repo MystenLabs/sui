@@ -19,6 +19,7 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 shared-crypto.workspace = true
 sui-types.workspace = true
 regex.workspace = true
+libaes = "0.7.0"
 
 [dev-dependencies]
 tempfile.workspace = true
