@@ -407,7 +407,8 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         if !is_otw {
             let msg = format!(
                 "Invalid parameter '{}' of type {}. \
-                Expected a one-time witness type, '{}::{otw_name}",
+                Expected a one-time witness type, '{}::{otw_name}. \
+                One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.",
                 first_var.value.name,
                 error_format(first_ty, &Subst::empty()),
                 context.current_module(),
