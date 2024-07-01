@@ -15,32 +15,40 @@ CHARACTER_SPRITES.src = `/assets/character.png`;
 const CROP_SPRITES = new Image();
 CROP_SPRITES.src = `/assets/sprites.png`;
 
+/// All the obstacles in the game are represented as rectangles.
 const OBSTACLES = [
     // Water bucket
-    { x: 37, y: 573, w: 74, h: 84 },
+    { x: 42, y: 500, w: 84, h: 84 },
+
     // Fence left side
-    { x: 157, y: 691, w: 25, h: 310 },
+    { x: 157, y: 650, w: 25, h: 270 },
     // fence right side
-    { x: 560, y: 681, w: 25, h: 320 },
+    { x: 560, y: 650, w: 25, h: 270 },
+
     // fence top right
-    { x: 489, y: 729, w: 95, h: 11 },
+    { x: 489, y: 650, w: 95, h: 11 },
     // fence top left
-    { x: 161, y: 729, w: 100, h: 11 },
+    { x: 161, y: 650, w: 100, h: 11 },
     // fence bottom
-    { x: 170, y: 998, w: 400, h: 12 }
+    { x: 170, y: 920, w: 400, h: 12 }
 ]
 
-const hasCollision = (x: number, y: number, characterWidth: number, characterHeight: number) => {
+const hasCollision = (x: number, y: number, characterWidth: number, _characterHeight: number) => {
     for (const obstacle of OBSTACLES) {
-
         const obstacleX = obstacle.x - (characterWidth / 2);
-        // const obs
 
-        console.log({ x, y });
-        if (x >= obstacleX && x <= obstacleX + obstacle.w 
-                && y >= obstacle.y && y <= obstacle.y + obstacle.h) {
-                    return true;
-            }
+        const collisions = {
+            fromX: obstacleX,
+            toX: obstacleX + obstacle.w,
+            fromY: obstacle.y,
+            toY: obstacle.y + obstacle.h
+        }
+        
+        const hasCollision = x >= collisions.fromX && x <= collisions.toX && y >= collisions.fromY && y <= collisions.toY
+
+        if (hasCollision) {
+            return true;
+        }
     }
     return false;
 }
@@ -100,7 +108,7 @@ class Character {
             x = x + this.movementSpeed;
         }
 
-        if (hasCollision(x, y)) {
+        if (hasCollision(x, y, this.width, this.height)) {
             return;
         }
 
@@ -108,7 +116,7 @@ class Character {
         if (y !== this.y) this.y = y;
 
         // handle out of bounds
-        if (x < 0) this.x = 0;
+        if (x < -(this.width / 2)) this.x = 0;
         if (y < 0) this.y = 0;
 
         const maxX = CANVAS_WIDTH - this.width;
@@ -249,13 +257,6 @@ export function Farm () {
         document.addEventListener('keyup', handleMovementEvent);
         window.requestAnimationFrame(updateFrames);
 
-        // setInterval(() => {
-        //     character.setActiveMoves({
-        //         ...DEFAULT_MOVES, 
-        //         [Moves.DOWN]: i++
-        //     });
-        //     window.requestAnimationFrame(updateFrames);
-        // }, 100)
         return () => {
             document.removeEventListener('keydown', handleMovementEvent);
             document.removeEventListener('keyup', handleMovementEvent);
@@ -264,7 +265,8 @@ export function Farm () {
 
     return (
         <div>
-            <canvas id="turnip-town-farm" height="1280" width="760" style={{margin: "0 auto", backgroundImage: "url('/assets/farm-background.jpg", backgroundSize: "cover"}}>
+            <canvas id="turnip-town-farm" height="1280" width="760"
+                style={{margin: "0 auto", backgroundImage: "url('/assets/farm-background.jpg", backgroundSize: "cover"}}>
             </canvas>
         </div>
     )
