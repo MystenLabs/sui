@@ -1,0 +1,8 @@
+warning[Lint W02014]: 
+  ┌─ tests/linter/incorrect_public_mut_tx_context.move:3:28
+  │
+3 │     public fun mint(_ctx: &TxContext) {
+  │                            ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+  │
+  = This warning can be suppressed with '#[allow(lint(public_mut_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
