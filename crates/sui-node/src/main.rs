@@ -35,10 +35,18 @@ struct Args {
     #[clap(long, help = "Specify address to listen on")]
     listen_address: Option<Multiaddr>,
 
-    #[clap(long, group = "exclusive")]
+    #[clap(
+        long,
+        group = "exclusive",
+        help = "Specify epoch to stop sui-node after i.e stop at Epoch_n+1. This flag takes precedence over config"
+    )]
     run_with_range_epoch: Option<EpochId>,
 
-    #[clap(long, group = "exclusive")]
+    #[clap(
+        long,
+        group = "exclusive",
+        help = "Specify checkpoint to stop sui-node after i.e stop at CheckpointSeq_n+1. This flag takes precedence over config"
+    )]
     run_with_range_checkpoint: Option<CheckpointSequenceNumber>,
 }
 
@@ -59,16 +67,13 @@ fn main() {
     );
     config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
 
-    // match run_with_range args
-    // this means that we always modify the config used to start the node
-    // for run_with_range. i.e if this is set in the config, it is ignored. only the cli args
-    // enable/disable run_with_range
+    // match run_with_range args. this will override epoch/checkpoint set in config
     match (args.run_with_range_epoch, args.run_with_range_checkpoint) {
         (None, Some(checkpoint)) => {
             config.run_with_range = Some(RunWithRange::Checkpoint(checkpoint))
         }
         (Some(epoch), None) => config.run_with_range = Some(RunWithRange::Epoch(epoch)),
-        _ => config.run_with_range = None,
+        _ => {}
     };
 
     let runtimes = SuiRuntimes::new(&config);
