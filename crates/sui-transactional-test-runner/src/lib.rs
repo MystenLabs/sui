@@ -127,6 +127,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             Some(&self.fullnode),
             transaction,
             with_shared,
+            false,
         )
         .await?;
         Ok((effects.into_data(), execution_error))

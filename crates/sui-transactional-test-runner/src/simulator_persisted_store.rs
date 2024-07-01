@@ -746,7 +746,14 @@ impl RestStateReader for PersistedStoreInnerReadOnlyWrapper {
         _parent: ObjectID,
         _cursor: Option<ObjectID>,
     ) -> sui_types::storage::error::Result<
-        Box<dyn Iterator<Item = sui_types::storage::RestDynamicFieldInfo> + '_>,
+        Box<
+            dyn Iterator<
+                    Item = (
+                        sui_types::storage::DynamicFieldKey,
+                        sui_types::storage::DynamicFieldIndexInfo,
+                    ),
+                > + '_,
+        >,
     > {
         todo!()
     }

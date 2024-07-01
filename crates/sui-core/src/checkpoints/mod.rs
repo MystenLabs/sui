@@ -1169,6 +1169,7 @@ impl CheckpointBuilder {
         let mut batch = self.tables.checkpoint_content.batch();
         let mut all_tx_digests =
             Vec::with_capacity(new_checkpoints.iter().map(|(_, c)| c.size()).sum());
+
         for (summary, contents) in &new_checkpoints {
             debug!(
                 checkpoint_commit_height = height,
@@ -1177,8 +1178,9 @@ impl CheckpointBuilder {
                 "writing checkpoint",
             );
             all_tx_digests.extend(contents.iter().map(|digests| digests.transaction));
+
             self.output
-                .checkpoint_created(summary, contents, &self.epoch_store)
+                .checkpoint_created(summary, contents, &self.epoch_store, &self.tables)
                 .await?;
 
             self.metrics
@@ -2300,19 +2302,20 @@ impl CheckpointServiceNotify for CheckpointService {
     ) -> SuiResult {
         let sequence = info.summary.sequence_number;
         let signer = info.summary.auth_sig().authority.concise();
-        if let Some(last_certified) = self
+
+        if let Some(highest_verified_checkpoint) = self
             .tables
-            .certified_checkpoints
-            .keys()
-            .skip_to_last()
-            .next()
-            .transpose()?
+            .get_highest_verified_checkpoint()?
+            .map(|x| *x.sequence_number())
         {
-            if sequence <= last_certified {
+            if sequence <= highest_verified_checkpoint {
                 debug!(
                     checkpoint_seq = sequence,
                     "Ignore checkpoint signature from {} - already certified", signer,
                 );
+                self.metrics
+                    .last_ignored_checkpoint_signature_received
+                    .set(sequence as i64);
                 return Ok(());
             }
         }
@@ -2702,6 +2705,7 @@ mod tests {
             summary: &CheckpointSummary,
             contents: &CheckpointContents,
             _epoch_store: &Arc<AuthorityPerEpochStore>,
+            _checkpoint_store: &Arc<CheckpointStore>,
         ) -> SuiResult {
             self.try_send((contents.clone(), summary.clone())).unwrap();
             Ok(())

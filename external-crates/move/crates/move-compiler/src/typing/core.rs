@@ -28,8 +28,10 @@ use crate::{
         unique_map::UniqueMap,
         *,
     },
+    typing::deprecation_warnings::Deprecations,
     FullyCompiledProgram,
 };
+use known_attributes::AttributePosition;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
@@ -91,6 +93,8 @@ pub struct Context<'env> {
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env mut CompilationEnv,
     pub(super) debug: TypingDebugFlags,
+
+    deprecations: Deprecations,
 
     // for generating new variables during match compilation
     next_match_var_id: usize,
@@ -180,6 +184,7 @@ impl<'env> Context<'env> {
         info: NamingProgramInfo,
     ) -> Self {
         let global_use_funs = UseFunsScope::global(&info);
+        let deprecations = Deprecations::new(env, &info);
         let debug = TypingDebugFlags {
             match_counterexample: false,
             autocomplete_resolution: false,
@@ -208,6 +213,7 @@ impl<'env> Context<'env> {
             macro_expansion: vec![],
             lambda_expansion: vec![],
             ide_info: IDEInfo::new(),
+            deprecations,
         }
     }
 
@@ -623,6 +629,25 @@ impl<'env> Context<'env> {
                     finfo.attributes.is_test_or_test_only()
                 })
         })
+    }
+
+    pub fn emit_warning_if_deprecated(
+        &mut self,
+        mident: &ModuleIdent,
+        name: Name,
+        method_opt: Option<Name>,
+    ) {
+        let in_same_module = self
+            .current_module
+            .is_some_and(|current| current == *mident);
+        if let Some(deprecation) = self.deprecations.get_deprecation(*mident, name) {
+            // Don't register a warning if we are in the module that is deprecated and the actual
+            // member is not deprecated.
+            if deprecation.location == AttributePosition::Module && in_same_module {
+                return;
+            }
+            deprecation.emit_deprecation_warning(self.env, name, method_opt);
+        }
     }
 
     fn module_info(&self, m: &ModuleIdent) -> &ModuleInfo {
@@ -1108,6 +1133,7 @@ pub fn make_struct_type(
     n: &DatatypeName,
     ty_args_opt: Option<Vec<Type>>,
 ) -> (Type, Vec<Type>) {
+    context.emit_warning_if_deprecated(m, n.0, None);
     let tn = sp(loc, TypeName_::ModuleType(*m, *n));
     let sdef = context.struct_definition(m, n);
     match ty_args_opt {
@@ -1244,6 +1270,7 @@ pub fn make_enum_type(
     enum_: &DatatypeName,
     ty_args_opt: Option<Vec<Type>>,
 ) -> (Type, Vec<Type>) {
+    context.emit_warning_if_deprecated(mident, enum_.0, None);
     let tn = sp(loc, TypeName_::ModuleType(*mident, *enum_));
     let edef = context.enum_definition(mident, enum_);
     match ty_args_opt {
@@ -1302,6 +1329,7 @@ pub fn make_constant_type(
     c: &ConstantName,
 ) -> Type {
     let in_current_module = Some(m) == context.current_module.as_ref();
+    context.emit_warning_if_deprecated(m, c.0, None);
     let (defined_loc, signature) = {
         let ConstantInfo {
             attributes: _,
@@ -1410,7 +1438,15 @@ pub fn make_method_call_type(
         return None;
     };
 
-    let function_ty = make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
+    let target_f = target_f.with_loc(method.loc);
+    let function_ty = make_function_type(
+        context,
+        loc,
+        &target_m,
+        &target_f,
+        ty_args_opt,
+        Some(method),
+    );
 
     Some((target_m, target_f, function_ty))
 }
@@ -1423,7 +1459,9 @@ pub fn make_function_type(
     m: &ModuleIdent,
     f: &FunctionName,
     ty_args_opt: Option<Vec<Type>>,
+    method_opt: Option<Name>,
 ) -> ResolvedFunctionType {
+    context.emit_warning_if_deprecated(m, f.0, method_opt);
     let return_ty = make_function_type_no_visibility_check(context, loc, m, f, ty_args_opt);
     let finfo = context.function_info(m, f);
     let defined_loc = finfo.defined_loc;
@@ -2178,6 +2216,7 @@ fn instantiate_apply_impl(
             (0..*len).map(|_| AbilitySet::empty()).collect()
         }
         sp!(_, N::TypeName_::ModuleType(m, n)) => {
+            context.emit_warning_if_deprecated(m, n.0, None);
             debug_assert!(abilities_opt.is_none(), "ICE instantiated expanded type");
             let tps = match context.datatype_kind(m, n) {
                 DatatypeKind::Struct => context.struct_tparams(m, n),

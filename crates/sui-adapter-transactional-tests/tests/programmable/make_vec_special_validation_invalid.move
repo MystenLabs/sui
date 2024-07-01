@@ -22,7 +22,7 @@ module test::m1 {
         while (!vector::is_empty(&v)) {
             let opt = vector::pop_back(&mut v);
             if (option::is_some(&opt)) {
-                string::utf8(*string::bytes(&option::destroy_some(opt)));
+                string::utf8(*string::as_bytes(&option::destroy_some(opt)));
             }
         }
     }

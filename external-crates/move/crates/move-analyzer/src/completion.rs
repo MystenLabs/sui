@@ -512,6 +512,7 @@ pub fn on_completion_request(
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
 ) {
+    let symbols_map = &context.symbols.lock().unwrap();
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
         .expect("could not deserialize completion request");
@@ -533,10 +534,19 @@ pub fn on_completion_request(
                 LintLevel::None,
             ) {
                 Ok((Some(symbols), _)) => completion_items(pos, &path, &symbols),
-                _ => completion_items(pos, &path, &context.symbols.lock().unwrap()),
+                _ => {
+                    if let Some(symbols) = symbols_map.get(&pkg_path) {
+                        completion_items(pos, &path, symbols)
+                    } else {
+                        vec![]
+                    }
+                }
             }
         }
-        None => completion_items(pos, &path, &context.symbols.lock().unwrap()),
+        None => {
+            eprintln!("failed completion for {:?} (package root not found)", path);
+            vec![]
+        }
     };
 
     let result = serde_json::to_value(items).expect("could not serialize completion response");
@@ -575,10 +585,12 @@ fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<Comple
             }
             Some(Tok::Period) => {
                 items = dot(symbols, path, &pos);
-                if !items.is_empty() {
-                    // found dot completions - do not look for any other
-                    only_custom_items = true;
-                }
+                // whether completions have been found for the dot or not
+                // it makes no sense to try offering "dumb" autocompletion
+                // options here as they will not fit (an example would
+                // be dot completion of u64 variable without any methods
+                // with u64 receiver being visible)
+                only_custom_items = true;
             }
 
             Some(Tok::ColonColon) => {

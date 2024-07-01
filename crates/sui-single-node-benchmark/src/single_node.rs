@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
-use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::mock_storage::InMemoryObjectStore;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -15,6 +14,7 @@ use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
+use sui_core::mock_consensus::{ConsensusMode, MockConsensusClient};
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
@@ -54,7 +54,10 @@ impl SingleValidator {
             _ => ConsensusMode::Noop,
         };
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
-            Arc::new(MockConsensusClient::new(validator.clone(), consensus_mode)),
+            Arc::new(MockConsensusClient::new(
+                Arc::downgrade(&validator),
+                consensus_mode,
+            )),
             validator.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,

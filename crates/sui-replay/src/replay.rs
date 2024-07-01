@@ -1860,9 +1860,7 @@ impl ChildObjectResolver for LocalExec {
             receiving_object_id: &ObjectID,
             receive_object_at_version: SequenceNumber,
         ) -> SuiResult<Option<Object>> {
-            let recv_object = match self_
-                .download_object_by_upper_bound(receiving_object_id, receive_object_at_version)?
-            {
+            let recv_object = match self_.get_object(receiving_object_id)? {
                 None => return Ok(None),
                 Some(o) => o,
             };

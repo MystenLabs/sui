@@ -883,7 +883,7 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency_v2">create_regulated_currency_v2</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>&gt;, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency_v2">create_regulated_currency_v2</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>&gt;, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -892,7 +892,7 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency_v2">create_regulated_currency_v2</a>&lt;T: drop&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency_v2">create_regulated_currency_v2</a>&lt;T: drop&gt;(
     witness: T,
     decimals: u8,
     symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
@@ -1022,7 +1022,7 @@ accordingly.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_add">deny_list_v2_add</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_add">deny_list_v2_add</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1031,7 +1031,7 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_add">deny_list_v2_add</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_add">deny_list_v2_add</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
     _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;,
     addr: <b>address</b>,
@@ -1052,7 +1052,7 @@ accordingly.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_remove">deny_list_v2_remove</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_remove">deny_list_v2_remove</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1061,7 +1061,7 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_remove">deny_list_v2_remove</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_remove">deny_list_v2_remove</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
     _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;,
     addr: <b>address</b>,
@@ -1082,7 +1082,7 @@ accordingly.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_current_epoch">deny_list_v2_contains_current_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_current_epoch">deny_list_v2_contains_current_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -1091,7 +1091,7 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_current_epoch">deny_list_v2_contains_current_epoch</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_current_epoch">deny_list_v2_contains_current_epoch</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
     addr: <b>address</b>,
     ctx: &TxContext,
@@ -1111,7 +1111,7 @@ accordingly.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>): bool
 </code></pre>
 
 
@@ -1120,7 +1120,7 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
     addr: <b>address</b>,
 ): bool {
@@ -1139,7 +1139,7 @@ accordingly.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_enable_global_pause">deny_list_v2_enable_global_pause</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_enable_global_pause">deny_list_v2_enable_global_pause</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1148,7 +1148,7 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_enable_global_pause">deny_list_v2_enable_global_pause</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_enable_global_pause">deny_list_v2_enable_global_pause</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
     deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;,
     ctx: &<b>mut</b> TxContext,
@@ -1169,7 +1169,7 @@ accordingly.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_global_pause">deny_list_v2_disable_global_pause</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_global_pause">deny_list_v2_disable_global_pause</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1178,7 +1178,7 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_global_pause">deny_list_v2_disable_global_pause</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_global_pause">deny_list_v2_disable_global_pause</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
     deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;,
     ctx: &<b>mut</b> TxContext,
@@ -1199,7 +1199,7 @@ accordingly.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch">deny_list_v2_is_global_pause_enabled_current_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch">deny_list_v2_is_global_pause_enabled_current_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -1208,7 +1208,7 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch">deny_list_v2_is_global_pause_enabled_current_epoch</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch">deny_list_v2_is_global_pause_enabled_current_epoch</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
     ctx: &TxContext,
 ): bool {
@@ -1227,7 +1227,7 @@ accordingly.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>): bool
 </code></pre>
 
 
@@ -1236,7 +1236,7 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
 ): bool {
     <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();

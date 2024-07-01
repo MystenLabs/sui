@@ -8,7 +8,9 @@ use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::epoch::randomness::RandomnessManager;
 use crate::execution_cache::build_execution_cache;
+use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::rest_index::RestIndexStore;
 use crate::signature_verifier::SignatureVerifierMetrics;
@@ -26,6 +28,7 @@ use sui_config::node::{
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::nondeterministic;
+use sui_network::randomness;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
 use sui_swarm_config::genesis_config::AccountConfig;
@@ -212,17 +215,9 @@ impl<'a> TestAuthorityBuilder<'a> {
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
         // `_guard` must be declared here so it is not dropped before
         // `AuthorityPerEpochStore::new` is called
-        // Force disable random beacon for tests using this builder, because it doesn't set up the
-        // RandomnessManager.
-        let _guard = if let Some(mut config) = self.protocol_config {
-            config.set_random_beacon_for_testing(false);
-            ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone())
-        } else {
-            ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-                config.set_random_beacon_for_testing(false);
-                config
-            })
-        };
+        let _guard = self
+            .protocol_config
+            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
         let epoch_flags = EpochFlag::default_flags_for_new_epoch(&config);
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
@@ -314,7 +309,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             authority_store,
             cache_traits,
-            epoch_store,
+            epoch_store.clone(),
             committee_store,
             index_store,
             rest_index,
@@ -322,11 +317,35 @@ impl<'a> TestAuthorityBuilder<'a> {
             &registry,
             genesis.objects(),
             &DBCheckpointConfig::default(),
-            config,
+            config.clone(),
             usize::MAX,
             ArchiveReaderBalancer::default(),
         )
         .await;
+
+        // Set up randomness with no-op consensus (DKG will not complete).
+        if epoch_store.randomness_state_enabled() {
+            let consensus_client = Box::new(MockConsensusClient::new(
+                Arc::downgrade(&state),
+                ConsensusMode::Noop,
+            ));
+            let randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_store),
+                consensus_client,
+                randomness::Handle::new_stub(),
+                config.protocol_key_pair(),
+            )
+            .await;
+            if let Some(randomness_manager) = randomness_manager {
+                // Randomness might fail if test configuration does not permit DKG init.
+                // In that case, skip setting it up.
+                epoch_store
+                    .set_randomness_manager(randomness_manager)
+                    .await
+                    .unwrap();
+            }
+        }
+
         // For any type of local testing that does not actually spawn a node, the checkpoint executor
         // won't be started, which means we won't actually execute the genesis transaction. In that case,
         // the genesis objects (e.g. all the genesis test coins) won't be accessible. Executing it

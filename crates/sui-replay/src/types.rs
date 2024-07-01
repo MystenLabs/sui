@@ -48,6 +48,7 @@ pub struct OnChainTransactionInfo {
     pub gas_price: u64,
     pub executed_epoch: u64,
     pub dependencies: Vec<TransactionDigest>,
+    #[serde(skip)]
     pub receiving_objs: Vec<(ObjectID, SequenceNumber)>,
     // TODO: There are two problems with this being a json-rpc type:
     // 1. The json-rpc type is not a perfect mirror with TransactionEffects since v2. We lost the

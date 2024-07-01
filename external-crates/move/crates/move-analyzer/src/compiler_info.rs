@@ -12,6 +12,11 @@ pub struct CompilerInfo {
     pub macro_info: BTreeMap<Loc, CI::MacroCallInfo>,
     pub expanded_lambdas: BTreeSet<Loc>,
     pub autocomplete_info: BTreeMap<FileHash, BTreeMap<Loc, CI::AutocompleteInfo>>,
+    /// Locations of binders in enum variants that are expanded from an ellipsis (and should
+    /// not be displayed in any way by the IDE)
+    pub ellipsis_binders: BTreeSet<Loc>,
+    /// Locations of guard expressions
+    pub guards: BTreeMap<FileHash, BTreeSet<Loc>>,
 }
 
 impl CompilerInfo {
@@ -54,7 +59,7 @@ impl CompilerInfo {
                     // TODO: Not much to do with this yet.
                 }
                 CI::IDEAnnotation::EllipsisMatchEntries(_) => {
-                    // TODO: Not much to do with this yet.
+                    self.ellipsis_binders.insert(loc);
                 }
             }
         }
@@ -82,5 +87,13 @@ impl CompilerInfo {
                 }
             })
         })
+    }
+
+    pub fn inside_guard(&self, fhash: FileHash, loc: &Loc, gloc: &Loc) -> bool {
+        self.guards
+            .get(&fhash)
+            .and_then(|guard_locs| guard_locs.get(gloc))
+            .is_some()
+            && gloc.contains(loc)
     }
 }

@@ -6,16 +6,18 @@
 //! only query from that block number onwards. The syncer also keeps track of the last
 //! block on Ethereum and will only query for events up to that block number.
 
-use ethers::providers::{Http, Middleware, Provider};
+use ethers::providers::{Http, JsonRpcClient, Middleware, Provider};
 use ethers::types::Address as EthAddress;
+use mysten_metrics::metered_channel::{channel, Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_bridge::error::BridgeResult;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::retry_with_max_elapsed_time;
-use sui_bridge::types::EthLog;
+use sui_bridge::types::RawEthLog;
 use tokio::task::JoinHandle;
 use tokio::time::{self, Duration};
 use tracing::{error, info};
@@ -38,7 +40,7 @@ pub type EthTargetAddresses = HashMap<EthAddress, u64>;
 #[allow(clippy::new_without_default)]
 impl<P> LatestEthSyncer<P>
 where
-    P: ethers::providers::JsonRpcClient + 'static,
+    P: JsonRpcClient + 'static,
 {
     pub fn new(
         eth_client: Arc<EthClient<P>>,
@@ -57,9 +59,9 @@ where
         metrics: BridgeIndexerMetrics,
     ) -> BridgeResult<(
         Vec<JoinHandle<()>>,
-        mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
+        Receiver<(EthAddress, u64, Vec<RawEthLog>)>,
     )> {
-        let (eth_evnets_tx, eth_events_rx) = mysten_metrics::metered_channel::channel(
+        let (eth_evnets_tx, eth_events_rx) = channel(
             ETH_EVENTS_CHANNEL_SIZE,
             &mysten_metrics::get_metrics()
                 .unwrap()
@@ -91,18 +93,18 @@ where
         contract_address: EthAddress,
         mut start_block: u64,
         provider: Arc<Provider<Http>>,
-        events_sender: mysten_metrics::metered_channel::Sender<(EthAddress, u64, Vec<EthLog>)>,
+        events_sender: Sender<(EthAddress, u64, Vec<RawEthLog>)>,
         eth_client: Arc<EthClient<P>>,
         metrics: BridgeIndexerMetrics,
     ) {
-        tracing::info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
+        info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
+        let mut interval = time::interval(BLOCK_QUERY_INTERVAL);
+        interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
-            let mut interval = time::interval(BLOCK_QUERY_INTERVAL);
             interval.tick().await;
-            let Ok(Ok(new_block)) = retry_with_max_elapsed_time!(
-                provider.get_block_number(),
-                time::Duration::from_secs(600)
-            ) else {
+            let Ok(Ok(new_block)) =
+                retry_with_max_elapsed_time!(provider.get_block_number(), Duration::from_secs(600))
+            else {
                 error!("Failed to get latest block from eth client after retry");
                 continue;
             };
@@ -110,7 +112,7 @@ where
             let new_block: u64 = new_block.as_u64();
 
             if new_block < start_block {
-                tracing::info!(
+                info!(
                     contract_address=?contract_address,
                     "New block {} is smaller than start block {}, ignore",
                     new_block,
@@ -120,11 +122,10 @@ where
             }
 
             // Each query does at most ETH_LOG_QUERY_MAX_BLOCK_RANGE blocks.
-            let end_block =
-                std::cmp::min(start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1, new_block);
+            let end_block = min(start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1, new_block);
             let timer = Instant::now();
             let Ok(Ok(events)) = retry_with_max_elapsed_time!(
-                eth_client.get_events_in_range(contract_address, start_block, end_block),
+                eth_client.get_raw_events_in_range(contract_address, start_block, end_block),
                 Duration::from_secs(600)
             ) else {
                 error!("Failed to get events from eth client after retry");
@@ -151,11 +152,9 @@ where
                 .await
                 .expect("All Eth event channel receivers are closed");
             if len != 0 {
-                tracing::info!(
+                info!(
                     ?contract_address,
-                    start_block,
-                    end_block,
-                    "Observed {len} new Eth events",
+                    start_block, end_block, "Observed {len} new Eth events",
                 );
             }
             if let Some(last_block) = last_block {

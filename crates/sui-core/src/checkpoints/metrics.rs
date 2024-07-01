@@ -18,6 +18,8 @@ pub struct CheckpointMetrics {
     pub checkpoint_participation: IntCounterVec,
     pub last_received_checkpoint_signatures: IntGaugeVec,
     pub last_sent_checkpoint_signature: IntGauge,
+    pub last_skipped_checkpoint_signature_submission: IntGauge,
+    pub last_ignored_checkpoint_signature_received: IntGauge,
     pub highest_accumulated_epoch: IntGauge,
     pub checkpoint_creation_latency_ms: Histogram,
     pub remote_checkpoint_forks: IntCounter,
@@ -86,6 +88,18 @@ impl CheckpointMetrics {
             last_sent_checkpoint_signature: register_int_gauge_with_registry!(
                 "last_sent_checkpoint_signature",
                 "Last checkpoint signature sent by myself",
+                registry
+            )
+            .unwrap(),
+            last_skipped_checkpoint_signature_submission: register_int_gauge_with_registry!(
+                "last_skipped_checkpoint_signature_submission",
+                "Last checkpoint signature that this validator skipped submitting because it was already certfied.",
+                registry
+            )
+            .unwrap(),
+            last_ignored_checkpoint_signature_received: register_int_gauge_with_registry!(
+                "last_ignored_checkpoint_signature_received",
+                "Last received checkpoint signature that this validator ignored because it was already certfied.",
                 registry
             )
             .unwrap(),

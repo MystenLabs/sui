@@ -43,6 +43,7 @@ pub async fn send_and_confirm_transaction_(
         fullnode,
         transaction,
         with_shared,
+        true,
     )
     .await?;
     Ok((txn, effects))
@@ -77,6 +78,7 @@ pub async fn execute_certificate_with_execution_error(
     fullnode: Option<&AuthorityState>,
     certificate: VerifiedCertificate,
     with_shared: bool, // transaction includes shared objects
+    fake_consensus: bool,
 ) -> Result<
     (
         CertifiedTransaction,
@@ -100,9 +102,30 @@ pub async fn execute_certificate_with_execution_error(
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
 
     if with_shared {
-        send_consensus(authority, &certificate).await;
+        if fake_consensus {
+            send_consensus(authority, &certificate).await;
+        } else {
+            // Just set object locks directly if send_consensus is not requested.
+            authority
+                .epoch_store_for_testing()
+                .assign_shared_object_versions_for_tests(
+                    authority.get_object_cache_reader().as_ref(),
+                    &vec![VerifiedExecutableTransaction::new_from_certificate(
+                        certificate.clone(),
+                    )],
+                )
+                .await?;
+        }
         if let Some(fullnode) = fullnode {
-            send_consensus(fullnode, &certificate).await;
+            fullnode
+                .epoch_store_for_testing()
+                .assign_shared_object_versions_for_tests(
+                    fullnode.get_object_cache_reader().as_ref(),
+                    &vec![VerifiedExecutableTransaction::new_from_certificate(
+                        certificate.clone(),
+                    )],
+                )
+                .await?;
         }
     }
 
@@ -133,7 +156,8 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
     transaction: Transaction,
-    with_shared: bool, // transaction includes shared objects
+    with_shared: bool,    // transaction includes shared objects
+    fake_consensus: bool, // runs consensus handler if true
 ) -> Result<
     (
         CertifiedTransaction,
@@ -143,7 +167,14 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     SuiError,
 > {
     let certificate = certify_transaction(authority, transaction).await?;
-    execute_certificate_with_execution_error(authority, fullnode, certificate, with_shared).await
+    execute_certificate_with_execution_error(
+        authority,
+        fullnode,
+        certificate,
+        with_shared,
+        fake_consensus,
+    )
+    .await
 }
 
 pub async fn init_state_validator_with_fullnode() -> (Arc<AuthorityState>, Arc<AuthorityState>) {

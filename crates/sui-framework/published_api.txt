@@ -2051,7 +2051,7 @@ create_currency
 	public fun
 	0x2::coin
 create_regulated_currency_v2
-	public(package) fun
+	public fun
 	0x2::coin
 mint
 	public fun
@@ -2063,28 +2063,28 @@ burn
 	public entry fun
 	0x2::coin
 deny_list_v2_add
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_remove
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_contains_current_epoch
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_contains_next_epoch
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_enable_global_pause
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_disable_global_pause
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_is_global_pause_enabled_current_epoch
-	public(package) fun
+	public fun
 	0x2::coin
 deny_list_v2_is_global_pause_enabled_next_epoch
-	public(package) fun
+	public fun
 	0x2::coin
 mint_and_transfer
 	public entry fun
@@ -4444,6 +4444,15 @@ pop_char
 length
 	public fun
 	0x1::ascii
+append
+	public fun
+	0x1::ascii
+insert
+	public fun
+	0x1::ascii
+substring
+	public fun
+	0x1::ascii
 as_bytes
 	public fun
 	0x1::ascii
@@ -4458,6 +4467,24 @@ is_valid_char
 	0x1::ascii
 is_printable_char
 	public fun
+	0x1::ascii
+is_empty
+	public fun
+	0x1::ascii
+to_uppercase
+	public fun
+	0x1::ascii
+to_lowercase
+	public fun
+	0x1::ascii
+index_of
+	public fun
+	0x1::ascii
+char_to_uppercase
+	fun
+	0x1::ascii
+char_to_lowercase
+	fun
 	0x1::ascii
 BitVector
 	public struct
@@ -4498,7 +4525,10 @@ to_ascii
 try_utf8
 	public fun
 	0x1::string
-bytes
+as_bytes
+	public fun
+	0x1::string
+into_bytes
 	public fun
 	0x1::string
 is_empty
@@ -4516,7 +4546,7 @@ append_utf8
 insert
 	public fun
 	0x1::string
-sub_string
+substring
 	public fun
 	0x1::string
 index_of
@@ -4533,6 +4563,12 @@ internal_sub_string
 	0x1::string
 internal_index_of
 	fun
+	0x1::string
+bytes
+	public fun
+	0x1::string
+sub_string
+	public fun
 	0x1::string
 length
 	public fun
