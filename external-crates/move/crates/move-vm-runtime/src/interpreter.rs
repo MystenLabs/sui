@@ -5,7 +5,9 @@
 use crate::{
     loader::{Function, Loader, Resolver},
     native_functions::NativeContext,
-    trace,
+    trace, trace_close_frame, trace_close_main_frame, trace_open_frame, trace_open_instruction,
+    trace_open_main_frame,
+    tracing2::trace_interface::Tracer,
 };
 use fail::fail_point;
 use move_binary_format::{
@@ -109,12 +111,22 @@ impl Interpreter {
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
+        tracer: &Option<Box<dyn Tracer>>,
         loader: &Loader,
     ) -> VMResult<Vec<Value>> {
         let mut interpreter = Interpreter {
             operand_stack: Stack::new(),
             call_stack: CallStack::new(),
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
+        };
+        trace_open_main_frame! {
+            tracer,
+            &args,
+            &ty_args,
+            &function,
+            &loader,
+            gas_meter.remaining_gas().into(),
+            data_store.link_context()
         };
         profile_open_frame!(gas_meter, function.pretty_string());
 
@@ -141,12 +153,21 @@ impl Interpreter {
                         .finish(Location::Module(function.module_id().clone()))
                 })?;
 
+            trace_close_main_frame! {
+                tracer,
+                &ty_args,
+                &return_values,
+                &function,
+                &loader,
+                gas_meter.remaining_gas().into(),
+                link_context,
+            };
             profile_close_frame!(gas_meter, function.pretty_string());
 
             Ok(return_values.into_iter().collect())
         } else {
             interpreter.execute_main(
-                loader, data_store, gas_meter, extensions, function, ty_args, args,
+                loader, data_store, gas_meter, extensions, function, ty_args, args, tracer,
             )
         }
     }
@@ -166,6 +187,7 @@ impl Interpreter {
         function: Arc<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
+        tracer: &Option<Box<dyn Tracer>>,
     ) -> VMResult<Vec<Value>> {
         let mut locals = Locals::new(function.local_count());
         for (i, value) in args.into_iter().enumerate() {
@@ -187,7 +209,7 @@ impl Interpreter {
         loop {
             let resolver = current_frame.resolver(link_context, loader);
             let exit_code = current_frame //self
-                .execute_code(&resolver, &mut self, gas_meter)
+                .execute_code(&resolver, &mut self, gas_meter, tracer)
                 .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
             match exit_code {
                 ExitCode::Return => {
@@ -201,6 +223,13 @@ impl Interpreter {
                         .charge_drop_frame(non_ref_vals.into_iter())
                         .map_err(|e| self.set_location(e))?;
 
+                    trace_close_frame! {
+                        tracer,
+                        &current_frame.function,
+                        &loader,
+                        gas_meter.remaining_gas().into(),
+                        link_context,
+                    };
                     profile_close_frame!(gas_meter, current_frame.function.pretty_string());
 
                     if let Some(frame) = self.call_stack.pop() {
@@ -214,6 +243,14 @@ impl Interpreter {
                 }
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
+                    trace_open_frame! {
+                        tracer,
+                        &[],
+                        &func,
+                        &loader,
+                        gas_meter.remaining_gas().into(),
+                        link_context,
+                    };
                     #[cfg(feature = "gas-profiler")]
                     let func_name = func.pretty_string();
                     profile_open_frame!(gas_meter, func_name.clone());
@@ -232,10 +269,17 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
                     if func.is_native() {
-                        self.call_native(&resolver, gas_meter, extensions, func, vec![])?;
+                        self.call_native(&resolver, gas_meter, extensions, func.clone(), vec![])?;
 
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
+                        trace_close_frame! {
+                            tracer,
+                            &func,
+                            &loader,
+                            gas_meter.remaining_gas().into(),
+                            link_context,
+                        };
                         profile_close_frame!(gas_meter, func_name.clone());
                         continue;
                     }
@@ -257,6 +301,14 @@ impl Interpreter {
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
+                    trace_open_frame! {
+                        tracer,
+                        &ty_args,
+                        &func,
+                        &loader,
+                        gas_meter.remaining_gas().into(),
+                        link_context,
+                    };
                     #[cfg(feature = "gas-profiler")]
                     let func_name = func.pretty_string();
                     profile_open_frame!(gas_meter, func_name.clone());
@@ -276,8 +328,15 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
                     if func.is_native() {
-                        self.call_native(&resolver, gas_meter, extensions, func, ty_args)?;
+                        self.call_native(&resolver, gas_meter, extensions, func.clone(), ty_args)?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
+                        trace_close_frame! {
+                            tracer,
+                            &func,
+                            &loader,
+                            gas_meter.remaining_gas().into(),
+                            link_context,
+                        };
                         profile_close_frame!(gas_meter, func_name.clone());
 
                         continue;
@@ -775,11 +834,11 @@ impl CallStack {
 /// A `Frame` is the execution context for a function. It holds the locals of the function and
 /// the function itself.
 // #[derive(Debug)]
-struct Frame {
-    pc: u16,
-    locals: Locals,
-    function: Arc<Function>,
-    ty_args: Vec<Type>,
+pub struct Frame {
+    pub pc: u16,
+    pub locals: Locals,
+    pub function: Arc<Function>,
+    pub ty_args: Vec<Type>,
 }
 
 /// An `ExitCode` from `execute_code_unit`.
@@ -797,8 +856,9 @@ impl Frame {
         resolver: &Resolver,
         interpreter: &mut Interpreter,
         gas_meter: &mut impl GasMeter,
+        tracer: &Option<Box<dyn Tracer>>,
     ) -> VMResult<ExitCode> {
-        self.execute_code_impl(resolver, interpreter, gas_meter)
+        self.execute_code_impl(resolver, interpreter, gas_meter, tracer)
             .map_err(|e| {
                 let e = if resolver.loader().vm_config().error_execution_state {
                     e.with_exec_state(interpreter.get_internal_state())
@@ -1359,6 +1419,7 @@ impl Frame {
         resolver: &Resolver,
         interpreter: &mut Interpreter,
         gas_meter: &mut impl GasMeter,
+        tracer: &Option<Box<dyn Tracer>>,
     ) -> PartialVMResult<ExitCode> {
         let code = self.function.code();
         loop {
@@ -1379,6 +1440,13 @@ impl Frame {
                         ),
                     )
                 });
+
+                trace_open_instruction! {
+                    &tracer,
+                    self,
+                    resolver.loader(),
+                    gas_meter.remaining_gas().into(),
+                };
 
                 profile_open_instr!(gas_meter, format!("{:?}", instruction));
 

@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::{
     data_cache::TransactionDataCache, native_extensions::NativeContextExtensions,
     native_functions::NativeFunction, runtime::VMRuntime, session::Session,
+    tracing2::trace_interface::Tracer,
 };
 use move_binary_format::{
     errors::{Location, VMResult},
@@ -41,6 +42,10 @@ impl MoveVM {
 
     pub fn config(&self) -> &VMConfig {
         self.runtime.loader().vm_config()
+    }
+
+    pub fn register_tracer(&mut self, tracer: Box<dyn Tracer>) {
+        self.runtime.set_tracer(tracer);
     }
 
     /// Create a new Session backed by the given storage.

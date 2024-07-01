@@ -1,0 +1,1695 @@
+{
+  "trace": [
+    {
+      "event": {
+        "Frame": {
+          "Open": {
+            "frame": {
+              "frame_id": 0,
+              "function_name": "test",
+              "module": {
+                "address": "0000000000000000000000000000000000000000000000000000000000000005",
+                "name": "l"
+              },
+              "binary_member_index": 0,
+              "type_instantiation": [],
+              "parameters": [],
+              "return_types": [],
+              "locals_types": []
+            }
+          }
+        }
+      },
+      "gas_left": 1000000000
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 0
+        }
+      },
+      "gas_left": 1000000000
+    },
+    {
+      "event": {
+        "Frame": {
+          "Open": {
+            "frame": {
+              "frame_id": 1,
+              "function_name": "f",
+              "module": {
+                "address": "0000000000000000000000000000000000000000000000000000000000000005",
+                "name": "l"
+              },
+              "binary_member_index": 1,
+              "type_instantiation": [],
+              "parameters": [],
+              "return_types": [],
+              "locals_types": [
+                {
+                  "layout": "u64",
+                  "ref_type": null
+                }
+              ]
+            }
+          }
+        }
+      },
+      "gas_left": 1000000000
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 0
+        }
+      },
+      "gas_left": 999998867
+    },
+    {
+      "event": {
+        "Frame": {
+          "Open": {
+            "frame": {
+              "frame_id": 2,
+              "function_name": "k",
+              "module": {
+                "address": "0000000000000000000000000000000000000000000000000000000000000005",
+                "name": "l"
+              },
+              "binary_member_index": 2,
+              "type_instantiation": [],
+              "parameters": [],
+              "return_types": [
+                {
+                  "layout": "u64",
+                  "ref_type": null
+                }
+              ],
+              "locals_types": []
+            }
+          }
+        }
+      },
+      "gas_left": 999998867
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Push": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            }
+          ],
+          "pc": 0
+        }
+      },
+      "gas_left": 999997734
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 1
+        }
+      },
+      "gas_left": 999997732
+    },
+    {
+      "event": {
+        "Frame": {
+          "Close": {
+            "frame_id": 2,
+            "return_": [
+              {
+                "Value": {
+                  "value": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "gas_left": 999997093
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Push": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            }
+          ],
+          "pc": 1
+        }
+      },
+      "gas_left": 999997093
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            },
+            {
+              "Pop": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            }
+          ],
+          "pc": 2
+        }
+      },
+      "gas_left": 999997091
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            },
+            {
+              "Write": {
+                "location": {
+                  "Local": [
+                    1,
+                    0
+                  ]
+                },
+                "value_written": {
+                  "Value": {
+                    "value": 2
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 3
+        }
+      },
+      "gas_left": 999997089
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    1,
+                    0
+                  ]
+                },
+                "value_read": {
+                  "Value": {
+                    "value": 2
+                  }
+                },
+                "moved": false
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            }
+          ],
+          "pc": 4
+        }
+      },
+      "gas_left": 999997057
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Push": {
+                "Value": {
+                  "value": 0
+                }
+              }
+            }
+          ],
+          "pc": 5
+        }
+      },
+      "gas_left": 999997025
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": 0
+                }
+              }
+            },
+            {
+              "Pop": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": false
+                }
+              }
+            }
+          ],
+          "pc": 6
+        }
+      },
+      "gas_left": 999997023
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": false
+                }
+              }
+            }
+          ],
+          "pc": 7
+        }
+      },
+      "gas_left": 999997021
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    1,
+                    0
+                  ]
+                },
+                "value_read": {
+                  "Value": {
+                    "value": 2
+                  }
+                },
+                "moved": true
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            }
+          ],
+          "pc": 8
+        }
+      },
+      "gas_left": 999997019
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 9
+        }
+      },
+      "gas_left": 999996987
+    },
+    {
+      "event": {
+        "Frame": {
+          "Open": {
+            "frame": {
+              "frame_id": 3,
+              "function_name": "g",
+              "module": {
+                "address": "0000000000000000000000000000000000000000000000000000000000000005",
+                "name": "l"
+              },
+              "binary_member_index": 3,
+              "type_instantiation": [],
+              "parameters": [
+                {
+                  "Value": {
+                    "value": 2
+                  }
+                }
+              ],
+              "return_types": [],
+              "locals_types": [
+                {
+                  "layout": "u8",
+                  "ref_type": null
+                }
+              ]
+            }
+          }
+        }
+      },
+      "gas_left": 999996987
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    3,
+                    0
+                  ]
+                },
+                "value_read": {
+                  "Value": {
+                    "value": 2
+                  }
+                },
+                "moved": true
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            }
+          ],
+          "pc": 0
+        }
+      },
+      "gas_left": 999994721
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            }
+          ],
+          "pc": 1
+        }
+      },
+      "gas_left": 999994689
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            },
+            {
+              "Write": {
+                "location": {
+                  "Local": [
+                    3,
+                    1
+                  ]
+                },
+                "value_written": {
+                  "Value": {
+                    "value": 2
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 2
+        }
+      },
+      "gas_left": 999994686
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Push": {
+                "Value": {
+                  "value": [
+                    1,
+                    2,
+                    3
+                  ]
+                }
+              }
+            }
+          ],
+          "pc": 3
+        }
+      },
+      "gas_left": 999994654
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": [
+                    1,
+                    2,
+                    3
+                  ]
+                }
+              }
+            }
+          ],
+          "pc": 4
+        }
+      },
+      "gas_left": 999994604
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Push": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            }
+          ],
+          "pc": 5
+        }
+      },
+      "gas_left": 999994602
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Push": {
+                "Value": {
+                  "value": true
+                }
+              }
+            }
+          ],
+          "pc": 6
+        }
+      },
+      "gas_left": 999994586
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            },
+            {
+              "Pop": {
+                "Value": {
+                  "value": true
+                }
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": {
+                    "type": "0x5::l::X",
+                    "fields": {
+                      "x": 1,
+                      "y": true
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 7
+        }
+      },
+      "gas_left": 999994584
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Push": {
+                "Value": {
+                  "value": true
+                }
+              }
+            }
+          ],
+          "pc": 8
+        }
+      },
+      "gas_left": 999994482
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": {
+                    "type": "0x5::l::X",
+                    "fields": {
+                      "x": 1,
+                      "y": true
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "Pop": {
+                "Value": {
+                  "value": true
+                }
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": {
+                    "type": "0x5::l::Y<0x5::l::X, bool>",
+                    "fields": {
+                      "x": {
+                        "type": "0x5::l::X",
+                        "fields": {
+                          "x": 1,
+                          "y": true
+                        }
+                      },
+                      "y": true
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 9
+        }
+      },
+      "gas_left": 999994480
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 10
+        }
+      },
+      "gas_left": 999994324
+    },
+    {
+      "event": {
+        "Frame": {
+          "Open": {
+            "frame": {
+              "frame_id": 4,
+              "function_name": "i",
+              "module": {
+                "address": "0000000000000000000000000000000000000000000000000000000000000005",
+                "name": "l"
+              },
+              "binary_member_index": 5,
+              "type_instantiation": [
+                {
+                  "struct": {
+                    "address": "0000000000000000000000000000000000000000000000000000000000000005",
+                    "module": "l",
+                    "name": "X",
+                    "type_args": []
+                  }
+                },
+                "bool"
+              ],
+              "parameters": [
+                {
+                  "Value": {
+                    "value": {
+                      "type": "0x5::l::Y<0x5::l::X, bool>",
+                      "fields": {
+                        "x": {
+                          "type": "0x5::l::X",
+                          "fields": {
+                            "x": 1,
+                            "y": true
+                          }
+                        },
+                        "y": true
+                      }
+                    }
+                  }
+                }
+              ],
+              "return_types": [
+                {
+                  "layout": "u8",
+                  "ref_type": null
+                }
+              ],
+              "locals_types": [
+                {
+                  "layout": "u64",
+                  "ref_type": null
+                },
+                {
+                  "layout": "u8",
+                  "ref_type": null
+                },
+                {
+                  "layout": "u8",
+                  "ref_type": "Mut"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "gas_left": 999994324
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    4,
+                    0
+                  ]
+                },
+                "value_read": {
+                  "Value": {
+                    "value": {
+                      "type": "0x5::l::Y<0x5::l::X, bool>",
+                      "fields": {
+                        "x": {
+                          "type": "0x5::l::X",
+                          "fields": {
+                            "x": 1,
+                            "y": true
+                          }
+                        },
+                        "y": true
+                      }
+                    }
+                  }
+                },
+                "moved": true
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": {
+                    "type": "0x5::l::Y<0x5::l::X, bool>",
+                    "fields": {
+                      "x": {
+                        "type": "0x5::l::X",
+                        "fields": {
+                          "x": 1,
+                          "y": true
+                        }
+                      },
+                      "y": true
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 0
+        }
+      },
+      "gas_left": 999991992
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": {
+                    "type": "0x5::l::Y<0x5::l::X, bool>",
+                    "fields": {
+                      "x": {
+                        "type": "0x5::l::X",
+                        "fields": {
+                          "x": 1,
+                          "y": true
+                        }
+                      },
+                      "y": true
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": {
+                    "type": "0x5::l::X",
+                    "fields": {
+                      "x": 1,
+                      "y": true
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": true
+                }
+              }
+            }
+          ],
+          "pc": 1
+        }
+      },
+      "gas_left": 999991888
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": true
+                }
+              }
+            }
+          ],
+          "pc": 2
+        }
+      },
+      "gas_left": 999991732
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": {
+                    "type": "0x5::l::X",
+                    "fields": {
+                      "x": 1,
+                      "y": true
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 3
+        }
+      },
+      "gas_left": 999991730
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Push": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            }
+          ],
+          "pc": 4
+        }
+      },
+      "gas_left": 999991728
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            },
+            {
+              "Write": {
+                "location": {
+                  "Local": [
+                    4,
+                    1
+                  ]
+                },
+                "value_written": {
+                  "Value": {
+                    "value": 1
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 5
+        }
+      },
+      "gas_left": 999991726
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    4,
+                    1
+                  ]
+                },
+                "value_read": {
+                  "Value": {
+                    "value": 1
+                  }
+                },
+                "moved": false
+              }
+            },
+            {
+              "Push": {
+                "ImmRef": {
+                  "location": {
+                    "Local": [
+                      4,
+                      1
+                    ]
+                  },
+                  "snapshot": {
+                    "Value": {
+                      "value": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 6
+        }
+      },
+      "gas_left": 999991694
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "ImmRef": {
+                  "location": {
+                    "Local": [
+                      4,
+                      1
+                    ]
+                  },
+                  "snapshot": {
+                    "Value": {
+                      "value": 1
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    4,
+                    1
+                  ]
+                },
+                "value_read": {
+                  "Value": {
+                    "value": 1
+                  }
+                },
+                "moved": false
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            }
+          ],
+          "pc": 7
+        }
+      },
+      "gas_left": 999991692
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            }
+          ],
+          "pc": 8
+        }
+      },
+      "gas_left": 999991660
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Push": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            }
+          ],
+          "pc": 9
+        }
+      },
+      "gas_left": 999991658
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "Value": {
+                  "value": 1
+                }
+              }
+            },
+            {
+              "Write": {
+                "location": {
+                  "Local": [
+                    4,
+                    2
+                  ]
+                },
+                "value_written": {
+                  "Value": {
+                    "value": 1
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 10
+        }
+      },
+      "gas_left": 999991656
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    4,
+                    2
+                  ]
+                },
+                "value_read": {
+                  "Value": {
+                    "value": 1
+                  }
+                },
+                "moved": false
+              }
+            },
+            {
+              "Push": {
+                "MutRef": {
+                  "location": {
+                    "Local": [
+                      4,
+                      2
+                    ]
+                  },
+                  "snapshot": {
+                    "Value": {
+                      "value": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 11
+        }
+      },
+      "gas_left": 999991624
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "MutRef": {
+                  "location": {
+                    "Local": [
+                      4,
+                      2
+                    ]
+                  },
+                  "snapshot": {
+                    "Value": {
+                      "value": 1
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "Write": {
+                "location": {
+                  "Local": [
+                    4,
+                    3
+                  ]
+                },
+                "value_written": {
+                  "MutRef": {
+                    "location": {
+                      "Local": [
+                        4,
+                        2
+                      ]
+                    },
+                    "snapshot": {
+                      "Value": {
+                        "value": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 12
+        }
+      },
+      "gas_left": 999991621
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Push": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            }
+          ],
+          "pc": 13
+        }
+      },
+      "gas_left": 999991605
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    4,
+                    3
+                  ]
+                },
+                "value_read": {
+                  "MutRef": {
+                    "location": {
+                      "Local": [
+                        4,
+                        2
+                      ]
+                    },
+                    "snapshot": {
+                      "Value": {
+                        "value": 1
+                      }
+                    }
+                  }
+                },
+                "moved": false
+              }
+            },
+            {
+              "Push": {
+                "MutRef": {
+                  "location": {
+                    "Local": [
+                      4,
+                      2
+                    ]
+                  },
+                  "snapshot": {
+                    "Value": {
+                      "value": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 14
+        }
+      },
+      "gas_left": 999991603
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "MutRef": {
+                  "location": {
+                    "Local": [
+                      4,
+                      2
+                    ]
+                  },
+                  "snapshot": {
+                    "Value": {
+                      "value": 1
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "Pop": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            },
+            {
+              "Write": {
+                "location": {
+                  "Local": [
+                    4,
+                    2
+                  ]
+                },
+                "value_written": {
+                  "Value": {
+                    "value": 2
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 15
+        }
+      },
+      "gas_left": 999991587
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    4,
+                    3
+                  ]
+                },
+                "value_read": {
+                  "MutRef": {
+                    "location": {
+                      "Local": [
+                        4,
+                        2
+                      ]
+                    },
+                    "snapshot": {
+                      "Value": {
+                        "value": 1
+                      }
+                    }
+                  }
+                },
+                "moved": true
+              }
+            },
+            {
+              "Push": {
+                "MutRef": {
+                  "location": {
+                    "Local": [
+                      4,
+                      2
+                    ]
+                  },
+                  "snapshot": {
+                    "Value": {
+                      "value": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "pc": 16
+        }
+      },
+      "gas_left": 999991555
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Pop": {
+                "MutRef": {
+                  "location": {
+                    "Local": [
+                      4,
+                      2
+                    ]
+                  },
+                  "snapshot": {
+                    "Value": {
+                      "value": 1
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    4,
+                    2
+                  ]
+                },
+                "value_read": {
+                  "Value": {
+                    "value": 2
+                  }
+                },
+                "moved": false
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            }
+          ],
+          "pc": 17
+        }
+      },
+      "gas_left": 999991539
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 18
+        }
+      },
+      "gas_left": 999991507
+    },
+    {
+      "event": {
+        "Frame": {
+          "Close": {
+            "frame_id": 4,
+            "return_": [
+              {
+                "Value": {
+                  "value": 2
+                }
+              }
+            ]
+          }
+        }
+      },
+      "gas_left": 999990868
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 11
+        }
+      },
+      "gas_left": 999990868
+    },
+    {
+      "event": {
+        "Frame": {
+          "Open": {
+            "frame": {
+              "frame_id": 5,
+              "function_name": "h",
+              "module": {
+                "address": "0000000000000000000000000000000000000000000000000000000000000005",
+                "name": "l"
+              },
+              "binary_member_index": 4,
+              "type_instantiation": [],
+              "parameters": [
+                {
+                  "Value": {
+                    "value": 2
+                  }
+                }
+              ],
+              "return_types": [],
+              "locals_types": []
+            }
+          }
+        }
+      },
+      "gas_left": 999990868
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 0
+        }
+      },
+      "gas_left": 999988602
+    },
+    {
+      "event": {
+        "Frame": {
+          "Close": {
+            "frame_id": 5,
+            "return_": []
+          }
+        }
+      },
+      "gas_left": 999987963
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [
+            {
+              "Read": {
+                "location": {
+                  "Local": [
+                    3,
+                    1
+                  ]
+                },
+                "value_read": {
+                  "Value": {
+                    "value": 2
+                  }
+                },
+                "moved": true
+              }
+            },
+            {
+              "Push": {
+                "Value": {
+                  "value": 2
+                }
+              }
+            }
+          ],
+          "pc": 12
+        }
+      },
+      "gas_left": 999987963
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 13
+        }
+      },
+      "gas_left": 999987931
+    },
+    {
+      "event": {
+        "Frame": {
+          "Open": {
+            "frame": {
+              "frame_id": 6,
+              "function_name": "h",
+              "module": {
+                "address": "0000000000000000000000000000000000000000000000000000000000000005",
+                "name": "l"
+              },
+              "binary_member_index": 4,
+              "type_instantiation": [],
+              "parameters": [
+                {
+                  "Value": {
+                    "value": 2
+                  }
+                }
+              ],
+              "return_types": [],
+              "locals_types": []
+            }
+          }
+        }
+      },
+      "gas_left": 999987931
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 0
+        }
+      },
+      "gas_left": 999985665
+    },
+    {
+      "event": {
+        "Frame": {
+          "Close": {
+            "frame_id": 6,
+            "return_": []
+          }
+        }
+      },
+      "gas_left": 999985026
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 14
+        }
+      },
+      "gas_left": 999985026
+    },
+    {
+      "event": {
+        "Frame": {
+          "Close": {
+            "frame_id": 3,
+            "return_": []
+          }
+        }
+      },
+      "gas_left": 999984387
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 10
+        }
+      },
+      "gas_left": 999984387
+    },
+    {
+      "event": {
+        "Frame": {
+          "Close": {
+            "frame_id": 1,
+            "return_": []
+          }
+        }
+      },
+      "gas_left": 999983748
+    },
+    {
+      "event": {
+        "Instruction": {
+          "type_parameters": [],
+          "effects": [],
+          "pc": 1
+        }
+      },
+      "gas_left": 999983748
+    },
+    {
+      "event": {
+        "Frame": {
+          "Close": {
+            "frame_id": 0,
+            "return_": []
+          }
+        }
+      },
+      "gas_left": 999983109
+    }
+  ]
+}
+

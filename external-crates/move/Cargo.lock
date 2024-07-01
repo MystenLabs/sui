@@ -1239,6 +1239,7 @@ checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.5",
+ "serde",
 ]
 
 [[package]]
@@ -2150,6 +2151,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-trace-format"
+version = "0.0.3"
+dependencies = [
+ "anyhow",
+ "arbitrary",
+ "enum-compat-util",
+ "getrandom 0.2.15",
+ "indexmap 2.2.6",
+ "move-binary-format",
+ "move-core-types",
+ "move-proc-macros",
+ "proptest",
+ "proptest-derive",
+ "ref-cast",
+ "serde",
+ "serde_json",
+ "variant_count",
+]
+
+[[package]]
 name = "move-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
@@ -2268,12 +2289,14 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-compiler",
+ "move-trace-format",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
  "proptest",
+ "serde_json",
  "smallvec",
  "tracing",
 ]

@@ -141,6 +141,44 @@ pub enum MoveTypeLayout {
     Enum(MoveEnumLayout),
 }
 
+impl MoveTypeLayout {
+    pub fn undecorate(&self) -> R::MoveTypeLayout {
+        match self {
+            MoveTypeLayout::Bool => R::MoveTypeLayout::Bool,
+            MoveTypeLayout::U8 => R::MoveTypeLayout::U8,
+            MoveTypeLayout::U64 => R::MoveTypeLayout::U64,
+            MoveTypeLayout::U128 => R::MoveTypeLayout::U128,
+            MoveTypeLayout::Address => R::MoveTypeLayout::Address,
+            MoveTypeLayout::Signer => R::MoveTypeLayout::Signer,
+            MoveTypeLayout::U16 => R::MoveTypeLayout::U16,
+            MoveTypeLayout::U32 => R::MoveTypeLayout::U32,
+            MoveTypeLayout::U256 => R::MoveTypeLayout::U256,
+            MoveTypeLayout::Vector(layout) => {
+                R::MoveTypeLayout::Vector(Box::new(layout.undecorate()))
+            }
+            MoveTypeLayout::Struct(layout) => R::MoveTypeLayout::Struct(layout.undecorate()),
+            MoveTypeLayout::Enum(layout) => R::MoveTypeLayout::Enum(layout.undecorate()),
+        }
+    }
+}
+
+impl MoveStructLayout {
+    pub fn undecorate(&self) -> R::MoveStructLayout {
+        R::MoveStructLayout(self.fields.iter().map(|f| f.layout.undecorate()).collect())
+    }
+}
+
+impl MoveEnumLayout {
+    pub fn undecorate(&self) -> R::MoveEnumLayout {
+        R::MoveEnumLayout(
+            self.variants
+                .iter()
+                .map(|(_, fields)| fields.iter().map(|f| f.layout.undecorate()).collect())
+                .collect(),
+        )
+    }
+}
+
 impl MoveValue {
     /// TODO (annotated-visitor): Port legacy uses of this method to `BoundedVisitor`.
     pub fn simple_deserialize(blob: &[u8], ty: &MoveTypeLayout) -> AResult<Self> {

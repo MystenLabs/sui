@@ -3227,6 +3227,19 @@ pub mod debug {
         }
     }
 
+    pub fn locals_as_strings(locals: &Locals) -> Vec<String> {
+        locals
+            .0
+            .borrow()
+            .iter()
+            .map(|v| {
+                let mut buf = String::new();
+                print_value_impl(&mut buf, v).unwrap();
+                buf
+            })
+            .collect()
+    }
+
     pub fn print_locals<B: Write>(buf: &mut B, locals: &Locals) -> PartialVMResult<()> {
         // REVIEW: The number of spaces in the indent is currently hard coded.
         for (idx, val) in locals.0.borrow().iter().enumerate() {
@@ -3663,7 +3676,9 @@ impl<'d, 'a> serde::de::DeserializeSeed<'d> for &MoveRuntimeVariantFieldLayout<'
 **************************************************************************************/
 
 impl Value {
-    fn constant_sig_token_to_layout(constant_signature: &SignatureToken) -> Option<MoveTypeLayout> {
+    pub(crate) fn constant_sig_token_to_layout(
+        constant_signature: &SignatureToken,
+    ) -> Option<MoveTypeLayout> {
         use MoveTypeLayout as L;
         use SignatureToken as S;
 

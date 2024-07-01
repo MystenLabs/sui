@@ -1,0 +1,523 @@
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING ttt
+Running Move unit tests
+Open frame: test
+stack:
+locals:
+Instruction:
+stack:
+locals:
+Open frame: f
+stack:
+locals:
+Instruction:
+stack:
+locals:
+Open frame: k
+stack:
+locals:
+Instruction:
+>	Push 1u64
+stack:
+	1u64
+locals:
+Instruction:
+stack:
+	1u64
+locals:
+Close frame 2
+stack:
+	1u64
+locals:
+Instruction:
+>	Push 1u64
+stack:
+	1u64
+	1u64
+locals:
+Instruction:
+>	Pop 1u64
+>	Pop 1u64
+>	Push 2u64
+stack:
+	2u64
+locals:
+Instruction:
+>	Pop 2u64
+>	Write: l0@1 <- 2u64
+stack:
+locals:
+	Frame 1
+		0: 2u64
+Instruction:
+>	Read: l0@1 -false-> 2u64
+>	Push 2u64
+stack:
+	2u64
+locals:
+	Frame 1
+		0: 2u64
+Instruction:
+>	Push 0u64
+stack:
+	2u64
+	0u64
+locals:
+	Frame 1
+		0: 2u64
+Instruction:
+>	Pop 0u64
+>	Pop 2u64
+>	Push false
+stack:
+	false
+locals:
+	Frame 1
+		0: 2u64
+Instruction:
+>	Pop false
+stack:
+locals:
+	Frame 1
+		0: 2u64
+Instruction:
+>	Read: l0@1 -true-> 2u64
+>	Push 2u64
+stack:
+	2u64
+locals:
+Instruction:
+stack:
+	2u64
+locals:
+Open frame: g
+stack:
+locals:
+	Frame 3
+		0: 2u64
+Instruction:
+>	Read: l0@3 -true-> 2u64
+>	Push 2u64
+stack:
+	2u64
+locals:
+Instruction:
+>	Pop 2u64
+>	Push 2u8
+stack:
+	2u8
+locals:
+Instruction:
+>	Pop 2u8
+>	Write: l1@3 <- 2u8
+stack:
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Push vector[
+	    1u64,
+	    2u64,
+	    3u64,
+	]
+stack:
+	vector[
+	    1u64,
+	    2u64,
+	    3u64,
+	]
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Pop vector[
+	    1u64,
+	    2u64,
+	    3u64,
+	]
+stack:
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Push 1u64
+stack:
+	1u64
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Push true
+stack:
+	1u64
+	true
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Pop 1u64
+>	Pop true
+>	Push 0x5::l::X {
+	    x: 1u64,
+	    y: true,
+	}
+stack:
+	0x5::l::X {
+	    x: 1u64,
+	    y: true,
+	}
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Push true
+stack:
+	0x5::l::X {
+	    x: 1u64,
+	    y: true,
+	}
+	true
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Pop 0x5::l::X {
+	    x: 1u64,
+	    y: true,
+	}
+>	Pop true
+>	Push 0x5::l::Y<0x5::l::X, bool> {
+	    x: 0x5::l::X {
+	        x: 1u64,
+	        y: true,
+	    },
+	    y: true,
+	}
+stack:
+	0x5::l::Y<0x5::l::X, bool> {
+	    x: 0x5::l::X {
+	        x: 1u64,
+	        y: true,
+	    },
+	    y: true,
+	}
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+stack:
+	0x5::l::Y<0x5::l::X, bool> {
+	    x: 0x5::l::X {
+	        x: 1u64,
+	        y: true,
+	    },
+	    y: true,
+	}
+locals:
+	Frame 3
+		1: 2u8
+Open frame: i
+stack:
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		0: 0x5::l::Y<0x5::l::X, bool> {
+		    x: 0x5::l::X {
+		        x: 1u64,
+		        y: true,
+		    },
+		    y: true,
+		}
+Instruction:
+>	Read: l0@4 -true-> 0x5::l::Y<0x5::l::X, bool> {
+	    x: 0x5::l::X {
+	        x: 1u64,
+	        y: true,
+	    },
+	    y: true,
+	}
+>	Push 0x5::l::Y<0x5::l::X, bool> {
+	    x: 0x5::l::X {
+	        x: 1u64,
+	        y: true,
+	    },
+	    y: true,
+	}
+stack:
+	0x5::l::Y<0x5::l::X, bool> {
+	    x: 0x5::l::X {
+	        x: 1u64,
+	        y: true,
+	    },
+	    y: true,
+	}
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Pop 0x5::l::Y<0x5::l::X, bool> {
+	    x: 0x5::l::X {
+	        x: 1u64,
+	        y: true,
+	    },
+	    y: true,
+	}
+>	Push 0x5::l::X {
+	    x: 1u64,
+	    y: true,
+	}
+>	Push true
+stack:
+	0x5::l::X {
+	    x: 1u64,
+	    y: true,
+	}
+	true
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Pop true
+stack:
+	0x5::l::X {
+	    x: 1u64,
+	    y: true,
+	}
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Pop 0x5::l::X {
+	    x: 1u64,
+	    y: true,
+	}
+stack:
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Push 1u64
+stack:
+	1u64
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Pop 1u64
+>	Write: l1@4 <- 1u64
+stack:
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+Instruction:
+>	Read: l1@4 -false-> 1u64
+>	Push &(l1@4) 1u64
+stack:
+	&(l1@4) 1u64
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+Instruction:
+>	Pop &(l1@4) 1u64
+>	Read: l1@4 -false-> 1u64
+>	Push 1u64
+stack:
+	1u64
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+Instruction:
+>	Pop 1u64
+stack:
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+Instruction:
+>	Push 1u8
+stack:
+	1u8
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+Instruction:
+>	Pop 1u8
+>	Write: l2@4 <- 1u8
+stack:
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+		2: 1u8
+Instruction:
+>	Read: l2@4 -false-> 1u8
+>	Push &mut(l2@4) 1u8
+stack:
+	&mut(l2@4) 1u8
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+		2: 1u8
+Instruction:
+>	Pop &mut(l2@4) 1u8
+>	Write: l3@4 <- &mut(l2@4) 1u8
+stack:
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+		2: 1u8
+		3: &mut(l2@4) 1u8
+Instruction:
+>	Push 2u8
+stack:
+	2u8
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+		2: 1u8
+		3: &mut(l2@4) 1u8
+Instruction:
+>	Read: l3@4 -false-> &mut(l2@4) 1u8
+>	Push &mut(l2@4) 1u8
+stack:
+	2u8
+	&mut(l2@4) 1u8
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+		2: 1u8
+		3: &mut(l2@4) 1u8
+Instruction:
+>	Pop &mut(l2@4) 1u8
+>	Pop 2u8
+>	Write: l2@4 <- 2u8
+stack:
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+		2: 2u8
+		3: &mut(l2@4) 1u8
+Instruction:
+>	Read: l3@4 -true-> &mut(l2@4) 1u8
+>	Push &mut(l2@4) 1u8
+stack:
+	&mut(l2@4) 1u8
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+		2: 2u8
+Instruction:
+>	Pop &mut(l2@4) 1u8
+>	Read: l2@4 -false-> 2u8
+>	Push 2u8
+stack:
+	2u8
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+		2: 2u8
+Instruction:
+stack:
+	2u8
+locals:
+	Frame 3
+		1: 2u8
+	Frame 4
+		1: 1u64
+		2: 2u8
+Close frame 4
+stack:
+	2u8
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+stack:
+	2u8
+locals:
+	Frame 3
+		1: 2u8
+Open frame: h
+stack:
+locals:
+	Frame 3
+		1: 2u8
+	Frame 5
+		0: 2u8
+Instruction:
+stack:
+locals:
+	Frame 3
+		1: 2u8
+	Frame 5
+		0: 2u8
+Close frame 5
+stack:
+locals:
+	Frame 3
+		1: 2u8
+Instruction:
+>	Read: l1@3 -true-> 2u8
+>	Push 2u8
+stack:
+	2u8
+locals:
+Instruction:
+stack:
+	2u8
+locals:
+Open frame: h
+stack:
+locals:
+	Frame 6
+		0: 2u8
+Instruction:
+stack:
+locals:
+	Frame 6
+		0: 2u8
+Close frame 6
+stack:
+locals:
+Instruction:
+stack:
+locals:
+Close frame 3
+stack:
+locals:
+Instruction:
+stack:
+locals:
+Close frame 1
+stack:
+locals:
+Instruction:
+stack:
+locals:
+Close frame 0
+stack:

@@ -35,9 +35,12 @@ use move_vm_types::{
 use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};
 use tracing::warn;
 
+use crate::tracing2::trace_interface::Tracer;
+
 /// An instantiation of the MoveVM.
 pub struct VMRuntime {
     loader: Loader,
+    tracer: Option<Box<dyn Tracer>>,
 }
 
 impl VMRuntime {
@@ -47,7 +50,12 @@ impl VMRuntime {
     ) -> PartialVMResult<Self> {
         Ok(VMRuntime {
             loader: Loader::new(NativeFunctions::new(natives)?, vm_config),
+            tracer: None,
         })
+    }
+
+    pub fn set_tracer(&mut self, tracer: Box<dyn Tracer>) {
+        self.tracer = Some(tracer);
     }
 
     pub fn new_session<'r, S: MoveResolver>(&self, remote: S) -> Session<'r, '_, S> {
@@ -341,6 +349,7 @@ impl VMRuntime {
             data_store,
             gas_meter,
             extensions,
+            &self.tracer,
             &self.loader,
         )?;
 

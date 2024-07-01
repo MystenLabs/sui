@@ -803,7 +803,7 @@ impl<'a> ModuleLoader<'a> {
 // entities. Each cache is protected by a `RwLock`. Operation in the Loader must be thread safe
 // (operating on values on the stack) and when cache needs updating the mutex must be taken.
 // The `pub(crate)` API is what a Loader offers to the runtime.
-pub(crate) struct Loader {
+pub struct Loader {
     module_cache: RwLock<ModuleCache>,
     type_cache: RwLock<TypeCache>,
     natives: NativeFunctions,
@@ -1339,7 +1339,7 @@ impl Loader {
     // Return an instantiated type given a generic and an instantiation.
     // Stopgap to avoid a recursion that is either taking too long or using too
     // much memory
-    fn subst(&self, ty: &Type, ty_args: &[Type]) -> PartialVMResult<Type> {
+    pub(crate) fn subst(&self, ty: &Type, ty_args: &[Type]) -> PartialVMResult<Type> {
         // Before instantiating the type, count the # of nodes of all type arguments plus
         // existing type instantiation.
         // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
@@ -1355,6 +1355,14 @@ impl Loader {
             }
         }
         ty.subst(ty_args)
+    }
+
+    pub(crate) fn make_type(
+        &self,
+        module: &CompiledModule,
+        tok: &SignatureToken,
+    ) -> PartialVMResult<Type> {
+        self.module_cache.read().make_type(module, tok)
     }
 
     // Verify the kind (constraints) of an instantiation.
@@ -1386,7 +1394,7 @@ impl Loader {
         self.module_cache.read().function_at(idx)
     }
 
-    fn get_module(
+    pub(crate) fn get_module(
         &self,
         link_context: AccountAddress,
         runtime_id: &ModuleId,
@@ -2063,7 +2071,7 @@ impl LoadedModule {
 // A runtime function
 // #[derive(Debug)]
 // https://github.com/rust-lang/rust/issues/70263
-pub(crate) struct Function {
+pub struct Function {
     #[allow(unused)]
     file_format_version: u32,
     index: FunctionDefinitionIndex,
