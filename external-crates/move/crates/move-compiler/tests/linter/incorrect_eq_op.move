@@ -1,10 +1,6 @@
 module 0x42::M {
 
-    #[allow(lint(constant_naming))]
-    const Another_BadName: u64 = 42; // Should trigger a warning
-
-    #[allow(lint(equal_operands))]
-    fun equal_operands() {
+    fun func1() {
         let a = 5;
         let b = 10;
 
@@ -23,5 +19,4 @@ module 0x42::M {
         let _ = a - a;
         let _ = b / b;
     }
-    
 }
