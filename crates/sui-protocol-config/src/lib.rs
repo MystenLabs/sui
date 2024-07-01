@@ -152,6 +152,7 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
 //             Enable soft bundle in devnet and testnet.
 //             Core macro visibility in sui core framework.
+//             Enable Mysticeti on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2463,6 +2464,8 @@ impl ProtocolConfig {
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::TotalTxCount;
                     }
+
+                    cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
                 }
                 // Use this template when making changes:
                 //
