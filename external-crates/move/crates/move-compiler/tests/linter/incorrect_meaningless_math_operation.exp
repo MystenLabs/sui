@@ -1,0 +1,32 @@
+warning[Lint W01006]: Detected a meaningless math operation that has no effect.
+  ┌─ tests/linter/incorrect_meaningless_math_operation.move:4:11
+  │
+4 │         x * 0 // This should trigger the linter
+  │           ^ Detected a meaningless math operation that has no effect.
+  │
+  = This warning can be suppressed with '#[allow(lint(meaningless_math_op))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01006]: Detected a meaningless math operation that has no effect.
+   ┌─ tests/linter/incorrect_meaningless_math_operation.move:16:11
+   │
+16 │         x * 1 // This should trigger the linter
+   │           ^ Detected a meaningless math operation that has no effect.
+   │
+   = This warning can be suppressed with '#[allow(lint(meaningless_math_op))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01006]: Detected a meaningless math operation that has no effect.
+   ┌─ tests/linter/incorrect_meaningless_math_operation.move:20:11
+   │
+20 │         x + 0 // This should trigger the linter
+   │           ^ Detected a meaningless math operation that has no effect.
+   │
+   = This warning can be suppressed with '#[allow(lint(meaningless_math_op))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01006]: Detected a meaningless math operation that has no effect.
+   ┌─ tests/linter/incorrect_meaningless_math_operation.move:24:11
+   │
+24 │         x - 0 // This should trigger the linter
+   │           ^ Detected a meaningless math operation that has no effect.
+   │
+   = This warning can be suppressed with '#[allow(lint(meaningless_math_op))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
