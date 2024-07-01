@@ -897,7 +897,6 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                             // Note: Exclude epoch beginning info except system_state below.
                             // This is to ensure that epoch beginning info columns are not overridden with default values,
                             // because these columns are default values in `last_epoch`.
-                            epochs::system_state.eq(excluded(epochs::system_state)),
                             epochs::epoch_total_transactions
                                 .eq(excluded(epochs::epoch_total_transactions)),
                             epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
@@ -915,7 +914,6 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                             epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
                         ),
                         |excluded: StoredEpochInfo| (
-                            epochs::system_state.eq(excluded.system_state.clone()),
                             epochs::epoch_total_transactions.eq(excluded.epoch_total_transactions),
                             epochs::last_checkpoint_id.eq(excluded.last_checkpoint_id),
                             epochs::epoch_end_timestamp.eq(excluded.epoch_end_timestamp),
