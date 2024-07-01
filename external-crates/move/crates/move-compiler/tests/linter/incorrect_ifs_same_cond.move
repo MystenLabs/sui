@@ -1,10 +1,6 @@
 module 0x42::M {
 
-    #[allow(lint(constant_naming))]
-    const Another_BadName: u64 = 42; // Should trigger a warning
-
-    #[allow(lint(consecutive_ifs))]
-    fun incorrect_ifs_same_cond(x: u64) {
+    fun func1(x: u64) {
       // Consecutive ifs with the same condition (should trigger lint)
         if (x > 10) {
             // Some logic here
