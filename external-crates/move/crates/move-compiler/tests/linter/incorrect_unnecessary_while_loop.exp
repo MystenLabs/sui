@@ -1,0 +1,13 @@
+warning[Lint W01013]: 
+   ┌─ tests/linter/incorrect_unnecessary_while_loop.move:5:9
+   │  
+ 5 │ ╭         while (true) {
+ 6 │ │             if(counter == 10) {
+ 7 │ │                 break
+ 8 │ │             };
+ 9 │ │             counter = counter + 1;
+10 │ │         }
+   │ ╰─────────^ Detected `while(true) {}` loop. Consider replacing with `loop {}`
+   │  
+   = This warning can be suppressed with '#[allow(lint(unnecessary_while_loop))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
