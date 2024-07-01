@@ -119,6 +119,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         // The commit index that is the max of local last commit index and highest commit index of blocks sent to Core.
         // Used to determine if fetched blocks can be sent to Core without gaps.
         let mut synced_commit_index = inner.dag_state.read().last_commit_index();
+        let mut highest_fetched_commit_index = 0;
 
         loop {
             tokio::select! {
@@ -176,6 +177,10 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     );
 
                     let (commit_start, commit_end) = (commits.first().unwrap().index(), commits.last().unwrap().index());
+
+                    highest_fetched_commit_index = highest_fetched_commit_index.max(commit_end);
+                    metrics.commit_sync_highest_fetched_index.set(highest_fetched_commit_index.into());
+
                     // Allow returning partial results, and try fetching the rest separately.
                     if commit_end < target_end {
                         pending_fetches.insert((commit_end + 1..=target_end).into());
@@ -193,6 +198,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         let (fetched_commit_range, blocks) = if fetched_commit_range.start() <= synced_commit_index + 1 {
                             fetched_blocks.pop_first().unwrap()
                         } else {
+                            metrics.commit_sync_gap_on_processing.inc();
                             // Found gap between earliest fetched block and latest synced block,
                             // so not sending additional blocks to Core.
                             break 'fetched;
@@ -275,7 +281,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .commit_sync_pending_fetches
                 .set(pending_fetches.len() as i64);
             metrics
-                .commit_sync_fetched_index
+                .commit_sync_highest_synced_index
                 .set(synced_commit_index as i64);
         }
     }
@@ -302,7 +308,15 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     return (commit_range.end(), commits, blocks);
                 }
                 Err(e) => {
-                    warn!("Failed to fetch: {}", e);
+                    warn!("Failed to fetch: {}", e.to_string());
+                    let error: &'static str = e.into();
+                    inner
+                        .context
+                        .metrics
+                        .node_metrics
+                        .commit_sync_fetch_once_errors
+                        .with_label_values(&[error])
+                        .inc();
                 }
             }
         }
