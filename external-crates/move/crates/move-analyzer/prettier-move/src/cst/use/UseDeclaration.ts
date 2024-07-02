@@ -22,6 +22,10 @@ export default function (path: AstPath<Node>): treeFn | null {
 			return printUseFun;
 		case UseDeclarationTree.ModuleIdentity:
 			return printModuleIdentity;
+		case UseDeclarationTree.FriendDeclaration:
+			return printFriendDeclaration;
+		case UseDeclarationTree.FriendAccess:
+			return printFriendAccess;
 		default:
 			return null;
 	}
@@ -56,6 +60,8 @@ export enum UseDeclarationTree {
 	UseModuleMember = 'use_module_member',
 	UseModuleMembers = 'use_module_members',
 	ModuleIdentity = 'module_identity',
+	FriendDeclaration = 'friend_declaration',
+	FriendAccess = 'friend_access',
 	UseFun = 'use_fun',
 }
 
@@ -173,4 +179,25 @@ export function printModuleIdentity(
 	print: printFn,
 ): Doc {
 	return join('::', path.map(print, 'nonFormattingChildren'));
+}
+
+export function printFriendDeclaration(
+	path: AstPath<Node>,
+	options: ParserOptions,
+	print: printFn,
+): Doc {
+	return group([
+		'friend',
+		' ',
+		path.call(print, 'nonFormattingChildren', 0), // module_access
+		';',
+	]);
+}
+
+export function printFriendAccess(
+	path: AstPath<Node>,
+	options: ParserOptions,
+	print: printFn,
+): Doc {
+	return path.map(print, 'nonFormattingChildren');
 }

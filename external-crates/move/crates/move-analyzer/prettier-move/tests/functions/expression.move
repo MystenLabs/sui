@@ -154,6 +154,13 @@ module prettier::expression {
         (expr1, expr2, expr3, expr4, expr5);
         (expr1, (expr2, expr3, expr4), expr5);
         (expr1, (expr2, expr3, expr4, expr5), expr6);
+
+        let request = pool.finish_swap(request);
+
+        (
+            request,
+            swap_impl<CoinIn, CoinOut, LpCoin>(pool, clock, coin_in, min_amount, ctx)
+        )
     }
 
     fun annotate_expression() {
