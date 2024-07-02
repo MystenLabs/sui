@@ -25,12 +25,35 @@ use super::TransactionBlockFilter;
 
 /// The `tx_sequence_number` range of the transactions to be queried.
 #[derive(Clone, Debug, Copy)]
-pub(crate) struct TxBounds {
+pub(crate) struct StoredTxBounds {
     pub lo: i64,
     pub hi: i64,
 }
 
+#[derive(Clone, Debug, Copy)]
+pub(crate) struct TxBounds {
+    pub lo: u64,
+    pub hi: u64,
+    pub adjusted: u64,
+    pub is_from_front: bool,
+}
+
 impl TxBounds {
+    pub(crate) fn new(lo: u64, hi: u64, scan_limit: Option<u64>, is_from_front: bool) -> Self {
+        let adjusted = if is_from_front {
+            scan_limit.map_or(hi, |limit| std::cmp::min(hi, lo.saturating_add(limit)))
+        } else {
+            scan_limit.map_or(hi, |limit| std::cmp::max(lo, hi.saturating_sub(limit)))
+        };
+
+        Self {
+            lo,
+            hi,
+            adjusted,
+            is_from_front,
+        }
+    }
+
     /// The default checkpoint lower bound is 0 and the default checkpoint upper bound is
     /// `checkpoint_viewed_at`. The two ends are then further adjusted, selecting the greatest
     /// between `after_cp` and `at_cp`, and the smallest among `before_cp`, `at_cp`, and
@@ -43,6 +66,8 @@ impl TxBounds {
         at_cp: Option<u64>,
         before_cp: Option<u64>,
         checkpoint_viewed_at: u64,
+        scan_limit: Option<u64>,
+        is_from_front: bool,
     ) -> Result<Self, diesel::result::Error> {
         let lo_cp = max_option!(after_cp.map(|x| x.saturating_add(1)), at_cp).unwrap_or(0);
         let hi_cp = min_option!(
@@ -51,7 +76,43 @@ impl TxBounds {
             Some(checkpoint_viewed_at)
         )
         .unwrap();
-        conn.result(move || tx_bounds_query(lo_cp, hi_cp).into_boxed())
+        let from_db: StoredTxBounds =
+            conn.result(move || tx_bounds_query(lo_cp, hi_cp).into_boxed())?;
+
+        Ok(Self::new(
+            from_db.lo as u64,
+            from_db.hi as u64,
+            scan_limit,
+            is_from_front,
+        ))
+    }
+
+    pub(crate) fn lo(&self) -> u64 {
+        if self.is_from_front {
+            self.lo
+        } else {
+            self.adjusted
+        }
+    }
+
+    pub(crate) fn hi(&self) -> u64 {
+        if self.is_from_front {
+            self.adjusted
+        } else {
+            self.hi
+        }
+    }
+
+    /// When a scan limit is provided, `has_prev_page` will always evaluate to true if it is under
+    /// the tx upper bound.
+    pub(crate) fn has_prev_page(&self) -> bool {
+        self.lo() > self.lo
+    }
+
+    /// When a scan limit is provided, `has_next_page` will always evaluate to true if it is under
+    /// the tx upper bound.
+    pub(crate) fn has_next_page(&self) -> bool {
+        self.hi() < self.hi
     }
 }
 
@@ -138,7 +199,7 @@ impl TransactionBlockFilter {
 /// columns. We can override this behavior by implementing `QueryableByName` for our struct. For
 /// `TxBounds`, its fields are derived from `checkpoints`, so we can't leverage the default
 /// implementation directly.
-impl<DB> QueryableByName<DB> for TxBounds
+impl<DB> QueryableByName<DB> for StoredTxBounds
 where
     DB: Backend,
     i64: FromSql<diesel::sql_types::BigInt, DB>,
@@ -270,7 +331,8 @@ pub(crate) fn select_tx(sender: Option<SuiAddress>, bound: TxBounds, from: &str)
         query,
         format!(
             "tx_sequence_number >= {} AND tx_sequence_number <= {}",
-            bound.lo, bound.hi
+            bound.lo(),
+            bound.hi()
         )
     )
 }

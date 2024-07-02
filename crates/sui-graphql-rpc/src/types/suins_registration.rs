@@ -20,7 +20,9 @@ use super::{
     stake::StakedSui,
     string_input::impl_string_input,
     sui_address::SuiAddress,
-    transaction_block::{self, TransactionBlock, TransactionBlockFilter},
+    transaction_block::{
+        self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
+    },
     type_filter::ExactTypeFilter,
 };
 use crate::{
@@ -246,7 +248,7 @@ impl SuinsRegistration {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+    ) -> Result<TransactionBlockConnection> {
         ObjectImpl(&self.super_.super_)
             .received_transaction_blocks(ctx, first, after, last, before, filter, scan_limit)
             .await

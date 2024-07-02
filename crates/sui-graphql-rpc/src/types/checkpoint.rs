@@ -10,7 +10,9 @@ use super::{
     digest::Digest,
     epoch::Epoch,
     gas::GasCostSummary,
-    transaction_block::{self, TransactionBlock, TransactionBlockFilter},
+    transaction_block::{
+        self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
+    },
 };
 use crate::consistency::Checkpointed;
 use crate::{
@@ -151,7 +153,7 @@ impl Checkpoint {
         last: Option<u64>,
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+    ) -> Result<TransactionBlockConnection> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let Some(filter) = filter
@@ -161,12 +163,18 @@ impl Checkpoint {
                 ..Default::default()
             })
         else {
-            return Ok(Connection::new(false, false));
+            return Ok(TransactionBlockConnection::new(false, false));
         };
 
-        TransactionBlock::paginate(ctx, page, filter, self.checkpoint_viewed_at, Some(1))
-            .await
-            .extend()
+        TransactionBlock::paginate(
+            ctx,
+            page,
+            filter,
+            self.checkpoint_viewed_at,
+            Some(100_000_000),
+        )
+        .await
+        .extend()
     }
 }
 

@@ -13,6 +13,7 @@ use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
 use super::suins_registration::NameService;
+use super::transaction_block::TransactionBlockConnection;
 use super::{
     address::Address,
     available_range::AvailableRange,
@@ -314,7 +315,7 @@ impl Query {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+    ) -> Result<TransactionBlockConnection> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;

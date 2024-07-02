@@ -14,7 +14,9 @@ use super::cursor::Page;
 use super::date_time::DateTime;
 use super::protocol_config::ProtocolConfigs;
 use super::system_state_summary::SystemStateSummary;
-use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
+use super::transaction_block::{
+    self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
+};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::dataloader::Loader;
@@ -233,7 +235,7 @@ impl Epoch {
         last: Option<u64>,
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+    ) -> Result<TransactionBlockConnection> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         #[allow(clippy::unnecessary_lazy_evaluations)] // rust-lang/rust-clippy#9422
@@ -247,7 +249,7 @@ impl Epoch {
                 ..Default::default()
             })
         else {
-            return Ok(Connection::new(false, false));
+            return Ok(TransactionBlockConnection::new(false, false));
         };
 
         let scan_limit = self

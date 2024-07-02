@@ -11,7 +11,9 @@ use super::{
     stake::StakedSui,
     sui_address::SuiAddress,
     suins_registration::{DomainFormat, SuinsRegistration},
-    transaction_block::{self, TransactionBlock, TransactionBlockFilter},
+    transaction_block::{
+        self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
+    },
     type_filter::ExactTypeFilter,
 };
 use async_graphql::{connection::Connection, *};
@@ -145,7 +147,7 @@ impl Address {
         relation: Option<AddressTransactionBlockRelationship>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+    ) -> Result<TransactionBlockConnection> {
         use AddressTransactionBlockRelationship as R;
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
@@ -161,7 +163,7 @@ impl Address {
                 ..Default::default()
             },
         }) else {
-            return Ok(Connection::new(false, false));
+            return Ok(TransactionBlockConnection::new(false, false));
         };
 
         TransactionBlock::paginate(

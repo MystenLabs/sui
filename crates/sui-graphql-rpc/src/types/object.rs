@@ -18,8 +18,8 @@ use super::move_package::MovePackage;
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
-use super::transaction_block;
 use super::transaction_block::TransactionBlockFilter;
+use super::transaction_block::{self, TransactionBlockConnection};
 use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
 use crate::consistency::{build_objects_query, Checkpointed, View};
@@ -242,7 +242,7 @@ pub(crate) struct HistoricalObjectCursor {
         arg(name = "before", ty = "Option<transaction_block::Cursor>"),
         arg(name = "filter", ty = "Option<TransactionBlockFilter>"),
         arg(name = "scan_limit", ty = "Option<u64>"),
-        ty = "Connection<String, TransactionBlock>",
+        ty = "TransactionBlockConnection",
         desc = "The transaction blocks that sent objects to this object."
     ),
     field(
@@ -434,7 +434,7 @@ impl Object {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+    ) -> Result<TransactionBlockConnection> {
         ObjectImpl(self)
             .received_transaction_blocks(ctx, first, after, last, before, filter, scan_limit)
             .await
@@ -595,7 +595,7 @@ impl ObjectImpl<'_> {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+    ) -> Result<TransactionBlockConnection> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let Some(filter) = filter
@@ -605,7 +605,7 @@ impl ObjectImpl<'_> {
                 ..Default::default()
             })
         else {
-            return Ok(Connection::new(false, false));
+            return Ok(TransactionBlockConnection::new(false, false));
         };
 
         TransactionBlock::paginate(

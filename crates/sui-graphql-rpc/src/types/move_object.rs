@@ -16,7 +16,9 @@ use super::owner::OwnerImpl;
 use super::stake::StakedSuiDowncastError;
 use super::sui_address::SuiAddress;
 use super::suins_registration::{DomainFormat, SuinsRegistration, SuinsRegistrationDowncastError};
-use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
+use super::transaction_block::{
+    self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
+};
 use super::type_filter::ExactTypeFilter;
 use super::{coin::Coin, object::Object};
 use crate::data::Db;
@@ -269,17 +271,9 @@ impl MoveObject {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+    ) -> Result<TransactionBlockConnection> {
         ObjectImpl(&self.super_)
-            .received_transaction_blocks(
-                ctx,
-                first,
-                after,
-                last,
-                before,
-                filter,
-                scan_limit,
-            )
+            .received_transaction_blocks(ctx, first, after, last, before, filter, scan_limit)
             .await
     }
 
