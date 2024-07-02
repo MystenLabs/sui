@@ -235,6 +235,22 @@ module prettier::expression {
             ),
             expr6,
         );
+
+        let request = pool.finish_swap(request);
+
+        (
+            request,
+            swap_impl < CoinIn,
+            CoinOut,
+            LpCoin >
+            (
+                pool,
+                clock,
+                coin_in,
+                min_amount,
+                ctx,
+            ),
+        )
     }
 
     fun annotate_expression() {
