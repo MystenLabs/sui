@@ -191,6 +191,171 @@ pub struct CheckpointSummary {
     pub version_specific_data: Vec<u8>,
 }
 
+/// CheckpointDiff is computed by diffing two CheckpointSummaries. For each field of type T
+/// in CheckpointSummary, CheckpointDiff contains a field of type Option<(T, T)> which is None if
+/// the field is the same in both CheckpointSummaries, and Some((old_value, new_value)) if the field
+/// has changed
+#[derive(Default, Clone, Serialize, Deserialize)]
+pub struct CheckpointDiff {
+    pub epoch: Option<(EpochId, EpochId)>,
+    pub sequence_number: Option<(CheckpointSequenceNumber, CheckpointSequenceNumber)>,
+    pub network_total_transactions: Option<(u64, u64)>,
+    pub content_digest: Option<(CheckpointContentsDigest, CheckpointContentsDigest)>,
+    pub previous_digest: Option<(Option<CheckpointDigest>, Option<CheckpointDigest>)>,
+    pub epoch_rolling_gas_cost_summary: Option<(GasCostSummary, GasCostSummary)>,
+    pub timestamp_ms: Option<(CheckpointTimestamp, CheckpointTimestamp)>,
+    pub checkpoint_commitments: Option<(Vec<CheckpointCommitment>, Vec<CheckpointCommitment>)>,
+    pub end_of_epoch_data: Option<(Option<EndOfEpochData>, Option<EndOfEpochData>)>,
+    pub version_specific_data: Option<(Vec<u8>, Vec<u8>)>,
+
+    // additionally, it has fields to store the diff of the ExecutionDigests from the
+    // checkpoint contents
+    pub left_diff: Vec<(ExecutionDigests, Vec<GenericSignature>)>,
+    pub right_diff: Vec<(ExecutionDigests, Vec<GenericSignature>)>,
+}
+
+impl CheckpointDiff {
+    pub fn new(
+        left: &CheckpointSummary,
+        left_contents: &CheckpointContents,
+        right: &CheckpointSummary,
+        right_contents: &CheckpointContents,
+    ) -> anyhow::Result<Self> {
+        if left.content_digest != *left_contents.digest() {
+            return Err(anyhow::anyhow!("CheckpointSummary content digest mismatch (left): summary={:?}, computed digest={:?}", left, left.digest()));
+        }
+        if right.content_digest != *right_contents.digest() {
+            return Err(anyhow::anyhow!("CheckpointSummary content digest mismatch (right): summary={:?}, computed digest={:?}", right, right.digest()));
+        }
+
+        let mut this = Self::default();
+        if left.epoch != right.epoch {
+            this.epoch = Some((left.epoch, right.epoch));
+        }
+        if left.sequence_number != right.sequence_number {
+            this.sequence_number = Some((left.sequence_number, right.sequence_number));
+        }
+        if left.network_total_transactions != right.network_total_transactions {
+            this.network_total_transactions = Some((
+                left.network_total_transactions,
+                right.network_total_transactions,
+            ));
+        }
+        if left.content_digest != right.content_digest {
+            this.content_digest = Some((left.content_digest, right.content_digest));
+        }
+        if left.previous_digest != right.previous_digest {
+            this.previous_digest = Some((left.previous_digest, right.previous_digest));
+        }
+        if left.epoch_rolling_gas_cost_summary != right.epoch_rolling_gas_cost_summary {
+            this.epoch_rolling_gas_cost_summary = Some((
+                left.epoch_rolling_gas_cost_summary.clone(),
+                right.epoch_rolling_gas_cost_summary.clone(),
+            ));
+        }
+        if left.timestamp_ms != right.timestamp_ms {
+            this.timestamp_ms = Some((left.timestamp_ms, right.timestamp_ms));
+        }
+        if left.checkpoint_commitments != right.checkpoint_commitments {
+            this.checkpoint_commitments = Some((
+                left.checkpoint_commitments.clone(),
+                right.checkpoint_commitments.clone(),
+            ));
+        }
+        if left.end_of_epoch_data != right.end_of_epoch_data {
+            this.end_of_epoch_data = Some((
+                left.end_of_epoch_data.clone(),
+                right.end_of_epoch_data.clone(),
+            ));
+        }
+        if left.version_specific_data != right.version_specific_data {
+            this.version_specific_data = Some((
+                left.version_specific_data.clone(),
+                right.version_specific_data.clone(),
+            ));
+        }
+
+        let mut left_iter = left_contents.iter_with_signatures().peekable();
+        let mut right_iter = right_contents.iter_with_signatures().peekable();
+
+        let mut left_diff = Vec::new();
+        let mut right_diff = Vec::new();
+
+        loop {
+            if left_iter.peek().is_none() && right_iter.peek().is_none() {
+                break;
+            }
+            if left_iter.peek().is_none() {
+                let (digests, sigs) = right_iter.next().unwrap();
+                right_diff.push((digests, sigs.to_vec()));
+                continue;
+            }
+            if right_iter.peek().is_none() {
+                let (digests, sigs) = left_iter.next().unwrap();
+                left_diff.push((digests, sigs.to_vec()));
+                continue;
+            }
+
+            let next_left = left_iter.next().unwrap();
+            if next_left == *right_iter.peek().unwrap() {
+                right_iter.next();
+            } else {
+                let (digests, sigs) = next_left;
+                left_diff.push((digests, sigs.to_vec()));
+            }
+        }
+
+        this.left_diff = left_diff;
+        this.right_diff = right_diff;
+
+        Ok(this)
+    }
+}
+
+// debug impl for CheckpointDiff that only prints non-None fields
+impl Debug for CheckpointDiff {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("CheckpointDiff");
+        if let Some(v) = &self.epoch {
+            dbg.field("epoch", v);
+        }
+        if let Some(v) = &self.sequence_number {
+            dbg.field("sequence_number", v);
+        }
+        if let Some(v) = &self.network_total_transactions {
+            dbg.field("network_total_transactions", v);
+        }
+        if let Some(v) = &self.content_digest {
+            dbg.field("content_digest", v);
+        }
+        if let Some(v) = &self.previous_digest {
+            dbg.field("previous_digest", v);
+        }
+        if let Some(v) = &self.epoch_rolling_gas_cost_summary {
+            dbg.field("epoch_rolling_gas_cost_summary", v);
+        }
+        if let Some(v) = &self.timestamp_ms {
+            dbg.field("timestamp_ms", v);
+        }
+        if let Some(v) = &self.checkpoint_commitments {
+            dbg.field("checkpoint_commitments", v);
+        }
+        if let Some(v) = &self.end_of_epoch_data {
+            dbg.field("end_of_epoch_data", v);
+        }
+        if let Some(v) = &self.version_specific_data {
+            dbg.field("version_specific_data", v);
+        }
+        if !self.left_diff.is_empty() {
+            dbg.field("left_diff", &self.left_diff);
+        }
+        if !self.right_diff.is_empty() {
+            dbg.field("right_diff", &self.right_diff);
+        }
+        dbg.finish()
+    }
+}
+
 impl Message for CheckpointSummary {
     type DigestType = CheckpointDigest;
     const SCOPE: IntentScope = IntentScope::CheckpointSummary;
@@ -490,6 +655,16 @@ impl CheckpointContents {
 
     pub fn iter(&self) -> Iter<'_, ExecutionDigests> {
         self.as_v1().transactions.iter()
+    }
+
+    pub fn iter_with_signatures(
+        &self,
+    ) -> impl Iterator<Item = (ExecutionDigests, &[GenericSignature])> {
+        self.as_v1()
+            .transactions
+            .iter()
+            .cloned()
+            .zip(self.as_v1().user_signatures.iter().map(|v| v.as_slice()))
     }
 
     pub fn into_iter_with_signatures(
