@@ -14,7 +14,7 @@ module sui::test_utils {
             std::debug::print(t1);
             print(b"!=");
             std::debug::print(t2);
-            abort 0
+            abort (0)
         }
     }
 
