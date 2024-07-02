@@ -1,6 +1,6 @@
 {
 	"name": "escrow-api-demo",
-	"version": "1.0.10",
+	"version": "1.0.11",
 	"private": true,
 	"description": "Demo package for escrow",
 	"main": "server.ts",

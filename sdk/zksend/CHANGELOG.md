@@ -1,5 +1,19 @@
 # @mysten/zksend
 
+## 0.10.0
+
+### Minor Changes
+
+- 45877014d1: Update ZkBag class to return functions to improve compatibility with new plugin API
+
+### Patch Changes
+
+- Updated dependencies [06a900c1ab]
+- Updated dependencies [45877014d1]
+- Updated dependencies [87d6f75403]
+  - @mysten/sui@1.2.1
+  - @mysten/wallet-standard@0.12.11
+
 ## 0.9.10
 
 ### Patch Changes
