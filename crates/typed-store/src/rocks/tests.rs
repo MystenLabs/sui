@@ -138,7 +138,7 @@ async fn test_reopen(#[values(true, false)] is_transactional: bool) {
             .expect("Failed to insert");
         db
     };
-    let db = DBMap::<u32, String>::reopen(&arc.rocksdb, None, &ReadWriteOptions::default())
+    let db = DBMap::<u32, String>::reopen(&arc.rocksdb, None, &ReadWriteOptions::default(), false)
         .expect("Failed to re-open storage");
     assert!(db
         .contains_key(&123456789)
@@ -174,7 +174,7 @@ async fn test_reopen_macro() {
 #[tokio::test]
 async fn test_wrong_reopen(#[values(true, false)] is_transactional: bool) {
     let rocks = open_rocksdb(temp_dir(), &["foo", "bar", "baz"], is_transactional);
-    let db = DBMap::<u8, u8>::reopen(&rocks, Some("quux"), &ReadWriteOptions::default());
+    let db = DBMap::<u8, u8>::reopen(&rocks, Some("quux"), &ReadWriteOptions::default(), false);
     assert!(db.is_err());
 }
 
@@ -567,12 +567,22 @@ async fn test_insert_batch(#[values(true, false)] is_transactional: bool) {
 async fn test_insert_batch_across_cf(#[values(true, false)] is_transactional: bool) {
     let rocks = open_rocksdb(temp_dir(), &["First_CF", "Second_CF"], is_transactional);
 
-    let db_cf_1 = DBMap::reopen(&rocks, Some("First_CF"), &ReadWriteOptions::default())
-        .expect("Failed to open storage");
+    let db_cf_1 = DBMap::reopen(
+        &rocks,
+        Some("First_CF"),
+        &ReadWriteOptions::default(),
+        false,
+    )
+    .expect("Failed to open storage");
     let keys_vals_1 = (1..100).map(|i| (i, i.to_string()));
 
-    let db_cf_2 = DBMap::reopen(&rocks, Some("Second_CF"), &ReadWriteOptions::default())
-        .expect("Failed to open storage");
+    let db_cf_2 = DBMap::reopen(
+        &rocks,
+        Some("Second_CF"),
+        &ReadWriteOptions::default(),
+        false,
+    )
+    .expect("Failed to open storage");
     let keys_vals_2 = (1000..1100).map(|i| (i, i.to_string()));
 
     let mut batch = db_cf_1.batch();
@@ -600,14 +610,22 @@ async fn test_insert_batch_across_different_db(#[values(true, false)] is_transac
     let rocks = open_rocksdb(temp_dir(), &["First_CF", "Second_CF"], is_transactional);
     let rocks2 = open_rocksdb(temp_dir(), &["First_CF", "Second_CF"], is_transactional);
 
-    let db_cf_1: DBMap<i32, String> =
-        DBMap::reopen(&rocks, Some("First_CF"), &ReadWriteOptions::default())
-            .expect("Failed to open storage");
+    let db_cf_1: DBMap<i32, String> = DBMap::reopen(
+        &rocks,
+        Some("First_CF"),
+        &ReadWriteOptions::default(),
+        false,
+    )
+    .expect("Failed to open storage");
     let keys_vals_1 = (1..100).map(|i| (i, i.to_string()));
 
-    let db_cf_2: DBMap<i32, String> =
-        DBMap::reopen(&rocks2, Some("Second_CF"), &ReadWriteOptions::default())
-            .expect("Failed to open storage");
+    let db_cf_2: DBMap<i32, String> = DBMap::reopen(
+        &rocks2,
+        Some("Second_CF"),
+        &ReadWriteOptions::default(),
+        false,
+    )
+    .expect("Failed to open storage");
     let keys_vals_2 = (1000..1100).map(|i| (i, i.to_string()));
 
     assert!(db_cf_1
@@ -1089,7 +1107,7 @@ async fn test_transactional() {
     let opt = rocksdb::Options::default();
     let rocksdb =
         open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
-    let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
+    let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default(), false)
         .expect("Failed to re-open storage");
 
     // transaction is used instead
@@ -1113,7 +1131,7 @@ async fn test_transaction_snapshot() {
     let opt = rocksdb::Options::default();
     let rocksdb =
         open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
-    let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
+    let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default(), false)
         .expect("Failed to re-open storage");
 
     // transaction without set_snapshot succeeds when extraneous write occurs before transaction
@@ -1200,7 +1218,7 @@ async fn test_retry_transaction() {
     let opt = rocksdb::Options::default();
     let rocksdb =
         open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
-    let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
+    let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default(), false)
         .expect("Failed to re-open storage");
 
     let mut conflicts = 0;
@@ -1260,7 +1278,7 @@ async fn test_transaction_read_your_write() {
     let opt = rocksdb::Options::default();
     let rocksdb =
         open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
-    let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
+    let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default(), false)
         .expect("Failed to re-open storage");
     db.insert(&key1.to_string(), &"1".to_string()).unwrap();
     let mut tx = db.transaction().expect("failed to initiate transaction");
@@ -1331,6 +1349,7 @@ async fn open_as_secondary_test() {
         &secondary_store,
         Some("table"),
         &ReadWriteOptions::default(),
+        false,
     )
     .unwrap();
 
@@ -1482,7 +1501,7 @@ fn open_map<P: AsRef<Path>, K, V>(
             MetricConf::default(),
             &[(cf, default_db_options().options)],
         )
-        .map(|db| DBMap::new(db, &ReadWriteOptions::default(), cf))
+        .map(|db| DBMap::new(db, &ReadWriteOptions::default(), cf, false))
         .expect("failed to open rocksdb")
     } else {
         DBMap::<K, V>::open(

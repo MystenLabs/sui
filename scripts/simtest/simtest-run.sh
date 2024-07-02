@@ -112,7 +112,7 @@ echo "All tests completed, checking for failures..."
 echo "============================================="
 date
 
-grep -qHn FAIL "$LOG_DIR"/*
+grep -EqHn 'TIMEOUT|FAIL' "$LOG_DIR"/*
 
 # if grep found no failures exit now
 [ $? -eq 1 ] && echo "No test failures detected" && exit 0

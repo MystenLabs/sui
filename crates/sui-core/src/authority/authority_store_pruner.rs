@@ -798,6 +798,7 @@ mod tests {
             // open the db to bypass default db options which ignores range tombstones
             // so we can read the accurate number of retained versions
             &ReadWriteOptions::default(),
+            false,
         )?;
         let iter = objects.unbounded_iter();
         for (k, _v) in iter {

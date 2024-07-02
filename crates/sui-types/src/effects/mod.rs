@@ -353,6 +353,9 @@ pub trait TransactionEffectsAPI {
             .collect()
     }
 
+    /// Returns all root shared objects (i.e. not child object) that are read-only in the transaction.
+    fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)>;
+
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus;

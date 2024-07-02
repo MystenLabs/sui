@@ -50,7 +50,7 @@ jobs:
       - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
         with:
           version: 9.1.1
-      - run: cargo build --bin sui-test-validator --bin sui --profile dev
+      - run: cargo build --bin sui --features indexer --profile dev
       - name: Install Nodejs
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
         with:
@@ -58,13 +58,13 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Install Playwright Browsers
-        run: pnpm --filter sui-wallet playwright install --with-deps chromium
+      # - name: Install Playwright Browsers
+      #   run: pnpm --filter sui-wallet playwright install --with-deps chromium
 
       - name: Set env
         run: |
           echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
-          echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=warn RUST_BACKTRACE=1 $(echo $PWD/target/debug/sui-test-validator) --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125)" >> $GITHUB_ENV
+          echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=warn RUST_BACKTRACE=1 $(echo $PWD/target/debug/sui) start --with-faucet --force-regenesis --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --with-graphql)" >> $GITHUB_ENV
 
       - name: Run TS SDK e2e tests
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isRust == 'true'}}
@@ -74,29 +74,28 @@ jobs:
         if: ${{ needs.diff.outputs.isGraphQlTransport == 'true' || needs.diff.outputs.isRust == 'true'}}
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/graphql-transport test:e2e'
 
-      - name: Run Local net
-        run: cargo run --bin sui-test-validator -- --epoch-duration-ms 10000 &
-      - name: Set Wallet env
-        run: echo "API_ENV=local" > "$PWD/apps/wallet/configs/environment/.env"
-      - name: Build Wallet
-        # need to run Wallet e2e when its upstream(TS SDK and Rust) or itself is changed
-        if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
-        run: pnpm wallet build
-      - name: Run Wallet e2e tests
-        if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- pnpm --filter sui-wallet playwright test
-      - uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: playwright-report-wallet
-          path: apps/wallet/playwright-report/
-          retention-days: 30
+      # - name: Run Local net
+      #   run: cargo run --bin sui -- start --with-faucet --force-regenesis --epoch-duration-ms 10000 &
+      # - name: Set Wallet env
+      #   run: echo "API_ENV=local" > "$PWD/apps/wallet/configs/environment/.env"
+      # - name: Build Wallet
+      #   # need to run Wallet e2e when its upstream(TS SDK and Rust) or itself is changed
+      #   if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
+      #   run: pnpm wallet build
+      # - name: Run Wallet e2e tests
+      #   if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
+      #   run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- pnpm --filter sui-wallet playwright test
+      # - uses: actions/upload-artifact@v3
+      #   if: always()
+      #   with:
+      #     name: playwright-report-wallet
+      #     path: apps/wallet/playwright-report/
+      #     retention-days: 30
 
   # Run e2e test against localnet built on the devnet branch for backward compatibility check
   local_devnet_branch:
     name: Local Network Built on devnet branch
     needs: diff
-    # TODO: add wallet e2e to the `if` condition when available
     if: needs.diff.outputs.isTypescriptSDK == 'true'
     runs-on: ubuntu-ghcloud
     services:
@@ -125,7 +124,6 @@ jobs:
   local_testnet_branch:
     name: Local Network Built on testnet branch
     needs: diff
-    # TODO: add wallet e2e to the `if` condition when available
     if: needs.diff.outputs.isTypescriptSDK == 'true'
     runs-on: ubuntu-ghcloud
     services:

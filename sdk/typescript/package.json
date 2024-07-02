@@ -3,7 +3,7 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui TypeScript API(Work in Progress)",
 	"homepage": "https://sdk.mystenlabs.com",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"license": "Apache-2.0",
 	"sideEffects": false,
 	"files": [
@@ -102,7 +102,7 @@
 		"test:unit": "vitest run unit __tests__",
 		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 180000 && vitest run e2e",
 		"test:e2e:nowait": "vitest run e2e",
-		"prepare:e2e": "docker-compose down && docker-compose up -d && cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=warn,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator -- --with-indexer --pg-port 5435 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125",
+		"prepare:e2e": "docker-compose down && docker-compose up -d && cargo build --bin sui --features indexer --profile dev && cross-env RUST_LOG=warn,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui -- start --with-faucet --force-regenesis --with-indexer --pg-port 5435 --pg-db-name sui_indexer_v2 --with-graphql",
 		"prepublishOnly": "pnpm build",
 		"size": "size-limit",
 		"analyze": "size-limit --why",

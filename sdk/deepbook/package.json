@@ -2,7 +2,7 @@
 	"name": "@mysten/deepbook",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui Deepbook SDK",
-	"version": "0.8.9",
+	"version": "0.8.10",
 	"license": "Apache-2.0",
 	"type": "commonjs",
 	"main": "./dist/cjs/index.js",
@@ -33,7 +33,7 @@
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
 		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest run e2e",
-		"prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=warn,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator"
+		"prepare:e2e": "cargo build --bin sui --profile dev && cross-env RUST_LOG=warn,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui -- start --with-faucet --force-regenesis"
 	},
 	"dependencies": {
 		"@mysten/sui": "workspace:*"

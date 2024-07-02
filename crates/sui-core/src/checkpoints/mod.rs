@@ -2769,6 +2769,7 @@ mod tests {
             .insert_tx_key_and_effects_signature(
                 &TransactionKey::Digest(digest),
                 &digest,
+                &effects.digest(),
                 Some(&AuthoritySignInfo::new(
                     epoch_store.epoch(),
                     &effects,
