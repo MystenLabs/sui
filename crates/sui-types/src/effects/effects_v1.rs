@@ -5,7 +5,7 @@ use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use crate::digests::{ObjectDigest, TransactionEventsDigest};
-use crate::effects::{InputSharedObject, TransactionEffectsAPI};
+use crate::effects::{InputSharedObject, TransactionEffectsAPI, UnchangedSharedKind};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
@@ -268,6 +268,19 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
 
     fn gas_cost_summary(&self) -> &GasCostSummary {
         &self.gas_used
+    }
+
+    fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)> {
+        self.input_shared_objects()
+            .iter()
+            .filter_map(|o| match o {
+                // In effects v1, the only unchanged shared objects are read-only shared objects.
+                InputSharedObject::ReadOnly(oref) => {
+                    Some((oref.0, UnchangedSharedKind::ReadOnlyRoot((oref.1, oref.2))))
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {

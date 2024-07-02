@@ -31,6 +31,7 @@ gas summary: computation_cost: 1000000, storage_cost: 11985200,  storage_rebate:
 
 task 6 'run'. lines 85-87:
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7 'run'. lines 88-90:
@@ -60,6 +61,7 @@ Error: Error checking transaction input objects: CoinTypeGlobalPause { coin_type
 
 task 14 'run'. lines 110-112:
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 15 'run'. lines 113-115:
@@ -68,6 +70,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6665200,  storage_rebate: 
 
 task 16 'run'. lines 116-118:
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 17 'run'. lines 119-121:

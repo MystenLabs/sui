@@ -7,6 +7,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 
 
 task 2 'programmable'. lines 24-25:
 mutated: object(0,0)
+unchanged_shared: object(1,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3 'programmable'. lines 27-28:

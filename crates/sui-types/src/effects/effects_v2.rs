@@ -311,6 +311,10 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
         &self.gas_used
     }
 
+    fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)> {
+        self.unchanged_shared_objects.clone()
+    }
+
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
         &mut self.status
     }
