@@ -1107,7 +1107,7 @@ impl AuthorityState {
     pub async fn try_execute_immediately(
         &self,
         certificate: &VerifiedExecutableTransaction,
-        expected_effects_digest: Option<TransactionEffectsDigest>,
+        mut expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
@@ -1119,14 +1119,13 @@ impl AuthorityState {
             .read_objects_for_execution(certificate, epoch_store)
             .await?;
 
-        let expected_effects_digest = expected_effects_digest.or_else(|| {
+        if expected_effects_digest.is_none() {
             // We could be re-executing a previously executed but uncommitted transaction, perhaps after
             // restarting with a new binary. In this situation, if we have published an effects signature,
             // we must be sure not to equivocate.
-            epoch_store
-                .get_signed_effects_digest(tx_digest)
-                .expect("read cannot fail")
-        });
+            // TODO: read from cache instead of DB
+            expected_effects_digest = epoch_store.get_signed_effects_digest(tx_digest)?;
+        }
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -4028,7 +4027,11 @@ impl AuthorityState {
 
                 let effects = SignedTransactionEffects::new_from_data_and_sig(effects, sig.clone());
 
-                epoch_store.insert_effects_signature(&tx_digest, effects.digest(), &sig)?;
+                epoch_store.insert_effects_digest_and_signature(
+                    &tx_digest,
+                    effects.digest(),
+                    &sig,
+                )?;
 
                 effects
             }

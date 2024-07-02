@@ -1205,7 +1205,7 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn insert_effects_signature(
+    pub fn insert_effects_digest_and_signature(
         &self,
         tx_digest: &TransactionDigest,
         effects_digest: &TransactionEffectsDigest,
