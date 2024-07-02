@@ -33,6 +33,7 @@ gas summary: computation_cost: 1000000, storage_cost: 12190400,  storage_rebate:
 
 task 5 'run'. lines 59-61:
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6 'transfer-object'. lines 62-64:
@@ -48,6 +49,7 @@ gas summary: computation_cost: 1000000, storage_cost: 4400400,  storage_rebate: 
 
 task 9 'run'. lines 71-73:
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 10 'transfer-object'. lines 74-74:
