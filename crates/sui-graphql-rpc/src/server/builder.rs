@@ -1086,4 +1086,83 @@ pub mod tests {
         let resp = reqwest::get(&url_with_param).await.unwrap();
         assert_eq!(resp.status(), StatusCode::GATEWAY_TIMEOUT);
     }
+
+    pub async fn test_query_mutation_payload_impl() {
+        async fn execute_request(
+            max_mutation_payload_size: u32,
+            max_query_payload_size: u32,
+            query: &str,
+        ) -> Response {
+            let service_config = ServiceConfig {
+                limits: Limits {
+                    max_mutation_payload_size,
+                    max_query_payload_size,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+
+            let schema = prep_schema(None, Some(service_config))
+                .extension(QueryLimitsChecker::default())
+                .build_schema();
+            schema.execute(query).await
+        }
+
+        // Should fail: read part of query is too big
+        let err: Vec<_> = execute_request(10, 10, "mutation { executeTransactionBlock(txBytes: \"AAA\", signatures: \"BBB\") { effects { status } } }")
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            err,
+            vec!["Mutation payload txBytes + sigantures size OK. The read part of the request is too large. Maximum allowed is 10".to_string()]
+        );
+
+        // Should fail: tx_bytes part of query is too big
+        let err: Vec<_> = execute_request(10, 10, "mutation { executeTransactionBlock(txBytes: \"AAABGKHSA\", signatures: \"BBB\") { effects { status } } }")
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            err,
+            vec!["Mutation payload (txBytes + signatures) size of executeTransactionBlock node is too large. The maximum allowed is 10 bytes".to_string()]
+        );
+
+        // dryRunTransactionBlock check, should fail
+        let err: Vec<_> = execute_request(
+            10,
+            10,
+            "query { dryRunTransactionBlock(txBytes: \"AAA\") { error transaction { digest } } }",
+        )
+        .await
+        .into_result()
+        .unwrap_err()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+        assert_eq!(
+            err,
+            vec!["Read query payload is too large. The maximum allowed is 10 bytes".to_string()]
+        );
+
+        // dryRunTransactionBlock check, should fail
+        let err: Vec<_> = execute_request(5, 100, "query { dryRunTransactionBlock(txBytes: \"AAAABAS\") { error transaction { digest } } }")
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            err,
+            vec!["The payload txBytes size of dryRunTransactionBlock node is too large. The maximum allowed is 5 bytes".to_string(),
+]
+        );
+    }
 }
