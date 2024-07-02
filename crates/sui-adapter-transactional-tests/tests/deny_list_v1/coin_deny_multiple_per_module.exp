@@ -6,6 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 9-56:
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6), object(1,7), object(1,8), object(1,9), object(1,10)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 33082800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'view-object'. lines 58-58:
@@ -259,4 +260,5 @@ Error: Error checking transaction input objects: AddressDeniedForCoin { address:
 
 task 15 'transfer-object'. lines 87-87:
 mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2416800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168

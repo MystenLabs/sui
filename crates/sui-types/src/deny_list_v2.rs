@@ -4,8 +4,7 @@
 use crate::base_types::{EpochId, ObjectID, SuiAddress};
 use crate::config::{Config, Setting};
 use crate::deny_list_v1::{
-    get_deny_list_root_object, input_object_coin_types_for_denylist_check,
-    DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE,
+    input_object_coin_types_for_denylist_check, DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE,
 };
 use crate::dynamic_field::{get_dynamic_field_from_store, DOFWrapper};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
@@ -13,7 +12,7 @@ use crate::id::UID;
 use crate::object::Object;
 use crate::storage::ObjectStore;
 use crate::transaction::{CheckedInputObjects, ReceivingObjects};
-use crate::{MoveTypeTagTrait, SUI_FRAMEWORK_PACKAGE_ID};
+use crate::{MoveTypeTagTrait, SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use move_core_types::ident_str;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::de::DeserializeOwned;
@@ -120,11 +119,13 @@ pub fn check_coin_deny_list_v2_during_signing(
     Ok(())
 }
 
+/// Returns 1) whether the coin deny list check passed, and 2) the number of regulated transfers.
 pub fn check_coin_deny_list_v2_during_execution(
     written_objects: &BTreeMap<ObjectID, Object>,
     cur_epoch: EpochId,
     object_store: &dyn ObjectStore,
-) -> Result<(), ExecutionError> {
+) -> (Result<(), ExecutionError>, u64) {
+    let mut num_regulated_transfers = 0;
     let mut new_coin_owners = BTreeMap::new();
     for obj in written_objects.values() {
         if obj.is_gas_coin() {
@@ -140,38 +141,43 @@ pub fn check_coin_deny_list_v2_during_execution(
             .entry(coin_type.to_canonical_string(false))
             .or_insert_with(BTreeSet::new)
             .insert(owner);
+        num_regulated_transfers += 1;
     }
     for (coin_type, owners) in new_coin_owners {
         let Some(deny_list) = get_per_type_coin_deny_list_v2(&coin_type, object_store) else {
             continue;
         };
         if check_global_pause(&deny_list, object_store, Some(cur_epoch)) {
-            return Err(ExecutionError::new(
-                ExecutionErrorKind::CoinTypeGlobalPause { coin_type },
-                None,
-            ));
+            return (
+                Err(ExecutionError::new(
+                    ExecutionErrorKind::CoinTypeGlobalPause { coin_type },
+                    None,
+                )),
+                num_regulated_transfers,
+            );
         }
         for owner in owners {
             if check_address_denied_by_config(&deny_list, owner, object_store, Some(cur_epoch)) {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::AddressDeniedForCoin {
-                        address: owner,
-                        coin_type,
-                    },
-                    None,
-                ));
+                return (
+                    Err(ExecutionError::new(
+                        ExecutionErrorKind::AddressDeniedForCoin {
+                            address: owner,
+                            coin_type,
+                        },
+                        None,
+                    )),
+                    num_regulated_transfers,
+                );
             }
         }
     }
-    Ok(())
+    (Ok(()), num_regulated_transfers)
 }
 
 pub fn get_per_type_coin_deny_list_v2(
     coin_type: &String,
     object_store: &dyn ObjectStore,
 ) -> Option<Config> {
-    let deny_list_root =
-        get_deny_list_root_object(object_store).expect("Deny list root object not found");
     let config_key = DOFWrapper {
         name: ConfigKey {
             per_type_index: DENY_LIST_COIN_TYPE_INDEX,
@@ -180,7 +186,7 @@ pub fn get_per_type_coin_deny_list_v2(
     };
     // TODO: Consider caching the config object UID to avoid repeat deserialization.
     let config: Config =
-        get_dynamic_field_from_store(object_store, deny_list_root.id(), &config_key).ok()?;
+        get_dynamic_field_from_store(object_store, SUI_DENY_LIST_OBJECT_ID, &config_key).ok()?;
     Some(config)
 }
 
