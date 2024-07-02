@@ -1,0 +1,96 @@
+---
+title: Staking and Governance
+---
+
+DeepBook’s novel approach to governance will allow users to update a single pool’s three parameters: taker fee rate, maker fee rate, and stake required. Stake required is the amount of DEEP tokens a user must have staked in the pool to take advantage of taker and maker incentives. Each individual DeepBook pool will have independent governance, and governance can be conducted every epoch. Learn more about governance in the Design page.
+
+![DeepBook Governance Timeline.png](https://prod-files-secure.s3.us-west-2.amazonaws.com/be379dd5-2030-4209-b08d-95b91eb5ac95/9229dba3-516a-4624-a938-392956dd1633/DeepBook_Governance_Timeline.png)
+
+## API
+
+Following are the endpoints that the `Pool` exposes for governance.
+
+---
+
+### Stake
+
+DEEP tokens must be available in the `BalanceManager` for staking. A user’s stake becomes active in the following epoch. If the user’s active stake is greater than the stake required, the user can get reduced taker fees and can accumulate trading fee rebates during that epoch.
+
+```rust
+/// Stake DEEP tokens to the pool. The balance_manager must have enough DEEP tokens.
+/// The balance_manager's data is updated with the staked amount.
+public fun stake<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &mut BalanceManager,
+    trade_proof: &TradeProof,
+    amount: u64,
+    ctx: &TxContext,
+)
+```
+
+### Unstake
+
+All of the user’s active and inactive stake will be removed and added back into the `BalanceManager`. Any casted votes will be removed. Maker rebates for the epoch will be forfeited, and any reduced taker fees for the remaining epoch will be disabled.
+
+```rust
+/// Unstake DEEP tokens from the pool. The balance_manager must have enough staked DEEP tokens.
+/// The balance_manager's data is updated with the unstaked amount.
+/// Balance is transferred to the balance_manager immediately.
+public fun unstake<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &mut BalanceManager,
+    trade_proof: &TradeProof,
+    ctx: &TxContext,
+)
+```
+
+### Submit Proposal
+
+Users with a non zero active stake can submit proposals. One proposal per user. The user automatically votes for the proposal they submit.
+
+```rust
+/// Submit a proposal to change the taker fee, maker fee, and stake required.
+/// The balance_manager must have enough staked DEEP tokens to participate.
+/// Each balance_manager can only submit one proposal per epoch.
+/// If the maximum proposal is reached, the proposal with the lowest vote is removed.
+/// If the balance_manager has less voting power than the lowest voted proposal, the proposal is not added.
+public fun submit_proposal<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &mut BalanceManager,
+    trade_proof: &TradeProof,
+    taker_fee: u64,
+    maker_fee: u64,
+    stake_required: u64,
+    ctx: &TxContext,
+)
+```
+
+### Vote
+
+Users with non zero voting power can vote on a proposal. All voting power is used on a single proposal. If the user has voted on a different proposal during this epoch, then that vote is removed and recasted into the new proposal.
+
+```rust
+/// Vote on a proposal. The balance_manager must have enough staked DEEP tokens to participate.
+/// Full voting power of the balance_manager is used.
+/// Voting for a new proposal will remove the vote from the previous proposal.
+public fun vote<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &mut BalanceManager,
+    trade_proof: &TradeProof,
+    proposal_id: ID,
+    ctx: &TxContext,
+)
+```
+
+### Claim Rebates
+
+```rust
+/// Claim the rewards for the balance_manager. The balance_manager must have rewards to claim.
+/// The balance_manager's data is updated with the claimed rewards.
+public fun claim_rebates<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &mut BalanceManager,
+    trade_proof: &TradeProof,
+    ctx: &TxContext,
+)
+```

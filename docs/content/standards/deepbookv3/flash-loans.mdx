@@ -1,0 +1,45 @@
+---
+title: Flash Loans
+---
+
+Users can borrow flash loans in the base or quote asset from any DeepBook pool. Flash loans return a FlashLoan hot potato, which must be returned back to the pool by the end of the call. Else, the transaction will fail. 
+The quantity borrowed can be the maximum amount that the pool owns. Borrowing from a pool and trading in the same pool can result in failures because trading requires the movement of funds. If the funds are borrowed, then there are no funds to move.
+API
+Following are the endpoints that the Pool exposes for flash loans
+Borrow Flash Loan Base
+/// Borrow base assets from the Pool. A hot potato is returned,
+/// forcing the borrower to return the assets within the same transaction.
+public fun borrow_flashloan_base<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    base_amount: u64,
+    ctx: &mut TxContext,
+): (Coin<BaseAsset>, FlashLoan)
+​
+Borrow Flash Loan Quote
+/// Borrow quote assets from the Pool. A hot potato is returned,
+/// forcing the borrower to return the assets within the same transaction.
+public fun borrow_flashloan_quote<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    quote_amount: u64,
+    ctx: &mut TxContext,
+): (Coin<QuoteAsset>, FlashLoan)
+​
+Return Flash Loan Base
+/// Return the flashloaned base assets to the Pool.
+/// FlashLoan object will only be unwrapped if the assets are returned,
+/// otherwise the transaction will fail.
+public fun return_flashloan_base<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    coin: Coin<BaseAsset>,
+    flash_loan: FlashLoan,
+)
+​
+Return Flash Loan Quote
+/// Return the flashloaned quote assets to the Pool.
+/// FlashLoan object will only be unwrapped if the assets are returned,
+/// otherwise the transaction will fail.
+public fun return_flashloan_quote<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    coin: Coin<QuoteAsset>,
+    flash_loan: FlashLoan,
+)
