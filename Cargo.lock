@@ -13292,6 +13292,8 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "axum",
+ "base64 0.21.2",
+ "bcs",
  "bin-version",
  "clap",
  "fastcrypto",
