@@ -1867,25 +1867,28 @@ SettingData
 new
 	public(package) fun
 	0x2::config
-create
+share
 	public(package) fun
 	0x2::config
-add_for_current_epoch
+transfer
 	public(package) fun
 	0x2::config
-remove_for_current_epoch
+add_for_next_epoch
+	public(package) fun
+	0x2::config
+remove_for_next_epoch
 	public(package) fun
 	0x2::config
 exists_with_type
 	public(package) fun
 	0x2::config
-exists_with_type_for_current_epoch
+exists_with_type_for_next_epoch
 	public(package) fun
 	0x2::config
-borrow_for_current_epoch_mut
+borrow_for_next_epoch_mut
 	public(package) fun
 	0x2::config
-borrow_most_recent
+read_setting_for_next_epoch
 	public(package) fun
 	0x2::config
 read_setting
@@ -1921,7 +1924,10 @@ v2_add
 v2_remove
 	public(package) fun
 	0x2::deny_list
-v2_most_recent_contains
+v2_contains_current_epoch
+	public(package) fun
+	0x2::deny_list
+v2_contains_next_epoch
 	public(package) fun
 	0x2::deny_list
 v2_enable_global_pause
@@ -1930,7 +1936,10 @@ v2_enable_global_pause
 v2_disable_global_pause
 	public(package) fun
 	0x2::deny_list
-v2_most_recent_is_global_pause_enabled
+v2_is_global_pause_enabled_current_epoch
+	public(package) fun
+	0x2::deny_list
+v2_is_global_pause_enabled_next_epoch
 	public(package) fun
 	0x2::deny_list
 add_per_type_config
@@ -2059,7 +2068,10 @@ deny_list_v2_add
 deny_list_v2_remove
 	public fun
 	0x2::coin
-deny_list_v2_most_recent_contains
+deny_list_v2_contains_current_epoch
+	public fun
+	0x2::coin
+deny_list_v2_contains_next_epoch
 	public fun
 	0x2::coin
 deny_list_v2_enable_global_pause
@@ -2068,7 +2080,10 @@ deny_list_v2_enable_global_pause
 deny_list_v2_disable_global_pause
 	public fun
 	0x2::coin
-deny_list_v2_most_recent_is_global_pause_enabled
+deny_list_v2_is_global_pause_enabled_current_epoch
+	public fun
+	0x2::coin
+deny_list_v2_is_global_pause_enabled_next_epoch
 	public fun
 	0x2::coin
 mint_and_transfer

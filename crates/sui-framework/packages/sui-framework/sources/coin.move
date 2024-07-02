@@ -244,7 +244,7 @@ module sui::coin {
         description: vector<u8>,
         icon_url: Option<Url>,
         allow_global_pause: bool,
-        ctx: &mut TxContext
+        ctx: &mut TxContext,
     ): (TreasuryCap<T>, DenyCapV2<T>, CoinMetadata<T>) {
         let (treasury_cap, metadata) = create_currency(
             witness,
@@ -315,13 +315,21 @@ module sui::coin {
         deny_list.v2_remove(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
-    public fun deny_list_v2_most_recent_contains<T>(
+    public fun deny_list_v2_contains_current_epoch<T>(
         deny_list: &DenyList,
         addr: address,
         ctx: &TxContext,
     ): bool {
         let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
-        deny_list.v2_most_recent_contains(DENY_LIST_COIN_INDEX, ty, addr, ctx)
+        deny_list.v2_contains_current_epoch(DENY_LIST_COIN_INDEX, ty, addr, ctx)
+    }
+
+    public fun deny_list_v2_contains_next_epoch<T>(
+        deny_list: &DenyList,
+        addr: address,
+    ): bool {
+        let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+        deny_list.v2_contains_next_epoch(DENY_LIST_COIN_INDEX, ty, addr)
     }
 
     #[allow(unused_mut_parameter)]
@@ -346,12 +354,19 @@ module sui::coin {
         deny_list.v2_disable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
     }
 
-    public fun deny_list_v2_most_recent_is_global_pause_enabled<T>(
+    public fun deny_list_v2_is_global_pause_enabled_current_epoch<T>(
         deny_list: &DenyList,
         ctx: &TxContext,
     ): bool {
         let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
-        deny_list.v2_most_recent_is_global_pause_enabled(DENY_LIST_COIN_INDEX, ty, ctx)
+        deny_list.v2_is_global_pause_enabled_current_epoch(DENY_LIST_COIN_INDEX, ty, ctx)
+    }
+
+    public fun deny_list_v2_is_global_pause_enabled_next_epoch<T>(
+        deny_list: &DenyList,
+    ): bool {
+        let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+        deny_list.v2_is_global_pause_enabled_next_epoch(DENY_LIST_COIN_INDEX, ty)
     }
 
     // === Entrypoints ===
