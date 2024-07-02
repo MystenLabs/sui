@@ -432,13 +432,8 @@ impl CheckpointExecutor {
             .await
             .expect("commit_transaction_outputs cannot fail");
 
-        // pending_execution stores transactions received from consensus which may not have
-        // been executed yet. At this point, they have been committed to the db durably and
-        // can be removed.
-        // After end-to-end quarantining, we will not need pending_execution since the consensus
-        // log itself will be used for recovery.
         epoch_store
-            .multi_remove_pending_execution(all_tx_digests)
+            .handle_committed_transactions(all_tx_digests)
             .expect("cannot fail");
 
         if !checkpoint.is_last_checkpoint_of_epoch() {
