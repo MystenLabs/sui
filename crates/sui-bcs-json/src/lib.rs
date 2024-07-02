@@ -12,6 +12,7 @@ use std::fmt;
 // transaction::{TransactionData, TransactionKind},
 // };
 // use sui_sdk2::types::u256;
+use sui_sdk2::types::MultisigAggregatedSignature as MultiSig;
 use sui_sdk2::types::MultisigMemberPublicKey as MultiSigPublicKey;
 use sui_sdk2::types::TransactionKind;
 use sui_sdk2::types::*;
@@ -149,7 +150,7 @@ pub enum Value {
     Bool(bool),
     Address(sui_sdk2::types::Address),
     // CallArg(CallArg),
-    // MultiSig(MultiSig),
+    MultiSig(MultiSig),
     MultiSigPublicKey(MultiSigPublicKey),
     String(String),
     // TransactionData(TransactionData),
@@ -196,7 +197,7 @@ impl Serialize for Value {
             V::Bool(b) => b.serialize(serializer),
             V::Address(a) => a.serialize(serializer),
             // V::CallArg(c) => c.serialize(serializer),
-            // V::MultiSig(sig) => sig.serialize(serializer),
+            V::MultiSig(sig) => sig.serialize(serializer),
             V::MultiSigPublicKey(sig) => sig.serialize(serializer),
             V::String(s) => serializer.serialize_str(s.as_str()),
             // V::TransactionData(data) => data.serialize(serializer),
@@ -243,7 +244,7 @@ impl<'t, 'de> DeserializeSeed<'de> for Type<'t> {
             // "u256" => U256::deserialize(deserializer).map(V::U256),
             "address" => Address::deserialize(deserializer).map(V::Address),
             // "call_arg" => CallArg::deserialize(deserializer).map(V::CallArg),
-            // "multisig" => MultiSig::deserialize(deserializer).map(V::MultiSig),
+            "multisig" => MultiSig::deserialize(deserializer).map(V::MultiSig),
             "multisig_public_key" => {
                 MultiSigPublicKey::deserialize(deserializer).map(V::MultiSigPublicKey)
             }
