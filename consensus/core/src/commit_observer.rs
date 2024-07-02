@@ -5,7 +5,8 @@ use std::{sync::Arc, time::Duration};
 
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
-use tracing::info;
+use tokio::time::Instant;
+use tracing::{debug, info};
 
 use crate::{
     block::{BlockAPI, VerifiedBlock},
@@ -97,17 +98,19 @@ impl CommitObserver {
     }
 
     fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
+        let now = Instant::now();
         // TODO: remove this check, to allow consensus to regenerate commits?
         let last_commit = self
             .store
             .read_last_commit()
             .expect("Reading the last commit should not fail");
 
-        if let Some(last_commit) = last_commit {
+        if let Some(last_commit) = &last_commit {
             let last_commit_index = last_commit.index();
 
             assert!(last_commit_index >= last_processed_commit_index);
             if last_commit_index == last_processed_commit_index {
+                debug!("Nothing to recover for commit observer as commit index {last_commit_index} = {last_processed_commit_index} last processed index");
                 return;
             }
         };
@@ -117,6 +120,8 @@ impl CommitObserver {
             .store
             .scan_commits(((last_processed_commit_index + 1)..=CommitIndex::MAX).into())
             .expect("Scanning commits should not fail");
+
+        debug!("Recovering commit observer after index {last_processed_commit_index} with last commit {:?} and {} unsent commits", last_commit, unsent_commits.len());
 
         // Resend all the committed subdags to the consensus output channel
         // for all the commits above the last processed index.
@@ -150,6 +155,11 @@ impl CommitObserver {
 
             last_sent_commit_index += 1;
         }
+
+        debug!(
+            "Commit observer recovery completed, took {:?}",
+            now.elapsed()
+        );
     }
 
     fn report_metrics(&self, committed: &[CommittedSubDag]) {

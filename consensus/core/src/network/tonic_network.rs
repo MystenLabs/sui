@@ -16,6 +16,7 @@ use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use futures::{stream, Stream, StreamExt as _};
 use hyper::server::conn::Http;
 use mysten_common::sync::notify_once::NotifyOnce;
+use mysten_metrics::monitored_future;
 use mysten_network::{
     callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
     multiaddr::Protocol,
@@ -654,6 +655,8 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             .with_label_values(&["tonic"])
             .set(1);
 
+        debug!("Starting tonic service");
+
         let authority = self.context.committee.authority(self.context.own_index);
         // Bind to localhost in unit tests since only local networking is needed.
         // Bind to the unspecified address to allow the actual address to be assigned,
@@ -699,7 +702,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
         // Create listener to incoming connections.
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let deadline = Instant::now() + Duration::from_secs(20);
         let listener = loop {
             if Instant::now() > deadline {
                 panic!("Failed to start server: timeout");
@@ -764,7 +767,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
 
         let shutdown_notif = self.shutdown_notif.clone();
 
-        self.server.spawn(async move {
+        self.server.spawn(monitored_future!(async move {
             let mut connection_handlers = JoinSet::new();
 
             loop {
@@ -895,7 +898,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     Ok(())
                 });
             }
-        });
+        }));
 
         info!("Server started at: {own_address}");
     }

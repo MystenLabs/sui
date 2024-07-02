@@ -148,7 +148,7 @@ where
         registry: Registry,
     ) -> Self {
         info!(
-            "Starting authority {}\n{:#?}\n{:#?}\n{:?}",
+            "Starting consensus authority {}\n{:#?}\n{:#?}\n{:?}",
             own_index, committee, parameters, protocol_config.version
         );
         assert!(committee.is_valid_index(own_index));
@@ -291,6 +291,11 @@ where
         };
 
         network_manager.install_service(network_service).await;
+
+        info!(
+            "Consensus authority started, took {:?}",
+            start_time.elapsed()
+        );
 
         Self {
             context,
