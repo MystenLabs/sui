@@ -166,6 +166,25 @@ function printReturnExpression(path: AstPath<Node>, options: ParserOptions, prin
 function printAbortExpression(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	const expression = path.node.nonFormattingChildren[0];
 	const printed = path.call(print, 'nonFormattingChildren', 0);
+
+	// Special case in `abort`. Historically, people have been using `abort` with
+	// parentheses, which are not required. We can format against it. Note, that
+	// we only do this for `abort` and should never do for other cases where
+	// `expression_list` is used, because it affects the semantics.
+	if (expression?.type === 'expression_list') {
+		return group([
+			'abort',
+			indent(line),
+			indent(
+				path.call(
+					(path) => path.call(print, 'nonFormattingChildren', 0),
+					'nonFormattingChildren',
+					0,
+				),
+			),
+		]);
+	}
+
 	return group([
 		'abort',
 		expression?.isList || expression?.isControlFlow

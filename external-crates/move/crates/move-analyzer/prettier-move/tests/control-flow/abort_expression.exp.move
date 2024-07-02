@@ -4,6 +4,8 @@
 module prettier::abort_expression {
     fun abort_expression() {
         abort 0;
+        abort 0;
+        abort 10;
         abort {
             10
         };
