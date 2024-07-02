@@ -19,6 +19,10 @@ pub struct TrafficControllerMetrics {
     pub tally_handled: IntCounter,
     pub error_tally_handled: IntCounter,
     pub deadmans_switch_enabled: IntGauge,
+    pub highest_direct_spam_rate: IntGauge,
+    pub highest_proxied_spam_rate: IntGauge,
+    pub highest_direct_error_rate: IntGauge,
+    pub highest_proxied_error_rate: IntGauge,
 }
 
 impl TrafficControllerMetrics {
@@ -90,6 +94,30 @@ impl TrafficControllerMetrics {
                 "deadmans_switch_enabled",
                 "If 1, the deadman's switch is enabled and all traffic control
                 should be getting bypassed",
+                registry
+            )
+            .unwrap(),
+            highest_direct_spam_rate: register_int_gauge_with_registry!(
+                "highest_direct_spam_rate",
+                "Highest direct spam rate seen recently",
+                registry
+            )
+            .unwrap(),
+            highest_proxied_spam_rate: register_int_gauge_with_registry!(
+                "highest_proxied_spam_rate",
+                "Highest proxied spam rate seen recently",
+                registry
+            )
+            .unwrap(),
+            highest_direct_error_rate: register_int_gauge_with_registry!(
+                "highest_direct_error_rate",
+                "Highest direct error rate seen recently",
+                registry
+            )
+            .unwrap(),
+            highest_proxied_error_rate: register_int_gauge_with_registry!(
+                "highest_proxied_error_rate",
+                "Highest proxied error rate seen recently",
                 registry
             )
             .unwrap(),
