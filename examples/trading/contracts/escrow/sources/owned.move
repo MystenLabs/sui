@@ -38,21 +38,16 @@ module escrow::owned {
     /// An object held in escrow
     public struct Escrow<T: key + store> has key {
         id: UID,
-
         /// Owner of `escrowed`
         sender: address,
-
         /// Intended recipient
         recipient: address,
-
         /// The ID of the key that opens the lock on the object sender wants
         /// from recipient.
         exchange_key: ID,
-
         /// The ID of the key that locked the escrowed object, before it was
         /// escrowed.
         escrowed_key: ID,
-
         /// The escrowed object.
         escrowed: T,
     }
