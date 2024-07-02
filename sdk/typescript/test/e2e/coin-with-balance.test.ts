@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { resolve } from 'path';
 import { fromHEX, toB64 } from '@mysten/bcs';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../src/bcs';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
 import { Transaction } from '../../src/transactions';
 import { coinWithBalance } from '../../src/transactions/intents/CoinWithBalance';
 import { normalizeSuiAddress } from '../../src/utils';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 describe('coinWithBalance', () => {
 	let toolbox: TestToolbox;
@@ -17,10 +18,10 @@ describe('coinWithBalance', () => {
 	let packageId: string;
 	let testType: string;
 
-	beforeEach(async () => {
+	beforeAll(async () => {
 		[toolbox, publishToolbox] = await Promise.all([setup(), setup()]);
-		const packagePath = __dirname + '/./data/coin_metadata';
-		({ packageId } = await publishPackage(packagePath, publishToolbox));
+		const packagePath = resolve(__dirname, './data/coin_metadata');
+		packageId = await publishToolbox.getPackage(packagePath);
 		testType = normalizeSuiAddress(packageId) + '::test::TEST';
 	});
 

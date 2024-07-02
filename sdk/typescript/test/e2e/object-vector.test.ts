@@ -24,6 +24,8 @@ describe('Test Move call with a vector of objects as input', () => {
 				showEffects: true,
 			},
 		});
+
+		await toolbox.client.waitForTransaction({ digest: result.digest });
 		expect(result.effects?.status.status).toEqual('success');
 		return result.effects?.created![0].reference.objectId!;
 	}
@@ -45,6 +47,7 @@ describe('Test Move call with a vector of objects as input', () => {
 				showEffects: true,
 			},
 		});
+		await toolbox.client.waitForTransaction({ digest: result.digest });
 		expect(result.effects?.status.status).toEqual('success');
 	}
 

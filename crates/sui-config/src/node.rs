@@ -187,6 +187,9 @@ pub struct NodeConfig {
 
     #[serde(default = "bool_true")]
     pub state_accumulator_v2: bool,
+
+    #[serde(default = "bool_true")]
+    pub enable_soft_bundle: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

@@ -454,6 +454,9 @@ pub trait ObjectCacheRead: Send + Sync {
             _ => Ok(false),
         }
     }
+
+    /// Return the watermark for the highest checkpoint for which we've pruned objects.
+    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber>;
 }
 
 pub trait TransactionCacheRead: Send + Sync {

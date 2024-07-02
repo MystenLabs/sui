@@ -34,7 +34,7 @@ use crate::{
         core::{
             self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
-        dependency_ordering, expand, infinite_instantiations, macro_expand, match_compilation,
+        dependency_ordering, expand, infinite_instantiations, macro_expand, match_analysis,
         recursive_datatypes,
         syntax_methods::validate_syntax_methods,
     },
@@ -349,7 +349,7 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
     };
     core::solve_constraints(context);
     expand::function_body_(context, &mut b_);
-    match_compilation::function_body_(context, &mut b_);
+    match_analysis::function_body_(context, &mut b_);
     debug_print!(context.debug.function_translation, ("output" => b_));
     sp(loc, b_)
 }
@@ -3865,7 +3865,7 @@ fn module_call(
     argloc: Loc,
     args: Vec<T::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
-    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
+    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt, None);
     let (call, ret_ty) = module_call_impl(context, loc, m, f, fty, argloc, args);
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
@@ -4287,7 +4287,7 @@ fn macro_module_call(
     argloc: Loc,
     nargs: Vec<N::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
-    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
+    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt, None);
     let args = nargs
         .into_iter()
         .map(|e| macro_expand::EvalStrategy::ByName(convert_macro_arg_to_block(context, e)))
@@ -4441,7 +4441,7 @@ fn expand_macro(
     let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
     {
         None => {
-            assert!(context.env.has_errors());
+            assert!(context.env.has_errors() || context.env.ide_mode());
             (context.error_type(call_loc), TE::UnresolvedError)
         }
         Some(macro_expand::ExpandedMacro {

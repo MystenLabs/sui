@@ -26,3 +26,7 @@ tonic:
   connection_buffer_size: 33554432
   excessive_message_size: 16777216
   message_size_limit: 67108864
+sync_last_proposed_block_timeout:
+  secs: 0
+  nanos: 0
+

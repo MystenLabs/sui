@@ -244,8 +244,7 @@ pub struct BlocklistCommitteeAction {
     pub nonce: u64,
     pub chain_id: BridgeChainId,
     pub blocklist_type: BlocklistType,
-    // TODO: rename this to `members_to_update`
-    pub blocklisted_members: Vec<BridgeAuthorityPublicKeyBytes>,
+    pub members_to_update: Vec<BridgeAuthorityPublicKeyBytes>,
 }
 
 #[derive(
@@ -479,8 +478,46 @@ pub struct EthLog {
     pub block_number: u64,
     pub tx_hash: H256,
     pub log_index_in_tx: u16,
-    // TODO: pull necessary fields from `Log`.
     pub log: Log,
+}
+
+/// The version of EthLog that does not have
+/// `log_index_in_tx`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawEthLog {
+    pub block_number: u64,
+    pub tx_hash: H256,
+    pub log: Log,
+}
+
+pub trait EthEvent {
+    fn block_number(&self) -> u64;
+    fn tx_hash(&self) -> H256;
+    fn log(&self) -> &Log;
+}
+
+impl EthEvent for EthLog {
+    fn block_number(&self) -> u64 {
+        self.block_number
+    }
+    fn tx_hash(&self) -> H256 {
+        self.tx_hash
+    }
+    fn log(&self) -> &Log {
+        &self.log
+    }
+}
+
+impl EthEvent for RawEthLog {
+    fn block_number(&self) -> u64 {
+        self.block_number
+    }
+    fn tx_hash(&self) -> H256 {
+        self.tx_hash
+    }
+    fn log(&self) -> &Log {
+        &self.log
+    }
 }
 
 /// Check if the bridge route is valid
@@ -625,7 +662,7 @@ mod tests {
             nonce: 94,
             chain_id: BridgeChainId::EthSepolia,
             blocklist_type: BlocklistType::Unblocklist,
-            blocklisted_members: vec![],
+            members_to_update: vec![],
         });
         assert_eq!(action.approval_threshold(), 5001);
 

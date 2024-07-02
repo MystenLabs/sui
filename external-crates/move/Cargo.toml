@@ -65,6 +65,7 @@ hkdf = "0.10.0"
 im = "15.1.0"
 internment = { version = "0.5.0", features = [ "arc"] }
 itertools = "0.10.0"
+json_comments = "0.2.2"
 leb128 = "0.2.5"
 libfuzzer-sys = "0.4"
 log = { version = "0.4.14", features = ["serde"] }

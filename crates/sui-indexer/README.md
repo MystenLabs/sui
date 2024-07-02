@@ -26,7 +26,17 @@ brew services start postgresql@version
 
 ### Local Development(Recommended)
 
-Use [sui-test-validator](../../crates/sui-test-validator/README.md)
+See the [docs](https://docs.sui.io/guides/developer/getting-started/local-network) for detailed information. Below is a quick start guide:
+
+Start a local network using the `sui` binary:
+```sh
+cargo run --bin sui -- start --with-faucet --force-regenesis 
+```
+
+If you want to run a local network with the indexer enabled (note that `libpq` is required), you can run the following command after following the steps in the next section to set up an indexer DB:
+```sh
+cargo run --bin sui --features indexer -- start --with-faucet --force-regenesis --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2
+```
 
 ### Running standalone indexer
 1. DB setup, under `sui/crates/sui-indexer` run:

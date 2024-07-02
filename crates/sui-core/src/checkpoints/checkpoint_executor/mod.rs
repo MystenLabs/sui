@@ -25,16 +25,17 @@ use std::{
     time::{Duration, Instant},
 };
 
+use either::Either;
 use futures::stream::FuturesOrdered;
 use itertools::izip;
 use mysten_metrics::spawn_monitored_task;
-use prometheus::Registry;
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::{fail_point, fail_point_async};
 use sui_types::accumulator::Accumulator;
 use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::message_envelope::Message;
 use sui_types::transaction::TransactionKind;
 use sui_types::{
@@ -55,7 +56,9 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use self::metrics::CheckpointExecutorMetrics;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityState;
-use crate::checkpoints::checkpoint_executor::data_ingestion_handler::store_checkpoint_locally;
+use crate::checkpoints::checkpoint_executor::data_ingestion_handler::{
+    load_checkpoint_data, store_checkpoint_locally,
+};
 use crate::state_accumulator::StateAccumulator;
 use crate::transaction_manager::TransactionManager;
 use crate::{
@@ -64,7 +67,8 @@ use crate::{
 };
 
 mod data_ingestion_handler;
-mod metrics;
+pub mod metrics;
+
 #[cfg(test)]
 pub(crate) mod tests;
 
@@ -81,8 +85,8 @@ const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
 
 #[derive(Debug, Clone, Copy)]
 pub struct CheckpointTimeoutConfig {
-    pub timeout: Duration,
-    pub panic_on_timeout: bool,
+    pub panic_timeout: Option<Duration>,
+    pub warning_timeout: Duration,
 }
 
 // We use a thread local so that the config can be overridden on a per-test basis. This means
@@ -102,21 +106,24 @@ pub fn init_checkpoint_timeout_config(config: CheckpointTimeoutConfig) {
 
 fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
     fn inner() -> CheckpointTimeoutConfig {
-        let panic_on_timeout = cfg!(msim)
-            || std::env::var("PANIC_ON_NEW_CHECKPOINT_TIMEOUT")
-                .map_or(false, |s| s == "true" || s == "1");
-
-        // if we are panicking on timeout default to a longer timeout than if we are simply logging.
-        let timeout = Duration::from_millis(
-            std::env::var("NEW_CHECKPOINT_TIMEOUT_MS")
+        let panic_timeout: Option<Duration> = if cfg!(msim) {
+            Some(Duration::from_secs(45))
+        } else {
+            std::env::var("NEW_CHECKPOINT_PANIC_TIMEOUT_MS")
                 .ok()
                 .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(if panic_on_timeout { 45000 } else { 2000 }),
-        );
+                .map(Duration::from_millis)
+        };
+
+        let warning_timeout: Duration = std::env::var("NEW_CHECKPOINT_WARNING_TIMEOUT_MS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(Duration::from_millis)
+            .unwrap_or(Duration::from_secs(5));
 
         CheckpointTimeoutConfig {
-            timeout,
-            panic_on_timeout,
+            panic_timeout,
+            warning_timeout,
         }
     }
 
@@ -150,7 +157,7 @@ impl CheckpointExecutor {
         state: Arc<AuthorityState>,
         accumulator: Arc<StateAccumulator>,
         config: CheckpointExecutorConfig,
-        prometheus_registry: &Registry,
+        metrics: Arc<CheckpointExecutorMetrics>,
     ) -> Self {
         Self {
             mailbox,
@@ -161,7 +168,7 @@ impl CheckpointExecutor {
             tx_manager: state.transaction_manager().clone(),
             accumulator,
             config,
-            metrics: CheckpointExecutorMetrics::new(prometheus_registry),
+            metrics,
         }
     }
 
@@ -171,17 +178,14 @@ impl CheckpointExecutor {
         state: Arc<AuthorityState>,
         accumulator: Arc<StateAccumulator>,
     ) -> Self {
-        Self {
+        Self::new(
             mailbox,
-            state: state.clone(),
             checkpoint_store,
-            object_cache_reader: state.get_object_cache_reader().clone(),
-            transaction_cache_reader: state.get_transaction_cache_reader().clone(),
-            tx_manager: state.transaction_manager().clone(),
+            state,
             accumulator,
-            config: Default::default(),
-            metrics: CheckpointExecutorMetrics::new_for_tests(),
-        }
+            Default::default(),
+            CheckpointExecutorMetrics::new_for_tests(),
+        )
     }
 
     /// Ensure that all checkpoints in the current epoch will be executed.
@@ -247,7 +251,6 @@ impl CheckpointExecutor {
             .map(|c| c.network_total_transactions)
             .unwrap_or(0);
         let scheduling_timeout_config = get_scheduling_timeout();
-        let scheduling_timeout = scheduling_timeout_config.timeout;
 
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
@@ -287,6 +290,9 @@ impl CheckpointExecutor {
                 .checkpoint_exec_inflight
                 .set(pending.len() as i64);
 
+            let panic_timeout = scheduling_timeout_config.panic_timeout;
+            let warning_timeout = scheduling_timeout_config.warning_timeout;
+
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
@@ -314,44 +320,39 @@ impl CheckpointExecutor {
                         return StopReason::RunWithRangeCondition;
                     }
                 }
-                // Check for newly synced checkpoints from StateSync.
-                received = timeout(scheduling_timeout, self.mailbox.recv()) => match received {
-                    Err(_elapsed) => {
-                        warn!(
-                            "Received no new synced checkpoints for {scheduling_timeout:?}. Next checkpoint to be scheduled: {next_to_schedule}",
-                        );
-                        if scheduling_timeout_config.panic_on_timeout {
-                            panic!("No new synced checkpoints received for {scheduling_timeout:?} on node {:?}", self.state.name);
-                        }
-                        fail_point!("cp_exec_scheduling_timeout_reached");
-                    },
-                    Ok(Ok(checkpoint)) => {
+
+                received = self.mailbox.recv() => match received {
+                    Ok(checkpoint) => {
                         info!(
                             sequence_number = ?checkpoint.sequence_number,
                             "Received checkpoint summary from state sync"
                         );
                         checkpoint.report_checkpoint_age_ms(&self.metrics.checkpoint_contents_age_ms);
                     },
-                    // In this case, messages in the mailbox have been overwritten
-                    // as a result of lagging too far behind.
-                    Ok(Err(RecvError::Lagged(num_skipped))) => {
+                    Err(RecvError::Lagged(num_skipped)) => {
                         debug!(
-                            "Checkpoint Execution Recv channel overflowed {:?} messages",
+                            "Checkpoint Execution Recv channel overflowed with {:?} messages",
                             num_skipped,
                         );
                     }
-                    Ok(Err(RecvError::Closed)) => {
+                    Err(RecvError::Closed) => {
                         panic!("Checkpoint Execution Sender (StateSync) closed channel unexpectedly");
-                    }
+                    },
+                },
+
+                _ = tokio::time::sleep(warning_timeout) => {
+                    warn!(
+                        "Received no new synced checkpoints for {warning_timeout:?}. Next checkpoint to be scheduled: {next_to_schedule}",
+                    );
                 }
+
+                _ = panic_timeout
+                            .map(|d| Either::Left(tokio::time::sleep(d)))
+                            .unwrap_or_else(|| Either::Right(futures::future::pending())) => {
+                    panic!("No new synced checkpoints received for {panic_timeout:?} on node {:?}", self.state.name);
+                },
             }
         }
-    }
-
-    pub fn set_inconsistent_state(&self, is_inconsistent_state: bool) {
-        self.metrics
-            .accumulator_inconsistent_state
-            .set(is_inconsistent_state as i64);
     }
 
     fn bump_highest_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
@@ -378,17 +379,28 @@ impl CheckpointExecutor {
         const NUM_SAVED_FULL_CHECKPOINT_CONTENTS: u64 = 5_000;
         if seq >= NUM_SAVED_FULL_CHECKPOINT_CONTENTS {
             let prune_seq = seq - NUM_SAVED_FULL_CHECKPOINT_CONTENTS;
-            let prune_checkpoint = self
+            if let Some(prune_checkpoint) = self
                 .checkpoint_store
                 .get_checkpoint_by_sequence_number(prune_seq)
                 .expect("Failed to fetch checkpoint")
-                .expect("Failed to retrieve earlier checkpoint by sequence number");
-            self.checkpoint_store
-                .delete_full_checkpoint_contents(prune_seq)
-                .expect("Failed to delete full checkpoint contents");
-            self.checkpoint_store
-                .delete_contents_digest_sequence_number_mapping(&prune_checkpoint.content_digest)
-                .expect("Failed to delete contents digest -> sequence number mapping");
+            {
+                self.checkpoint_store
+                    .delete_full_checkpoint_contents(prune_seq)
+                    .expect("Failed to delete full checkpoint contents");
+                self.checkpoint_store
+                    .delete_contents_digest_sequence_number_mapping(
+                        &prune_checkpoint.content_digest,
+                    )
+                    .expect("Failed to delete contents digest -> sequence number mapping");
+            } else {
+                // If this is directly after a snapshot restore with skiplisting,
+                // this is expected for the first `NUM_SAVED_FULL_CHECKPOINT_CONTENTS`
+                // checkpoints.
+                debug!(
+                    "Failed to fetch checkpoint with sequence number {:?}",
+                    prune_seq
+                );
+            }
         }
 
         self.checkpoint_store
@@ -420,13 +432,8 @@ impl CheckpointExecutor {
             .await
             .expect("commit_transaction_outputs cannot fail");
 
-        // pending_execution stores transactions received from consensus which may not have
-        // been executed yet. At this point, they have been committed to the db durably and
-        // can be removed.
-        // After end-to-end quarantining, we will not need pending_execution since the consensus
-        // log itself will be used for recovery.
         epoch_store
-            .multi_remove_pending_execution(all_tx_digests)
+            .handle_committed_transactions(all_tx_digests)
             .expect("cannot fail");
 
         if !checkpoint.is_last_checkpoint_of_epoch() {
@@ -667,7 +674,7 @@ impl CheckpointExecutor {
                         self.transaction_cache_reader.as_ref(),
                         self.checkpoint_store.clone(),
                         &all_tx_digests,
-                        epoch_store.clone(),
+                        &epoch_store,
                         checkpoint.clone(),
                         self.accumulator.clone(),
                         effects,
@@ -889,7 +896,7 @@ async fn handle_execution_effects(
                             transaction_cache_reader,
                             checkpoint_store.clone(),
                             &all_tx_digests,
-                            epoch_store.clone(),
+                            &epoch_store,
                             checkpoint.clone(),
                             accumulator.clone(),
                             effects,
@@ -1283,16 +1290,15 @@ async fn finalize_checkpoint(
     transaction_cache_reader: &dyn TransactionCacheRead,
     checkpoint_store: Arc<CheckpointStore>,
     tx_digests: &[TransactionDigest],
-    epoch_store: Arc<AuthorityPerEpochStore>,
+    epoch_store: &Arc<AuthorityPerEpochStore>,
     checkpoint: VerifiedCheckpoint,
     accumulator: Arc<StateAccumulator>,
     effects: Vec<TransactionEffects>,
     data_ingestion_dir: Option<PathBuf>,
 ) -> SuiResult<Accumulator> {
     debug!("finalizing checkpoint");
-    if epoch_store.per_epoch_finalized_txns_enabled() {
-        epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
-    }
+    epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
+
     // TODO remove once we no longer need to support this table for read RPC
     state
         .get_checkpoint_cache()
@@ -1305,15 +1311,28 @@ async fn finalize_checkpoint(
     let checkpoint_acc =
         accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
 
-    if let Some(path) = data_ingestion_dir {
-        store_checkpoint_locally(
-            path,
+    if data_ingestion_dir.is_some() || state.rest_index.is_some() {
+        let checkpoint_data = load_checkpoint_data(
             checkpoint,
             object_cache_reader,
             transaction_cache_reader,
             checkpoint_store,
-            tx_digests.to_vec(),
+            tx_digests,
         )?;
+
+        // TODO(bmwill) discuss with team a better location for this indexing so that it isn't on
+        // the critical path and the writes to the DB are done in checkpoint order
+        if let Some(rest_index) = &state.rest_index {
+            let mut layout_resolver = epoch_store.executor().type_layout_resolver(Box::new(
+                PackageStoreWithFallback::new(state.get_backing_package_store(), &checkpoint_data),
+            ));
+
+            rest_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut())?;
+        }
+
+        if let Some(path) = data_ingestion_dir {
+            store_checkpoint_locally(path, &checkpoint_data)?;
+        }
     }
     Ok(checkpoint_acc)
 }

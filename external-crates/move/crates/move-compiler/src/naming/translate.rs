@@ -781,10 +781,20 @@ impl<'env> Context<'env> {
                 ResolvedCallSubject::Builtin(Box::new(resolved))
             }
             EA::Name(n) => {
+                let possibly_datatype_name = self
+                    .env
+                    .supports_feature(self.current_package, FeatureGate::PositionalFields)
+                    && is_constant_name(&n.value);
                 match self.resolve_local(
                     n.loc,
                     NameResolution::UnboundUnscopedName,
-                    |n| format!("Unbound function '{}' in current scope", n),
+                    |n| {
+                        if possibly_datatype_name {
+                            format!("Unbound datatype or function '{}' in current scope", n)
+                        } else {
+                            format!("Unbound function '{}' in current scope", n)
+                        }
+                    },
                     n,
                 ) {
                     None => {

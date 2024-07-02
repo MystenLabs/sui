@@ -125,7 +125,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 debug!(
                     "Delaying retry {} of peer {} subscription, in {} seconds",
                     retries,
-                    peer,
+                    peer_hostname,
                     delay.as_secs_f32(),
                 );
                 sleep(delay).await;
@@ -282,6 +282,15 @@ mod test {
             _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_latest_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _authorities: Vec<AuthorityIndex>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }
     }

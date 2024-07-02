@@ -234,7 +234,6 @@ pub async fn test_checkpoint_executor_cross_epoch() {
                 EpochFlag::default_flags_for_new_epoch(&authority_state.config),
             )
             .unwrap(),
-            &executor,
             accumulator,
             &ExpensiveSafetyCheckConfig::default(),
         )
@@ -394,7 +393,8 @@ async fn init_executor_test(
         broadcast::channel(buffer_size);
     let epoch_store = state.epoch_store_for_testing();
 
-    let accumulator = StateAccumulator::new(state.get_accumulator_store().clone(), &epoch_store);
+    let accumulator =
+        StateAccumulator::new_for_tests(state.get_accumulator_store().clone(), &epoch_store);
     let accumulator = Arc::new(accumulator);
 
     let executor = CheckpointExecutor::new_for_tests(

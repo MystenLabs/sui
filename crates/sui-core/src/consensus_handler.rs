@@ -27,7 +27,7 @@ use sui_types::{
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
 };
-use tracing::{debug, error, info, instrument, trace_span};
+use tracing::{debug, error, info, instrument, trace_span, warn};
 
 use crate::{
     authority::{
@@ -233,13 +233,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let round = consensus_output.leader_round();
 
+        // TODO: Remove this once narwhal is deprecated. For now mysticeti will not return
+        // more than one leader per round so we are not in danger of ignoring any commits.
         assert!(round >= last_committed_round);
         if last_committed_round == round {
             // we can receive the same commit twice after restart
             // It is critical that the writes done by this function are atomic - otherwise we can
             // lose the later parts of a commit if we restart midway through processing it.
-            info!(
-                "Ignoring consensus output for round {} as it is already committed",
+            warn!(
+                "Ignoring consensus output for round {} as it is already committed. NOTE: This is only expected if Narwhal is running.",
                 round
             );
             return;

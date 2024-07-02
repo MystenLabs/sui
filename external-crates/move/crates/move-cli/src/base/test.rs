@@ -5,7 +5,7 @@ use super::reroot_path;
 use crate::NativeFunctionRecord;
 use anyhow::Result;
 use clap::*;
-use move_command_line_common::files::{FileHash, MOVE_COVERAGE_MAP_EXTENSION};
+use move_command_line_common::files::MOVE_COVERAGE_MAP_EXTENSION;
 use move_compiler::{
     diagnostics::{self, Diagnostics},
     shared::{NumberFormat, NumericalAddress},
@@ -16,7 +16,7 @@ use move_coverage::coverage_map::{output_map_to_file, CoverageMap};
 use move_package::{compilation::build_plan::BuildPlan, BuildConfig};
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::CostTable;
-use std::{collections::HashMap, fs, io::Write, path::Path, process::ExitStatus, sync::Arc};
+use std::{io::Write, path::Path, process::ExitStatus};
 // if windows
 #[cfg(target_family = "windows")]
 use std::os::windows::process::ExitStatusExt;
@@ -158,23 +158,6 @@ pub fn run_move_unit_tests<W: Write + Send>(
         })
         .collect();
 
-    // Get the source files for all modules. We need this in order to report source-mapped error
-    // messages.
-    let dep_file_map: HashMap<_, _> = resolution_graph
-        .package_table
-        .iter()
-        .flat_map(|(_, rpkg)| {
-            rpkg.get_sources(&resolution_graph.build_options)
-                .unwrap()
-                .iter()
-                .map(|fname| {
-                    let contents = fs::read_to_string(Path::new(fname.as_str())).unwrap();
-                    let fhash = FileHash::new(&contents);
-                    (fhash, (*fname, Arc::from(contents)))
-                })
-                .collect::<HashMap<_, _>>()
-        })
-        .collect();
     let root_package = resolution_graph.root_package();
     let build_plan = BuildPlan::create(resolution_graph)?;
     // Compile the package. We need to intercede in the compilation, process being performed by the
@@ -189,6 +172,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let built_test_plan = construct_test_plan(compilation_env, Some(root_package), &cfgir);
+        let mapped_files = compilation_env.mapped_files().clone();
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =
@@ -199,16 +183,15 @@ pub fn run_move_unit_tests<W: Write + Send>(
             .into_iter()
             .map(|unit| unit.named_module)
             .collect();
-        test_plan = Some((built_test_plan, files.clone(), named_units));
+        test_plan = Some((built_test_plan, mapped_files, named_units));
         warning_diags = Some(warnings);
         Ok((files, units))
     })?;
 
-    let (test_plan, mut files, units) = test_plan.unwrap();
-    files.extend(dep_file_map);
+    let (test_plan, mapped_files, units) = test_plan.unwrap();
     let test_plan = test_plan.unwrap();
     let no_tests = test_plan.is_empty();
-    let test_plan = TestPlan::new(test_plan, files, units);
+    let test_plan = TestPlan::new(test_plan, mapped_files, units);
 
     let trace_path = pkg_path.join(".trace");
     let coverage_map_path = pkg_path

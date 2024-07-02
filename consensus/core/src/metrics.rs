@@ -101,6 +101,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) block_size: Histogram,
     pub(crate) block_ancestors: Histogram,
+    pub(crate) block_ancestors_depth: HistogramVec,
     pub(crate) highest_verified_authority_round: IntGaugeVec,
     pub(crate) lowest_verified_authority_round: IntGaugeVec,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
@@ -156,10 +157,13 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetched_blocks: IntCounter,
     pub(crate) commit_sync_total_fetched_blocks_size: IntCounter,
     pub(crate) commit_sync_quorum_index: IntGauge,
-    pub(crate) commit_sync_fetched_index: IntGauge,
+    pub(crate) commit_sync_highest_synced_index: IntGauge,
+    pub(crate) commit_sync_highest_fetched_index: IntGauge,
     pub(crate) commit_sync_local_index: IntGauge,
+    pub(crate) commit_sync_gap_on_processing: IntCounter,
     pub(crate) commit_sync_fetch_loop_latency: Histogram,
     pub(crate) commit_sync_fetch_once_latency: Histogram,
+    pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
     pub(crate) uptime: Histogram,
 }
 
@@ -188,6 +192,13 @@ impl NodeMetrics {
                 "block_ancestors",
                 "Number of ancestors in proposed blocks",
                 exponential_buckets(1.0, 1.4, 20).unwrap(),
+                registry,
+            ).unwrap(),
+            block_ancestors_depth: register_histogram_vec_with_registry!(
+                "block_ancestors_depth",
+                "The depth in rounds of ancestors included in newly proposed blocks",
+                &["authority"],
+                exponential_buckets(1.0, 2.0, 14).unwrap(),
                 registry,
             ).unwrap(),
             highest_verified_authority_round: register_int_gauge_vec_with_registry!(
@@ -497,14 +508,24 @@ impl NodeMetrics {
                 "The maximum commit index voted by a quorum of authorities",
                 registry,
             ).unwrap(),
-            commit_sync_fetched_index: register_int_gauge_with_registry!(
+            commit_sync_highest_synced_index: register_int_gauge_with_registry!(
                 "commit_sync_fetched_index",
                 "The max commit index among local and fetched commits",
+                registry,
+            ).unwrap(),
+            commit_sync_highest_fetched_index: register_int_gauge_with_registry!(
+                "commit_sync_highest_fetched_index",
+                "The max commit index that has been fetched via network",
                 registry,
             ).unwrap(),
             commit_sync_local_index: register_int_gauge_with_registry!(
                 "commit_sync_local_index",
                 "The local commit index",
+                registry,
+            ).unwrap(),
+            commit_sync_gap_on_processing: register_int_counter_with_registry!(
+                "commit_sync_gap_on_processing",
+                "Number of instances where a gap was found in fetched commit processing",
                 registry,
             ).unwrap(),
             commit_sync_fetch_loop_latency: register_histogram_with_registry!(
@@ -518,6 +539,12 @@ impl NodeMetrics {
                 "The time taken to fetch commits and blocks once",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
+            ).unwrap(),
+            commit_sync_fetch_once_errors: register_int_counter_vec_with_registry!(
+                "commit_sync_fetch_once_errors",
+                "Number of errors when attempting to fetch commits and blocks from single authority during commit sync.",
+                &["error"],
+                registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(
                 "uptime",

@@ -17,7 +17,7 @@ mod checked {
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, TransactionData, TransactionDataAPI,
-        TransactionKind, VersionedProtocolMessage as _,
+        TransactionKind,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -186,13 +186,9 @@ mod checked {
         // Overrides the gas objects in the transaction.
         gas_override: &[ObjectRef],
     ) -> SuiResult<SuiGasStatus> {
-        // Cheap validity checks that is ok to run multiple times during processing.
-        transaction.check_version_and_features_supported(protocol_config)?;
         let gas = if gas_override.is_empty() {
-            transaction.validity_check(protocol_config)?;
             transaction.gas()
         } else {
-            transaction.validity_check_no_gas_check(protocol_config)?;
             gas_override
         };
 

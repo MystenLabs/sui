@@ -136,7 +136,7 @@ impl Adapter {
                 .publish_module(binary, DEFAULT_ACCOUNT, &mut UnmeteredGasMeter)
                 .unwrap_or_else(|e| panic!("failure publishing module: {e:?}\n{:#?}", module));
         }
-        let (changeset, _) = session.finish().0.expect("failure getting write set");
+        let changeset = session.finish().0.expect("failure getting write set");
         self.store
             .apply(changeset)
             .expect("failure applying write set");
@@ -173,7 +173,7 @@ impl Adapter {
             .publish_module_bundle(binaries, DEFAULT_ACCOUNT, &mut UnmeteredGasMeter)
             .unwrap_or_else(|e| panic!("failure publishing module bundle: {e:?}"));
 
-        let (changeset, _) = session.finish().0.expect("failure getting write set");
+        let changeset = session.finish().0.expect("failure getting write set");
         self.store
             .apply(changeset)
             .expect("failure applying write set");

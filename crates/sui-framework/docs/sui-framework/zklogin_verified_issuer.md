@@ -226,7 +226,7 @@ Returns true if <code><b>address</b></code> was created using zklogin with the g
     address_seed: u256,
     issuer: &String,
 ): bool {
-    <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_check_zklogin_issuer_internal">check_zklogin_issuer_internal</a>(<b>address</b>, address_seed, issuer.bytes())
+    <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_check_zklogin_issuer_internal">check_zklogin_issuer_internal</a>(<b>address</b>, address_seed, issuer.as_bytes())
 }
 </code></pre>
 

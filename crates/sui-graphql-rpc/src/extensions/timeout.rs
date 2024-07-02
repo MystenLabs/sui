@@ -47,6 +47,8 @@ impl Extension for TimeoutExt {
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
         let document = next.run(ctx, query, variables).await?;
+        *self.query.lock().unwrap() = Some(ctx.stringify_execute_doc(&document, variables));
+
         let is_mutation = document
             .operations
             .iter()

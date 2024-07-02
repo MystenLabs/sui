@@ -64,4 +64,9 @@ module std::u256_tests {
     fun test_pow_overflow() {
         255u256.pow(255);
     }
+
+    #[test]
+    fun test_dos() {
+        integer_tests::test_dos!(MAX, CASES);
+    }
 }

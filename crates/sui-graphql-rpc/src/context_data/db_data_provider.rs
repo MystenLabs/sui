@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::{DEFAULT_REQUEST_TIMEOUT_MS, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
     types::{address::Address, sui_address::SuiAddress, validator::Validator},
 };
@@ -26,14 +25,6 @@ impl PgManager {
     }
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
-    pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader<PgConnection>, Error> {
-        Self::reader_with_config(
-            db_url,
-            DEFAULT_SERVER_DB_POOL_SIZE,
-            DEFAULT_REQUEST_TIMEOUT_MS,
-        )
-    }
-
     pub(crate) fn reader_with_config(
         db_url: impl Into<String>,
         pool_size: u32,

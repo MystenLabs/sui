@@ -1,0 +1,136 @@
+# Default values for graphql.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+
+# DB_URL could conatin sensitive info so create a k8s secret outside of this helm chart. This helm chart will expect the secret to be loaded as an env var.
+# Example: kubectl create secret generic db_url --from-literal=password=<actual db url> --namespace graphql
+#
+# RPC_URL is also expected to be an env var so the command properly populates
+command: ["/opt/sui/bin/sui-graphql-rpc", "start-server","--host","0.0.0.0","--port","8001","--db-url","$DB_URL","--node-rpc-url", "$RPC_URL","--config","/opt/sui/config/graphql.toml","--ide-title","Sui RPC2.0 GraphQL"]
+
+
+env:
+  RUST_BACKTRACE:
+    value: "1"
+  RPC_URL: 
+    value: "https://public-rpc.mainnet.sui.io" # you will want to point this to a local fullnode instance like http://<servicename>.<namespace>.svc.cluster.local:900
+  DB_URL:
+    valueFrom:
+      secretKeyRef:
+        name: "indexer-reader-db-url-secret"
+        key: "db-url"
+
+configMapName: graphql-toml
+# Additional volumes on the output Deployment definition.
+volumes:
+ - name: graphql-toml-volume
+   configMap:
+    name: graphql-toml
+    items:
+      - key: graphql.toml
+        path: graphql.toml 
+
+# Additional volumeMounts on the output Deployment definition.
+volumeMounts:
+ - name: graphql-toml-volume
+   mountPath: "/opt/sui/config/graphql.toml"
+   subPath: "graphql.toml"
+   readOnly: true
+
+replicaCount: 3
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "default"
+
+
+image:
+  repository: "mysten/sui-graphql-rpc"
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "sui-graphql-rpc-v2024.4.0-release"
+
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations:
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "9184"
+  prometheus.io/scrape: "true"
+
+podLabels:
+  app: "graphql"
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 8001
+
+ingress:
+  enabled: false
+  className: ""
+  annotations:
+        # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+#livenessProbe:
+#  httpGet:
+#    path: /
+#    port: http
+#readinessProbe:
+#  httpGet:
+#    path: /
+#    port: http
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 15
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

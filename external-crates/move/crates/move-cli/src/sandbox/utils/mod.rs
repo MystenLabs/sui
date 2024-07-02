@@ -13,7 +13,10 @@ use move_binary_format::{
 };
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{FileHash, MOVE_COMPILED_EXTENSION};
-use move_compiler::diagnostics::{self, report_diagnostics, Diagnostic, Diagnostics, FileName};
+use move_compiler::{
+    diagnostics::{self, report_diagnostics, Diagnostic, Diagnostics},
+    shared::files::FileName,
+};
 use move_core_types::{
     account_address::AccountAddress,
     effects::{ChangeSet, Op},
@@ -55,8 +58,6 @@ pub fn get_gas_status(cost_table: &CostTable, gas_budget: Option<u64>) -> Result
 }
 
 pub(crate) fn explain_publish_changeset(changeset: &ChangeSet) {
-    // publish effects should contain no resources
-    assert!(changeset.resources().next().is_none());
     // total bytes written across all accounts
     let mut total_bytes_written = 0;
     for (addr, name, blob_op) in changeset.modules() {
@@ -267,7 +268,7 @@ pub(crate) fn explain_publish_error(
                     }
                 }
             }
-            report_diagnostics(&files, diags)
+            report_diagnostics(&files.into(), diags)
         }
         status_code => {
             println!("Publishing failed with unexpected error {:?}", status_code)

@@ -523,6 +523,10 @@ impl CheckpointContents {
         self.into_v1().transactions
     }
 
+    pub fn inner(&self) -> &[ExecutionDigests] {
+        &self.as_v1().transactions
+    }
+
     pub fn size(&self) -> usize {
         self.as_v1().transactions.len()
     }

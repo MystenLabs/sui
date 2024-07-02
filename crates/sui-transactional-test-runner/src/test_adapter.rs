@@ -62,6 +62,7 @@ use sui_storage::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
+use sui_types::committee::EpochId;
 use sui_types::crypto::{get_authority_key_pair, RandomnessRound};
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
@@ -164,6 +165,7 @@ struct TxnSummary {
     deleted: Vec<ObjectID>,
     unwrapped_then_deleted: Vec<ObjectID>,
     wrapped: Vec<ObjectID>,
+    unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
     gas_summary: GasCostSummary,
 }
@@ -246,7 +248,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     ProtocolConfig::get_for_max_version_UNSAFE()
                 };
                 if let Some(enable) = shared_object_deletion {
-                    protocol_config.set_shared_object_deletion(enable);
+                    protocol_config.set_shared_object_deletion_for_testing(enable);
                 }
                 if let Some(mx_tx_gas_override) = max_gas {
                     if simulator {
@@ -1447,6 +1449,12 @@ impl<'a> SuiTestAdapter {
             self.enumerate_fake(id);
         }
 
+        let mut unchanged_shared_ids = effects
+            .unchanged_shared_objects()
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
+
         // Treat unwrapped objects as writes (even though sometimes this is the first time we can
         // refer to them at their id in storage).
 
@@ -1457,6 +1465,7 @@ impl<'a> SuiTestAdapter {
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        unchanged_shared_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
 
         match effects.status() {
             ExecutionStatus::Success { .. } => {
@@ -1473,6 +1482,7 @@ impl<'a> SuiTestAdapter {
                     deleted: deleted_ids,
                     unwrapped_then_deleted: unwrapped_then_deleted_ids,
                     wrapped: wrapped_ids,
+                    unchanged_shared: unchanged_shared_ids,
                 })
             }
             ExecutionStatus::Failure { error, command } => {
@@ -1553,6 +1563,8 @@ impl<'a> SuiTestAdapter {
                     deleted: deleted_ids,
                     unwrapped_then_deleted: unwrapped_then_deleted_ids,
                     wrapped: wrapped_ids,
+                    // TODO: Properly propagate unchanged shared objects in dev_inspect.
+                    unchanged_shared: vec![],
                 })
             }
             SuiExecutionStatus::Failure { error } => Err(anyhow::anyhow!(self.stabilize_str(
@@ -1618,6 +1630,7 @@ impl<'a> SuiTestAdapter {
             deleted,
             unwrapped_then_deleted,
             wrapped,
+            unchanged_shared,
         }: &TxnSummary,
         summarize: bool,
     ) -> Option<String> {
@@ -1665,6 +1678,17 @@ impl<'a> SuiTestAdapter {
                 out.push('\n')
             }
             write!(out, "wrapped: {}", self.list_objs(wrapped, summarize)).unwrap();
+        }
+        if !unchanged_shared.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(
+                out,
+                "unchanged_shared: {}",
+                self.list_objs(unchanged_shared, summarize)
+            )
+            .unwrap();
         }
         out.push('\n');
         write!(out, "gas summary: {}", gas_summary).unwrap();
@@ -2257,6 +2281,10 @@ impl ObjectStore for SuiTestAdapter {
 }
 
 impl ReadStore for SuiTestAdapter {
+    fn get_latest_epoch_id(&self) -> sui_types::storage::error::Result<EpochId> {
+        self.executor.get_latest_epoch_id()
+    }
+
     fn get_committee(
         &self,
         epoch: sui_types::committee::EpochId,

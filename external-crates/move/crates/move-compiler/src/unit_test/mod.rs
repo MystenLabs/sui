@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compiled_unit::NamedCompiledModule, diagnostics::FilesSourceText, shared::NumericalAddress,
+    compiled_unit::NamedCompiledModule, shared::files::MappedFiles, shared::NumericalAddress,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -19,9 +19,8 @@ pub mod plan_builder;
 
 pub type TestName = String;
 
-#[derive(Debug, Clone)]
 pub struct TestPlan {
-    pub files: FilesSourceText,
+    pub mapped_files: MappedFiles,
     pub module_tests: BTreeMap<ModuleId, ModuleTestPlan>,
     pub module_info: BTreeMap<ModuleId, NamedCompiledModule>,
 }
@@ -90,7 +89,7 @@ impl ModuleTestPlan {
 impl TestPlan {
     pub fn new(
         tests: Vec<ModuleTestPlan>,
-        files: FilesSourceText,
+        mapped_files: MappedFiles,
         units: Vec<NamedCompiledModule>,
     ) -> Self {
         let module_tests: BTreeMap<_, _> = tests
@@ -104,7 +103,7 @@ impl TestPlan {
             .collect();
 
         Self {
-            files,
+            mapped_files,
             module_tests,
             module_info,
         }

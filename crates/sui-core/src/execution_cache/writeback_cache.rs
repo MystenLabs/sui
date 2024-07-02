@@ -49,11 +49,7 @@ use crate::transaction_outputs::TransactionOutputs;
 
 use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
-use either::Either;
-use futures::{
-    future::{join_all, BoxFuture},
-    FutureExt,
-};
+use futures::{future::BoxFuture, FutureExt};
 use moka::sync::Cache as MokaCache;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
@@ -609,7 +605,13 @@ impl WritebackCache {
                         .unwrap_or(false);
 
                 if highest != cache_entry && !tombstone_possibly_pruned {
-                    tracing::error!("object_by_id cache is incoherent for {:?}", object_id);
+                    tracing::error!(
+                        ?highest,
+                        ?cache_entry,
+                        ?tombstone_possibly_pruned,
+                        "object_by_id cache is incoherent for {:?}",
+                        object_id
+                    );
                     panic!("object_by_id cache is incoherent for {:?}", object_id);
                 }
             }
@@ -1145,6 +1147,10 @@ impl WritebackCache {
             self.cached.object_by_id_cache.invalidate(object_id);
         }
 
+        for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
+            self.cached.object_by_id_cache.invalidate(object_id);
+        }
+
         // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
         Ok(())
     }
@@ -1350,6 +1356,7 @@ impl ObjectCacheRead for WritebackCache {
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(object_id, version_bound))]
     fn find_object_lt_or_eq_version(
         &self,
         object_id: ObjectID,
@@ -1374,6 +1381,9 @@ impl ObjectCacheRead for WritebackCache {
                                 .record_cache_negative_hit("object_lt_or_eq_version", $level);
                             return Ok(None);
                         }
+                    } else {
+                        self.metrics
+                            .record_cache_miss("object_lt_or_eq_version", $level);
                     }
                 }
             };
@@ -1601,6 +1611,10 @@ impl ObjectCacheRead for WritebackCache {
         )?;
         Ok(())
     }
+
+    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        self.store.perpetual_tables.get_highest_pruned_checkpoint()
+    }
 }
 
 impl TransactionCacheRead for WritebackCache {
@@ -1717,25 +1731,11 @@ impl TransactionCacheRead for WritebackCache {
         &'a self,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>> {
-        async move {
-            let registrations = self
-                .executed_effects_digests_notify_read
-                .register_all(digests);
-
-            let executed_effects_digests = self.multi_get_executed_effects_digests(digests)?;
-
-            let results = executed_effects_digests
-                .into_iter()
-                .zip(registrations)
-                .map(|(a, r)| match a {
-                    // Note that Some() clause also drops registration that is already fulfilled
-                    Some(ready) => Either::Left(futures::future::ready(ready)),
-                    None => Either::Right(r),
-                });
-
-            Ok(join_all(results).await)
-        }
-        .boxed()
+        self.executed_effects_digests_notify_read
+            .read(digests, |digests| {
+                self.multi_get_executed_effects_digests(digests)
+            })
+            .boxed()
     }
 
     fn multi_get_events(

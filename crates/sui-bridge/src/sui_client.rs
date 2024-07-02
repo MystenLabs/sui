@@ -167,6 +167,12 @@ where
             .map_err(|e| BridgeError::InternalError(format!("Can't get bridge committee: {e}")))
     }
 
+    pub async fn is_bridge_paused(&self) -> BridgeResult<bool> {
+        self.get_bridge_summary()
+            .await
+            .map(|summary| summary.is_frozen)
+    }
+
     pub async fn get_treasury_summary(&self) -> BridgeResult<BridgeTreasurySummary> {
         Ok(self.get_bridge_summary().await?.treasury)
     }

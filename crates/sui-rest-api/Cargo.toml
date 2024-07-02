@@ -25,6 +25,7 @@ prometheus.workspace = true
 fastcrypto.workspace = true
 sui-types.workspace = true
 mysten-network.workspace = true
+sui-protocol-config.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

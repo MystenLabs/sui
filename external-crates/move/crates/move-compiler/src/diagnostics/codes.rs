@@ -289,6 +289,7 @@ codes!(
         IncompatibleSyntaxMethods: { msg: "'syntax' method types differ", severity: BlockingError },
         InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
         IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
+        DeprecatedUsage: { msg: "deprecated usage", severity: Warning },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

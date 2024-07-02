@@ -7,7 +7,7 @@ use arc_swap::{ArcSwapOption, Guard};
 use consensus_core::TransactionClient;
 use sui_types::{
     error::{SuiError, SuiResult},
-    messages_consensus::ConsensusTransaction,
+    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
 };
 use tap::prelude::*;
 use tokio::time::{sleep, timeout};
@@ -15,7 +15,7 @@ use tracing::warn;
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    consensus_adapter::SubmitToConsensus,
+    consensus_adapter::SubmitToConsensus, consensus_handler::SequencedConsensusTransactionKey,
 };
 
 /// Basically a wrapper struct that reads from the LOCAL_MYSTICETI_CLIENT variable where the latest
@@ -85,7 +85,7 @@ impl SubmitToConsensus for LazyMysticetiClient {
             .iter()
             .map(|t| bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail"))
             .collect::<Vec<_>>();
-        client
+        let block_ref = client
             .as_ref()
             .expect("Client should always be returned")
             .submit(transactions_bytes)
@@ -95,6 +95,21 @@ impl SubmitToConsensus for LazyMysticetiClient {
                 warn!("Submit transactions failed with: {:?}", r);
             })
             .map_err(|err| SuiError::FailedToSubmitToConsensus(err.to_string()))?;
+
+        let is_soft_bundle = transactions.len() > 1;
+
+        if !is_soft_bundle
+            && matches!(
+                transactions[0].kind,
+                ConsensusTransactionKind::EndOfPublish(_)
+                    | ConsensusTransactionKind::CapabilityNotification(_)
+                    | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                    | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
+            )
+        {
+            let transaction_key = SequencedConsensusTransactionKey::External(transactions[0].key());
+            tracing::info!("Transaction {transaction_key:?} was included in {block_ref}",)
+        };
         Ok(())
     }
 }

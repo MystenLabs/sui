@@ -1088,7 +1088,8 @@ fn gate_known_attribute(context: &mut Context, loc: Loc, known: &KnownAttribute)
         | KnownAttribute::Diagnostic(_)
         | KnownAttribute::DefinesPrimitive(_)
         | KnownAttribute::External(_)
-        | KnownAttribute::Syntax(_) => (),
+        | KnownAttribute::Syntax(_)
+        | KnownAttribute::Deprecation(_) => (),
         KnownAttribute::Error(_) => {
             let pkg = context.current_package();
             context

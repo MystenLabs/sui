@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::checkpoints::ListCheckpointsQueryParameters;
 use crate::transactions::ExecuteTransactionQueryParameters;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -29,14 +30,24 @@ impl Client {
     pub async fn get_latest_checkpoint(&self) -> Result<CertifiedCheckpointSummary> {
         let url = format!("{}/checkpoints", self.base_url);
 
+        let query = ListCheckpointsQueryParameters {
+            limit: Some(1),
+            start: None,
+            direction: None,
+        };
+
         let response = self
             .inner
             .get(url)
+            .query(&query)
             .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .send()
             .await?;
 
-        self.bcs(response).await
+        let mut page: Vec<CertifiedCheckpointSummary> = self.bcs(response).await?;
+
+        page.pop()
+            .ok_or_else(|| anyhow!("server returned empty checkpoint list"))
     }
 
     pub async fn get_full_checkpoint(

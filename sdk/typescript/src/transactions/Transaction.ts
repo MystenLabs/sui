@@ -302,13 +302,14 @@ export class Transaction {
 	}
 
 	/** Add a transaction to the transaction */
-	add(command: Command | ((tx: Transaction) => TransactionResult)): TransactionResult {
+	add<T = TransactionResult>(command: Command | ((tx: Transaction) => T)): T {
 		if (typeof command === 'function') {
 			return command(this);
 		}
 
 		const index = this.#data.commands.push(command);
-		return createTransactionResult(index - 1);
+
+		return createTransactionResult(index - 1) as T;
 	}
 
 	#normalizeTransactionArgument(arg: TransactionArgument | SerializedBcs<any>) {
@@ -529,7 +530,7 @@ export class Transaction {
 	async prepareForSerialization(options: SerializeTransactionOptions) {
 		const intents = new Set<string>();
 		for (const command of this.#data.commands) {
-			if (command.$Intent && options.supportedIntents) {
+			if (command.$Intent) {
 				intents.add(command.$Intent.name);
 			}
 		}

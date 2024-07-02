@@ -1749,6 +1749,20 @@ impl std::ops::Add<u64> for RandomnessRound {
     }
 }
 
+impl std::ops::Sub for RandomnessRound {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self {
+        Self(self.0 - other.0)
+    }
+}
+
+impl std::ops::Sub<u64> for RandomnessRound {
+    type Output = Self;
+    fn sub(self, other: u64) -> Self {
+        Self(self.0 - other)
+    }
+}
+
 impl RandomnessRound {
     pub fn new(round: u64) -> Self {
         Self(round)

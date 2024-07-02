@@ -15,5 +15,7 @@ tracing.workspace = true
 
 sui-json-rpc-types.workspace = true
 sui-sdk.workspace = true
+sui-types.workspace = true
 
 move-package.workspace = true
+move-symbol-pool.workspace = true

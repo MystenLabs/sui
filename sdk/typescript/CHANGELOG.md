@@ -1,5 +1,31 @@
 # @mysten/sui.js
 
+## 1.2.1
+
+### Patch Changes
+
+- 06a900c1ab: Fix nonce generation inconsistency
+- 45877014d1: Improve return type when passing functions to tx.add
+- 87d6f75403: Parallel executor now only re-uses gasCoins if the gas coin is only used for gas
+
+## 1.2.0
+
+### Minor Changes
+
+- fef99d377f: Update parallel executor class to handle gasPrice and budgeting to remove extra rpc calls during execution"
+
+## 1.1.2
+
+### Patch Changes
+
+- 0dfff33b95: Fix bug that prevents coinWithBalance intent from being resolved
+
+## 1.1.1
+
+### Patch Changes
+
+- 101f1ff4b8: Fix coinWithBalance when passing balance using a number instead of a bigint
+
 ## 1.1.0
 
 ### Minor Changes

@@ -5,7 +5,7 @@ import { CONSTANTS, QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { SuiObjectData } from "@mysten/sui/client";
-import { TransactionBlock } from "@mysten/sui/transactions";
+import { Transaction } from "@mysten/sui/transactions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
@@ -20,7 +20,7 @@ export function useLockObjectMutation() {
     mutationFn: async ({ object }: { object: SuiObjectData }) => {
       if (!account?.address)
         throw new Error("You need to connect your wallet!");
-      const txb = new TransactionBlock();
+      const txb = new Transaction();
 
       const [locked, key] = txb.moveCall({
         target: `${CONSTANTS.escrowContract.packageId}::lock::lock`,
@@ -73,7 +73,7 @@ export function useUnlockMutation() {
         return;
       }
 
-      const txb = new TransactionBlock();
+      const txb = new Transaction();
 
       const item = txb.moveCall({
         target: `${CONSTANTS.escrowContract.packageId}::lock::unlock`,

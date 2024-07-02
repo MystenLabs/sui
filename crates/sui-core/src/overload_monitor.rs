@@ -415,6 +415,8 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     pub async fn test_check_authority_overload() {
+        telemetry_subscribers::init_for_testing();
+
         let config = AuthorityOverloadConfig {
             safe_transaction_ready_rate: 0,
             ..Default::default()

@@ -41,7 +41,7 @@ pub struct TransactionEffectsV2 {
     dependencies: Vec<TransactionDigest>,
 
     /// The version number of all the written Move objects by this transaction.
-    lamport_version: SequenceNumber,
+    pub(crate) lamport_version: SequenceNumber,
     /// Objects whose state are changed in the object store.
     changed_objects: Vec<(ObjectID, EffectsObjectChange)>,
     /// Shared objects that are not mutated in this transaction. Unlike owned objects,
@@ -311,6 +311,10 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
         &self.gas_used
     }
 
+    fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)> {
+        self.unchanged_shared_objects.clone()
+    }
+
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
         &mut self.status
     }
@@ -555,6 +559,10 @@ impl TransactionEffectsV2 {
                 self
             );
         }
+    }
+
+    pub fn changed_objects(&self) -> &[(ObjectID, EffectsObjectChange)] {
+        &self.changed_objects
     }
 }
 

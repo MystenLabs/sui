@@ -106,6 +106,7 @@ members = [
   "crates/sui-framework-snapshot",
   "crates/sui-framework-tests",
   "crates/sui-genesis-builder",
+  "crates/sui-graphql-config",
   "crates/sui-graphql-e2e-tests",
   "crates/sui-graphql-rpc",
   "crates/sui-graphql-rpc-client",
@@ -197,7 +198,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.28.0"
+version = "1.29.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -375,8 +376,8 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "3a490f1f1035cc6b7845f6a82d697ce47b067fd9", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "3a490f1f1035cc6b7845f6a82d697ce47b067fd9", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "594c417e3716fc909b71a0a8ffd01ee5b25bf4b0", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "594c417e3716fc909b71a0a8ffd01ee5b25bf4b0", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
@@ -564,10 +565,10 @@ move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8435ec2f308cb6c345e2737ae929d170589d9508" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8435ec2f308cb6c345e2737ae929d170589d9508" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8435ec2f308cb6c345e2737ae929d170589d9508", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8435ec2f308cb6c345e2737ae929d170589d9508", features = ["experimental"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538", features = ["experimental"] }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
@@ -611,6 +612,7 @@ sui-faucet = { path = "crates/sui-faucet" }
 sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
 sui-framework-tests = { path = "crates/sui-framework-tests" }
+sui-graphql-config = { path = "crates/sui-graphql-config" }
 sui-graphql-rpc = { path = "crates/sui-graphql-rpc" }
 sui-graphql-rpc-client = { path = "crates/sui-graphql-rpc-client" }
 sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }

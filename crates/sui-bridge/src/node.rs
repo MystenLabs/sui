@@ -35,7 +35,7 @@ pub async fn run_bridge_node(
 ) -> anyhow::Result<JoinHandle<()>> {
     init_all_struct_tags();
     let metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
-    let (server_config, client_config) = config.validate().await?;
+    let (server_config, client_config) = config.validate(metrics.clone()).await?;
 
     // Start Client
     let _handles = if let Some(client_config) = client_config {
@@ -85,7 +85,7 @@ async fn start_client_components(
     let mut all_handles = vec![];
     let (task_handles, eth_events_rx, _) =
         EthSyncer::new(client_config.eth_client.clone(), eth_contracts_to_watch)
-            .run()
+            .run(metrics.clone())
             .await
             .expect("Failed to start eth syncer");
     all_handles.extend(task_handles);
@@ -104,6 +104,8 @@ async fn start_client_components(
             .expect("Failed to get committee"),
     );
     let bridge_auth_agg = BridgeAuthorityAggregator::new(committee);
+    let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
+    let (token_type_tags_tx, token_type_tags_rx) = tokio::sync::watch::channel(sui_token_type_tags);
 
     let bridge_action_executor = BridgeActionExecutor::new(
         sui_client.clone(),
@@ -112,6 +114,7 @@ async fn start_client_components(
         client_config.key,
         client_config.sui_address,
         client_config.gas_object_ref.0,
+        token_type_tags_rx,
         metrics.clone(),
     )
     .await;
@@ -121,6 +124,7 @@ async fn start_client_components(
         sui_events_rx,
         eth_events_rx,
         store.clone(),
+        token_type_tags_tx,
         metrics,
     );
 

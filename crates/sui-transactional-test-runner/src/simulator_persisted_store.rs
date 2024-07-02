@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::language_storage::StructTag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use simulacrum::Simulacrum;
 use std::num::NonZeroUsize;
@@ -713,6 +714,12 @@ impl RestStateReader for PersistedStoreInnerReadOnlyWrapper {
         todo!()
     }
 
+    fn get_lowest_available_checkpoint_objects(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        Ok(0)
+    }
+
     fn get_chain_identifier(
         &self,
     ) -> sui_types::storage::error::Result<sui_types::digests::ChainIdentifier> {
@@ -722,6 +729,40 @@ impl RestStateReader for PersistedStoreInnerReadOnlyWrapper {
             .unwrap()
             .digest())
         .into())
+    }
+
+    fn account_owned_objects_info_iter(
+        &self,
+        _owner: SuiAddress,
+        _cursor: Option<ObjectID>,
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = sui_types::storage::AccountOwnedObjectInfo> + '_>,
+    > {
+        todo!()
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        _parent: ObjectID,
+        _cursor: Option<ObjectID>,
+    ) -> sui_types::storage::error::Result<
+        Box<
+            dyn Iterator<
+                    Item = (
+                        sui_types::storage::DynamicFieldKey,
+                        sui_types::storage::DynamicFieldIndexInfo,
+                    ),
+                > + '_,
+        >,
+    > {
+        todo!()
+    }
+
+    fn get_coin_info(
+        &self,
+        _coin_type: &StructTag,
+    ) -> sui_types::storage::error::Result<Option<sui_types::storage::CoinInfo>> {
+        todo!()
     }
 }
 

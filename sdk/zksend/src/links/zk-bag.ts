@@ -25,140 +25,127 @@ export class ZkBag<IDs> {
 		this.ids = ids;
 	}
 
-	new(
-		tx: Transaction,
-		{
-			arguments: [store, receiver],
-		}: {
-			arguments: [store: TransactionObjectArgument | string, receiver: Argument | string];
-		},
-	) {
-		tx.moveCall({
-			target: `${this.#package}::${this.#module}::new`,
-			arguments: [
-				tx.object(store),
-				typeof receiver === 'string' ? tx.pure.address(receiver) : receiver,
-			],
-		});
+	new({
+		arguments: [store, receiver],
+	}: {
+		arguments: [store: TransactionObjectArgument | string, receiver: Argument | string];
+	}) {
+		return (tx: Transaction) => {
+			tx.moveCall({
+				target: `${this.#package}::${this.#module}::new`,
+				arguments: [
+					tx.object(store),
+					typeof receiver === 'string' ? tx.pure.address(receiver) : receiver,
+				],
+			});
+		};
 	}
 
-	add(
-		tx: Transaction,
-		{
-			arguments: [store, receiver, item],
-			typeArguments,
-		}: {
-			arguments: [
-				store: TransactionObjectArgument | string,
-				receiver: Argument | string,
-				item: TransactionObjectArgument | string,
-			];
-			typeArguments: [string];
-		},
-	): Extract<Argument, { $kind: 'Result' }> {
-		return tx.moveCall({
-			target: `${this.#package}::${this.#module}::add`,
-			arguments: [
-				tx.object(store),
-				typeof receiver === 'string' ? tx.pure.address(receiver) : receiver,
-				tx.object(item),
-			],
-			typeArguments: typeArguments,
-		});
+	add({
+		arguments: [store, receiver, item],
+		typeArguments,
+	}: {
+		arguments: [
+			store: TransactionObjectArgument | string,
+			receiver: Argument | string,
+			item: TransactionObjectArgument | string,
+		];
+		typeArguments: [string];
+	}): (tx: Transaction) => Extract<Argument, { $kind: 'Result' }> {
+		return (tx: Transaction) =>
+			tx.moveCall({
+				target: `${this.#package}::${this.#module}::add`,
+				arguments: [
+					tx.object(store),
+					typeof receiver === 'string' ? tx.pure.address(receiver) : receiver,
+					tx.object(item),
+				],
+				typeArguments: typeArguments,
+			});
 	}
 
-	init_claim(
-		tx: Transaction,
-		{
-			arguments: [store],
-		}: {
-			arguments: [store: TransactionObjectArgument | string];
-		},
-	) {
-		const [bag, claimProof] = tx.moveCall({
-			target: `${this.#package}::${this.#module}::init_claim`,
-			arguments: [tx.object(store)],
-		});
+	init_claim({ arguments: [store] }: { arguments: [store: TransactionObjectArgument | string] }) {
+		return (tx: Transaction) => {
+			const [bag, claimProof] = tx.moveCall({
+				target: `${this.#package}::${this.#module}::init_claim`,
+				arguments: [tx.object(store)],
+			});
 
-		return [bag, claimProof] as const;
+			return [bag, claimProof] as const;
+		};
 	}
 
-	reclaim(
-		tx: Transaction,
-		{
-			arguments: [store, receiver],
-		}: {
-			arguments: [store: TransactionObjectArgument | string, receiver: Argument | string];
-		},
-	) {
-		const [bag, claimProof] = tx.moveCall({
-			target: `${this.#package}::${this.#module}::reclaim`,
-			arguments: [
-				tx.object(store),
-				typeof receiver === 'string' ? tx.pure.address(receiver) : receiver,
-			],
-		});
+	reclaim({
+		arguments: [store, receiver],
+	}: {
+		arguments: [store: TransactionObjectArgument | string, receiver: Argument | string];
+	}) {
+		return (tx: Transaction) => {
+			const [bag, claimProof] = tx.moveCall({
+				target: `${this.#package}::${this.#module}::reclaim`,
+				arguments: [
+					tx.object(store),
+					typeof receiver === 'string' ? tx.pure.address(receiver) : receiver,
+				],
+			});
 
-		return [bag, claimProof] as const;
+			return [bag, claimProof] as const;
+		};
 	}
 
-	claim(
-		tx: Transaction,
-		{
-			arguments: [bag, claim, id],
-			typeArguments,
-		}: {
-			arguments: [
-				bag: TransactionObjectArgument | string,
-				claim: Extract<Argument, { $kind: 'NestedResult' }>,
-				id: TransactionObjectArgument | string,
-			];
-			typeArguments: [string];
-		},
-	): Extract<Argument, { $kind: 'Result' }> {
-		return tx.moveCall({
-			target: `${this.#package}::${this.#module}::claim`,
-			arguments: [tx.object(bag), tx.object(claim), typeof id === 'string' ? tx.object(id) : id],
-			typeArguments,
-		});
+	claim({
+		arguments: [bag, claim, id],
+		typeArguments,
+	}: {
+		arguments: [
+			bag: TransactionObjectArgument | string,
+			claim: Extract<Argument, { $kind: 'NestedResult' }>,
+			id: TransactionObjectArgument | string,
+		];
+		typeArguments: [string];
+	}): (tx: Transaction) => Extract<Argument, { $kind: 'Result' }> {
+		return (tx: Transaction) =>
+			tx.moveCall({
+				target: `${this.#package}::${this.#module}::claim`,
+				arguments: [tx.object(bag), tx.object(claim), typeof id === 'string' ? tx.object(id) : id],
+				typeArguments,
+			});
 	}
 
-	finalize(
-		tx: Transaction,
-		{
-			arguments: [bag, claim],
-		}: {
-			arguments: [
-				bag: TransactionObjectArgument | string,
-				claim: Extract<Argument, { $kind: 'NestedResult' }>,
-			];
-		},
-	) {
-		tx.moveCall({
-			target: `${this.#package}::${this.#module}::finalize`,
-			arguments: [tx.object(bag), tx.object(claim)],
-		});
+	finalize({
+		arguments: [bag, claim],
+	}: {
+		arguments: [
+			bag: TransactionObjectArgument | string,
+			claim: Extract<Argument, { $kind: 'NestedResult' }>,
+		];
+	}) {
+		return (tx: Transaction) => {
+			tx.moveCall({
+				target: `${this.#package}::${this.#module}::finalize`,
+				arguments: [tx.object(bag), tx.object(claim)],
+			});
+		};
 	}
 
-	update_receiver(
-		tx: Transaction,
-		{
-			arguments: [bag, from, to],
-		}: {
-			arguments: [
-				bag: TransactionObjectArgument | string,
-				from: Argument | string,
-				to: Argument | string,
-			];
-		},
-	) {
-		tx.moveCall({
-			target: `${this.#package}::${this.#module}::update_receiver`,
-			arguments: [
-				tx.object(bag),
-				typeof from === 'string' ? tx.pure.address(from) : from,
-				typeof to === 'string' ? tx.pure.address(to) : to,
-			],
-		});
+	update_receiver({
+		arguments: [bag, from, to],
+	}: {
+		arguments: [
+			bag: TransactionObjectArgument | string,
+			from: Argument | string,
+			to: Argument | string,
+		];
+	}) {
+		return (tx: Transaction) => {
+			tx.moveCall({
+				target: `${this.#package}::${this.#module}::update_receiver`,
+				arguments: [
+					tx.object(bag),
+					typeof from === 'string' ? tx.pure.address(from) : from,
+					typeof to === 'string' ? tx.pure.address(to) : to,
+				],
+			});
+		};
 	}
 }

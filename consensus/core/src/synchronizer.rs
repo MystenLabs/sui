@@ -244,23 +244,30 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             }
             let (sender, receiver) =
                 channel("consensus_synchronizer_fetches", FETCH_BLOCKS_CONCURRENCY);
-            tasks.spawn(Self::fetch_blocks_from_authority(
+            let context_cloned = context.clone();
+            let network_cloned = network_client.clone();
+            let block_verified_cloned = block_verifier.clone();
+            let core_thread_dispatcher_cloned = core_dispatcher.clone();
+            let dag_state_cloned = dag_state.clone();
+            let command_sender_cloned = commands_sender.clone();
+
+            tasks.spawn(monitored_future!(Self::fetch_blocks_from_authority(
                 index,
-                network_client.clone(),
-                block_verifier.clone(),
-                context.clone(),
-                core_dispatcher.clone(),
-                dag_state.clone(),
+                network_cloned,
+                block_verified_cloned,
+                context_cloned,
+                core_thread_dispatcher_cloned,
+                dag_state_cloned,
                 receiver,
-                commands_sender.clone(),
-            ));
+                command_sender_cloned,
+            )));
             fetch_block_senders.insert(index, sender);
         }
 
         let commands_sender_clone = commands_sender.clone();
 
         // Spawn the task to listen to the requests & periodic runs
-        tasks.spawn(async {
+        tasks.spawn(monitored_future!(async move {
             let mut s = Self {
                 context,
                 commands_receiver,
@@ -274,7 +281,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 dag_state,
             };
             s.run().await;
-        });
+        }));
 
         Arc::new(SynchronizerHandle {
             commands_sender,
@@ -874,6 +881,10 @@ mod tests {
         fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
             todo!()
         }
+
+        fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
+            todo!()
+        }
     }
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
@@ -956,6 +967,15 @@ mod tests {
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_latest_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _authorities: Vec<AuthorityIndex>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Bytes>> {
+            todo!()
         }
     }
 

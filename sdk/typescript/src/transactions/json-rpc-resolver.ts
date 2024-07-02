@@ -148,8 +148,8 @@ async function resolveObjectReferences(
 	// We keep the input by-reference to avoid needing to re-resolve it:
 	const objectsToResolve = transactionData.inputs.filter((input) => {
 		return (
-			(input.UnresolvedObject && !input.UnresolvedObject.version) ||
-			input.UnresolvedObject?.initialSharedVersion
+			input.UnresolvedObject &&
+			!(input.UnresolvedObject.version || input.UnresolvedObject?.initialSharedVersion)
 		);
 	}) as Extract<CallArg, { UnresolvedObject: unknown }>[];
 
@@ -179,7 +179,7 @@ async function resolveObjectReferences(
 
 	const invalidObjects = Array.from(responsesById)
 		.filter(([_, obj]) => obj.error)
-		.map(([id, _obj]) => id);
+		.map(([_, obj]) => JSON.stringify(obj.error));
 
 	if (invalidObjects.length) {
 		throw new Error(`The following input objects are invalid: ${invalidObjects.join(', ')}`);
@@ -218,10 +218,11 @@ async function resolveObjectReferences(
 		const id = normalizeSuiAddress(input.UnresolvedObject.objectId);
 		const object = objectsById.get(id);
 
-		if (object?.initialSharedVersion) {
+		if (input.UnresolvedObject.initialSharedVersion ?? object?.initialSharedVersion) {
 			updated = Inputs.SharedObjectRef({
 				objectId: id,
-				initialSharedVersion: object.initialSharedVersion,
+				initialSharedVersion:
+					input.UnresolvedObject.initialSharedVersion || object?.initialSharedVersion!,
 				mutable: isUsedAsMutable(transactionData, index),
 			});
 		} else if (isUsedAsReceiving(transactionData, index)) {
