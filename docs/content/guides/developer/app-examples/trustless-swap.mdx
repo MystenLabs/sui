@@ -123,6 +123,8 @@ Move's type system guarantees that a given `Key` cannot be re-used (because `unl
 
 The test starts with a helper function for creating an object, it doesn't matter what kind of object it is, as long as it has the `store` ability. The test uses `Coin<SUI>`, because it comes with a `#[test_only]` function for minting:
 
+{@inject: examples/trading/contracts/escrow/sources/lock.move#fun=test_coin noComments}
+
 ```move
 #[test_only] use sui::coin::{Self, Coin};
 #[test_only] use sui::sui::SUI;
@@ -299,7 +301,6 @@ public fun swap<T: key + store, U: key + store>(
 :::tip Additional resources
 
 - [Full source code](https://github.com/MystenLabs/sui/blob/705ee1ed3ce8cfadc4597c6facb6769d7dfb5896/examples/trading/contracts/escrow/sources/shared.move)
-- Concepts: [ID Pointer](../../../concepts/sui-move-concepts/patterns/id-pointer)
 - Concepts: [Shared Objects](../../../concepts/object-ownership/shared)
 - Concepts: [Shared Object Deletion](https://blog.sui.io/ephemeral-shared-objects/)
 - Concepts: [PTBs](../../../concepts/transactions/prog-txn-blocks)
@@ -313,6 +314,8 @@ Tests for the `escrow` module will be more involved than for `lock` – you will
 You will focus on the test for a successful swap, but a link to all the tests can be found later on.
 
 As with the lock test, start by creating a function to mint a test coin. You also create some constants to represent our transaction senders, `ALICE` and `BOB`.
+
+{@inject: examples/trading/contracts/escrow/sources/lock.move#fun=test_coin noComments}
 
 ```move
 #[test_only] use sui::coin::{Self, Coin};
@@ -330,6 +333,8 @@ fun test_coin(ts: &mut Scenario): Coin<SUI> {
 
 The test body starts with a call to `test_scenario::begin` and ends with a call to `test_scenario::end`. It doesn't matter which address you pass to `begin`, because you will pick one of `ALICE` or `BOB` at the start of each new transaction you write, so set it to `@0x0`:
 
+{@inject: examples/trading/contracts/escrow/sources/shared.move#test}
+
 ```move
 #[test]
 fun test_successful_swap() {
@@ -343,8 +348,9 @@ fun test_successful_swap() {
 
 The first transaction is from `BOB` who creates a coin and locks it. You may remember the ID of the coin and the ID of the key, which you will need later, but now you transfer the locked object and the key itself to `BOB`, because this is what would happen with a real transaction: When simulating transactions in a test, you should only keep around primitive values, not whole objects, which would need to be written to chain between transactions.
 
-Write these transactions inside the `test_succesful_swap` function, between the call to `begin` and `end`.
+Write these transactions inside the `test_successful_swap` function, between the call to `begin` and `end`.
 
+{@inject: examples/trading/contracts/escrow/sources/shared.move#variable=i2 noComments}
 ```move
 let (i2, ik2) = {
     ts::next_tx(&mut ts, BOB);
@@ -360,6 +366,7 @@ let (i2, ik2) = {
 
 Next, `ALICE` comes along and sets up the `Escrow`, which locks their coin. They register their interest for `BOB'`s coin by referencing `BOB`'s key's ID (`ik2`):
 
+{@inject: examples/trading/contracts/escrow/sources/shared.move#variable=i1 noComments}
 ```move
 let i1 = {
     ts::next_tx(&mut ts, ALICE);
@@ -420,6 +427,8 @@ The `escrow` Move package is now functional: You could publish it on chain and p
 
 Querying `Escrow` objects by their sender or recipient will require custom indexing, and to make it easy for the indexer to spot relevant transactions you will add the following **events** to `escrow.move`:
 
+{@inject: examples/trading/contracts/escrow/sources/shared.move#struct=EscrowCreated,EscrowSwapped,EscrowCancelled noComments}
+
 ```move
 struct EscrowCreated has copy, drop {
     escrow_id: ID,
@@ -438,9 +447,9 @@ struct EscrowCancelled has copy, drop {
 }
 ```
 
-Functions responsible for various aspects of the escrow's lifecycle emit these events.  so that the custom indexer can subscribe to transactions that emit these events, and only process those, rather than the whole chain state:
+Functions responsible for various aspects of the escrow's lifecycle emit these events. The custom indexer can then subscribe to transactions that emit these events and process only those, rather than the entire chain state:
 
-
+{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=create,swap,return_to_sender noComments}
 
 ```move
 use sui::event;
@@ -523,6 +532,8 @@ To achieve this, in the next step you [create an indexing service](#backend).
 ## Backend indexer {#backend}
 
 With the contract adapted to emit events, you can now write an indexer that keeps track of all active `Escrow` objects and exposes an API for querying objects by sender or recipient. The indexer will be backed by a Prisma DB with the following schema:
+
+{@inject: examples/trading/api/prisma/schema.prisma}
 
 ```ts
 // prisma/schema.prisma
