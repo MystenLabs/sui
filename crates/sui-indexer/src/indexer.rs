@@ -112,8 +112,8 @@ impl Indexer {
         let (exit_sender, exit_receiver) = oneshot::channel();
         // Spawn a task that links the cancellation token to the exit sender
         spawn_monitored_task!(async move {
-            cancel_clone.cancelled().await;
             let _ = exit_sender.send(());
+            cancel_clone.cancelled().await;
         });
 
         let mut executor = IndexerExecutor::new(
