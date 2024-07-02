@@ -40,7 +40,7 @@ export type WalletProviderProps = {
 	autoConnect?: boolean;
 
 	/** Enables the Stashed wallet */
-	stashedWallet?: StashedWalletConfig;
+	stashedWallet?: StashedWalletConfig | false;
 
 	/** Configures how the most recently connected to wallet account is stored. Set to `null` to disable persisting state entirely. Defaults to using localStorage if it is available. */
 	storage?: StateStorage | null;
@@ -63,7 +63,7 @@ export function WalletProvider({
 	storageKey = DEFAULT_STORAGE_KEY,
 	enableUnsafeBurner = false,
 	autoConnect = false,
-	stashedWallet,
+	stashedWallet = globalThis.document ? { name: document.title } : false,
 	theme = lightTheme,
 	children,
 }: WalletProviderProps) {
@@ -106,7 +106,7 @@ function WalletConnectionManager({
 }: WalletConnectionManagerProps) {
 	useWalletsChanged(preferredWallets, walletFilter);
 	useWalletPropertiesChanged();
-	useStashedWallet(stashedWallet);
+	useStashedWallet(stashedWallet || undefined);
 	useUnsafeBurnerWallet(enableUnsafeBurner);
 	useAutoConnectWallet();
 
