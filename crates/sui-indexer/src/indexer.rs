@@ -21,7 +21,9 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use crate::build_json_rpc_server;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
-use crate::handlers::objects_snapshot_processor::{start_objects_snapshot_processor, ObjectsSnapshotProcessor, SnapshotLagConfig};
+use crate::handlers::objects_snapshot_processor::{
+    start_objects_snapshot_processor, ObjectsSnapshotProcessor, SnapshotLagConfig,
+};
 use crate::handlers::pruner::Pruner;
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
