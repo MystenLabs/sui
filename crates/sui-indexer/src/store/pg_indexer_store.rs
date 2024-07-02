@@ -446,10 +446,6 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         &self,
         objects: Vec<ObjectChangeToCommit>,
     ) -> Result<(), IndexerError> {
-        let guard = self
-            .metrics
-            .checkpoint_db_commit_latency_objects_history_chunks
-            .start_timer();
         let mut mutated_objects: Vec<StoredHistoryObject> = vec![];
         let mut object_versions: Vec<StoredObjectVersion> = vec![];
         let mut deleted_object_ids: Vec<StoredDeletedHistoryObject> = vec![];
@@ -466,6 +462,10 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             }
         }
 
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_history_chunks
+            .start_timer();
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -478,18 +478,11 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                         conn
                     );
                 }
-
-                for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    insert_or_ignore_into!(objects_version::table, object_version_chunk, conn);
-                }
-
                 for deleted_objects_chunk in
                     deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
                     insert_or_ignore_into!(objects_history::table, deleted_objects_chunk, conn);
                 }
-
                 Ok::<(), IndexerError>(())
             },
             PG_DB_COMMIT_SLEEP_DURATION
@@ -504,6 +497,30 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object history with error: {}", e);
+        })?;
+
+        let guard = self.metrics.objects_version_db_commit_latency.start_timer();
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    insert_or_ignore_into!(objects_version::table, object_version_chunk, conn);
+                }
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(
+                elapsed,
+                "Persisted {} chunked objects version",
+                object_versions.len(),
+            );
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist objects version with error: {}", e);
         })
     }
 
