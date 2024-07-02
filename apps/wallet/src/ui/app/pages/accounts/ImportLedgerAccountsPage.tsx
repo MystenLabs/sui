@@ -26,7 +26,7 @@ import Overlay from '../../components/overlay';
 import { getSuiApplicationErrorMessage } from '../../helpers/errorMessages';
 import { useAccounts } from '../../hooks/useAccounts';
 
-const numLedgerAccountsToDeriveByDefault = 10;
+const numLedgerAccountsToDeriveByDefault = 15;
 
 export function ImportLedgerAccountsPage() {
 	const [searchParams] = useSearchParams();
