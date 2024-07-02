@@ -244,15 +244,16 @@ where
         let leader_timeout_handle =
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let synchronizer = Synchronizer::start(
             network_client.clone(),
             context.clone(),
             core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
             block_verifier.clone(),
             dag_state.clone(),
         );
 
-        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let commit_syncer = CommitSyncer::new(
             context.clone(),
             core_dispatcher.clone(),
