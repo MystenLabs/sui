@@ -71,6 +71,7 @@ fn convert_url(url_str: &str) -> Option<String> {
 /// and high double digits usually means something is broken.
 const DATA_INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
+    200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0,
 ];
 /// NOTE: for objects_snapshot update and advance_epoch, which are expected to be within [0.1, 100] seconds,
 /// and can go up to high hundres of seconds when things go wrong.
@@ -153,6 +154,7 @@ pub struct IndexerMetrics {
     pub object_mutation_db_commit_latency: Histogram,
     pub object_deletion_db_commit_latency: Histogram,
     pub epoch_db_commit_latency: Histogram,
+    pub objects_version_db_commit_latency: Histogram,
     // latencies of slow DB update queries, now only advance epoch and objects_snapshot update
     pub advance_epoch_latency: Histogram,
     pub update_object_snapshot_latency: Histogram,
@@ -580,6 +582,13 @@ impl IndexerMetrics {
             epoch_db_commit_latency: register_histogram_with_registry!(
                 "epoch_db_commit_latency",
                 "Time spent commiting a epoch to the db",
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            objects_version_db_commit_latency: register_histogram_with_registry!(
+                "objects_version_db_commit_latency",
+                "Time spent commiting a objects version to the db",
                 DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
