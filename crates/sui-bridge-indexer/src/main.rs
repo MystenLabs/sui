@@ -5,23 +5,25 @@ use anyhow::Result;
 use clap::*;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_metrics::start_prometheus_server;
-use prometheus::Registry;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::eth_worker::EthBridgeWorker;
+use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
 use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
-use sui_bridge_indexer::{config::load_config, metrics::BridgeIndexerMetrics};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_sdk::SuiClientBuilder;
 use tokio::task::JoinHandle;
 
+use mysten_metrics::metered_channel::channel;
+use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::sui_checkpoint_ingestion::SuiCheckpointSyncer;
+use sui_config::Config;
 use tracing::info;
 
 #[derive(Parser, Clone, Debug)]
@@ -116,7 +118,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn start_processing_sui_checkpoints_by_querying_txes(
+async fn start_processing_sui_checkpoints_by_querying_txns(
     sui_rpc_url: String,
     db_url: String,
     indexer_metrics: BridgeIndexerMetrics,

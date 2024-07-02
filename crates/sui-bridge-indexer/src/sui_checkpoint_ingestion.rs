@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::Config;
+use crate::config::IndexerConfig;
 use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::PgPool;
 use crate::schema::progress_store::{columns, dsl};
@@ -37,7 +37,7 @@ impl SuiCheckpointSyncer {
     }
     pub async fn start(
         self,
-        config: &Config,
+        config: &IndexerConfig,
         indexer_meterics: BridgeIndexerMetrics,
         ingestion_metrics: DataIngestionMetrics,
     ) -> anyhow::Result<(), anyhow::Error> {
@@ -175,7 +175,7 @@ impl SuiCheckpointSyncer {
         bridge_genesis_checkpoint: u64,
         ingestion_metrics: DataIngestionMetrics,
         indexer_meterics: BridgeIndexerMetrics,
-        config: &Config,
+        config: &IndexerConfig,
         task: &Task,
     ) -> anyhow::Result<()> {
         let (exit_sender, exit_receiver) = oneshot::channel();
