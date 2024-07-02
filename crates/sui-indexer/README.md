@@ -54,6 +54,7 @@ cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https
 cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443" --rpc-server-worker
 ```
 More flags info can be found in this [file](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer/src/lib.rs#L83-L123).
+
 ### DB reset
 Run this command under `sui/crates/sui-indexer`, which will wipe DB; In case of schema changes in `.sql` files, this will also update corresponding `schema.rs` file.
 ```sh
