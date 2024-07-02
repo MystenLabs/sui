@@ -139,7 +139,14 @@ function printLambdaExpression(path: AstPath<Node>, options: ParserOptions, prin
  * Print `assign_expression` node.
  */
 function printAssignExpression(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return join(' = ', path.map(print, 'nonFormattingChildren'));
+	return [
+		path.call(print, 'nonFormattingChildren', 0), // lhs
+		' =',
+		group([
+			indent(line),
+			indent(path.call(print, 'nonFormattingChildren', 1)), // rhs
+		]),
+	];
 }
 
 /**

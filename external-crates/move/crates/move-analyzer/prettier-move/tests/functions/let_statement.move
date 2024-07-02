@@ -39,6 +39,8 @@ module prettier::let_statement {
             very_very_very_long_value
         );
 
+        let z = first().final().second_arg();
+
         let (very_long_binding, very_long_binding1, very_long_binding2) = (1, 2, 3);
 
         let (very_long_binding, mut very_long_binding1, very_long_binding2) = (
@@ -50,6 +52,19 @@ module prettier::let_statement {
         let a = very_very_very_long_value_very_long_value_very_long_value;
 
         let c: TypeName<Which<Is<Very<Big>>>> = very_very_very_long_value_very_long_value_very_long_value;
+
+        let to_remain_locked =
+            (
+                self.final_unlock_ts_sec -
+                math::min(self.final_unlock_ts_sec, now),
+            );
+
+        let to_remain_locked = (
+            self.final_unlock_ts_sec - math::min(self.final_unlock_ts_sec, now)
+        ) * self.unlock_per_second;
+
+        let locked_amount_round =
+            balance::value(&self.locked_balance) / self.unlock_per_second * self.unlock_per_second;
     }
 
     fun misc() {

@@ -180,12 +180,13 @@ function newProxy(node: FormattedNode): FormattedNode {
 					// TODO: consider revisiting `call_expression` and `macro_call_expression`
 					// 'call_expression',
 					// 'macro_call_expression',
+					'dot_expression',
 					'vector_expression',
 					'expression_list',
 					'if_expression',
 					'pack_expression',
 					'block',
-				];
+				].includes(target.type);
 			}
 
 			// Returns all the named children of the node that are not formatting.

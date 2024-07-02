@@ -56,24 +56,28 @@ function printLetStatement(path: AstPath<Node>, options: ParserOptions, print: p
 	const expression = children.length === 3 ? children[2] : children[1];
 
 	if (printed.length === 2) {
-		return group([
+		return [
 			'let ',
 			printed[0]!,
 			' =',
-			expression?.isBreakableExpression || expression?.isControlFlow
+			group(
+				expression?.isBreakableExpression || expression?.isControlFlow
 				? [' ', printed[1]!]
 				: [indent(line), indent(printed[1]!)],
-		]);
+			),
+		];
 	}
 
-	return group([
+	return [
 		'let ',
 		printed[0]!,
 		': ',
 		printed[1]!,
 		' =',
-		expression!.isBreakableExpression || expression!.isControlFlow
-			? [' ', printed[2]!]
-			: [indent(line), indent(printed[2]!)],
-	]);
+		group(
+			expression!.isBreakableExpression || expression!.isControlFlow
+				? [' ', printed[2]!]
+				: [indent(line), indent(printed[2]!)],
+		),
+	];
 }

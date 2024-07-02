@@ -251,15 +251,16 @@ module sui::coin {
         icon_url: Option<Url>,
         ctx: &mut TxContext,
     ): (TreasuryCap<T>, DenyCap<T>, CoinMetadata<T>) {
-        let (treasury_cap, metadata) = create_currency(
-            witness,
-            decimals,
-            symbol,
-            name,
-            description,
-            icon_url,
-            ctx,
-        );
+        let (treasury_cap, metadata) =
+            create_currency(
+                witness,
+                decimals,
+                symbol,
+                name,
+                description,
+                icon_url,
+                ctx,
+            );
         let deny_cap = DenyCap { id: object::new(ctx) };
         transfer::freeze_object(RegulatedCoinMetadata<T> {
             id: object::new(ctx),
@@ -311,9 +312,9 @@ module sui::coin {
         addr: address,
         _ctx: &mut TxContext,
     ) {
-        let `type` = type_name::into_string(type_name::get_with_original_ids<
-            T,
-        >()).into_bytes();
+        let `type` = type_name::into_string(
+            type_name::get_with_original_ids<T>(),
+        ).into_bytes();
         deny_list::add(
             deny_list,
             DENY_LIST_COIN_INDEX,
@@ -330,9 +331,9 @@ module sui::coin {
         addr: address,
         _ctx: &mut TxContext,
     ) {
-        let `type` = type_name::into_string(type_name::get_with_original_ids<
-            T,
-        >()).into_bytes();
+        let `type` = type_name::into_string(
+            type_name::get_with_original_ids<T>(),
+        ).into_bytes();
         deny_list::remove(
             deny_list,
             DENY_LIST_COIN_INDEX,

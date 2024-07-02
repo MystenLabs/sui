@@ -336,8 +336,12 @@ module sui::hex {
 
     #[test]
     fun test_hex_decode_string_literal__long_hex() {
-        assert!(x"036d2416252ae1db8aedad59e14b007bee6ab94a3e77a3549a81137871604456f3" ==
-        decode(b"036d2416252ae1Db8aedAd59e14b007bee6aB94a3e77a3549a81137871604456f3"));
+        assert!(
+            x"036d2416252ae1db8aedad59e14b007bee6ab94a3e77a3549a81137871604456f3" ==
+            decode(
+                b"036d2416252ae1Db8aedAd59e14b007bee6aB94a3e77a3549a81137871604456f3",
+            ),
+        );
     }
 
     #[test]
