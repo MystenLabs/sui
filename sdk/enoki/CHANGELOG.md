@@ -1,5 +1,15 @@
 # @mysten/enoki
 
+## 0.3.10
+
+### Patch Changes
+
+- Updated dependencies [06a900c1ab]
+- Updated dependencies [45877014d1]
+- Updated dependencies [87d6f75403]
+  - @mysten/sui@1.2.1
+  - @mysten/zklogin@0.7.10
+
 ## 0.3.9
 
 ### Patch Changes

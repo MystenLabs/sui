@@ -1,5 +1,13 @@
 # @mysten/sui.js
 
+## 1.2.1
+
+### Patch Changes
+
+- 06a900c1ab: Fix nonce generation inconsistency
+- 45877014d1: Improve return type when passing functions to tx.add
+- 87d6f75403: Parallel executor now only re-uses gasCoins if the gas coin is only used for gas
+
 ## 1.2.0
 
 ### Minor Changes
