@@ -1,19 +1,15 @@
 module 0x42::M {
-
     use sui::object::UID;
     use sui::transfer;
 
-    struct AdminCap has key {
+    struct Admin has key {
        id: UID
     }
 
-    #[allow(lint(freezing_capability))]
-    public fun freeze_cap(w: AdminCap) {
+    public fun freeze_cap(w: Admin) {
         transfer::public_freeze_object(w);
     }
 
-    #[allow(lint(constant_naming))]
-    const Another_BadName: u64 = 42; // Should trigger a warning
 }
 
 module sui::object {
