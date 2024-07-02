@@ -162,7 +162,7 @@ async fn create_native_transfer_tx(test_env: Arc<TestEnv>, gas: ObjectRef) -> Tr
                 .await,
         ))
         .unwrap();
-    let amount_input = pt_builder.pure(&1u64).unwrap();
+    let amount_input = pt_builder.pure(1u64).unwrap();
     let split_coin = pt_builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         ident_str!("coin").to_owned(),
@@ -192,7 +192,7 @@ struct TestEnv {
 impl TestEnv {
     async fn get_latest_object_ref(&self, object_id: &ObjectID) -> ObjectRef {
         self.test_cluster
-            .get_object_from_fullnode_store(&object_id)
+            .get_object_from_fullnode_store(object_id)
             .await
             .unwrap()
             .compute_object_reference()
