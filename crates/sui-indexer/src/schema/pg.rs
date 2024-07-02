@@ -1,5 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
@@ -22,6 +20,14 @@ diesel::table! {
         end_of_epoch_data -> Nullable<Bytea>,
         min_tx_sequence_number -> Nullable<Int8>,
         max_tx_sequence_number -> Nullable<Int8>
+    }
+}
+
+diesel::table! {
+    cp_tx (checkpoint_sequence_number) {
+        checkpoint_sequence_number -> Int8,
+        min_tx_sequence_number -> Int8,
+        max_tx_sequence_number -> Int8,
     }
 }
 
@@ -375,43 +381,27 @@ diesel::table! {
     }
 }
 
-#[macro_export]
-macro_rules! for_all_tables {
-    ($action:path) => {
-        $action!(
-            checkpoints,
-            display,
-            epochs,
-            event_emit_module,
-            event_emit_package,
-            event_senders,
-            event_struct_instantiation,
-            event_struct_module,
-            event_struct_name,
-            event_struct_package,
-            events,
-            events_partition_0,
-            objects,
-            objects_history,
-            objects_history_partition_0,
-            objects_snapshot,
-            objects_version,
-            packages,
-            transactions,
-            transactions_partition_0,
-            tx_calls_fun,
-            tx_calls_mod,
-            tx_calls_pkg,
-            tx_changed_objects,
-            tx_digests,
-            tx_input_objects,
-            tx_kinds,
-            tx_recipients,
-            tx_senders
-        );
-    };
-}
-
-pub use for_all_tables;
-
-for_all_tables!(diesel::allow_tables_to_appear_in_same_query);
+diesel::allow_tables_to_appear_in_same_query!(
+    checkpoints,
+    cp_tx,
+    display,
+    epochs,
+    events,
+    events_partition_0,
+    objects,
+    objects_history,
+    objects_history_partition_0,
+    objects_snapshot,
+    packages,
+    transactions,
+    transactions_partition_0,
+    tx_calls_fun,
+    tx_calls_mod,
+    tx_calls_pkg,
+    tx_changed_objects,
+    tx_digests,
+    tx_input_objects,
+    tx_kinds,
+    tx_recipients,
+    tx_senders,
+);
