@@ -87,7 +87,7 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
-#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
@@ -226,7 +226,7 @@ pub enum VersionedDkgMessage {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum VersionedDkgConfimation {
+pub enum VersionedDkgConfirmation {
     V0(dkg::Confirmation<bls12381::G2Element>),
     V1(dkg::Confirmation<bls12381::G2Element>),
 }
@@ -292,38 +292,38 @@ impl VersionedDkgMessage {
     }
 }
 
-impl VersionedDkgConfimation {
+impl VersionedDkgConfirmation {
     pub fn sender(&self) -> u16 {
         match self {
-            VersionedDkgConfimation::V0(msg) => msg.sender,
-            VersionedDkgConfimation::V1(msg) => msg.sender,
+            VersionedDkgConfirmation::V0(msg) => msg.sender,
+            VersionedDkgConfirmation::V1(msg) => msg.sender,
         }
     }
 
     pub fn num_of_complaints(&self) -> usize {
         match self {
-            VersionedDkgConfimation::V0(msg) => msg.complaints.len(),
-            VersionedDkgConfimation::V1(msg) => msg.complaints.len(),
+            VersionedDkgConfirmation::V0(msg) => msg.complaints.len(),
+            VersionedDkgConfirmation::V1(msg) => msg.complaints.len(),
         }
     }
 
     pub fn unwrap_v0(&self) -> &dkg::Confirmation<bls12381::G2Element> {
         match self {
-            VersionedDkgConfimation::V0(msg) => msg,
+            VersionedDkgConfirmation::V0(msg) => msg,
             _ => panic!("BUG: expected V0 confirmation"),
         }
     }
 
     pub fn unwrap_v1(&self) -> &dkg::Confirmation<bls12381::G2Element> {
         match self {
-            VersionedDkgConfimation::V1(msg) => msg,
+            VersionedDkgConfirmation::V1(msg) => msg,
             _ => panic!("BUG: expected V1 confirmation"),
         }
     }
 
     pub fn expect_v1(self) -> Self {
         match self {
-            VersionedDkgConfimation::V1(_) => self,
+            VersionedDkgConfirmation::V1(_) => self,
             _ => panic!("BUG: expected V1 confirmation"),
         }
     }
@@ -423,10 +423,10 @@ impl ConsensusTransaction {
     }
     pub fn new_randomness_dkg_confirmation(
         authority: AuthorityName,
-        versioned_confirmation: &VersionedDkgConfimation,
+        versioned_confirmation: &VersionedDkgConfirmation,
     ) -> Self {
         let confirmation = match versioned_confirmation {
-            VersionedDkgConfimation::V0(msg) => {
+            VersionedDkgConfirmation::V0(msg) => {
                 // Old version does not use the enum, so we need to serialize it separately.
                 bcs::to_bytes(msg).expect("message serialization should not fail")
             }
