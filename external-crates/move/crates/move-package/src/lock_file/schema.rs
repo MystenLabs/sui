@@ -346,6 +346,31 @@ pub enum ManagedAddressUpdate {
     },
 }
 
+/// Sets the `original-published-id` to a given `id` in the lock file. This is a raw utility
+/// for preparing package publishing and package upgrades. Invariant: callers maintain a valid
+/// hex `id`.
+pub fn set_original_id(file: &mut LockFile, environment: &str, id: &str) -> Result<()> {
+    use toml_edit::{value, Document};
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    let mut toml = toml_string.parse::<Document>()?;
+    let env_table = toml
+        .get_mut(ENV_TABLE_NAME)
+        .and_then(|item| item.as_table_mut())
+        .ok_or_else(|| anyhow!("Could not find 'env' table in Move.lock"))?
+        .get_mut(environment)
+        .and_then(|item| item.as_table_mut())
+        .ok_or_else(|| anyhow!("Could not find {environment} table in Move.lock"))?;
+    env_table[ORIGINAL_PUBLISHED_ID_KEY] = value(id);
+
+    file.set_len(0)?;
+    file.rewind()?;
+    write!(file, "{}", toml)?;
+    file.flush()?;
+    file.rewind()?;
+    Ok(())
+}
+
 /// Saves published or upgraded package addresses in the lock file.
 pub fn update_managed_address(
     file: &mut LockFile,

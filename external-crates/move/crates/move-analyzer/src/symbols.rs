@@ -1340,7 +1340,8 @@ pub fn get_symbols(
 
     // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
     // vector as the writer
-    let resolution_graph = build_config.resolution_graph_for_package(pkg_path, &mut Vec::new())?;
+    let resolution_graph =
+        build_config.resolution_graph_for_package(pkg_path, None, &mut Vec::new())?;
     let root_pkg_name = resolution_graph.graph.root_package_name;
 
     let overlay_fs_root = VfsPath::new(OverlayFS::new(&[
