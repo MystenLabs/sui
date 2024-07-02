@@ -5,7 +5,7 @@
 use crate::{
     context::Context,
     symbols::{
-        self, mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
+        get_symbols, mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
         type_list_to_ide_string, type_to_ide_string, DefInfo, PrecompiledPkgDeps,
         SymbolicatorRunner, Symbols,
     },
@@ -527,7 +527,7 @@ pub fn on_completion_request(
     let pos = parameters.text_document_position.position;
     let items = match SymbolicatorRunner::root_dir(&path) {
         Some(pkg_path) => {
-            match symbols::get_symbols(
+            match get_symbols(
                 pkg_dependencies,
                 ide_files_root.clone(),
                 &pkg_path,
@@ -686,7 +686,7 @@ fn completion_dot_test() {
     path.push("tests/completion");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = symbols::get_symbols(
+    let (symbols_opt, _) = get_symbols(
         Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),

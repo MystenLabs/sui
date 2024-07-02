@@ -42,9 +42,13 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request) {
 
 fn inlay_hints(context: &Context, fpath: PathBuf) -> Option<Vec<InlayHint>> {
     let symbols_map = &context.symbols.lock().ok()?;
-    let mut hints: Vec<InlayHint> = vec![];
     let symbols =
         SymbolicatorRunner::root_dir(&fpath).and_then(|pkg_path| symbols_map.get(&pkg_path))?;
+    inlay_hints_internal(symbols, fpath)
+}
+
+fn inlay_hints_internal(symbols: &Symbols, fpath: PathBuf) -> Option<Vec<InlayHint>> {
+    let mut hints: Vec<InlayHint> = vec![];
     let file_defs = symbols.file_mods.get(&fpath)?;
     for mod_defs in file_defs {
         for untyped_def_loc in mod_defs.untyped_defs() {
@@ -116,4 +120,69 @@ fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayH
     Some(InlayHintTooltip::MarkupContent(on_hover_markup(
         struct_def_info,
     )))
+}
+
+#[cfg(test)]
+fn validate_type_hint(
+    hints: &Vec<InlayHint>,
+    path: &std::path::Path,
+    line: u32,
+    col: u32,
+    ty: &str,
+) {
+    let lsp_line = line - 1; // 0th based
+    if let Some(label_parts) = hints.iter().find_map(|h| {
+        if h.position.line == lsp_line && h.position.character == col {
+            if let InlayHintLabel::LabelParts(parts) = &h.label {
+                return Some(parts);
+            }
+        }
+        None
+    }) {
+        let found_ty = &label_parts[1].value;
+        assert!(
+            found_ty == ty,
+            "incorrect type of hint (found '{found_ty}' instead of expected '{ty}') at line {line} and col {col} in {path:?}"
+        );
+    } else {
+        panic!("hint not found at line {line} and col {col} in {path:?}");
+    }
+}
+
+#[test]
+/// Tests if inlay type hints are generated correctly.
+fn inlay_type_test() {
+    use crate::symbols::get_symbols;
+    use move_compiler::linters::LintLevel;
+    use std::{
+        collections::BTreeMap,
+        sync::{Arc, Mutex},
+    };
+    use vfs::{impls::memory::MemoryFS, VfsPath};
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/inlay-hints");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        Arc::new(Mutex::new(BTreeMap::new())),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/type_hints.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let hints = inlay_hints_internal(&symbols, cpath).unwrap();
+    validate_type_hint(&hints, &path, 8, 22, "u64");
+    validate_type_hint(&hints, &path, 9, 24, "InlayHints::type_hints::SomeStruct");
+    validate_type_hint(&hints, &path, 25, 23, "u64");
+    validate_type_hint(&hints, &path, 26, 25, "InlayHints::type_hints::SomeStruct");
+    validate_type_hint(&hints, &path, 27, 27, "u64");
+    validate_type_hint(&hints, &path, 28, 29, "InlayHints::type_hints::SomeStruct");
 }
