@@ -81,6 +81,18 @@ pub enum ImageAction {
         /// Optional reference value, default to "main"
         #[arg(long)]
         ref_val: Option<String>,
+        /// Optional cpu resource request, default to "2"
+        #[arg(long)]
+        cpu: Option<String>,
+        /// Optional memory resource request, default to "4Gi"
+        #[arg(long)]
+        memory: Option<String>,
+        /// Optional disk resource request, default to "10Gi"
+        #[arg(long)]
+        disk: Option<String>,
+        /// Optional build args to pass to the docker build command
+        #[arg(long)]
+        build_args: Vec<String>,
     },
     #[command(name = "query")]
     Query {
@@ -115,10 +127,14 @@ pub enum ImageAction {
 struct RequestBuildRequest {
     repo_name: String,
     dockerfile: String,
-    image_tag: Option<String>,
     image_name: Option<String>,
+    image_tag: Option<String>,
     ref_type: Option<RefType>,
     ref_val: Option<String>,
+    cpu: Option<String>,
+    memory: Option<String>,
+    disk: Option<String>,
+    build_args: Vec<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -256,6 +272,10 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 image_tag,
                 ref_type,
                 ref_val,
+                cpu: _,
+                memory: _,
+                disk: _,
+                build_args: _,
             } => {
                 let ref_type = ref_type.clone().unwrap_or(RefType::Branch);
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
@@ -401,6 +421,10 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             image_tag,
             ref_type,
             ref_val,
+            cpu,
+            memory,
+            disk,
+            build_args,
         } => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
@@ -412,6 +436,10 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 image_tag: image_tag.clone(),
                 ref_type: ref_type.clone(),
                 ref_val: ref_val.clone(),
+                cpu: cpu.clone(),
+                memory: memory.clone(),
+                disk: disk.clone(),
+                build_args: build_args.clone(),
             };
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))
