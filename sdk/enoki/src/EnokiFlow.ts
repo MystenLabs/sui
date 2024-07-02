@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiClient } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import type { Transaction } from '@mysten/sui/transactions';
 import { fromB64, toB64 } from '@mysten/sui/utils';
 import type { ZkLoginSignatureInputs } from '@mysten/sui/zklogin';
 import { decodeJwt } from 'jose';
@@ -15,6 +13,7 @@ import type { Encryption } from './encryption.js';
 import { createDefaultEncryption } from './encryption.js';
 import type { EnokiClientConfig } from './EnokiClient/index.js';
 import { EnokiClient } from './EnokiClient/index.js';
+import type { EnokiNetwork } from './EnokiClient/type.js';
 import { EnokiKeypair } from './EnokiKeypair.js';
 import type { SyncStore } from './stores.js';
 import { createSessionStorage } from './stores.js';
@@ -57,6 +56,9 @@ const createStorageKeys = (apiKey: string) => ({
 	SESSION: `@enoki/flow/session/${apiKey}`,
 });
 
+/**
+ * @deprecated Use `registerEnokiWallets` instead
+ */
 export class EnokiFlow {
 	#storageKeys: { STATE: string; SESSION: string };
 	#enokiClient: EnokiClient;
@@ -108,7 +110,7 @@ export class EnokiFlow {
 		provider: AuthProvider;
 		clientId: string;
 		redirectUrl: string;
-		network?: 'mainnet' | 'testnet' | 'devnet';
+		network?: EnokiNetwork;
 		extraParams?: Record<string, unknown>;
 	}) {
 		const ephemeralKeyPair = new Ed25519Keypair();
@@ -257,7 +259,7 @@ export class EnokiFlow {
 	}
 
 	// TODO: Should this return the proof if it already exists?
-	async getProof({ network }: { network?: 'mainnet' | 'testnet' } = {}) {
+	async getProof({ network }: { network?: EnokiNetwork } = {}) {
 		const zkp = await this.getSession();
 		const { salt } = this.$zkLoginState.get();
 
@@ -291,7 +293,7 @@ export class EnokiFlow {
 		return proof;
 	}
 
-	async getKeypair({ network }: { network?: 'mainnet' | 'testnet' } = {}) {
+	async getKeypair({ network }: { network?: EnokiNetwork } = {}) {
 		// Get the proof, so that we ensure it exists in state:
 		await this.getProof({ network });
 
@@ -313,74 +315,5 @@ export class EnokiFlow {
 			proof: zkp.proof,
 			ephemeralKeypair: Ed25519Keypair.fromSecretKey(fromB64(zkp.ephemeralKeyPair)),
 		});
-	}
-
-	async sponsorTransaction({
-		network,
-		transaction,
-		client,
-	}: {
-		network?: 'mainnet' | 'testnet';
-		transaction: Transaction;
-		client: SuiClient;
-	}) {
-		const session = await this.getSession();
-
-		if (!session || !session.jwt) {
-			throw new Error('Missing required data for sponsorship.');
-		}
-
-		const transactionKindBytes = await transaction.build({
-			onlyTransactionKind: true,
-			client,
-		});
-
-		return await this.#enokiClient.createSponsoredTransaction({
-			jwt: session.jwt,
-			network,
-			transactionKindBytes: toB64(transactionKindBytes),
-		});
-	}
-
-	async executeTransaction({
-		network,
-		bytes,
-		digest,
-		client,
-	}: {
-		network?: 'mainnet' | 'testnet';
-		bytes: string;
-		digest: string;
-		client: SuiClient;
-	}) {
-		const keypair = await this.getKeypair({ network });
-		const userSignature = await keypair.signTransaction(fromB64(bytes));
-
-		await this.#enokiClient.executeSponsoredTransaction({
-			digest,
-			signature: userSignature.signature,
-		});
-
-		// TODO: Should the parent just do this?
-		await client.waitForTransaction({ digest });
-
-		return { digest };
-	}
-
-	async sponsorAndExecuteTransaction({
-		network,
-		transaction,
-		client,
-	}: {
-		network?: 'mainnet' | 'testnet';
-		transaction: Transaction;
-		client: SuiClient;
-	}) {
-		const { bytes, digest } = await this.sponsorTransaction({
-			network,
-			transaction,
-			client,
-		});
-		return await this.executeTransaction({ network, bytes, digest, client });
 	}
 }
