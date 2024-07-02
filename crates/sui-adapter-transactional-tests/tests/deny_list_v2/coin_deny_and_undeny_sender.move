@@ -39,9 +39,8 @@ module test::regulated_coin {
         deny_list: &DenyList,
         addr: address,
         expected: bool,
-        ctx: &TxContext,
     ) {
-        let status = coin::deny_list_v2_most_recent_contains<REGULATED_COIN>(deny_list, addr, ctx);
+        let status = coin::deny_list_v2_contains_next_epoch<REGULATED_COIN>(deny_list, addr);
         assert!(status == expected, 0);
     }
 }
