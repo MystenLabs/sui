@@ -135,7 +135,7 @@ fn copy_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> {
         dev_mode: true,
         ..Default::default()
     })
-    .resolution_graph_for_package(pkg_dir, &mut Vec::new())
+    .resolution_graph_for_package(pkg_dir, None, &mut Vec::new())
     {
         Ok(pkg) => pkg,
         Err(_) => return Ok(tmp_dir.to_path_buf()),

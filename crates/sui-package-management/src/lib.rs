@@ -3,9 +3,10 @@
 
 use anyhow::{bail, Context};
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use move_core_types::account_address::AccountAddress;
 use move_package::{
     lock_file::{self, schema::ManagedPackage, LockFile},
     resolution::resolution_graph::Package,
@@ -94,6 +95,43 @@ pub async fn update_lock_file(
     Ok(())
 }
 
+/// Sets the `original-published-id` in the Move.lock to the given `id`. This function
+/// provides a utility to manipualte the `original-published-id` during a package upgrade.
+/// For instance, we require graph resolution to resolve a `0x0` address for module names
+/// in the package to-be-upgraded, and the `Move.lock` value can be explicitly set to `0x0`
+/// in such cases (and reset otherwise).
+/// The function returns the existing `original-published-id`, if any.
+pub fn set_package_id(
+    package_path: &Path,
+    install_dir: Option<PathBuf>,
+    chain_id: Option<String>,
+    id: AccountAddress,
+) -> Result<Option<AccountAddress>, anyhow::Error> {
+    let lock_file_path = package_path.join(SourcePackageLayout::Lock.path());
+    if let Ok(mut lock_file) = File::open(lock_file_path.clone()) {
+        if let Some(chain_id) = chain_id {
+            let managed_package = ManagedPackage::read(&mut lock_file)
+                .ok()
+                .and_then(|m| m.into_iter().find(|(_, v)| v.chain_id == *chain_id));
+            if let Some((env, v)) = managed_package {
+                let install_dir = install_dir.unwrap_or(PathBuf::from("."));
+                let lock_for_update = LockFile::from(install_dir.clone(), &lock_file_path);
+                if let Ok(mut lock_for_update) = lock_for_update {
+                    lock_file::schema::set_original_id(
+                        &mut lock_for_update,
+                        &env,
+                        &id.to_canonical_string(true),
+                    )?;
+                    lock_for_update.commit(lock_file_path)?;
+                    let id = AccountAddress::from_str(&v.original_published_id)?;
+                    return Ok(Some(id));
+                }
+            }
+        }
+    };
+    Ok(None)
+}
+
 /// Find the published on-chain ID in the `Move.lock` or `Move.toml` file.
 /// A chain ID of `None` means that we will only try to resolve a published ID from the Move.toml.
 /// The published ID is resolved from the `Move.toml` if the Move.lock does not exist.
@@ -156,5 +194,3 @@ fn published_at_property(package: &Package) -> Result<String, PublishedAtError> 
     };
     Ok(value.to_string())
 }
-
-pub fn resolve_alias() {}

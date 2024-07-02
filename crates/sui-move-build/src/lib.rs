@@ -174,7 +174,7 @@ impl BuildConfig {
     pub fn resolution_graph(
         mut self,
         path: &Path,
-        _chain_id: Option<String>,
+        chain_id: Option<String>,
     ) -> SuiResult<ResolvedGraph> {
         if let Some(err_msg) = set_sui_flavor(&mut self.config) {
             return Err(SuiError::ModuleBuildFailure { error: err_msg });
@@ -182,10 +182,10 @@ impl BuildConfig {
 
         if self.print_diags_to_stderr {
             self.config
-                .resolution_graph_for_package(path, &mut std::io::stderr())
+                .resolution_graph_for_package(path, chain_id, &mut std::io::stderr())
         } else {
             self.config
-                .resolution_graph_for_package(path, &mut std::io::sink())
+                .resolution_graph_for_package(path, chain_id, &mut std::io::sink())
         }
         .map_err(|err| SuiError::ModuleBuildFailure {
             error: format!("{:?}", err),
