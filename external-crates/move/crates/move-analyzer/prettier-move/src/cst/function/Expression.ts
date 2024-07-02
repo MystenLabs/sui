@@ -160,13 +160,16 @@ function printBinaryExpression(path: AstPath<Node>, options: ParserOptions, prin
 	const shouldBreak = rhs!.startsOnNewLine || false;
 	let breakSymbol: Doc = line;
 
-	return group([
-		path.call(print, 'nonFormattingChildren', 0), // lhs
-		' ',
-		path.call(print, 'nonFormattingChildren', 1), // operator
-		breakSymbol,
-		path.call(print, 'nonFormattingChildren', 2), // rhs
-	], { shouldBreak });
+	return group(
+		[
+			path.call(print, 'nonFormattingChildren', 0), // lhs
+			' ',
+			path.call(print, 'nonFormattingChildren', 1), // operator
+			breakSymbol,
+			path.call(print, 'nonFormattingChildren', 2), // rhs
+		],
+		{ shouldBreak },
+	);
 }
 
 /**
@@ -253,14 +256,17 @@ function printUnitExpression(path: AstPath<Node>, options: ParserOptions, print:
  * Print `expression_list` node.
  */
 function printExpressionList(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return group([
-		'(',
-		indent(softline),
-		indent(join([',', line], path.map(print, 'nonFormattingChildren'))),
-		ifBreak(','), // trailing comma
-		softline,
-		')',
-	], { shouldBreak: shouldBreakFirstChild(path) });
+	return group(
+		[
+			'(',
+			indent(softline),
+			indent(join([',', line], path.map(print, 'nonFormattingChildren'))),
+			ifBreak(','), // trailing comma
+			softline,
+			')',
+		],
+		{ shouldBreak: shouldBreakFirstChild(path) },
+	);
 }
 
 /**
@@ -357,7 +363,9 @@ export function printBlock(
 function printDotExpression(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	const nodes = path.node.nonFormattingChildren;
 	const children = path.map(print, 'nonFormattingChildren');
-	const isChain = nodes[0]?.type === Expression.DotExpression || path.node.parent?.type === Expression.DotExpression;
+	const isChain =
+		nodes[0]?.type === Expression.DotExpression ||
+		path.node.parent?.type === Expression.DotExpression;
 
 	if (children.length < 2) {
 		return path.node.type;
