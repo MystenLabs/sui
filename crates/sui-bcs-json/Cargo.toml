@@ -16,8 +16,9 @@ move-core-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 shared-crypto.workspace = true
-sui-types = { workspace = true, features = ["test-utils"]}
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+# sui-types = { workspace = true, features = ["test-utils"]}
+sui-sdk2.workspace = true
 
 [build-dependencies]
 cbindgen = { version="0.24.0", default-features=false }
+

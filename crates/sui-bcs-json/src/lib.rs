@@ -2,15 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use move_core_types::u256::U256;
+// use move_core_types::u256::U256;
 use std::ffi::{c_char, c_int, CStr};
 use std::fmt;
-use sui_types::multisig::{MultiSig, MultiSigPublicKey};
-use sui_types::transaction::{CallArg, TransactionDataV1};
-use sui_types::{
-    base_types::SuiAddress,
-    transaction::{TransactionData, TransactionKind},
-};
+// use sui_types::multisig::{MultiSig, MultiSigPublicKey};
+// use sui_types::transaction::{CallArg, TransactionDataV1};
+// use sui_types::{
+// base_types::SuiAddress,
+// transaction::{TransactionData, TransactionKind},
+// };
+// use sui_sdk2::types::u256;
+use sui_sdk2::types::MultisigMemberPublicKey as MultiSigPublicKey;
+use sui_sdk2::types::TransactionKind;
+use sui_sdk2::types::*;
 
 use serde::{
     de::{DeserializeSeed, Error, Expected, SeqAccess, Unexpected, Visitor},
@@ -133,10 +137,6 @@ pub extern "C" fn sui_bcs_json_free(ptr: *const u8, len: usize) {
 #[derive(Copy, Clone)]
 pub struct Type<'t>(&'t str);
 
-pub enum TxData {
-    V1(TransactionDataV1),
-}
-
 /// Value is the intermediate representation between BCS and JSON. When going in either direction,
 /// we go via an instance of `Value`.
 pub enum Value {
@@ -145,14 +145,14 @@ pub enum Value {
     U32(u32),
     U64(u64),
     U128(u128),
-    U256(U256),
+    // U256(U256),
     Bool(bool),
-    Address(SuiAddress),
-    CallArg(CallArg),
-    MultiSig(MultiSig),
+    Address(sui_sdk2::types::Address),
+    // CallArg(CallArg),
+    // MultiSig(MultiSig),
     MultiSigPublicKey(MultiSigPublicKey),
     String(String),
-    TransactionData(TransactionData),
+    // TransactionData(TransactionData),
     TransactionKind(TransactionKind),
     Vec(Vec<Value>),
 }
@@ -192,14 +192,14 @@ impl Serialize for Value {
             V::U32(n) => n.serialize(serializer),
             V::U64(n) => n.serialize(serializer),
             V::U128(n) => n.serialize(serializer),
-            V::U256(n) => n.serialize(serializer),
+            // V::U256(n) => n.serialize(serializer),
             V::Bool(b) => b.serialize(serializer),
             V::Address(a) => a.serialize(serializer),
-            V::CallArg(c) => c.serialize(serializer),
-            V::MultiSig(sig) => sig.serialize(serializer),
+            // V::CallArg(c) => c.serialize(serializer),
+            // V::MultiSig(sig) => sig.serialize(serializer),
             V::MultiSigPublicKey(sig) => sig.serialize(serializer),
             V::String(s) => serializer.serialize_str(s.as_str()),
-            V::TransactionData(data) => data.serialize(serializer),
+            // V::TransactionData(data) => data.serialize(serializer),
             V::TransactionKind(kind) => kind.serialize(serializer),
             V::Vec(vs) => {
                 let mut seq = serializer.serialize_seq(Some(vs.len()))?;
@@ -240,16 +240,16 @@ impl<'t, 'de> DeserializeSeed<'de> for Type<'t> {
             "u32" => u32::deserialize(deserializer).map(V::U32),
             "u64" => u64::deserialize(deserializer).map(V::U64),
             "u128" => u128::deserialize(deserializer).map(V::U128),
-            "u256" => U256::deserialize(deserializer).map(V::U256),
-            "address" => SuiAddress::deserialize(deserializer).map(V::Address),
-            "call_arg" => CallArg::deserialize(deserializer).map(V::CallArg),
-            "multisig" => MultiSig::deserialize(deserializer).map(V::MultiSig),
+            // "u256" => U256::deserialize(deserializer).map(V::U256),
+            "address" => Address::deserialize(deserializer).map(V::Address),
+            // "call_arg" => CallArg::deserialize(deserializer).map(V::CallArg),
+            // "multisig" => MultiSig::deserialize(deserializer).map(V::MultiSig),
             "multisig_public_key" => {
                 MultiSigPublicKey::deserialize(deserializer).map(V::MultiSigPublicKey)
             }
-            "transaction_data" => {
-                TransactionData::deserialize(deserializer).map(V::TransactionData)
-            }
+            // "transaction_data" => {
+            //     TransactionData::deserialize(deserializer).map(V::TransactionData)
+            // }
             "transaction_kind" => {
                 TransactionKind::deserialize(deserializer).map(V::TransactionKind)
             }
@@ -635,7 +635,7 @@ mod tests {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
             let arguments = vec![
-                builder.input(CallArg::SUI_SYSTEM_MUT).unwrap(),
+                // builder.input(CallArg::SUI_SYSTEM_MUT).unwrap(),
                 builder.make_obj_vec(obj_vec).unwrap(),
                 builder
                     .input(CallArg::Pure(bcs::to_bytes(&amount).unwrap()))
