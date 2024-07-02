@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 52;
+const MAX_PROTOCOL_VERSION: u64 = 53;
 
 // Record history of protocol version allocations here:
 //
@@ -153,6 +153,8 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 //             Enable soft bundle in devnet and testnet.
 //             Core macro visibility in sui core framework.
 //             Enable Mysticeti on mainnet.
+//             Turn on count based shared object congestion control in devnet.
+// Version 53: Enable consensus commit prologue V3 in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2466,6 +2468,15 @@ impl ProtocolConfig {
                     }
 
                     cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
+                }
+                53 => {
+                    // Enable consensus commit prologue V3 in testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .record_consensus_determined_version_assignments_in_prologue = true;
+                        cfg.feature_flags
+                            .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
