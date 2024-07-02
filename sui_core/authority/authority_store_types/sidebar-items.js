@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StoreData","StoreMoveObjectWrapper","StoreObjectV1","StoreObjectWrapper"],"fn":["get_store_object_pair"],"struct":["IndirectObjectMetadata","StoreMoveObjectV1","StoreObjectPair","StoreObjectValue"],"type":["ObjectContentDigest","StoreMoveObject","StoreObject"]};

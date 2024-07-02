@@ -1,0 +1,295 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Client implementation for the `TransactionBuilder` RPC API."><title>TransactionBuilderClient in sui_json_rpc_api - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-9ee3a5e31a2afa3e.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sui_json_rpc_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.75.0 (82e1608df 2023-12-21)" data-channel="1.75.0" data-search-js="search-8fbf244ebcf71464.js" data-settings-js="settings-74424d7eec62a23e.js" ><script src="../static.files/storage-fec3eaa3851e447d.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-9dd44ab47b99a0fb.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-5d8b3c7633ad77ba.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../sui_json_rpc_api/index.html">sui_json_rpc_api</a><span class="version">0.0.0</span></h2></div><h2 class="location"><a href="#">TransactionBuilderClient</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.batch_transaction">batch_transaction</a></li><li><a href="#method.merge_coin">merge_coin</a></li><li><a href="#method.move_call">move_call</a></li><li><a href="#method.pay">pay</a></li><li><a href="#method.pay_all_sui">pay_all_sui</a></li><li><a href="#method.pay_sui">pay_sui</a></li><li><a href="#method.publish">publish</a></li><li><a href="#method.request_add_stake">request_add_stake</a></li><li><a href="#method.request_withdraw_stake">request_withdraw_stake</a></li><li><a href="#method.split_coin">split_coin</a></li><li><a href="#method.split_coin_equal">split_coin_equal</a></li><li><a href="#method.transfer_object">transfer_object</a></li><li><a href="#method.transfer_sui">transfer_sui</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate sui_json_rpc_api</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">sui_json_rpc_api</a>::<wbr><a class="trait" href="#">TransactionBuilderClient</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait TransactionBuilderClient: ClientT {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 13 methods</span></summary>    // Provided methods
+    fn <a href="#method.transfer_object" class="fn">transfer_object</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        object_id: ObjectID,
+        gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;,
+        recipient: SuiAddress
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.transfer_sui" class="fn">transfer_sui</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        sui_object_id: ObjectID,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;,
+        recipient: SuiAddress,
+        amount: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pay" class="fn">pay</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        input_coins: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;ObjectID&gt;,
+        recipients: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;SuiAddress&gt;,
+        amounts: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;&gt;,
+        gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pay_sui" class="fn">pay_sui</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        input_coins: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;ObjectID&gt;,
+        recipients: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;SuiAddress&gt;,
+        amounts: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pay_all_sui" class="fn">pay_all_sui</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        input_coins: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;ObjectID&gt;,
+        recipient: SuiAddress,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.move_call" class="fn">move_call</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        package_object_id: ObjectID,
+        module: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+        function: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+        type_arguments: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;SuiTypeTag&gt;,
+        arguments: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;SuiJsonValue&gt;,
+        gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;,
+        execution_mode: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;SuiTransactionBlockBuilderMode&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.publish" class="fn">publish</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        sender: SuiAddress,
+        compiled_modules: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;Base64&gt;,
+        dependencies: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;ObjectID&gt;,
+        gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.split_coin" class="fn">split_coin</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_amounts: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;&gt;,
+        gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.split_coin_equal" class="fn">split_coin_equal</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_count: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;,
+        gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.merge_coin" class="fn">merge_coin</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        primary_coin: ObjectID,
+        coin_to_merge: ObjectID,
+        gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.batch_transaction" class="fn">batch_transaction</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        single_transaction_params: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;RPCTransactionRequestParams&gt;,
+        gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;,
+        txn_builder_mode: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;SuiTransactionBlockBuilderMode&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.request_add_stake" class="fn">request_add_stake</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        coins: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;ObjectID&gt;,
+        amount: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;&gt;,
+        validator: SuiAddress,
+        gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.request_withdraw_stake" class="fn">request_withdraw_stake</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 self,
+        signer: SuiAddress,
+        staked_sui: ObjectID,
+        gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+        gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+             'life0: 'async_trait</span> { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Client implementation for the <code>TransactionBuilder</code> RPC API.</p>
+</div></details><h2 id="provided-methods" class="small-section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.transfer_object" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.transfer_object" class="fn">transfer_object</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    object_id: ObjectID,
+    gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;,
+    recipient: SuiAddress
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Create an unsigned transaction to transfer an object from one address to another. The object’s type
+must allow public transfers</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.transfer_sui" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.transfer_sui" class="fn">transfer_sui</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    sui_object_id: ObjectID,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;,
+    recipient: SuiAddress,
+    amount: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Create an unsigned transaction to send SUI coin object to a Sui address. The SUI object is also used as the gas object.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pay" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.pay" class="fn">pay</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    input_coins: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;ObjectID&gt;,
+    recipients: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;SuiAddress&gt;,
+    amounts: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;&gt;,
+    gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Send <code>Coin&lt;T&gt;</code> to a list of addresses, where <code>T</code> can be any coin type, following a list of amounts,
+The object specified in the <code>gas</code> field will be used to pay the gas fee for the transaction.
+The gas object can not appear in <code>input_coins</code>. If the gas object is not specified, the RPC server
+will auto-select one.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pay_sui" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.pay_sui" class="fn">pay_sui</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    input_coins: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;ObjectID&gt;,
+    recipients: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;SuiAddress&gt;,
+    amounts: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Send SUI coins to a list of addresses, following a list of amounts.
+This is for SUI coin only and does not require a separate gas coin object.
+Specifically, what pay_sui does are:</p>
+<ol>
+<li>debit each input_coin to create new coin following the order of
+amounts and assign it to the corresponding recipient.</li>
+<li>accumulate all residual SUI from input coins left and deposit all SUI to the first
+input coin, then use the first input coin as the gas coin object.</li>
+<li>the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost</li>
+<li>all other input coints other than the first one are deleted.</li>
+</ol>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pay_all_sui" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.pay_all_sui" class="fn">pay_all_sui</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    input_coins: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;ObjectID&gt;,
+    recipient: SuiAddress,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Send all SUI coins to one recipient.
+This is for SUI coin only and does not require a separate gas coin object.
+Specifically, what pay_all_sui does are:</p>
+<ol>
+<li>accumulate all SUI from input coins and deposit all SUI to the first input coin</li>
+<li>transfer the updated first coin to the recipient and also use this first coin as gas coin object.</li>
+<li>the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost.</li>
+<li>all other input coins other than the first are deleted.</li>
+</ol>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.move_call" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.move_call" class="fn">move_call</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    package_object_id: ObjectID,
+    module: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+    function: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+    type_arguments: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;SuiTypeTag&gt;,
+    arguments: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;SuiJsonValue&gt;,
+    gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;,
+    execution_mode: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;SuiTransactionBlockBuilderMode&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Create an unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.publish" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.publish" class="fn">publish</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    sender: SuiAddress,
+    compiled_modules: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;Base64&gt;,
+    dependencies: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;ObjectID&gt;,
+    gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Create an unsigned transaction to publish a Move package.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.split_coin" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.split_coin" class="fn">split_coin</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    coin_object_id: ObjectID,
+    split_amounts: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;&gt;,
+    gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Create an unsigned transaction to split a coin object into multiple coins.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.split_coin_equal" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.split_coin_equal" class="fn">split_coin_equal</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    coin_object_id: ObjectID,
+    split_count: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;,
+    gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Create an unsigned transaction to split a coin object into multiple equal-size coins.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.merge_coin" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.merge_coin" class="fn">merge_coin</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    primary_coin: ObjectID,
+    coin_to_merge: ObjectID,
+    gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Create an unsigned transaction to merge multiple coins into one coin.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.batch_transaction" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.batch_transaction" class="fn">batch_transaction</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    single_transaction_params: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;RPCTransactionRequestParams&gt;,
+    gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;,
+    txn_builder_mode: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;SuiTransactionBlockBuilderMode&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Create an unsigned batched transaction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.request_add_stake" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.request_add_stake" class="fn">request_add_stake</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    coins: <a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;ObjectID&gt;,
+    amount: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;&gt;,
+    validator: SuiAddress,
+    gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Add stake to a validator’s staking pool using multiple coins and amount.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.request_withdraw_stake" class="method"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><h4 class="code-header">fn <a href="#method.request_withdraw_stake" class="fn">request_withdraw_stake</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 self,
+    signer: SuiAddress,
+    staked_sui: ObjectID,
+    gas: <a class="enum" href="https://doc.rust-lang.org/1.75.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ObjectID&gt;,
+    gas_budget: BigInt&lt;<a class="primitive" href="https://doc.rust-lang.org/1.75.0/std/primitive.u64.html">u64</a>&gt;
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.75.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.75.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;TransactionBlockBytes&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.75.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,
+    'life0: 'async_trait,</span></h4></section></summary><div class="docblock"><p>Withdraw stake from a validator’s staking pool.</p>
+</div></details></div><h2 id="object-safety" class="small-section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.75.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="small-section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-TransactionBuilderClient-for-TypeJsonRpseeInteral" class="impl"><a class="src rightside" href="../src/sui_json_rpc_api/transaction_builder.rs.html#17">source</a><a href="#impl-TransactionBuilderClient-for-TypeJsonRpseeInteral" class="anchor">§</a><h3 class="code-header">impl&lt;TypeJsonRpseeInteral&gt; <a class="trait" href="trait.TransactionBuilderClient.html" title="trait sui_json_rpc_api::TransactionBuilderClient">TransactionBuilderClient</a> for TypeJsonRpseeInteral<span class="where fmt-newline">where
+    TypeJsonRpseeInteral: ClientT,</span></h3></section></div><script src="../trait.impl/sui_json_rpc_api/transaction_builder/trait.TransactionBuilderClient.js" async></script></section></div></main></body></html>

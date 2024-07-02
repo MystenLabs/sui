@@ -1,0 +1,6 @@
+(function() {var implementors = {
+"sui_adapter_latest":[["impl&lt;'backing&gt; Storage for <a class=\"struct\" href=\"sui_adapter_latest/temporary_store/struct.TemporaryStore.html\" title=\"struct sui_adapter_latest::temporary_store::TemporaryStore\">TemporaryStore</a>&lt;'backing&gt;"]],
+"sui_adapter_v0":[["impl&lt;'backing&gt; Storage for <a class=\"struct\" href=\"sui_adapter_v0/temporary_store/struct.TemporaryStore.html\" title=\"struct sui_adapter_v0::temporary_store::TemporaryStore\">TemporaryStore</a>&lt;'backing&gt;"]],
+"sui_adapter_v1":[["impl&lt;'backing&gt; Storage for <a class=\"struct\" href=\"sui_adapter_v1/temporary_store/struct.TemporaryStore.html\" title=\"struct sui_adapter_v1::temporary_store::TemporaryStore\">TemporaryStore</a>&lt;'backing&gt;"]],
+"sui_adapter_v2":[["impl&lt;'backing&gt; Storage for <a class=\"struct\" href=\"sui_adapter_v2/temporary_store/struct.TemporaryStore.html\" title=\"struct sui_adapter_v2::temporary_store::TemporaryStore\">TemporaryStore</a>&lt;'backing&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

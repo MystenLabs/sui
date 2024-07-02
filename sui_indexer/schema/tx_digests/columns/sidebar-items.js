@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["cp_sequence_number","star","tx_digest","tx_sequence_number"]};

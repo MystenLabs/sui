@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["APPLICATION_BCS","APPLICATION_JSON","DEFAULT_PAGE_SIZE","MAX_PAGE_SIZE","TEXT_PLAIN_UTF_8"],"enum":["Direction"],"mod":["accept","client","content_type","transactions","types"],"struct":["CheckpointData","CheckpointTransaction","Page","RestError","RestMetrics","RestService"],"type":["Result"]};

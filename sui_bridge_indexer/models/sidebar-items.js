@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ProgressStore","SuiProgressStore","TokenTransfer","TokenTransferData"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["run_test","run_test_impl"],"mod":["args","programmable_transaction_test_parser","test_adapter"],"struct":["ValidatorWithFullnode"],"trait":["TransactionalAdapter"]};

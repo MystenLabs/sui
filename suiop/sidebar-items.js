@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Resource"],"fn":["main"],"struct":["SuiOpArgs"]};

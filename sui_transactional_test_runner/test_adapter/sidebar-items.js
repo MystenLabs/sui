@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FakeID"],"static":["PRE_COMPILED"],"struct":["SuiTestAdapter"]};

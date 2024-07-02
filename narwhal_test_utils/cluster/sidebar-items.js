@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["setup_tracing"],"struct":["AuthorityDetails","Cluster","PrimaryNodeDetails","WorkerNodeDetails"]};

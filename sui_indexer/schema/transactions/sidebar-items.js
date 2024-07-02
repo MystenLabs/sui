@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["all_columns"],"mod":["columns","dsl"],"struct":["balance_changes","checkpoint_sequence_number","events","object_changes","raw_effects","raw_transaction","star","success_command_count","table","timestamp_ms","transaction_digest","transaction_kind","tx_sequence_number"],"type":["BoxedQuery","SqlType"]};

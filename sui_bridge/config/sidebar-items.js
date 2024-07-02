@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["pick_highest_balance_coin"],"struct":["BridgeClientConfig","BridgeCommitteeConfig","BridgeNodeConfig","BridgeServerConfig","EthConfig","EthContractAddresses","SuiConfig"]};

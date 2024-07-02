@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EffectsFinality"],"struct":["BalanceChange","Client","TransactionExecutionResponse"]};

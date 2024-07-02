@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StateAccumulator"],"fn":["accumulate_effects"],"struct":["StateAccumulatorMetrics","StateAccumulatorV1","StateAccumulatorV2","WrappedObject"],"trait":["AccumulatorStore"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["examine_key","generate_bridge_authority_key_and_write_to_file","generate_bridge_client_key_and_write_to_file","generate_bridge_node_config_and_write_to_file","get_eth_contract_addresses","get_eth_signer_client","publish_and_register_coins_return_add_coins_on_sui_action","wait_for_server_to_be_up"],"type":["EthSigner"]};

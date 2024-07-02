@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CHANNEL_CAPACITY","NUM_SHUTDOWN_RECEIVERS"],"mod":["consensus"],"struct":["Primary","PrimaryChannelMetrics"]};
