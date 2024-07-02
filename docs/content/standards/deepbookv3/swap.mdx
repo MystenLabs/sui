@@ -1,0 +1,63 @@
+---
+title: Swap
+---
+
+DeepBook provides a swap-like interface commonly seen in AMMs. Unlike the order functions, `swap_exact_amount` can be called without a BalanceManager. It is called directly with Coin objects. When swapping from base to quote, `base_in` must have a positive value while `quote_in` must be zero. Vise versa when swapping from quote to base. Some `deep_in` amount is required to pay for trading fees. This amount can be overestimated, the unused DEEP tokens will be returned at the end of the call.
+
+The `get_amount_out` endpoint can be used to simulate this swap. It will also return the exact amount of DEEP tokens that this swap will require.
+
+## Swap API
+
+Following are the endpoints that the `Pool` exposes for swaps.
+
+---
+
+### Swap Exact Base for Quote
+
+Users can overestimate the amount of DEEP required. The remaining balance will be returned.
+
+```rust
+/// Swap exact base quantity without needing a `balance_manager`.
+/// DEEP quantity can be overestimated. Returns three `Coin` objects:
+/// base, quote, and deep. Some base quantity may be left over, if the
+/// input quantity is not divisible by lot size.
+public fun swap_exact_base_for_quote<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    base_in: Coin<BaseAsset>,
+    deep_in: Coin<DEEP>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (Coin<BaseAsset>, Coin<QuoteAsset>, Coin<DEEP>)
+```
+
+### Swap Exact Quote for Base
+
+```rust
+/// Swap exact quote quantity without needing a `balance_manager`.
+/// DEEP quantity can be overestimated. Returns three `Coin` objects:
+/// base, quote, and deep. Some quote quantity may be left over if the
+/// input quantity is not divisible by lot size.
+public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    quote_in: Coin<QuoteAsset>,
+    deep_in: Coin<DEEP>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (Coin<BaseAsset>, Coin<QuoteAsset>, Coin<DEEP>)
+```
+
+### Swap Exact Quantity
+
+This function is what the above two functions call with coin::zer() set for the third coin. Users can call this directly for base → quote or quote → base as long as base or quote have a zero value.
+
+```rust
+/// Swap exact quantity without needing an balance_manager.
+public fun swap_exact_quantity<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    base_in: Coin<BaseAsset>,
+    quote_in: Coin<QuoteAsset>,
+    deep_in: Coin<DEEP>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (Coin<BaseAsset>, Coin<QuoteAsset>, Coin<DEEP>)
+```

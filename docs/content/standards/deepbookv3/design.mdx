@@ -1,0 +1,9 @@
+---
+title: DeepBook Design
+---
+
+INSERT FLOWCHART HERE
+
+## Objects
+
+The DBv3 design revolves around three shared objects: `Pool`, `PoolRegistry`, and `BalanceManager`. The `Pool` shared object represents one market and is responsible for managain its order book, users, stakes, etc.. `PoolRegistry` is only used during pool creation, it makes sure that duplicate pools are not created and maintains package versioning. `BalanceManager` is used to source a user's funds when placing orders. A single `BalanceManager` can be used between all pools.
