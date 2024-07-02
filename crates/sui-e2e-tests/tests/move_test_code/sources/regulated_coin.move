@@ -18,8 +18,8 @@ module move_test_code::regulated_coin {
             ctx
         );
         let coin = coin::mint(&mut treasury_cap, 1000000, ctx);
-        transfer::public_transfer(coin, tx_context::sender(ctx));
-        transfer::public_transfer(deny_cap, tx_context::sender(ctx));
+        transfer::public_transfer(coin, ctx.sender());
+        transfer::public_transfer(deny_cap, ctx.sender());
         transfer::public_freeze_object(treasury_cap);
         transfer::public_freeze_object(metadata);
     }
