@@ -313,15 +313,17 @@ impl Query {
         last: Option<u64>,
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
+        scan_limit: Option<u64>,
     ) -> Result<Connection<String, TransactionBlock>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         TransactionBlock::paginate(
-            ctx.data_unchecked(),
+            ctx,
             page,
             filter.unwrap_or_default(),
             checkpoint,
+            Some(scan_limit.unwrap_or(10000000)),
         )
         .await
         .extend()

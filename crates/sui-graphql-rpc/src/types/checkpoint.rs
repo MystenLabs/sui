@@ -164,14 +164,9 @@ impl Checkpoint {
             return Ok(Connection::new(false, false));
         };
 
-        TransactionBlock::paginate(
-            ctx.data_unchecked(),
-            page,
-            filter,
-            self.checkpoint_viewed_at,
-        )
-        .await
-        .extend()
+        TransactionBlock::paginate(ctx, page, filter, self.checkpoint_viewed_at, Some(1))
+            .await
+            .extend()
     }
 }
 
