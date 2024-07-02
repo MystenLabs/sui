@@ -1,25 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::{AuthorityMetrics, AuthorityState};
+use crate::checkpoints::CheckpointServiceNoop;
+use crate::consensus_adapter::SubmitToConsensus;
+use crate::consensus_handler::SequencedConsensusTransaction;
 use prometheus::Registry;
-use std::sync::Arc;
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use sui_core::authority::{AuthorityMetrics, AuthorityState};
-use sui_core::checkpoints::CheckpointServiceNoop;
-use sui_core::consensus_adapter::SubmitToConsensus;
-use sui_core::consensus_handler::SequencedConsensusTransaction;
+use std::sync::{Arc, Weak};
 use sui_types::error::SuiResult;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use sui_types::transaction::VerifiedCertificate;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tracing::debug;
 
-pub(crate) struct MockConsensusClient {
+pub struct MockConsensusClient {
     tx_sender: mpsc::Sender<ConsensusTransaction>,
     _consensus_handle: JoinHandle<()>,
 }
 
-pub(crate) enum ConsensusMode {
+pub enum ConsensusMode {
     // ConsensusClient does absolutely nothing when receiving a transaction
     Noop,
     // ConsensusClient directly sequences the transaction into the store.
@@ -27,7 +28,7 @@ pub(crate) enum ConsensusMode {
 }
 
 impl MockConsensusClient {
-    pub(crate) fn new(validator: Arc<AuthorityState>, consensus_mode: ConsensusMode) -> Self {
+    pub fn new(validator: Weak<AuthorityState>, consensus_mode: ConsensusMode) -> Self {
         let (tx_sender, tx_receiver) = mpsc::channel(1000000);
         let _consensus_handle = Self::run(validator, tx_receiver, consensus_mode);
         Self {
@@ -36,8 +37,8 @@ impl MockConsensusClient {
         }
     }
 
-    pub(crate) fn run(
-        validator: Arc<AuthorityState>,
+    pub fn run(
+        validator: Weak<AuthorityState>,
         tx_receiver: mpsc::Receiver<ConsensusTransaction>,
         consensus_mode: ConsensusMode,
     ) -> JoinHandle<()> {
@@ -45,14 +46,18 @@ impl MockConsensusClient {
     }
 
     async fn run_impl(
-        validator: Arc<AuthorityState>,
+        validator: Weak<AuthorityState>,
         mut tx_receiver: mpsc::Receiver<ConsensusTransaction>,
         consensus_mode: ConsensusMode,
     ) {
         let checkpoint_service = Arc::new(CheckpointServiceNoop {});
-        let epoch_store = validator.epoch_store_for_testing();
         let authority_metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         while let Some(tx) = tx_receiver.recv().await {
+            let Some(validator) = validator.upgrade() else {
+                debug!("validator shut down; exiting MockConsensusClient");
+                return;
+            };
+            let epoch_store = validator.epoch_store_for_testing();
             match consensus_mode {
                 ConsensusMode::Noop => {}
                 ConsensusMode::DirectSequencing => {
@@ -68,15 +73,13 @@ impl MockConsensusClient {
                         .unwrap();
                 }
             }
-            let tx = match tx.kind {
-                ConsensusTransactionKind::UserTransaction(tx) => tx,
-                _ => unreachable!("Only user transactions are supported in benchmark"),
-            };
-            if tx.contains_shared_object() {
-                validator.enqueue_certificates_for_execution(
-                    vec![VerifiedCertificate::new_unchecked(*tx)],
-                    &epoch_store,
-                );
+            if let ConsensusTransactionKind::UserTransaction(tx) = tx.kind {
+                if tx.contains_shared_object() {
+                    validator.enqueue_certificates_for_execution(
+                        vec![VerifiedCertificate::new_unchecked(*tx)],
+                        &epoch_store,
+                    );
+                }
             }
         }
     }

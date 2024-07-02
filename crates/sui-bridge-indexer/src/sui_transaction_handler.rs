@@ -16,32 +16,29 @@ use sui_bridge::events::{
 
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 
+use mysten_metrics::metered_channel::{Receiver, ReceiverStream};
 use sui_types::BRIDGE_ADDRESS;
 use tracing::{error, info};
 
 pub(crate) const COMMIT_BATCH_SIZE: usize = 10;
 
-pub async fn handle_sui_transcations_loop(
+pub async fn handle_sui_transactions_loop(
     pg_pool: PgPool,
-    rx: mysten_metrics::metered_channel::Receiver<(
-        Vec<RetrievedTransaction>,
-        Option<TransactionDigest>,
-    )>,
+    rx: Receiver<(Vec<RetrievedTransaction>, Option<TransactionDigest>)>,
     metrics: BridgeIndexerMetrics,
 ) {
     let checkpoint_commit_batch_size = std::env::var("COMMIT_BATCH_SIZE")
         .unwrap_or(COMMIT_BATCH_SIZE.to_string())
         .parse::<usize>()
         .unwrap();
-    let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(rx)
-        .ready_chunks(checkpoint_commit_batch_size);
+    let mut stream = ReceiverStream::new(rx).ready_chunks(checkpoint_commit_batch_size);
     while let Some(batch) = stream.next().await {
         // unwrap: batch must not be empty
         let cursor = batch.last().unwrap().1;
         let token_transfers = batch
             .into_iter()
             // TODO: letting it panic so we can capture errors, but we should handle this more gracefully
-            .flat_map(|(chunk, _)| process_transctions(chunk, &metrics).unwrap())
+            .flat_map(|(chunk, _)| process_transactions(chunk, &metrics).unwrap())
             .collect::<Vec<_>>();
 
         // write batched token transfers to DB
@@ -68,14 +65,14 @@ pub async fn handle_sui_transcations_loop(
     unreachable!("Channel closed unexpectedly");
 }
 
-fn process_transctions(
-    txes: Vec<RetrievedTransaction>,
+fn process_transactions(
+    txns: Vec<RetrievedTransaction>,
     metrics: &BridgeIndexerMetrics,
 ) -> Result<Vec<TokenTransfer>> {
-    txes.into_iter()
-        .map(|tx| into_token_transfers(tx, metrics))
-        .collect::<Result<Vec<_>>>()
-        .map(|v| v.into_iter().flatten().collect())
+    txns.into_iter().try_fold(vec![], |mut result, tx| {
+        result.append(&mut into_token_transfers(tx, metrics)?);
+        Ok(result)
+    })
 }
 
 pub fn into_token_transfers(

@@ -35,7 +35,7 @@ use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::{AuthorityEpochTables, AuthorityPerEpochStore};
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
-use crate::consensus_adapter::ConsensusAdapter;
+use crate::consensus_adapter::SubmitToConsensus;
 
 type PkG = bls12381::G2Element;
 type EncG = bls12381::G2Element;
@@ -210,7 +210,7 @@ impl VersionedUsedProcessedMessages {
 pub struct RandomnessManager {
     epoch_store: Weak<AuthorityPerEpochStore>,
     epoch: EpochId,
-    consensus_adapter: Arc<ConsensusAdapter>,
+    consensus_adapter: Box<dyn SubmitToConsensus>,
     network_handle: randomness::Handle,
     authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
 
@@ -232,7 +232,7 @@ impl RandomnessManager {
     // Returns None in case of invalid input or other failure to initialize DKG.
     pub async fn try_new(
         epoch_store_weak: Weak<AuthorityPerEpochStore>,
-        consensus_adapter: Arc<ConsensusAdapter>,
+        consensus_adapter: Box<dyn SubmitToConsensus>,
         network_handle: randomness::Handle,
         authority_key_pair: &AuthorityKeyPair,
     ) -> Option<Self> {
@@ -473,7 +473,7 @@ impl RandomnessManager {
     }
 
     /// Sends the initial dkg::Message to begin the randomness DKG protocol.
-    pub fn start_dkg(&mut self) -> SuiResult {
+    pub async fn start_dkg(&mut self) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // DKG already started (or completed or failed).
             return Ok(());
@@ -511,7 +511,8 @@ impl RandomnessManager {
         });
         if !fail_point_skip_sending {
             self.consensus_adapter
-                .submit(transaction, None, &epoch_store)?;
+                .submit_to_consensus(&[transaction], &epoch_store)
+                .await?;
         }
 
         epoch_store
@@ -609,7 +610,8 @@ impl RandomnessManager {
                     });
                     if !fail_point_skip_sending {
                         self.consensus_adapter
-                            .submit(transaction, None, &epoch_store)?;
+                            .submit_to_consensus(&[transaction], &epoch_store)
+                            .await?;
                     }
 
                     let elapsed = self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
@@ -1003,7 +1005,7 @@ mod tests {
             let epoch_store = state.epoch_store_for_testing();
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
-                consensus_adapter.clone(),
+                Box::new(consensus_adapter.clone()),
                 sui_network::randomness::Handle::new_stub(),
                 validator.protocol_key_pair(),
             )
@@ -1017,7 +1019,7 @@ mod tests {
         // Generate and distribute Messages.
         let mut dkg_messages = Vec::new();
         for randomness_manager in randomness_managers.iter_mut() {
-            randomness_manager.start_dkg().unwrap();
+            randomness_manager.start_dkg().await.unwrap();
 
             let mut dkg_message = rx_consensus.recv().await.unwrap();
             assert!(dkg_message.len() == 1);
@@ -1149,7 +1151,7 @@ mod tests {
             let epoch_store = state.epoch_store_for_testing();
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
-                consensus_adapter.clone(),
+                Box::new(consensus_adapter.clone()),
                 sui_network::randomness::Handle::new_stub(),
                 validator.protocol_key_pair(),
             )
@@ -1163,7 +1165,7 @@ mod tests {
         // Generate and distribute Messages.
         let mut dkg_messages = Vec::new();
         for randomness_manager in randomness_managers.iter_mut() {
-            randomness_manager.start_dkg().unwrap();
+            randomness_manager.start_dkg().await.unwrap();
 
             let mut dkg_message = rx_consensus.recv().await.unwrap();
             assert!(dkg_message.len() == 1);

@@ -2635,6 +2635,7 @@ dependencies = [
  "rustls 0.21.12",
  "serde",
  "shared-crypto",
+ "strum_macros 0.24.3",
  "sui-macros",
  "sui-protocol-config",
  "sui-tls",

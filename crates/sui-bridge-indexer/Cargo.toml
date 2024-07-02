@@ -29,10 +29,10 @@ sui-types.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true
 backoff.workspace = true
+sui-config.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }
-sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 hex-literal = "0.3.4"

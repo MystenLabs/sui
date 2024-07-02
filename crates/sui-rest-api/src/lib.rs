@@ -10,6 +10,7 @@ pub mod accept;
 mod accounts;
 mod checkpoints;
 pub mod client;
+mod coins;
 mod committee;
 pub mod content_type;
 mod error;
@@ -147,6 +148,7 @@ impl RestService {
                 get(system::get_protocol_config),
             )
             .route(system::GET_GAS_INFO_PATH, get(system::get_gas_info))
+            .route(coins::GET_COIN_INFO_PATH, get(coins::get_coin_info))
             .route(
                 checkpoints::LIST_CHECKPOINT_PATH,
                 get(checkpoints::list_checkpoints),
@@ -163,6 +165,10 @@ impl RestService {
             .route(
                 objects::GET_OBJECT_WITH_VERSION_PATH,
                 get(objects::get_object_with_version),
+            )
+            .route(
+                objects::LIST_DYNAMIC_FIELDS_PATH,
+                get(objects::list_dynamic_fields),
             )
             .with_state(self.clone())
             .pipe(|router| {

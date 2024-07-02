@@ -358,8 +358,8 @@ Sender is not @0x0 the system address.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_string_bytes_lt">string_bytes_lt</a>(a: &String, b: &String): bool {
-    <b>let</b> a_bytes = a.bytes();
-    <b>let</b> b_bytes = b.bytes();
+    <b>let</b> a_bytes = a.as_bytes();
+    <b>let</b> b_bytes = b.as_bytes();
 
     <b>if</b> (a_bytes.length() &lt; b_bytes.length()) {
         <b>true</b>

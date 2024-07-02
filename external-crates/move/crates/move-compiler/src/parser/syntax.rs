@@ -2093,66 +2093,71 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                 consume_token(context.tokens, Tok::RParen)?;
                 pat
             }
-            Tok::Mut | Tok::Identifier => ok_with_loc!(context, {
-                let mut_ = parse_mut_opt(context)?;
-                let name_access_chain = parse_name_access_chain(
-                    context,
-                    /* macros */ false,
-                    /* tyargs */ true,
-                    || "a pattern entry",
-                )?;
+            t @ (Tok::Mut | Tok::Identifier | Tok::NumValue)
+                if !matches!(t, Tok::NumValue)
+                    || matches!(context.tokens.lookahead(), Ok(Tok::ColonColon)) =>
+            {
+                ok_with_loc!(context, {
+                    let mut_ = parse_mut_opt(context)?;
+                    let name_access_chain = parse_name_access_chain(
+                        context,
+                        /* macros */ false,
+                        /* tyargs */ true,
+                        || "a pattern entry",
+                    )?;
 
-                fn report_invalid_mut(context: &mut Context, mut_: Option<Loc>) {
-                    if let Some(loc) = mut_ {
-                        let diag = diag!(
-                            Syntax::UnexpectedToken,
-                            (loc, "Invalid 'mut' keyword on non-variable pattern")
-                        );
-                        context.env.add_diag(diag);
+                    fn report_invalid_mut(context: &mut Context, mut_: Option<Loc>) {
+                        if let Some(loc) = mut_ {
+                            let diag = diag!(
+                                Syntax::UnexpectedToken,
+                                (loc, "Invalid 'mut' keyword on non-variable pattern")
+                            );
+                            context.env.add_diag(diag);
+                        }
                     }
-                }
 
-                match context.tokens.peek() {
-                    Tok::LParen => {
-                        let mut pattern_start_set = VALUE_START_SET.clone();
-                        pattern_start_set.add_all(&[
-                            Tok::PeriodPeriod,
-                            Tok::LParen,
-                            Tok::Mut,
-                            Tok::Identifier,
-                        ]);
-                        let (loc, patterns) = with_loc!(
-                            context,
-                            parse_comma_list(
-                                context,
+                    match context.tokens.peek() {
+                        Tok::LParen => {
+                            let mut pattern_start_set = VALUE_START_SET.clone();
+                            pattern_start_set.add_all(&[
+                                Tok::PeriodPeriod,
                                 Tok::LParen,
-                                Tok::RParen,
-                                &pattern_start_set,
-                                parse_positional_field_pattern,
-                                "a pattern",
-                            )
-                        );
-                        report_invalid_mut(context, mut_);
-                        MP::PositionalConstructor(name_access_chain, sp(loc, patterns))
-                    }
-                    Tok::LBrace => {
-                        let (loc, patterns) = with_loc!(
-                            context,
-                            parse_comma_list(
+                                Tok::Mut,
+                                Tok::Identifier,
+                            ]);
+                            let (loc, patterns) = with_loc!(
                                 context,
-                                Tok::LBrace,
-                                Tok::RBrace,
-                                &TokenSet::from([Tok::PeriodPeriod, Tok::Mut, Tok::Identifier]),
-                                parse_field_pattern,
-                                "a field pattern",
-                            )
-                        );
-                        report_invalid_mut(context, mut_);
-                        MP::FieldConstructor(name_access_chain, sp(loc, patterns))
+                                parse_comma_list(
+                                    context,
+                                    Tok::LParen,
+                                    Tok::RParen,
+                                    &pattern_start_set,
+                                    parse_positional_field_pattern,
+                                    "a pattern",
+                                )
+                            );
+                            report_invalid_mut(context, mut_);
+                            MP::PositionalConstructor(name_access_chain, sp(loc, patterns))
+                        }
+                        Tok::LBrace => {
+                            let (loc, patterns) = with_loc!(
+                                context,
+                                parse_comma_list(
+                                    context,
+                                    Tok::LBrace,
+                                    Tok::RBrace,
+                                    &TokenSet::from([Tok::PeriodPeriod, Tok::Mut, Tok::Identifier]),
+                                    parse_field_pattern,
+                                    "a field pattern",
+                                )
+                            );
+                            report_invalid_mut(context, mut_);
+                            MP::FieldConstructor(name_access_chain, sp(loc, patterns))
+                        }
+                        _ => MP::Name(mut_, name_access_chain),
                     }
-                    _ => MP::Name(mut_, name_access_chain),
-                }
-            }),
+                })
+            }
             _ => {
                 if let Some(value) = maybe_parse_value(context)? {
                     Ok(sp(value.loc, MP::Literal(value)))

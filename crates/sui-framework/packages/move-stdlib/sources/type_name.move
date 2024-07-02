@@ -33,7 +33,7 @@ module std::type_name {
         /// `00000000000000000000000000000001::string::String` or
         /// `0000000000000000000000000000000a::module_name1::type_name1<0000000000000000000000000000000a::module_name2::type_name2<u64>>`
         /// Addresses are hex-encoded lowercase values of length ADDRESS_LENGTH (16, 20, or 32 depending on the Move platform)
-        name: String
+        name: String,
     }
 
     /// Return a value representation of the type `T`.  Package IDs
@@ -61,14 +61,15 @@ module std::type_name {
         bytes == &b"u128" ||
         bytes == &b"u256" ||
         bytes == &b"address" ||
-        (bytes.length() >= 6 &&
-         bytes[0] == ASCII_V &&
-         bytes[1] == ASCII_E &&
-         bytes[2] == ASCII_C &&
-         bytes[3] == ASCII_T &&
-         bytes[4] == ASCII_O &&
-         bytes[5] == ASCII_R)
-
+        (
+            bytes.length() >= 6 &&
+            bytes[0] == ASCII_V &&
+            bytes[1] == ASCII_E &&
+            bytes[2] == ASCII_C &&
+            bytes[3] == ASCII_T &&
+            bytes[4] == ASCII_O &&
+            bytes[5] == ASCII_R,
+        )
     }
 
     /// Get the String representation of `self`

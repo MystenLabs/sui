@@ -14,13 +14,17 @@ import { log } from './log';
 import { assert } from 'console';
 import { IndentAction } from 'vscode';
 
-function semanticVersion(path: string, args?: readonly string[]): semver.SemVer | null {
+function version(path: string, args?: readonly string[]): string | null {
     const versionString = childProcess.spawnSync(
         path, args, { encoding: 'utf8' },
     );
-    if (versionString.stdout) {
+    return versionString.stdout;
+}
+
+function semanticVersion(versionString: string | null): semver.SemVer | null {
+    if (versionString !== null) {
         // Version string looks as follows: 'COMMAND_NAME SEMVER-SHA'
-        const versionStringWords = versionString.stdout.split(' ', 2);
+        const versionStringWords = versionString.split(' ', 2);
         if (versionStringWords.length < 2) {
             return null;
         }
@@ -35,6 +39,33 @@ function semanticVersion(path: string, args?: readonly string[]): semver.SemVer 
 
     }
     return null;
+}
+
+function shouldInstall(bundledVersionString: string | null,
+                       bundledVersion: semver.SemVer | null,
+                       highestVersionString: string | null,
+                       highestVersion: semver.SemVer | null): boolean {
+    if (bundledVersionString === null || bundledVersion === null) {
+        log.info('No bundled binary');
+        return false;
+    }
+    if (highestVersionString === null || highestVersion === null) {
+        log.info(`Installing bundled move-analyzer as no existing version found: v${bundledVersion.version}`);
+        return true;
+    }
+    if (semver.gt(bundledVersion, highestVersion)) {
+        log.info(`Installing bundled move-analyzer as the highest version available: v${bundledVersion.version}`);
+        return true;
+    }
+    if (semver.eq(bundledVersion, highestVersion) &&
+        bundledVersionString !== highestVersionString) {
+        // Bundled version is the same as the highest installed one,
+        // but the entire version string including commit sha is different
+        // in which case favor the bundled one as it may contain a patch
+        log.info(`Installing bundled move-analyzer equal to the highest version available: v${bundledVersion.version}`);
+        return true;
+    }
+    return false;
 }
 
 /** Information passed along to each VS Code command defined by this extension. */
@@ -247,15 +278,15 @@ export class Context {
                 () => false,
             );
             if (serverPathExists) {
-                log.info(`deleting existing move-analyzer binary at '${this.configuration.defaultServerPath}'`);
+                log.info(`Deleting existing move-analyzer binary at '${this.configuration.defaultServerPath}'`);
                 await vscode.workspace.fs.delete(this.configuration.defaultServerPath);
             }
          } else {
-            log.info(`creating directory for move-analyzer binary at '${this.configuration.defaultServerDir}'`);
+            log.info(`Creating directory for move-analyzer binary at '${this.configuration.defaultServerDir}'`);
             await vscode.workspace.fs.createDirectory(this.configuration.defaultServerDir);
          }
 
-         log.info(`copying move-analyzer binary to '${this.configuration.defaultServerPath}'`);
+         log.info(`Copying move-analyzer binary to '${this.configuration.defaultServerPath}'`);
          await vscode.workspace.fs.copy(bundledServerPath, this.configuration.defaultServerPath);
     }
 
@@ -297,14 +328,17 @@ export class Context {
         const bundledServerPath = vscode.Uri.joinPath(extensionContext.extensionUri,
                                                     'language-server',
                                                     this.configuration.serverName);
-        const bundledVersion = semanticVersion(bundledServerPath.fsPath, serverVersionArgs);
-        log.info(`bundled version: ${bundledVersion}`);
+        const bundledVersionString = version(bundledServerPath.fsPath, serverVersionArgs);
+        const bundledVersion = semanticVersion(bundledVersionString);
+        log.info(`Bundled version: ${bundledVersion}`);
 
-        const standaloneVersion = semanticVersion(this.configuration.serverPath, serverVersionArgs);
-        log.info(`standalone version: ${standaloneVersion}`);
+        const standaloneVersionString = version(this.configuration.serverPath, serverVersionArgs);
+        const standaloneVersion = semanticVersion(standaloneVersionString);
+        log.info(`Standalone version: ${standaloneVersion}`);
 
-        const cliVersion = semanticVersion(this.configuration.suiPath, cliVersionArgs);
-        log.info(`cli version: ${cliVersion}`);
+        const cliVersionString = version(this.configuration.suiPath, cliVersionArgs);
+        const cliVersion = semanticVersion(cliVersionString);
+        log.info(`CLI version: ${cliVersion}`);
 
         if (this.configuration.serverPath !== this.configuration.defaultServerPath.fsPath) {
             // User has overwritten default server path (need to compare paths as comparing URIs fails
@@ -331,8 +365,10 @@ export class Context {
 
         // What's the highest version installed? Also track path and arguments to run analyzer
         // with the highest version
+        let highestVersionString = null;
         let highestVersion = null;
         if (standaloneVersion !== null) {
+            highestVersionString = standaloneVersionString;
             highestVersion = standaloneVersion;
             this.resolvedServerPath = this.configuration.serverPath;
             this.resolvedServerArgs = serverArgs;
@@ -341,6 +377,7 @@ export class Context {
         }
 
         if (cliVersion !== null && (highestVersion === null || semver.gt(cliVersion, highestVersion))) {
+            highestVersionString = cliVersionString;
             highestVersion = cliVersion;
             this.resolvedServerPath = this.configuration.suiPath;
             this.resolvedServerArgs = cliArgs;
@@ -348,12 +385,10 @@ export class Context {
                     ` at '${this.resolvedServerPath}' as the highest one`);
         }
 
-        if (bundledVersion !== null && (highestVersion === null || semver.gt(bundledVersion, highestVersion))) {
+        if (shouldInstall(bundledVersionString, bundledVersion, highestVersionString, highestVersion)) {
             highestVersion = bundledVersion;
             this.resolvedServerPath = this.configuration.defaultServerPath.fsPath;
             this.resolvedServerArgs = serverArgs;
-            log.info(`Setting v${bundledVersion.version} of bundled move-analyzer ` +
-                    ` at '${this.resolvedServerPath}' as the highest one and installing it`);
             await this.installBundledBinary(bundledServerPath);
             log.info('Successfuly installed move-analyzer');
         }

@@ -3,6 +3,7 @@
 
 use consensus_config::{AuthorityIndex, Epoch, Stake};
 use fastcrypto::error::FastCryptoError;
+use strum_macros::IntoStaticStr;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
@@ -12,8 +13,8 @@ use crate::{
 };
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
-#[derive(Clone, Debug, Error)]
-pub enum ConsensusError {
+#[derive(Clone, Debug, Error, IntoStaticStr)]
+pub(crate) enum ConsensusError {
     #[error("Error deserializing block: {0}")]
     MalformedBlock(bcs::Error),
 

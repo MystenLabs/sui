@@ -220,14 +220,15 @@ u8, u16, u32, u64, u128, u256, bool, address, vector.
     bytes == &b"u128" ||
     bytes == &b"u256" ||
     bytes == &b"<b>address</b>" ||
-    (bytes.length() &gt;= 6 &&
-     bytes[0] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_V">ASCII_V</a> &&
-     bytes[1] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_E">ASCII_E</a> &&
-     bytes[2] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_C">ASCII_C</a> &&
-     bytes[3] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_T">ASCII_T</a> &&
-     bytes[4] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_O">ASCII_O</a> &&
-     bytes[5] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_R">ASCII_R</a>)
-
+    (
+        bytes.length() &gt;= 6 &&
+        bytes[0] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_V">ASCII_V</a> &&
+        bytes[1] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_E">ASCII_E</a> &&
+        bytes[2] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_C">ASCII_C</a> &&
+        bytes[3] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_T">ASCII_T</a> &&
+        bytes[4] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_O">ASCII_O</a> &&
+        bytes[5] == <a href="../move-stdlib/type_name.md#0x1_type_name_ASCII_R">ASCII_R</a>,
+    )
 }
 </code></pre>
 

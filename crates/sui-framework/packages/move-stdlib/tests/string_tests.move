@@ -15,7 +15,7 @@ module std::string_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = string::EINVALID_UTF8)]
+    #[expected_failure(abort_code = string::EInvalidUTF8)]
     fun test_invalid_utf8() {
         let no_sparkle_heart = vector[0, 159, 146, 150];
         let s = no_sparkle_heart.to_string();
@@ -23,31 +23,31 @@ module std::string_tests {
     }
 
     #[test]
-    fun test_sub_string() {
+    fun test_substring() {
         let s = b"abcd".to_string();
-        let sub = s.sub_string(2, 4);
+        let sub = s.substring(2, 4);
         assert!(sub == b"cd".to_string())
     }
 
     #[test]
-    #[expected_failure(abort_code = string::EINVALID_INDEX)]
-    fun test_sub_string_invalid_boundary() {
+    #[expected_failure(abort_code = string::EInvalidIndex)]
+    fun test_substring_invalid_boundary() {
         let sparkle_heart = vector[240, 159, 146, 150];
         let s = sparkle_heart.to_string();
-        let _sub = s.sub_string(1, 4);
+        let _sub = s.substring(1, 4);
     }
 
     #[test]
-    #[expected_failure(abort_code = string::EINVALID_INDEX)]
-    fun test_sub_string_invalid_index() {
+    #[expected_failure(abort_code = string::EInvalidIndex)]
+    fun test_substring_invalid_index() {
         let s = b"abcd".to_string();
-        let _sub = s.sub_string(4, 5);
+        let _sub = s.substring(4, 5);
     }
 
     #[test]
-    fun test_sub_string_empty() {
+    fun test_substring_empty() {
         let s = b"abcd".to_string();
-        let sub = s.sub_string(4, 4);
+        let sub = s.substring(4, 4);
         assert!(sub.is_empty())
     }
 
@@ -79,5 +79,10 @@ module std::string_tests {
         let mut s = b"abcd".to_string();
         s.insert(1, b"xy".to_string());
         assert!(s == b"axybcd".to_string())
+    }
+
+    #[test]
+    fun test_into_bytes() {
+        assert!(b"abcd" == b"abcd".to_string().into_bytes())
     }
 }

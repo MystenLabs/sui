@@ -125,7 +125,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 debug!(
                     "Delaying retry {} of peer {} subscription, in {} seconds",
                     retries,
-                    peer,
+                    peer_hostname,
                     delay.as_secs_f32(),
                 );
                 sleep(delay).await;

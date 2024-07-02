@@ -208,6 +208,12 @@ impl MappedFiles {
             .map(|posn| FilePosition::new(posn.file_hash, posn.end))
     }
 
+    pub fn file_size(&self, fhash: &FileHash) -> usize {
+        let file_id = *self.file_mapping().get(fhash).unwrap();
+        let source = self.files().source(file_id).unwrap();
+        source.len()
+    }
+
     pub fn position_opt(&self, loc: &Loc) -> Option<FilePositionSpan> {
         let start_loc = loc.start() as usize;
         let end_loc = loc.end() as usize;

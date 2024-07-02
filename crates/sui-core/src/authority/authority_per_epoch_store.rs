@@ -881,12 +881,12 @@ impl AuthorityPerEpochStore {
         self.randomness_reporter.get().cloned()
     }
 
-    pub fn set_randomness_manager(
+    pub async fn set_randomness_manager(
         &self,
         mut randomness_manager: RandomnessManager,
     ) -> SuiResult<()> {
         let reporter = randomness_manager.reporter();
-        let result = randomness_manager.start_dkg();
+        let result = randomness_manager.start_dkg().await;
         if self
             .randomness_manager
             .set(tokio::sync::Mutex::new(randomness_manager))
@@ -1325,27 +1325,14 @@ impl AuthorityPerEpochStore {
         &self,
         checkpoints: Vec<CheckpointSequenceNumber>,
     ) -> SuiResult<Vec<Accumulator>> {
-        // We need to register waiters _before_ reading from the database to avoid
-        // race conditions
-        let registrations = self.checkpoint_state_notify_read.register_all(&checkpoints);
-        let accumulators = self
-            .tables()?
-            .state_hash_by_checkpoint
-            .multi_get(checkpoints)?;
-
-        // Zipping together registrations and accumulators ensures returned order is
-        // the same as order of digests
-        let results =
-            accumulators
-                .into_iter()
-                .zip(registrations.into_iter())
-                .map(|(a, r)| match a {
-                    // Note that Some() clause also drops registration that is already fulfilled
-                    Some(ready) => Either::Left(futures::future::ready(ready)),
-                    None => Either::Right(r),
-                });
-
-        Ok(join_all(results).await)
+        self.checkpoint_state_notify_read
+            .read(&checkpoints, |checkpoints| -> SuiResult<_> {
+                Ok(self
+                    .tables()?
+                    .state_hash_by_checkpoint
+                    .multi_get(checkpoints)?)
+            })
+            .await
     }
 
     pub async fn notify_read_running_root(
@@ -2948,13 +2935,36 @@ impl AuthorityPerEpochStore {
             checkpoint_service,
             cache_reader,
             &ConsensusCommitInfo::new_for_test(
-                self.get_highest_pending_checkpoint_height() + 1,
+                if self.randomness_state_enabled() {
+                    self.get_highest_pending_checkpoint_height() / 2 + 1
+                } else {
+                    self.get_highest_pending_checkpoint_height() + 1
+                },
                 0,
                 skip_consensus_commit_prologue_in_test,
             ),
             authority_metrics,
         )
         .await
+    }
+
+    #[cfg(any(test, feature = "test-utils"))]
+    pub async fn assign_shared_object_versions_for_tests(
+        self: &Arc<Self>,
+        cache_reader: &dyn ObjectCacheRead,
+        transactions: &[VerifiedExecutableTransaction],
+    ) -> SuiResult {
+        let mut batch = self.db_batch()?;
+        self.process_consensus_transaction_shared_object_versions(
+            cache_reader,
+            transactions,
+            None,
+            &BTreeMap::new(),
+            &mut batch,
+        )
+        .await?;
+        batch.write()?;
+        Ok(())
     }
 
     fn process_notifications(

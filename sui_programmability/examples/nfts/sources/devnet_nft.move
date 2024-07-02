@@ -108,7 +108,7 @@ module nfts::devnet_nftTests {
         {
             let mut nft = ts::take_from_sender<DevNetNFT>(&scenario);
             devnet_nft::update_description(&mut nft, b"a new description") ;
-            assert!(*string::bytes(devnet_nft::description(&nft)) == b"a new description", 0);
+            assert!(*string::as_bytes(devnet_nft::description(&nft)) == b"a new description", 0);
             ts::return_to_sender(&scenario, nft);
         };
         // burn it

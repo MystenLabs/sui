@@ -3,7 +3,7 @@
 
 use crate::{
     context::Context,
-    symbols::{on_hover_markup, type_to_ide_string, DefInfo, Symbols},
+    symbols::{on_hover_markup, type_to_ide_string, DefInfo, SymbolicatorRunner, Symbols},
 };
 use lsp_server::Request;
 use lsp_types::{
@@ -12,9 +12,10 @@ use lsp_types::{
 };
 
 use move_compiler::{naming::ast as N, shared::Identifier};
+use std::path::PathBuf;
 
 /// Handles inlay hints request of the language server
-pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Symbols) {
+pub fn on_inlay_hint_request(context: &Context, request: &Request) {
     let parameters = serde_json::from_value::<InlayHintParams>(request.params.clone())
         .expect("could not deserialize inlay hints request");
 
@@ -23,46 +24,11 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
         "inlay_hints_request (types: {}): {:?}",
         context.inlay_type_hints, fpath
     );
-    let mut hints: Vec<InlayHint> = vec![];
-
-    if context.inlay_type_hints {
-        if let Some(file_defs) = symbols.file_mods.get(&fpath) {
-            for mod_defs in file_defs {
-                for untyped_def_loc in mod_defs.untyped_defs() {
-                    let start_position = symbols.files.start_position(untyped_def_loc);
-                    if let Some(DefInfo::Local(n, t, _, _)) = symbols.def_info(untyped_def_loc) {
-                        let position = Position {
-                            line: start_position.line_offset() as u32,
-                            character: start_position.column_offset() as u32 + n.len() as u32,
-                        };
-                        let colon_label = InlayHintLabelPart {
-                            value: ": ".to_string(),
-                            tooltip: None,
-                            location: None,
-                            command: None,
-                        };
-                        let type_label = InlayHintLabelPart {
-                            value: type_to_ide_string(t, /* verbose */ true),
-                            tooltip: None,
-                            location: None,
-                            command: None,
-                        };
-                        let h = InlayHint {
-                            position,
-                            label: InlayHintLabel::LabelParts(vec![colon_label, type_label]),
-                            kind: Some(InlayHintKind::TYPE),
-                            text_edits: None,
-                            tooltip: additional_hint_info(t, symbols),
-                            padding_left: None,
-                            padding_right: None,
-                            data: None,
-                        };
-                        hints.push(h);
-                    }
-                }
-            }
-        };
-    }
+    let hints = if context.inlay_type_hints {
+        inlay_hints(context, fpath).unwrap_or_default()
+    } else {
+        vec![]
+    };
 
     let response = lsp_server::Response::new_ok(request.id.clone(), hints);
     if let Err(err) = context
@@ -72,6 +38,49 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
     {
         eprintln!("could not send inlay thing response: {:?}", err);
     }
+}
+
+fn inlay_hints(context: &Context, fpath: PathBuf) -> Option<Vec<InlayHint>> {
+    let symbols_map = &context.symbols.lock().ok()?;
+    let mut hints: Vec<InlayHint> = vec![];
+    let symbols =
+        SymbolicatorRunner::root_dir(&fpath).and_then(|pkg_path| symbols_map.get(&pkg_path))?;
+    let file_defs = symbols.file_mods.get(&fpath)?;
+    for mod_defs in file_defs {
+        for untyped_def_loc in mod_defs.untyped_defs() {
+            let start_position = symbols.files.start_position(untyped_def_loc);
+            if let DefInfo::Local(n, t, _, _, _) = symbols.def_info(untyped_def_loc)? {
+                let position = Position {
+                    line: start_position.line_offset() as u32,
+                    character: start_position.column_offset() as u32 + n.len() as u32,
+                };
+                let colon_label = InlayHintLabelPart {
+                    value: ": ".to_string(),
+                    tooltip: None,
+                    location: None,
+                    command: None,
+                };
+                let type_label = InlayHintLabelPart {
+                    value: type_to_ide_string(t, /* verbose */ true),
+                    tooltip: None,
+                    location: None,
+                    command: None,
+                };
+                let h = InlayHint {
+                    position,
+                    label: InlayHintLabel::LabelParts(vec![colon_label, type_label]),
+                    kind: Some(InlayHintKind::TYPE),
+                    text_edits: None,
+                    tooltip: additional_hint_info(t, symbols),
+                    padding_left: None,
+                    padding_right: None,
+                    data: None,
+                };
+                hints.push(h);
+            }
+        }
+    }
+    Some(hints)
 }
 
 /// Helper function to compute additional optional info for the hint.
@@ -94,22 +103,15 @@ fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayH
         return None;
     };
 
-    let Some(mod_defs) = symbols
+    let mod_defs = symbols
         .file_mods
         .values()
         .flatten()
-        .find(|m| m.ident() == &mod_ident.value)
-    else {
-        return None;
-    };
+        .find(|m| m.ident() == &mod_ident.value)?;
 
-    let Some(struct_def) = mod_defs.structs().get(&struct_name.value()) else {
-        return None;
-    };
+    let struct_def = mod_defs.structs().get(&struct_name.value())?;
 
-    let Some(struct_def_info) = symbols.def_info(&struct_def.name_start()) else {
-        return None;
-    };
+    let struct_def_info = symbols.def_info(&struct_def.name_loc)?;
 
     Some(InlayHintTooltip::MarkupContent(on_hover_markup(
         struct_def_info,

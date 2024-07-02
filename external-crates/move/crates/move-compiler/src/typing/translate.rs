@@ -4441,7 +4441,7 @@ fn expand_macro(
     let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
     {
         None => {
-            assert!(context.env.has_errors());
+            assert!(context.env.has_errors() || context.env.ide_mode());
             (context.error_type(call_loc), TE::UnresolvedError)
         }
         Some(macro_expand::ExpandedMacro {
