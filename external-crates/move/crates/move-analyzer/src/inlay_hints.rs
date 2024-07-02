@@ -123,13 +123,7 @@ fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayH
 }
 
 #[cfg(test)]
-fn validate_type_hint(
-    hints: &Vec<InlayHint>,
-    path: &std::path::Path,
-    line: u32,
-    col: u32,
-    ty: &str,
-) {
+fn validate_type_hint(hints: &[InlayHint], path: &std::path::Path, line: u32, col: u32, ty: &str) {
     let lsp_line = line - 1; // 0th based
     if let Some(label_parts) = hints.iter().find_map(|h| {
         if h.position.line == lsp_line && h.position.character == col {
