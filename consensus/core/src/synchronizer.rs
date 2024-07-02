@@ -24,8 +24,10 @@ use tokio::{
     task::JoinSet,
     time::{sleep, sleep_until, timeout, Instant},
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
+use crate::authority_service::COMMIT_LAG_MULTIPLIER;
+use crate::commit_syncer::CommitVoteMonitor;
 use crate::{
     block::{BlockRef, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
@@ -34,7 +36,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::NetworkClient,
-    BlockAPI, Round,
+    BlockAPI, CommitIndex, Round,
 };
 
 /// The number of concurrent fetch blocks requests per authority
@@ -215,6 +217,7 @@ pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThread
     commands_receiver: Receiver<Command>,
     fetch_block_senders: BTreeMap<AuthorityIndex, Sender<BlocksGuard>>,
     core_dispatcher: Arc<D>,
+    commit_vote_monitor: Arc<CommitVoteMonitor>,
     dag_state: Arc<RwLock<DagState>>,
     fetch_blocks_scheduler_task: JoinSet<()>,
     network_client: Arc<C>,
@@ -228,6 +231,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         network_client: Arc<C>,
         context: Arc<Context>,
         core_dispatcher: Arc<D>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         block_verifier: Arc<V>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Arc<SynchronizerHandle> {
@@ -279,6 +283,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 inflight_blocks_map,
                 commands_sender: commands_sender_clone,
                 dag_state,
+                commit_vote_monitor,
             };
             s.run().await;
         }));
@@ -650,6 +655,18 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
     }
 
     async fn start_fetch_missing_blocks_task(&mut self) -> ConsensusResult<()> {
+        let (commit_lagging, last_commit_index, quorum_commit_index) = self.is_commit_lagging();
+        if commit_lagging {
+            trace!("Scheduled synchronizer temporarily disabled as local commit is falling behind from quorum {last_commit_index} << {quorum_commit_index}");
+            self.context
+                .metrics
+                .node_metrics
+                .fetch_blocks_scheduler_skipped
+                .with_label_values(&["commit_lagging"])
+                .inc();
+            return Ok(());
+        }
+
         let missing_blocks = self
             .core_dispatcher
             .get_missing_blocks()
@@ -698,6 +715,18 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 debug!("Total blocks requested to fetch: {}, total fetched: {}", total_requested, total_fetched);
             }));
         Ok(())
+    }
+
+    fn is_commit_lagging(&self) -> (bool, CommitIndex, CommitIndex) {
+        let last_commit_index = self.dag_state.read().last_commit_index();
+        let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
+        let commit_threshold = last_commit_index
+            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER;
+        (
+            commit_threshold < quorum_commit_index,
+            last_commit_index,
+            quorum_commit_index,
+        )
     }
 
     /// Fetches the `missing_blocks` from available peers. The method will attempt to split the load amongst multiple (random) peers.
@@ -822,6 +851,9 @@ mod tests {
     use parking_lot::RwLock;
     use tokio::time::sleep;
 
+    use crate::authority_service::COMMIT_LAG_MULTIPLIER;
+    use crate::commit::{CommitVote, TrustedCommit};
+    use crate::commit_syncer::CommitVoteMonitor;
     use crate::{
         block::{BlockDigest, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
@@ -835,6 +867,7 @@ mod tests {
         synchronizer::{
             InflightBlocksMap, Synchronizer, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT,
         },
+        CommitDigest, CommitIndex,
     };
 
     // TODO: create a complete Mock for thread dispatcher to be used from several tests
@@ -846,8 +879,8 @@ mod tests {
 
     impl MockCoreThreadDispatcher {
         async fn get_add_blocks(&self) -> Vec<VerifiedBlock> {
-            let lock = self.add_blocks.lock().await;
-            lock.to_vec()
+            let mut lock = self.add_blocks.lock().await;
+            lock.drain(0..).collect()
         }
 
         async fn stub_missing_blocks(&self, block_refs: BTreeSet<BlockRef>) {
@@ -1057,11 +1090,13 @@ mod tests {
         let network_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         let handle = Synchronizer::start(
             network_client.clone(),
             context,
             core_dispatcher.clone(),
+            commit_vote_monitor,
             block_verifier,
             dag_state,
         );
@@ -1102,11 +1137,13 @@ mod tests {
         let network_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         let handle = Synchronizer::start(
             network_client.clone(),
             context,
             core_dispatcher.clone(),
+            commit_vote_monitor,
             block_verifier,
             dag_state,
         );
@@ -1158,6 +1195,7 @@ mod tests {
         let network_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         // Create some test blocks
         let expected_blocks = (0..10)
@@ -1196,6 +1234,7 @@ mod tests {
             network_client.clone(),
             context,
             core_dispatcher.clone(),
+            commit_vote_monitor,
             block_verifier,
             dag_state,
         );
@@ -1212,5 +1251,108 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn synchronizer_periodic_task_skip_when_commit_lagging() {
+        // GIVEN
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let network_client = Arc::new(MockNetworkClient::default());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+
+        // AND stub some missing blocks
+        let expected_blocks = (0..10)
+            .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()))
+            .collect::<Vec<_>>();
+        let missing_blocks = expected_blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<BTreeSet<_>>();
+        core_dispatcher
+            .stub_missing_blocks(missing_blocks.clone())
+            .await;
+
+        // AND stub the requests for authority 1 & 2
+        // Make the first authority timeout, so the second will be called. "We" are authority = 0, so
+        // we are skipped anyways.
+        network_client
+            .stub_fetch_blocks(
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(1),
+                Some(FETCH_REQUEST_TIMEOUT),
+            )
+            .await;
+        network_client
+            .stub_fetch_blocks(
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(2),
+                None,
+            )
+            .await;
+
+        // Now create some blocks to simulate a commit lag
+        let round = context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER * 2;
+        let commit_index: CommitIndex = round - 1;
+        let blocks = (0..4)
+            .map(|authority| {
+                let commit_votes = vec![CommitVote::new(commit_index, CommitDigest::MIN)];
+                let block = TestBlock::new(round, authority)
+                    .set_commit_votes(commit_votes)
+                    .build();
+
+                VerifiedBlock::new_for_test(block)
+            })
+            .collect::<Vec<_>>();
+
+        // Pass them through the commit vote monitor - so now there will be a big commit lag to prevent
+        // the scheduled synchronizer from running
+        for block in blocks {
+            commit_vote_monitor.observe(&block);
+        }
+
+        // WHEN start the synchronizer and wait for a couple of seconds where normally the synchronizer should have kicked in.
+        let _handle = Synchronizer::start(
+            network_client.clone(),
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
+            block_verifier,
+            dag_state.clone(),
+        );
+
+        sleep(4 * FETCH_REQUEST_TIMEOUT).await;
+
+        // Since we should be in commit lag mode none of the missed blocks should have been fetched - hence nothing should be
+        // sent to core for processing.
+        let added_blocks = core_dispatcher.get_add_blocks().await;
+        assert_eq!(added_blocks, vec![]);
+
+        // AND advance now the local commit index by adding a new commit that matches the commit index
+        // of quorum
+        {
+            let mut d = dag_state.write();
+            for index in 1..=commit_index {
+                let commit =
+                    TrustedCommit::new_for_test(index, CommitDigest::MIN, 0, BlockRef::MIN, vec![]);
+
+                d.add_commit(commit);
+            }
+
+            assert_eq!(
+                d.last_commit_index(),
+                commit_vote_monitor.quorum_commit_index()
+            );
+        }
+
+        sleep(2 * FETCH_REQUEST_TIMEOUT).await;
+
+        // THEN the missing blocks should now be fetched and added to core
+        let added_blocks = core_dispatcher.get_add_blocks().await;
+        assert_eq!(added_blocks, expected_blocks);
     }
 }
