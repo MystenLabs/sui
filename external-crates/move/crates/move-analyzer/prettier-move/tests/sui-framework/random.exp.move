@@ -67,7 +67,8 @@ module sui::random {
 
         // Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
-        let inner: &mut RandomInner = versioned::load_value_mut(&mut self.inner);
+        let inner: &mut RandomInner =
+            versioned::load_value_mut(&mut self.inner);
         assert!(inner.version == version, EWrongInnerVersion);
         inner
     }
@@ -139,10 +140,11 @@ module sui::random {
     /// Create a generator. Can be used to derive up to MAX_U16 * 32 random bytes.
     public fun new_generator(r: &Random, ctx: &mut TxContext): RandomGenerator {
         let inner = load_inner(r);
-        let seed = hmac_sha3_256(
-            &inner.random_bytes,
-            &ctx.fresh_object_address().to_bytes(),
-        );
+        let seed =
+            hmac_sha3_256(
+                &inner.random_bytes,
+                &ctx.fresh_object_address().to_bytes(),
+            );
         RandomGenerator { seed, counter: 0, buffer: vector[] }
     }
 

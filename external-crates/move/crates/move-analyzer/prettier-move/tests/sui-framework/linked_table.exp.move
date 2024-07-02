@@ -74,10 +74,8 @@ module sui::linked_table {
         let prev = option::none();
         let next = if (old_head.is_some()) {
             let old_head_k = old_head.destroy_some();
-            field::borrow_mut<K, Node<K, V>>(
-                &mut table.id,
-                old_head_k,
-            ).prev = option::some(k);
+            field::borrow_mut<K, Node<K, V>>(&mut table.id, old_head_k).prev =
+                option::some(k);
             option::some(old_head_k)
         } else {
             option::none()
@@ -99,10 +97,8 @@ module sui::linked_table {
         let old_tail = table.tail.swap_or_fill(k);
         let prev = if (old_tail.is_some()) {
             let old_tail_k = old_tail.destroy_some();
-            field::borrow_mut<K, Node<K, V>>(
-                &mut table.id,
-                old_tail_k,
-            ).next = option::some(k);
+            field::borrow_mut<K, Node<K, V>>(&mut table.id, old_tail_k).next =
+                option::some(k);
             option::some(old_tail_k)
         } else {
             option::none()

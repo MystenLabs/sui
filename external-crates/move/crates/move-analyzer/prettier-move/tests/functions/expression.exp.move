@@ -8,11 +8,13 @@ module prettier::expression {
         *&a = 100;
         a = (copy b);
         b = (move c);
-        *df::borrow_mut<
-            A,
-            B,
-        >() = another_call();
+        *df::borrow_mut<A, B>() =
+            another_call();
         (a, b) = (1, 2);
+
+        strategy.underlying_nominal_value_usdc =
+            strategy.underlying_nominal_value_usdc -
+            to_withdraw;
     }
 
     fun identified_expression() {
@@ -38,12 +40,16 @@ module prettier::expression {
             Struct { a: 1 },
         );
         call(
-            nested_call(deeply_nested_call()),
+            nested_call(
+                deeply_nested_call(),
+            ),
             haha(),
         );
-        call(nested_call(LongStruct {
-            a: 1,
-        }));
+        call(
+            nested_call(LongStruct {
+                a: 1,
+            }),
+        );
     }
 
     fun call_expression_type_arguments() {
@@ -236,7 +242,9 @@ module prettier::expression {
             expr6,
         );
 
-        let request = pool.finish_swap(request);
+        let request = pool.finish_swap(
+            request,
+        );
 
         (
             request,
@@ -258,9 +266,8 @@ module prettier::expression {
         (
             really_long_expression: ReallyLongType
         ).say_something();
-        let a = (
-            call_expression(): Type
-        );
+        let a =
+            (call_expression(): Type);
         let a: Type = call_expression();
     }
 
@@ -315,10 +322,9 @@ module prettier::expression {
     }
 
     fun macro_module_access() {
-        assert!<
-            WithType,
-            MultiEven,
-        >(module::call_something());
+        assert!<WithType, MultiEven>(
+            module::call_something(),
+        );
         assert!(
             module::call_something(),
             EDoesntQuiteWork,

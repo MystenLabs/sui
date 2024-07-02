@@ -280,7 +280,7 @@ function printBindList(path: AstPath<Node>, options: ParserOptions, print: print
 			path.map((path) => {
 				if (path.node.type === '(') return ['(', ifBreak(builders.line, '')];
 				if (path.node.type === ')')
-					return builders.dedent([ifBreak(builders.line, ''), ')']);
+					return builders.dedent([ifBreak([',', builders.line], ''), ')']);
 				if (path.node.type === ',') return [',', line];
 				if (path.node.type === 'mut') return ['mut '];
 				return indent(path.call(print));

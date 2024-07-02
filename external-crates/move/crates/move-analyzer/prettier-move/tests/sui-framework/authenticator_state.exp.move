@@ -167,10 +167,8 @@ module sui::authenticator_state {
         // replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CurrentVersion, EWrongInnerVersion);
 
-        let inner: &mut AuthenticatorStateInner = dynamic_field::borrow_mut(
-            &mut self.id,
-            self.version,
-        );
+        let inner: &mut AuthenticatorStateInner =
+            dynamic_field::borrow_mut(&mut self.id, self.version);
 
         assert!(inner.version == version, EWrongInnerVersion);
         inner
@@ -182,10 +180,8 @@ module sui::authenticator_state {
         // replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CurrentVersion, EWrongInnerVersion);
 
-        let inner: &AuthenticatorStateInner = dynamic_field::borrow(
-            &self.id,
-            self.version,
-        );
+        let inner: &AuthenticatorStateInner =
+            dynamic_field::borrow(&self.id, self.version);
 
         assert!(inner.version == version, EWrongInnerVersion);
         inner

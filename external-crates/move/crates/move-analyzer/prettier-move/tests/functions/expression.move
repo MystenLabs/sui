@@ -10,6 +10,8 @@ module prettier::expression {
         b = (move c);
         *df::borrow_mut<A, B>() = another_call();
         (a, b) = (1, 2);
+
+        strategy.underlying_nominal_value_usdc = strategy.underlying_nominal_value_usdc - to_withdraw;
     }
 
     fun identified_expression() {
