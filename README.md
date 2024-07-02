@@ -52,6 +52,7 @@ Sui is supported by several cutting-edge [peer-reviewed studies](https://github.
 
 Use the following links to learn more about Sui and the Sui ecosystem:
 
+ * Follow the latest updates and engage with the community on [Sui Twitter](https://twitter.com/SuiNetwork).
  * Learn more about working with Sui in the [Sui Documentation](https://docs.sui.io/).
  * Join the Sui community on [Sui Discord](https://discord.gg/sui).
  * Find out more about the Sui ecosystem on the [Sui Resources](https://sui.io/resources/) page.
