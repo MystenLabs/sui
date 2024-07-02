@@ -239,6 +239,25 @@ module capy::capy {
         }
     }
 
+    #[test_only]
+    public fun test_capy(id: UID): Capy {
+        use std::vector;
+        use std::ascii::string;
+
+        let genes = Genes { sequence: vector::empty() };
+        let url = url::new_unsafe(string(b"https://example.com"));
+        Capy{
+            id,
+            gen: 0,
+            url,
+            link: url,
+            genes,
+            dev_genes: genes,
+            item_count: 0,
+            attributes: vector::empty(),
+        }
+    }
+
     // ======= User facing functions =======
 
     /// Attach an Item to a Capy. Function is generic and allows any app to attach items to
