@@ -69,7 +69,7 @@ pub async fn new_handlers<S, T>(
 ) -> Result<CheckpointHandler<S, T>, IndexerError>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
-    T: R2D2Connection,
+    T: R2D2Connection + 'static,
 {
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
