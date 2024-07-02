@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::schema::{progress_store, sui_progress_store, token_transfer, token_transfer_data};
+use diesel::data_types::PgTimestamp;
 use diesel::{Identifiable, Insertable, Queryable, Selectable};
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -9,6 +10,8 @@ use diesel::{Identifiable, Insertable, Queryable, Selectable};
 pub struct ProgressStore {
     pub task_name: String,
     pub checkpoint: i64,
+    pub target_checkpoint: i64,
+    pub timestamp: Option<PgTimestamp>,
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]

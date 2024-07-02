@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::postgres_manager::{get_connection_pool, write, PgPool};
+use crate::postgres_manager::{write, PgPool};
 use crate::{
     metrics::BridgeIndexerMetrics, BridgeDataSource, TokenTransfer, TokenTransferData,
     TokenTransferStatus,
@@ -33,12 +33,11 @@ pub struct SuiBridgeWorker {
 impl SuiBridgeWorker {
     pub fn new(
         bridge_object_ids: Vec<ObjectID>,
-        db_url: String,
+        pg_pool: PgPool,
         metrics: BridgeIndexerMetrics,
     ) -> Self {
         let mut bridge_object_ids = bridge_object_ids.into_iter().collect::<BTreeSet<_>>();
         bridge_object_ids.insert(SUI_BRIDGE_OBJECT_ID);
-        let pg_pool = get_connection_pool(db_url);
         Self {
             bridge_object_ids,
             pg_pool,

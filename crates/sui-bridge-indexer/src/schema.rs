@@ -6,6 +6,8 @@ diesel::table! {
     progress_store (task_name) {
         task_name -> Text,
         checkpoint -> Int8,
+        target_checkpoint -> Int8,
+        timestamp -> Nullable<Timestamp>,
     }
 }
 
