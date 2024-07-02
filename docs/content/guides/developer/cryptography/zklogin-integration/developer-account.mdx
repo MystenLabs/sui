@@ -182,22 +182,26 @@ _Go to Settings_
 
 <TabItem label="Microsoft" value="microsoft">
 
-1. Register and sign in to [admin center](https://entra.microsoft.com/). Go to **Applications** then **App registrations** tab on the left. Create application name, select "supported account types" and set redirect URL, then click "Register".
+1. Register and sign in to the [Microsoft Entra admin center](https://entra.microsoft.com/). 
+1. Select **Applications** > **App registrations** from the left nav.
 
-	![1](../../../../concepts/cryptography/images/zklogin-microsoft1.png "Click on App registrations")
-	
-	*This is where you can create application*
+	![Nav menu](./images/microsoft1.png)
+1. Click the **New Registration** button in the top left to open the **Register an application** page.
 
-1. In "Authentictation" tab, select "ID tokens" for "Implicit grant and hybrid flows" and save.
+	![New Registration](./images/microsoft2.png)
+1. Type the application name in the **Name** field, select the appropriate **Supported account types** option, and set the **Redirect URI** value. When satisfied, click **Register**.
 
-	![1](../../../../concepts/cryptography/images/zklogin-microsoft2.png "Enable ID tokens")
-	
-	*This is where you enable ID tokens*
-1. Client ID can be found in "Overview" tab.
+	![Create application page](./images/microsoft3.png "Create application")
+1. After clicking the **Register** button, the admin center opens the application view. Select **Authentication** from the left nav of the application view.
 
-	![1](../../../../concepts/cryptography/images/zklogin-microsoft3.png "Find Client ID")
-	
-	*This is where you find client ID*
+	![Select Authentication](./images/microsoft4.png "Select Authentication")
+1. In the **Implicit grant and hybrid flows** section, check the **ID tokens (used for implicit and hybrid flows)** box.
+
+	![Enable ID tokens](./images/microsoft5.png "Enable ID tokens")
+1. Click **Save**.
+1. Client ID is available in the **Essentials** section of the application's **Overview** tab.
+
+	![Find Client ID](./images/microsoft6.png "Find Client ID")
 </TabItem>
 
 </Tabs>
