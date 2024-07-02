@@ -182,7 +182,7 @@ macro_rules! or_filter {
 /// Accepts two `Rawquery` instances and a third expression consisting of which columns to join on.
 #[macro_export]
 macro_rules! inner_join {
-    ($lhs:expr, $rhs:ident => ($rhs_query:expr, $alias:expr), using: [$using:expr $(, $more_using:expr)*]) => {{
+    ($lhs:expr, $alias:expr => $rhs_query:expr, using: [$using:expr $(, $more_using:expr)*]) => {{
         use $crate::raw_query::RawQuery;
 
         let (lhs_sql, mut binds) = $lhs.finish();
@@ -190,9 +190,11 @@ macro_rules! inner_join {
 
         binds.extend(rhs_binds);
 
-        let aliased = format!("({}) AS {}", rhs_sql, $alias);
-        let using_clause = format!("USING ({})", stringify!($using $(, $more_using)*));
-        let sql = format!("{} INNER JOIN {} {}", lhs_sql, aliased, using_clause);
+        let sql = format!(
+            "{lhs_sql} INNER JOIN ({rhs_sql}) AS {} USING ({})",
+            $alias,
+            stringify!($using $(, $more_using)*),
+        );
 
         RawQuery::new(sql, binds)
     }};

@@ -318,6 +318,9 @@ impl Query {
     ) -> Result<TransactionBlockConnection> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
+        // let first = first.map(|f| f.min(scan_limit.unwrap_or(f)));
+        // let last = last.map(|l| l.min(scan_limit.unwrap_or(l)));
+
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         TransactionBlock::paginate(
             ctx,

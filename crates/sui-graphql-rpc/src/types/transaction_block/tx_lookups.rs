@@ -7,6 +7,7 @@ use crate::{
     filter, inner_join, max_option, min_option, query,
     raw_query::RawQuery,
     types::{
+        cursor::Page,
         digest::Digest,
         sui_address::SuiAddress,
         transaction_block::TransactionBlockKindInput,
@@ -21,7 +22,7 @@ use diesel::{
 use std::fmt::{self, Write};
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
-use super::TransactionBlockFilter;
+use super::{Cursor, TransactionBlockFilter};
 
 /// The `tx_sequence_number` range of the transactions to be queried.
 #[derive(Clone, Debug, Copy)]
@@ -34,23 +35,45 @@ pub(crate) struct StoredTxBounds {
 pub(crate) struct TxBounds {
     pub lo: u64,
     pub hi: u64,
-    pub adjusted: u64,
-    pub is_from_front: bool,
+    pub has_prev_page: bool,
+    pub has_next_page: bool,
 }
 
 impl TxBounds {
-    pub(crate) fn new(lo: u64, hi: u64, scan_limit: Option<u64>, is_from_front: bool) -> Self {
-        let adjusted = if is_from_front {
-            scan_limit.map_or(hi, |limit| std::cmp::min(hi, lo.saturating_add(limit)))
+    /// Given the `tx_sequence_number` true lower and upper bound, optional cursors, and an optional
+    /// `scan_limit`, determine the new lower and upper bounds, and whether
+    pub(crate) fn new(
+        lo: u64,
+        hi: u64,
+        after: Option<u64>,
+        before: Option<u64>,
+        is_from_front: bool,
+        scan_limit: Option<u64>,
+    ) -> Self {
+        let mut adjusted_lo = after.map_or(lo, |a| std::cmp::max(lo, a));
+        let mut adjusted_hi = before.map_or(hi, |b| std::cmp::min(hi, b));
+
+        (adjusted_lo, adjusted_hi) = if is_from_front {
+            (
+                adjusted_lo,
+                scan_limit.map_or(adjusted_hi, |limit| {
+                    std::cmp::min(adjusted_hi, adjusted_lo.saturating_add(limit))
+                }),
+            )
         } else {
-            scan_limit.map_or(hi, |limit| std::cmp::max(lo, hi.saturating_sub(limit)))
+            (
+                scan_limit.map_or(adjusted_lo, |limit| {
+                    std::cmp::max(adjusted_lo, adjusted_hi.saturating_sub(limit))
+                }),
+                adjusted_hi,
+            )
         };
 
         Self {
-            lo,
-            hi,
-            adjusted,
-            is_from_front,
+            lo: adjusted_lo,
+            hi: adjusted_hi,
+            has_prev_page: adjusted_lo > lo,
+            has_next_page: adjusted_hi < hi,
         }
     }
 
@@ -67,7 +90,7 @@ impl TxBounds {
         before_cp: Option<u64>,
         checkpoint_viewed_at: u64,
         scan_limit: Option<u64>,
-        is_from_front: bool,
+        page: &Page<Cursor>,
     ) -> Result<Self, diesel::result::Error> {
         let lo_cp = max_option!(after_cp.map(|x| x.saturating_add(1)), at_cp).unwrap_or(0);
         let hi_cp = min_option!(
@@ -79,40 +102,31 @@ impl TxBounds {
         let from_db: StoredTxBounds =
             conn.result(move || tx_bounds_query(lo_cp, hi_cp).into_boxed())?;
 
+        println!("StoredTxBounds: {:?}", from_db);
+
+        let lo = from_db.lo as u64;
+        let hi = from_db.hi as u64;
+
+        println!("checkpoint_viewed_at: {}", checkpoint_viewed_at);
+
+        println!("before: {:?}", page.before().map(|x| x.tx_sequence_number));
+
+        println!(
+            "TxBounds::Query: lo: {}, hi: {}, scan_limit: {}, is_from_front: {}",
+            lo,
+            hi,
+            scan_limit.unwrap_or(0),
+            page.is_from_front()
+        );
+
         Ok(Self::new(
-            from_db.lo as u64,
-            from_db.hi as u64,
+            lo,
+            hi,
+            page.after().map(|x| x.tx_sequence_number),
+            page.before().map(|x| x.tx_sequence_number),
+            page.is_from_front(),
             scan_limit,
-            is_from_front,
         ))
-    }
-
-    pub(crate) fn lo(&self) -> u64 {
-        if self.is_from_front {
-            self.lo
-        } else {
-            self.adjusted
-        }
-    }
-
-    pub(crate) fn hi(&self) -> u64 {
-        if self.is_from_front {
-            self.adjusted
-        } else {
-            self.hi
-        }
-    }
-
-    /// When a scan limit is provided, `has_prev_page` will always evaluate to true if it is under
-    /// the tx upper bound.
-    pub(crate) fn has_prev_page(&self) -> bool {
-        self.lo() > self.lo
-    }
-
-    /// When a scan limit is provided, `has_next_page` will always evaluate to true if it is under
-    /// the tx upper bound.
-    pub(crate) fn has_next_page(&self) -> bool {
-        self.hi() < self.hi
     }
 }
 
@@ -331,8 +345,7 @@ pub(crate) fn select_tx(sender: Option<SuiAddress>, bound: TxBounds, from: &str)
         query,
         format!(
             "tx_sequence_number >= {} AND tx_sequence_number <= {}",
-            bound.lo(),
-            bound.hi()
+            bound.lo, bound.hi
         )
     )
 }

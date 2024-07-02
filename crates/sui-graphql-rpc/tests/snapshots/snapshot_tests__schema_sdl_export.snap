@@ -103,7 +103,7 @@ type Address implements IOwner {
 	Similar behavior to the `transactionBlocks` in Query but supporting the additional
 	`AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
 type AddressConnection {
@@ -522,7 +522,7 @@ type Coin implements IMoveObject & IObject & IOwner {
 	"""
 	The transaction blocks that sent objects to this object.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -681,7 +681,7 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	"""
 	The transaction blocks that sent objects to this object.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -1432,7 +1432,7 @@ interface IObject {
 	"""
 	The transaction blocks that sent objects to this object.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -1976,7 +1976,7 @@ type MoveObject implements IMoveObject & IObject & IOwner {
 	"""
 	The transaction blocks that sent objects to this object.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -2165,7 +2165,7 @@ type MovePackage implements IObject & IOwner {
 	
 	Note that objects that have been sent to a package become inaccessible.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the package's content.
 	"""
@@ -2496,7 +2496,7 @@ type Object implements IObject & IOwner {
 	"""
 	The transaction blocks that sent objects to this object.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -3061,7 +3061,7 @@ type Query {
 	"""
 	The transaction blocks that exist in the network.
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The events that exist in the network.
 	"""
@@ -3483,7 +3483,7 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	"""
 	The transaction blocks that sent objects to this object.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -3685,7 +3685,7 @@ type SuinsRegistration implements IMoveObject & IObject & IOwner {
 	"""
 	The transaction blocks that sent objects to this object.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -3863,11 +3863,19 @@ type TransactionBlock {
 type TransactionBlockConnection {
 	"""
 	Information to aid in pagination.
+	
+	When `scanLimit` is specified on `TransactionBlock` queries:
+	- Even if the current page is empty, `hasNextPage` and `hasPreviousPage` will be true until
+	the caller paginates to the end of either range.
+	
+	When `scanLimit` is not specified, then:
+	- `hasNextPage` and `hasPreviousPage` behave conventionally, returning false
+	when there are no more results in the respective direction.
+	
+	This approach ensures consistent pagination behavior, allowing traversal through potentially
+	sparse data sets within the specified or default range.
 	"""
 	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
 	edges: [TransactionBlockEdge!]!
 	"""
 	A list of nodes.
