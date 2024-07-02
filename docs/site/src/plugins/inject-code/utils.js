@@ -106,11 +106,11 @@ exports.capturePrepend = (match, text) => {
   let preText = text.substring(0, match.index);
   const lines = preText.split("\n");
   let pre = [];
-  for (let x = lines.length - 1; x > 0; x--) {
+  for (let x = lines.length - 1; x >= 0; x--) {
     if (
-      lines[x].match(/^\s*\/\//) ||
-      lines[x].match(/^\s*#/) ||
-      lines[x].trim() === ""
+      lines[x].match(/^\s*\/\//s) ||
+      lines[x].match(/^\s*#/s) ||
+      (lines[x].trim() === "" && x === lines.length - 1)
     ) {
       // Capture sometimes incorrectly includes a blank line
       // before function/struct. Don't include.

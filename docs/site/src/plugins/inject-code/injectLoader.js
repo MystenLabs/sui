@@ -51,6 +51,9 @@ const addCodeInject = function (source) {
             case "tsx":
               language = "ts";
               break;
+            case "prisma":
+              language = "ts";
+              break;
             default:
               language = fileExt;
           }
@@ -66,6 +69,8 @@ const addCodeInject = function (source) {
               const funKey = "#fun=";
               const structKey = "#struct=";
               const moduleKey = "#module=";
+              const varKey = "#variable=";
+              const useKey = "#use=";
               const getName = (mark, key) => {
                 return mark.indexOf(key, mark) >= 0
                   ? mark.substring(mark.indexOf(key) + key.length).trim()
@@ -74,6 +79,8 @@ const addCodeInject = function (source) {
               const funName = getName(marker, funKey);
               const structName = getName(marker, structKey);
               const moduleName = getName(marker, moduleKey);
+              const variableName = getName(marker, varKey);
+              const useName = getName(marker, useKey);
               if (funName) {
                 const funs = funName.split(",");
                 let funContent = [];
@@ -131,6 +138,74 @@ const addCodeInject = function (source) {
                   }
                 }
                 injectFileContent = structContent.join("\n").trim();
+              } else if (variableName) {
+                const vs = variableName.split(",");
+                let temp = "";
+                let isGroup = false;
+                let groupedVars = [];
+                vs.forEach((v) => {
+                  if (v.startsWith("(")) {
+                    temp = v;
+                    isGroup = true;
+                  } else if (isGroup) {
+                    temp += ", " + v;
+                    if (temp.endsWith(")")) {
+                      groupedVars.push(temp);
+                      temp = "";
+                      isGroup = false;
+                    }
+                  } else {
+                    groupedVars.push(v);
+                  }
+                });
+                let varContent = [];
+
+                for (let v of groupedVars) {
+                  v = v.trim();
+                  const varStrShort = `^(\\s*)?(#\\[test_only\\])?(let|const) \\(?.*?\\b${v}\\b.*?\\)?\\s?=.*;`;
+                  //const varStrLong = `^(\\s*)?(#\\[test_only\\])?(let|const) ${v}.*\\{.*\\};\\n`;
+                  const varStrLong = `^(\\s*)?(#\\[test_only\\])?(let|const) \\(?.*?\\b${v}\\b.*?\\)?\\s?= \\{[^}]*\\};\\n`;
+                  const varREShort = new RegExp(varStrShort, "m");
+                  const varRELong = new RegExp(varStrLong, "m");
+                  const varShortMatch = varREShort.exec(injectFileContent);
+                  const varLongMatch = varRELong.exec(injectFileContent);
+                  if (varShortMatch || varLongMatch) {
+                    let varMatch = varShortMatch ? varShortMatch : varLongMatch;
+                    let preVar = utils.capturePrepend(
+                      varMatch,
+                      injectFileContent,
+                    );
+                    varContent.push(
+                      utils.removeLeadingSpaces(varMatch[0], preVar),
+                    );
+                  } else {
+                    injectFileContent =
+                      "Variable not found. If code is formatted correctly, consider using code comments instead.";
+                  }
+                }
+                injectFileContent = varContent.join("\n").trim();
+              } else if (useName) {
+                const us = useName.split(",");
+                let useContent = [];
+                for (let u of us) {
+                  u = u.trim();
+                  const useStr = `^(\\s*)(#\\[test_only\\])? use ${u}\\b.*;`;
+                  const useRE = new RegExp(useStr, "mig");
+                  const useMatch = useRE.exec(injectFileContent);
+                  if (useMatch) {
+                    let preUse = utils.capturePrepend(
+                      useMatch,
+                      injectFileContent,
+                    );
+                    useContent.push(
+                      utils.removeLeadingSpaces(useMatch[0], preUse),
+                    );
+                  } else {
+                    injectFileContent =
+                      "Use statement not found. If code is formatted correctly, consider using code comments instead.";
+                  }
+                }
+                injectFileContent = useContent.join("\n").trim();
               } else if (moduleName) {
                 const modStr = `^(\\s*)*module \\b${moduleName}\\b.*?}\\n(?=\\n)?`;
                 const modRE = new RegExp(modStr, "msi");
@@ -213,7 +288,7 @@ const addCodeInject = function (source) {
                     let replacer = "";
                     if (matches[match].indexOf("-pause:") > 0) {
                       replacer = matches[match].substring(
-                        matches[match].indexOf("-pause") + 8,
+                        matches[match].indexOf("-pause") + 7,
                       );
                     }
 

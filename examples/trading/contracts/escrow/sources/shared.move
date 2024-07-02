@@ -182,9 +182,12 @@ module escrow::shared {
         coin::mint_for_testing<SUI>(42, ts.ctx())
     }
 
+    //docs::#test
     #[test]
     fun test_successful_swap() {
         let mut ts = ts::begin(@0x0);
+        
+        //docs::#test-pause:// Rest of the test ...
 
         // Bob locks the object they want to trade.
         let (i2, ik2) = {
@@ -234,9 +237,11 @@ module escrow::shared {
             let c: Coin<SUI> = ts.take_from_address_by_id(BOB, i1);
             ts::return_to_address(BOB, c);
         };
+        //docs::#test-resume
 
         ts::end(ts);
     }
+    //docs::/#test
 
     #[test]
     #[expected_failure(abort_code = EMismatchedSenderRecipient)]
