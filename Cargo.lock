@@ -14045,6 +14045,7 @@ dependencies = [
  "hyper 1.4.1",
  "move-cli",
  "move-cli",
+ "move-cli",
  "move-core-types",
  "mysten-metrics",
  "once_cell",
