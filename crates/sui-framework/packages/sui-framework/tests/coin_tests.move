@@ -400,6 +400,51 @@ module sui::coin_tests {
         scenario.end();
     }
 
+    #[test, expected_failure(abort_code = sui::coin::EGlobalPauseNotAllowed)]
+    fun deny_list_v2_global_pause_not_allowed_enable() {
+        let mut scenario = test_scenario::begin(@0);
+        deny_list::create_for_test(scenario.ctx());
+        scenario.next_tx(TEST_ADDR);
+
+        let witness = COIN_TESTS {};
+        let (_treasury, mut deny_cap, _metadata) = coin::create_regulated_currency_v2(
+            witness,
+            6,
+            b"COIN_TESTS",
+            b"coin_name",
+            b"description",
+            option::some(url::new_unsafe_from_bytes(b"icon_url")),
+            /* allow_global_pause */ false ,
+            scenario.ctx(),
+        );
+        let mut deny_list: deny_list::DenyList = scenario.take_shared();
+        coin::deny_list_v2_enable_global_pause(&mut deny_list, &mut deny_cap, scenario.ctx());
+        abort 0
+    }
+
+    #[test, expected_failure(abort_code = sui::coin::EGlobalPauseNotAllowed)]
+    fun deny_list_v2_global_pause_not_allowed_disable() {
+        let mut scenario = test_scenario::begin(@0);
+        deny_list::create_for_test(scenario.ctx());
+        scenario.next_tx(TEST_ADDR);
+
+        let witness = COIN_TESTS {};
+        let (_treasury, mut deny_cap, _metadata) = coin::create_regulated_currency_v2(
+            witness,
+            6,
+            b"COIN_TESTS",
+            b"coin_name",
+            b"description",
+            option::some(url::new_unsafe_from_bytes(b"icon_url")),
+            /* allow_global_pause */ false ,
+            scenario.ctx(),
+        );
+        let mut deny_list: deny_list::DenyList = scenario.take_shared();
+        coin::deny_list_v2_disable_global_pause(&mut deny_list, &mut deny_cap, scenario.ctx());
+        abort 0
+    }
+
+
     #[test]
     fun test_migrate_regulated_currency_to_v2() {
         let mut scenario = test_scenario::begin(@0);
@@ -465,6 +510,57 @@ module sui::coin_tests {
         };
         transfer::public_freeze_object(deny_cap_v2);
         scenario.end();
+    }
+
+    #[test, expected_failure(abort_code = sui::coin::EGlobalPauseNotAllowed)]
+    fun test_migrate_regulated_currency_to_v2_disallow_global_pause() {
+        let mut scenario = test_scenario::begin(@0);
+        deny_list::create_for_test(scenario.ctx());
+        scenario.next_tx(TEST_ADDR);
+
+        let witness = COIN_TESTS {};
+        let (treasury, mut deny_cap, metadata) = coin::create_regulated_currency(
+            witness,
+            6,
+            b"COIN_TESTS",
+            b"coin_name",
+            b"description",
+            option::some(url::new_unsafe_from_bytes(b"icon_url")),
+            scenario.ctx(),
+        );
+        let mut deny_cap_v2;
+        transfer::public_freeze_object(metadata);
+        transfer::public_freeze_object(treasury);
+        scenario.next_tx(TEST_ADDR);
+        {
+            // test freezing an address
+            let mut deny_list: deny_list::DenyList = scenario.take_shared();
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
+            test_scenario::return_shared(deny_list);
+        };
+        scenario.next_tx(TEST_ADDR);
+        {
+            let mut deny_list: deny_list::DenyList = scenario.take_shared();
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @100));
+            assert!(!coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @100));
+            deny_cap_v2 = coin::migrate_regulated_currency_to_v2(&mut deny_list, deny_cap, false, scenario.ctx());
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100));
+            assert!(coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @100));
+            assert!(!coin::deny_list_v2_contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
+            test_scenario::return_shared(deny_list);
+        };
+        scenario.next_epoch(TEST_ADDR);
+        {
+            let deny_list: deny_list::DenyList = scenario.take_shared();
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100));
+            assert!(coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @100));
+            assert!(coin::deny_list_v2_contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
+            test_scenario::return_shared(deny_list);
+        };
+        scenario.next_tx(TEST_ADDR);
+        let mut deny_list: deny_list::DenyList = scenario.take_shared();
+        coin::deny_list_v2_enable_global_pause(&mut deny_list, &mut deny_cap_v2, scenario.ctx());
+        abort 0
     }
 
 
