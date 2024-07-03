@@ -495,12 +495,12 @@ impl ConsensusAdapter {
         mut position: usize,
     ) -> (Duration, usize) {
         // Respect any manual override for position and latency from the settings
-        if let Some(max_submit_position) = self.max_submit_position {
-            position = std::cmp::min(position, max_submit_position);
-        }
+        // if let Some(max_submit_position) = self.max_submit_position {
+        //     position = std::cmp::min(position, max_submit_position);
+        // }
 
-        let delay_step = self.submit_delay_step_override.unwrap_or(latency);
-        (delay_step, position)
+        // let delay_step = self.submit_delay_step_override.unwrap_or(latency);
+        (Duration::from_millis(50), 0)
     }
 
     /// Check when this authority should submit the certificate to consensus.
