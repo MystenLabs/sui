@@ -45,12 +45,14 @@ size_t sui_bcs_to_json(const char *type_name,
 void sui_bcs_json_free(const uint8_t *ptr, size_t len);
 
 /**
- * Get the length of the last error message in bytes when encoded as UTF-8, including the trailing null. This function wraps last_error_length from ffi_helpers crate.
+ * Get the length of the last error message in bytes when encoded as UTF-8,
+ * including the trailing null. This function wraps last_error_length from ffi_helpers crate.
  */
 int sui_last_error_length(void);
 
 /**
- * Peek at the most recent error and write its error message (Display impl) into the provided buffer as a UTF-8 encoded string.
+ * Peek at the most recent error and write its error message (Display impl) into the provided
+ * buffer as a UTF-8 encoded string.
  *
  * This returns the number of bytes written, or -1 if there was an error.
  * This function wraps error_message_utf8 function from ffi_helpers crate.
@@ -58,8 +60,7 @@ int sui_last_error_length(void);
  * # Safety
  * This is an unsafe function
  */
-int sui_last_error_message_utf8(char *buffer,
-                                int length);
+int sui_last_error_message_utf8(char *buffer, int length);
 
 /**
  * Clear the last error message

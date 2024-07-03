@@ -17,7 +17,8 @@ serde.workspace = true
 serde_json.workspace = true
 shared-crypto.workspace = true
 # sui-types = { workspace = true, features = ["test-utils"]}
-sui-sdk2.workspace = true
+sui-sdk2 = { workspace = true, features = ["rand"]}
+rand = "0.8"
 
 [build-dependencies]
 cbindgen = { version="0.24.0", default-features=false }
