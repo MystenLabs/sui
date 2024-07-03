@@ -488,14 +488,6 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                     RepoRegion::UsEast1 => region = "us-east1".to_string(),
                 }
             }
-            let mut args = vec![];
-            for arg in build_args.clone().iter_mut() {
-                let needle = "--";
-                if !arg.starts_with(needle) {
-                    arg.insert_str(0, needle);
-                }
-                args.push(arg.to_string())
-            }
             let body = RequestBuildRequest {
                 repo_name: repo_name.clone(),
                 dockerfile: dockerfile.clone(),
@@ -507,7 +499,7 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 cpu,
                 memory,
                 disk,
-                build_args: args,
+                build_args: build_args.clone(),
             };
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))
