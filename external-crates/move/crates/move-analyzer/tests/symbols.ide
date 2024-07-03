@@ -5,384 +5,8 @@
     "M1.move": [
       {
         "UseDefTest": {
-          "use_line": 2,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 6,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 9,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 9,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 9,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 10,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 10,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 10,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 10,
-          "use_ndx": 3
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 15,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 19,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 20,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 20,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 20,
-          "use_ndx": 3
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 24,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 25,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 25,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 30,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 34,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 40,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 40,
-          "use_ndx": 3
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 43,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 45,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 45,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 45,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 45,
-          "use_ndx": 3
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 56,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 57,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 57,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 61,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 63,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 68,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 69,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 75,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 79,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 83,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 94,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 94,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 94,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 102,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 108,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 108,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 108,
-          "use_ndx": 3
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 114,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 118,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 122,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 123,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 127,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 129,
-          "use_ndx": 0
-        }
-      }
-    ],
-    "M3.move": [
-      {
-        "UseDefTest": {
-          "use_line": 2,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
           "use_line": 3,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 6,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 6,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 6,
-          "use_ndx": 3
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 6,
-          "use_ndx": 4
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 10,
-          "use_ndx": 4
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 10,
-          "use_ndx": 6
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 11,
           "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 15,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 23,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 23,
-          "use_ndx": 2
-        }
-      }
-    ],
-    "M4.move": [
-      {
-        "UseDefTest": {
-          "use_line": 4,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 6,
-          "use_ndx": 1
         }
       },
       {
@@ -399,13 +23,339 @@
       },
       {
         "UseDefTest": {
-          "use_line": 20,
+          "use_line": 10,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 10,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 11,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 23,
+          "use_line": 11,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 11,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 11,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 16,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 20,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 21,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 21,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 21,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 25,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 26,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 26,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 31,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 35,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 41,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 41,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 44,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 46,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 46,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 46,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 46,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 57,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 58,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 58,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 62,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 64,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 69,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 70,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 76,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 80,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 84,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 95,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 95,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 95,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 103,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 109,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 109,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 109,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 115,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 119,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 123,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 124,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 128,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 130,
+          "use_ndx": 0
+        }
+      }
+    ],
+    "M3.move": [
+      {
+        "UseDefTest": {
+          "use_line": 3,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 4,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 7,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 7,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 7,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 7,
+          "use_ndx": 4
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 11,
+          "use_ndx": 4
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 11,
+          "use_ndx": 6
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 12,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 16,
           "use_ndx": 1
         }
       },
@@ -417,25 +367,75 @@
       },
       {
         "UseDefTest": {
-          "use_line": 26,
-          "use_ndx": 0
+          "use_line": 24,
+          "use_ndx": 2
         }
-      },
+      }
+    ],
+    "M4.move": [
       {
         "UseDefTest": {
-          "use_line": 40,
+          "use_line": 5,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 43,
+          "use_line": 7,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 8,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 55,
+          "use_line": 11,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 21,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 24,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 25,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 27,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 41,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 44,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 56,
           "use_ndx": 0
         }
       }

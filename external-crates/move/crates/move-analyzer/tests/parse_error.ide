@@ -7,19 +7,19 @@
     "M1.move": [
       {
         "UseDefTest": {
-          "use_line": 8,
+          "use_line": 9,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 21,
+          "use_line": 22,
           "use_ndx": 0
         }
       }
@@ -27,7 +27,7 @@
     "M2.move": [
       {
         "UseDefTest": {
-          "use_line": 2,
+          "use_line": 3,
           "use_ndx": 0
         }
       }

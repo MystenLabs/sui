@@ -6,20 +6,8 @@
     "variant_match.move": [
       {
         "UseDefTest": {
-          "use_line": 6,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
           "use_line": 7,
           "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 7,
-          "use_ndx": 1
         }
       },
       {
@@ -32,24 +20,6 @@
         "UseDefTest": {
           "use_line": 8,
           "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 8,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 8,
-          "use_ndx": 3
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 8,
-          "use_ndx": 4
         }
       },
       {
@@ -60,122 +30,98 @@
       },
       {
         "UseDefTest": {
-          "use_line": 14,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 14,
+          "use_line": 9,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
-          "use_ndx": 3
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 18,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 19,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 19,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 19,
+          "use_line": 9,
           "use_ndx": 2
         }
       },
       {
         "UseDefTest": {
-          "use_line": 19,
+          "use_line": 9,
           "use_ndx": 3
         }
       },
       {
         "UseDefTest": {
-          "use_line": 20,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 20,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 20,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 23,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 23,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 23,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 23,
-          "use_ndx": 3
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 23,
+          "use_line": 9,
           "use_ndx": 4
         }
       },
       {
         "UseDefTest": {
-          "use_line": 23,
-          "use_ndx": 5
+          "use_line": 10,
+          "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 23,
-          "use_ndx": 6
+          "use_line": 15,
+          "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 23,
-          "use_ndx": 8
+          "use_line": 15,
+          "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 23,
-          "use_ndx": 9
+          "use_line": 15,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 19,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 20,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 20,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 20,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 20,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 21,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 21,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 21,
+          "use_ndx": 2
         }
       },
       {
@@ -187,12 +133,66 @@
       {
         "UseDefTest": {
           "use_line": 24,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 24,
           "use_ndx": 2
         }
       },
       {
         "UseDefTest": {
           "use_line": 24,
+          "use_ndx": 3
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 24,
+          "use_ndx": 4
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 24,
+          "use_ndx": 5
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 24,
+          "use_ndx": 6
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 24,
+          "use_ndx": 8
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 24,
+          "use_ndx": 9
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 25,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 25,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 25,
           "use_ndx": 3
         }
       }
@@ -201,26 +201,14 @@
     "struct_match.move": [
       {
         "UseDefTest": {
-          "use_line": 12,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
           "use_line": 13,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 13,
-          "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 13,
-          "use_ndx": 2
+          "use_line": 14,
+          "use_ndx": 0
         }
       },
       {
@@ -237,13 +225,25 @@
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 15,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 15,
           "use_ndx": 3
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 4
         }
       }
@@ -252,31 +252,31 @@
     "int_match.move": [
       {
         "UseDefTest": {
-          "use_line": 4,
+          "use_line": 5,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 4,
+          "use_line": 5,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 4,
+          "use_line": 5,
           "use_ndx": 2
         }
       },
       {
         "UseDefTest": {
-          "use_line": 5,
+          "use_line": 6,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 5,
+          "use_line": 6,
           "use_ndx": 1
         }
       }
@@ -285,7 +285,7 @@
     "long_enum.move": [
       {
         "UseDefTest": {
-          "use_line": 2,
+          "use_line": 3,
           "use_ndx": 0
         }
       }
@@ -294,25 +294,25 @@
     "mut_match.move": [
       {
         "UseDefTest": {
-          "use_line": 3,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
           "use_line": 4,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 4,
+          "use_line": 5,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 5,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 4,
+          "use_line": 5,
           "use_ndx": 2
         }
       }            
@@ -321,67 +321,67 @@
     "nested_match.move": [
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 2
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 3
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 4
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 5
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 6
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 7
         }
       },
       {
         "UseDefTest": {
-          "use_line": 15,
+          "use_line": 16,
           "use_ndx": 2
         }
       },
       {
         "UseDefTest": {
-          "use_line": 15,
+          "use_line": 16,
           "use_ndx": 3
         }
       },
       {
         "UseDefTest": {
-          "use_line": 15,
+          "use_line": 16,
           "use_ndx": 4
         }
       },
       {
         "UseDefTest": {
-          "use_line": 15,
+          "use_line": 16,
           "use_ndx": 5
         }
       },
       {
         "UseDefTest": {
-          "use_line": 15,
+          "use_line": 16,
           "use_ndx": 6
         }
       }
@@ -391,19 +391,19 @@
     "nested_guard.move": [
       {
         "UseDefTest": {
-          "use_line": 3,
+          "use_line": 4,
           "use_ndx": 2
         }
       },
       {
         "UseDefTest": {
-          "use_line": 3,
+          "use_line": 4,
           "use_ndx": 3
         }
       },
       {
         "UseDefTest": {
-          "use_line": 3,
+          "use_line": 4,
           "use_ndx": 4
         }
       }

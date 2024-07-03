@@ -6,43 +6,43 @@
     "structs.move": [
       {
         "UseDefTest": {
-          "use_line": 2,
+          "use_line": 3,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 4,
+          "use_line": 5,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 4,
+          "use_line": 5,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 6,
+          "use_line": 7,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 6,
+          "use_line": 7,
           "use_ndx": 2
         }
       },
       {
         "UseDefTest": {
-          "use_line": 7,
+          "use_line": 8,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 7,
+          "use_line": 8,
           "use_ndx": 3
         }
       }

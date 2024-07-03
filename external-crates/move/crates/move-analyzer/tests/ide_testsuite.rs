@@ -11,8 +11,9 @@ use std::{
 
 use json_comments::StripComments;
 use lsp_types::Position;
-use move_analyzer::symbols::{
-    def_info_doc_string, get_symbols, maybe_convert_for_guard, Symbols, UseDefMap,
+use move_analyzer::{
+    completion::completion_items,
+    symbols::{def_info_doc_string, get_symbols, maybe_convert_for_guard, Symbols, UseDefMap},
 };
 use move_command_line_common::testing::{
     add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT,
@@ -30,12 +31,19 @@ struct TestSuite {
 #[derive(Serialize, Deserialize)]
 enum TestEntry {
     UseDefTest(UseDefTest),
+    CompletionTest(CompletionTest),
 }
 
 #[derive(Serialize, Deserialize)]
 struct UseDefTest {
     use_line: u32,
     use_ndx: usize,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CompletionTest {
+    use_line: u32,
+    use_col: u32,
 }
 
 impl UseDefTest {
@@ -48,12 +56,12 @@ impl UseDefTest {
         use_file: &str,
         use_file_path: &Path,
     ) -> anyhow::Result<()> {
-        // let file_name_mapping = &symbols.file_name_mapping;
         let def_info = &symbols.def_info;
         let UseDefTest { use_ndx, use_line } = self;
         writeln!(output, "-- test {test_idx} -------------------")?;
         writeln!(output, "use line: {use_line}, use_ndx: {use_ndx}")?;
-        let Some(uses) = mod_symbols.get(*use_line) else {
+        let lsp_use_line = use_line - 1; // 0th-based
+        let Some(uses) = mod_symbols.get(lsp_use_line) else {
             writeln!(
                 output,
                 "ERROR: No use_line {use_line} in mod_symbols {mod_symbols:#?} for file {use_file}"
@@ -92,7 +100,7 @@ impl UseDefTest {
         use_def.render(
             output,
             symbols,
-            *use_line,
+            lsp_use_line,
             &use_file_content,
             &def_file_content,
         )?;
@@ -104,7 +112,7 @@ impl UseDefTest {
         if let Some(guard_def) = maybe_convert_for_guard(
             def,
             use_file_path,
-            &Position::new(*use_line, use_def.col_start()),
+            &Position::new(lsp_use_line, use_def.col_start()),
             symbols,
         ) {
             writeln!(
@@ -127,6 +135,43 @@ impl UseDefTest {
                 }
             )?;
         };
+        Ok(())
+    }
+}
+
+impl CompletionTest {
+    fn test(
+        &self,
+        test_idx: usize,
+        symbols: &Symbols,
+        output: &mut dyn std::io::Write,
+        use_file_path: &Path,
+    ) -> anyhow::Result<()> {
+        let lsp_use_line = self.use_line - 1; // 0th-based
+        let use_pos = Position {
+            line: lsp_use_line,
+            character: self.use_col,
+        };
+        let items = completion_items(use_pos, use_file_path, symbols);
+        writeln!(output, "-- test {test_idx} -------------------")?;
+        writeln!(
+            output,
+            "use line: {}, use_col: {}",
+            self.use_line, self.use_col
+        )?;
+        for i in items {
+            writeln!(output, "{:?} '{}'", i.kind.unwrap(), i.label)?;
+            writeln!(output, "\tINSERT TEXT: '{}'", i.insert_text.unwrap())?;
+            if let Some(label_details) = i.label_details {
+                if let Some(detail) = label_details.detail {
+                    writeln!(output, "\tTARGET     : '{}'", detail.trim())?;
+                }
+                if let Some(description) = label_details.description {
+                    writeln!(output, "\tTYPE       : '{description}'")?;
+                }
+            }
+        }
+        writeln!(output)?;
         Ok(())
     }
 }
@@ -196,6 +241,9 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
             match test {
                 TestEntry::UseDefTest(use_def_test) => {
                     use_def_test.test(idx, mod_symbols, &symbols, writer, &file, &cpath)?
+                }
+                TestEntry::CompletionTest(completion_test) => {
+                    completion_test.test(idx, &symbols, writer, &cpath)?;
                 }
             };
             writeln!(writer)?;
