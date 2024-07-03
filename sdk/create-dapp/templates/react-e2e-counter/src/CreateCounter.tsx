@@ -8,8 +8,8 @@ export function CreateCounter({
 }: {
   onCreated: (id: string) => void;
 }) {
-  const suiClient = useSuiClient();
   const counterPackageId = useNetworkVariable("counterPackageId");
+  const suiClient = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction({
     execute: async ({ bytes, signature }) =>
       await suiClient.executeTransactionBlock({

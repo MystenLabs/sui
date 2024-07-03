@@ -10,9 +10,9 @@ import { Button, Flex, Heading, Text } from "@radix-ui/themes";
 import { useNetworkVariable } from "./networkConfig";
 
 export function Counter({ id }: { id: string }) {
+  const counterPackageId = useNetworkVariable("counterPackageId");
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
-  const counterPackageId = useNetworkVariable("counterPackageId");
   const { mutate: signAndExecute } = useSignAndExecuteTransaction({
     execute: async ({ bytes, signature }) =>
       await suiClient.executeTransactionBlock({
