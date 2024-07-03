@@ -29,12 +29,12 @@ const Examples = (props) => {
     };
   }, [light]);
 
-  const { examples } = props;
+  const { method, examples } = props;
 
   const request = {
     jsonrpc: "2.0",
     id: 1,
-    method: `${examples[0].name}`,
+    method,
     params: [],
   };
 

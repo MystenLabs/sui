@@ -175,7 +175,7 @@ pub trait SuiSystemStateTrait {
     fn safe_mode(&self) -> bool;
     fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams);
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
-    fn get_pending_active_validators<S: ObjectStore>(
+    fn get_pending_active_validators<S: ObjectStore + ?Sized>(
         &self,
         object_store: &S,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError>;
@@ -318,13 +318,12 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
 /// dynamic field as a Validator type. We need the version to determine which inner type to use for
 /// the Validator type. This is assuming that the validator is stored in the table as
 /// ValidatorWrapper type.
-pub fn get_validator_from_table<S, K>(
-    object_store: &S,
+pub fn get_validator_from_table<K>(
+    object_store: &dyn ObjectStore,
     table_id: ObjectID,
     key: &K,
 ) -> Result<SuiValidatorSummary, SuiError>
 where
-    S: ObjectStore,
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
 {
     let field: ValidatorWrapper = get_dynamic_field_from_store(object_store, table_id, key)
@@ -385,12 +384,12 @@ pub fn get_validators_from_table_vec<S, ValidatorType>(
     table_size: u64,
 ) -> Result<Vec<ValidatorType>, SuiError>
 where
-    S: ObjectStore,
+    S: ObjectStore + ?Sized,
     ValidatorType: Serialize + DeserializeOwned,
 {
     let mut validators = vec![];
     for i in 0..table_size {
-        let validator: ValidatorType = get_dynamic_field_from_store(object_store, table_id, &i)
+        let validator: ValidatorType = get_dynamic_field_from_store(&object_store, table_id, &i)
             .map_err(|err| {
                 SuiError::SuiSystemStateReadError(format!(
                     "Failed to load validator from table: {:?}",

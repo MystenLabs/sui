@@ -1,0 +1,63 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: graphql
+  name: graphql
+  namespace: rpc-mainnet
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: graphql
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9184"
+        prometheus.io/scrape: "true"
+      labels:
+        app: graphql
+    spec:
+      containers:
+      - command:
+        - /opt/sui/bin/sui-graphql-rpc
+        - start-server
+        - --host
+        - 0.0.0.0
+        - --port
+        - "8001"
+        - --db-url
+        - postgres://x:x@x:5432/defaultdb
+        - --node-rpc-url
+        - http://sui-node.rpc-mainnet.svc.cluster.local:9000
+        - --config
+        - /opt/sui/config/sui-graphql.toml
+        - --ide-title
+        - Sui Mainnet GraphQL
+        env:
+        - name: RUST_BACKTRACE
+          value: "1"
+        image: x
+        imagePullPolicy: Always
+        name: sui-graphql
+        ports:
+        - containerPort: 8001
+          protocol: TCP
+        resources:
+          requests:
+            cpu: "2"
+            memory: 8G
+        volumeMounts:
+        - mountPath: /opt/sui/config/sui-graphql.toml
+          name: graphql-config-volume
+          subPath: sui-graphql.toml
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: graphql-config
+        name: graphql-config-volume

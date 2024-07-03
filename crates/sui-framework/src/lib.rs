@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::file_format::{Ability, AbilitySet};
 use move_binary_format::CompiledModule;
@@ -10,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
 use sui_types::base_types::ObjectRef;
 use sui_types::storage::ObjectStore;
-use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
@@ -18,6 +18,7 @@ use sui_types::{
     object::{Object, OBJECT_START_VERSION},
     MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
 };
+use sui_types::{BRIDGE_PACKAGE_ID, DEEPBOOK_PACKAGE_ID};
 use tracing::error;
 
 /// Represents a system package in the framework, that's built from the source code inside
@@ -71,7 +72,7 @@ impl SystemPackage {
             &self.modules(),
             OBJECT_START_VERSION,
             self.dependencies.to_vec(),
-            TransactionDigest::genesis(),
+            TransactionDigest::genesis_marker(),
         )
     }
 }
@@ -122,6 +123,15 @@ impl BuiltInFramework {
                 DEEPBOOK_PACKAGE_ID,
                 "deepbook",
                 [MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]
+            ),
+            (
+                BRIDGE_PACKAGE_ID,
+                "bridge",
+                [
+                    MOVE_STDLIB_PACKAGE_ID,
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    SUI_SYSTEM_PACKAGE_ID
+                ]
             )
         ])
         .iter()
@@ -166,8 +176,7 @@ pub async fn compare_system_package<S: ObjectStore>(
     id: &ObjectID,
     modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
-    max_binary_format_version: u32,
-    no_extraneous_module_bytes: bool,
+    binary_config: &BinaryConfig,
 ) -> Option<ObjectRef> {
     let cur_object = match object_store.get_object(id) {
         Ok(Some(cur_object)) => cur_object,
@@ -183,7 +192,7 @@ pub async fn compare_system_package<S: ObjectStore>(
                     dependencies,
                     // Genesis is fine here, we only use it to calculate an object ref that we can use
                     // for all validators to commit to the same bytes in the update
-                    TransactionDigest::genesis(),
+                    TransactionDigest::genesis_marker(),
                 )
                 .compute_object_reference(),
             );
@@ -215,12 +224,21 @@ pub async fn compare_system_package<S: ObjectStore>(
     }
 
     let compatibility = Compatibility {
-        check_struct_and_pub_function_linking: true,
-        check_struct_layout: true,
+        check_datatype_and_pub_function_linking: true,
+        check_datatype_layout: true,
         check_friend_linking: false,
+        // Checking `entry` linkage is required because system packages are updated in-place, and a
+        // transaction that was rolled back to make way for reconfiguration should still be runnable
+        // after a reconfiguration that upgraded the framework.
+        //
+        // A transaction that calls a system function that was previously `entry` and is now private
+        // will fail because its entrypoint became no longer callable. A transaction that calls a
+        // system function that was previously `public entry` and is now just `public` could also
+        // fail if one of its mutable inputs was being used in another private `entry` function.
         check_private_entry_linking: true,
         disallowed_new_abilities: AbilitySet::singleton(Ability::Key),
-        disallow_change_struct_type_params: true,
+        disallow_change_datatype_type_params: true,
+        disallow_new_variants: true,
     };
 
     let new_pkg = new_object
@@ -228,17 +246,14 @@ pub async fn compare_system_package<S: ObjectStore>(
         .try_as_package_mut()
         .expect("Created as package");
 
-    let cur_normalized =
-        match cur_pkg.normalize(max_binary_format_version, no_extraneous_module_bytes) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Could not normalize existing package: {e:?}");
-                return None;
-            }
-        };
-    let mut new_normalized = new_pkg
-        .normalize(max_binary_format_version, no_extraneous_module_bytes)
-        .ok()?;
+    let cur_normalized = match cur_pkg.normalize(binary_config) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Could not normalize existing package: {e:?}");
+            return None;
+        }
+    };
+    let mut new_normalized = new_pkg.normalize(binary_config).ok()?;
 
     for (name, cur_module) in cur_normalized {
         let Some(new_module) = new_normalized.remove(&name) else {

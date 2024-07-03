@@ -1,6 +1,5 @@
 [package]
 name = "B"
-version = "0.0.0"
 
 [dependencies]
-D = { local = "../D", version = "1.0.0" }
+D = { local = "../D-v1" }

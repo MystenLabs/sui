@@ -95,29 +95,21 @@ async fn test_transaction_expiration() {
     let mut expired_data = data.clone();
     *expired_data.expiration_mut_for_testing() = TransactionExpiration::Epoch(0);
     let expired_transaction = test_cluster.wallet.sign_transaction(&expired_data);
-    let authority = test_cluster.swarm.validator_node_handles().pop().unwrap();
-    let result = authority
-        .with_async(|node| async {
-            let epoch_store = node.state().epoch_store_for_testing();
-            let state = node.state();
-            let expired_transaction = state.verify_transaction(expired_transaction).unwrap();
-            state
-                .handle_transaction(&epoch_store, expired_transaction)
-                .await
-        })
+    let result = test_cluster
+        .wallet
+        .execute_transaction_may_fail(expired_transaction)
         .await;
-    assert!(matches!(result.unwrap_err(), SuiError::TransactionExpired));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(&SuiError::TransactionExpired.to_string()));
 
     // Non expired transaction signed without issue
     *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
     let transaction = test_cluster.wallet.sign_transaction(&data);
-    authority
-        .with_async(|node| async {
-            let epoch_store = node.state().epoch_store_for_testing();
-            let state = node.state();
-            let transaction = state.verify_transaction(transaction).unwrap();
-            state.handle_transaction(&epoch_store, transaction).await
-        })
+    test_cluster
+        .wallet
+        .execute_transaction_may_fail(transaction)
         .await
         .unwrap();
 }
@@ -153,7 +145,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .sui_node
         .with(|node| node.clone_authority_aggregator().unwrap());
     let cert = net
-        .process_transaction(tx.clone())
+        .process_transaction(tx.clone(), None)
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -179,7 +171,10 @@ async fn reconfig_with_revert_end_to_end_test() {
     let client = net
         .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
         .unwrap();
-    client.handle_certificate(cert.clone()).await.unwrap();
+    client
+        .handle_certificate_v2(cert.clone(), None)
+        .await
+        .unwrap();
 
     authorities[reverting_authority_idx]
         .with_async(|node| async {
@@ -257,9 +252,18 @@ async fn reconfig_with_revert_end_to_end_test() {
 // This test just starts up a cluster that reconfigures itself under 0 load.
 #[sim_test]
 async fn test_passive_reconfig() {
+    do_test_passive_reconfig().await;
+}
+
+#[sim_test(check_determinism)]
+async fn test_passive_reconfig_determinism() {
+    do_test_passive_reconfig().await;
+}
+
+async fn do_test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
     let _commit_root_state_digest = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_commit_root_state_digest_supported(true);
+        config.set_commit_root_state_digest_supported_for_testing(true);
         config
     });
     ProtocolConfig::poison_get_for_min_version();
@@ -291,6 +295,60 @@ async fn test_passive_reconfig() {
                 .unwrap();
             assert_eq!(commitments.len(), 1);
         });
+}
+
+// Test for syncing a node to an authority that already has many txes.
+#[sim_test]
+async fn test_expired_locks() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10000)
+        .build()
+        .await;
+
+    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+    let accounts_and_objs = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let sender = accounts_and_objs[0].0;
+    let receiver = accounts_and_objs[1].0;
+    let gas_object = accounts_and_objs[0].1[0];
+
+    let transfer_sui = |amount| {
+        test_cluster.wallet.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .transfer_sui(Some(amount), receiver)
+                .build(),
+        )
+    };
+
+    let t1 = transfer_sui(1);
+    test_cluster
+        .create_certificate(t1.clone(), None)
+        .await
+        .unwrap();
+
+    // attempt to equivocate
+    let t2 = transfer_sui(2);
+    test_cluster
+        .create_certificate(t2.clone(), None)
+        .await
+        .unwrap_err();
+
+    test_cluster.wait_for_epoch_all_nodes(1).await;
+
+    // old locks can be overridden in new epoch
+    test_cluster
+        .create_certificate(t2.clone(), None)
+        .await
+        .unwrap();
+
+    // attempt to equivocate
+    test_cluster
+        .create_certificate(t1.clone(), None)
+        .await
+        .unwrap_err();
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.
@@ -415,7 +473,7 @@ async fn test_validator_resign_effects() {
         .sui_node
         .with(|node| node.clone_authority_aggregator().unwrap());
     let effects1 = net
-        .process_transaction(tx)
+        .process_transaction(tx, None)
         .await
         .unwrap()
         .into_effects_for_testing();
@@ -440,14 +498,14 @@ async fn test_validator_candidate_pool_read() {
             .unwrap();
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         let staking_pool_id = get_validator_from_table(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             system_state_summary.validator_candidates_id,
             &address,
         )
         .unwrap()
         .staking_pool_id;
         let validator = get_validator_by_pool_id(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -485,7 +543,7 @@ async fn test_inactive_validator_pool_read() {
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         // Validator is active. Check that we can find its summary by staking pool id.
         let validator = get_validator_by_pool_id(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -520,7 +578,7 @@ async fn test_inactive_validator_pool_read() {
         );
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         let validator = get_validator_by_pool_id(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -580,6 +638,15 @@ async fn test_reconfig_with_committee_change_basic() {
 
 #[sim_test]
 async fn test_reconfig_with_committee_change_stress() {
+    do_test_reconfig_with_committee_change_stress().await;
+}
+
+#[sim_test(check_determinism)]
+async fn test_reconfig_with_committee_change_stress_determinism() {
+    do_test_reconfig_with_committee_change_stress().await;
+}
+
+async fn do_test_reconfig_with_committee_change_stress() {
     let mut candidates = (0..6)
         .map(|_| ValidatorGenesisConfigBuilder::new().build(&mut OsRng))
         .collect::<Vec<_>>();
@@ -594,6 +661,8 @@ async fn test_reconfig_with_committee_change_stress() {
         .build()
         .await;
 
+    let mut cur_epoch = 0;
+
     while let Some(v1) = candidates.pop() {
         let v2 = candidates.pop().unwrap();
         execute_add_validator_transactions(&test_cluster, &v1).await;
@@ -607,7 +676,7 @@ async fn test_reconfig_with_committee_change_stress() {
             // otherwise new validators to the committee will not be able to catch up to the network
             // TODO: remove and replace with usage of archival solution
             .filter(|node| {
-                node.config
+                node.config()
                     .authority_store_pruning_config
                     .num_epochs_to_retain_for_checkpoints()
                     .is_some()
@@ -620,11 +689,18 @@ async fn test_reconfig_with_committee_change_stress() {
         }
         let handle1 = test_cluster.spawn_new_validator(v1).await;
         let handle2 = test_cluster.spawn_new_validator(v2).await;
+
+        tokio::join!(
+            test_cluster.wait_for_epoch_on_node(&handle1, Some(cur_epoch), Duration::from_secs(60)),
+            test_cluster.wait_for_epoch_on_node(&handle2, Some(cur_epoch), Duration::from_secs(60))
+        );
+
         test_cluster.trigger_reconfiguration().await;
         let committee = test_cluster
             .fullnode_handle
             .sui_node
             .with(|node| node.state().epoch_store_for_testing().committee().clone());
+        cur_epoch = committee.epoch();
         assert_eq!(committee.num_members(), 7);
         assert!(committee.authority_exists(&handle1.state().name));
         assert!(committee.authority_exists(&handle2.state().name));
@@ -632,6 +708,72 @@ async fn test_reconfig_with_committee_change_stress() {
             .iter()
             .all(|v| !committee.authority_exists(v));
     }
+}
+
+#[cfg(msim)]
+#[sim_test]
+async fn test_epoch_flag_upgrade() {
+    use std::any;
+
+    use std::sync::Mutex;
+    use sui_core::authority::epoch_start_configuration::EpochFlag;
+    use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
+    use sui_macros::register_fail_point_arg;
+
+    let initial_flags_nodes = Arc::new(Mutex::new(HashSet::new()));
+    register_fail_point_arg("initial_epoch_flags", move || {
+        // only alter flags on each node once
+        let current_node = sui_simulator::current_simnode_id();
+
+        // override flags on up to 2 nodes.
+        let mut initial_flags_nodes = initial_flags_nodes.lock().unwrap();
+        if initial_flags_nodes.len() >= 2 || !initial_flags_nodes.insert(current_node) {
+            return None;
+        }
+
+        // start with no flags set
+        Some(Vec::<EpochFlag>::new())
+    });
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(30000)
+        .build()
+        .await;
+
+    let mut any_empty = false;
+    for node in test_cluster.all_node_handles() {
+        any_empty = any_empty
+            || node.with(|node| {
+                node.state()
+                    .epoch_store_for_testing()
+                    .epoch_start_config()
+                    .flags()
+                    .is_empty()
+            });
+    }
+    assert!(any_empty);
+
+    test_cluster.wait_for_epoch_all_nodes(1).await;
+
+    let mut any_empty = false;
+    for node in test_cluster.all_node_handles() {
+        any_empty = any_empty
+            || node.with(|node| {
+                node.state()
+                    .epoch_store_for_testing()
+                    .epoch_start_config()
+                    .flags()
+                    .is_empty()
+            });
+    }
+    assert!(!any_empty);
+
+    sleep(Duration::from_secs(15)).await;
+
+    test_cluster.stop_all_validators().await;
+    test_cluster.start_all_validators().await;
+
+    test_cluster.wait_for_epoch_all_nodes(2).await;
 }
 
 #[cfg(msim)]
@@ -768,7 +910,7 @@ async fn execute_add_validator_transactions(
             .get_sui_system_state_object_for_testing()
             .unwrap();
         system_state
-            .get_pending_active_validators(node.state().db().as_ref())
+            .get_pending_active_validators(node.state().get_object_store().as_ref())
             .unwrap()
             .len()
     });
@@ -813,7 +955,7 @@ async fn execute_add_validator_transactions(
             .get_sui_system_state_object_for_testing()
             .unwrap();
         let pending_active_validators = system_state
-            .get_pending_active_validators(node.state().db().as_ref())
+            .get_pending_active_validators(node.state().get_object_store().as_ref())
             .unwrap();
         assert_eq!(pending_active_validators.len(), pending_active_count + 1);
         assert_eq!(

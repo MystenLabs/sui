@@ -1,6 +1,6 @@
 [package]
 name = "sui-rosetta"
-version = "0.1.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -41,7 +41,6 @@ shared-crypto.workspace = true
 move-core-types.workspace = true
 
 telemetry-subscribers.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 sui-sdk.workspace = true

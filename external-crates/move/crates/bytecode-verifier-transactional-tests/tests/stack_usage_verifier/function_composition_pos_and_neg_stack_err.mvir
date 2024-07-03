@@ -21,9 +21,10 @@ module 0x1.A {
 }
 
 //# run
+module 0x42.m {
 import 0x1.A;
 
-main() {
+entry foo() {
     let k: u64;
     let ans: u64;
     let e: u64;
@@ -35,4 +36,5 @@ label b0:
     // negative stack, but never reached during checking
     (A.eat_stack(), A.eat_stack());
     return;
+}
 }

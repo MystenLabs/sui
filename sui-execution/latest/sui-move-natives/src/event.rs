@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{legacy_test_cost, object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -75,7 +75,7 @@ pub fn emit(
     );
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    let max_event_emit_size = obj_runtime.local_config.max_event_emit_size;
+    let max_event_emit_size = obj_runtime.protocol_config.max_event_emit_size();
     let ev_size = u64::from(tag_size + event_value_size);
     // Check if the event size is within the limit
     if ev_size > max_event_emit_size {
@@ -90,7 +90,10 @@ pub fn emit(
 
     // Check that the size contribution of the event is within the total size limit
     // This feature is guarded as its only present in some versions
-    if let Some(max_event_emit_size_total) = obj_runtime.local_config.max_event_emit_size_total {
+    if let Some(max_event_emit_size_total) = obj_runtime
+        .protocol_config
+        .max_event_emit_size_total_as_option()
+    {
         let total_events_size = obj_runtime.state.total_events_size() + ev_size;
         if total_events_size > max_event_emit_size_total {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
@@ -113,4 +116,48 @@ pub fn emit(
 
     obj_runtime.emit_event(ty, *tag, event_value)?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
+}
+
+/// Get the all emitted events of type `T`, starting at the specified index
+pub fn num_events(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    assert!(ty_args.is_empty());
+    assert!(args.is_empty());
+    let object_runtime_ref: &ObjectRuntime = context.extensions().get();
+    let num_events = object_runtime_ref.state.events().len();
+    Ok(NativeResult::ok(
+        legacy_test_cost(),
+        smallvec![Value::u32(num_events as u32)],
+    ))
+}
+
+/// Get the all emitted events of type `T`, starting at the specified index
+pub fn get_events_by_type(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    assert_eq!(ty_args.len(), 1);
+    let specified_ty = ty_args.pop().unwrap();
+    assert!(args.is_empty());
+    let object_runtime_ref: &ObjectRuntime = context.extensions().get();
+    let matched_events = object_runtime_ref
+        .state
+        .events()
+        .iter()
+        .filter_map(|(ty, _, event)| {
+            if specified_ty == *ty {
+                Some(event.copy_value().unwrap())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    Ok(NativeResult::ok(
+        legacy_test_cost(),
+        smallvec![Value::vector_for_testing_only(matched_events)],
+    ))
 }

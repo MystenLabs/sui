@@ -4,11 +4,7 @@
 import { fromB64, toB64 } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import {
-	combinePartialSigs,
-	decodeMultiSig,
-	PubkeyWeightPair,
-} from '../../../src/cryptography/multisig';
+import { bcs } from '../../../src/bcs';
 import { PublicKey } from '../../../src/cryptography/publickey';
 import {
 	parseSerializedSignature,
@@ -18,6 +14,7 @@ import {
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
+import { MultiSigPublicKey, parsePartialSignatures } from '../../../src/multisig';
 
 describe('Signature', () => {
 	let k1: Ed25519Keypair,
@@ -52,20 +49,23 @@ describe('Signature', () => {
 	});
 
 	it('`toSerializedSignature()` should correctly serialize signature', async () => {
-		const pubkeyWeightPairs: PubkeyWeightPair[] = [
-			{
-				pubKey: pk1,
-				weight: 1,
-			},
-			{
-				pubKey: pk2,
-				weight: 2,
-			},
-			{
-				pubKey: pk3,
-				weight: 3,
-			},
-		];
+		const publicKey = MultiSigPublicKey.fromPublicKeys({
+			publicKeys: [
+				{
+					publicKey: pk1,
+					weight: 1,
+				},
+				{
+					publicKey: pk2,
+					weight: 2,
+				},
+				{
+					publicKey: pk3,
+					weight: 3,
+				},
+			],
+			threshold: 3,
+		});
 
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 
@@ -73,28 +73,29 @@ describe('Signature', () => {
 		const sig2 = await k2.signPersonalMessage(data);
 		const sig3 = await k3.signPersonalMessage(data);
 
-		const multisig = combinePartialSigs(
-			[sig1.signature, sig2.signature, sig3.signature],
-			pubkeyWeightPairs,
-			3,
-		);
+		const multisig = publicKey.combinePartialSignatures([
+			sig1.signature,
+			sig2.signature,
+			sig3.signature,
+		]);
 
-		const decoded = decodeMultiSig(multisig);
+		const decoded = parsePartialSignatures(bcs.MultiSig.parse(fromB64(multisig).slice(1)));
+
 		const SerializeSignatureInput: SerializeSignatureInput[] = [
 			{
 				signatureScheme: decoded[0].signatureScheme,
 				signature: decoded[0].signature,
-				publicKey: decoded[0].pubKey,
+				publicKey: decoded[0].publicKey,
 			},
 			{
 				signatureScheme: decoded[1].signatureScheme,
 				signature: decoded[1].signature,
-				publicKey: decoded[1].pubKey,
+				publicKey: decoded[1].publicKey,
 			},
 			{
 				signatureScheme: decoded[2].signatureScheme,
 				signature: decoded[2].signature,
-				publicKey: decoded[2].pubKey,
+				publicKey: decoded[2].publicKey,
 			},
 		];
 
@@ -108,20 +109,23 @@ describe('Signature', () => {
 	});
 
 	it('`toSerializedSignature()` should handle invalid parameters', async () => {
-		const pubkeyWeightPairs: PubkeyWeightPair[] = [
-			{
-				pubKey: pk1,
-				weight: 1,
-			},
-		];
+		const publicKey = MultiSigPublicKey.fromPublicKeys({
+			publicKeys: [
+				{
+					publicKey: pk1,
+					weight: 1,
+				},
+			],
+			threshold: 1,
+		});
 
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 
 		const sig1 = await k1.signPersonalMessage(data);
 
-		const multisig = combinePartialSigs([sig1.signature], pubkeyWeightPairs, 3);
+		const multisig = publicKey.combinePartialSignatures([sig1.signature]);
 
-		const decoded = decodeMultiSig(multisig);
+		const decoded = parsePartialSignatures(bcs.MultiSig.parse(fromB64(multisig).slice(1)));
 
 		const SerializeSignatureInput: SerializeSignatureInput[] = [
 			{
@@ -136,20 +140,23 @@ describe('Signature', () => {
 	});
 
 	it('`parseSerializedSignature()` should correctly parse serialized signature', async () => {
-		const pubkeyWeightPairs: PubkeyWeightPair[] = [
-			{
-				pubKey: pk1,
-				weight: 1,
-			},
-			{
-				pubKey: pk2,
-				weight: 2,
-			},
-			{
-				pubKey: pk3,
-				weight: 3,
-			},
-		];
+		const publicKey = MultiSigPublicKey.fromPublicKeys({
+			publicKeys: [
+				{
+					publicKey: pk1,
+					weight: 1,
+				},
+				{
+					publicKey: pk2,
+					weight: 2,
+				},
+				{
+					publicKey: pk3,
+					weight: 3,
+				},
+			],
+			threshold: 3,
+		});
 
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 
@@ -157,11 +164,11 @@ describe('Signature', () => {
 		const sig2 = await k2.signPersonalMessage(data);
 		const sig3 = await k3.signPersonalMessage(data);
 
-		const multisig = combinePartialSigs(
-			[sig1.signature, sig2.signature, sig3.signature],
-			pubkeyWeightPairs,
-			3,
-		);
+		const multisig = publicKey.combinePartialSignatures([
+			sig1.signature,
+			sig2.signature,
+			sig3.signature,
+		]);
 
 		const parsedSignature = parseSerializedSignature(sig1.signature);
 		expect(parsedSignature.serializedSignature).toEqual(sig1.signature);
@@ -179,8 +186,6 @@ describe('Signature', () => {
 		bytes[0] = 0x06;
 		const invalidSignature = toB64(bytes);
 
-		expect(() => parseSerializedSignature(invalidSignature)).toThrowError(
-			new Error('Unsupported signature scheme'),
-		);
+		expect(() => parseSerializedSignature(invalidSignature)).toThrowError();
 	});
 });

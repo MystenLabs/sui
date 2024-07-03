@@ -13,7 +13,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
-use sui_types::storage::{get_module, PackageObjectArc};
+use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, SuiError, SuiResult},
@@ -156,7 +156,7 @@ impl<'state> LinkageView<'state> {
         // speed up other requests.
         for TypeOrigin {
             module_name,
-            struct_name,
+            datatype_name: struct_name,
             package: defining_id,
         } in context.type_origin_table()
         {
@@ -308,7 +308,7 @@ impl<'state> LinkageResolver for LinkageView<'state> {
 
         for TypeOrigin {
             module_name,
-            struct_name,
+            datatype_name: struct_name,
             package,
         } in package.move_package().type_origin_table()
         {
@@ -348,7 +348,7 @@ impl<'state> ModuleResolver for LinkageView<'state> {
 }
 
 impl<'state> BackingPackageStore for LinkageView<'state> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.resolver.get_package_object(package_id)
     }
 }

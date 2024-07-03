@@ -1,0 +1,30 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭───────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                   │
+├─────────────┬─────────────────────────────────────────────────┤
+│ command     │ values                                          │
+├─────────────┼─────────────────────────────────────────────────┤
+│ split-coins │ gas [0, 1, 2, 3]                                │
+│ assign      │ coins                                           │
+│ move-call   │ sui::coin::destroy_zero<sui::sui::SUI> coins.0  │
+│ split-coins │ coins.1 [0, 0]                                  │
+│ assign      │ zcoins                                          │
+│ move-call   │ sui::coin::destroy_zero<sui::sui::SUI> zcoins.0 │
+│ move-call   │ sui::coin::destroy_zero<sui::sui::SUI> zcoins.1 │
+│ merge-coins │ gas [coins.1, coins.2, coins.3]                 │
+╰─────────────┴─────────────────────────────────────────────────╯
+ === BUILT PTB === 
+Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0])
+Input 1: Pure([1, 0, 0, 0, 0, 0, 0, 0])
+Input 2: Pure([2, 0, 0, 0, 0, 0, 0, 0])
+Input 3: Pure([3, 0, 0, 0, 0, 0, 0, 0])
+Command 0: SplitCoins(GasCoinInput(0),Input(1),Input(2),Input(3))
+Command 1: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero<0x2::sui::SUI>(NestedResult(0,0)))
+Command 2: SplitCoins(NestedResult(0,1)Input(0),Input(0))
+Command 3: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero<0x2::sui::SUI>(NestedResult(2,0)))
+Command 4: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero<0x2::sui::SUI>(NestedResult(2,1)))
+Command 5: MergeCoins(GasCoin,NestedResult(0,1),NestedResult(0,2),NestedResult(0,3))

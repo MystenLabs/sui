@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let x: u64;
 label b0:
     x = 0;
@@ -9,4 +11,6 @@ label loop:
 label loop_cont:
     assert(move(x) == 1, 42);
     return;
+}
+
 }

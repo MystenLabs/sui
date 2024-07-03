@@ -41,10 +41,8 @@ public fun StructEq::new(): StructEq::S {
 }
 
 ============ Diagnostics ================
-error: Leaked mutable module-internal reference via return value 0
-   ┌─ tests/escape_analysis/struct_eq.move:12:5
-   │
-12 │ ╭     public fun leak_f(s: &mut S): &mut u64 {
-13 │ │         &mut s.f
-14 │ │     }
-   │ ╰─────^
+warning: DEPRECATED. will be removed
+  ┌─ tests/escape_analysis/struct_eq.move:5:5
+  │
+5 │     invariant forall s: S: s == S { f: 10 };
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Specification blocks are deprecated and are no longer used

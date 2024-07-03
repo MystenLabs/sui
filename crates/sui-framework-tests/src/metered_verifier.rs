@@ -1,10 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_bytecode_verifier::meter::Scope;
+use move_bytecode_verifier_meter::Scope;
 use prometheus::Registry;
-use std::{path::PathBuf, sync::Arc, time::Instant};
-use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Instant,
+};
+use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_framework::BuiltInFramework;
 use sui_move_build::{CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
@@ -14,7 +18,7 @@ use sui_types::{
 };
 use sui_verifier::meter::SuiVerifierMeter;
 
-fn build(path: PathBuf) -> SuiResult<CompiledPackage> {
+fn build(path: &Path) -> SuiResult<CompiledPackage> {
     let mut config = sui_move_build::BuildConfig::new_for_testing();
     config.config.warnings_are_errors = true;
     config.build(path)
@@ -26,21 +30,20 @@ fn test_metered_move_bytecode_verifier() {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
-    let compiled_package = build(path).unwrap();
+    let compiled_package = build(&path).unwrap();
     let compiled_modules: Vec<_> = compiled_package.get_modules().cloned().collect();
 
-    let mut metered_verifier_config = default_verifier_config(
-        &ProtocolConfig::get_for_max_version_UNSAFE(),
-        true, /* enable metering */
-    );
+    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let mut verifier_config = protocol_config.verifier_config(/* for_signing */ true);
+    let mut meter_config = protocol_config.meter_config();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
-    let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+    let mut meter = SuiVerifierMeter::new(meter_config.clone());
     let timer_start = Instant::now();
     // Default case should pass
     let r = run_metered_move_bytecode_verifier(
         &compiled_modules,
-        &metered_verifier_config,
+        &verifier_config,
         &mut meter,
         &bytecode_verifier_metrics,
     );
@@ -91,18 +94,7 @@ fn test_metered_move_bytecode_verifier() {
         bytecode_verifier_metrics
             .verifier_timeout_metrics
             .with_label_values(&[
-                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
-                BytecodeVerifierMetrics::TIMEOUT_TAG,
-            ])
-            .get(),
-    );
-
-    assert_eq!(
-        0,
-        bytecode_verifier_metrics
-            .verifier_timeout_metrics
-            .with_label_values(&[
-                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::OVERALL_TAG,
                 BytecodeVerifierMetrics::TIMEOUT_TAG,
             ])
             .get(),
@@ -121,16 +113,16 @@ fn test_metered_move_bytecode_verifier() {
     );
 
     // Use low limits. Should fail
-    metered_verifier_config.max_back_edges_per_function = Some(100);
-    metered_verifier_config.max_back_edges_per_module = Some(1_000);
-    metered_verifier_config.max_per_mod_meter_units = Some(10_000);
-    metered_verifier_config.max_per_fun_meter_units = Some(10_000);
+    verifier_config.max_back_edges_per_function = Some(100);
+    verifier_config.max_back_edges_per_module = Some(1_000);
+    meter_config.max_per_mod_meter_units = Some(10_000);
+    meter_config.max_per_fun_meter_units = Some(10_000);
 
-    let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+    let mut meter = SuiVerifierMeter::new(meter_config);
     let timer_start = Instant::now();
     let r = run_metered_move_bytecode_verifier(
         &compiled_modules,
-        &metered_verifier_config,
+        &verifier_config,
         &mut meter,
         &bytecode_verifier_metrics,
     );
@@ -178,18 +170,7 @@ fn test_metered_move_bytecode_verifier() {
         bytecode_verifier_metrics
             .verifier_timeout_metrics
             .with_label_values(&[
-                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
-                BytecodeVerifierMetrics::TIMEOUT_TAG,
-            ])
-            .get(),
-    );
-    // Sui verifier did not fail
-    assert_eq!(
-        0,
-        bytecode_verifier_metrics
-            .verifier_timeout_metrics
-            .with_label_values(&[
-                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::OVERALL_TAG,
                 BytecodeVerifierMetrics::TIMEOUT_TAG,
             ])
             .get(),
@@ -212,33 +193,33 @@ fn test_metered_move_bytecode_verifier() {
     let with_unpublished_deps = false;
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/basics");
-    let package = build(path).unwrap();
+    let package = build(&path).unwrap();
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
 
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../sui_programmability/examples/fungible_tokens");
-    let package = build(path).unwrap();
+    let package = build(&path).unwrap();
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
 
-    let is_metered = true;
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let metered_verifier_config = default_verifier_config(&protocol_config, is_metered);
+    let verifier_config = protocol_config.verifier_config(/* for_signing */ true);
+    let meter_config = protocol_config.meter_config();
 
     // Check if the same meter is indeed used multiple invocations of the verifier
-    let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+    let mut meter = SuiVerifierMeter::new(meter_config);
     for modules in &packages {
-        let prev_meter = meter.get_usage(Scope::Module) + meter.get_usage(Scope::Function);
+        let prev_meter = meter.get_usage(Scope::Package);
 
         run_metered_move_bytecode_verifier(
             modules,
-            &metered_verifier_config,
+            &verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
         )
         .expect("Verification should not timeout");
 
-        let curr_meter = meter.get_usage(Scope::Module) + meter.get_usage(Scope::Function);
+        let curr_meter = meter.get_usage(Scope::Package);
         assert!(curr_meter > prev_meter);
     }
 }
@@ -248,16 +229,16 @@ fn test_metered_move_bytecode_verifier() {
 fn test_meter_system_packages() {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
 
-    let is_metered = true;
-    let metered_verifier_config =
-        default_verifier_config(&ProtocolConfig::get_for_max_version_UNSAFE(), is_metered);
+    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let verifier_config = protocol_config.verifier_config(/* for_signing */ true);
+    let meter_config = protocol_config.meter_config();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
-    let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+    let mut meter = SuiVerifierMeter::new(meter_config);
     for system_package in BuiltInFramework::iter_system_packages() {
         run_metered_move_bytecode_verifier(
             &system_package.modules(),
-            &metered_verifier_config,
+            &verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
         )
@@ -276,17 +257,7 @@ fn test_meter_system_packages() {
         bytecode_verifier_metrics
             .verifier_timeout_metrics
             .with_label_values(&[
-                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
-                BytecodeVerifierMetrics::TIMEOUT_TAG,
-            ])
-            .get(),
-    );
-    assert_eq!(
-        0,
-        bytecode_verifier_metrics
-            .verifier_timeout_metrics
-            .with_label_values(&[
-                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::OVERALL_TAG,
                 BytecodeVerifierMetrics::TIMEOUT_TAG,
             ])
             .get(),
@@ -312,15 +283,15 @@ fn test_meter_system_packages() {
 fn test_build_and_verify_programmability_examples() {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
 
-    let is_metered = true;
-    let metered_verifier_config =
-        default_verifier_config(&ProtocolConfig::get_for_max_version_UNSAFE(), is_metered);
+    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let verifier_config = protocol_config.verifier_config(/* for_signing */ true);
+    let meter_config = protocol_config.meter_config();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let examples =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples");
 
-    for example in std::fs::read_dir(&examples).unwrap() {
+    for example in std::fs::read_dir(examples).unwrap() {
         let Ok(example) = example else { continue };
         let path = example.path();
 
@@ -333,12 +304,12 @@ fn test_build_and_verify_programmability_examples() {
             continue;
         };
 
-        let modules = build(path).unwrap().into_modules();
+        let modules = build(&path).unwrap().into_modules();
 
-        let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+        let mut meter = SuiVerifierMeter::new(meter_config.clone());
         run_metered_move_bytecode_verifier(
             &modules,
-            &metered_verifier_config,
+            &verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
         )

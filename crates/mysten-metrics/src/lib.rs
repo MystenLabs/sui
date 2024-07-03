@@ -21,6 +21,7 @@ use uuid::Uuid;
 mod guards;
 pub mod histogram;
 pub mod metered_channel;
+pub mod monitored_mpsc;
 pub use guards::*;
 
 pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
@@ -30,7 +31,9 @@ pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
 pub struct Metrics {
     pub tasks: IntGaugeVec,
     pub futures: IntGaugeVec,
-    pub channels: IntGaugeVec,
+    pub channel_inflight: IntGaugeVec,
+    pub channel_sent: IntGaugeVec,
+    pub channel_received: IntGaugeVec,
     pub scope_iterations: IntGaugeVec,
     pub scope_duration_ns: IntGaugeVec,
     pub scope_entrance: IntGaugeVec,
@@ -53,9 +56,23 @@ impl Metrics {
                 registry,
             )
             .unwrap(),
-            channels: register_int_gauge_vec_with_registry!(
-                "monitored_channels",
-                "Size of channels.",
+            channel_inflight: register_int_gauge_vec_with_registry!(
+                "monitored_channel_inflight",
+                "Inflight items in channels.",
+                &["name"],
+                registry,
+            )
+            .unwrap(),
+            channel_sent: register_int_gauge_vec_with_registry!(
+                "monitored_channel_sent",
+                "Sent items in channels.",
+                &["name"],
+                registry,
+            )
+            .unwrap(),
+            channel_received: register_int_gauge_vec_with_registry!(
+                "monitored_channel_received",
+                "Received items in channels.",
                 &["name"],
                 registry,
             )
@@ -319,13 +336,17 @@ impl RegistryService {
 }
 
 /// Create a metric that measures the uptime from when this metric was constructed.
-/// The metric is labeled with the provided 'version' label (this should generally be of the
-/// format: 'semver-gitrevision') and the provided 'chain_identifier' label.
+/// The metric is labeled with:
+/// - 'process': the process type, differentiating between validator and fullnode
+/// - 'version': binary version, generally be of the format: 'semver-gitrevision'
+/// - 'chain_identifier': the identifier of the network which this process is part of
 pub fn uptime_metric(
+    process: &str,
     version: &'static str,
     chain_identifier: &str,
 ) -> Box<dyn prometheus::core::Collector> {
     let opts = prometheus::opts!("uptime", "uptime of the node service in seconds")
+        .variable_label("process")
         .variable_label("version")
         .variable_label("chain_identifier");
 
@@ -335,11 +356,55 @@ pub fn uptime_metric(
         opts,
         prometheus_closure_metric::ValueType::Counter,
         uptime,
-        &[version, chain_identifier],
+        &[process, version, chain_identifier],
     )
     .unwrap();
 
     Box::new(metric)
+}
+
+pub const METRICS_ROUTE: &str = "/metrics";
+
+// Creates a new http server that has as a sole purpose to expose
+// and endpoint that prometheus agent can use to poll for the metrics.
+// A RegistryService is returned that can be used to get access in prometheus Registries.
+pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
+    let registry = Registry::new();
+
+    let registry_service = RegistryService::new(registry);
+
+    if cfg!(msim) {
+        // prometheus uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
+        // can't yet run it in the simulator.
+        warn!("not starting prometheus server in simulator");
+        return registry_service;
+    }
+
+    let app = Router::new()
+        .route(METRICS_ROUTE, get(metrics))
+        .layer(Extension(registry_service.clone()));
+
+    tokio::spawn(async move {
+        axum::Server::bind(&addr)
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+
+    registry_service
+}
+
+pub async fn metrics(
+    Extension(registry_service): Extension<RegistryService>,
+) -> (StatusCode, String) {
+    let metrics_families = registry_service.gather_all();
+    match TextEncoder.encode_to_string(&metrics_families) {
+        Ok(metrics) => (StatusCode::OK, metrics),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("unable to encode metrics: {error}"),
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -430,49 +495,5 @@ mod tests {
         let metric_1 = metrics.remove(0);
         assert_eq!(metric_1.get_name(), "sui_counter_2");
         assert_eq!(metric_1.get_help(), "counter_2_desc");
-    }
-}
-
-pub const METRICS_ROUTE: &str = "/metrics";
-
-// Creates a new http server that has as a sole purpose to expose
-// and endpoint that prometheus agent can use to poll for the metrics.
-// A RegistryService is returned that can be used to get access in prometheus Registries.
-pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
-    let registry = Registry::new();
-
-    let registry_service = RegistryService::new(registry);
-
-    if cfg!(msim) {
-        // prometheus uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
-        // can't yet run it in the simulator.
-        warn!("not starting prometheus server in simulator");
-        return registry_service;
-    }
-
-    let app = Router::new()
-        .route(METRICS_ROUTE, get(metrics))
-        .layer(Extension(registry_service.clone()));
-
-    tokio::spawn(async move {
-        axum::Server::bind(&addr)
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
-    });
-
-    registry_service
-}
-
-pub async fn metrics(
-    Extension(registry_service): Extension<RegistryService>,
-) -> (StatusCode, String) {
-    let metrics_families = registry_service.gather_all();
-    match TextEncoder.encode_to_string(&metrics_families) {
-        Ok(metrics) => (StatusCode::OK, metrics),
-        Err(error) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("unable to encode metrics: {error}"),
-        ),
     }
 }

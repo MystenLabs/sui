@@ -1,0 +1,11 @@
+[package]
+name = "D"
+version = "0.0.1"
+published-at = "0xd0"
+edition = "development"
+
+[dependencies]
+Sui = { local = "../sui" }
+
+[addresses]
+d = "0xd0"

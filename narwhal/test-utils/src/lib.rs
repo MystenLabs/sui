@@ -1023,6 +1023,10 @@ pub struct CommitteeFixture {
 }
 
 impl CommitteeFixture {
+    pub fn authority(&self, index: usize) -> &AuthorityFixture {
+        &self.authorities[index]
+    }
+
     pub fn authorities(&self) -> impl Iterator<Item = &AuthorityFixture> {
         self.authorities.iter()
     }

@@ -10,4 +10,3 @@ publish = false
 tokio.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
-workspace-hack.workspace = true

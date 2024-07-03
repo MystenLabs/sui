@@ -12,7 +12,7 @@ module counter::counter {
     use sui::tx_context::{Self, TxContext};
 
     /// A shared counter.
-    struct Counter has key {
+    public struct Counter has key {
         id: UID,
         owner: address,
         value: u64

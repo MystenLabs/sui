@@ -1,6 +1,6 @@
 // Casting to u8.
 //# run
-script {
+module 1::m {
 fun main() {
     // 0 remains unchanged.
     assert!((0u8 as u8) == 0u8, 1000);
@@ -30,7 +30,7 @@ fun main() {
 
 // Casting to u16.
 //# run
-script {
+module 2::m {
 fun main() {
     // 0 remains unchanged.
     assert!((0u8 as u16) == 0u16, 1000);
@@ -60,7 +60,7 @@ fun main() {
 
 // Casting to u32.
 //# run
-script {
+module 3::m {
 fun main() {
     // 0 remains unchanged.
     assert!((0u8 as u32) == 0u32, 1000);
@@ -90,7 +90,7 @@ fun main() {
 
 // Casting to u64.
 //# run
-script {
+module 4::m {
 fun main() {
     // 0 remains unchanged.
     assert!((0u8 as u64) == 0u64, 2000);
@@ -120,7 +120,7 @@ fun main() {
 
 // Casting to u128.
 //# run
-script {
+module 5::m {
 fun main() {
     // 0 remains unchanged.
     assert!((0u8 as u128) == 0u128, 3000);
@@ -150,7 +150,7 @@ fun main() {
 
 // Casting to u256.
 //# run
-script {
+module 6::m {
 fun main() {
     // 0 remains unchanged.
     assert!((0u8 as u256) == 0u256, 3000);
@@ -180,7 +180,7 @@ fun main() {
 
 // Casting to u8, overflowing.
 //# run
-script {
+module 7::m {
 fun main() {
     // should fail
     (256u64 as u8);
@@ -188,7 +188,7 @@ fun main() {
 }
 
 //# run
-script {
+module 8::m {
 fun main() {
     // should fail
     (303u64 as u8);
@@ -196,7 +196,7 @@ fun main() {
 }
 
 //# run
-script {
+module 9::m {
 fun main() {
     // should fail
     (256u128 as u8);
@@ -204,7 +204,7 @@ fun main() {
 }
 
 //# run
-script {
+module 10::m {
 fun main() {
     // should fail
     (56432u128 as u8);
@@ -212,7 +212,7 @@ fun main() {
 }
 
 //# run
-script {
+module 11::m {
 fun main() {
     // should fail
     (18446744073709551615u64 as u8);
@@ -220,7 +220,7 @@ fun main() {
 }
 
 //# run
-script {
+module 12::m {
 fun main() {
     // should fail
     (340282366920938463463374607431768211455u128 as u8);
@@ -228,7 +228,7 @@ fun main() {
 }
 
 //# run
-script {
+module 13::m {
 fun main() {
     // should fail
     (2561u16 as u8);
@@ -236,7 +236,7 @@ fun main() {
 }
 
 //# run
-script {
+module 14::m {
 fun main() {
     // should fail
     (65532u16 as u8);
@@ -244,7 +244,7 @@ fun main() {
 }
 
 //# run
-script {
+module 15::m {
 fun main() {
     // should fail
     (256123u32 as u8);
@@ -252,7 +252,7 @@ fun main() {
 }
 
 //# run
-script {
+module 16::m {
 fun main() {
     // should fail
     (11579208923731619542357098500868790785326998466564056403945758400791312963993u256 as u8);
@@ -261,7 +261,7 @@ fun main() {
 
 // Casting to u16, overflowing.
 //# run
-script {
+module 17::m {
 fun main() {
     // should fail
     (256343532u64 as u16);
@@ -269,7 +269,7 @@ fun main() {
 }
 
 //# run
-script {
+module 18::m {
 fun main() {
     // should fail
     (3564603u64 as u16);
@@ -277,7 +277,7 @@ fun main() {
 }
 
 //# run
-script {
+module 19::m {
 fun main() {
     // should fail
     (256666765790535666u128 as u16);
@@ -285,7 +285,7 @@ fun main() {
 }
 
 //# run
-script {
+module 20::m {
 fun main() {
     // should fail
     (256765735666u128 as u16);
@@ -293,7 +293,7 @@ fun main() {
 }
 
 //# run
-script {
+module 21::m {
 fun main() {
     // should fail
     (18446744073709551615u64 as u16);
@@ -301,7 +301,7 @@ fun main() {
 }
 
 //# run
-script {
+module 22::m {
 fun main() {
     // should fail
     (340282366920938463463374607431768211455u128 as u16);
@@ -309,7 +309,7 @@ fun main() {
 }
 
 //# run
-script {
+module 23::m {
 fun main() {
     // should fail
     (429496729u32 as u16);
@@ -317,7 +317,7 @@ fun main() {
 }
 
 //# run
-script {
+module 24::m {
 fun main() {
     // should fail
     (42949629u32 as u16);
@@ -325,7 +325,7 @@ fun main() {
 }
 
 //# run
-script {
+module 25::m {
 fun main() {
     // should fail
     (115792089237316195423570985008687907853269984665640564039457584007913129639u256 as u16);
@@ -334,7 +334,7 @@ fun main() {
 
 // Casting to u32, overflowing.
 //# run
-script {
+module 26::m {
 fun main() {
     // should fail
     (4294967295644u64 as u32);
@@ -342,7 +342,7 @@ fun main() {
 }
 
 //# run
-script {
+module 27::m {
 fun main() {
     // should fail
     (3564699003u64 as u32);
@@ -350,7 +350,7 @@ fun main() {
 }
 
 //# run
-script {
+module 28::m {
 fun main() {
     // should fail
     (256666765790535666u128 as u32);
@@ -358,7 +358,7 @@ fun main() {
 }
 
 //# run
-script {
+module 29::m {
 fun main() {
     // should fail
     (25676573566896u128 as u32);
@@ -366,7 +366,7 @@ fun main() {
 }
 
 //# run
-script {
+module 30::m {
 fun main() {
     // should fail
     (18446744073709551615u64 as u32);
@@ -374,7 +374,7 @@ fun main() {
 }
 
 //# run
-script {
+module 31::m {
 fun main() {
     // should fail
     (340282366920938463463374607431768211455u128 as u32);
@@ -382,7 +382,7 @@ fun main() {
 }
 
 //# run
-script {
+module 32::m {
 fun main() {
     // should fail
     (115792089237316195423570985008687907853269984665640564039457584007913129639u256 as u32);
@@ -391,7 +391,7 @@ fun main() {
 
 // Casting to u64, overflowing.
 //# run
-script {
+module 33::m {
 fun main() {
     // should fail
     (18446744073709551616u128 as u64);
@@ -399,7 +399,7 @@ fun main() {
 }
 
 //# run
-script {
+module 34::m {
 fun main() {
     // should fail
     (18446744073709551647u128 as u64);
@@ -407,7 +407,7 @@ fun main() {
 }
 
 //# run
-script {
+module 35::m {
 fun main() {
     // should fail
     (340282366920938463463374607431768211455u128 as u64);

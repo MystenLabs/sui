@@ -11,9 +11,10 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, SharedInput};
+use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObjectArc};
+use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -61,7 +62,7 @@ pub struct TemporaryStore<'backing> {
 
     /// Every package that was loaded from DB store during execution.
     /// These packages were not previously loaded into the temporary store.
-    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, Object>>,
+    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, PackageObject>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -151,11 +152,10 @@ impl<'backing> TemporaryStore<'backing> {
                 .map(|(id, (obj, _))| (id, obj))
                 .collect(),
             events: TransactionEvents { data: self.events },
-            max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_runtime_objects: self.loaded_child_objects,
-            no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
+            binary_config: to_binary_config(&self.protocol_config),
         }
     }
 
@@ -174,7 +174,7 @@ impl<'backing> TemporaryStore<'backing> {
         }
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
-            self.write_object(object, WriteKind::Mutate);
+            self.write_object(object.clone(), WriteKind::Mutate);
         }
     }
 
@@ -264,6 +264,9 @@ impl<'backing> TemporaryStore<'backing> {
                 SharedInput::Existing(oref) => oref,
                 SharedInput::Deleted(_) => {
                     unreachable!("Shared object deletion not supported in effects v1")
+                }
+                SharedInput::Cancelled(_) => {
+                    unreachable!("Per object congestion control not supported in effects v1.")
                 }
             })
             .collect();
@@ -705,7 +708,7 @@ impl<'backing> TemporaryStore<'backing> {
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`
             let new_storage_rebate =
-                gas_charger.track_storage_mutation(new_object_size, old_storage_rebate);
+                gas_charger.track_storage_mutation(*object_id, new_object_size, old_storage_rebate);
             object.storage_rebate = new_storage_rebate;
             if !object.is_immutable() {
                 objects_to_update.push((object.clone(), *write_kind));
@@ -728,7 +731,7 @@ impl<'backing> TemporaryStore<'backing> {
                 | DeleteKindWithOldVersion::Normal(version) => {
                     // get and track the deleted object `storage_rebate`
                     let storage_rebate = self.get_input_storage_rebate(object_id, *version);
-                    gas_charger.track_storage_mutation(0, storage_rebate);
+                    gas_charger.track_storage_mutation(*object_id, 0, storage_rebate);
                 }
                 DeleteKindWithOldVersion::UnwrapThenDelete
                 | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => {
@@ -991,20 +994,41 @@ impl<'backing> Storage for TemporaryStore<'backing> {
     ) {
         TemporaryStore::save_loaded_runtime_objects(self, loaded_runtime_objects)
     }
+
+    fn save_wrapped_object_containers(
+        &mut self,
+        _wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
+    ) {
+        unreachable!("Unused in v0")
+    }
+
+    fn check_coin_deny_list(
+        &self,
+        _written_objects: &BTreeMap<ObjectID, Object>,
+    ) -> Result<(), ExecutionError> {
+        unreachable!("Coin denylist v2 is not supported in sui-execution v0");
+    }
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         if let Some((obj, _)) = self.written.get(package_id) {
-            Ok(Some(PackageObjectArc::new(obj.clone())))
+            Ok(Some(PackageObject::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged
                 if let Some(v) = &obj {
-                    // TODO: Can this lock ever block execution?
-                    self.runtime_packages_loaded_from_db
-                        .write()
-                        .insert(*package_id, v.object().clone());
+                    if !self
+                        .runtime_packages_loaded_from_db
+                        .read()
+                        .contains_key(package_id)
+                    {
+                        // TODO: Can this lock ever block execution?
+                        // TODO: Why do we need a RwLock anyway???
+                        self.runtime_packages_loaded_from_db
+                            .write()
+                            .insert(*package_id, v.clone());
+                    }
                 }
                 obj
             })

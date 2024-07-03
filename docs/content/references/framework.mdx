@@ -1,0 +1,36 @@
+---
+title: Sui Framework
+description: The Sui framework libraries include Move modules that provide the logic for Sui and its standards. A Rust process creates the documentation for the modules directly from comments in the code.
+---
+
+import DocCardList from '@theme/DocCardList';
+
+The documentation in this section is created from the Rust `cargo doc` process. The process builds the content from comments in the source code.   
+
+## Framework documentation
+
+The child pages to this topic describe the module members for the following libraries:
+
+<DocCardList/>
+
+## Source code
+
+You can find the source code for these Move modules in the [crates/sui-framework/packages](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages) directory in the `sui` repository on GitHub. As previously mentioned, the comments included in the code provide context for the logic defined.
+
+## Crate documentation
+
+You can review the raw `cargo doc` output of the following documentation in the `sui` repository. The .md files are located in the `crates/sui-framework/docs` directory. Online, they are located at https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/docs.
+
+## Build documentation locally
+
+The most recent documentation is always available in the `main` branch of the `sui` repository. You shouldn't need to build the documentation locally, but if the need arises you can:
+
+1. Open a terminal or console to the `sui/crates/sui-framework` directory.
+1. Run `cargo doc --workspace --exclude "sui-benchmark" --no-deps`.
+1. The docs are built to `crates/sui-framework/docs` into their respective subdirectories.
+
+:::info
+
+If the `cargo doc` process does not work as expected, try running `cargo clean` before attempting again. 
+
+:::

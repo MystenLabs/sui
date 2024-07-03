@@ -98,9 +98,9 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         Ok(())
     }
 
-    fn flush(&mut self, end_checkpoint_seq_num: u64) -> Result<()> {
+    fn flush(&mut self, end_checkpoint_seq_num: u64) -> Result<bool> {
         if self.data.is_empty() {
-            return Ok(());
+            return Ok(false);
         }
         self.checkpoint_range.end = end_checkpoint_seq_num;
         let mut batch_data = vec![];
@@ -118,7 +118,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         let mut writer = ArrowWriter::try_new(self.file()?, batch.schema(), Some(properties))?;
         writer.write(&batch)?;
         writer.close()?;
-        Ok(())
+        Ok(true)
     }
 
     fn reset(&mut self, epoch_num: EpochId, start_checkpoint_seq_num: u64) -> Result<()> {
@@ -127,5 +127,12 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         self.epoch = epoch_num;
         self.data = vec![];
         Ok(())
+    }
+
+    fn file_size(&self) -> Result<Option<u64>> {
+        // parquet writer doesn't write records in a temp staging file
+        // and only flushes records after serializing and compressing them
+        // when flush is invoked
+        Ok(None)
     }
 }

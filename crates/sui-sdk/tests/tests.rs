@@ -11,13 +11,13 @@ fn mnemonic_test() {
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let (address, phrase, scheme) = keystore
-        .generate_and_add_new_key(SignatureScheme::ED25519, None, None)
+        .generate_and_add_new_key(SignatureScheme::ED25519, None, None, None)
         .unwrap();
 
     let keystore_path_2 = temp_dir.path().join("sui2.keystore");
     let mut keystore2 = Keystore::from(FileBasedKeystore::new(&keystore_path_2).unwrap());
     let imported_address = keystore2
-        .import_from_mnemonic(&phrase, SignatureScheme::ED25519, None)
+        .import_from_mnemonic(&phrase, SignatureScheme::ED25519, None, None)
         .unwrap();
     assert_eq!(scheme.flag(), Ed25519SuiSignature::SCHEME.flag());
     assert_eq!(address, imported_address);

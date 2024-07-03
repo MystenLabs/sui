@@ -1,0 +1,130 @@
+---
+title: Rules
+---
+
+Rules are programmable restrictions that you can apply to any action in the [`TokenPolicy`](./token-policy.mdx). They are the tool of compliance, regulation, and enforcement of certain business logic in the closed-loop system.
+
+## Rule structure
+
+A rule is represented as a witness - a type with a `drop` ability. You can either encode it in your application logic, or include it as part of a separate module for a more modular approach.
+
+```move
+/// The Rule type
+struct Rule has drop {}
+```
+
+After you [add a rule](./token-policy.mdx#adding-rules) to an action in the `TokenPolicy`, the action requires a stamp of the rule to pass confirmation.
+
+See the [Approving actions](./action-request.mdx#approving-actions) section for more details on how to approve an action.
+
+## Modular rules
+
+You can publish rules as separate reusable modules. This enables you to create a library of rules that you can use in different token policies, maximizing code reuse and minimizing the risk of errors.
+
+A rule module is a regular module with a `verify`-like function that typically takes a `TokenPolicy`, [`ActionRequest`](./action-request.mdx), and a `TxContext` as arguments. The function is responsible for verifying the action and stamping the `ActionRequest` with the rule type.
+
+```move
+module example::pass_rule {
+    use sui::tx_context;
+    use sui::token::{Self, ActionRequest, TokenPolicy};
+
+    /// The Rule type
+    struct Pass has drop {}
+
+    /// Add approval from the Pass rule to the ActionRequest
+    public fun verify<T>(
+        _policy: &TokenPolicy<T>,
+        action_request: &mut ActionRequest<T>,
+        ctx: &mut TxContext,
+    ) {
+        // ...
+        token::add_approval(Pass {}, action_request, ctx)
+    }
+}
+```
+
+## Rule configuration
+
+Some rules, such as `denylist` or `allowlist` require configuration. For example, a `denylist` rule might require a list of addresses that are not allowed to perform certain actions. A rule module can define a configuration structure and provide functions to add, modify, retrieve, and remove the configuration.
+
+:::info
+
+A single rule has a single configuration, even when assigned to multiple actions. If there's a need to have configuration per action, a rule module needs to define a storage structure that can hold and manage multiple configurations.
+
+:::
+
+The configuration system comes with a set of guarantees to protect token owners from malicious actions (or upgrades) from rule module developers:
+
+1. The `rule` module defines the type and structure of the configuration.
+2. Addition or modification and removal of the configuration are available only to the `TokenPolicy` owner.
+3. Only a rule can read the configuration.
+4. Rules cannot modify the configuration without the `TokenPolicy` owner's approval.
+
+The only attack vector available to the rule creator is upgrading the module and creating a function to bypass the restriction. Make sure to use rules provided by a trusted developer.
+
+## Configuration API
+
+The `sui::token` module defines the configuration API and has the following set of functions.
+
+### Add new configuration
+
+A rule must approve new configurations (the rule witness) and the `TokenPolicy` owner. The type of the configuration can be any as long as it has the `store` ability.
+
+```move
+// module: sui::token
+public fun add_rule_config<T, Rule: drop, Config: store>(
+    _rule: Rule,
+    policy: &mut TokenPolicy<T>,
+    policy_cap: &TokenPolicyCap<T>,
+    config: Config,
+    _ctx: &mut TxContext
+);
+```
+
+### Read the configuration
+
+Rules can read the configuration stored in the `TokenPolicy`.
+
+```move
+// module: sui::token
+public fun rule_config<T, Rule: drop, Config: store>(
+    _rule: Rule, policy: &TokenPolicy<T>
+): &Config;
+```
+
+### Modify the configuration
+
+A rule must approve configuration modifications (the rule witness) as well as the `TokenPolicy` owner.
+
+```move
+// module: sui::token
+public fun rule_config_mut<T, Rule: drop, Config: store>(
+    _rule: Rule, policy: &mut TokenPolicy<T>, policy_cap: &TokenPolicyCap<T>
+): &mut Config;
+```
+
+### Remove configuration
+
+A good practice for rules is to provide a method to remove the configuration, as a rule can use a custom type for it. However, a token owner can always call the `remove_rule_config` function to remove the configuration.
+
+```move
+// module: sui::token
+public fun remove_rule_config<T, Rule, Config: store>(
+    policy: &mut TokenPolicy<T>,
+    policy_cap: &TokenPolicyCap<T>,
+    _ctx: &mut TxContext
+): Config;
+```
+
+Because the configuration has `store`, the token owner can wrap and transfer or store the configuration somewhere else. If the `Config` type has `drop`, the value can be ignored.
+
+## Cheatsheet: Rule configuration API
+
+| Method name                 | Description                              | Notes                                          |
+|-----------------------------|------------------------------------------|------------------------------------------------|
+| `add_rule_config`           | Adds a new config for the rule           | Requires rule witness and token owner approval |
+| `remove_rule_config`        | Removes config object from the policy    | Token Owner can perform any time           |
+| `rule_config`               | Access the config immutably              | Only available to a rule                       |
+| `rule_config_mut`           | Get mutable reference to config          | Requires rule witness and token owner approval |
+| `has_rule_config`           | Check if the rule has a config set       | -                                              |
+| `has_rule_config_with_type` | Check if the rule has a config with type | -                                              |

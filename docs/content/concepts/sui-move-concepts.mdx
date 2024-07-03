@@ -9,7 +9,9 @@ You can use Move to define, create, and manage programmable Sui objects represen
 
 ## Move on Sui
 
-Move on Sui contains some important differences from Move on other blockchains. Sui takes advantage of Move's security and flexibility and enhances it with the features described in the following sections to vastly improve throughput, reduce delays in finality, and make Move programming more approachable. For full details, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper.
+
+Move on Sui contains some important differences from Move on other blockchains. Sui takes advantage of Move's security and flexibility and enhances it with the features described in the following sections to vastly improve throughput, reduce delays in finality, and make Move programming more approachable. For full details, see the [Sui Smart Contracts Platform](/doc/sui.pdf) white paper.
+
 
 :::tip
 
@@ -20,9 +22,9 @@ Where the Sui documentation refers to the Move language, the content is document
 In general, Move on Diem code written for other systems works in Sui with these exceptions:
 
 - [Global storage operators](https://move-language.github.io/move/global-storage-operators.html)
-- [Key abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.mdx)
+- [Key abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md)
 
-## Key differences
+## Key differences {#differences}
 
 Key differences with Move on Sui include:
 
@@ -44,7 +46,7 @@ Move on Sui addresses the scaling issue by not having global storage, or its rel
 
 In Move on Diem, there is a 16-byte `address` type used to represent account addresses in global storage. A 16 byte address is sufficient for the Move on Diem security model.
 
-Sui doesn't have global storage, so `address` is re-purposed as a 32-byte identifier used for both objects and accounts. Each transaction is signed by an account (the "sender") that is accessible from the transactioon context, and each object stores its `address` wrapped in its `id: UID` field. (Refer to [object.move](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object.move) in the Sui framework for details).
+Sui doesn't have global storage, so `address` is re-purposed as a 32-byte identifier used for both objects and accounts. Each transaction is signed by an account (the "sender") that is accessible from the transaction context, and each object stores its `address` wrapped in its `id: UID` field. (Refer to [object.move](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object.move) in the Sui framework for details).
 
 ### Object with key ability, globally unique IDs {#global-unique}
 
@@ -82,7 +84,3 @@ Move does not have a native type for strings, but it has a useful wrapper. See [
 ### One-time witness
 
 A one-time witness (OTW) is a special instance of a type created in the module initializer and guaranteed to be unique with only one instance. See [One-Time Witness](./sui-move-concepts/one-time-witness.mdx) for an example.
-
-### Patterns
-
-Move coding patterns, or techniques, solve logic problems you encounter when developing Move packages for the Sui blockchain. See the [Patterns](./sui-move-concepts/patterns.mdx) section for a list of documented coding patterns.

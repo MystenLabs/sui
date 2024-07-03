@@ -14,11 +14,6 @@ if ! command -v sed &> /dev/null; then
     exit 1
 fi
 
-if ! command -v cargo-hakari &> /dev/null; then
-    echo "Please install cargo-hakari (via cargo)" >&2
-    exit 1
-fi
-
 DEFAULT_REMOTE="https://github.com/move-language/move"
 DEFAULT_BRANCH="sui-move"
 
@@ -64,15 +59,5 @@ sed -i '' -f - "$REPO/Cargo.toml" <<EOS
 s!git = "[^"]*"!git = "$REMOTE"!
 s!rev = "[^"]*"!rev = "$COMMIT"!
 EOS
-
->&2 echo "Updating $REPO/.config/hakari.toml ..."
-sed -i '' -f - "$REPO/.config/hakari.toml" <<EOS
-/name = "move-/!b
-s!git = "[^"]*"!git = "$REMOTE"!
-s!rev = "[^"]*"!rev = "$COMMIT"!
-EOS
-
->&2 echo "Running \`cargo hakari generate\` ..."
-cargo hakari generate
 
 >&2 echo "Done!"

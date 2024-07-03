@@ -1,7 +1,0 @@
-[book]
-authors = ["The Move Contributors"]
-description = "Move book maintained by the Move Chinese contributors."
-language = "zh"
-multilingual = false
-src = "src"
-title = "Move Book 中文版"

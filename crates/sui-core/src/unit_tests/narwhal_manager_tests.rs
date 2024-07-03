@@ -5,10 +5,8 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::AuthorityState;
 use crate::checkpoints::{CheckpointMetrics, CheckpointService, CheckpointServiceNoop};
 use crate::consensus_handler::ConsensusHandlerInitializer;
-use crate::consensus_manager::narwhal_manager::{
-    NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics,
-};
-use crate::consensus_manager::ConsensusManagerTrait;
+use crate::consensus_manager::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
+use crate::consensus_manager::{ConsensusManagerMetrics, ConsensusManagerTrait};
 use crate::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use crate::state_accumulator::StateAccumulator;
 use bytes::Bytes;
@@ -16,8 +14,7 @@ use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Epoch, WorkerCache};
-use narwhal_executor::ExecutionState;
-use narwhal_types::{BatchAPI, ConsensusOutput, TransactionProto, TransactionsClient};
+use narwhal_types::{TransactionProto, TransactionsClient};
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,31 +26,6 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{interval, sleep};
-
-#[derive(Clone)]
-struct NoOpExecutionState {
-    epoch: Epoch,
-}
-
-#[async_trait::async_trait]
-impl ExecutionState for NoOpExecutionState {
-    async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
-        for batches in consensus_output.batches {
-            for batch in batches {
-                for transaction in batch.transactions().iter() {
-                    assert_eq!(
-                        transaction.clone(),
-                        Bytes::from(self.epoch.to_be_bytes().to_vec())
-                    );
-                }
-            }
-        }
-    }
-
-    async fn last_executed_sub_dag_index(&self) -> u64 {
-        0
-    }
-}
 
 async fn send_transactions(
     name: &bls12381::min_sig::BLS12381PublicKey,
@@ -70,7 +42,7 @@ async fn send_transactions(
     let mut client = TransactionsClient::new(channel);
     // Make a transaction to submit forever.
     let tx = TransactionProto {
-        transaction: Bytes::from(epoch.to_be_bytes().to_vec()),
+        transactions: vec![Bytes::from(epoch.to_be_bytes().to_vec())],
     };
     // Repeatedly send transactions.
     let interval = interval(Duration::from_millis(1));
@@ -95,19 +67,21 @@ async fn send_transactions(
     assert!(succeeded_once);
 }
 
-fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
+pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
     let (output, _result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
-    let accumulator = StateAccumulator::new(state.database.clone());
-    let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
-
     let epoch_store = state.epoch_store_for_testing();
+    let accumulator = Arc::new(StateAccumulator::new_for_tests(
+        state.get_accumulator_store().clone(),
+        &epoch_store,
+    ));
+    let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
 
     let (checkpoint_service, _) = CheckpointService::spawn(
         state.clone(),
         state.get_checkpoint_store().clone(),
         epoch_store.clone(),
-        Box::new(state.db()),
-        Arc::new(accumulator),
+        state.get_transaction_cache_reader().clone(),
+        Arc::downgrade(&accumulator),
         Box::new(output),
         Box::new(certified_output),
         CheckpointMetrics::new_for_tests(),
@@ -154,7 +128,7 @@ async fn test_narwhal_manager() {
             registry_service,
         };
 
-        let metrics = NarwhalManagerMetrics::new(&Registry::new());
+        let metrics = Arc::new(ConsensusManagerMetrics::new(&Registry::new()));
         let epoch_store = state.epoch_store_for_testing();
 
         let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
@@ -178,6 +152,8 @@ async fn test_narwhal_manager() {
                 ),
             )
             .await;
+
+        assert!(narwhal_manager.is_running().await);
 
         let name = config.protocol_key_pair().public().clone();
         narwhal_managers.push((
@@ -215,6 +191,7 @@ async fn test_narwhal_manager() {
         narwhal_manager.shutdown().await;
 
         // ensure that no primary or worker node is running
+        assert!(!narwhal_manager.is_running().await);
         assert!(!narwhal_manager.primary_node.is_running().await);
         assert!(narwhal_manager
             .worker_nodes

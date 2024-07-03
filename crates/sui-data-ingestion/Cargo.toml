@@ -1,0 +1,40 @@
+[package]
+name = "sui-data-ingestion"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+aws-config.workspace = true
+aws-sdk-dynamodb.workspace = true
+aws-sdk-s3.workspace = true
+backoff.workspace = true
+base64-url.workspace = true
+bcs.workspace = true
+byteorder.workspace = true
+bytes.workspace = true
+futures.workspace = true
+mysten-metrics.workspace = true
+notify.workspace = true
+object_store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+prometheus.workspace = true
+telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+sui-archival.workspace = true
+sui-storage.workspace = true
+sui-data-ingestion-core.workspace = true
+sui-types.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+rand.workspace = true
+tempfile.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }

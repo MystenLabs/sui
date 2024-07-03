@@ -4,7 +4,13 @@
 
 import * as os from 'os';
 import * as vscode from 'vscode';
-import * as Path from 'path';
+import * as path from 'path';
+
+export const MOVE_CONF_NAME = 'move';
+export const LINT_OPT = 'lint';
+export const TYPE_HINTS_OPT = 'inlay-hints.type';
+export const SUI_PATH_OPT = 'sui.path';
+export const SERVER_PATH_OPT = 'server.path';
 
 /**
  * User-defined configuration values, such as those specified in VS Code settings.
@@ -15,8 +21,24 @@ import * as Path from 'path';
 export class Configuration {
     private readonly configuration: vscode.WorkspaceConfiguration;
 
+    /** Default directory for the location of the language server binary */
+    readonly defaultServerDir: vscode.Uri;
+
+    /** Name of the language server binary */
+    readonly serverName: string;
+
+    /** Default path to the language server binary */
+    readonly defaultServerPath: vscode.Uri;
+
     constructor() {
-        this.configuration = vscode.workspace.getConfiguration('move-analyzer');
+        this.configuration = vscode.workspace.getConfiguration(MOVE_CONF_NAME);
+        this.defaultServerDir = vscode.Uri.joinPath(vscode.Uri.file(os.homedir()), '.sui', 'bin');
+        if (process.platform === 'win32') {
+            this.serverName = 'move-analyzer.exe';
+        } else {
+            this.serverName = 'move-analyzer';
+        }
+        this.defaultServerPath = vscode.Uri.joinPath(this.defaultServerDir, this.serverName);
     }
 
     /** A string representation of the configured values, for logging purposes. */
@@ -26,29 +48,33 @@ export class Configuration {
 
     /** The path to the move-analyzer executable. */
     get serverPath(): string {
-        const defaultName = 'move-analyzer';
-        let serverPath = this.configuration.get<string>('server.path', defaultName);
-        if (serverPath.length === 0) {
-            // The default value of the `server.path` setting is 'move-analyzer'.
-            // A user may have over-written this default with an empty string value, ''.
-            // An empty string cannot be an executable name, so instead use the default.
-            return defaultName;
-        }
-
-        if (serverPath === defaultName) {
-            // If the program set by the user is through PATH,
-            // it will return directly if specified
-            return defaultName;
-        }
-
+        const serverPath = this.configuration.get<string | null>(SERVER_PATH_OPT) ?? this.defaultServerPath.fsPath;
         if (serverPath.startsWith('~/')) {
-            serverPath = os.homedir() + serverPath.slice('~'.length);
+            return os.homedir() + serverPath.slice('~'.length);
         }
-
-        if (process.platform === 'win32' && !serverPath.endsWith('.exe')) {
-            serverPath = serverPath + '.exe';
-        }
-
-        return Path.resolve(serverPath);
+        return path.resolve(serverPath);
     }
-}
+
+    /** The path to the Sui binary. */
+    get suiPath(): string {
+        const suiBin = process.platform === 'win32' ? 'sui.exe' : 'sui';
+        const suiPath = this.configuration.get<string | null >(SUI_PATH_OPT) ?? suiBin;
+
+        if (suiPath === suiBin) {
+            return suiPath;
+        }
+        if (suiPath.startsWith('~/')) {
+            return os.homedir() + suiPath.slice('~'.length);
+        }
+        return path.resolve(suiPath);
+    }
+
+    get lint(): string {
+        return this.configuration.get(LINT_OPT) ?? 'default';
+    }
+
+    get inlayHintsForType(): boolean {
+        return this.configuration.get(TYPE_HINTS_OPT) ?? false;
+    }
+
+} // Configuration

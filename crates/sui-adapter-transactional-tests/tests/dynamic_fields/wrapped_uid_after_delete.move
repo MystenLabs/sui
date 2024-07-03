@@ -11,19 +11,17 @@
 module a::m {
 
 use sui::dynamic_field::{add, exists_, borrow, borrow_mut};
-use sui::object::{Self, UID};
-use sui::tx_context::{sender, TxContext};
 
-struct Wrapper has key {
+public struct Wrapper has key {
     id: UID,
     old: UID,
 }
 
-struct Obj has key, store {
+public struct Obj has key, store {
     id: UID,
 }
 
-struct Counter has key, store {
+public struct Counter has key, store {
     id: UID,
     count: u64,
 }
@@ -49,7 +47,7 @@ fun destroy(counter: Counter): u64 {
 
 entry fun t0(ctx: &mut TxContext) {
     let id = object::new(ctx);
-    sui::transfer::transfer(Obj { id }, sender(ctx))
+    sui::transfer::transfer(Obj { id }, ctx.sender())
 }
 
 entry fun t1(obj: &mut Obj, ctx: &mut TxContext) {
@@ -66,7 +64,7 @@ entry fun t3(obj: Obj, ctx: &mut TxContext) {
     let Obj { id } = obj;
     assert!(count(borrow(&id, 0)) == 1, 0);
     let wrapper = Wrapper { id: object::new(ctx), old: id };
-    sui::transfer::transfer(wrapper, sender(ctx))
+    sui::transfer::transfer(wrapper, ctx.sender())
 }
 
 entry fun t4(wrapper: &mut Wrapper) {

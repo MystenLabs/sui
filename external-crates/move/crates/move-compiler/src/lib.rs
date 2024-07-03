@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-#![forbid(unsafe_code)]
+// #![forbid(unsafe_code)]
 
 #[macro_use(sp)]
 extern crate move_ir_types;
@@ -19,6 +19,7 @@ pub mod expansion;
 pub mod hlir;
 pub mod interface_generator;
 pub mod ir_translation;
+pub mod linters;
 pub mod naming;
 pub mod parser;
 pub mod shared;
@@ -26,7 +27,6 @@ pub mod sui_mode;
 mod to_bytecode;
 pub mod typing;
 pub mod unit_test;
-pub mod verification;
 
 pub use command_line::{
     compiler::{

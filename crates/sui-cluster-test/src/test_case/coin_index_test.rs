@@ -101,7 +101,7 @@ impl TestCaseImpl for CoinIndexTest {
             .get_latest_sui_system_state()
             .await
             .active_validators
-            .get(0)
+            .first()
             .unwrap()
             .sui_address;
         let txn = make_staking_transaction(ctx.get_wallet(), validator_addr).await;
@@ -167,6 +167,7 @@ impl TestCaseImpl for CoinIndexTest {
                 args,
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -251,6 +252,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -316,6 +318,7 @@ impl TestCaseImpl for CoinIndexTest {
                 args,
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -355,6 +358,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -386,6 +390,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -455,6 +460,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -701,6 +707,7 @@ async fn add_to_envelope(
             ],
             None,
             rgp * 2_000_000,
+            None,
         )
         .await
         .unwrap();

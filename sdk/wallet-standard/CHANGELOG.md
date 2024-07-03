@@ -1,5 +1,236 @@
 # @mysten/wallet-standard
 
+## 0.12.11
+
+### Patch Changes
+
+- Updated dependencies [06a900c1ab]
+- Updated dependencies [45877014d1]
+- Updated dependencies [87d6f75403]
+  - @mysten/sui@1.2.1
+
+## 0.12.10
+
+### Patch Changes
+
+- Updated dependencies [fef99d377f]
+  - @mysten/sui@1.2.0
+
+## 0.12.9
+
+### Patch Changes
+
+- 805ff4d4c2: Fix bug where transaction was passed as both transaction and transactionBlock to sui:signTransactionBlock
+
+## 0.12.8
+
+### Patch Changes
+
+- Updated dependencies [0dfff33b95]
+  - @mysten/sui@1.1.2
+
+## 0.12.7
+
+### Patch Changes
+
+- Updated dependencies [101f1ff4b8]
+  - @mysten/sui@1.1.1
+
+## 0.12.6
+
+### Patch Changes
+
+- Updated dependencies [bae8f9683c]
+  - @mysten/sui@1.1.0
+
+## 0.12.5
+
+### Patch Changes
+
+- Updated dependencies [369b924343]
+  - @mysten/sui@1.0.5
+
+## 0.12.4
+
+### Patch Changes
+
+- Updated dependencies [f1e828f557]
+  - @mysten/sui@1.0.4
+
+## 0.12.3
+
+### Patch Changes
+
+- Updated dependencies [1f20580841]
+  - @mysten/sui@1.0.3
+
+## 0.12.2
+
+### Patch Changes
+
+- Updated dependencies [f0a839f874]
+  - @mysten/sui@1.0.2
+
+## 0.12.1
+
+### Patch Changes
+
+- Updated dependencies [6fc6235984]
+  - @mysten/sui@1.0.1
+
+## 0.12.0
+
+### Minor Changes
+
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
+  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+
+### Patch Changes
+
+- Updated dependencies [ebdfe7cf21]
+- Updated dependencies [a92b03de42]
+  - @mysten/sui@1.0.0
+
+## 0.11.6
+
+### Patch Changes
+
+- Updated dependencies [99b112178c]
+  - @mysten/sui.js@0.54.1
+
+## 0.11.5
+
+### Patch Changes
+
+- Updated dependencies [b7f673dbd9]
+- Updated dependencies [123b42c75c]
+  - @mysten/sui.js@0.54.0
+
+## 0.11.4
+
+### Patch Changes
+
+- Updated dependencies [774bfb41a8]
+  - @mysten/sui.js@0.53.0
+
+## 0.11.3
+
+### Patch Changes
+
+- Updated dependencies [929db4976a]
+  - @mysten/sui.js@0.52.0
+
+## 0.11.2
+
+### Patch Changes
+
+- Updated dependencies [b4ecdb5860]
+  - @mysten/sui.js@0.51.2
+
+## 0.11.1
+
+### Patch Changes
+
+- Updated dependencies [6984dd1e38]
+  - @mysten/sui.js@0.51.1
+
+## 0.11.0
+
+### Minor Changes
+
+- 437f0ca2ef: Add isSuiChain utility which is useful for type-safe dApp interfaces in wallets
+
+### Patch Changes
+
+- Updated dependencies [0cafa94027]
+  - @mysten/sui.js@0.51.0
+
+## 0.10.3
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/sui.js@0.50.1
+
+## 0.10.2
+
+### Patch Changes
+
+- Updated dependencies [a34f1cb67d]
+- Updated dependencies [c08e3569ef]
+- Updated dependencies [9a14e61db4]
+- Updated dependencies [13e922d9b1]
+- Updated dependencies [a34f1cb67d]
+- Updated dependencies [220a766d86]
+  - @mysten/sui.js@0.50.0
+
+## 0.10.1
+
+### Patch Changes
+
+- 9ac0a4ec01: Add extensions to all sdk import paths
+- Updated dependencies [9ac0a4ec01]
+  - @mysten/sui.js@0.49.1
+
+## 0.10.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+### Patch Changes
+
+- Updated dependencies [e5f9e3ba21]
+  - @mysten/sui.js@0.49.0
+
+## 0.9.0
+
+### Minor Changes
+
+- 165ad6b21d: Introduce new optional `id` property, which wallets can specify as a unique identifier, separate from the wallet name.
+
+### Patch Changes
+
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+- Updated dependencies [dd362ec1d6]
+  - @mysten/sui.js@0.48.1
+
+## 0.8.11
+
+### Patch Changes
+
+- Updated dependencies [cdcfa76c43]
+  - @mysten/sui.js@0.48.0
+
+## 0.8.10
+
+### Patch Changes
+
+- Updated dependencies [194c980cb]
+- Updated dependencies [9ac7e2f3d]
+- Updated dependencies [0259aec82]
+- Updated dependencies [64d45ba27]
+  - @mysten/sui.js@0.47.0
+
+## 0.8.9
+
+### Patch Changes
+
+- Updated dependencies [652bcdd92]
+  - @mysten/sui.js@0.46.1
+
+## 0.8.8
+
+### Patch Changes
+
+- Updated dependencies [28c2c3330]
+- Updated dependencies [43444c58f]
+- Updated dependencies [8d1e74e52]
+- Updated dependencies [093554a0d]
+- Updated dependencies [3718a230b]
+  - @mysten/sui.js@0.46.0
+
 ## 0.8.7
 
 ### Patch Changes

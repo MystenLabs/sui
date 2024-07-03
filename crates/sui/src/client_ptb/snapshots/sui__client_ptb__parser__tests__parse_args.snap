@@ -1,0 +1,547 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 4,
+        },
+        value: Bool(
+            true,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 5,
+        },
+        value: Bool(
+            false,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        value: InferredNum(
+            U256(
+                1,
+            ),
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 5,
+        },
+        value: InferredNum(
+            U256(
+                1000,
+            ),
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 11,
+        },
+        value: InferredNum(
+            U256(
+                100000000,
+            ),
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 10,
+        },
+        value: U64(
+            100000,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: U8(
+            1,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 6,
+        },
+        value: U128(
+            1,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: InferredNum(
+            U256(
+                1,
+            ),
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 7,
+        },
+        value: InferredNum(
+            U256(
+                4096,
+            ),
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 13,
+        },
+        value: InferredNum(
+            U256(
+                4294967296,
+            ),
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 12,
+        },
+        value: U64(
+            1048576,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 5,
+        },
+        value: U8(
+            1,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 8,
+        },
+        value: U128(
+            1,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 4,
+        },
+        value: Address(
+            0x1,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 8,
+        },
+        value: Address(
+            0x1000,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 14,
+        },
+        value: Address(
+            0x100000000,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 10,
+        },
+        value: Address(
+            0x100000,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 4,
+        },
+        value: Address(
+            0x1,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 5,
+        },
+        value: Address(
+            0x1,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 4,
+        },
+        value: Option(
+            Spanned {
+                span: Span {
+                    start: 0,
+                    end: 4,
+                },
+                value: None,
+            },
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 7,
+        },
+        value: Option(
+            Spanned {
+                span: Span {
+                    start: 5,
+                    end: 6,
+                },
+                value: Some(
+                    InferredNum(
+                        U256(
+                            1,
+                        ),
+                    ),
+                ),
+            },
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 9,
+        },
+        value: Option(
+            Spanned {
+                span: Span {
+                    start: 5,
+                    end: 8,
+                },
+                value: Some(
+                    InferredNum(
+                        U256(
+                            1,
+                        ),
+                    ),
+                ),
+            },
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 29,
+        },
+        value: Option(
+            Spanned {
+                span: Span {
+                    start: 5,
+                    end: 28,
+                },
+                value: Some(
+                    Option(
+                        Spanned {
+                            span: Span {
+                                start: 10,
+                                end: 27,
+                            },
+                            value: Some(
+                                Option(
+                                    Spanned {
+                                        span: Span {
+                                            start: 15,
+                                            end: 26,
+                                        },
+                                        value: Some(
+                                            Option(
+                                                Spanned {
+                                                    span: Span {
+                                                        start: 20,
+                                                        end: 25,
+                                                    },
+                                                    value: Some(
+                                                        U128(
+                                                            1,
+                                                        ),
+                                                    ),
+                                                },
+                                            ),
+                                        ),
+                                    },
+                                ),
+                            ),
+                        },
+                    ),
+                ),
+            },
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 8,
+        },
+        value: Vector(
+            [],
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 15,
+        },
+        value: Vector(
+            [
+                Spanned {
+                    span: Span {
+                        start: 7,
+                        end: 8,
+                    },
+                    value: InferredNum(
+                        U256(
+                            1,
+                        ),
+                    ),
+                },
+                Spanned {
+                    span: Span {
+                        start: 10,
+                        end: 11,
+                    },
+                    value: InferredNum(
+                        U256(
+                            2,
+                        ),
+                    ),
+                },
+                Spanned {
+                    span: Span {
+                        start: 13,
+                        end: 14,
+                    },
+                    value: InferredNum(
+                        U256(
+                            3,
+                        ),
+                    ),
+                },
+            ],
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 16,
+        },
+        value: Vector(
+            [
+                Spanned {
+                    span: Span {
+                        start: 7,
+                        end: 8,
+                    },
+                    value: InferredNum(
+                        U256(
+                            1,
+                        ),
+                    ),
+                },
+                Spanned {
+                    span: Span {
+                        start: 10,
+                        end: 11,
+                    },
+                    value: InferredNum(
+                        U256(
+                            2,
+                        ),
+                    ),
+                },
+                Spanned {
+                    span: Span {
+                        start: 13,
+                        end: 14,
+                    },
+                    value: InferredNum(
+                        U256(
+                            3,
+                        ),
+                    ),
+                },
+            ],
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 7,
+        },
+        value: VariableAccess(
+            Spanned {
+                span: Span {
+                    start: 0,
+                    end: 3,
+                },
+                value: "foo",
+            },
+            [
+                Spanned {
+                    span: Span {
+                        start: 4,
+                        end: 7,
+                    },
+                    value: "bar",
+                },
+            ],
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 11,
+        },
+        value: VariableAccess(
+            Spanned {
+                span: Span {
+                    start: 0,
+                    end: 3,
+                },
+                value: "foo",
+            },
+            [
+                Spanned {
+                    span: Span {
+                        start: 4,
+                        end: 7,
+                    },
+                    value: "bar",
+                },
+                Spanned {
+                    span: Span {
+                        start: 8,
+                        end: 11,
+                    },
+                    value: "baz",
+                },
+            ],
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 15,
+        },
+        value: VariableAccess(
+            Spanned {
+                span: Span {
+                    start: 0,
+                    end: 3,
+                },
+                value: "foo",
+            },
+            [
+                Spanned {
+                    span: Span {
+                        start: 4,
+                        end: 7,
+                    },
+                    value: "bar",
+                },
+                Spanned {
+                    span: Span {
+                        start: 8,
+                        end: 11,
+                    },
+                    value: "baz",
+                },
+                Spanned {
+                    span: Span {
+                        start: 12,
+                        end: 15,
+                    },
+                    value: "qux",
+                },
+            ],
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 5,
+        },
+        value: VariableAccess(
+            Spanned {
+                span: Span {
+                    start: 0,
+                    end: 3,
+                },
+                value: "foo",
+            },
+            [
+                Spanned {
+                    span: Span {
+                        start: 4,
+                        end: 5,
+                    },
+                    value: "0",
+                },
+            ],
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 7,
+        },
+        value: VariableAccess(
+            Spanned {
+                span: Span {
+                    start: 0,
+                    end: 3,
+                },
+                value: "foo",
+            },
+            [
+                Spanned {
+                    span: Span {
+                        start: 4,
+                        end: 5,
+                    },
+                    value: "0",
+                },
+                Spanned {
+                    span: Span {
+                        start: 6,
+                        end: 7,
+                    },
+                    value: "1",
+                },
+            ],
+        ),
+    },
+]

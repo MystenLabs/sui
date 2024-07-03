@@ -1,11 +1,9 @@
 module 0x42::t {
 
-friend 0x42::m;
-
 public struct X has drop {}
 
 public fun pub(_self: &X) {}
-public(friend) fun fr(_self: &X) {}
+public(package) fun fr(_self: &X) {}
 
 }
 

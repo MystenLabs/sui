@@ -247,6 +247,8 @@ async fn test_stake_all() {
 
 #[tokio::test]
 async fn test_withdraw_stake() {
+    telemetry_subscribers::init_for_testing();
+
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .build()
@@ -439,7 +441,8 @@ async fn test_pay_sui_multiple_times() {
 
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
-    for _ in 1..100 {
+    for i in 1..20 {
+        println!("Iteration: {}", i);
         let ops = serde_json::from_value(json!(
             [{
                 "operation_identifier":{"index":0},

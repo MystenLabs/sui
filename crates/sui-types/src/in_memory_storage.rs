@@ -5,14 +5,17 @@ use crate::base_types::VersionNumber;
 use crate::committee::EpochId;
 use crate::inner_temporary_store::WrittenObjects;
 use crate::storage::{
-    get_module, get_module_by_id, load_package_object_from_object_store, PackageObjectArc,
+    get_module, get_module_by_id, load_package_object_from_object_store, PackageObject,
 };
+use crate::transaction::TransactionDataAPI;
+use crate::transaction::{InputObjectKind, InputObjects, ObjectReadResult, Transaction};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::{Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
 };
+use better_any::{Tid, TidAble};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
@@ -20,13 +23,13 @@ use std::collections::BTreeMap;
 
 // TODO: We should use AuthorityTemporaryStore instead.
 // Keeping this functionally identical to AuthorityTemporaryStore is a pain.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Tid)]
 pub struct InMemoryStorage {
     persistent: BTreeMap<ObjectID, Object>,
 }
 
 impl BackingPackageStore for InMemoryStorage {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         load_package_object_from_object_store(self, package_id)
     }
 }
@@ -107,7 +110,7 @@ impl ModuleResolver for &mut InMemoryStorage {
 }
 
 impl ObjectStore for InMemoryStorage {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> crate::storage::error::Result<Option<Object>> {
         Ok(self.persistent.get(object_id).cloned())
     }
 
@@ -115,7 +118,7 @@ impl ObjectStore for InMemoryStorage {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> crate::storage::error::Result<Option<Object>> {
         Ok(self
             .persistent
             .get(object_id)
@@ -131,7 +134,7 @@ impl ObjectStore for InMemoryStorage {
 }
 
 impl ObjectStore for &mut InMemoryStorage {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> crate::storage::error::Result<Option<Object>> {
         Ok(self.persistent.get(object_id).cloned())
     }
 
@@ -139,7 +142,7 @@ impl ObjectStore for &mut InMemoryStorage {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> crate::storage::error::Result<Option<Object>> {
         Ok(self
             .persistent
             .get(object_id)
@@ -172,6 +175,22 @@ impl InMemoryStorage {
         Self { persistent }
     }
 
+    pub fn read_input_objects_for_transaction(&self, transaction: &Transaction) -> InputObjects {
+        let mut input_objects = Vec::new();
+        for kind in transaction.transaction_data().input_objects().unwrap() {
+            let obj: Object = match kind {
+                InputObjectKind::MovePackage(id)
+                | InputObjectKind::ImmOrOwnedMoveObject((id, _, _))
+                | InputObjectKind::SharedMoveObject { id, .. } => {
+                    self.get_object(&id).unwrap().clone()
+                }
+            };
+
+            input_objects.push(ObjectReadResult::new(kind, obj.into()));
+        }
+        input_objects.into()
+    }
+
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
         self.persistent.get(id)
     }
@@ -187,6 +206,10 @@ impl InMemoryStorage {
     pub fn insert_object(&mut self, object: Object) {
         let id = object.id();
         self.persistent.insert(id, object);
+    }
+
+    pub fn remove_object(&mut self, object_id: ObjectID) -> Option<Object> {
+        self.persistent.remove(&object_id)
     }
 
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {

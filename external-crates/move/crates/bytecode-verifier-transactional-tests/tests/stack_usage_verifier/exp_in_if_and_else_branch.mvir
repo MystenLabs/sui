@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     jump_if (true) b2;
 label b1:
@@ -12,4 +14,6 @@ label b2:
     jump b3;
 label b3:
     return;
+}
+
 }

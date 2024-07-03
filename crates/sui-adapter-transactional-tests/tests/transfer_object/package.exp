@@ -12,7 +12,7 @@ task 2 'view-object'. lines 13-13:
 1,0::m
 
 task 3 'transfer-object'. lines 15-15:
-Error: Error checking transaction input objects: MovePackageAsObject { object_id: 0xea71cafce0431a127076a7884cb66612bdc9bb2ff442c4d3afbbc73dbc18f660 }
+Error: Error checking transaction input objects: MovePackageAsObject { object_id: object(1,0) }
 
 task 4 'view-object'. lines 17-17:
 1,0::m

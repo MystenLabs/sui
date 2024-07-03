@@ -1,0 +1,455 @@
+# TS SDK v1.0 Migration Guide
+
+We are excited to announce the 1.0 release of the Typescript SDK. This release includes a lot of new
+features, as well as as number of renames, and cleanup of old APIs that no longer make sense.
+
+This migration guide will primarily focus on helping migrate existing features that have changed in
+this release, and won't cover all the new features that have been added, but here are some
+highlights:
+
+- [A new GraphQL Client for the newly released Sui GraphQL API](../graphql)
+- [New Transaction Executor classes for efficient Transaction execution](../executors)
+- [New Transaction Intents to simplify common transaction patterns](../transaction-building/intents)
+- [A new Plugin system for Extending Transaction Building](../plugins)
+
+The majority of changes in this release are in the `@mysten/sui` package, but the changes to API
+require some breaking changes across all the Typescript SDKs. You can find migration guides for all
+affected packages below:
+
+## Changes to `@mysten/sui`
+
+As part of the 1.0 release the `@mysten/sui.js` package has been renamed to `@mysten/sui`
+
+To upgrade to the new version, uninstall the old package and install the new one:
+
+```sh npm2yarn
+npm uninstall @mysten/sui.js
+npm install @mysten/sui
+```
+
+Then update all imports to use the new package name:
+
+```diff
+- import { SuiClient } from '@mysten/sui.js'
++ import { SuiClient } from '@mysten/sui'
+```
+
+### `@mysten/sui/transactions`
+
+The largest changes in the 1.0 release are all centered around how Transactions are built and
+executed. This includes are complete rewrite of the internal representation of transactions, as well
+as as changes to the terminology used in the SDK and corresponding documentation.
+
+The `TransactionBlock` class has been renamed to `Transaction`, and most methods and properties that
+previously used `transactionBlock` have been updated to use `transaction` instead.
+
+The distinction between TransactionBlocks and transactions has been a source of confusion for many
+people. With this release we are hoping to disambiguate these terms, and similar changes will be
+coming to other parts of the SUI ecosystem in the future.
+
+A `Transaction` now refers to a Programable Transaction Block, which consists of 1 or more
+`commands` (previously called transactions). A `Command` refers to a single step in Programable
+Transaction Block.
+
+### Transaction
+
+The `TransactionBlock` class has been renamed to `Transaction`, along with many related APIs:
+
+- `TransactionBlock` -> `Transaction`
+- `isTransactionBlock` -> `isTransaction`
+- `TransactionBlockInput` -> `TransactionInput`
+- `signer.signTransactionBlock` -> `signer.signTransaction`
+- `pubkey.verifyTransactionBlock` -> `pubkey.verifyTransaction`
+- `suiClient.waitForTransactionBlock({ transactionBlock })` ->
+  `suiClient.waitForTransaction({ transaction })`
+- `suiClient.signAndExecuteTransactionBlock({ transactionBlock })` ->
+  `suiClient.signAndExecuteTransaction({ transaction })`
+
+There are a few methods on SuiClient that retain the `TransactionBlock` name because they correspond
+to specific JSON RPC calls. The following methods are unchanged:
+
+- `suiClient.getTransactionBlock`
+- `suiClient.queryTransactionBlocks`
+- `suiClient.executeTransactionBlock`
+- `suiClient.dryRunTransactionBlock`
+- `suiClient.devInspectTransactionBlock`
+
+### Building Transactions
+
+With the introduction of the Transaction plugin API, and Transaction Intents, serializing
+transactions is now an asynchronous process.
+
+`transaction.serialize()` has been deprecated in favor of `transaction.toJSON()`. The `toJSON`
+method will invoke any serialization plugins used by the transaction, and return JSON in a new
+Transaction JSON Format.
+
+We have also removed the protocol config and limits options since enforcing these limits in the
+Transaction builder adds little practical value, and required additional API calls every time a
+transaction was build.
+
+#### Cloning a Transaction
+
+Cloning a transaction can now be done the `transaction.from` rather than the TransactionBlock
+constructor:
+
+```diff
+- const newTransaction = new TransactionBlock(oldTransaction)
++ const newTransaction = Transaction.from(oldTransaction)
+```
+
+#### `transaction.blockData` -> `transaction.getData()`
+
+The `blockData` property has been deprecated and will be removed in a future release. A new
+`txb.getData()` method has been added, and returns the new internal representation of a
+TransactionBlock. The `blockData` property will continue to return the old representation to allow a
+more gradual migration, but will be removed in a future minor release.
+
+#### `transaction.pure`
+
+The previously deprecated uses of `txb.pure` have now been removed. `transaction.pure()` used to
+accept raw values at would attempt to infer the correct BCS encoding based on usage. This behavior
+was the source of a lot of bugs and confusion. transaction.pure() now accepts serialized bcs values,
+and includes a number of helper method for the most common cases.
+
+The latest release of the BCS library has also removed its type registry, so the `transaction.pure`
+can no longer be called with a bcs type-name. All pure values must now either be serialized using
+the bcs library, or use one of the provided helper methods.
+
+```diff
+- txb.pure('0x123')
++ txb.pure.address('0x123')
++ txb.pure(bcs.Address.serialize('0x123'))
+- txb.pure(123)
++ txb.pure.u64(123n)
++ txb.pure(bcs.U64.serialize(123n))
+- txb.pure(123, 'u64')
++ txb.pure.u64(123n)
+- txb.pure(['0x123'], 'vector<address>')
++ txb.pure(bcs.vector(bcs.Address).serialize(['0x123']))
+```
+
+### Commands
+
+The `Transactions` export has been renamed to `Commands` and some of the options have been renamed:
+
+```diff
+- import { Transactions } from '@mysten/sui/transactions'
++ import { Commands } from '@mysten/sui/transactions'
+
+ tx.makeMoveVec({
+   type: '0x123::foo:Bar'
+-  objects: [tx.object(objectId)],
++  elements: [tx.object(objectId)]
+ })
+
+ tx.upgrade({
+   modules,
+   dependencies,
+   packageId: EXAMPLE_PACKAGE_ID,
+   ticket: tx.object(ticketId),
+-  packageId: '0x123',
++  package: '0x123'
+ })
+```
+
+### Transaction types
+
+The shapes of the following types have change. We expect that for most use-cases, this will not
+require any migration because these types represent values created by other parts of the SDK that
+have been updated to return the new format
+
+- [`TransactionObjectArgument`](/typedoc/types/_mysten_sui.transactions.TransactionObjectArgument.html)
+  shape changed
+- [`TransactionResult`](/typedoc/types/_mysten_sui.transactions.TransactionResult.html) shape
+  changed
+- [`TransactionObjectInput`](/typedoc/types/_mysten_sui.transactions.TransactionObjectInput.html)
+  shape changed
+- [`TransactionArgument`](/typedoc/types/_mysten_sui.transactions.TransactionArgument.html) shape
+  changed
+- [`TransactionBlockInput`](/typedoc/types/_mysten_sui.transactions.TransactionBlockInput.html)
+  shape changed
+
+### `getPureSerializationType`
+
+The `getPureSerializationType` utility function has been removed.
+
+## `@mysten/sui/bcs`
+
+### Bcs Types
+
+Many of the BCS type definitions exported from the Typescript SDK have been updated to more closely
+align with the Rust definitions. If you were using these types to parse transactions from BCS, you
+may find that some of the data structures have been updated.
+
+We have also removed some redundant exports that mirror the exported BCS types. These types often
+conflicted with other types in the Typescript SDK, leading to confusion about which version to use.
+
+The correct way to get Typescript types for the exported BCS types is to use the $inferType type
+helper:
+
+```ts
+import { bcs } from '@mysten/sui/bcs';
+
+function callArg(arg: typeof bcs.CallArg.$inferType) {
+	// ...
+}
+```
+
+## /utils
+
+The typescript SDK no longer uses `superstruct` for type validation, so the `is` and `assert`
+helpers have been removed.
+
+## /multisig
+
+The `publicKeyFromSuiBytes` has been moved to `@mysten/sui/verify`
+
+```diff
+- import { publicKeyFromSuiBytes } from '@mysten/sui/multisig'
++ import { publicKeyFromSuiBytes } from '@mysten/sui/verify'
+```
+
+## /verify
+
+The methods for verifying signatures have been renamed
+
+```diff
+- import {
+-   verifyTransactionBlock
+-   verifyPersonalMessage
+- } from '@mysten/sui/verify'
++ import {
++   verifyTransactionSignature
++   verifyPersonalMessageSignature
++ } from '@mysten/sui/verify'
+```
+
+## /cryptography
+
+The `signData` method has been removed from Signers and Keypair classes. Use `sign` instead.
+
+```diff
+- keypair.signData(data)
++ await keypair.sign(data)
+```
+
+For some keypair implementations, the `signPersonalMessage` method incorrectly returned a BCS
+encoded version of the signed message. All `signPersonalMessage` implementations now correctly
+return the unwrapped bytes of the message that was signed
+
+# @mysten/bcs
+
+## The Registry
+
+We have removed the previously deprecated registry from the BCS library. The registry was removed
+from the documentation when BCS was re-written last year, and is now being removed entirely.
+
+The registry was dependent on side-effects to register type definitions, and had no way to enforce
+type-safety. The new BCS API works much better in bundlers, and provides great type-safety when
+parsing an serializing BCS data.
+
+## Size limits
+
+Previously the `size` option was used both as an initial size and a maximum size when creating a bcs
+writer instance. We replaced the `size` option with a new `initialSize` option, and have updated
+`maxSize` to default to Infinity rather than defaulting to `size`.
+
+## new methods on BcsType
+
+We have added `fromBase64`, `fromBase58`, and `fromHex` methods to `BcsType` instances, making it
+easier to parse BCS data from various string encodings.
+
+## Generics
+
+We previously deprecated the `generic` helper exported from `@mysten/bcs`. This helper has now been
+entirely removed.
+
+## Enums
+
+We have updated the typescript types associated with BCS enum types to simplify working with parsed
+enums in typescript. Parsed enums now have a `$kind` property that can be used to discriminate
+between enum variants. Checking properties of the enum type now works without using the `in`
+operator:
+
+```ts
+const MyEnum = bcs.enum('MyEnum', {
+	Variant0: bcs.u16(),
+	Variant1: bcs.u8(),
+	Variant2: bcs.string(),
+});
+
+const parsed = MyEnum.deserialize(data);
+
+// Discriminate using the $kind property
+if (parsed.$kind === 'Variant0') {
+	parsed.Variant0; // type is number
+}
+
+// We can also directly the enum properties
+if (parsed.Variant0 !== undefined) {
+	parsed.Variant0; // type is number
+}
+```
+
+# @mysten/kiosk
+
+The options passed to `KioskTransaction` and `TransferPolicyTransaction` have been updated to
+replace `transactionBlock` with `transaction`.
+
+```diff
+- const kioskTransaction = new KioskTransaction({ transactionBlock, ...otherOptions })
++ const kioskTransaction = new KioskTransaction({ transaction, ...otherOptions })
+
+- const transferPolicyTransaction = new TransferPolicyTransaction({ transactionBlock, ...otherOptions })
++ const transferPolicyTransaction = new TransferPolicyTransaction({ transaction, ...otherOptions })
+```
+
+The options passed to `resolveRuleFunction` have also been updated to pass the `transaction` rather
+than the `transactionBlock`.
+
+```diff
+- resolveRuleFunction({ transactionBlock }) => { ... }
++ resolveRuleFunction({ transaction }) => { ... }
+```
+
+# @mysten/enoki
+
+The Enoki SDK has been updated to replace TransactionBlock terminology with Transaction throughout
+the API:
+
+```diff
+- enokiFlow.sponsorAndExecuteTransactionBlock({ transactionBlock })
++ enokiFlow.sponsorAndExecuteTransaction({ transaction })
+
+- enokiFlow.sponsorTransactionBlock({ transactionBlock })
++ enokiFlow.sponsorTransaction({ transaction })
+
+- enokiFlow.executeTransactionBlock({ ... })
++ enokiFlow.executeTransaction({ ... })
+
+- enokiClient.createSponsoredTransactionBlock({ transactionBlockKindBytes })
++ enokiClient.createSponsoredTransaction({ transactionKindBytes })
+
+- enokiClient.executeSponsoredTransactionBlock({ ... })
++ enokiClient.executeSponsoredTransaction({ ... })
+```
+
+# dapp-kit
+
+## `useSignTransactionBlock`
+
+The `useSignTransactionBlock` has been named to `useSignTransaction` and now returns bytes instead
+of transactionBlockBytes
+
+```diff
+- const { mutate: signTransactionBlock } = useSignTransactionBlock()
++ const { mutate: signTransaction } = useSignTransaction()
+  ...
+- const { signature, transactionBlockBytes } = await signTransactionBlock({ transactionBlock })
++ const { signature, bytes } = await signTransaction({ transaction })
+```
+
+## `useSignAndExecuteTransactionBlock`
+
+The `useSignAndExecuteTransactionBlock` has been named to `useSignAndExecuteTransaction` and
+redesigned to work the the updated wallet-standard methods.
+
+`useSignAndExecuteTransaction` no-longer accepts the options passed to
+`suiClient.executeTransactionBlock` for returning additional data.
+
+By default useSignAndExecuteTransactionBlock will now return an object with the transaction `digest`
+and the bcs encoded transaction effects:
+
+```ts
+const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction()
+...
+const { digest, effects } = await signAndExecuteTransaction({ transaction })
+```
+
+To fetch additional data, you can provide a customized `execute` function:
+
+```diff
+- const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock()
+- const { digest, objectChanges } = await signAndExecuteTransactionBlock({
+-   transactionBlock: transaction,
+-   options: {
+-     showObjectChanges: true,
+-   },
+- })
+
++ const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock({
++ 	execute: async ({ bytes, signature }) =>
++ 		await suiClient.executeTransactionBlock({
++ 			transactionBlock: bytes,
++ 			signature,
++ 			options: {
++ 				// Raw effects are required so the effects can be reported back to the wallet
++ 				showRawEffects: true,
++ 				// Select additional data to return
++ 				showObjectChanges: true,
++ 			},
++ 		}),
++ });
+
++ const { digest, objectChanges } = await signAndExecuteTransaction({
++ 	transaction,
++ });
+```
+
+When using a custom `execute` function, the you must return the rawEffects by setting
+`showRawEffects` to true if using `suiClient.executeTransactionBlock`, or by returning an object
+matching `{ effects: { bcs: string` } }` with the base64 encoded bcs effects when using a GraphQL
+query to execute the transaction.
+
+This change decouples the `useSignAndExecuteTransaction` hook from a specific RPC API
+implementation, and will enable migration to GraphQL without additional breaking changes in this
+hook.
+
+# @mysten/zksend
+
+The `getSentTransactionBlocksWithLinks` method has been renamed to `getSentTransactionsWithLinks`,
+and all methods that previously accepted a `transactionBlock` option now accept a `transaction`
+instead instead.
+
+```diff
+- import { getSentTransactionBlocksWithLinks, ZkSendLinkBuilder } from '@mysten/zksend'
++ import { getSentTransactionsWithLinks, ZkSendLinkBuilder } from '@mysten/zksend'
+
+  const tx = new Transaction();
+  const link = new ZkSendLinkBuilder({
+    sender: '0x...',
+  });
+
+  link.createSendTransaction({
+-   transactionBlock: tx,
++   transaction: tx,
+  });
+```
+
+# @mysten/wallet-standard
+
+### New wallet-standard features
+
+We have added 3 new features to the wallet standard designed to allow efficient execution of
+Transactions in wallets without waiting for previous transactions to be indexed in the wallets RPC
+API.
+
+For more details on how wallets can take advantage of these features, see the
+[wallet-standard documentation](https://docs.sui.io/standards/wallet-standard).
+
+The old `sui:signTransactionBlock` and `sui:signAndExecuteTransactionBlock` methods have been
+deprecated in favor of the new `sui:signTransaction` and `sui:signAndExecuteTransaction` methods,
+but wallets should continue to implement these deprecated methods until the new methods have been
+broadly adopted by dapps.
+
+### helpers
+
+2 new helpers have been added to make it easier for dapps to handle wallets that have implemented
+either the new or old wallet-standard methods: `signTransaction` and `signAndExecuteTransaction`.
+
+```ts
+import { signAndExecuteTransaction, signTransaction } from '@mysten/wallet-standard';
+
+const { signature, bytes } = await signTransaction(wallet, { transaction });
+const { digest, effects } = await signAndExecuteTransaction(wallet, { transaction });
+```

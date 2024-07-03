@@ -6,25 +6,23 @@ use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
 use anyhow::{bail, Result};
 
 use move_binary_format::{
-    access::ModuleAccess,
     compatibility::Compatibility,
-    errors::VMError,
+    errors::{Location, VMError},
     file_format::{AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken},
     normalized, IndexKind,
 };
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{FileHash, MOVE_COMPILED_EXTENSION};
 use move_compiler::{
-    compiled_unit::{CompiledUnit, NamedCompiledModule},
-    diagnostics::{self, report_diagnostics, Diagnostic, Diagnostics, FileName},
+    diagnostics::{self, report_diagnostics, Diagnostic, Diagnostics},
+    shared::files::FileName,
 };
 use move_core_types::{
     account_address::AccountAddress,
     effects::{ChangeSet, Op},
-    errmap::ErrorMapping,
     language_storage::{ModuleId, TypeTag},
     transaction_argument::TransactionArgument,
-    vm_status::{AbortLocation, StatusCode, VMStatus},
+    vm_status::{StatusCode, StatusType},
 };
 use move_ir_types::location::Loc;
 use move_package::compilation::compiled_package::CompiledUnitWithSource;
@@ -33,6 +31,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     fs,
     path::Path,
+    sync::Arc,
 };
 
 pub mod on_disk_state_view;
@@ -58,16 +57,7 @@ pub fn get_gas_status(cost_table: &CostTable, gas_budget: Option<u64>) -> Result
     Ok(gas_status)
 }
 
-pub(crate) fn module(unit: &CompiledUnit) -> Result<&CompiledModule> {
-    match unit {
-        CompiledUnit::Module(NamedCompiledModule { module, .. }) => Ok(module),
-        _ => bail!("Found script in modules -- this shouldn't happen"),
-    }
-}
-
 pub(crate) fn explain_publish_changeset(changeset: &ChangeSet) {
-    // publish effects should contain no resources
-    assert!(changeset.resources().next().is_none());
     // total bytes written across all accounts
     let mut total_bytes_written = 0;
     for (addr, name, blob_op) in changeset.modules() {
@@ -154,18 +144,18 @@ pub(crate) fn explain_publish_error(
         file_hash,
         (
             FileName::from(unit.source_path.to_string_lossy()),
-            file_contents,
+            Arc::from(file_contents),
         ),
     );
 
-    let module = module(&unit.unit)?;
+    let module = &unit.unit.module;
     let module_id = module.self_id();
     let error_clone = error.clone();
-    match error.into_vm_status() {
-        VMStatus::Error(DUPLICATE_MODULE_NAME) => {
+    match error.major_status() {
+        DUPLICATE_MODULE_NAME => {
             println!("Module {} exists already.", module_id);
         }
-        VMStatus::Error(BACKWARD_INCOMPATIBLE_MODULE_UPDATE) => {
+        BACKWARD_INCOMPATIBLE_MODULE_UPDATE => {
             println!("Breaking change detected--publishing aborted. Re-run with --ignore-breaking-changes to publish anyway.");
 
             let old_module = state.get_module_by_id(&module_id)?.unwrap();
@@ -173,12 +163,13 @@ pub(crate) fn explain_publish_error(
             let new_api = normalized::Module::new(module);
 
             if (Compatibility {
-                check_struct_and_pub_function_linking: false,
-                check_struct_layout: true,
+                check_datatype_and_pub_function_linking: false,
+                check_datatype_layout: true,
                 check_friend_linking: false,
                 check_private_entry_linking: true,
                 disallowed_new_abilities: AbilitySet::EMPTY,
-                disallow_change_struct_type_params: false,
+                disallow_change_datatype_type_params: false,
+                disallow_new_variants: false,
             })
             .check(&old_api, &new_api)
             .is_err()
@@ -187,12 +178,13 @@ pub(crate) fn explain_publish_error(
                 // structs of this type. but probably a bad idea
                 println!("Layout API for structs of module {} has changed. Need to do a data migration of published structs", module_id)
             } else if (Compatibility {
-                check_struct_and_pub_function_linking: true,
-                check_struct_layout: false,
+                check_datatype_and_pub_function_linking: true,
+                check_datatype_layout: false,
                 check_friend_linking: false,
                 check_private_entry_linking: true,
                 disallowed_new_abilities: AbilitySet::EMPTY,
-                disallow_change_struct_type_params: false,
+                disallow_change_datatype_type_params: false,
+                disallow_new_variants: false,
             })
             .check(&old_api, &new_api)
             .is_err()
@@ -202,7 +194,7 @@ pub(crate) fn explain_publish_error(
                 println!("Linking API for structs/functions of module {} has changed. Need to redeploy all dependent modules.", module_id)
             }
         }
-        VMStatus::Error(CYCLIC_MODULE_DEPENDENCY) => {
+        CYCLIC_MODULE_DEPENDENCY => {
             println!(
                 "Publishing module {} introduces cyclic dependencies.",
                 module_id
@@ -248,7 +240,7 @@ pub(crate) fn explain_publish_error(
             }
             println!("Re-run with --ignore-breaking-changes to publish anyway.")
         }
-        VMStatus::Error(MISSING_DEPENDENCY) => {
+        MISSING_DEPENDENCY => {
             let err_indices = error_clone.indices();
             let mut diags = Diagnostics::new();
             for (ind_kind, table_ind) in err_indices {
@@ -276,13 +268,10 @@ pub(crate) fn explain_publish_error(
                     }
                 }
             }
-            report_diagnostics(&files, diags)
+            report_diagnostics(&files.into(), diags)
         }
-        VMStatus::Error(status_code) => {
+        status_code => {
             println!("Publishing failed with unexpected error {:?}", status_code)
-        }
-        VMStatus::Executed | VMStatus::MoveAbort(..) | VMStatus::ExecutionFailure { .. } => {
-            unreachable!()
         }
     }
 
@@ -291,7 +280,6 @@ pub(crate) fn explain_publish_error(
 
 /// Explain an execution error
 pub(crate) fn explain_execution_error(
-    error_descriptions: &ErrorMapping,
     error: VMError,
     state: &OnDiskStateView,
     script_type_parameters: &[AbilitySet],
@@ -301,82 +289,64 @@ pub(crate) fn explain_execution_error(
     txn_args: &[TransactionArgument],
 ) -> Result<()> {
     use StatusCode::*;
-    match error.into_vm_status() {
-        VMStatus::MoveAbort(AbortLocation::Module(id), abort_code) => {
-            // try to use move-explain to explain the abort
-
-            print!(
-                "Execution aborted with code {} in module {}.",
-                abort_code, id
-            );
-
-            if let Some(error_desc) = error_descriptions.get_explanation(&id, abort_code) {
-                println!(
-                    " Abort code details:\nName: {}\nDescription:{}",
-                    error_desc.code_name, error_desc.code_description,
-                )
-            } else {
-                println!()
-            }
-        }
-        VMStatus::MoveAbort(AbortLocation::Script, abort_code) => {
-            // TODO: map to source code location
+    match (error.location(), error.major_status(), error.sub_status()) {
+        (Location::Module(module_id), StatusCode::ABORTED, Some(abort_code)) => {
             println!(
-                "Execution aborted with code {} in transaction script",
-                abort_code
-            )
+                "Execution aborted with code {} in module {}.",
+                abort_code, module_id
+            );
         }
-        VMStatus::ExecutionFailure {
-            status_code,
-            location,
-            function,
-            code_offset,
-        } => {
+        (location, status_code, _) if error.status_type() == StatusType::Execution => {
+            let (function, code_offset) = error.offsets()[0];
             let status_explanation = match status_code {
-                RESOURCE_ALREADY_EXISTS => "a RESOURCE_ALREADY_EXISTS error (i.e., \
-                                            `move_to<T>(account)` when there is already a \
-                                            resource of type `T` under `account`)"
-                    .to_string(),
-                MISSING_DATA => "a RESOURCE_DOES_NOT_EXIST error (i.e., `move_from<T>(a)`, \
-                                 `borrow_global<T>(a)`, or `borrow_global_mut<T>(a)` when there \
-                                 is no resource of type `T` at address `a`)"
-                    .to_string(),
-                ARITHMETIC_ERROR => "an arithmetic error (i.e., integer overflow/underflow, \
-                                     div/mod by zero, or invalid shift)"
-                    .to_string(),
-                VECTOR_OPERATION_ERROR => "an error originated from vector operations (i.e., \
-                                           index out of bound, pop an empty vector, or unpack a \
-                                           vector with a wrong parity)"
-                    .to_string(),
-                EXECUTION_STACK_OVERFLOW => "an execution stack overflow".to_string(),
-                CALL_STACK_OVERFLOW => "a call stack overflow".to_string(),
-                OUT_OF_GAS => "an out of gas error".to_string(),
-                _ => format!("a {} error", status_code.status_type()),
+                RESOURCE_ALREADY_EXISTS => {
+                    "a RESOURCE_ALREADY_EXISTS error (i.e., \
+                    `move_to<T>(account)` when there is already a \
+                    resource of type `T` under `account`)"
+                }
+                MISSING_DATA => {
+                    "a RESOURCE_DOES_NOT_EXIST error (i.e., `move_from<T>(a)`, \
+                    `borrow_global<T>(a)`, or `borrow_global_mut<T>(a)` when there \
+                    is no resource of type `T` at address `a`)"
+                }
+                ARITHMETIC_ERROR => {
+                    "an arithmetic error (i.e., integer overflow/underflow, \
+                        div/mod by zero, or invalid shift)"
+                }
+                VECTOR_OPERATION_ERROR => {
+                    "an error originated from vector operations (i.e., \
+                        index out of bound, pop an empty vector, or unpack a \
+                        vector with a wrong parity)"
+                }
+                EXECUTION_STACK_OVERFLOW => "an execution stack overflow",
+                CALL_STACK_OVERFLOW => "a call stack overflow",
+                OUT_OF_GAS => "an out of gas error",
+                _ => "an execution error",
             };
             // TODO: map to source code location
             let location_explanation = match location {
-                AbortLocation::Module(id) => {
+                Location::Module(id) => {
                     format!(
                         "{}::{}",
                         id,
-                        state.resolve_function(&id, function)?.unwrap()
+                        state.resolve_function(id, function.0)?.unwrap()
                     )
                 }
-                AbortLocation::Script => "script".to_string(),
+                Location::Undefined => "UNDEFINED".to_owned(),
             };
             println!(
                 "Execution failed because of {} in {} at code offset {}",
                 status_explanation, location_explanation, code_offset
             )
         }
-        VMStatus::Error(NUMBER_OF_TYPE_ARGUMENTS_MISMATCH) => println!(
+        (_, NUMBER_OF_TYPE_ARGUMENTS_MISMATCH, _) => println!(
             "Execution failed with incorrect number of type arguments: script expected {:?}, but \
              found {:?}",
             script_type_parameters.len(),
             vm_type_args.len()
         ),
-        VMStatus::Error(TYPE_MISMATCH) => explain_type_error(script_parameters, signers, txn_args),
-        VMStatus::Error(LINKER_ERROR) => {
+        (_, TYPE_MISMATCH, _) => explain_type_error(script_parameters, signers, txn_args),
+        (_, LINKER_ERROR, _) => {
             // TODO: is this the only reason we can see LINKER_ERROR?
             // Can we also see it if someone manually deletes modules in storage?
             println!(
@@ -385,10 +355,9 @@ pub(crate) fn explain_execution_error(
                  0x1::M)"
             );
         }
-        VMStatus::Error(status_code) => {
+        (_, status_code, _) => {
             println!("Execution failed with unexpected error {:?}", status_code)
         }
-        VMStatus::Executed => unreachable!(),
     }
     Ok(())
 }

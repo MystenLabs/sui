@@ -12,8 +12,9 @@ use move_package::{
     },
     package_hooks,
     package_hooks::PackageHooks,
+    package_hooks::PackageIdentifier,
     resolution::resolution_graph::Package,
-    source_package::parsed_manifest::{CustomDepInfo, PackageDigest},
+    source_package::parsed_manifest::{CustomDepInfo, PackageDigest, SourceManifest},
     BuildConfig, ModelConfig,
 };
 use move_symbol_pool::Symbol;
@@ -123,7 +124,6 @@ impl Test<'_> {
             dev_mode: true,
             test_mode: false,
             generate_docs: false,
-            generate_abis: false,
             install_dir: Some(out_path),
             force_recompilation: false,
             lock_file: ["locked", "notlocked"]
@@ -199,7 +199,7 @@ struct TestHooks();
 
 impl PackageHooks for TestHooks {
     fn custom_package_info_fields(&self) -> Vec<String> {
-        vec!["test_hooks_field".to_owned()]
+        vec!["test_hooks_field".to_owned(), "version".to_owned()]
     }
 
     fn custom_dependency_key(&self) -> Option<String> {
@@ -219,6 +219,26 @@ impl PackageHooks for TestHooks {
             info.package_address,
             info.subdir.to_string_lossy(),
         )
+    }
+
+    fn custom_resolve_pkg_id(
+        &self,
+        manifest: &SourceManifest,
+    ) -> anyhow::Result<PackageIdentifier> {
+        let name = manifest.package.name.to_string();
+        if name.ends_with("-rename") {
+            Ok(Symbol::from(name.replace("-rename", "-resolved")))
+        } else {
+            Ok(manifest.package.name)
+        }
+    }
+
+    fn resolve_version(&self, manifest: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
+        Ok(manifest
+            .package
+            .custom_properties
+            .get(&Symbol::from("version"))
+            .map(|v| Symbol::from(v.as_ref())))
     }
 }
 

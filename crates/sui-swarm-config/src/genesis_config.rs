@@ -52,6 +52,7 @@ pub struct ValidatorGenesisConfig {
     pub consensus_internal_worker_address: Option<Multiaddr>,
     #[serde(default = "default_stake")]
     pub stake: u64,
+    pub name: Option<String>,
 }
 
 impl ValidatorGenesisConfig {
@@ -168,9 +169,9 @@ impl ValidatorGenesisConfigBuilder {
                 local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset),
                 local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 1),
                 local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 2)
-                    .zero_ip_multi_address(),
+                    .with_zero_ip(),
                 local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 3)
-                    .zero_ip_multi_address(),
+                    .with_zero_ip(),
                 local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 4),
                 local_ip_utils::new_deterministic_udp_address_for_testing(&ip, offset + 5),
                 local_ip_utils::new_deterministic_tcp_address_for_testing(&ip, offset + 6),
@@ -208,6 +209,7 @@ impl ValidatorGenesisConfigBuilder {
             consensus_address,
             consensus_internal_worker_address: None,
             stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
+            name: None,
         }
     }
 }

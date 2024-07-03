@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type TransactionBlock } from '@mysten/sui.js/transactions';
+import type { Transaction } from '@mysten/sui/transactions';
 
-import { type ObjectArgument } from '../../types';
-import { objArg } from '../../utils';
+import type { ObjectArgument } from '../../types/index.js';
 
 export function attachKioskLockRuleTx(
-	tx: TransactionBlock,
+	tx: Transaction,
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
@@ -16,12 +15,12 @@ export function attachKioskLockRuleTx(
 	tx.moveCall({
 		target: `${packageId}::kiosk_lock_rule::add`,
 		typeArguments: [type],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap)],
+		arguments: [tx.object(policy), tx.object(policyCap)],
 	});
 }
 
 export function attachRoyaltyRuleTx(
-	tx: TransactionBlock,
+	tx: Transaction,
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
@@ -36,8 +35,8 @@ export function attachRoyaltyRuleTx(
 		target: `${packageId}::royalty_rule::add`,
 		typeArguments: [type],
 		arguments: [
-			objArg(tx, policy),
-			objArg(tx, policyCap),
+			tx.object(policy),
+			tx.object(policyCap),
 			tx.pure.u16(Number(percentageBps)),
 			tx.pure.u64(minAmount),
 		],
@@ -45,7 +44,7 @@ export function attachRoyaltyRuleTx(
 }
 
 export function attachPersonalKioskRuleTx(
-	tx: TransactionBlock,
+	tx: Transaction,
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
@@ -54,12 +53,12 @@ export function attachPersonalKioskRuleTx(
 	tx.moveCall({
 		target: `${packageId}::personal_kiosk_rule::add`,
 		typeArguments: [type],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap)],
+		arguments: [tx.object(policy), tx.object(policyCap)],
 	});
 }
 
 export function attachFloorPriceRuleTx(
-	tx: TransactionBlock,
+	tx: Transaction,
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
@@ -69,6 +68,6 @@ export function attachFloorPriceRuleTx(
 	tx.moveCall({
 		target: `${packageId}::floor_price_rule::add`,
 		typeArguments: [type],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap), tx.pure.u64(minPrice)],
+		arguments: [tx.object(policy), tx.object(policyCap), tx.pure.u64(minPrice)],
 	});
 }

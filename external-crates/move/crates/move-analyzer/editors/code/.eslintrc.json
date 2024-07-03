@@ -7,7 +7,7 @@
     "parser": "@typescript-eslint/parser",
     "parserOptions": {
         // Match the ECMAScript standard specified in our TypeScript config.
-        "ecmaVersion": "2020",
+        "ecmaVersion": 2021,
         // Use ECMAScript modules.
         "sourceType": "module",
         // To type-check while linting, specify the TypeScript compiler be
@@ -15,7 +15,7 @@
         // using the TypeScript configuration file at the "project" path.
         "tsconfigRootDir": ".",
         "project": [
-            "./tsconfig.json"
+            "**/tsconfig.json"
         ]
     },
 
@@ -160,11 +160,9 @@
         "@typescript-eslint/naming-convention": "off",
         "@typescript-eslint/no-base-to-string": "warn",
         "@typescript-eslint/no-confusing-non-null-assertion": "warn",
-        "@typescript-eslint/no-duplicate-imports": "warn",
         "@typescript-eslint/no-dynamic-delete": "warn",
         "@typescript-eslint/no-extra-parens": "warn",
         "@typescript-eslint/no-extraneous-class": "warn",
-        "@typescript-eslint/no-implicit-any-catch": "warn",
         "@typescript-eslint/no-invalid-this": "warn",
         "@typescript-eslint/no-invalid-void-type": "warn",
         "@typescript-eslint/no-loop-func": "warn",
@@ -178,6 +176,7 @@
         "@typescript-eslint/no-unnecessary-type-arguments": "warn",
         "@typescript-eslint/no-unnecessary-type-constraint": "warn",
         "@typescript-eslint/no-unused-expressions": "warn",
+        "@typescript-eslint/no-unused-vars": "warn",
         "@typescript-eslint/no-use-before-define": "warn",
         "@typescript-eslint/non-nullable-type-assertion-style": "warn",
         "@typescript-eslint/object-curly-spacing": ["warn", "always"],
@@ -213,7 +212,9 @@
         "@typescript-eslint/no-unsafe-return": "off",
         "@typescript-eslint/type-annotation-spacing": "off",
         "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/no-unsafe-argument": "off",
         "@typescript-eslint/no-unsafe-assignment": "off",
+        "@typescript-eslint/no-unsafe-enum-comparison": "off",
         "@typescript-eslint/restrict-template-expressions": "off",
         "@typescript-eslint/array-type": "off"
     }

@@ -6,6 +6,7 @@ import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
 
 import { bcs } from '../bcs/index.js';
+import type { Signer } from '../cryptography/keypair.js';
 import { bytesEqual, PublicKey } from '../cryptography/publickey.js';
 import {
 	SIGNATURE_FLAG_TO_SCHEME,
@@ -13,17 +14,24 @@ import {
 } from '../cryptography/signature-scheme.js';
 import type { SignatureFlag, SignatureScheme } from '../cryptography/signature-scheme.js';
 import { parseSerializedSignature } from '../cryptography/signature.js';
-import type { SerializedSignature } from '../cryptography/signature.js';
+import type { SuiGraphQLClient } from '../graphql/client.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
+import { toZkLoginPublicIdentifier } from '../zklogin/publickey.js';
+import { MultiSigSigner } from './signer.js';
 
 type CompressedSignature =
 	| { ED25519: number[] }
 	| { Secp256k1: number[] }
-	| { Secp256r1: number[] };
+	| { Secp256r1: number[] }
+	| { ZkLogin: number[] };
 
-type PublicKeyEnum = { ED25519: number[] } | { Secp256k1: number[] } | { Secp256r1: number[] };
+type PublicKeyEnum =
+	| { ED25519: number[] }
+	| { Secp256k1: number[] }
+	| { Secp256r1: number[] }
+	| { ZkLogin: number[] };
 
 type PubkeyEnumWeightPair = {
 	pubKey: PublicKeyEnum;
@@ -68,6 +76,7 @@ export class MultiSigPublicKey extends PublicKey {
 		 *  MultiSig public key as buffer or base-64 encoded string
 		 */
 		value: string | Uint8Array | MultiSigPublicKeyStruct,
+		options: { client?: SuiGraphQLClient } = {},
 	) {
 		super();
 
@@ -89,7 +98,10 @@ export class MultiSigPublicKey extends PublicKey {
 		const seenPublicKeys = new Set<string>();
 
 		this.publicKeys = this.multisigPublicKey.pk_map.map(({ pubKey, weight }) => {
-			const [scheme, bytes] = Object.entries(pubKey)[0] as [SignatureScheme, number[]];
+			const [scheme, bytes] = Object.entries(pubKey).filter(([name]) => name !== '$kind')[0] as [
+				SignatureScheme,
+				number[],
+			];
 			const publicKeyStr = Uint8Array.from(bytes).toString();
 
 			if (seenPublicKeys.has(publicKeyStr)) {
@@ -102,7 +114,7 @@ export class MultiSigPublicKey extends PublicKey {
 			}
 
 			return {
-				publicKey: publicKeyFromRawBytes(scheme, Uint8Array.from(bytes)),
+				publicKey: publicKeyFromRawBytes(scheme, Uint8Array.from(bytes), options),
 				weight,
 			};
 		});
@@ -163,6 +175,14 @@ export class MultiSigPublicKey extends PublicKey {
 		return this.publicKeys;
 	}
 
+	getThreshold() {
+		return this.multisigPublicKey.threshold;
+	}
+
+	getSigner(...signers: [signer: Signer]) {
+		return new MultiSigSigner(this, signers);
+	}
+
 	/**
 	 * Return the Sui address associated with this MultiSig public key
 	 */
@@ -194,13 +214,15 @@ export class MultiSigPublicKey extends PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	async verify(message: Uint8Array, multisigSignature: SerializedSignature): Promise<boolean> {
+	async verify(message: Uint8Array, multisigSignature: string): Promise<boolean> {
 		// Multisig verification only supports serialized signature
-		const { signatureScheme, multisig } = parseSerializedSignature(multisigSignature);
+		const parsed = parseSerializedSignature(multisigSignature);
 
-		if (signatureScheme !== 'MultiSig') {
+		if (parsed.signatureScheme !== 'MultiSig') {
 			throw new Error('Invalid signature scheme');
 		}
+
+		const { multisig } = parsed;
 
 		let signatureWeight = 0;
 
@@ -228,7 +250,7 @@ export class MultiSigPublicKey extends PublicKey {
 	 * Combines multiple partial signatures into a single multisig, ensuring that each public key signs only once
 	 * and that all the public keys involved are known and valid, and then serializes multisig into the standard format
 	 */
-	combinePartialSignatures(signatures: SerializedSignature[]): SerializedSignature {
+	combinePartialSignatures(signatures: string[]): string {
 		if (signatures.length > MAX_SIGNER_IN_MULTISIG) {
 			throw new Error(`Max number of signatures in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
 		}
@@ -238,13 +260,18 @@ export class MultiSigPublicKey extends PublicKey {
 
 		for (let i = 0; i < signatures.length; i++) {
 			let parsed = parseSerializedSignature(signatures[i]);
-
 			if (parsed.signatureScheme === 'MultiSig') {
 				throw new Error('MultiSig is not supported inside MultiSig');
 			}
 
+			let publicKey;
 			if (parsed.signatureScheme === 'ZkLogin') {
-				throw new Error('ZkLogin is not supported inside MultiSig');
+				publicKey = toZkLoginPublicIdentifier(
+					parsed.zkLogin?.addressSeed,
+					parsed.zkLogin?.iss,
+				).toRawBytes();
+			} else {
+				publicKey = parsed.publicKey;
 			}
 
 			compressedSignatures[i] = {
@@ -253,7 +280,7 @@ export class MultiSigPublicKey extends PublicKey {
 
 			let publicKeyIndex;
 			for (let j = 0; j < this.publicKeys.length; j++) {
-				if (bytesEqual(parsed.publicKey, this.publicKeys[j].publicKey.toRawBytes())) {
+				if (bytesEqual(publicKey, this.publicKeys[j].publicKey.toRawBytes())) {
 					if (bitmap & (1 << j)) {
 						throw new Error('Received multiple signatures from the same public key');
 					}
@@ -275,8 +302,7 @@ export class MultiSigPublicKey extends PublicKey {
 			bitmap,
 			multisig_pk: this.multisigPublicKey,
 		};
-
-		const bytes = bcs.MultiSig.serialize(multisig).toBytes();
+		const bytes = bcs.MultiSig.serialize(multisig, { maxSize: 8192 }).toBytes();
 		let tmp = new Uint8Array(bytes.length + 1);
 		tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 		tmp.set(bytes, 1);
@@ -287,13 +313,15 @@ export class MultiSigPublicKey extends PublicKey {
 /**
  * Parse multisig structure into an array of individual signatures: signature scheme, the actual individual signature, public key and its weight.
  */
-export function parsePartialSignatures(multisig: MultiSigStruct): ParsedPartialMultiSigSignature[] {
+export function parsePartialSignatures(
+	multisig: MultiSigStruct,
+	options: { client?: SuiGraphQLClient } = {},
+): ParsedPartialMultiSigSignature[] {
 	let res: ParsedPartialMultiSigSignature[] = new Array(multisig.sigs.length);
 	for (let i = 0; i < multisig.sigs.length; i++) {
-		const [signatureScheme, signature] = Object.entries(multisig.sigs[i])[0] as [
-			SignatureScheme,
-			number[],
-		];
+		const [signatureScheme, signature] = Object.entries(multisig.sigs[i]).filter(
+			([name]) => name !== '$kind',
+		)[0] as [SignatureScheme, number[]];
 		const pkIndex = asIndices(multisig.bitmap).at(i)!;
 		const pair = multisig.multisig_pk.pk_map[pkIndex];
 		const pkBytes = Uint8Array.from(Object.values(pair.pubKey)[0]);
@@ -302,7 +330,7 @@ export function parsePartialSignatures(multisig: MultiSigStruct): ParsedPartialM
 			throw new Error('MultiSig is not supported inside MultiSig');
 		}
 
-		const publicKey = publicKeyFromRawBytes(signatureScheme, pkBytes);
+		const publicKey = publicKeyFromRawBytes(signatureScheme, pkBytes, options);
 
 		res[i] = {
 			signatureScheme,

@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::net::IpAddr;
+use std::time::SystemTime;
+use std::{net::SocketAddr, sync::Arc};
+use sui_types::traffic_control::RemoteFirewallConfig;
 
-use axum::extract::Json;
-use axum::extract::State;
+use axum::extract::{ConnectInfo, Json, State};
 use futures::StreamExt;
 use hyper::HeaderMap;
 use jsonrpsee::core::server::helpers::BoundedSubscriptions;
@@ -17,11 +19,18 @@ use jsonrpsee::types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT
 use jsonrpsee::types::{ErrorObject, Id, InvalidRequest, Params, Request};
 use jsonrpsee::{core::server::rpc_module::Methods, server::logger::Logger};
 use serde_json::value::RawValue;
+use sui_core::traffic_controller::{
+    metrics::TrafficControllerMetrics, policies::TrafficTally, TrafficController,
+};
+use sui_types::traffic_control::ClientIdSource;
+use sui_types::traffic_control::{PolicyConfig, Weight};
+use tracing::error;
 
 use crate::routing_layer::RpcRouter;
-use crate::CLIENT_TARGET_API_VERSION_HEADER;
+use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
 
 pub const MAX_RESPONSE_SIZE: u32 = 2 << 30;
+const TOO_MANY_REQUESTS_MSG: &str = "Too many requests";
 
 #[derive(Clone, Debug)]
 pub struct JsonRpcService<L> {
@@ -32,15 +41,32 @@ pub struct JsonRpcService<L> {
     /// Registered server methods.
     methods: Methods,
     rpc_router: RpcRouter,
+    traffic_controller: Option<Arc<TrafficController>>,
+    client_id_source: Option<ClientIdSource>,
 }
 
 impl<L> JsonRpcService<L> {
-    pub fn new(methods: Methods, rpc_router: RpcRouter, logger: L) -> Self {
+    pub fn new(
+        methods: Methods,
+        rpc_router: RpcRouter,
+        logger: L,
+        remote_fw_config: Option<RemoteFirewallConfig>,
+        policy_config: Option<PolicyConfig>,
+        traffic_controller_metrics: TrafficControllerMetrics,
+    ) -> Self {
         Self {
             methods,
             rpc_router,
             logger,
             id_provider: Arc::new(RandomIntegerIdProvider),
+            traffic_controller: policy_config.clone().map(|policy| {
+                Arc::new(TrafficController::spawn(
+                    policy,
+                    traffic_controller_metrics,
+                    remote_fw_config,
+                ))
+            }),
+            client_id_source: policy_config.map(|policy| policy.client_id_source),
         }
     }
 }
@@ -98,6 +124,7 @@ pub(crate) fn ok_response(body: String) -> hyper::Response<hyper::Body> {
 }
 
 pub async fn json_rpc_handler<L: Logger>(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     State(service): State<JsonRpcService<L>>,
     headers: HeaderMap,
     Json(raw_request): Json<Box<RawValue>>,
@@ -106,7 +133,7 @@ pub async fn json_rpc_handler<L: Logger>(
     let api_version = headers
         .get(CLIENT_TARGET_API_VERSION_HEADER)
         .and_then(|h| h.to_str().ok());
-    let response = process_raw_request(&service, api_version, raw_request.get()).await;
+    let response = process_raw_request(&service, api_version, raw_request.get(), client_addr).await;
 
     ok_response(response.result)
 }
@@ -115,9 +142,37 @@ async fn process_raw_request<L: Logger>(
     service: &JsonRpcService<L>,
     api_version: Option<&str>,
     raw_request: &str,
+    client_addr: SocketAddr,
 ) -> MethodResponse {
+    let client = match service.client_id_source {
+        Some(ClientIdSource::SocketAddr) => Some(client_addr.ip()),
+        Some(ClientIdSource::XForwardedFor) => {
+            // TODO - implement this later. Will need to read header at axum layer.
+            error!(
+                "X-Forwarded-For client ID source not yet supported on json \
+                rpc servers. Skipping traffic controller request handling.",
+            );
+            None
+        }
+        None => None,
+    };
     if let Ok(request) = serde_json::from_str::<Request>(raw_request) {
-        process_request(request, api_version, service.call_data()).await
+        // check if either IP is blocked, in which case return early
+        if let Some(traffic_controller) = &service.traffic_controller {
+            if let Err(blocked_response) =
+                handle_traffic_req(traffic_controller.clone(), &client).await
+            {
+                return blocked_response;
+            }
+        }
+
+        // handle response tallying
+        let response = process_request(request, api_version, service.call_data()).await;
+        if let Some(traffic_controller) = &service.traffic_controller {
+            handle_traffic_resp(traffic_controller.clone(), client, &response);
+        }
+
+        response
     } else if let Ok(_batch) = serde_json::from_str::<Vec<&RawValue>>(raw_request) {
         MethodResponse::error(
             Id::Null,
@@ -126,6 +181,50 @@ async fn process_raw_request<L: Logger>(
     } else {
         let (id, code) = prepare_error(raw_request);
         MethodResponse::error(id, ErrorObject::from(code))
+    }
+}
+
+async fn handle_traffic_req(
+    traffic_controller: Arc<TrafficController>,
+    client: &Option<IpAddr>,
+) -> Result<(), MethodResponse> {
+    if !traffic_controller.check(client, &None).await {
+        // Entity in blocklist
+        let err_obj =
+            ErrorObject::borrowed(ErrorCode::ServerIsBusy.code(), &TOO_MANY_REQUESTS_MSG, None);
+        Err(MethodResponse::error(Id::Null, err_obj))
+    } else {
+        Ok(())
+    }
+}
+
+fn handle_traffic_resp(
+    traffic_controller: Arc<TrafficController>,
+    client: Option<IpAddr>,
+    response: &MethodResponse,
+) {
+    let error = response.error_code.map(ErrorCode::from);
+    traffic_controller.tally(TrafficTally {
+        direct: client,
+        through_fullnode: None,
+        error_weight: error.map(normalize).unwrap_or(Weight::zero()),
+        // For now, count everything as spam with equal weight
+        // on the rpc node side, including gas-charging endpoints
+        // such as `sui_executeTransactionBlock`, as this can enable
+        // node operators who wish to rate limit their transcation
+        // traffic and incentivize high volume clients to choose a
+        // suitable rpc provider (or run their own). Later we may want
+        // to provide a weight distribution based on the method being called.
+        spam_weight: Weight::one(),
+        timestamp: SystemTime::now(),
+    });
+}
+
+// TODO: refine error matching here
+fn normalize(err: ErrorCode) -> Weight {
+    match err {
+        ErrorCode::InvalidRequest | ErrorCode::InvalidParams => Weight::one(),
+        _ => Weight::zero(),
     }
 }
 
@@ -143,8 +242,10 @@ async fn process_request<L: Logger>(
     } = call;
     let conn_id = 0; // unused
 
-    let params = Params::new(req.params.map(|params| params.get()));
     let name = rpc_router.route(&req.method, api_version);
+    let raw_params: Option<&RawValue> = req.params;
+    let params = Params::new(raw_params.map(|params| params.get()));
+
     let id = req.id;
 
     let response = match methods.method_with_name(name) {
@@ -177,7 +278,6 @@ async fn process_request<L: Logger>(
 
                 let id = id.into_owned();
                 let params = params.into_owned();
-
                 (callback)(id, params, conn_id, max_response_body_size as usize, None).await
             }
             MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
@@ -204,7 +304,7 @@ async fn process_request<L: Logger>(
 }
 
 /// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
-/// unparseable garbage.
+/// unparsable garbage.
 pub fn prepare_error(data: &str) -> (Id<'_>, ErrorCode) {
     match serde_json::from_str::<InvalidRequest>(data) {
         Ok(InvalidRequest { id }) => (id, ErrorCode::InvalidRequest),

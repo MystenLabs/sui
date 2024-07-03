@@ -5,16 +5,13 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
-    use std::vector;
+    use sui::transfer::Receiving;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 
@@ -54,7 +51,7 @@ module tto::M1 {
         };
     }
 
-    public fun receive_all_but_last(parent: &mut A, x: vector<Receiving<B>>) {
+    public fun receive_all_but_last(parent: &mut A, mut x: vector<Receiving<B>>) {
         while (vector::length(&x) > 1) {
             let r = vector::pop_back(&mut x);
             let b = transfer::receive(&mut parent.id, r);
@@ -62,7 +59,7 @@ module tto::M1 {
         };
     }
 
-    public fun receive_all_send_back(parent: &mut A, x: vector<Receiving<B>>) {
+    public fun receive_all_send_back(parent: &mut A, mut x: vector<Receiving<B>>) {
         while (!vector::is_empty(&x)) {
             let r = vector::pop_back(&mut x);
             let b = transfer::receive(&mut parent.id, r);
@@ -70,7 +67,7 @@ module tto::M1 {
         };
     }
 
-    public fun receive_all(parent: &mut A, x: vector<Receiving<B>>) {
+    public fun receive_all(parent: &mut A, mut x: vector<Receiving<B>>) {
         while (!vector::is_empty(&x)) {
             let r = vector::pop_back(&mut x);
             let b = transfer::receive(&mut parent.id, r);

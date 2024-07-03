@@ -3,7 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    file_format::{basic_test_module, CompiledModule, CompiledScript},
+    binary_config::BinaryConfig,
+    file_format::{
+        basic_test_module, basic_test_module_with_enum, Bytecode, CodeUnit, CompiledModule,
+        SignatureIndex, VariantJumpTableIndex,
+    },
     file_format_common::*,
 };
 use move_core_types::{metadata::Metadata, vm_status::StatusCode};
@@ -15,7 +19,7 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(150); // table count (high bit 1)
     binary.push(150); // table count (high bit 1)
     binary.push(1);
-    let res = CompiledScript::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected bad uleb").major_status(),
         StatusCode::MALFORMED
@@ -36,7 +40,7 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(150); // table count again (high bit 1)
     binary.push(150); // table count again (high bit 1)
     binary.push(0); // table count again
-    let res = CompiledScript::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected bad uleb").major_status(),
         StatusCode::MALFORMED
@@ -69,7 +73,7 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(1); // table type
     binary.push(0); // table offset
     binary.push(10); // table length
-    let res = CompiledScript::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected no table content").major_status(),
         StatusCode::MALFORMED
@@ -113,7 +117,7 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(0); // table offset
     binary.push(10); // table length
     binary.resize(binary.len() + 5, 0);
-    let res = CompiledScript::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected bad table content").major_status(),
         StatusCode::MALFORMED
@@ -147,26 +151,11 @@ fn malformed_simple_versioned_test(version: u32) {
     binary.push(20); // table offset
     binary.push(10); // table length
     binary.resize(binary.len() + 5000, 0);
-    let res = CompiledScript::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected table offset overflow")
             .major_status(),
         StatusCode::DUPLICATE_TABLE
-    );
-
-    // bad table in script
-    let mut binary = BinaryConstants::MOVE_MAGIC.to_vec();
-    binary.extend(version.to_le_bytes()); // version
-    binary.push(1); // table count
-    binary.push(0xD); // table type - FieldHandle not good for script
-    binary.push(0); // table offset
-    binary.push(10); // table length
-    binary.resize(binary.len() + 5000, 0);
-    let res = CompiledScript::deserialize(&binary);
-    assert_eq!(
-        res.expect_err("Expected table offset overflow")
-            .major_status(),
-        StatusCode::MALFORMED
     );
 }
 
@@ -175,7 +164,7 @@ fn malformed_simple_versioned_test(version: u32) {
 fn malformed_simple() {
     // empty binary
     let binary = vec![];
-    let res = CompiledScript::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected malformed binary").major_status(),
         StatusCode::BAD_MAGIC
@@ -183,7 +172,7 @@ fn malformed_simple() {
 
     // under-sized binary
     let binary = vec![0u8, 0u8, 0u8];
-    let res = CompiledScript::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected malformed binary").major_status(),
         StatusCode::BAD_MAGIC
@@ -191,7 +180,7 @@ fn malformed_simple() {
 
     // bad magic
     let binary = vec![0u8; 4];
-    let res = CompiledScript::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected bad magic").major_status(),
         StatusCode::BAD_MAGIC
@@ -199,7 +188,7 @@ fn malformed_simple() {
 
     // only magic
     let binary = BinaryConstants::MOVE_MAGIC.to_vec();
-    let res = CompiledScript::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected malformed binary").major_status(),
         StatusCode::MALFORMED
@@ -210,7 +199,7 @@ fn malformed_simple() {
     binary.extend((VERSION_MAX.checked_add(1).unwrap()).to_le_bytes()); // version
     binary.push(10); // table count
     binary.push(0); // rest of binary
-    let res = CompiledScript::deserialize(&binary);
+    let res = CompiledModule::deserialize_with_defaults(&binary);
     assert_eq!(
         res.expect_err("Expected unknown version").major_status(),
         StatusCode::UNKNOWN_VERSION
@@ -229,32 +218,13 @@ fn max_version_lower_than_hardcoded() {
     binary.push(10); // table count
     binary.push(0); // rest of binary
 
-    let res =
-        CompiledScript::deserialize_with_max_version(&binary, VERSION_MAX.checked_sub(1).unwrap());
+    let res = CompiledModule::deserialize_with_config(
+        &binary,
+        &BinaryConfig::legacy(VERSION_MAX.checked_sub(1).unwrap(), VERSION_MIN, false),
+    );
     assert_eq!(
         res.expect_err("Expected unknown version").major_status(),
         StatusCode::UNKNOWN_VERSION
-    );
-}
-
-// Ensure that we can deserialize a script from disk
-static EMPTY_SCRIPT: &[u8] = include_bytes!("empty_script.mv");
-
-#[test]
-fn deserialize_file() {
-    CompiledScript::deserialize(EMPTY_SCRIPT).expect("script should deserialize properly");
-}
-
-// An invalid script that is missing a signature should not deserialize successfully.
-static INVALID_SCRIPT_NO_SIGNATURE: &[u8] = include_bytes!("invalid_script_no_signature.mv");
-
-#[test]
-fn deserialize_invalid_script_no_signature() {
-    assert_eq!(
-        CompiledScript::deserialize(INVALID_SCRIPT_NO_SIGNATURE)
-            .unwrap_err()
-            .major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
     );
 }
 
@@ -270,15 +240,13 @@ fn deserialize_trailing_bytes() {
         // ok with flag false
         CompiledModule::deserialize_with_config(
             bytes,
-            VERSION_MAX,
-            /*check_no_extraneous_bytes*/ false,
+            &BinaryConfig::with_extraneous_bytes_check(false),
         )
         .unwrap();
         // error with flag true
         let status_code = CompiledModule::deserialize_with_config(
             bytes,
-            VERSION_MAX,
-            /*check_no_extraneous_bytes*/ true,
+            &BinaryConfig::with_extraneous_bytes_check(true),
         )
         .unwrap_err()
         .major_status();
@@ -318,15 +286,13 @@ fn no_metadata() {
         // ok with flag false
         CompiledModule::deserialize_with_config(
             bytes,
-            VERSION_MAX,
-            /*check_no_extraneous_bytes*/ false,
+            &BinaryConfig::with_extraneous_bytes_check(false),
         )
         .unwrap();
         // error with flag true
         let status_code = CompiledModule::deserialize_with_config(
             bytes,
-            VERSION_MAX,
-            /*check_no_extraneous_bytes*/ true,
+            &BinaryConfig::with_extraneous_bytes_check(true),
         )
         .unwrap_err()
         .major_status();
@@ -367,4 +333,123 @@ fn no_metadata() {
         v
     };
     test(&test2);
+}
+
+#[test]
+fn deserialize_below_min_version() {
+    let mut module = basic_test_module();
+    module.version = VERSION_MIN;
+    let bytes = {
+        let mut v = vec![];
+        module
+            .serialize_with_version(module.version, &mut v)
+            .unwrap();
+        v
+    };
+
+    let res = CompiledModule::deserialize_with_config(
+        &bytes,
+        &BinaryConfig::legacy(VERSION_MAX, VERSION_MAX, true),
+    )
+    .unwrap_err()
+    .major_status();
+    assert_eq!(res, StatusCode::UNKNOWN_VERSION);
+}
+
+#[test]
+fn enum_version_lie() {
+    let test = |bytes, expected_status| {
+        let status_code = CompiledModule::deserialize_with_config(
+            bytes,
+            &BinaryConfig::with_extraneous_bytes_check(true),
+        )
+        .unwrap_err()
+        .major_status();
+        assert_eq!(status_code, expected_status);
+    };
+
+    // With enums and an invalid version bytecode version
+    let module = basic_test_module_with_enum();
+    let mut test_mut = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+
+    // Manually manipulate the version in the binary to the wrong version
+    for (i, b) in VERSION_6.to_le_bytes().iter().enumerate() {
+        test_mut[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    test(&test_mut, StatusCode::MALFORMED);
+
+    let mut module = basic_test_module();
+    module.function_defs[0].code = Some(CodeUnit {
+        locals: SignatureIndex::new(0),
+        code: vec![
+            Bytecode::VariantSwitch(VariantJumpTableIndex::new(0)),
+            Bytecode::Ret,
+        ],
+        jump_tables: vec![],
+    });
+    let mut m_bytes = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    for (i, b) in VERSION_6.to_le_bytes().iter().enumerate() {
+        m_bytes[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    test(&m_bytes, StatusCode::MALFORMED);
+}
+
+#[test]
+fn deserialize_empty_enum_fails() {
+    let mut module = basic_test_module_with_enum();
+    module.enum_defs[0].variants = vec![];
+    let mut bin = vec![];
+    module.serialize(&mut bin).unwrap();
+    CompiledModule::deserialize_with_config(&bin, &BinaryConfig::with_extraneous_bytes_check(true))
+        .unwrap_err();
+}
+
+#[test]
+fn serialize_deserialize_v6_no_flavor() {
+    let module = basic_test_module();
+    let mut bin = vec![];
+    module.serialize_with_version(VERSION_6, &mut bin).unwrap();
+    let v6_bytes = VERSION_6.to_le_bytes();
+    let v6_flavor_bytes = BinaryFlavor::encode_version(VERSION_6).to_le_bytes();
+    // assert that no flavoring is added to v6
+    assert_eq!(v6_bytes, v6_flavor_bytes);
+    assert_eq!(
+        bin[BinaryConstants::MOVE_MAGIC_SIZE..BinaryConstants::MOVE_MAGIC_SIZE + v6_bytes.len()],
+        v6_bytes
+    );
+    let module = CompiledModule::deserialize_with_defaults(&bin).unwrap();
+    assert_eq!(module.version, VERSION_6);
+}
+
+#[test]
+fn serialize_deserialize_v7_with_no_flavor() {
+    let module = basic_test_module();
+    let mut bin = vec![];
+    module.serialize_with_version(VERSION_7, &mut bin).unwrap();
+    let v7_bytes = VERSION_7.to_le_bytes();
+    // Override the version bytes to not have the flavor
+    for (i, b) in v7_bytes.iter().enumerate() {
+        bin[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    // Deserialization will now fail because the version is not encoded with the flavor and the
+    // version is >= 7.
+    let x = CompiledModule::deserialize_with_defaults(&bin).unwrap_err();
+    assert_eq!(x.major_status(), StatusCode::UNKNOWN_VERSION);
+}
+
+#[test]
+fn serialize_deserialize_v7_with_flavor() {
+    let module = basic_test_module_with_enum();
+    let mut bin = vec![];
+    module.serialize_with_version(VERSION_7, &mut bin).unwrap();
+    let x = CompiledModule::deserialize_with_defaults(&bin).unwrap();
+    assert_eq!(x, module);
 }

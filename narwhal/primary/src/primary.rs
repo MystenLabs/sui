@@ -27,12 +27,11 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
-use config::{Authority, AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
-use crypto::{traits::EncodeDecodeBase64, RandomnessPrivateKey};
+use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache};
+use crypto::traits::EncodeDecodeBase64;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, Signature};
 use fastcrypto::{
     hash::Hash,
-    serde_helpers::ToFromByteArray,
     signature_service::SignatureService,
     traits::{KeyPair as _, ToFromBytes},
 };
@@ -95,7 +94,6 @@ impl Primary {
         network_signer: NetworkKeyPair,
         committee: Committee,
         worker_cache: WorkerCache,
-        chain_identifier: ChainIdentifier,
         protocol_config: ProtocolConfig,
         parameters: Parameters,
         client: NetworkClient,
@@ -134,11 +132,6 @@ impl Primary {
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_our_digests,
             &primary_channel_metrics.tx_our_digests_total,
-        );
-        let (tx_system_messages, rx_system_messages) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_system_messages,
-            &primary_channel_metrics.tx_system_messages_total,
         );
         let (tx_parents, rx_parents) = channel_with_total(
             CHANNEL_CAPACITY,
@@ -192,16 +185,6 @@ impl Primary {
             &primary_channel_metrics,
         ));
 
-        // Convert authority private key into key used for random beacon.
-        let randomness_private_key = fastcrypto::groups::bls12381::Scalar::from_byte_array(
-            signer
-                .copy()
-                .private()
-                .as_bytes()
-                .try_into()
-                .expect("key length should match"),
-        )
-        .expect("should work to convert BLS key to Scalar");
         let signature_service = SignatureService::new(signer);
 
         // Spawn the network receiver listening to messages from the other primaries.
@@ -218,7 +201,7 @@ impl Primary {
             signature_service: signature_service.clone(),
             certificate_store: certificate_store.clone(),
             vote_digest_store,
-            rx_narwhal_round_updates,
+            rx_narwhal_round_updates: rx_narwhal_round_updates.clone(),
             parent_digests: Default::default(),
             metrics: node_metrics.clone(),
         })
@@ -365,15 +348,14 @@ impl Primary {
                     network = n;
                     break;
                 }
-                Err(_) => {
+                Err(e) => {
                     retries_left -= 1;
 
                     if retries_left <= 0 {
                         panic!("Failed to initialize Network!");
                     }
                     error!(
-                        "Address {} should be available for the primary Narwhal service, retrying in one second",
-                        addr
+                        "Address {addr} should be available for the primary Narwhal service, retrying in one second: {e:#?}",
                     );
                     sleep(Duration::from_secs(1));
                 }
@@ -488,12 +470,11 @@ impl Primary {
             tx_shutdown.subscribe(),
             rx_parents,
             rx_our_digests,
-            rx_system_messages,
             tx_headers,
             tx_narwhal_round_updates,
             rx_committed_own_headers,
-            node_metrics,
-            leader_schedule,
+            node_metrics.clone(),
+            leader_schedule.clone(),
         );
 
         let mut handles = vec![
@@ -506,15 +487,10 @@ impl Primary {
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
         let state_handler_handle = StateHandler::spawn(
-            &chain_identifier,
-            &protocol_config,
             authority.id(),
-            committee,
             rx_committed_certificates,
             tx_shutdown.subscribe(),
             Some(tx_committed_own_headers),
-            tx_system_messages,
-            RandomnessPrivateKey::from(randomness_private_key),
             network,
         );
         handles.push(state_handler_handle);
@@ -571,6 +547,27 @@ struct PrimaryReceiverHandler {
     metrics: Arc<PrimaryMetrics>,
 }
 
+fn authority_for_request<'a, T>(
+    committee: &'a Committee,
+    request: &anemo::Request<T>,
+) -> DagResult<&'a Authority> {
+    let peer_id = request
+        .peer_id()
+        .ok_or_else(|| DagError::NetworkError("Unable to access remote peer ID".to_owned()))?;
+    let peer_network_key = NetworkPublicKey::from_bytes(&peer_id.0).map_err(|e| {
+        DagError::NetworkError(format!(
+            "Unable to interpret remote peer ID {peer_id:?} as a NetworkPublicKey: {e:?}"
+        ))
+    })?;
+    committee
+        .authority_by_network_key(&peer_network_key)
+        .ok_or_else(|| {
+            DagError::NetworkError(format!(
+                "Unable to find authority with network key {peer_network_key:?}"
+            ))
+        })
+}
+
 #[allow(clippy::result_large_err)]
 impl PrimaryReceiverHandler {
     fn find_next_round(
@@ -612,21 +609,7 @@ impl PrimaryReceiverHandler {
             .inc_by(num_parents as u64);
 
         // Vote request must come from the Header's author.
-        let peer_id = request
-            .peer_id()
-            .ok_or_else(|| DagError::NetworkError("Unable to access remote peer ID".to_owned()))?;
-        let peer_network_key = NetworkPublicKey::from_bytes(&peer_id.0).map_err(|e| {
-            DagError::NetworkError(format!(
-                "Unable to interpret remote peer ID {peer_id:?} as a NetworkPublicKey: {e:?}"
-            ))
-        })?;
-        let peer_authority = committee
-            .authority_by_network_key(&peer_network_key)
-            .ok_or_else(|| {
-                DagError::NetworkError(format!(
-                    "Unable to find authority with network key {peer_network_key:?}"
-                ))
-            })?;
+        let peer_authority = authority_for_request(&self.committee, &request)?;
         ensure!(
             header.author() == peer_authority.id(),
             DagError::NetworkError(format!(

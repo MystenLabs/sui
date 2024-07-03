@@ -1,22 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
-import {
+import { bcs } from '@mysten/sui/bcs';
+import type {
+	Transaction,
 	TransactionArgument,
-	TransactionBlock,
 	TransactionObjectArgument,
-} from '@mysten/sui.js/transactions';
+} from '@mysten/sui/transactions';
 
-import { ObjectArgument, TRANSFER_POLICY_MODULE, TRANSFER_POLICY_TYPE } from '../types';
-import { objArg } from '../utils';
+import type { ObjectArgument } from '../types/index.js';
+import { TRANSFER_POLICY_MODULE, TRANSFER_POLICY_TYPE } from '../types/index.js';
 
 /**
  * Call the `transfer_policy::new` function to create a new transfer policy.
  * Returns `transferPolicyCap`
  */
 export function createTransferPolicy(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	publisher: ObjectArgument,
 ): TransactionObjectArgument {
@@ -36,14 +36,14 @@ export function createTransferPolicy(
  * Used if we want to use the policy before making it a shared object.
  */
 export function createTransferPolicyWithoutSharing(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	publisher: ObjectArgument,
 ): [TransactionObjectArgument, TransactionObjectArgument] {
 	const [transferPolicy, transferPolicyCap] = tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::new`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, publisher)],
+		arguments: [tx.object(publisher)],
 	});
 
 	return [transferPolicy, transferPolicyCap];
@@ -52,7 +52,7 @@ export function createTransferPolicyWithoutSharing(
  * Converts Transfer Policy to a shared object.
  */
 export function shareTransferPolicy(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	transferPolicy: TransactionObjectArgument,
 ) {
@@ -67,7 +67,7 @@ export function shareTransferPolicy(
  * Call the `transfer_policy::withdraw` function to withdraw profits from a transfer policy.
  */
 export function withdrawFromPolicy(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
@@ -78,7 +78,7 @@ export function withdrawFromPolicy(
 	const [profits] = tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::withdraw`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap), amountArg],
+		arguments: [tx.object(policy), tx.object(policyCap), amountArg],
 	});
 
 	return profits;
@@ -89,7 +89,7 @@ export function withdrawFromPolicy(
  * transaction.
  */
 export function confirmRequest(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	policy: ObjectArgument,
 	request: TransactionArgument,
@@ -97,7 +97,7 @@ export function confirmRequest(
 	tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::confirm_request`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, policy), request],
+		arguments: [tx.object(policy), request],
 	});
 }
 
@@ -105,7 +105,7 @@ export function confirmRequest(
  * Calls the `transfer_policy::remove_rule` function to remove a Rule from the transfer policy's ruleset.
  */
 export function removeTransferPolicyRule(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	ruleType: string,
 	configType: string,
@@ -115,6 +115,6 @@ export function removeTransferPolicyRule(
 	tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::remove_rule`,
 		typeArguments: [itemType, ruleType, configType],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap)],
+		arguments: [tx.object(policy), tx.object(policyCap)],
 	});
 }

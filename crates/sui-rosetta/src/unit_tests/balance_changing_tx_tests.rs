@@ -145,7 +145,7 @@ async fn test_publish_and_move_call() {
         "examples",
         "fungible_tokens",
     ]);
-    let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
+    let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
     let compiled_modules_bytes =
         compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();
@@ -716,7 +716,7 @@ async fn test_transaction(
     let response = client
         .quorum_driver_api()
         .execute_transaction_block(
-            Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature]),
+            Transaction::from_data(data.clone(), vec![signature]),
             SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )

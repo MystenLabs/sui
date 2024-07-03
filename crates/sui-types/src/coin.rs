@@ -10,10 +10,10 @@ use crate::{
 };
 use crate::{base_types::ObjectID, id::UID, SUI_FRAMEWORK_ADDRESS};
 use move_core_types::{
+    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
-    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -94,7 +94,7 @@ impl Coin {
     }
 
     pub fn layout(type_param: TypeTag) -> MoveStructLayout {
-        MoveStructLayout::WithTypes {
+        MoveStructLayout {
             type_: Self::type_(type_param.clone()),
             fields: vec![
                 MoveFieldLayout::new(
@@ -158,6 +158,18 @@ impl TreasuryCap {
             type_params: vec![TypeTag::Struct(Box::new(type_param))],
         }
     }
+
+    /// Checks if the provided type is `TreasuryCap<T>`, returning the type T if so.
+    pub fn is_treasury_with_coin_type(other: &StructTag) -> Option<&StructTag> {
+        if Self::is_treasury_type(other) && other.type_params.len() == 1 {
+            match other.type_params.first() {
+                Some(TypeTag::Struct(coin_type)) => Some(coin_type),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl TryFrom<Object> for TreasuryCap {
@@ -215,6 +227,18 @@ impl CoinMetadata {
             name: COIN_METADATA_STRUCT_NAME.to_owned(),
             module: COIN_MODULE_NAME.to_owned(),
             type_params: vec![TypeTag::Struct(Box::new(type_param))],
+        }
+    }
+
+    /// Checks if the provided type is `CoinMetadata<T>`, returning the type T if so.
+    pub fn is_coin_metadata_with_coin_type(other: &StructTag) -> Option<&StructTag> {
+        if Self::is_coin_metadata(other) && other.type_params.len() == 1 {
+            match other.type_params.first() {
+                Some(TypeTag::Struct(coin_type)) => Some(coin_type),
+                _ => None,
+            }
+        } else {
+            None
         }
     }
 }

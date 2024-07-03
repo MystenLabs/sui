@@ -15,15 +15,14 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
-git-version.workspace = true
-const-str.workspace = true
+bin-version.workspace = true
 
 move-binary-format.workspace = true
 move-cli.workspace = true
+move-compiler.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
 move-package.workspace = true
-move-prover-boogie-backend.workspace = true
 move-prover.workspace = true
 move-unit-test.workspace = true
 telemetry-subscribers.workspace = true
@@ -32,10 +31,10 @@ tokio = { workspace = true, features = ["full"] }
 move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
 sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 
-sui-core = { workspace = true, optional = true }
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
+better_any = "0.1.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
@@ -64,6 +63,6 @@ build = []
 coverage = []
 disassemble = []
 prove = []
-unit_test = ["build", "dep:once_cell", "dep:sui-core"]
+unit_test = ["build", "dep:once_cell"]
 calibrate = []
 all = ["build", "coverage", "disassemble", "prove", "unit_test", "calibrate"]

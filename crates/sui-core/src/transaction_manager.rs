@@ -2,33 +2,35 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cmp::max,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    cmp::{max, Reverse},
+    collections::{hash_map, BTreeSet, BinaryHeap, HashMap, HashSet},
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
-use indexmap::IndexMap;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::{base_types::TransactionDigest, error::SuiResult, fp_ensure};
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
+    base_types::{ObjectID, SequenceNumber, TransactionDigest},
     committee::EpochId,
     digests::TransactionEffectsDigest,
-    error::SuiError,
+    error::{SuiError, SuiResult},
+    fp_ensure,
+    message_envelope::Message,
+    storage::InputKey,
     transaction::{TransactionDataAPI, VerifiedCertificate},
 };
+use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{error, instrument, trace, warn};
+use tokio::time::Instant;
+use tracing::{error, info, instrument, trace, warn};
 
-use crate::authority::{
-    authority_per_epoch_store::AuthorityPerEpochStore,
-    authority_store::{InputKey, LockMode},
+use crate::{
+    authority::authority_per_epoch_store::AuthorityPerEpochStore, execution_cache::ObjectCacheRead,
 };
-use crate::authority::{AuthorityMetrics, AuthorityStore};
+use crate::{authority::AuthorityMetrics, execution_cache::TransactionCacheRead};
+use sui_config::node::AuthorityOverloadConfig;
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
 
@@ -39,14 +41,6 @@ mod transaction_manager_tests;
 /// Minimum capacity of HashMaps used in TransactionManager.
 const MIN_HASHMAP_CAPACITY: usize = 1000;
 
-// Reject a transaction if transaction manager queue length is above this threshold.
-// 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
-pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
-
-// Reject a transaction if the number of pending transactions depending on the object
-// is above the threshold.
-pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
-
 /// TransactionManager is responsible for managing object dependencies of pending transactions,
 /// and publishing a stream of certified transactions (certificates) ready to execute.
 /// It receives certificates from Narwhal, validator RPC handlers, and checkpoint executor.
@@ -55,57 +49,35 @@ pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 /// The actual execution logic is inside AuthorityState. After a transaction commits and updates
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
-    authority_store: Arc<AuthorityStore>,
-    tx_ready_certificates: UnboundedSender<(
-        VerifiedExecutableTransaction,
-        Option<TransactionEffectsDigest>,
-    )>,
+    object_cache_read: Arc<dyn ObjectCacheRead>,
+    transaction_cache_read: Arc<dyn TransactionCacheRead>,
+    tx_ready_certificates: UnboundedSender<PendingCertificate>,
     metrics: Arc<AuthorityMetrics>,
-    inner: RwLock<Inner>,
+    // inner is a doubly nested lock so that we can enforce that an outer lock (for read) is held
+    // before the inner lock (for read or write) can be acquired. During reconfiguration, we acquire
+    // the outer lock for write, to ensure that no other threads can be running while we reconfigure.
+    inner: RwLock<RwLock<Inner>>,
 }
 
 #[derive(Clone, Debug)]
-struct PendingCertificate {
+pub struct PendingCertificateStats {
+    // The time this certificate enters transaction manager.
+    pub enqueue_time: Instant,
+    // The time this certificate becomes ready for execution.
+    pub ready_time: Option<Instant>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingCertificate {
     // Certified transaction to be executed.
-    certificate: VerifiedExecutableTransaction,
+    pub certificate: VerifiedExecutableTransaction,
     // When executing from checkpoint, the certified effects digest is provided, so that forks can
     // be detected prior to committing the transaction.
-    expected_effects_digest: Option<TransactionEffectsDigest>,
-    // Input object locks that have not been acquired, because:
-    // 1. The object has not been created yet.
-    // 2. The object exists, but this transaction is trying to acquire a r/w lock while the object
-    // is held in ro locks by other transaction(s).
-    acquiring_locks: BTreeMap<InputKey, LockMode>,
-    // Input object locks that have been acquired.
-    acquired_locks: BTreeMap<InputKey, LockMode>,
-}
-
-/// LockQueue is a queue of transactions waiting or holding a lock on an object.
-#[derive(Debug, Default)]
-struct LockQueue {
-    // Transactions waiting for read-only lock.
-    readonly_waiters: BTreeSet<TransactionDigest>,
-    // Transactions holding read-only lock that have not finished executions.
-    readonly_holders: BTreeSet<TransactionDigest>,
-    // Transactions waiting for default lock.
-    // Only after there is no more transaction wait or holding read-only locks,
-    // can a transaction acquire the default lock.
-    // Note that except for immutable objects, a given key may only have one TransactionDigest in
-    // the set. Unfortunately we cannot easily verify that this invariant is upheld, because you
-    // cannot determine from TransactionData whether an input is mutable or immutable.
-    default_waiters: BTreeSet<TransactionDigest>,
-}
-
-impl LockQueue {
-    fn has_readonly(&self) -> bool {
-        !(self.readonly_waiters.is_empty() && self.readonly_holders.is_empty())
-    }
-
-    fn is_empty(&self) -> bool {
-        self.readonly_waiters.is_empty()
-            && self.readonly_holders.is_empty()
-            && self.default_waiters.is_empty()
-    }
+    pub expected_effects_digest: Option<TransactionEffectsDigest>,
+    // The input object this certificate is waiting for to become available in order to be executed.
+    pub waiting_input_objects: BTreeSet<InputKey>,
+    // Stores stats about this transaction.
+    pub stats: PendingCertificateStats,
 }
 
 struct CacheInner {
@@ -248,13 +220,13 @@ struct Inner {
     // Current epoch of TransactionManager.
     epoch: EpochId,
 
-    // Maps input objects to transactions waiting for locks on the object.
-    lock_waiters: HashMap<InputKey, LockQueue>,
+    // Maps missing input objects to transactions in pending_certificates.
+    missing_inputs: HashMap<InputKey, BTreeSet<TransactionDigest>>,
 
     // Stores age info for all transactions depending on each object.
     // Used for throttling signing and submitting transactions depending on hot objects.
     // An `IndexMap` is used to ensure that the insertion order is preserved.
-    input_objects: HashMap<ObjectID, IndexMap<TransactionDigest, Instant>>,
+    input_objects: HashMap<ObjectID, TransactionQueue>,
 
     // Maps object IDs to the highest observed sequence number of the object. When the value is
     // None, indicates that the object is immutable, corresponding to an InputKey with no sequence
@@ -266,26 +238,27 @@ struct Inner {
 
     // Maps transaction digests to their content and missing input objects.
     pending_certificates: HashMap<TransactionDigest, PendingCertificate>,
-    // Maps executing transaction digests to their acquired input object locks.
-    executing_certificates: HashMap<TransactionDigest, BTreeMap<InputKey, LockMode>>,
+
+    // Transactions that have all input objects available, but have not finished execution.
+    executing_certificates: HashSet<TransactionDigest>,
 }
 
 impl Inner {
     fn new(epoch: EpochId, metrics: Arc<AuthorityMetrics>) -> Inner {
         Inner {
             epoch,
-            lock_waiters: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+            missing_inputs: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
             input_objects: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
             available_objects_cache: AvailableObjectsCache::new(metrics),
             pending_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
-            executing_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+            executing_certificates: HashSet::with_capacity(MIN_HASHMAP_CAPACITY),
         }
     }
 
-    // Checks if there is any transaction waiting on the lock of input_key, and try to
-    // update transactions that can acquire the lock.
+    // Checks if there is any transaction waiting on `input_key`. Returns all the pending
+    // transactions that are ready to be executed.
     // Must ensure input_key is available in storage before calling this function.
-    fn try_acquire_lock(
+    fn find_ready_transactions(
         &mut self,
         input_key: InputKey,
         update_cache: bool,
@@ -297,26 +270,10 @@ impl Inner {
 
         let mut ready_certificates = Vec::new();
 
-        let Some(lock_queue) = self.lock_waiters.get_mut(&input_key) else {
+        let Some(digests) = self.missing_inputs.remove(&input_key) else {
             // No transaction is waiting on the object yet.
             return ready_certificates;
         };
-
-        // Waiters can acquire lock in either readonly or default mode.
-        let mut digests = BTreeSet::new();
-        if !lock_queue.readonly_waiters.is_empty() {
-            std::mem::swap(&mut digests, &mut lock_queue.readonly_waiters);
-            lock_queue.readonly_holders.extend(digests.iter().cloned());
-        } else if lock_queue.readonly_holders.is_empty() {
-            // Only try to acquire default lock if there is no readonly lock waiter / holder.
-            std::mem::swap(&mut digests, &mut lock_queue.default_waiters);
-        };
-        if lock_queue.is_empty() {
-            self.lock_waiters.remove(&input_key);
-        }
-        if digests.is_empty() {
-            return ready_certificates;
-        }
 
         let input_txns = self
             .input_objects
@@ -328,12 +285,10 @@ impl Inner {
                 )
             });
         for digest in digests.iter() {
-            let age_opt = input_txns.shift_remove(digest);
-            // The digest of the transaction must be inside the map.
-            assert!(age_opt.is_some());
+            let age_opt = input_txns.remove(digest).expect("digest must be in map");
             metrics
                 .transaction_manager_transaction_queue_age_s
-                .observe(age_opt.unwrap().elapsed().as_secs_f64());
+                .observe(age_opt.elapsed().as_secs_f64());
         }
 
         if input_txns.is_empty() {
@@ -343,19 +298,15 @@ impl Inner {
         for digest in digests {
             // Pending certificate must exist.
             let pending_cert = self.pending_certificates.get_mut(&digest).unwrap();
-            let lock_mode = pending_cert.acquiring_locks.remove(&input_key).unwrap();
-            assert!(pending_cert
-                .acquired_locks
-                .insert(input_key, lock_mode)
-                .is_none());
-            // When a certificate has all locks acquired, it is ready to execute.
-            if pending_cert.acquiring_locks.is_empty() {
+            assert!(pending_cert.waiting_input_objects.remove(&input_key));
+            // When a certificate has all its input objects, it is ready to execute.
+            if pending_cert.waiting_input_objects.is_empty() {
                 let pending_cert = self.pending_certificates.remove(&digest).unwrap();
                 ready_certificates.push(pending_cert);
             } else {
                 // TODO: we should start logging this at a higher level after some period of
                 // time has elapsed.
-                trace!(tx_digest = ?digest,acquiring = ?pending_cert.acquiring_locks, "Certificate acquiring locks");
+                trace!(tx_digest = ?digest,missing = ?pending_cert.waiting_input_objects, "Certificate waiting on missing inputs");
             }
         }
 
@@ -363,7 +314,7 @@ impl Inner {
     }
 
     fn maybe_reserve_capacity(&mut self) {
-        self.lock_waiters.maybe_reserve_capacity();
+        self.missing_inputs.maybe_reserve_capacity();
         self.input_objects.maybe_reserve_capacity();
         self.pending_certificates.maybe_reserve_capacity();
         self.executing_certificates.maybe_reserve_capacity();
@@ -371,7 +322,7 @@ impl Inner {
 
     /// After reaching 1/4 load in hashmaps, decrease capacity to increase load to 1/2.
     fn maybe_shrink_capacity(&mut self) {
-        self.lock_waiters.maybe_shrink_capacity();
+        self.missing_inputs.maybe_shrink_capacity();
         self.input_objects.maybe_shrink_capacity();
         self.pending_certificates.maybe_shrink_capacity();
         self.executing_certificates.maybe_shrink_capacity();
@@ -380,27 +331,24 @@ impl Inner {
 
 impl TransactionManager {
     /// If a node restarts, transaction manager recovers in-memory data from pending_certificates,
-    /// which contains certificates not yet executed from Narwhal output and RPC.
+    /// which contains certified transactions from consensus output and RPC that are not executed.
     /// Transactions from other sources, e.g. checkpoint executor, have own persistent storage to
     /// retry transactions.
     pub(crate) fn new(
-        authority_store: Arc<AuthorityStore>,
+        object_cache_read: Arc<dyn ObjectCacheRead>,
+        transaction_cache_read: Arc<dyn TransactionCacheRead>,
         epoch_store: &AuthorityPerEpochStore,
-        tx_ready_certificates: UnboundedSender<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
+        tx_ready_certificates: UnboundedSender<PendingCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
-            authority_store,
+            object_cache_read,
+            transaction_cache_read,
             metrics: metrics.clone(),
-            inner: RwLock::new(Inner::new(epoch_store.epoch(), metrics)),
+            inner: RwLock::new(RwLock::new(Inner::new(epoch_store.epoch(), metrics))),
             tx_ready_certificates,
         };
-        transaction_manager
-            .enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store)
-            .expect("Initialize TransactionManager with pending certificates failed.");
+        transaction_manager.enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store);
         transaction_manager
     }
 
@@ -414,7 +362,7 @@ impl TransactionManager {
         &self,
         certs: Vec<VerifiedCertificate>,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<()> {
+    ) {
         let executable_txns = certs
             .into_iter()
             .map(VerifiedExecutableTransaction::new_from_certificate)
@@ -427,7 +375,7 @@ impl TransactionManager {
         &self,
         certs: Vec<VerifiedExecutableTransaction>,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<()> {
+    ) {
         let certs = certs.into_iter().map(|cert| (cert, None)).collect();
         self.enqueue_impl(certs, epoch_store)
     }
@@ -437,7 +385,7 @@ impl TransactionManager {
         &self,
         certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<()> {
+    ) {
         let certs = certs
             .into_iter()
             .map(|(cert, fx)| (cert, Some(fx)))
@@ -452,7 +400,9 @@ impl TransactionManager {
             Option<TransactionEffectsDigest>,
         )>,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<()> {
+    ) {
+        let reconfig_lock = self.inner.read();
+
         // filter out already executed certs
         let certs: Vec<_> = certs
             .into_iter()
@@ -460,12 +410,12 @@ impl TransactionManager {
                 let digest = *cert.digest();
                 // skip already executed txes
                 if self
-                    .authority_store
+                    .transaction_cache_read
                     .is_tx_already_executed(&digest)
-                    .expect("Failed to check if tx is already executed")
+                    .unwrap_or_else(|err| {
+                        panic!("Failed to check if tx is already executed: {:?}", err)
+                    })
                 {
-                    // also ensure the transaction will not be retried after restart.
-                    let _ = epoch_store.remove_pending_execution(&digest);
                     self.metrics
                         .transaction_manager_num_enqueued_certificates
                         .with_label_values(&["already_executed"])
@@ -482,20 +432,16 @@ impl TransactionManager {
         let certs: Vec<_> = certs
             .into_iter()
             .map(|(cert, fx_digest)| {
-                let digest = *cert.digest();
                 let input_object_kinds = cert
                     .data()
                     .intent_message()
                     .value
                     .input_objects()
                     .expect("input_objects() cannot fail");
-                let mut input_object_locks = self.authority_store.get_input_object_locks(
-                    &digest,
-                    &input_object_kinds,
-                    epoch_store,
-                );
+                let mut input_object_keys =
+                    epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds);
 
-                if input_object_kinds.len() != input_object_locks.len() {
+                if input_object_kinds.len() != input_object_keys.len() {
                     error!("Duplicated input objects: {:?}", input_object_kinds);
                 }
 
@@ -507,20 +453,29 @@ impl TransactionManager {
                         version: entry.1,
                     };
                     receiving_objects.insert(key);
-                    input_object_locks.insert(key, LockMode::Default);
+                    input_object_keys.insert(key);
                 }
 
-                for key in input_object_locks.keys() {
-                    object_availability.insert(*key, None);
+                for key in input_object_keys.iter() {
+                    if key.is_cancelled() {
+                        // Cancelled txn objects should always be available immediately.
+                        // Don't need to wait on these objects for execution.
+                        object_availability.insert(*key, Some(true));
+                    } else {
+                        object_availability.insert(*key, None);
+                    }
                 }
 
-                (cert, fx_digest, input_object_locks)
+                (cert, fx_digest, input_object_keys)
             })
             .collect();
 
         {
-            let mut inner = self.inner.write();
+            let mut inner = reconfig_lock.write();
             for (key, value) in object_availability.iter_mut() {
+                if value.is_some_and(|available| available) {
+                    continue;
+                }
                 if let Some(available) = inner.available_objects_cache.is_object_available(key) {
                     *value = Some(available);
                 }
@@ -536,15 +491,15 @@ impl TransactionManager {
 
         // Checking object availability without holding TM lock to reduce contention.
         // But input objects can become available before TM lock is acquired.
-        // So missing objects' availability are checked again after releasing the TM lock.
+        // So missing objects' availability are checked again after acquiring TM lock.
         let cache_miss_availability = self
-            .authority_store
+            .object_cache_read
             .multi_input_objects_available(
-                input_object_cache_misses.iter().cloned(),
+                &input_object_cache_misses,
                 receiving_objects,
-                epoch_store,
+                epoch_store.epoch(),
             )
-            .expect("Checking object existence cannot fail!")
+            .unwrap_or_else(|err| panic!("Checking object existence cannot fail: {:?}", err))
             .into_iter()
             .zip(input_object_cache_misses);
 
@@ -553,7 +508,7 @@ impl TransactionManager {
         // executed.
 
         // Internal lock is held only for updating the internal state.
-        let mut inner = self.inner.write();
+        let mut inner = reconfig_lock.write();
 
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
@@ -584,13 +539,17 @@ impl TransactionManager {
         inner.available_objects_cache.disable_unbounded_cache();
 
         let mut pending = Vec::new();
+        let pending_cert_enqueue_time = Instant::now();
 
-        for (cert, expected_effects_digest, input_object_locks) in certs {
+        for (cert, expected_effects_digest, input_object_keys) in certs {
             pending.push(PendingCertificate {
                 certificate: cert,
                 expected_effects_digest,
-                acquiring_locks: input_object_locks,
-                acquired_locks: BTreeMap::new(),
+                waiting_input_objects: input_object_keys,
+                stats: PendingCertificateStats {
+                    enqueue_time: pending_cert_enqueue_time,
+                    ready_time: None,
+                },
             });
         }
 
@@ -607,8 +566,6 @@ impl TransactionManager {
                     "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
                     inner.epoch, pending_cert.certificate
                 );
-                // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_execution(&digest);
                 continue;
             }
 
@@ -621,7 +578,7 @@ impl TransactionManager {
                 continue;
             }
             // skip already executing txes
-            if inner.executing_certificates.contains_key(&digest) {
+            if inner.executing_certificates.contains(&digest) {
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["already_executing"])
@@ -629,9 +586,11 @@ impl TransactionManager {
                 continue;
             }
             // skip already executed txes
-            if self.authority_store.is_tx_already_executed(&digest)? {
-                // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_execution(&digest);
+            let is_tx_already_executed = self
+                .transaction_cache_read
+                .is_tx_already_executed(&digest)
+                .expect("Check if tx is already executed should not fail");
+            if is_tx_already_executed {
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["already_executed"])
@@ -639,62 +598,34 @@ impl TransactionManager {
                 continue;
             }
 
-            let mut acquiring_locks = BTreeMap::new();
-            std::mem::swap(&mut acquiring_locks, &mut pending_cert.acquiring_locks);
-            for (key, lock_mode) in acquiring_locks {
-                // The transaction needs to wait to acquire locks in two cases:
-                let mut acquire = false;
+            let mut waiting_input_objects = BTreeSet::new();
+            std::mem::swap(
+                &mut waiting_input_objects,
+                &mut pending_cert.waiting_input_objects,
+            );
+            for key in waiting_input_objects {
                 if !object_availability[&key].unwrap() {
-                    // 1. The input object is not yet available.
-                    acquire = true;
-                    let lock_queue = inner.lock_waiters.entry(key).or_default();
-                    match lock_mode {
-                        LockMode::Default => {
-                            // If the transaction is acquiring the object in Default mode, it must
-                            // wait for all ReadOnly locks to be released.
-                            assert!(lock_queue.default_waiters.insert(digest));
-                        }
-                        LockMode::ReadOnly => {
-                            assert!(lock_queue.readonly_waiters.insert(digest));
-                        }
-                    }
-                } else {
-                    match lock_mode {
-                        LockMode::Default => {
-                            // 2. The input object is currently locked in ReadOnly mode, and this
-                            // transaction is acquiring it in Default mode.
-                            if let Some(lock_queue) = inner.lock_waiters.get_mut(&key) {
-                                // If there are any ReadOnly locks, the transaction must wait for
-                                // them to be released.
-                                if lock_queue.has_readonly() {
-                                    acquire = true;
-                                    assert!(lock_queue.default_waiters.insert(digest));
-                                }
-                            }
-                        }
-                        LockMode::ReadOnly => {
-                            // Acquired readonly locks need to be tracked until the transaction has
-                            // finished execution.
-                            let lock_queue = inner.lock_waiters.entry(key).or_default();
-                            assert!(lock_queue.readonly_holders.insert(digest));
-                        }
-                    }
-                }
-                if acquire {
-                    pending_cert.acquiring_locks.insert(key, lock_mode);
+                    // The input object is not yet available.
+                    pending_cert.waiting_input_objects.insert(key);
+
+                    assert!(
+                        inner.missing_inputs.entry(key).or_default().insert(digest),
+                        "Duplicated certificate {:?} for missing object {:?}",
+                        digest,
+                        key
+                    );
                     let input_txns = inner.input_objects.entry(key.id()).or_default();
-                    input_txns.insert(digest, Instant::now());
-                } else {
-                    pending_cert.acquired_locks.insert(key, lock_mode);
+                    input_txns.insert(digest, pending_cert_enqueue_time);
                 }
             }
 
             // Ready transactions can start to execute.
-            if pending_cert.acquiring_locks.is_empty() {
+            if pending_cert.waiting_input_objects.is_empty() {
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["ready"])
                     .inc();
+                pending_cert.stats.ready_time = Some(Instant::now());
                 // Send to execution driver for execution.
                 self.certificate_ready(&mut inner, pending_cert);
                 continue;
@@ -717,14 +648,12 @@ impl TransactionManager {
 
         self.metrics
             .transaction_manager_num_missing_objects
-            .set(inner.lock_waiters.len() as i64);
+            .set(inner.missing_inputs.len() as i64);
         self.metrics
             .transaction_manager_num_pending_certificates
             .set(inner.pending_certificates.len() as i64);
 
         inner.maybe_reserve_capacity();
-
-        Ok(())
     }
 
     #[cfg(test)]
@@ -733,18 +662,21 @@ impl TransactionManager {
         input_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
-        let mut inner = self.inner.write();
+        let reconfig_lock = self.inner.read();
+        let mut inner = reconfig_lock.write();
         let _scope = monitored_scope("TransactionManager::objects_available::wlock");
-        self.objects_available_locked(&mut inner, epoch_store, input_keys, true);
+        self.objects_available_locked(&mut inner, epoch_store, input_keys, true, Instant::now());
         inner.maybe_shrink_capacity();
     }
 
+    #[instrument(level = "trace", skip_all)]
     fn objects_available_locked(
         &self,
         inner: &mut Inner,
         epoch_store: &AuthorityPerEpochStore,
         input_keys: Vec<InputKey>,
         update_cache: bool,
+        available_time: Instant,
     ) {
         if inner.epoch != epoch_store.epoch() {
             warn!(
@@ -759,14 +691,17 @@ impl TransactionManager {
 
         for input_key in input_keys {
             trace!(?input_key, "object available");
-            for ready_cert in inner.try_acquire_lock(input_key, update_cache, &self.metrics) {
+            for mut ready_cert in
+                inner.find_ready_transactions(input_key, update_cache, &self.metrics)
+            {
+                ready_cert.stats.ready_time = Some(available_time);
                 self.certificate_ready(inner, ready_cert);
             }
         }
 
         self.metrics
             .transaction_manager_num_missing_objects
-            .set(inner.lock_waiters.len() as i64);
+            .set(inner.missing_inputs.len() as i64);
         self.metrics
             .transaction_manager_num_pending_certificates
             .set(inner.pending_certificates.len() as i64);
@@ -783,8 +718,10 @@ impl TransactionManager {
         output_object_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
+        let reconfig_lock = self.inner.read();
         {
-            let mut inner = self.inner.write();
+            let commit_time = Instant::now();
+            let mut inner = reconfig_lock.write();
             let _scope = monitored_scope("TransactionManager::notify_commit::wlock");
 
             if inner.epoch != epoch_store.epoch() {
@@ -792,67 +729,49 @@ impl TransactionManager {
                 return;
             }
 
-            self.objects_available_locked(&mut inner, epoch_store, output_object_keys, true);
+            self.objects_available_locked(
+                &mut inner,
+                epoch_store,
+                output_object_keys,
+                true,
+                commit_time,
+            );
 
-            let Some(acquired_locks) = inner.executing_certificates.remove(digest) else {
+            if !inner.executing_certificates.remove(digest) {
                 trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
                 return;
-            };
-            for (key, lock_mode) in acquired_locks {
-                if lock_mode == LockMode::Default {
-                    // Holders of default locks are not tracked.
-                    continue;
-                }
-                assert_eq!(lock_mode, LockMode::ReadOnly);
-                let lock_queue = inner.lock_waiters.get_mut(&key).unwrap();
-                assert!(
-                    lock_queue.readonly_holders.remove(digest),
-                    "Certificate {:?} not found among readonly lock holders",
-                    digest
-                );
-                for ready_cert in inner.try_acquire_lock(key, true, &self.metrics) {
-                    self.certificate_ready(&mut inner, ready_cert);
-                }
             }
+
             self.metrics
                 .transaction_manager_num_executing_certificates
                 .set(inner.executing_certificates.len() as i64);
 
             inner.maybe_shrink_capacity();
         }
-
-        let _ = epoch_store.remove_pending_execution(digest);
     }
 
     /// Sends the ready certificate for execution.
     fn certificate_ready(&self, inner: &mut Inner, pending_certificate: PendingCertificate) {
-        let cert = pending_certificate.certificate;
-        let expected_effects_digest = pending_certificate.expected_effects_digest;
-        trace!(tx_digest = ?cert.digest(), "certificate ready");
-        let tx_data = &cert.data().intent_message().value;
+        trace!(tx_digest = ?pending_certificate.certificate.digest(), "certificate ready");
+        assert_eq!(pending_certificate.waiting_input_objects.len(), 0);
         // Record as an executing certificate.
-        assert_eq!(
-            pending_certificate.acquired_locks.len(),
-            tx_data.input_objects().unwrap().len() + tx_data.receiving_objects().len(),
-        );
         assert!(inner
             .executing_certificates
-            .insert(*cert.digest(), pending_certificate.acquired_locks)
-            .is_none());
-        let _ = self
-            .tx_ready_certificates
-            .send((cert, expected_effects_digest));
+            .insert(*pending_certificate.certificate.digest()));
+        self.metrics.txn_ready_rate_tracker.lock().record();
+        let _ = self.tx_ready_certificates.send(pending_certificate);
         self.metrics.transaction_manager_num_ready.inc();
         self.metrics.execution_driver_dispatch_queue.inc();
     }
 
     /// Gets the missing input object keys for the given transaction.
     pub(crate) fn get_missing_input(&self, digest: &TransactionDigest) -> Option<Vec<InputKey>> {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         inner
             .pending_certificates
             .get(digest)
-            .map(|cert| cert.acquiring_locks.keys().cloned().collect())
+            .map(|cert| cert.waiting_input_objects.clone().into_iter().collect())
     }
 
     // Returns the number of transactions waiting on each object ID, as well as the age of the oldest transaction in the queue.
@@ -860,15 +779,16 @@ impl TransactionManager {
         &self,
         keys: Vec<ObjectID>,
     ) -> Vec<(ObjectID, usize, Option<Duration>)> {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         keys.into_iter()
             .map(|key| {
-                let default_map = IndexMap::new();
+                let default_map = TransactionQueue::default();
                 let txns = inner.input_objects.get(&key).unwrap_or(&default_map);
                 (
                     key,
                     txns.len(),
-                    txns.first().map(|(_, time)| time.elapsed()),
+                    txns.first().map(|(time, _)| time.elapsed()),
                 )
             })
             .collect()
@@ -876,31 +796,34 @@ impl TransactionManager {
 
     // Returns the number of transactions pending or being executed right now.
     pub(crate) fn inflight_queue_len(&self) -> usize {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         inner.pending_certificates.len() + inner.executing_certificates.len()
     }
 
     // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
     // because they are no longer relevant and may be incorrect in the new epoch.
     pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
-        let mut inner = self.inner.write();
+        let reconfig_lock = self.inner.write();
+        let mut inner = reconfig_lock.write();
         *inner = Inner::new(new_epoch, self.metrics.clone());
     }
 
     pub(crate) fn check_execution_overload(
         &self,
-        txn_age_threshold: Duration,
+        overload_config: &AuthorityOverloadConfig,
         tx_data: &SenderSignedData,
     ) -> SuiResult {
         // Too many transactions are pending execution.
         let inflight_queue_len = self.inflight_queue_len();
         fp_ensure!(
-            inflight_queue_len < MAX_TM_QUEUE_LENGTH,
+            inflight_queue_len < overload_config.max_transaction_manager_queue_length,
             SuiError::TooManyTransactionsPendingExecution {
                 queue_len: inflight_queue_len,
-                threshold: MAX_TM_QUEUE_LENGTH,
+                threshold: overload_config.max_transaction_manager_queue_length,
             }
         );
+        tx_data.digest();
 
         for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
             tx_data
@@ -911,24 +834,27 @@ impl TransactionManager {
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
-            fp_ensure!(
-                queue_len < MAX_PER_OBJECT_QUEUE_LENGTH,
-                SuiError::TooManyTransactionsPendingOnObject {
+            if queue_len >= overload_config.max_transaction_manager_per_object_queue_length {
+                info!(
+                    "Overload detected on object {:?} with {} pending transactions",
+                    object_id, queue_len
+                );
+                fp_bail!(SuiError::TooManyTransactionsPendingOnObject {
                     object_id,
                     queue_len,
-                    threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
-                }
-            );
+                    threshold: overload_config.max_transaction_manager_per_object_queue_length,
+                });
+            }
             if let Some(age) = txn_age {
                 // Check that we don't have a txn that has been waiting for a long time in the queue.
-                fp_ensure!(
-                    age < txn_age_threshold,
-                    SuiError::TooOldTransactionPendingOnObject {
+                if age >= overload_config.max_txn_age_in_queue {
+                    info!("Overload detected on object {:?} with oldest transaction pending for {} secs", object_id, age.as_secs());
+                    fp_bail!(SuiError::TooOldTransactionPendingOnObject {
                         object_id,
                         txn_age_sec: age.as_secs(),
-                        threshold: txn_age_threshold.as_secs(),
-                    }
-                );
+                        threshold: overload_config.max_txn_age_in_queue.as_secs(),
+                    });
+                }
             }
         }
         Ok(())
@@ -937,11 +863,12 @@ impl TransactionManager {
     // Verify TM has no pending item for tests.
     #[cfg(test)]
     fn check_empty_for_testing(&self) {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         assert!(
-            inner.lock_waiters.is_empty(),
-            "Lock waiters: {:?}",
-            inner.lock_waiters
+            inner.missing_inputs.is_empty(),
+            "Missing inputs: {:?}",
+            inner.missing_inputs
         );
         assert!(
             inner.input_objects.is_empty(),
@@ -985,12 +912,98 @@ where
     }
 }
 
+trait ResizableHashSet<K> {
+    fn maybe_reserve_capacity(&mut self);
+    fn maybe_shrink_capacity(&mut self);
+}
+
+impl<K> ResizableHashSet<K> for HashSet<K>
+where
+    K: std::cmp::Eq + std::hash::Hash,
+{
+    /// After reaching 3/4 load in hashset, increase capacity to decrease load to 1/2.
+    fn maybe_reserve_capacity(&mut self) {
+        if self.len() > self.capacity() * 3 / 4 {
+            self.reserve(self.capacity() / 2);
+        }
+    }
+
+    /// After reaching 1/4 load in hashset, decrease capacity to increase load to 1/2.
+    fn maybe_shrink_capacity(&mut self) {
+        if self.len() > MIN_HASHMAP_CAPACITY && self.len() < self.capacity() / 4 {
+            self.shrink_to(max(self.capacity() / 2, MIN_HASHMAP_CAPACITY))
+        }
+    }
+}
+
+#[derive(Default, Debug)]
+struct TransactionQueue {
+    digests: HashMap<TransactionDigest, Instant>,
+    ages: BinaryHeap<(Reverse<Instant>, TransactionDigest)>,
+}
+
+impl TransactionQueue {
+    fn len(&self) -> usize {
+        self.digests.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.digests.is_empty()
+    }
+
+    /// Insert the digest into the queue with the given time. If the digest is
+    /// already in the queue, this is a no-op.
+    fn insert(&mut self, digest: TransactionDigest, time: Instant) {
+        if let hash_map::Entry::Vacant(entry) = self.digests.entry(digest) {
+            entry.insert(time);
+            self.ages.push((Reverse(time), digest));
+        }
+    }
+
+    /// Remove the digest from the queue. Returns the time the digest was
+    /// inserted into the queue, if it was present.
+    ///
+    /// After removing the digest, first() will return the new oldest entry
+    /// in the queue (which may be unchanged).
+    fn remove(&mut self, digest: &TransactionDigest) -> Option<Instant> {
+        let Some(when) = self.digests.remove(digest) else {
+            return None;
+        };
+
+        // This loop removes all previously inserted entries that no longer
+        // correspond to live entries in self.digests. When the loop terminates,
+        // the top of the heap will be the oldest live entry.
+        // Amortized complexity of `remove` is O(lg(n)).
+        while !self.ages.is_empty() {
+            let first = self.ages.peek().expect("heap cannot be empty");
+
+            // We compare the exact time of the entry, because there may be an
+            // entry in the heap that was previously inserted and removed from
+            // digests, and we want to ignore it. (see test_transaction_queue_remove_in_order)
+            if self.digests.get(&first.1) == Some(&first.0 .0) {
+                break;
+            }
+
+            self.ages.pop();
+        }
+
+        Some(when)
+    }
+
+    /// Return the oldest entry in the queue.
+    fn first(&self) -> Option<(Instant, TransactionDigest)> {
+        self.ages.peek().map(|(time, digest)| (time.0, *digest))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use prometheus::Registry;
+    use rand::{Rng, RngCore};
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn test_available_objects_cache() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::default()));
         let mut cache = AvailableObjectsCache::new_with_size(metrics, 5);
@@ -1059,5 +1072,168 @@ mod test {
             version: 8.into(),
         };
         assert_eq!(cache.is_object_available(&input_key), Some(true));
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue() {
+        let mut queue = TransactionQueue::default();
+
+        // insert and remove an item
+        let time = Instant::now();
+        let digest = TransactionDigest::new([1; 32]);
+        queue.insert(digest, time);
+        assert_eq!(queue.first(), Some((time, digest)));
+        queue.remove(&digest);
+        assert_eq!(queue.first(), None);
+
+        // remove a non-existent item
+        assert_eq!(queue.remove(&digest), None);
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue_remove_in_order() {
+        // insert two items, remove them in insertion order
+        let time1 = Instant::now();
+        let digest1 = TransactionDigest::new([1; 32]);
+        let time2 = time1 + Duration::from_secs(1);
+        let digest2 = TransactionDigest::new([2; 32]);
+
+        let mut queue = TransactionQueue::default();
+        queue.insert(digest1, time1);
+        queue.insert(digest2, time2);
+
+        assert_eq!(queue.first(), Some((time1, digest1)));
+        assert_eq!(queue.remove(&digest1), Some(time1));
+        assert_eq!(queue.first(), Some((time2, digest2)));
+        assert_eq!(queue.remove(&digest2), Some(time2));
+        assert_eq!(queue.first(), None);
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue_remove_in_reverse_order() {
+        // insert two items, remove them in reverse order
+        let time1 = Instant::now();
+        let digest1 = TransactionDigest::new([1; 32]);
+        let time2 = time1 + Duration::from_secs(1);
+        let digest2 = TransactionDigest::new([2; 32]);
+
+        let mut queue = TransactionQueue::default();
+        queue.insert(digest1, time1);
+        queue.insert(digest2, time2);
+
+        assert_eq!(queue.first(), Some((time1, digest1)));
+        assert_eq!(queue.remove(&digest2), Some(time2));
+
+        // after removing digest2, digest1 is still the first item
+        assert_eq!(queue.first(), Some((time1, digest1)));
+        assert_eq!(queue.remove(&digest1), Some(time1));
+
+        assert_eq!(queue.first(), None);
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue_reinsert() {
+        // insert two items
+        let time1 = Instant::now();
+        let digest1 = TransactionDigest::new([1; 32]);
+        let time2 = time1 + Duration::from_secs(1);
+        let digest2 = TransactionDigest::new([2; 32]);
+
+        let mut queue = TransactionQueue::default();
+        queue.insert(digest1, time1);
+        queue.insert(digest2, time2);
+
+        // remove the second item
+        queue.remove(&digest2);
+        assert_eq!(queue.first(), Some((time1, digest1)));
+
+        // insert the second item again
+        let time3 = time2 + Duration::from_secs(1);
+        queue.insert(digest2, time3);
+
+        // remove the first item
+        queue.remove(&digest1);
+
+        // time3 should be in first()
+        assert_eq!(queue.first(), Some((time3, digest2)));
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn test_transaction_queue_double_insert() {
+        let time1 = Instant::now();
+        let digest1 = TransactionDigest::new([1; 32]);
+        let time2 = time1 + Duration::from_secs(1);
+        let digest2 = TransactionDigest::new([2; 32]);
+        let time3 = time2 + Duration::from_secs(1);
+
+        let mut queue = TransactionQueue::default();
+        queue.insert(digest1, time1);
+        queue.insert(digest2, time2);
+        queue.insert(digest2, time3);
+
+        // re-insertion of digest2 should not change its time
+        assert_eq!(queue.first(), Some((time1, digest1)));
+        queue.remove(&digest1);
+        assert_eq!(queue.first(), Some((time2, digest2)));
+    }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn transaction_queue_random_test() {
+        let mut rng = rand::thread_rng();
+        let mut digests = Vec::new();
+        for _ in 0..100 {
+            let mut digest = [0; 32];
+            rng.fill_bytes(&mut digest);
+            digests.push(TransactionDigest::new(digest));
+        }
+
+        let mut verifier = HashMap::new();
+        let mut queue = TransactionQueue::default();
+
+        let mut now = Instant::now();
+
+        // first insert some random digests so that the queue starts
+        // out well-populated
+        for _ in 0..70 {
+            now += Duration::from_secs(1);
+            let digest = digests[rng.gen_range(0..digests.len())];
+            let time = now;
+            queue.insert(digest, time);
+            verifier.entry(digest).or_insert(time);
+        }
+
+        // Do random operations on both the queue and the verifier, and
+        // verify that the two structures always agree
+        for _ in 0..100000 {
+            // advance time
+            now += Duration::from_secs(1);
+
+            // pick a random digest
+            let digest = digests[rng.gen_range(0..digests.len())];
+
+            // either insert or remove it
+            if rng.gen_bool(0.5) {
+                let time = now;
+                queue.insert(digest, time);
+                verifier.entry(digest).or_insert(time);
+            } else {
+                let time = verifier.remove(&digest);
+                assert_eq!(queue.remove(&digest), time);
+            }
+
+            assert_eq!(
+                queue.first(),
+                verifier
+                    .iter()
+                    .min_by_key(|(_, time)| **time)
+                    .map(|(digest, time)| (*time, *digest))
+            );
+        }
     }
 }

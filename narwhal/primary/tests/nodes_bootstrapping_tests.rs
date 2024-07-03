@@ -33,7 +33,7 @@ async fn test_response_error_after_shutdown_internal_consensus() {
     let tx_str = "test transaction".to_string();
     let tx = bcs::to_bytes(&tx_str).unwrap();
     let txn = TransactionProto {
-        transaction: Bytes::from(tx),
+        transactions: vec![Bytes::from(tx)],
     };
 
     // Should fail submitting to consensus.
@@ -294,7 +294,7 @@ async fn test_loss_of_liveness_with_recovery() {
 
     // wait and fetch the latest commit round
     tokio::time::sleep(node_advance_delay).await;
-    let rounds_3 = cluster.assert_progress(4, 0).await;
+    let rounds_3 = cluster.assert_progress(4, 2).await;
 
     let round_2_max = rounds_2.values().max().unwrap();
     assert!(

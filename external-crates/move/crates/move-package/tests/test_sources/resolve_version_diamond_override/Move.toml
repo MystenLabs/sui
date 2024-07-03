@@ -1,0 +1,25 @@
+# Direct dependencies of the root package (A and B) depend on different versions of C.
+# This would cause a conflict but we override the version of C in the root package.
+#                                                             
+#                            v1                                
+#            +---+       +---------+                           
+#   +------->| A |------>| C-loc-1 |                           
+#   |        +---+       +---------+                           
+#   |                     ^                                    
+# +----+     ov(2)        |                                    
+# |Root|------------------+                                    
+# +----+                  |                                    
+#   |                     v  v2                                
+#   |        +---+       +---------+                           
+#   +------->| B |------>| C-loc-2 |                           
+#            +---+       +---------+                           
+          
+
+[package]
+name = "Root"
+version = "1"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }
+C = { local = "./deps_only/C-loc-2", override = true }

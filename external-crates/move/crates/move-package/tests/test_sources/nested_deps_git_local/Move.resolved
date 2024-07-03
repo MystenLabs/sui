@@ -1,7 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/nested_deps_git_local",
-        root_package: "NestedDeps",
+        root_package_id: "NestedDeps",
+        root_package_name: "NestedDeps",
         package_graph: {
             "NestedDeps": [
                 (
@@ -30,9 +31,9 @@ ResolvedGraph {
             "MoveNursery": Package {
                 kind: Git(
                     GitInfo {
-                        git_url: "https://github.com/move-language/move",
-                        git_rev: "781c844",
-                        subdir: "language/move-stdlib/nursery",
+                        git_url: "https://github.com/MystenLabs/sui",
+                        git_rev: "5d8a867",
+                        subdir: "external-crates/move/crates/move-stdlib/nursery",
                     },
                 ),
                 version: None,
@@ -41,9 +42,9 @@ ResolvedGraph {
             "MoveStdlib": Package {
                 kind: Git(
                     GitInfo {
-                        git_url: "https://github.com/move-language/move",
-                        git_rev: "781c844",
-                        subdir: "language/move-stdlib",
+                        git_url: "https://github.com/MystenLabs/sui",
+                        git_rev: "5d8a867",
+                        subdir: "external-crates/move/crates/move-stdlib",
                     },
                 ),
                 version: None,
@@ -55,14 +56,13 @@ ResolvedGraph {
             "MoveStdlib",
             "NestedDeps",
         },
-        manifest_digest: "0C5D381E36019E1585333C288C833EF07C2E0AC0CD76B1326E88A6765714C247",
+        manifest_digest: "598DCC919F7378E59F328E1B448D1AAC70B8F34894146860B3ABF46600F9F79B",
         deps_digest: "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082",
     },
     build_options: BuildConfig {
         dev_mode: true,
         test_mode: false,
         generate_docs: false,
-        generate_abis: false,
         install_dir: Some(
             "ELIDED_FOR_TEST",
         ),
@@ -70,7 +70,6 @@ ResolvedGraph {
         lock_file: Some(
             "ELIDED_FOR_TEST",
         ),
-        additional_named_addresses: {},
         fetch_deps_only: false,
         skip_fetch_latest_git_deps: false,
         default_flavor: None,
@@ -78,17 +77,18 @@ ResolvedGraph {
         deps_as_root: false,
         silence_warnings: false,
         warnings_are_errors: false,
+        json_errors: false,
+        additional_named_addresses: {},
+        lint_flag: LintFlag {
+            no_lint: false,
+            lint: false,
+        },
     },
     package_table: {
         "MoveNursery": Package {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "MoveNursery",
-                    version: (
-                        1,
-                        5,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -109,7 +109,6 @@ ResolvedGraph {
                                 "..",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -128,11 +127,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "MoveStdlib",
-                    version: (
-                        1,
-                        5,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -164,11 +158,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "NestedDeps",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -189,13 +178,12 @@ ResolvedGraph {
                         InternalDependency {
                             kind: Git(
                                 GitInfo {
-                                    git_url: "https://github.com/move-language/move",
-                                    git_rev: "781c844",
-                                    subdir: "language/move-stdlib/nursery",
+                                    git_url: "https://github.com/MystenLabs/sui",
+                                    git_rev: "5d8a867",
+                                    subdir: "external-crates/move/crates/move-stdlib/nursery",
                                 },
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },

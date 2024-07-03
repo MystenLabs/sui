@@ -19,9 +19,9 @@ npm i @mysten/bcs
 import { bcs } from '@mysten/bcs';
 
 // define UID as a 32-byte array, then add a transform to/from hex strings
-const UID = bcs.array(32, bcs.u8()).transform({
-	input: (id: string) => fromHex(id),
-	output: (id) => toHex(id),
+const UID = bcs.fixedArray(32, bcs.u8()).transform({
+	input: (id: string) => fromHEX(id),
+	output: (id) => toHEX(Uint8Array.from(id)),
 });
 
 const Coin = bcs.struct('Coin', {
@@ -51,8 +51,8 @@ built-in primitives, such as `string` or `u64`). There are no type hints in the 
 what they mean, so the schema used for decoding must match the schema used to encode the data.
 
 The `@mysten/bcs` library can be used to define schemas that can serialize and deserialize BCS
-encoded data, and and can infer the correct TypeScript for the schema from the definitions
-themselves rather than having to define them manually.
+encoded data, and can infer the correct TypeScript for the schema from the definitions themselves
+rather than having to define them manually.
 
 ## Basic types
 
@@ -147,10 +147,15 @@ const struct = MyStruct.serialize({ id: 1, name: 'name' }).toBytes();
 const tuple = bcs.tuple([bcs.u8(), bcs.string()]).serialize([1, 'name']).toBytes();
 
 // Map
-const map = bcs.map(bcs.u8(), bcs.string()).serialize(.toBytes()[
-	[1, 'one'],
-	[2, 'two'],
-]);
+const map = bcs
+	.map(bcs.u8(), bcs.string())
+	.serialize(
+		new Map([
+			[1, 'one'],
+			[2, 'two'],
+		]),
+	)
+	.toBytes();
 
 // Parsing data back into original types
 
@@ -183,20 +188,19 @@ const parsedMap = bcs.map(bcs.u8(), bcs.string()).parse(map);
 
 ## Generics
 
-To define a generic struct or an enum, you can use `bcs.generic` to create a generic type helper
+To define a generic struct or an enum, you can define a generic typescript function helper
 
 ```ts
 // Example: Generics
-import { bcs } from '@mysten/bcs';
+import { bcs, BcsType } from '@mysten/bcs';
 
-// Container -> the name of the type
-// [T] -> A list of names for the generic types
-// The second argument is a function that takes the generic types as arguments and returns a bcs type
-const Container = bcs.generic(['T'], (T) =>
-	bcs.struct('Container<T>', {
+// The T typescript generic is a placeholder for the typescript type of the generic value
+// The T argument will be the bcs type passed in when creating a concrete instance of the Container type
+function Container<T extends BcsType<any>>(T: T) {
+	return bcs.struct('Container<T>', {
 		contents: T,
 	}),
-);
+}
 
 // When serializing, we have to pass the type to use for `T`
 const bytes = Container(bcs.u8()).serialize({ contents: 100 }).toBytes();
@@ -206,13 +210,17 @@ const U8Container = Container(bcs.u8());
 const bytes = U8Container.serialize({ contents: 100 }).toBytes();
 
 // Using multiple generics
-
-const VecMap = bcs.generic(['K', 'V'], (K, V) =>
-	bcs.struct('VecMap<K, V>', {
-		keys: bcs.vector(K),
-		values: bcs.vector(V),
-	}),
-);
+function VecMap<K extends BcsType<any>, V extends BcsType<any>>(K: K, V: V) {
+	// You can use the names of the generic params in the type name to
+	return bcs.struct(
+		// You can use the names of the generic params to give your type a more useful name
+		`VecMap<${K.name}, ${V.name}>`,
+		{
+			keys: bcs.vector(K),
+			values: bcs.vector(V),
+		}
+	)
+}
 
 // To serialize VecMap, we can use:
 VecMap(bcs.string(), bcs.string())
@@ -250,7 +258,7 @@ when calling `serialize`. The `output` type can generally be inferred from the d
 input type will need to be provided explicitly. In some cases, for complex transforms, you'll need
 to manually type the return
 
-transforms can also handle more complex types. For instance, `@mysten/sui.js` uses the following
+transforms can also handle more complex types. For instance, `@mysten/sui` uses the following
 definition to transform enums into a more TypeScript friends format:
 
 ```ts

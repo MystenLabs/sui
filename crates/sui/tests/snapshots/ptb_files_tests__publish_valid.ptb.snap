@@ -1,0 +1,14 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭────────────────────────────────────────────╮
+│ PTB Preview                                │
+├─────────┬──────────────────────────────────┤
+│ command │ values                           │
+├─────────┼──────────────────────────────────┤
+│ publish │ tests/ptb_files/publish/test_pkg │
+╰─────────┴──────────────────────────────────╯
+ === BUILT PTB === 
+Command 0: Publish(_,)

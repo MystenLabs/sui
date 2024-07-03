@@ -1,10 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::chain_from_chain_id;
 use crate::{
-    config::ReplayableNetworkConfigSet,
     data_fetcher::{
         extract_epoch_and_version, DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher,
+    },
+    displays::{
+        transaction_displays::{transform_command_results_to_annotated, FullPTB},
+        Pretty,
     },
     types::*,
 };
@@ -26,27 +30,20 @@ use std::{
     sync::Mutex,
 };
 use sui_config::node::ExpensiveSafetyCheckConfig;
-use sui_core::{
-    authority::{
-        authority_per_epoch_store::AuthorityPerEpochStore,
-        epoch_start_configuration::EpochStartConfiguration,
-        test_authority_builder::TestAuthorityBuilder, AuthorityState, NodeStateDump,
-    },
-    epoch::epoch_metrics::EpochMetrics,
-    module_cache_metrics::ResolverMetrics,
-    signature_verifier::SignatureVerifierMetrics,
-};
+use sui_core::authority::NodeStateDump;
 use sui_execution::Executor;
 use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::storage::{get_module, PackageObjectArc};
+use sui_types::in_memory_storage::InMemoryStorage;
+use sui_types::message_envelope::Message;
+use sui_types::storage::{get_module, PackageObject};
+use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::{
-    authenticator_state::get_authenticator_state_obj_initial_shared_version,
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
-    digests::{ChainIdentifier, CheckpointDigest, ObjectDigest, TransactionDigest},
+    digests::{ObjectDigest, TransactionDigest},
     error::{ExecutionError, SuiError, SuiResult},
     executable_transaction::VerifiedExecutableTransaction,
     gas::SuiGasStatus,
@@ -55,15 +52,13 @@ use sui_types::{
     object::{Data, Object, Owner},
     storage::get_module_by_id,
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
-    sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
     transaction::{
-        CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
-        TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate,
-        VerifiedTransaction,
+        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
+        SenderSignedData, Transaction, TransactionDataAPI, TransactionKind, VerifiedTransaction,
     },
     DEEPBOOK_PACKAGE_ID,
 };
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
 
@@ -71,7 +66,7 @@ use tracing::{error, info, warn};
 pub struct ExecutionSandboxState {
     /// Information describing the transaction
     pub transaction_info: OnChainTransactionInfo,
-    /// All the obejcts that are required for the execution of the transaction
+    /// All the objects that are required for the execution of the transaction
     pub required_objects: Vec<Object>,
     /// Temporary store from executing this locally in `execute_transaction_to_effects`
     #[serde(skip)]
@@ -81,17 +76,17 @@ pub struct ExecutionSandboxState {
     /// Status from executing this locally in `execute_transaction_to_effects`
     #[serde(skip)]
     pub local_exec_status: Option<Result<(), ExecutionError>>,
-    /// Pre exec diag info
-    pub pre_exec_diag: DiagInfo,
 }
 
 impl ExecutionSandboxState {
     pub fn check_effects(&self) -> Result<(), ReplayEngineError> {
         if self.transaction_info.effects != self.local_exec_effects {
             error!("Replay tool forked {}", self.transaction_info.tx_digest);
+            let diff = self.diff_effects();
+            println!("{}", diff);
             return Err(ReplayEngineError::EffectsForked {
                 digest: self.transaction_info.tx_digest,
-                diff: format!("\n{}", self.diff_effects()),
+                diff: format!("\n{}", diff),
                 on_chain: Box::new(self.transaction_info.effects.clone()),
                 local: Box::new(self.local_exec_effects.clone()),
             });
@@ -108,7 +103,6 @@ impl ExecutionSandboxState {
         let mut res = vec![];
 
         let diff = TextDiff::from_lines(&on_chain_str, &local_chain_str);
-        println!("On-chain vs local diff");
         for change in diff.iter_all_changes() {
             let sign = match change.tag() {
                 ChangeTag::Delete => "---",
@@ -138,12 +132,13 @@ pub struct ProtocolVersionSummary {
     pub epoch_change_tx: TransactionDigest,
 }
 
+#[derive(Clone)]
 pub struct Storage {
     /// These are objects at the frontier of the execution's view
     /// They might not be the latest object currently but they are the latest objects
     /// for the TX at the time it was run
     /// This store cannot be shared between runners
-    pub live_objects_store: BTreeMap<ObjectID, Object>,
+    pub live_objects_store: Arc<Mutex<BTreeMap<ObjectID, Object>>>,
 
     /// Package cache and object version cache can be shared between runners
     /// Non system packages are immutable so we can cache these
@@ -156,7 +151,12 @@ pub struct Storage {
 impl std::fmt::Display for Storage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Live object store")?;
-        for (id, obj) in self.live_objects_store.iter() {
+        for (id, obj) in self
+            .live_objects_store
+            .lock()
+            .expect("Unable to lock")
+            .iter()
+        {
             writeln!(f, "{}: {:?}", id, obj.compute_object_reference())?;
         }
         writeln!(f, "Package cache")?;
@@ -180,7 +180,7 @@ impl std::fmt::Display for Storage {
 impl Storage {
     pub fn default() -> Self {
         Self {
-            live_objects_store: BTreeMap::new(),
+            live_objects_store: Arc::new(Mutex::new(BTreeMap::new())),
             package_cache: Arc::new(Mutex::new(BTreeMap::new())),
             object_version_cache: Arc::new(Mutex::new(BTreeMap::new())),
         }
@@ -188,6 +188,8 @@ impl Storage {
 
     pub fn all_objects(&self) -> Vec<Object> {
         self.live_objects_store
+            .lock()
+            .expect("Unable to lock")
             .values()
             .cloned()
             .chain(
@@ -208,6 +210,7 @@ impl Storage {
     }
 }
 
+#[derive(Clone)]
 pub struct LocalExec {
     pub client: Option<SuiClient>,
     // For a given protocol version, what TX created it, and what is the valid range of epochs
@@ -226,14 +229,16 @@ pub struct LocalExec {
     // Used for fetching data from the network or remote store
     pub fetcher: Fetchers,
 
-    pub diag: DiagInfo,
     // One can optionally override the executor version
     // -1 implies use latest version
-    pub executor_version_override: Option<i64>,
+    pub executor_version: Option<i64>,
     // One can optionally override the protocol version
     // -1 implies use latest version
     // None implies use the protocol version at the time of execution
-    pub protocol_version_override: Option<i64>,
+    pub protocol_version: Option<i64>,
+    // Whether or not to enable the gas profiler, the PathBuf contains either a user specified
+    // filepath or the default current directory and name format for the profile output
+    pub enable_profiler: Option<PathBuf>,
     // Retry policies due to RPC errors
     pub num_retries_for_timeout: u32,
     pub sleep_period_for_timeout: std::time::Duration,
@@ -310,83 +315,28 @@ impl LocalExec {
     }
 
     pub async fn replay_with_network_config(
-        rpc_url: Option<String>,
-        path: Option<String>,
+        rpc_url: String,
         tx_digest: TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
-        executor_version_override: Option<i64>,
-        protocol_version_override: Option<i64>,
+        executor_version: Option<i64>,
+        protocol_version: Option<i64>,
+        enable_profiler: Option<PathBuf>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-        async fn inner_exec(
-            rpc_url: String,
-            tx_digest: TransactionDigest,
-            expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-            use_authority: bool,
-            executor_version_override: Option<i64>,
-            protocol_version_override: Option<i64>,
-        ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-            LocalExec::new_from_fn_url(&rpc_url)
-                .await?
-                .init_for_execution()
-                .await?
-                .execute_transaction(
-                    &tx_digest,
-                    expensive_safety_check_config,
-                    use_authority,
-                    executor_version_override,
-                    protocol_version_override,
-                )
-                .await
-        }
-
-        if let Some(url) = rpc_url.clone() {
-            info!("Using RPC URL: {}", url);
-            match inner_exec(
-                url,
-                tx_digest,
-                expensive_safety_check_config.clone(),
+        info!("Using RPC URL: {}", rpc_url);
+        LocalExec::new_from_fn_url(&rpc_url)
+            .await?
+            .init_for_execution()
+            .await?
+            .execute_transaction(
+                &tx_digest,
+                expensive_safety_check_config,
                 use_authority,
-                executor_version_override,
-                protocol_version_override,
+                executor_version,
+                protocol_version,
+                enable_profiler,
             )
             .await
-            {
-                Ok(exec_state) => return Ok(exec_state),
-                Err(e) => {
-                    warn!(
-                        "Failed to execute transaction with provided RPC URL: Error {}",
-                        e
-                    );
-                }
-            }
-        }
-
-        let cfg = ReplayableNetworkConfigSet::load_config(path)?;
-        for cfg in &cfg.base_network_configs {
-            info!(
-                "Attempting to replay with network rpc: {}",
-                cfg.public_full_node.clone()
-            );
-            match inner_exec(
-                cfg.public_full_node.clone(),
-                tx_digest,
-                expensive_safety_check_config.clone(),
-                use_authority,
-                executor_version_override,
-                protocol_version_override,
-            )
-            .await
-            {
-                Ok(exec_state) => return Ok(exec_state),
-                Err(e) => {
-                    warn!("Failed to execute transaction with network config: {}. Attempting next network config...", e);
-                    continue;
-                }
-            }
-        }
-        error!("No more configs to attempt. Try specifying Full Node RPC URL directly or provide a config file with a valid URL");
-        Err(ReplayEngineError::UnableToExecuteWithNetworkConfigs { cfgs: cfg })
     }
 
     /// This captures the state of the network at a given point in time and populates
@@ -431,9 +381,9 @@ impl LocalExec {
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
-            diag: Default::default(),
-            executor_version_override: None,
-            protocol_version_override: None,
+            executor_version: None,
+            protocol_version: None,
+            enable_profiler: None,
         })
     }
 
@@ -473,9 +423,9 @@ impl LocalExec {
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
-            diag: Default::default(),
-            executor_version_override: None,
-            protocol_version_override: None,
+            executor_version: None,
+            protocol_version: None,
+            enable_profiler: None,
         })
     }
 
@@ -488,7 +438,11 @@ impl LocalExec {
         // Backfill the store
         for obj in objs.iter() {
             let o_ref = obj.compute_object_reference();
-            self.storage.live_objects_store.insert(o_ref.0, obj.clone());
+            self.storage
+                .live_objects_store
+                .lock()
+                .expect("Can't lock")
+                .insert(o_ref.0, obj.clone());
             self.storage
                 .object_version_cache
                 .lock()
@@ -626,6 +580,59 @@ impl LocalExec {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
+    pub fn download_object_by_upper_bound(
+        &self,
+        object_id: &ObjectID,
+        version_upper_bound: VersionNumber,
+    ) -> Result<Option<Object>, ReplayEngineError> {
+        let local_object = self
+            .storage
+            .live_objects_store
+            .lock()
+            .expect("Can't lock")
+            .get(object_id)
+            .cloned();
+        if local_object.is_some() {
+            return Ok(local_object);
+        }
+        let response = block_on({
+            self.fetcher
+                .get_child_object(object_id, version_upper_bound)
+        });
+        match response {
+            Ok(object) => {
+                let obj_ref = object.compute_object_reference();
+                self.storage
+                    .live_objects_store
+                    .lock()
+                    .expect("Can't lock")
+                    .insert(*object_id, object.clone());
+                self.storage
+                    .object_version_cache
+                    .lock()
+                    .expect("Can't lock")
+                    .insert((obj_ref.0, obj_ref.1), object.clone());
+                Ok(Some(object))
+            }
+            Err(ReplayEngineError::ObjectNotExist { id }) => {
+                error!("Could not find child object {id} on RPC server. It might have been pruned, deleted, or never existed.");
+                Ok(None)
+            }
+            Err(ReplayEngineError::ObjectDeleted {
+                id,
+                version,
+                digest,
+            }) => {
+                error!("Object {id} {version} {digest} was deleted on RPC server.");
+                Ok(None)
+            }
+            Err(err) => Err(ReplayEngineError::SuiRpcError {
+                err: err.to_string(),
+            }),
+        }
+    }
+
     pub async fn get_checkpoint_txs(
         &self,
         checkpoint_id: u64,
@@ -658,6 +665,7 @@ impl LocalExec {
                     use_authority,
                     None,
                     None,
+                    None,
                 )
                 .await
                 .map(|q| q.check_effects())
@@ -684,23 +692,27 @@ impl LocalExec {
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         let tx_digest = &tx_info.tx_digest;
-        // A lot of the logic here isnt designed for genesis
-        if *tx_digest == TransactionDigest::genesis() || tx_info.sender == SuiAddress::ZERO {
-            // Genesis.
+        // TODO: Support system transactions.
+        if tx_info.sender_signed_data.transaction_data().is_system_tx() {
             warn!(
-                "Genesis/system TX replay not supported: {}, skipping transaction",
+                "System TX replay not supported: {}, skipping transaction",
                 tx_digest
             );
-            // Return the same data from onchain since we dont want to fail nor do we want to recompute
-            // Assume genesis transactions are always successful
-            let effects = tx_info.effects.clone();
-            return Ok(ExecutionSandboxState {
-                transaction_info: tx_info.clone(),
-                required_objects: vec![],
-                local_exec_temporary_store: None,
-                local_exec_effects: effects,
-                local_exec_status: Some(Ok(())),
-                pre_exec_diag: self.diag.clone(),
+            return Err(ReplayEngineError::TransactionNotSupported {
+                digest: *tx_digest,
+                reason: "System transaction".to_string(),
+            });
+        }
+        // Before protocol version 16, the generation of effects depends on the wrapped tombstones.
+        // It is not possible to retrieve such data for replay.
+        if tx_info.protocol_version.as_u64() < 16 {
+            warn!(
+                "Protocol version ({:?}) too old: {}, skipping transaction",
+                tx_info.protocol_version, tx_digest
+            );
+            return Err(ReplayEngineError::TransactionNotSupported {
+                digest: *tx_digest,
+                reason: "Protocol version too old".to_string(),
             });
         }
         // Initialize the state necessary for execution
@@ -710,46 +722,46 @@ impl LocalExec {
             &input_objects.filter_shared_objects().len(),
             &tx_info.shared_object_refs.len()
         );
-        assert_eq!(
-            input_objects.transaction_dependencies(),
-            tx_info.dependencies.clone().into_iter().collect(),
-        );
         // At this point we have all the objects needed for replay
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
         let protocol_config =
-            &ProtocolConfig::get_for_version(tx_info.protocol_version, Chain::Unknown);
+            &ProtocolConfig::get_for_version(tx_info.protocol_version, tx_info.chain);
 
         let metrics = self.metrics.clone();
 
-        // Extract the epoch start timestamp
-        let (epoch_start_timestamp, rgp) = self
-            .get_epoch_start_timestamp_and_rgp(tx_info.executed_epoch)
-            .await?;
-
-        let ov = self.executor_version_override;
+        let ov = self.executor_version;
 
         // We could probably cache the executor per protocol config
-        let executor = get_executor(ov, protocol_config, expensive_safety_check_config);
+        let executor = get_executor(
+            ov,
+            protocol_config,
+            expensive_safety_check_config,
+            self.enable_profiler.clone(),
+        );
 
         // All prep done
         let expensive_checks = true;
+        let transaction_kind = override_transaction_kind.unwrap_or(tx_info.kind.clone());
         let certificate_deny_set = HashSet::new();
-        let res = if let Ok(gas_status) =
-            SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
-        {
+        let (inner_store, gas_status, effects, result) = if let Ok(gas_status) = SuiGasStatus::new(
+            tx_info.gas_budget,
+            tx_info.gas_price,
+            tx_info.reference_gas_price,
+            protocol_config,
+        ) {
             executor.execute_transaction_to_effects(
                 &self,
                 protocol_config,
-                metrics,
+                metrics.clone(),
                 expensive_checks,
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
-                epoch_start_timestamp,
-                input_objects,
+                tx_info.epoch_start_timestamp,
+                CheckedInputObjects::new_for_replay(input_objects.clone()),
                 tx_info.gas.clone(),
                 gas_status,
-                override_transaction_kind.unwrap_or(tx_info.kind.clone()),
+                transaction_kind.clone(),
                 tx_info.sender,
                 *tx_digest,
             )
@@ -757,18 +769,83 @@ impl LocalExec {
             unreachable!("Transaction was valid so gas status must be valid");
         };
 
+        if let Err(err) = self.pretty_print_for_tracing(
+            &gas_status,
+            &executor,
+            tx_info,
+            &transaction_kind,
+            protocol_config,
+            metrics,
+            expensive_checks,
+            input_objects.clone(),
+        ) {
+            error!("Failed to pretty print for tracing: {:?}", err);
+        }
+
         let all_required_objects = self.storage.all_objects();
+
         let effects =
-            SuiTransactionBlockEffects::try_from(res.1).map_err(ReplayEngineError::from)?;
+            SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;
 
         Ok(ExecutionSandboxState {
             transaction_info: tx_info.clone(),
             required_objects: all_required_objects,
-            local_exec_temporary_store: Some(res.0),
+            local_exec_temporary_store: Some(inner_store),
             local_exec_effects: effects,
-            local_exec_status: Some(res.2),
-            pre_exec_diag: self.diag.clone(),
+            local_exec_status: Some(result),
         })
+    }
+
+    fn pretty_print_for_tracing(
+        &self,
+        gas_status: &SuiGasStatus,
+        executor: &Arc<dyn Executor + Send + Sync>,
+        tx_info: &OnChainTransactionInfo,
+        transaction_kind: &TransactionKind,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+        expensive_checks: bool,
+        input_objects: InputObjects,
+    ) -> anyhow::Result<()> {
+        trace!(target: "replay_gas_info", "{}", Pretty(gas_status));
+
+        let skip_checks = true;
+        if let ProgrammableTransaction(pt) = transaction_kind {
+            trace!(
+                target: "replay_ptb_info",
+                "{}",
+                Pretty(&FullPTB {
+                    ptb: pt.clone(),
+                    results: transform_command_results_to_annotated(
+                        executor,
+                        &self.clone(),
+                        executor.dev_inspect_transaction(
+                            &self,
+                            protocol_config,
+                            metrics,
+                            expensive_checks,
+                            &HashSet::new(),
+                            &tx_info.executed_epoch,
+                            tx_info.epoch_start_timestamp,
+                            CheckedInputObjects::new_for_replay(input_objects),
+                            tx_info.gas.clone(),
+                            SuiGasStatus::new(
+                                tx_info.gas_budget,
+                                tx_info.gas_price,
+                                tx_info.reference_gas_price,
+                                protocol_config,
+                            )?,
+                            transaction_kind.clone(),
+                            tx_info.sender,
+                            tx_info.sender_signed_data.digest(),
+                            skip_checks,
+                        )
+                        .3
+                        .unwrap_or_default(),
+                    )?,
+            }));
+        }
+        Ok(())
     }
 
     /// Must be called after `init_for_execution`
@@ -800,122 +877,60 @@ impl LocalExec {
 
     /// Executes a transaction with the state specified in `pre_run_sandbox`
     /// This is useful for executing a transaction with a specific state
-    /// However if the state in invalid, the behavior is undefined. Use wisely
-    /// If no transaction is provided, the transaction in the sandbox state is used
-    /// Currently if the transaction is provided, the signing will fail, so this feature is TBD
+    /// However if the state in invalid, the behavior is undefined.
     pub async fn certificate_execute_with_sandbox_state(
         pre_run_sandbox: &ExecutionSandboxState,
-        override_transaction_data: Option<TransactionData>,
-        pre_exec_diag: &DiagInfo,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-        assert!(
-            override_transaction_data.is_none(),
-            "Custom transaction data is not supported yet"
-        );
-
         // These cannot be changed and are inherited from the sandbox state
         let executed_epoch = pre_run_sandbox.transaction_info.executed_epoch;
         let reference_gas_price = pre_run_sandbox.transaction_info.reference_gas_price;
         let epoch_start_timestamp = pre_run_sandbox.transaction_info.epoch_start_timestamp;
         let protocol_config = ProtocolConfig::get_for_version(
             pre_run_sandbox.transaction_info.protocol_version,
-            Chain::Unknown,
+            pre_run_sandbox.transaction_info.chain,
         );
         let required_objects = pre_run_sandbox.required_objects.clone();
-        let shared_object_refs = pre_run_sandbox.transaction_info.shared_object_refs.clone();
+        let store = InMemoryStorage::new(required_objects.clone());
 
-        let transaction_intent = pre_run_sandbox
-            .transaction_info
-            .sender_signed_data
-            .intent_message()
-            .intent
-            .clone();
-        let transaction_signatures = pre_run_sandbox
-            .transaction_info
-            .sender_signed_data
-            .tx_signatures()
-            .to_vec();
+        let transaction =
+            Transaction::new(pre_run_sandbox.transaction_info.sender_signed_data.clone());
 
-        // This must be provided
-        let transaction_data = override_transaction_data.unwrap_or(
-            pre_run_sandbox
-                .transaction_info
-                .sender_signed_data
-                .transaction_data()
-                .clone(),
-        );
-
-        // Begin state prep
-        let (authority_state, epoch_store) = prep_network(
-            &required_objects,
-            reference_gas_price,
+        // TODO: This will not work for deleted shared objects. We need to persist that information in the sandbox.
+        // TODO: A lot of the following code is replicated in several places. We should introduce a few
+        // traits and make them shared so that we don't have to fix one by one when we have major execution
+        // layer changes.
+        let input_objects = store.read_input_objects_for_transaction(&transaction);
+        let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
+            VerifiedTransaction::new_unchecked(transaction),
             executed_epoch,
-            epoch_start_timestamp,
+        );
+        let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
+            &executable,
+            input_objects,
             &protocol_config,
-        )
-        .await;
-
-        let sender_signed_tx = Transaction::from_generic_sig_data(
-            transaction_data,
-            transaction_intent,
-            transaction_signatures,
-        );
-        let sender_signed_tx = VerifiedTransaction::new_unchecked(
-            VerifiedTransaction::new_unchecked(sender_signed_tx).into(),
-        );
-
-        let response = authority_state
-            .handle_transaction(&epoch_store, sender_signed_tx.clone())
-            .await?;
-
-        let auth_vote = response.status.into_signed_for_testing();
-
-        let mut committee = authority_state.clone_committee_for_testing();
-        committee.epoch = executed_epoch;
-        let certificate = CertifiedTransaction::new(
-            sender_signed_tx.clone().into_message(),
-            vec![auth_vote.clone()],
-            &committee,
+            reference_gas_price,
         )
         .unwrap();
-
-        certificate.verify_committee_sigs_only(&committee).unwrap();
-
-        let certificate = &VerifiedExecutableTransaction::new_from_certificate(
-            VerifiedCertificate::new_unchecked(certificate.clone()),
+        let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
+        let (_, _, effects, exec_res) = executor.execute_transaction_to_effects(
+            &store,
+            &protocol_config,
+            Arc::new(LimitsMetrics::new(&Registry::new())),
+            true,
+            &HashSet::new(),
+            &executed_epoch,
+            epoch_start_timestamp,
+            input_objects,
+            gas,
+            gas_status,
+            kind,
+            signer,
+            *executable.digest(),
         );
 
-        let new_tx_digest = certificate.digest();
-
-        epoch_store
-            .set_shared_object_versions_for_testing(
-                new_tx_digest,
-                &shared_object_refs
-                    .iter()
-                    .map(|(id, version, _)| (*id, *version))
-                    .collect::<Vec<_>>(),
-            )
-            .unwrap();
-
-        // hack to simulate an epoch change just for this transaction
-        {
-            let db = authority_state.db();
-            let mut execution_lock = db.execution_lock_for_reconfiguration().await;
-            *execution_lock = executed_epoch;
-            drop(execution_lock);
-        }
-
-        let res = authority_state
-            .try_execute_immediately(certificate, None, &epoch_store)
-            .await
-            .map_err(ReplayEngineError::from)?;
-
-        let exec_res = match res.1 {
-            Some(q) => Err(q),
-            None => Ok(()),
-        };
         let effects =
-            SuiTransactionBlockEffects::try_from(res.0).map_err(ReplayEngineError::from)?;
+            SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;
 
         Ok(ExecutionSandboxState {
             transaction_info: pre_run_sandbox.transaction_info.clone(),
@@ -923,7 +938,6 @@ impl LocalExec {
             local_exec_temporary_store: None, // We dont capture it for cert exec run
             local_exec_effects: effects,
             local_exec_status: Some(exec_res),
-            pre_exec_diag: pre_exec_diag.clone(),
         })
     }
 
@@ -938,7 +952,7 @@ impl LocalExec {
         let pre_run_sandbox = self
             .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
             .await?;
-        Self::certificate_execute_with_sandbox_state(&pre_run_sandbox, None, &self.diag).await
+        Self::certificate_execute_with_sandbox_state(&pre_run_sandbox).await
     }
 
     /// Must be called after `init_for_execution`
@@ -978,11 +992,13 @@ impl LocalExec {
         tx_digest: &TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
-        executor_version_override: Option<i64>,
-        protocol_version_override: Option<i64>,
+        executor_version: Option<i64>,
+        protocol_version: Option<i64>,
+        enable_profiler: Option<PathBuf>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-        self.executor_version_override = executor_version_override;
-        self.protocol_version_override = protocol_version_override;
+        self.executor_version = executor_version;
+        self.protocol_version = protocol_version;
+        self.enable_profiler = enable_profiler;
         if use_authority {
             self.certificate_execute(tx_digest, expensive_safety_check_config.clone())
                 .await
@@ -1022,7 +1038,13 @@ impl LocalExec {
             //     !self.system_package_ids().contains(obj_id),
             //     "All system packages should be downloaded already"
             // );
-        } else if let Some(obj) = self.storage.live_objects_store.get(obj_id) {
+        } else if let Some(obj) = self
+            .storage
+            .live_objects_store
+            .lock()
+            .expect("Can't lock")
+            .get(obj_id)
+        {
             return Ok(Some(obj.clone()));
         }
 
@@ -1075,7 +1097,7 @@ impl LocalExec {
                 .node_state_dump
                 .relevant_system_packages
                 .iter()
-                .map(|w| w.compute_object_reference())
+                .map(|w| (w.id, w.version, w.digest))
                 .map(|q| (q.0, q.1))
                 .collect()),
         }
@@ -1092,7 +1114,7 @@ impl LocalExec {
             .fetcher
             .get_checkpoint_txs(0)
             .await?
-            .get(0)
+            .first()
             .expect("Genesis TX must be in first checkpoint");
         // Somehow the genesis TX did not emit any event, but we know it was the start of version 1
         // So we need to manually add this range
@@ -1308,19 +1330,17 @@ impl LocalExec {
     pub async fn get_protocol_config(
         &self,
         epoch_id: EpochId,
+        chain: Chain,
     ) -> Result<ProtocolConfig, ReplayEngineError> {
-        match self.protocol_version_override {
+        match self.protocol_version {
             Some(x) if x < 0 => Ok(ProtocolConfig::get_for_max_version_UNSAFE()),
-            Some(v) => Ok(ProtocolConfig::get_for_version(
-                (v as u64).into(),
-                Chain::Unknown,
-            )),
+            Some(v) => Ok(ProtocolConfig::get_for_version((v as u64).into(), chain)),
             None => self
                 .protocol_version_epoch_table
                 .iter()
                 .rev()
                 .find(|(_, rg)| epoch_id >= rg.epoch_start)
-                .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into(), Chain::Unknown)))
+                .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into(), chain)))
                 .unwrap_or_else(|| {
                     Err(ReplayEngineError::ProtocolVersionNotFound { epoch: epoch_id })
                 }),
@@ -1386,9 +1406,13 @@ impl LocalExec {
     pub async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
+        tx_digest: &TransactionDigest,
     ) -> Result<(u64, u64), ReplayEngineError> {
         if epoch_id == 0 {
-            return Err(ReplayEngineError::EpochNotSupported { epoch: epoch_id });
+            return Err(ReplayEngineError::TransactionNotSupported {
+                digest: *tx_digest,
+                reason: "Transactions from epoch 0 not supported".to_string(),
+            });
         }
         self.fetcher
             .get_epoch_start_timestamp_and_rgp(epoch_id)
@@ -1439,12 +1463,20 @@ impl LocalExec {
             .iter()
             .map(|obj_ref| obj_ref.to_object_ref())
             .collect();
+        let receiving_objs = orig_tx
+            .transaction_data()
+            .receiving_objects()
+            .into_iter()
+            .map(|(obj_id, version, _)| (obj_id, version))
+            .collect();
 
         let epoch_id = effects.executed_epoch;
+        let chain = chain_from_chain_id(self.fetcher.get_chain_id().await?.as_str());
 
         // Extract the epoch start timestamp
-        let (epoch_start_timestamp, reference_gas_price) =
-            self.get_epoch_start_timestamp_and_rgp(epoch_id).await?;
+        let (epoch_start_timestamp, reference_gas_price) = self
+            .get_epoch_start_timestamp_and_rgp(epoch_id, tx_digest)
+            .await?;
 
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
@@ -1458,13 +1490,15 @@ impl LocalExec {
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects: SuiTransactionBlockEffects::V1(effects),
+            receiving_objs,
             // Find the protocol version for this epoch
             // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
-            protocol_version: self.get_protocol_config(epoch_id).await?.version,
+            protocol_version: self.get_protocol_config(epoch_id, chain).await?.version,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
             reference_gas_price,
+            chain,
         })
     }
 
@@ -1512,16 +1546,23 @@ impl LocalExec {
             .collect();
         let gas_data = orig_tx.transaction_data().gas_data();
         let gas_object_refs: Vec<_> = gas_data.clone().payment.into_iter().collect();
+        let receiving_objs = orig_tx
+            .transaction_data()
+            .receiving_objects()
+            .into_iter()
+            .map(|(obj_id, version, _)| (obj_id, version))
+            .collect();
 
         let epoch_id = dp.node_state_dump.executed_epoch;
 
-        let protocol_config = ProtocolConfig::get_for_version(
-            dp.node_state_dump.protocol_version.into(),
-            Chain::Unknown,
-        );
+        let chain = chain_from_chain_id(self.fetcher.get_chain_id().await?.as_str());
+
+        let protocol_config =
+            ProtocolConfig::get_for_version(dp.node_state_dump.protocol_version.into(), chain);
         // Extract the epoch start timestamp
-        let (epoch_start_timestamp, reference_gas_price) =
-            self.get_epoch_start_timestamp_and_rgp(epoch_id).await?;
+        let (epoch_start_timestamp, reference_gas_price) = self
+            .get_epoch_start_timestamp_and_rgp(epoch_id, tx_digest)
+            .await?;
 
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
@@ -1535,11 +1576,13 @@ impl LocalExec {
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects,
+            receiving_objs,
             protocol_version: protocol_config.version,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
             reference_gas_price,
+            chain,
         })
     }
 
@@ -1553,15 +1596,14 @@ impl LocalExec {
         let mut imm_owned_inputs = vec![];
         let mut shared_inputs = vec![];
         let mut deleted_shared_info_map = BTreeMap::new();
-        let mut deleted_objects_mutability = BTreeMap::new();
 
         // for deleted shared objects, we need to look at the transaction dependencies to find the
         // correct transaction dependency for a deleted shared object.
         if !deleted_shared_objects.is_empty() {
             for tx_digest in tx_info.dependencies.iter() {
                 let tx_info = self.resolve_tx_components(tx_digest).await?;
-                for (obj_id, _, _) in tx_info.shared_object_refs.iter() {
-                    deleted_shared_info_map.insert(*obj_id, tx_info.tx_digest);
+                for (obj_id, version, _) in tx_info.shared_object_refs.iter() {
+                    deleted_shared_info_map.insert(*obj_id, (tx_info.tx_digest, *version));
                 }
             }
         }
@@ -1584,7 +1626,13 @@ impl LocalExec {
                     mutable: _,
                 } if !deleted_shared_info_map.contains_key(id) => {
                     // We already downloaded
-                    if let Some(o) = self.storage.live_objects_store.get(id) {
+                    if let Some(o) = self
+                        .storage
+                        .live_objects_store
+                        .lock()
+                        .expect("Can't lock")
+                        .get(id)
+                    {
                         shared_inputs.push(o.clone());
                         Ok(())
                     } else {
@@ -1594,10 +1642,7 @@ impl LocalExec {
                         })
                     }
                 }
-                InputObjectKind::SharedMoveObject { id, mutable, .. } => {
-                    deleted_objects_mutability.insert(*id, *mutable);
-                    Ok(())
-                }
+                _ => Ok(()),
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -1616,13 +1661,14 @@ impl LocalExec {
         // Add shared objects
         in_objs.extend(shared_inputs);
 
+        // TODO(Zhe): Account for cancelled transaction assigned version here, and tests.
         let resolved_input_objs = tx_info
             .input_objects
             .iter()
             .flat_map(|kind| match kind {
                 InputObjectKind::MovePackage(i) => {
                     // Okay to unwrap since we downloaded it
-                    Some((
+                    Some(ObjectReadResult::new(
                         *kind,
                         self.storage
                             .package_cache
@@ -1635,10 +1681,11 @@ impl LocalExec {
                                     .expect("Object download failed")
                                     .expect("Object not found on chain"),
                             )
-                            .clone(),
+                            .clone()
+                            .into(),
                     ))
                 }
-                InputObjectKind::ImmOrOwnedMoveObject(o_ref) => Some((
+                InputObjectKind::ImmOrOwnedMoveObject(o_ref) => Some(ObjectReadResult::new(
                     *kind,
                     self.storage
                         .object_version_cache
@@ -1646,38 +1693,36 @@ impl LocalExec {
                         .expect("Cannot lock")
                         .get(&(o_ref.0, o_ref.1))
                         .unwrap()
-                        .clone(),
+                        .clone()
+                        .into(),
                 )),
-                InputObjectKind::SharedMoveObject {
-                    id,
-                    initial_shared_version: _,
-                    mutable: _,
-                } if !deleted_shared_info_map.contains_key(id) => {
+                InputObjectKind::SharedMoveObject { id, .. }
+                    if !deleted_shared_info_map.contains_key(id) =>
+                {
                     // we already downloaded
-                    Some((
+                    Some(ObjectReadResult::new(
                         *kind,
-                        self.storage.live_objects_store.get(id).unwrap().clone(),
+                        self.storage
+                            .live_objects_store
+                            .lock()
+                            .expect("Can't lock")
+                            .get(id)
+                            .unwrap()
+                            .clone()
+                            .into(),
                     ))
                 }
-                InputObjectKind::SharedMoveObject { .. } => None,
+                InputObjectKind::SharedMoveObject { id, .. } => {
+                    let (digest, version) = deleted_shared_info_map.get(id).unwrap();
+                    Some(ObjectReadResult::new(
+                        *kind,
+                        ObjectReadResultKind::DeletedSharedObject(*version, *digest),
+                    ))
+                }
             })
             .collect();
 
-        // Use the transaction dependency info that we computed above for the deleted shared
-        // objects to populated the deleted shared objects list for transaction inputs.
-        let mut deleted_objects = vec![];
-        for (obj_id, seqno, _) in deleted_shared_objects.iter() {
-            if let Some(tx_digest) = deleted_shared_info_map.get(obj_id) {
-                let object_mut = deleted_objects_mutability
-                    .get(obj_id)
-                    .expect("Deleted shared object must have a mutability entry");
-                deleted_objects.push((*obj_id, *seqno, *object_mut, *tx_digest));
-            } else {
-                panic!("Was unable to find the transaction dependency for the deleted shared object {}", obj_id);
-            }
-        }
-
-        Ok(InputObjects::new(resolved_input_objs, deleted_objects))
+        Ok(InputObjects::new(resolved_input_objs))
     }
 
     /// Given the OnChainTransactionInfo, download and store the input objects, and other info necessary
@@ -1711,10 +1756,13 @@ impl LocalExec {
             .resolve_download_input_objects(tx_info, deleted_shared_refs)
             .await?;
 
+        // Fetch the receiving objects
+        self.multi_download_and_store(&tx_info.receiving_objs)
+            .await?;
+
         // Prep the object runtime for dynamic fields
         // Download the child objects accessed at the version right before the execution of this TX
         let loaded_child_refs = self.fetch_loaded_child_refs(&tx_info.tx_digest).await?;
-        self.diag.loaded_child_objects = loaded_child_refs.clone();
         self.multi_download_and_store(&loaded_child_refs).await?;
         tokio::task::yield_now().await;
 
@@ -1727,12 +1775,12 @@ impl LocalExec {
 impl BackingPackageStore for LocalExec {
     /// In this case we might need to download a dependency package which was not present in the
     /// modified at versions list because packages are immutable
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         fn inner(self_: &LocalExec, package_id: &ObjectID) -> SuiResult<Option<Object>> {
             // If package not present fetch it from the network
             self_
                 .get_or_download_object(package_id, true /* we expect a Move package*/)
-                .map_err(|e| SuiError::GenericStorageError(e.to_string()))
+                .map_err(|e| SuiError::Storage(e.to_string()))
         }
 
         let res = inner(self, package_id);
@@ -1743,7 +1791,7 @@ impl BackingPackageStore for LocalExec {
                 package_id: *package_id,
                 result: res.clone(),
             });
-        res.map(|o| o.map(PackageObjectArc::new))
+        res.map(|o| o.map(PackageObject::new))
     }
 }
 
@@ -1762,10 +1810,11 @@ impl ChildObjectResolver for LocalExec {
             child: &ObjectID,
             child_version_upper_bound: SequenceNumber,
         ) -> SuiResult<Option<Object>> {
-            let child_object = match self_.get_object(child)? {
-                None => return Ok(None),
-                Some(o) => o,
-            };
+            let child_object =
+                match self_.download_object_by_upper_bound(child, child_version_upper_bound)? {
+                    None => return Ok(None),
+                    Some(o) => o,
+                };
             let child_version = child_object.version();
             if child_object.version() > child_version_upper_bound {
                 return Err(SuiError::Unknown(format!(
@@ -1849,7 +1898,13 @@ impl ParentSync for LocalExec {
         object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>> {
         fn inner(self_: &LocalExec, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-            if let Some(v) = self_.storage.live_objects_store.get(&object_id) {
+            if let Some(v) = self_
+                .storage
+                .live_objects_store
+                .lock()
+                .expect("Can't lock")
+                .get(&object_id)
+            {
                 return Ok(Some(v.compute_object_reference()));
             }
             Ok(None)
@@ -1955,16 +2010,25 @@ impl ModuleResolver for &mut LocalExec {
 impl ObjectStore for LocalExec {
     /// The object must be present in store by normal process we used to backfill store in init
     /// We dont download if not present
-    fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
-        let res = Ok(self.storage.live_objects_store.get(object_id).cloned());
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        let res = self
+            .storage
+            .live_objects_store
+            .lock()
+            .expect("Can't lock")
+            .get(object_id)
+            .cloned();
         self.exec_store_events
             .lock()
             .expect("Unable to lock events list")
             .push(ExecutionStoreEvent::ObjectStoreGetObject {
                 object_id: *object_id,
-                result: res.clone(),
+                result: Ok(res.clone()),
             });
-        res
+        Ok(res)
     }
 
     /// The object must be present in store by normal process we used to backfill store in init
@@ -1973,10 +2037,12 @@ impl ObjectStore for LocalExec {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> SuiResult<Option<Object>> {
-        let res = Ok(self
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        let res = self
             .storage
             .live_objects_store
+            .lock()
+            .expect("Can't lock")
             .get(object_id)
             .and_then(|obj| {
                 if obj.version() == version {
@@ -1984,7 +2050,7 @@ impl ObjectStore for LocalExec {
                 } else {
                     None
                 }
-            }));
+            });
 
         self.exec_store_events
             .lock()
@@ -1992,15 +2058,18 @@ impl ObjectStore for LocalExec {
             .push(ExecutionStoreEvent::ObjectStoreGetObjectByKey {
                 object_id: *object_id,
                 version,
-                result: res.clone(),
+                result: Ok(res.clone()),
             });
 
-        res
+        Ok(res)
     }
 }
 
 impl ObjectStore for &mut LocalExec {
-    fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object(object_id)
     }
@@ -2009,7 +2078,7 @@ impl ObjectStore for &mut LocalExec {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> sui_types::storage::error::Result<Option<Object>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object_by_key(object_id, version)
     }
@@ -2038,7 +2107,8 @@ impl GetModule for LocalExec {
 pub fn get_executor(
     executor_version_override: Option<i64>,
     protocol_config: &ProtocolConfig,
-    expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+    _expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+    enable_profiler: Option<PathBuf>,
 ) -> Arc<dyn Executor + Send + Sync> {
     let protocol_config = executor_version_override
         .map(|q| {
@@ -2055,101 +2125,6 @@ pub fn get_executor(
         .unwrap_or(protocol_config.clone());
 
     let silent = true;
-    sui_execution::executor(
-        &protocol_config,
-        expensive_safety_check_config.enable_move_vm_paranoid_checks(),
-        silent,
-    )
-    .expect("Creating an executor should not fail here")
-}
-
-async fn prep_network(
-    objects: &[Object],
-    reference_gas_price: u64,
-    executed_epoch: u64,
-    epoch_start_timestamp: u64,
-    protocol_config: &ProtocolConfig,
-) -> (Arc<AuthorityState>, Arc<AuthorityPerEpochStore>) {
-    let authority_state = authority_state(protocol_config, objects, reference_gas_price).await;
-    let epoch_store = create_epoch_store(
-        &authority_state,
-        reference_gas_price,
-        executed_epoch,
-        epoch_start_timestamp,
-        protocol_config.version.as_u64(),
-    )
-    .await;
-
-    (authority_state, epoch_store)
-}
-
-async fn authority_state(
-    protocol_config: &ProtocolConfig,
-    objects: &[Object],
-    reference_gas_price: u64,
-) -> Arc<AuthorityState> {
-    // Initiaize some network
-    TestAuthorityBuilder::new()
-        .with_protocol_config(protocol_config.clone())
-        .with_reference_gas_price(reference_gas_price)
-        .with_starting_objects(objects)
-        .build()
-        .await
-}
-
-async fn create_epoch_store(
-    authority_state: &Arc<AuthorityState>,
-    reference_gas_price: u64,
-    executed_epoch: u64,
-    epoch_start_timestamp: u64,
-    protocol_version: u64,
-) -> Arc<AuthorityPerEpochStore> {
-    let sys_state = EpochStartSystemState::new_v1(
-        executed_epoch,
-        protocol_version,
-        reference_gas_price,
-        false,
-        epoch_start_timestamp,
-        ONE_DAY_MS,
-        vec![], // TODO: add validators
-    );
-
-    let path = {
-        let dir = std::env::temp_dir();
-        let store_base_path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        std::fs::create_dir(&store_base_path).unwrap();
-        store_base_path
-    };
-
-    let epoch_start_config = EpochStartConfiguration::new(
-        sys_state,
-        CheckpointDigest::random(),
-        get_authenticator_state_obj_initial_shared_version(&authority_state.database)
-            .expect("read cannot fail"),
-    );
-
-    let registry = Registry::new();
-    let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-    let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
-    let mut committee = authority_state.committee_store().get_latest_committee();
-
-    // Overwrite the epoch so it matches this TXs
-    committee.epoch = executed_epoch;
-
-    let name = committee.names().next().unwrap();
-    AuthorityPerEpochStore::new(
-        *name,
-        Arc::new(committee.clone()),
-        &path,
-        None,
-        EpochMetrics::new(&registry),
-        epoch_start_config,
-        authority_state.database.clone(),
-        cache_metrics,
-        signature_verifier_metrics,
-        &ExpensiveSafetyCheckConfig::default(),
-        // TODO(william) use correct chain ID and generally make replayer
-        // work with chain specific configs
-        ChainIdentifier::from(CheckpointDigest::random()),
-    )
+    sui_execution::executor(&protocol_config, silent, enable_profiler)
+        .expect("Creating an executor should not fail here")
 }

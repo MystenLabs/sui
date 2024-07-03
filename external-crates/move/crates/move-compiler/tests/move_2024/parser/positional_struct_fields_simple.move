@@ -1,5 +1,4 @@
-address 0x42 {
-module M {
+module 0x42::M {
     // Valid positional field struct declaration
     public struct Foo(u64) has copy, drop;
     public struct Bar has copy (u64) 
@@ -9,5 +8,4 @@ module M {
         u64,
         /** another field with another doc comment **/
         u64,)
-}
 }

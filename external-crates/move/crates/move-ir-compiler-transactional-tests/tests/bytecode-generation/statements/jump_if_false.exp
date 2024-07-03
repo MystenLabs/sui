@@ -1,11 +1,13 @@
 processed 4 tasks
 
-task 0 'print-bytecode'. lines 1-18:
+task 0 'print-bytecode'. lines 1-20:
 // Move bytecode v6
-script {
+module 1.m {
 
 
-main() {
+
+
+entry foo() {
 L0:	loc0: u64
 B0:
 	0: LdU64(0)
@@ -23,15 +25,18 @@ B2:
 	10: Branch(2)
 B3:
 	11: Ret
+
 }
 }
 
-task 1 'print-bytecode'. lines 20-32:
+task 1 'print-bytecode'. lines 22-36:
 // Move bytecode v6
-script {
+module 2.m {
 
 
-main() {
+
+
+entry foo() {
 L0:	loc0: u64
 B0:
 	0: LdU64(0)
@@ -45,15 +50,18 @@ B3:
 	5: Branch(2)
 B4:
 	6: Ret
+
 }
 }
 
-task 2 'print-bytecode'. lines 34-42:
+task 2 'print-bytecode'. lines 38-48:
 // Move bytecode v6
-script {
+module 3.m {
 
 
-main() {
+
+
+entry foo() {
 B0:
 	0: LdTrue
 	1: BrFalse(3)
@@ -61,15 +69,18 @@ B1:
 	2: Branch(3)
 B2:
 	3: Ret
+
 }
 }
 
-task 3 'print-bytecode'. lines 44-55:
+task 3 'print-bytecode'. lines 50-63:
 // Move bytecode v6
-script {
+module 4.m {
 
 
-main() {
+
+
+entry foo() {
 B0:
 	0: Branch(2)
 B1:
@@ -80,5 +91,6 @@ B3:
 	3: Branch(0)
 B4:
 	4: Ret
+
 }
 }

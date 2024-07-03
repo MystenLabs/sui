@@ -120,6 +120,31 @@ impl fmt::UpperHex for NumericalAddress {
     }
 }
 
+impl fmt::LowerHex for NumericalAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let encoded = hex::encode(self.as_ref());
+        let dropped = encoded
+            .chars()
+            .skip_while(|c| c == &'0')
+            .collect::<String>();
+        let prefix = if f.alternate() { "0x" } else { "" };
+        if dropped.is_empty() {
+            write!(f, "{}0", prefix)
+        } else {
+            write!(f, "{}{}", prefix, dropped)
+        }
+    }
+}
+
+impl fmt::Display for ParsedAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Named(n) => write!(f, "{n}"),
+            Self::Numerical(a) => write!(f, "{a}"),
+        }
+    }
+}
+
 impl PartialOrd for NumericalAddress {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))

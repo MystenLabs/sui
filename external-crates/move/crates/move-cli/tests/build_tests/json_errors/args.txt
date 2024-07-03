@@ -1,0 +1,6 @@
+build --json-errors
+disassemble --json-errors --package Test --name m
+build --json-errors --silence-warnings
+build --json-errors --silence-warnings --warnings-are-errors
+build --json-errors --warnings-are-errors
+build --json-errors --warnings-are-errors

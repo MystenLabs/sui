@@ -11,8 +11,8 @@ use std::{
 };
 
 use crate::{
-    rocks::{be_fix_int_ser, TypedStoreError},
-    Map,
+    rocks::{be_fix_int_ser, errors::typed_store_err_from_bcs_err},
+    Map, TypedStoreError,
 };
 use bincode::Options;
 use collectable::TryExtend;
@@ -246,7 +246,7 @@ where
 
     fn insert(&self, key: &K, value: &V) -> Result<(), Self::Error> {
         let raw_key = be_fix_int_ser(key)?;
-        let raw_value = bcs::to_bytes(value)?;
+        let raw_value = bcs::to_bytes(value).map_err(typed_store_err_from_bcs_err)?;
         let mut locked = self.rows.write().unwrap();
         locked.insert(raw_key, raw_value);
         Ok(())
@@ -277,7 +277,7 @@ where
     }
 
     fn unbounded_iter(&'a self) -> Self::Iterator {
-        unimplemented!("umplemented API");
+        unimplemented!("unimplemented API");
     }
 
     fn iter_with_bounds(
@@ -285,11 +285,11 @@ where
         _lower_bound: Option<K>,
         _upper_bound: Option<K>,
     ) -> Self::Iterator {
-        unimplemented!("umplemented API");
+        unimplemented!("unimplemented API");
     }
 
     fn range_iter(&'a self, _range: impl RangeBounds<K>) -> Self::Iterator {
-        unimplemented!("umplemented API");
+        unimplemented!("unimplemented API");
     }
 
     fn safe_iter(&'a self) -> Self::SafeIterator {
@@ -300,6 +300,18 @@ where
             direction: Direction::Forward,
         }
         .build()
+    }
+
+    fn safe_iter_with_bounds(
+        &'a self,
+        _lower_bound: Option<K>,
+        _upper_bound: Option<K>,
+    ) -> Self::SafeIterator {
+        unimplemented!("unimplemented API");
+    }
+
+    fn safe_range_iter(&'a self, _range: impl RangeBounds<K>) -> Self::SafeIterator {
+        unimplemented!("unimplemented API");
     }
 
     fn keys(&'a self) -> Self::Keys {

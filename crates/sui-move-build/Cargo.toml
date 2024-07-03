@@ -1,6 +1,6 @@
 [package]
 name = "sui-move-build"
-version = "0.0.0"
+version.workspace = true
 edition = "2021"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Logic for building Sui Move Packages"
@@ -17,6 +17,8 @@ sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "su
 
 serde-reflection.workspace = true
 sui-types.workspace = true
+sui-protocol-config.workspace = true
+sui-package-management.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -26,11 +28,6 @@ move-core-types.workspace = true
 move-ir-types.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
-
-[[test]]
-name = "linter_tests"
-harness = false

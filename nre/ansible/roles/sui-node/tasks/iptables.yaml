@@ -46,6 +46,14 @@
     protocol: tcp
     comment: sui-node protocol
 
+- name: Allow TCP destination port 8081 / sui-node consensus connectivity
+  iptables:
+    chain: INPUT
+    destination_port: 8081
+    jump: ACCEPT
+    protocol: tcp
+    comment: sui-node consensus
+
 - name: Allow UDP destination port 8081 / sui-node narwhal-primary-address connectivity
   iptables:
     chain: INPUT

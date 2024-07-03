@@ -1,20 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
+import type { Transaction, TransactionObjectArgument } from '@mysten/sui/transactions';
 
-import { ObjectArgument } from '../types';
-import { objArg } from '../utils';
+import type { ObjectArgument } from '../types/index.js';
 
 export function convertToPersonalTx(
-	tx: TransactionBlock,
+	tx: Transaction,
 	kiosk: ObjectArgument,
 	kioskOwnerCap: ObjectArgument,
 	packageId: string,
 ): TransactionObjectArgument {
 	const personalKioskCap = tx.moveCall({
 		target: `${packageId}::personal_kiosk::new`,
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskOwnerCap)],
+		arguments: [tx.object(kiosk), tx.object(kioskOwnerCap)],
 	});
 
 	return personalKioskCap;
@@ -24,7 +23,7 @@ export function convertToPersonalTx(
  * Transfers the personal kiosk Cap to the sender.
  */
 export function transferPersonalCapTx(
-	tx: TransactionBlock,
+	tx: Transaction,
 	personalKioskCap: TransactionObjectArgument,
 	packageId: string,
 ) {

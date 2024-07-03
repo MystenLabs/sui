@@ -5,7 +5,8 @@
 use anyhow::{anyhow, bail, *};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
-use std::{collections::BTreeMap, convert::TryInto, path::Path};
+use std::{collections::BTreeMap, path::Path};
+use vfs::{error::VfsErrorKind, VfsPath, VfsResult};
 
 /// Result of sha256 hash of a file's contents.
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
@@ -13,11 +14,7 @@ pub struct FileHash(pub [u8; 32]);
 
 impl FileHash {
     pub fn new(file_contents: &str) -> Self {
-        Self(
-            sha2::Sha256::digest(file_contents.as_bytes())
-                .try_into()
-                .expect("Length of sha256 digest must always be 32 bytes"),
-        )
+        Self(sha2::Sha256::digest(file_contents.as_bytes()).into())
     }
 
     pub const fn empty() -> Self {
@@ -124,6 +121,21 @@ pub fn find_move_filenames(
     }
 }
 
+/// Similar to find_filenames but it will keep any file explicitly passed in `paths`
+pub fn find_filenames_and_keep_specified<Predicate: FnMut(&Path) -> bool>(
+    paths: &[impl AsRef<Path>],
+    is_file_desired: Predicate,
+) -> anyhow::Result<Vec<String>> {
+    let (file_paths, other_paths): (Vec<&Path>, Vec<&Path>) =
+        paths.iter().map(|p| p.as_ref()).partition(|s| s.is_file());
+    let mut files = file_paths
+        .into_iter()
+        .map(path_to_string)
+        .collect::<anyhow::Result<Vec<String>>>()?;
+    files.extend(find_filenames(&other_paths, is_file_desired)?);
+    Ok(files)
+}
+
 pub fn path_to_string(path: &Path) -> anyhow::Result<String> {
     match path.to_str() {
         Some(p) => Ok(p.to_string()),
@@ -179,4 +191,87 @@ pub fn verify_and_create_named_address_mapping<T: Copy + std::fmt::Display + Eq>
     }
 
     Ok(mapping)
+}
+
+//**************************************************************************************************
+// Virtual file system support
+//**************************************************************************************************
+
+/// Determine if the virtual path at `vfs_path` exists distinguishing between whether the path did
+/// not exist, or if there were other errors in determining if the path existed.
+/// It implements the same functionality as try_exists above but for the virtual file system
+pub fn try_exists_vfs(vfs_path: &VfsPath) -> VfsResult<bool> {
+    use VfsResult as R;
+    match vfs_path.metadata() {
+        R::Ok(_) => R::Ok(true),
+        R::Err(e) if matches!(e.kind(), &VfsErrorKind::FileNotFound) => R::Ok(false),
+        R::Err(e) => R::Err(e),
+    }
+}
+
+/// - For each directory in `paths`, it will return all files that satisfy the predicate
+/// - Any file explicitly passed in `paths`, it will include that file in the result, regardless
+///   of the file extension
+/// It implements the same functionality as find_filenames above but for the virtual file system
+pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
+    paths: &[VfsPath],
+    mut is_file_desired: Predicate,
+) -> anyhow::Result<Vec<VfsPath>> {
+    let mut result = vec![];
+
+    for p in paths {
+        if !try_exists_vfs(p)? {
+            anyhow::bail!("No such file or directory '{}'", p.as_str())
+        }
+        if p.is_file()? && is_file_desired(p) {
+            result.push(p.clone());
+            continue;
+        }
+        if !p.is_dir()? {
+            continue;
+        }
+        for entry in p.walk_dir()?.filter_map(|e| e.ok()) {
+            if !entry.is_file()? || !is_file_desired(&entry) {
+                continue;
+            }
+
+            result.push(entry);
+        }
+    }
+    Ok(result)
+}
+
+/// - For each directory in `paths`, it will return all files with the `MOVE_EXTENSION` found
+///   recursively in that directory
+/// - If `keep_specified_files` any file explicitly passed in `paths`, will be added to the result
+///   Otherwise, they will be discarded
+/// It implements the same functionality as find_move_filenames above but for the virtual file
+/// system
+pub fn find_move_filenames_vfs(
+    paths: &[VfsPath],
+    keep_specified_files: bool,
+) -> anyhow::Result<Vec<VfsPath>> {
+    if keep_specified_files {
+        let mut file_paths = vec![];
+        let mut other_paths = vec![];
+        for p in paths {
+            if p.is_file()? {
+                file_paths.push(p.clone());
+            } else {
+                other_paths.push(p.clone());
+            }
+        }
+        file_paths.extend(find_filenames_vfs(&other_paths, |path| {
+            path.extension()
+                .map(|e| e.as_str() == MOVE_EXTENSION)
+                .unwrap_or(false)
+        })?);
+        Ok(file_paths)
+    } else {
+        find_filenames_vfs(paths, |path| {
+            path.extension()
+                .map(|e| e.as_str() == MOVE_EXTENSION)
+                .unwrap_or(false)
+        })
+    }
 }

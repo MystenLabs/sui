@@ -16,8 +16,8 @@ type StyleMarker = {
 export const StyleMarker = forwardRef<
 	ElementRef<typeof Slot>,
 	ComponentPropsWithoutRef<typeof Slot>
->(({ children }, forwardedRef) => (
-	<Slot ref={forwardedRef} {...styleDataAttribute}>
+>(({ children, ...props }, forwardedRef) => (
+	<Slot ref={forwardedRef} {...props} {...styleDataAttribute}>
 		{children}
 	</Slot>
 ));

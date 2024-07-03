@@ -40,7 +40,6 @@ struct FaucetResponse {
 
 pub const SUI_FAUCET: &str = "https://faucet.testnet.sui.io/v1/gas"; // testnet faucet
 
-// if you use the sui-test-validator and use the local network; if it does not work, try with port 5003.
 // const SUI_FAUCET: &str = "http://127.0.0.1:9123/gas";
 
 /// Return a sui client to interact with the APIs,
@@ -48,7 +47,7 @@ pub const SUI_FAUCET: &str = "https://faucet.testnet.sui.io/v1/gas"; // testnet 
 ///
 /// By default, this function will set up a wallet locally if there isn't any, or reuse the
 /// existing one and its active address. This function should be used when two addresses are needed,
-/// e.g., transfering objects from one address to another.
+/// e.g., transferring objects from one address to another.
 pub async fn setup_for_write() -> Result<(SuiClient, SuiAddress, SuiAddress), anyhow::Error> {
     let (client, active_address) = setup_for_read().await?;
     // make sure we have some SUI (5_000_000 MIST) on this address
@@ -56,14 +55,14 @@ pub async fn setup_for_write() -> Result<(SuiClient, SuiAddress, SuiAddress), an
     if coin.is_none() {
         request_tokens_from_faucet(active_address, &client).await?;
     }
-    let wallet = retrieve_wallet().await?;
+    let wallet = retrieve_wallet()?;
     let addresses = wallet.get_addresses();
     let addresses = addresses
         .into_iter()
         .filter(|address| address != &active_address)
         .collect::<Vec<_>>();
     let recipient = addresses
-        .get(0)
+        .first()
         .expect("Cannot get the recipient address needed for writing operations. Aborting");
 
     Ok((client, active_address, *recipient))
@@ -78,7 +77,7 @@ pub async fn setup_for_write() -> Result<(SuiClient, SuiAddress, SuiAddress), an
 pub async fn setup_for_read() -> Result<(SuiClient, SuiAddress), anyhow::Error> {
     let client = SuiClientBuilder::default().build_testnet().await?;
     println!("Sui testnet version is: {}", client.api_version());
-    let mut wallet = retrieve_wallet().await?;
+    let mut wallet = retrieve_wallet()?;
     assert!(wallet.get_addresses().len() >= 2);
     let active_address = wallet.active_address()?;
 
@@ -130,7 +129,7 @@ pub async fn request_tokens_from_faucet(
 
     let mut coin_id = "".to_string();
 
-    // wait for the faucet to finsh the batch of token requests
+    // wait for the faucet to finish the batch of token requests
     loop {
         let resp = client
             .get("https://faucet.testnet.sui.io/v1/status")
@@ -222,7 +221,7 @@ pub async fn split_coin_digest(
     // get the reference gas price from the network
     let gas_price = sui.read_api().get_reference_gas_price().await?;
 
-    // now we programatically build the transaction through several commands
+    // now we programmatically build the transaction through several commands
     let mut ptb = ProgrammableTransactionBuilder::new();
     // first, we want to split the coin, and we specify how much SUI (in MIST) we want
     // for the new coin
@@ -259,7 +258,7 @@ pub async fn split_coin_digest(
     let transaction_response = sui
         .quorum_driver_api()
         .execute_transaction_block(
-            Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]),
+            Transaction::from_data(tx_data, vec![signature]),
             SuiTransactionBlockResponseOptions::new(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
@@ -267,7 +266,7 @@ pub async fn split_coin_digest(
     Ok(transaction_response.digest)
 }
 
-pub async fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
+pub fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     let keystore_path = sui_config_dir()?.join(SUI_KEYSTORE_FILENAME);
 
@@ -299,18 +298,19 @@ pub async fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
     let default_active_address = if let Some(address) = keystore.addresses().first() {
         *address
     } else {
-        keystore.generate_and_add_new_key(ED25519, None, None)?.0
+        keystore
+            .generate_and_add_new_key(ED25519, None, None, None)?
+            .0
     };
 
     if keystore.addresses().len() < 2 {
-        keystore.generate_and_add_new_key(ED25519, None, None)?;
+        keystore.generate_and_add_new_key(ED25519, None, None, None)?;
     }
 
     client_config.active_address = Some(default_active_address);
     client_config.save(&wallet_conf)?;
 
-    let wallet =
-        WalletContext::new(&wallet_conf, Some(std::time::Duration::from_secs(60)), None).await?;
+    let wallet = WalletContext::new(&wallet_conf, Some(std::time::Duration::from_secs(60)), None)?;
 
     Ok(wallet)
 }

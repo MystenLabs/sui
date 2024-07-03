@@ -1,0 +1,9 @@
+--gas-budget @aa
+--split-coins @0x1 [0xfffffffffu8]
+--split-coins 2x2 [1000]
+--assign X
+--assign Y
+--make-move-vec <vector<address>> [[@0x1],[@0x2]]
+--transfer-objects s @0x1
+--assign Z none
+--move-call 0x1::option::is_no <u64> Z

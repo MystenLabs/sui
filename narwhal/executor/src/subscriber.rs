@@ -14,6 +14,8 @@ use network::client::NetworkClient;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::{sync::Arc, time::Duration, vec};
+use tracing::warn;
+use types::error::LocalClientError;
 use types::FetchBatchesRequest;
 
 use fastcrypto::hash::Hash;
@@ -112,7 +114,6 @@ async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
             _ = rx_shutdown.receiver.recv() => {
                 return
             }
-
         }
     }
 }
@@ -220,7 +221,8 @@ impl Subscriber {
             debug!("No batches to fetch, payload is empty");
             return ConsensusOutput {
                 sub_dag: Arc::new(deliver),
-                batches: vec![],
+                // Length of `batches` must match certificate count in `sub_dag` even if empty.
+                batches: vec![Vec::new(); num_certs],
             };
         }
 
@@ -269,6 +271,13 @@ impl Subscriber {
         let fetched_batches =
             Self::fetch_batches_from_workers(&inner, batch_digests_and_workers).await;
         drop(fetched_batches_timer);
+
+        for batch in fetched_batches.values() {
+            inner
+                .metrics
+                .consensus_output_transactions
+                .inc_by(batch.transactions().len() as u64);
+        }
 
         // Map all fetched batches to their respective certificates and submit as
         // consensus output
@@ -359,7 +368,9 @@ impl Subscriber {
                 {
                     Ok(resp) => break resp.batches,
                     Err(e) => {
-                        error!("Failed to fetch batches from worker {worker_name}: {e:?}");
+                        if !matches!(e, LocalClientError::ShuttingDown) {
+                            warn!("Failed to fetch batches from worker {worker_name}: {e:?}");
+                        }
                         // Loop forever on failure. During shutdown, this should get cancelled.
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;

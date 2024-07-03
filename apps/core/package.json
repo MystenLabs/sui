@@ -28,7 +28,7 @@
 		"@hookform/resolvers": "^3.1.1",
 		"@mysten/dapp-kit": "workspace:*",
 		"@mysten/kiosk": "workspace:*",
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@sentry/react": "^7.59.2",
 		"@tanstack/react-query": "^5.0.0",
 		"bignumber.js": "^9.1.1",
@@ -46,8 +46,8 @@
 		"@vanilla-extract/vite-plugin": "^3.9.0",
 		"postcss": "^8.4.31",
 		"tailwindcss": "^3.3.3",
-		"typescript": "^5.1.6",
+		"typescript": "^5.3.3",
 		"vite": "^4.4.4",
-		"vitest": "^0.33.0"
+		"vitest": "^1.6.0"
 	}
 }

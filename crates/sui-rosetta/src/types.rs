@@ -337,6 +337,10 @@ impl From<SuiPublicKey> for PublicKey {
                 hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::Secp256r1,
             },
+            SuiPublicKey::ZkLogin(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(&k.0),
+                curve_type: CurveType::ZkLogin, // inaccurate but added for completeness.
+            },
         }
     }
 }
@@ -357,6 +361,7 @@ pub enum CurveType {
     Secp256k1,
     Edwards25519,
     Secp256r1,
+    ZkLogin,
 }
 
 impl From<CurveType> for SignatureScheme {
@@ -365,6 +370,7 @@ impl From<CurveType> for SignatureScheme {
             CurveType::Secp256k1 => SignatureScheme::Secp256k1,
             CurveType::Edwards25519 => SignatureScheme::ED25519,
             CurveType::Secp256r1 => SignatureScheme::Secp256r1,
+            CurveType::ZkLogin => SignatureScheme::ZkLoginAuthenticator,
         }
     }
 }
@@ -407,6 +413,7 @@ pub enum OperationType {
     ConsensusCommitPrologue,
     ProgrammableTransaction,
     AuthenticatorStateUpdate,
+    RandomnessStateUpdate,
     EndOfEpochTransaction,
 }
 
@@ -415,7 +422,9 @@ impl From<&SuiTransactionBlockKind> for OperationType {
         match tx {
             SuiTransactionBlockKind::ChangeEpoch(_) => OperationType::EpochChange,
             SuiTransactionBlockKind::Genesis(_) => OperationType::Genesis,
-            SuiTransactionBlockKind::ConsensusCommitPrologue(_) => {
+            SuiTransactionBlockKind::ConsensusCommitPrologue(_)
+            | SuiTransactionBlockKind::ConsensusCommitPrologueV2(_)
+            | SuiTransactionBlockKind::ConsensusCommitPrologueV3(_) => {
                 OperationType::ConsensusCommitPrologue
             }
             SuiTransactionBlockKind::ProgrammableTransaction(_) => {
@@ -423,6 +432,9 @@ impl From<&SuiTransactionBlockKind> for OperationType {
             }
             SuiTransactionBlockKind::AuthenticatorStateUpdate(_) => {
                 OperationType::AuthenticatorStateUpdate
+            }
+            SuiTransactionBlockKind::RandomnessStateUpdate(_) => {
+                OperationType::RandomnessStateUpdate
             }
             SuiTransactionBlockKind::EndOfEpochTransaction(_) => {
                 OperationType::EndOfEpochTransaction
@@ -546,9 +558,9 @@ pub struct ConstructionPreprocessRequest {
 }
 
 #[derive(Serialize, Deserialize)]
-pub enum PreprocessMetadata {
-    PaySui,
-    Delegation,
+pub struct PreprocessMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -562,6 +574,8 @@ pub struct ConstructionPreprocessResponse {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MetadataOptions {
     pub internal_operation: InternalOperation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget: Option<u64>,
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {

@@ -1,6 +1,6 @@
 [package]
 name = "sui-archival"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 publish = false
 license = "Apache-2.0"
@@ -19,11 +19,11 @@ rand.workspace = true
 object_store.workspace = true
 prometheus.workspace = true
 sui-config.workspace = true
-sui-types.workspace = true
+sui-types = { workspace = true, features = ["test-utils"]}
 sui-storage.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 tokio = { workspace = true, features = ["full"] }
-workspace-hack.workspace = true
+serde_json = "1.0.95"
 
 [dev-dependencies]
 tempfile.workspace = true

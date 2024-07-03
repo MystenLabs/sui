@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ObjectOwner } from '@mysten/sui.js/client';
-import { TransactionObjectArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
+import type { ObjectOwner } from '@mysten/sui/client';
+import type { Transaction, TransactionObjectArgument } from '@mysten/sui/transactions';
 
-import { ObjectArgument } from '.';
+import type { ObjectArgument } from './index.js';
 
 /** The Transfer Policy module. */
 export const TRANSFER_POLICY_MODULE = '0x2::transfer_policy';
@@ -52,7 +52,9 @@ export type TransferPolicyCreated = {
 // Each rule resolving function should check that the key it's seeking is in the object
 // e.g. `if(!'my_key' in ruleParams!) throw new Error("Can't resolve that rule!")`
 export type RuleResolvingParams = {
-	transactionBlock: TransactionBlock;
+	transaction: Transaction;
+	/** @deprecated use transaction instead */
+	transactionBlock: Transaction;
 	itemType: string;
 	itemId: string;
 	price: string;

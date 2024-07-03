@@ -13,10 +13,62 @@
 //! It's used to compress mostly indexes into the main binary tables.
 use crate::file_format::Bytecode;
 use anyhow::{bail, Result};
+use move_core_types as MVT;
 use std::{
     io::{Cursor, Read},
     mem::size_of,
 };
+
+// Static assertions about the encoding of the flavor into the version of the binary format.
+const _: () = {
+    let x = BinaryFlavor::shift_and_flavor(0u32);
+    // Make sure that the flavoring is added in the correct position in the u32.
+    // It should always be `0x05XX_XXXX` where `XX_XXXX` is the version digits.
+    assert!(x == 0x0500_0000u32);
+    // Make sure that the flavoring is extracted correctly.
+    assert!(BinaryFlavor::mask_and_shift_to_unflavor(x) == BinaryFlavor::SUI_FLAVOR);
+};
+
+/// Encoding of a the flavor into the version of the binary format for versions >= 7.
+pub struct BinaryFlavor;
+impl BinaryFlavor {
+    pub const FLAVOR_MASK: u32 = 0xFF00_0000;
+    pub const VERSION_MASK: u32 = 0x00FF_FFFF;
+    // The Sui flavor is 0x05
+    pub const SUI_FLAVOR: u8 = 0x05;
+    const SHIFT_AMOUNT: u8 = 24;
+
+    pub fn encode_version(unflavored_version: u32) -> u32 {
+        if unflavored_version <= VERSION_6 {
+            return unflavored_version;
+        }
+
+        debug_assert!(unflavored_version & Self::VERSION_MASK == unflavored_version);
+        Self::shift_and_flavor(unflavored_version)
+    }
+
+    pub fn decode_version(flavored_version: u32) -> u32 {
+        if flavored_version <= VERSION_6 {
+            return flavored_version;
+        }
+        flavored_version & Self::VERSION_MASK
+    }
+
+    pub fn decode_flavor(flavored_version: u32) -> Option<u8> {
+        if flavored_version <= VERSION_6 {
+            return None;
+        }
+        Some(Self::mask_and_shift_to_unflavor(flavored_version))
+    }
+
+    const fn mask_and_shift_to_unflavor(flavored: u32) -> u8 {
+        ((flavored & Self::FLAVOR_MASK) >> Self::SHIFT_AMOUNT) as u8
+    }
+
+    const fn shift_and_flavor(unflavored: u32) -> u32 {
+        (Self::SUI_FLAVOR as u32) << Self::SHIFT_AMOUNT | unflavored
+    }
+}
 
 /// Constant values for the binary format header.
 ///
@@ -44,13 +96,15 @@ pub const SIGNATURE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const ADDRESS_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const IDENTIFIER_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const MODULE_HANDLE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
-pub const STRUCT_HANDLE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
+pub const DATATYPE_HANDLE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const STRUCT_DEF_INDEX_MAX: u64 = TABLE_INDEX_MAX;
+pub const ENUM_DEF_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const FUNCTION_HANDLE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const FUNCTION_INST_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const FIELD_HANDLE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const FIELD_INST_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const STRUCT_DEF_INST_INDEX_MAX: u64 = TABLE_INDEX_MAX;
+pub const ENUM_DEF_INST_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const CONSTANT_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 
 pub const BYTECODE_COUNT_MAX: u64 = 65535;
@@ -72,6 +126,31 @@ pub const ACQUIRES_COUNT_MAX: u64 = 255;
 pub const FIELD_COUNT_MAX: u64 = 255;
 pub const FIELD_OFFSET_MAX: u64 = 255;
 
+#[allow(clippy::assertions_on_constants)]
+pub const VARIANT_COUNT_MAX: u64 = {
+    // These assertions are performed at compile time to ensure that the encoding of enum variants
+    // does not exceed 127.
+    assert!(
+        MVT::VARIANT_COUNT_MAX == 127,
+        "MVT::VARIANT_COUNT_MAX changed -- don't update this to more than 127 \
+         without adding uleb encoding for enum variants"
+    );
+    MVT::VARIANT_COUNT_MAX
+};
+
+#[allow(clippy::assertions_on_constants)]
+pub const JUMP_TABLE_INDEX_MAX: u64 = {
+    assert!(
+        MVT::VARIANT_COUNT_MAX == 127,
+        "MVT::VARIANT_COUNT_MAX changed -- don't update this to more than 127 \
+         without adding uleb encoding for enum variants"
+    );
+    MVT::VARIANT_COUNT_MAX
+};
+
+pub const VARIANT_INSTANTIATION_HANDLE_INDEX_MAX: u64 = 1024;
+pub const VARIANT_HANDLE_INDEX_MAX: u64 = 1024;
+
 pub const TYPE_PARAMETER_COUNT_MAX: u64 = 255;
 pub const TYPE_PARAMETER_INDEX_MAX: u64 = 65536;
 
@@ -86,21 +165,25 @@ pub const SIGNATURE_TOKEN_DEPTH_MAX: usize = 256;
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum TableType {
-    MODULE_HANDLES          = 0x1,
-    STRUCT_HANDLES          = 0x2,
-    FUNCTION_HANDLES        = 0x3,
-    FUNCTION_INST           = 0x4,
-    SIGNATURES              = 0x5,
-    CONSTANT_POOL           = 0x6,
-    IDENTIFIERS             = 0x7,
-    ADDRESS_IDENTIFIERS     = 0x8,
-    STRUCT_DEFS             = 0xA,
-    STRUCT_DEF_INST         = 0xB,
-    FUNCTION_DEFS           = 0xC,
-    FIELD_HANDLE            = 0xD,
-    FIELD_INST              = 0xE,
-    FRIEND_DECLS            = 0xF,
-    METADATA                = 0x10,
+    MODULE_HANDLES        = 0x1,
+    DATATYPE_HANDLES      = 0x2,
+    FUNCTION_HANDLES      = 0x3,
+    FUNCTION_INST         = 0x4,
+    SIGNATURES            = 0x5,
+    CONSTANT_POOL         = 0x6,
+    IDENTIFIERS           = 0x7,
+    ADDRESS_IDENTIFIERS   = 0x8,
+    STRUCT_DEFS           = 0xA,
+    STRUCT_DEF_INST       = 0xB,
+    FUNCTION_DEFS         = 0xC,
+    FIELD_HANDLE          = 0xD,
+    FIELD_INST            = 0xE,
+    FRIEND_DECLS          = 0xF,
+    METADATA              = 0x10,
+    ENUM_DEFS             = 0x11,
+    ENUM_DEF_INST         = 0x12,
+    VARIANT_HANDLES       = 0x13,
+    VARIANT_INST_HANDLES  = 0x14,
 }
 
 /// Constants for signature blob values.
@@ -119,7 +202,7 @@ pub enum SerializedType {
     STRUCT                  = 0x8,
     TYPE_PARAMETER          = 0x9,
     VECTOR                  = 0xA,
-    STRUCT_INST             = 0xB,
+    DATATYPE_INST           = 0xB,
     SIGNER                  = 0xC,
     U16                     = 0xD,
     U32                     = 0xE,
@@ -131,8 +214,25 @@ pub enum SerializedType {
 #[repr(u8)]
 #[derive(Clone, Copy, Debug)]
 pub enum SerializedNativeStructFlag {
-    NATIVE                  = 0x1,
-    DECLARED                = 0x2,
+    NATIVE   = 0x1,
+    DECLARED = 0x2,
+}
+
+#[rustfmt::skip]
+#[allow(non_camel_case_types)]
+#[repr(u8)]
+#[derive(Clone, Copy, Debug)]
+pub enum SerializedEnumFlag {
+    // 0x1 is reserved for NATIVE if we ever decide to add it
+    DECLARED = 0x2, 
+}
+
+#[rustfmt::skip]
+#[allow(non_camel_case_types)]
+#[repr(u8)]
+#[derive(Clone, Copy, Debug)]
+pub enum SerializedJumpTableFlag {
+    FULL = 0x1,
 }
 
 /// List of opcodes constants.
@@ -141,83 +241,96 @@ pub enum SerializedNativeStructFlag {
 #[repr(u8)]
 #[derive(Clone, Copy, Debug)]
 pub enum Opcodes {
-    POP                         = 0x01,
-    RET                         = 0x02,
-    BR_TRUE                     = 0x03,
-    BR_FALSE                    = 0x04,
-    BRANCH                      = 0x05,
-    LD_U64                      = 0x06,
-    LD_CONST                    = 0x07,
-    LD_TRUE                     = 0x08,
-    LD_FALSE                    = 0x09,
-    COPY_LOC                    = 0x0A,
-    MOVE_LOC                    = 0x0B,
-    ST_LOC                      = 0x0C,
-    MUT_BORROW_LOC              = 0x0D,
-    IMM_BORROW_LOC              = 0x0E,
-    MUT_BORROW_FIELD            = 0x0F,
-    IMM_BORROW_FIELD            = 0x10,
-    CALL                        = 0x11,
-    PACK                        = 0x12,
-    UNPACK                      = 0x13,
-    READ_REF                    = 0x14,
-    WRITE_REF                   = 0x15,
-    ADD                         = 0x16,
-    SUB                         = 0x17,
-    MUL                         = 0x18,
-    MOD                         = 0x19,
-    DIV                         = 0x1A,
-    BIT_OR                      = 0x1B,
-    BIT_AND                     = 0x1C,
-    XOR                         = 0x1D,
-    OR                          = 0x1E,
-    AND                         = 0x1F,
-    NOT                         = 0x20,
-    EQ                          = 0x21,
-    NEQ                         = 0x22,
-    LT                          = 0x23,
-    GT                          = 0x24,
-    LE                          = 0x25,
-    GE                          = 0x26,
-    ABORT                       = 0x27,
-    NOP                         = 0x28,
-    EXISTS                      = 0x29,
-    MUT_BORROW_GLOBAL           = 0x2A,
-    IMM_BORROW_GLOBAL           = 0x2B,
-    MOVE_FROM                   = 0x2C,
-    MOVE_TO                     = 0x2D,
-    FREEZE_REF                  = 0x2E,
-    SHL                         = 0x2F,
-    SHR                         = 0x30,
-    LD_U8                       = 0x31,
-    LD_U128                     = 0x32,
-    CAST_U8                     = 0x33,
-    CAST_U64                    = 0x34,
-    CAST_U128                   = 0x35,
-    MUT_BORROW_FIELD_GENERIC    = 0x36,
-    IMM_BORROW_FIELD_GENERIC    = 0x37,
-    CALL_GENERIC                = 0x38,
-    PACK_GENERIC                = 0x39,
-    UNPACK_GENERIC              = 0x3A,
-    EXISTS_GENERIC              = 0x3B,
-    MUT_BORROW_GLOBAL_GENERIC   = 0x3C,
-    IMM_BORROW_GLOBAL_GENERIC   = 0x3D,
-    MOVE_FROM_GENERIC           = 0x3E,
-    MOVE_TO_GENERIC             = 0x3F,
-    VEC_PACK                    = 0x40,
-    VEC_LEN                     = 0x41,
-    VEC_IMM_BORROW              = 0x42,
-    VEC_MUT_BORROW              = 0x43,
-    VEC_PUSH_BACK               = 0x44,
-    VEC_POP_BACK                = 0x45,
-    VEC_UNPACK                  = 0x46,
-    VEC_SWAP                    = 0x47,
-    LD_U16                      = 0x48,
-    LD_U32                      = 0x49,
-    LD_U256                     = 0x4A,
-    CAST_U16                    = 0x4B,
-    CAST_U32                    = 0x4C,
-    CAST_U256                   = 0x4D,
+    POP                            = 0x01,
+    RET                            = 0x02,
+    BR_TRUE                        = 0x03,
+    BR_FALSE                       = 0x04,
+    BRANCH                         = 0x05,
+    LD_U64                         = 0x06,
+    LD_CONST                       = 0x07,
+    LD_TRUE                        = 0x08,
+    LD_FALSE                       = 0x09,
+    COPY_LOC                       = 0x0A,
+    MOVE_LOC                       = 0x0B,
+    ST_LOC                         = 0x0C,
+    MUT_BORROW_LOC                 = 0x0D,
+    IMM_BORROW_LOC                 = 0x0E,
+    MUT_BORROW_FIELD               = 0x0F,
+    IMM_BORROW_FIELD               = 0x10,
+    CALL                           = 0x11,
+    PACK                           = 0x12,
+    UNPACK                         = 0x13,
+    READ_REF                       = 0x14,
+    WRITE_REF                      = 0x15,
+    ADD                            = 0x16,
+    SUB                            = 0x17,
+    MUL                            = 0x18,
+    MOD                            = 0x19,
+    DIV                            = 0x1A,
+    BIT_OR                         = 0x1B,
+    BIT_AND                        = 0x1C,
+    XOR                            = 0x1D,
+    OR                             = 0x1E,
+    AND                            = 0x1F,
+    NOT                            = 0x20,
+    EQ                             = 0x21,
+    NEQ                            = 0x22,
+    LT                             = 0x23,
+    GT                             = 0x24,
+    LE                             = 0x25,
+    GE                             = 0x26,
+    ABORT                          = 0x27,
+    NOP                            = 0x28,
+    // gap for deprecated bytecodes, see bottom of enum
+    FREEZE_REF                     = 0x2E,
+    SHL                            = 0x2F,
+    SHR                            = 0x30,
+    LD_U8                          = 0x31,
+    LD_U128                        = 0x32,
+    CAST_U8                        = 0x33,
+    CAST_U64                       = 0x34,
+    CAST_U128                      = 0x35,
+    MUT_BORROW_FIELD_GENERIC       = 0x36,
+    IMM_BORROW_FIELD_GENERIC       = 0x37,
+    CALL_GENERIC                   = 0x38,
+    PACK_GENERIC                   = 0x39,
+    UNPACK_GENERIC                 = 0x3A,
+    VEC_PACK                       = 0x40,
+    VEC_LEN                        = 0x41,
+    VEC_IMM_BORROW                 = 0x42,
+    VEC_MUT_BORROW                 = 0x43,
+    VEC_PUSH_BACK                  = 0x44,
+    VEC_POP_BACK                   = 0x45,
+    VEC_UNPACK                     = 0x46,
+    VEC_SWAP                       = 0x47,
+    LD_U16                         = 0x48,
+    LD_U32                         = 0x49,
+    LD_U256                        = 0x4A,
+    CAST_U16                       = 0x4B,
+    CAST_U32                       = 0x4C,
+    CAST_U256                      = 0x4D,
+    PACK_VARIANT                   = 0x4E,
+    PACK_VARIANT_GENERIC           = 0x4F,
+    UNPACK_VARIANT                 = 0x50,
+    UNPACK_VARIANT_IMM_REF         = 0x51,
+    UNPACK_VARIANT_MUT_REF         = 0x52,
+    UNPACK_VARIANT_GENERIC         = 0x53,
+    UNPACK_VARIANT_GENERIC_IMM_REF = 0x54,
+    UNPACK_VARIANT_GENERIC_MUT_REF = 0x55,
+    VARIANT_SWITCH                 = 0x56,
+
+    // ******** DEPRECATED BYTECODES ********
+    // global storage opcodes are unused and deprecated
+    EXISTS_DEPRECATED                       = 0x29,
+    MUT_BORROW_GLOBAL_DEPRECATED            = 0x2A,
+    IMM_BORROW_GLOBAL_DEPRECATED            = 0x2B,
+    MOVE_FROM_DEPRECATED                    = 0x2C,
+    MOVE_TO_DEPRECATED                      = 0x2D,
+    EXISTS_GENERIC_DEPRECATED               = 0x3B,
+    MUT_BORROW_GLOBAL_GENERIC_DEPRECATED    = 0x3C,
+    IMM_BORROW_GLOBAL_GENERIC_DEPRECATED    = 0x3D,
+    MOVE_FROM_GENERIC_DEPRECATED            = 0x3E,
+    MOVE_TO_GENERIC_DEPRECATED              = 0x3F,
 }
 
 /// Upper limit on the binary size
@@ -405,173 +518,16 @@ pub const VERSION_5: u32 = 5;
 ///  + u16, u32, u256 integers and corresponding Ld, Cast bytecodes
 pub const VERSION_6: u32 = 6;
 
+/// Version 7: changes compared with version 6
+///  + enums
+pub const VERSION_7: u32 = 7;
+
 // Mark which version is the latest version
-pub const VERSION_MAX: u32 = VERSION_6;
+pub const VERSION_MAX: u32 = VERSION_7;
 
 // Mark which oldest version is supported.
 // TODO(#145): finish v4 compatibility; as of now, only metadata is implemented
 pub const VERSION_MIN: u32 = VERSION_5;
-
-pub(crate) mod versioned_data {
-    use crate::{errors::*, file_format_common::*};
-    use move_core_types::vm_status::StatusCode;
-    use std::io::{Cursor, Read};
-    pub struct VersionedBinary<'a> {
-        version: u32,
-        binary: &'a [u8],
-        check_no_extraneous_bytes: bool,
-    }
-
-    pub struct VersionedCursor<'a> {
-        version: u32,
-        cursor: Cursor<&'a [u8]>,
-        check_no_extraneous_bytes: bool,
-    }
-
-    impl<'a> VersionedBinary<'a> {
-        fn new(
-            binary: &'a [u8],
-            max_version: u32,
-            check_no_extraneous_bytes: bool,
-        ) -> BinaryLoaderResult<(Self, Cursor<&'a [u8]>)> {
-            let mut cursor = Cursor::<&'a [u8]>::new(binary);
-            let mut magic = [0u8; BinaryConstants::MOVE_MAGIC_SIZE];
-            if let Ok(count) = cursor.read(&mut magic) {
-                if count != BinaryConstants::MOVE_MAGIC_SIZE || magic != BinaryConstants::MOVE_MAGIC
-                {
-                    return Err(PartialVMError::new(StatusCode::BAD_MAGIC));
-                }
-            } else {
-                return Err(PartialVMError::new(StatusCode::MALFORMED)
-                    .with_message("Bad binary header".to_string()));
-            }
-            let version = match read_u32(&mut cursor) {
-                Ok(v) => v,
-                Err(_) => {
-                    return Err(PartialVMError::new(StatusCode::MALFORMED)
-                        .with_message("Bad binary header".to_string()));
-                }
-            };
-            if version == 0 || version > u32::min(max_version, VERSION_MAX) {
-                return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION));
-            }
-            Ok((
-                Self {
-                    version,
-                    binary,
-                    check_no_extraneous_bytes,
-                },
-                cursor,
-            ))
-        }
-
-        #[allow(dead_code)]
-        pub fn version(&self) -> u32 {
-            self.version
-        }
-
-        pub fn new_cursor(&self, start: usize, end: usize) -> VersionedCursor<'a> {
-            VersionedCursor {
-                version: self.version,
-                cursor: Cursor::new(&self.binary[start..end]),
-                check_no_extraneous_bytes: self.check_no_extraneous_bytes,
-            }
-        }
-
-        pub fn slice(&self, start: usize, end: usize) -> &'a [u8] {
-            &self.binary[start..end]
-        }
-
-        pub(crate) fn check_no_extraneous_bytes(&self) -> bool {
-            self.check_no_extraneous_bytes
-        }
-    }
-
-    impl<'a> VersionedCursor<'a> {
-        /// Verifies the correctness of the "static" part of the binary's header.
-        /// If valid, returns a cursor to the binary
-        pub fn new(
-            binary: &'a [u8],
-            max_version: u32,
-            check_no_extraneous_bytes: bool,
-        ) -> BinaryLoaderResult<Self> {
-            let (binary, cursor) =
-                VersionedBinary::new(binary, max_version, check_no_extraneous_bytes)?;
-            Ok(VersionedCursor {
-                version: binary.version,
-                cursor,
-                check_no_extraneous_bytes,
-            })
-        }
-
-        #[allow(dead_code)]
-        pub fn version(&self) -> u32 {
-            self.version
-        }
-
-        pub fn position(&self) -> u64 {
-            self.cursor.position()
-        }
-
-        #[allow(dead_code)]
-        pub fn binary(&self) -> VersionedBinary<'a> {
-            VersionedBinary {
-                version: self.version,
-                binary: self.cursor.get_ref(),
-                check_no_extraneous_bytes: self.check_no_extraneous_bytes,
-            }
-        }
-
-        pub fn read_u8(&mut self) -> Result<u8> {
-            read_u8(&mut self.cursor)
-        }
-
-        #[allow(dead_code)]
-        pub fn read_u32(&mut self) -> Result<u32> {
-            read_u32(&mut self.cursor)
-        }
-
-        pub fn read_uleb128_as_u64(&mut self) -> Result<u64> {
-            read_uleb128_as_u64(&mut self.cursor)
-        }
-
-        pub fn read_new_binary<'b>(
-            &mut self,
-            buffer: &'b mut Vec<u8>,
-            n: usize,
-        ) -> BinaryLoaderResult<VersionedBinary<'b>> {
-            debug_assert!(buffer.is_empty());
-            let mut tmp_buffer = vec![0; n];
-            match self.cursor.read_exact(&mut tmp_buffer) {
-                Err(_) => Err(PartialVMError::new(StatusCode::MALFORMED)),
-                Ok(()) => {
-                    *buffer = tmp_buffer;
-                    Ok(VersionedBinary {
-                        version: self.version,
-                        binary: buffer,
-                        check_no_extraneous_bytes: self.check_no_extraneous_bytes,
-                    })
-                }
-            }
-        }
-
-        #[cfg(test)]
-        pub fn new_for_test(version: u32, cursor: Cursor<&'a [u8]>) -> Self {
-            Self {
-                version,
-                cursor,
-                check_no_extraneous_bytes: true,
-            }
-        }
-    }
-
-    impl<'a> Read for VersionedCursor<'a> {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-            self.cursor.read(buf)
-        }
-    }
-}
-pub(crate) use versioned_data::{VersionedBinary, VersionedCursor};
 
 /// The encoding of the instruction is the serialized form of it, but disregarding the
 /// serialization of the instruction's argument(s).
@@ -610,10 +566,6 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         MutBorrowFieldGeneric(_) => Opcodes::MUT_BORROW_FIELD_GENERIC,
         ImmBorrowField(_) => Opcodes::IMM_BORROW_FIELD,
         ImmBorrowFieldGeneric(_) => Opcodes::IMM_BORROW_FIELD_GENERIC,
-        MutBorrowGlobal(_) => Opcodes::MUT_BORROW_GLOBAL,
-        MutBorrowGlobalGeneric(_) => Opcodes::MUT_BORROW_GLOBAL_GENERIC,
-        ImmBorrowGlobal(_) => Opcodes::IMM_BORROW_GLOBAL,
-        ImmBorrowGlobalGeneric(_) => Opcodes::IMM_BORROW_GLOBAL_GENERIC,
         Add => Opcodes::ADD,
         Sub => Opcodes::SUB,
         Mul => Opcodes::MUL,
@@ -635,12 +587,6 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         Ge => Opcodes::GE,
         Abort => Opcodes::ABORT,
         Nop => Opcodes::NOP,
-        Exists(_) => Opcodes::EXISTS,
-        ExistsGeneric(_) => Opcodes::EXISTS_GENERIC,
-        MoveFrom(_) => Opcodes::MOVE_FROM,
-        MoveFromGeneric(_) => Opcodes::MOVE_FROM_GENERIC,
-        MoveTo(_) => Opcodes::MOVE_TO,
-        MoveToGeneric(_) => Opcodes::MOVE_TO_GENERIC,
         VecPack(..) => Opcodes::VEC_PACK,
         VecLen(_) => Opcodes::VEC_LEN,
         VecImmBorrow(_) => Opcodes::VEC_IMM_BORROW,
@@ -655,6 +601,26 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         CastU16 => Opcodes::CAST_U16,
         CastU32 => Opcodes::CAST_U32,
         CastU256 => Opcodes::CAST_U256,
+        PackVariant(_) => Opcodes::PACK_VARIANT,
+        PackVariantGeneric(_) => Opcodes::PACK_VARIANT_GENERIC,
+        UnpackVariant(_) => Opcodes::UNPACK_VARIANT,
+        UnpackVariantImmRef(_) => Opcodes::UNPACK_VARIANT_IMM_REF,
+        UnpackVariantMutRef(_) => Opcodes::UNPACK_VARIANT_MUT_REF,
+        UnpackVariantGeneric(_) => Opcodes::UNPACK_VARIANT_GENERIC,
+        UnpackVariantGenericImmRef(_) => Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF,
+        UnpackVariantGenericMutRef(_) => Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF,
+        VariantSwitch(_) => Opcodes::VARIANT_SWITCH,
+        // ******** DEPRECATED BYTECODES ********
+        ExistsDeprecated(_) => Opcodes::EXISTS_DEPRECATED,
+        ExistsGenericDeprecated(_) => Opcodes::EXISTS_GENERIC_DEPRECATED,
+        MoveFromDeprecated(_) => Opcodes::MOVE_FROM_DEPRECATED,
+        MoveFromGenericDeprecated(_) => Opcodes::MOVE_FROM_GENERIC_DEPRECATED,
+        MoveToDeprecated(_) => Opcodes::MOVE_TO_DEPRECATED,
+        MoveToGenericDeprecated(_) => Opcodes::MOVE_TO_GENERIC_DEPRECATED,
+        MutBorrowGlobalDeprecated(_) => Opcodes::MUT_BORROW_GLOBAL_DEPRECATED,
+        MutBorrowGlobalGenericDeprecated(_) => Opcodes::MUT_BORROW_GLOBAL_GENERIC_DEPRECATED,
+        ImmBorrowGlobalDeprecated(_) => Opcodes::IMM_BORROW_GLOBAL_DEPRECATED,
+        ImmBorrowGlobalGenericDeprecated(_) => Opcodes::IMM_BORROW_GLOBAL_GENERIC_DEPRECATED,
     };
     opcode as u8
 }

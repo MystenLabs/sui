@@ -8,6 +8,7 @@ module M {
     const S3: S<u64, bool> = S { f: 0 };
     const S4: S<S<u64, bool>> = S { f: S { f: 0 } };
 
+    #[allow(implicit_const_copy)]
     fun t() {
         S1.f;
         S2.f;

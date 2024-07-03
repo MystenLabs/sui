@@ -9,10 +9,9 @@
 //# publish
 
 module test::m {
-    use sui::tx_context::{Self, TxContext};
     use sui::dynamic_object_field as ofield;
 
-    struct S has key, store {
+    public struct S has key, store {
         id: sui::object::UID,
     }
 

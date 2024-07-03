@@ -1,5 +1,239 @@
 # @mysten/sui.js
 
+## 1.2.1
+
+### Patch Changes
+
+- 06a900c1ab: Fix nonce generation inconsistency
+- 45877014d1: Improve return type when passing functions to tx.add
+- 87d6f75403: Parallel executor now only re-uses gasCoins if the gas coin is only used for gas
+
+## 1.2.0
+
+### Minor Changes
+
+- fef99d377f: Update parallel executor class to handle gasPrice and budgeting to remove extra rpc calls during execution"
+
+## 1.1.2
+
+### Patch Changes
+
+- 0dfff33b95: Fix bug that prevents coinWithBalance intent from being resolved
+
+## 1.1.1
+
+### Patch Changes
+
+- 101f1ff4b8: Fix coinWithBalance when passing balance using a number instead of a bigint
+
+## 1.1.0
+
+### Minor Changes
+
+- bae8f9683c: Remove address from parseSerializedSignature
+
+## 1.0.5
+
+### Patch Changes
+
+- 369b924343: Fix serializing bcs<u8> inputs from pure strings in v1 json
+- Updated dependencies [369b924343]
+  - @mysten/bcs@1.0.2
+
+## 1.0.4
+
+### Patch Changes
+
+- f1e828f557: Export types needed for defining Transaction plugins
+- Updated dependencies [f1e828f557]
+  - @mysten/bcs@1.0.1
+
+## 1.0.3
+
+### Patch Changes
+
+- 1f20580841: Fix parsing of object refs from v1 json
+
+## 1.0.2
+
+### Patch Changes
+
+- f0a839f874: Fix serialization bug when converting object inputs to v1 JSON
+
+## 1.0.1
+
+### Patch Changes
+
+- 6fc6235984: Fix parsing of struct tags
+
+## 1.0.0
+
+### Major Changes
+
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
+  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+
+### Patch Changes
+
+- ebdfe7cf21: Add support for more JSON RPC error codes
+- Updated dependencies [a92b03de42]
+  - @mysten/bcs@1.0.0
+
+## 0.54.1
+
+### Patch Changes
+
+- 99b112178c: Fix gql.tada dependency issue
+
+## 0.54.0
+
+### Minor Changes
+
+- b7f673dbd9: Update versioned graphql schema imports
+
+### Patch Changes
+
+- 123b42c75c: Only accept 1 keypair on getSigner method of MultiSigPubKey
+
+## 0.53.0
+
+### Minor Changes
+
+- 774bfb41a8: Add MultiSigSigner class to simplify multisig signing
+
+## 0.52.0
+
+### Minor Changes
+
+- 929db4976a: Add normalizeSuiNSName and isValidSuiNSName utils, and add a format option to SuiClient.resolveNameServiceNames
+
+## 0.51.2
+
+### Patch Changes
+
+- b4ecdb5860: Fix fetch being incorrectly bound to GraphQL client
+
+## 0.51.1
+
+### Patch Changes
+
+- 6984dd1e38: Update gql.tada and add type definitions for custom scalars
+
+## 0.51.0
+
+### Minor Changes
+
+- 0cafa94027: Remove deprecated types directory
+
+## 0.50.1
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/bcs@0.11.1
+
+## 0.50.0
+
+### Minor Changes
+
+- a34f1cb67d: Use Bech32 instead of Hex for private key export, supports both Hex and Bech32 for importing
+
+### Patch Changes
+
+- a34f1cb67d: deprecate ExportedKeypair
+- c08e3569ef: Export all keypair utilities
+- 9a14e61db4: Allow signer in signAndExecuteTransactionBlock to be a Signer rather than a Keypair
+- 13e922d9b1: Fix multiple shared objects not respecting mutable correctly
+- 220a766d86: Fix WebSocket constructor not being properly assigned in SuiClient HTTP transport
+- Updated dependencies [bae8802fe3]
+  - @mysten/bcs@0.11.0
+
+## 0.49.1
+
+### Patch Changes
+
+- 9ac0a4ec01: Add extensions to all sdk import paths
+- Updated dependencies [9ac0a4ec01]
+  - @mysten/bcs@0.10.1
+
+## 0.49.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+### Patch Changes
+
+- Updated dependencies [e5f9e3ba21]
+  - @mysten/bcs@0.10.0
+
+## 0.48.1
+
+### Patch Changes
+
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+- Updated dependencies [dd362ec1d6]
+  - @mysten/bcs@0.9.1
+
+## 0.48.0
+
+### Minor Changes
+
+- cdcfa76c43: Add a new client method for retrieving epoch metrics (suix_getEpochMetrics)
+
+### Patch Changes
+
+- Updated dependencies [fce0a08d0f]
+  - @mysten/bcs@0.9.0
+
+## 0.47.0
+
+### Minor Changes
+
+- 0259aec82: Removed dependency on @open-rpc/client-js and replaced it with standard fetch and WebSocket based APIs
+
+  If you are using the `subscribeEvent` or `subscribeTransaction` in environments that do not support the `WebSocket` api natively (This will be true for most versions of Node.js) you will need to provide a WebSocket implementation when creating your SuiClient. You can either use a global polyfill for the WebSocket class, or pass a compatible WebSocket implementation into SuiHTTPTransport (eg, using the `ws` package)
+
+  ```typescript
+  import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
+  import { WebSocket } from 'ws';
+
+  new SuiClient({
+  	transport: new SuiHTTPTransport({
+  		url: getFullnodeUrl('mainnet'),
+  		// The typescript definitions may not match perfectly, casting to never avoids these minor incompatibilities
+  		WebSocketConstructor: WebSocket as never,
+  	}),
+  });
+  ```
+
+- 64d45ba27: Add support for zklogin sig inside multisig
+
+### Patch Changes
+
+- 194c980cb: Properly determine shared object mutability when being passed by value.
+- 9ac7e2f3d: Add additional type exports to zklogin package
+
+## 0.46.1
+
+### Patch Changes
+
+- 652bcdd92: Remove some multisig methods that had previously been deprecated and are no longer exported
+
+## 0.46.0
+
+### Minor Changes
+
+- 093554a0d: Remove deprecated framework code.
+
+### Patch Changes
+
+- 28c2c3330: Use the same issuer string in address derivation for the two google's iss values
+- 43444c58f: Extend the `TransactionBlock#object()` API to accept the `TransactionResult` type as well, so that it can be used flexibly in SDKs.
+- 8d1e74e52: Fix setting gasPrice for devInspectTransactionBlock
+- 3718a230b: Adds `txb.pure.id()` to pass ID pure values more intuitively
+
 ## 0.45.1
 
 ### Patch Changes

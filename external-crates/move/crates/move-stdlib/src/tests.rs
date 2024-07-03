@@ -21,21 +21,6 @@ fn check_that_docs_are_updated() {
     )
 }
 
-#[test]
-fn check_that_the_errmap_is_updated() {
-    let temp_file = tempfile::NamedTempFile::new().unwrap();
-
-    crate::build_error_code_map(&temp_file.path().to_string_lossy());
-
-    assert!(
-        file_diff::diff(
-            &temp_file.path().to_string_lossy(),
-            &crate::move_stdlib_errmap_full_path()
-        ),
-        "Generated errmap differ from the one checked in"
-    );
-}
-
 fn check_dirs_not_diff<A: AsRef<Path>, B: AsRef<Path>>(
     actual: A,
     expected: B,

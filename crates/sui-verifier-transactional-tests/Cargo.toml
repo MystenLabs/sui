@@ -16,4 +16,3 @@ name = "tests"
 harness = false
 
 [dependencies]
-workspace-hack.workspace = true

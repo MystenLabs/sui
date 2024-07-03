@@ -37,7 +37,6 @@ anemo.workspace = true
 anemo-tower.workspace = true
 anyhow.workspace = true
 eyre.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 arc-swap.workspace = true

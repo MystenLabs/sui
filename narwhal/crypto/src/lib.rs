@@ -43,8 +43,6 @@ pub type KeyPair = bls12381::min_sig::BLS12381KeyPair;
 
 pub type NetworkPublicKey = ed25519::Ed25519PublicKey;
 pub type NetworkKeyPair = ed25519::Ed25519KeyPair;
-pub type RandomnessPrivateKey =
-    fastcrypto_tbls::ecies::PrivateKey<fastcrypto::groups::bls12381::G2Element>;
 
 ////////////////////////////////////////////////////////////////////////
 

@@ -4,13 +4,13 @@
 use std::str::FromStr;
 
 use anyhow::ensure;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
+use move_core_types::annotated_value::MoveDatatypeLayout;
+use move_core_types::annotated_value::MoveValue;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
-use move_core_types::value::MoveStruct;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,7 +19,7 @@ use serde_with::Bytes;
 
 use crate::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use crate::error::{SuiError, SuiResult};
-use crate::object::{MoveObject, ObjectFormatOptions};
+use crate::object::bounded_visitor::BoundedVisitor;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::SUI_SYSTEM_ADDRESS;
@@ -41,7 +41,7 @@ pub struct EventEnvelope {
 /// Unique ID of a Sui Event, the ID is a combination of tx seq number and event seq number,
 /// the ID is local to this particular fullnode and will be different from other fullnode.
 #[serde_as]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct EventID {
     pub tx_digest: TransactionDigest,
@@ -125,17 +125,11 @@ impl Event {
             contents,
         }
     }
-    pub fn move_event_to_move_struct(
-        type_: &StructTag,
+    pub fn move_event_to_move_value(
         contents: &[u8],
-        resolver: &impl GetModule,
-    ) -> SuiResult<MoveStruct> {
-        let layout = MoveObject::get_layout_from_struct_tag(
-            type_.clone(),
-            ObjectFormatOptions::default(),
-            resolver,
-        )?;
-        MoveStruct::simple_deserialize(contents, &layout).map_err(|e| {
+        layout: MoveDatatypeLayout,
+    ) -> SuiResult<MoveValue> {
+        BoundedVisitor::deserialize_value(contents, &layout.into_layout()).map_err(|e| {
             SuiError::ObjectSerializationError {
                 error: e.to_string(),
             }

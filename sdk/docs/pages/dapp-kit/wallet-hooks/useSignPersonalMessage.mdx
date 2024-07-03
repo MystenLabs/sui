@@ -1,8 +1,8 @@
 import { UseSignPersonalMessageExample } from '../../../examples/wallet-hooks';
 
-# `useSignPersonalMessage`
+# useSignPersonalMessage
 
-The `useSignPersonalMessage` hook can be used to prompt the user to sign a message with their wallet
+Use the `useSignPersonalMessage` hook to prompt the user to sign a message with their wallet.
 
 ```ts
 import { ConnectButton, useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
@@ -53,9 +53,9 @@ function MyComponent() {
 
 ## Arguments
 
-- `message`: The message to sign, as a `Uint8Array`
+- `message`: The message to sign, as a `Uint8Array`.
 
 ## Result
 
-- `signature`: The signature of the message, as a Base64 encoded `string`
-- `bytes`: The bytes of the message, as a a Base64 encoded `string`
+- `signature`: The signature of the message, as a `Base64`-encoded `string`.
+- `bytes`: The bytes of the message, as a a `Base64`-encoded `string`.

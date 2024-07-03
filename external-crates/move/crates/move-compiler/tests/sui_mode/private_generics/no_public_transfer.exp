@@ -1,24 +1,32 @@
 error[Sui E02009]: invalid private transfer call
-  ┌─ tests/sui_mode/private_generics/no_public_transfer.move:8:9
+  ┌─ tests/sui_mode/private_generics/no_public_transfer.move:9:9
   │
-7 │     public fun t1(s: other::S) {
+8 │     public fun t1(s: other::S) {
   │                      -------- The type 'a::other::S' is not declared in the current module
-8 │         transfer::transfer(s, @0x100);
+9 │         transfer::transfer(s, @0x100);
   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::transfer' is restricted to being called in the object's module, 'a::other'
 
 error[Sui E02009]: invalid private transfer call
-   ┌─ tests/sui_mode/private_generics/no_public_transfer.move:12:9
+   ┌─ tests/sui_mode/private_generics/no_public_transfer.move:13:9
    │
-11 │     public fun t2(s: other::S) {
+12 │     public fun t2(s: other::S) {
    │                      -------- The type 'a::other::S' is not declared in the current module
-12 │         transfer::freeze_object(s);
+13 │         transfer::freeze_object(s);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::freeze_object' is restricted to being called in the object's module, 'a::other'
 
 error[Sui E02009]: invalid private transfer call
-   ┌─ tests/sui_mode/private_generics/no_public_transfer.move:16:9
+   ┌─ tests/sui_mode/private_generics/no_public_transfer.move:17:9
    │
-15 │     public fun t3(s: other::S) {
+16 │     public fun t3(s: other::S) {
    │                      -------- The type 'a::other::S' is not declared in the current module
-16 │         transfer::share_object(s);
+17 │         transfer::share_object(s);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::share_object' is restricted to being called in the object's module, 'a::other'
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer.move:21:9
+   │
+20 │     public fun t4(p: &mut UID, s: Receiving<other::S>): other::S {
+   │                                             -------- The type 'a::other::S' is not declared in the current module
+21 │         transfer::receive(p, s)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::receive' is restricted to being called in the object's module, 'a::other'
 

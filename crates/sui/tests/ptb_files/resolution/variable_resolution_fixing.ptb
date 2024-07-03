@@ -1,0 +1,5 @@
+--assign s @0x1
+--move-call sui::coin::value<sui::sui::SUI> s
+# Make sure that the second usage of 's' here binds to/uses the same input as the move call above
+--make-move-vec <address> [s]
+

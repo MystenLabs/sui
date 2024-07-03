@@ -3,8 +3,10 @@
 
 use crate::{
     crypto::{CompressedSignature, SignatureScheme},
+    digests::ZKLoginInputsDigest,
     multisig::{MultiSig, MultiSigPublicKey},
-    signature::{AuthenticatorTrait, VerifyParams},
+    signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
+    signature_verification::VerifiedDigestCache,
     sui_serde::SuiBitmap,
 };
 pub use enum_dispatch::enum_dispatch;
@@ -19,11 +21,14 @@ use schemars::JsonSchema;
 use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use shared_crypto::intent::IntentMessage;
-use std::hash::{Hash, Hasher};
+use std::{
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 
 use crate::{
     base_types::{EpochId, SuiAddress},
-    crypto::{PublicKey, Signature},
+    crypto::PublicKey,
     error::SuiError,
 };
 
@@ -86,20 +91,18 @@ impl Hash for MultiSigLegacy {
 }
 
 impl AuthenticatorTrait for MultiSigLegacy {
-    fn verify_user_authenticator_epoch(&self, _: EpochId) -> Result<(), SuiError> {
-        Ok(())
-    }
-
-    fn verify_uncached_checks<T>(
+    fn verify_user_authenticator_epoch(
         &self,
-        _value: &IntentMessage<T>,
-        _author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
-    ) -> Result<(), SuiError>
-    where
-        T: Serialize,
-    {
-        Ok(())
+        epoch_id: EpochId,
+        max_epoch_upper_bound_delta: Option<u64>,
+    ) -> Result<(), SuiError> {
+        let multisig: MultiSig =
+            self.clone()
+                .try_into()
+                .map_err(|_| SuiError::InvalidSignature {
+                    error: "Invalid legacy multisig".to_string(),
+                })?;
+        multisig.verify_user_authenticator_epoch(epoch_id, max_epoch_upper_bound_delta)
     }
 
     fn verify_claims<T>(
@@ -107,56 +110,50 @@ impl AuthenticatorTrait for MultiSigLegacy {
         value: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) -> Result<(), SuiError>
     where
         T: Serialize,
     {
-        let multisig: MultiSig = self.clone().try_into()?;
-        multisig.verify_claims(value, author, aux_verify_data)
-    }
-
-    fn verify_authenticator<T>(
-        &self,
-        value: &IntentMessage<T>,
-        author: SuiAddress,
-        epoch: Option<EpochId>,
-        aux_verify_data: &VerifyParams,
-    ) -> Result<(), SuiError>
-    where
-        T: Serialize,
-    {
-        let multisig: MultiSig = self.clone().try_into()?;
-        multisig.verify_authenticator(value, author, epoch, aux_verify_data)
+        let multisig: MultiSig =
+            self.clone()
+                .try_into()
+                .map_err(|_| SuiError::InvalidSignature {
+                    error: "Invalid legacy multisig".to_string(),
+                })?;
+        multisig.verify_claims(value, author, aux_verify_data, zklogin_inputs_cache)
     }
 }
 
 impl TryFrom<MultiSigLegacy> for MultiSig {
-    type Error = SuiError;
+    type Error = FastCryptoError;
 
     fn try_from(multisig: MultiSigLegacy) -> Result<Self, Self::Error> {
-        Ok(MultiSig::new(
+        MultiSig::insecure_new(
             multisig.clone().sigs,
             bitmap_to_u16(multisig.clone().bitmap)?,
-            multisig.multisig_pk.into(),
-        ))
+            multisig.multisig_pk.try_into()?,
+        )
+        .init_and_validate()
     }
 }
 
-impl From<MultiSigPublicKeyLegacy> for MultiSigPublicKey {
-    fn from(multisig: MultiSigPublicKeyLegacy) -> Self {
-        MultiSigPublicKey::construct(multisig.pk_map, multisig.threshold)
+impl TryFrom<MultiSigPublicKeyLegacy> for MultiSigPublicKey {
+    type Error = FastCryptoError;
+    fn try_from(multisig: MultiSigPublicKeyLegacy) -> Result<Self, Self::Error> {
+        let multisig_pk_legacy =
+            MultiSigPublicKey::insecure_new(multisig.pk_map, multisig.threshold).validate()?;
+        Ok(multisig_pk_legacy)
     }
 }
 
 /// Convert a roaring bitmap to plain bitmap.
-pub fn bitmap_to_u16(roaring: RoaringBitmap) -> Result<u16, SuiError> {
+pub fn bitmap_to_u16(roaring: RoaringBitmap) -> Result<u16, FastCryptoError> {
     let indices: Vec<u32> = roaring.into_iter().collect();
     let mut val = 0;
     for i in indices {
         if i >= 10 {
-            return Err(SuiError::InvalidSignature {
-                error: "Invalid bitmap".to_string(),
-            });
+            return Err(FastCryptoError::InvalidInput);
         }
         val |= 1 << i as u8;
     }
@@ -166,7 +163,7 @@ pub fn bitmap_to_u16(roaring: RoaringBitmap) -> Result<u16, SuiError> {
 impl MultiSigLegacy {
     /// This combines a list of [enum Signature] `flag || signature || pk` to a MultiSig.
     pub fn combine(
-        full_sigs: Vec<Signature>,
+        full_sigs: Vec<GenericSignature>,
         multisig_pk: MultiSigPublicKeyLegacy,
     ) -> Result<Self, SuiError> {
         multisig_pk
@@ -236,7 +233,7 @@ impl ToFromBytes for MultiSigLegacy {
             return Err(FastCryptoError::InvalidInput);
         }
         let multisig: MultiSigLegacy =
-            bcs::from_bytes(&bytes[1..]).map_err(|_| FastCryptoError::InvalidSignature)?;
+            bcs::from_bytes(&bytes[1..]).map_err(|_| FastCryptoError::InvalidInput)?;
         multisig.validate()?;
         Ok(multisig)
     }
@@ -331,8 +328,9 @@ impl MultiSigPublicKeyLegacy {
         &self.pk_map
     }
 
-    pub fn validate(&self) -> Result<(), FastCryptoError> {
-        let multisig: MultiSigPublicKey = self.clone().into();
-        multisig.validate()
+    pub fn validate(&self) -> Result<Self, FastCryptoError> {
+        let multisig: MultiSigPublicKey = self.clone().try_into()?;
+        multisig.validate()?;
+        Ok(self.clone())
     }
 }

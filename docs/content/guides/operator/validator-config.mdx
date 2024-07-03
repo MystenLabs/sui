@@ -24,6 +24,15 @@ Specific steps you must take include:
 
 {@include: ../../snippets/staking-pool-reqs.mdx}
 
+## Hardware requirements to run a Validator node
+
+Suggested minimum hardware specifications to run a Sui Validator node:
+
+- CPU: 24 physical cores (or 48 virtual cores)
+- Memory: 128 GB
+- Storage: 4 TB NVME
+- Network: 1 Gbps
+
 ## Validator consensus and voting power 
 
 The total voting power on Sui is always 10,000, regardless of the amount staked. Therefore, the quorum threshold is 6,667. There is no limit to the amount of SUI users can stake with a validator. Each validator has consensus voting power proportional to SUI in its staking pool, with one exception: the voting power of an individual validator is capped at 1,000 (10% of the total). If a validator accumulates more than 10% of total stake, the validator's voting power remains fixed at 10%, and the remaining voting power is spread across the rest of the validator set.
@@ -80,6 +89,8 @@ For example, assume that there are seven validators with equal stake, and the pr
 In practice, the process for submitting a gas price quote for the Gas Price Survey is a straightforward one. Each validator owns an object that contains their quote for the reference gas price. To change their response, they must update the value in that object.
 
 For example, to set the price quote for the next epoch to 42, run:
+
+{@include: ../../snippets/info-gas-budget.mdx}
 
 ```shell
 sui client call --package <PACKAGE-ID> --module sui_system --function request_set_gas_price --args 0x5 \"42\" --gas-budget <GAS-AMOUNT>

@@ -1,0 +1,10 @@
+[package]
+name = "random_nft"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+random_nft = "0x0"

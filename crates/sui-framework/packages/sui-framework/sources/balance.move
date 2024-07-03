@@ -5,31 +5,28 @@
 /// module to allow balance operations and can be used to implement
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance {
-    use sui::tx_context::{Self, TxContext};
 
-    friend sui::sui;
+    /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
+    public use fun sui::coin::from_balance as Balance.into_coin;
 
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
-
     /// For when an overflow is happening on Supply operations.
     const EOverflow: u64 = 1;
-
     /// For when trying to withdraw more than there is.
     const ENotEnough: u64 = 2;
-
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 3;
 
     /// A Supply of T. Used for minting and burning.
     /// Wrapped into a `TreasuryCap` in the `Coin` module.
-    struct Supply<phantom T> has store {
+    public struct Supply<phantom T> has store {
         value: u64
     }
 
     /// Storable balance - an inner struct of a Coin type.
     /// Can be used to store coins which don't need the key ability.
-    struct Balance<phantom T> has store {
+    public struct Balance<phantom T> has store {
         value: u64
     }
 
@@ -68,21 +65,11 @@ module sui::balance {
         Balance { value: 0 }
     }
 
-    spec zero {
-        aborts_if false;
-        ensures result.value == 0;
-    }
-
     /// Join two balances together.
     public fun join<T>(self: &mut Balance<T>, balance: Balance<T>): u64 {
         let Balance { value } = balance;
         self.value = self.value + value;
         self.value
-    }
-
-    spec join {
-        ensures self.value == old(self.value) + balance.value;
-        ensures result == self.value;
     }
 
     /// Split a `Balance` and take a sub balance from it.
@@ -92,20 +79,10 @@ module sui::balance {
         Balance { value }
     }
 
-    spec split {
-        aborts_if self.value < value with ENotEnough;
-        ensures self.value == old(self.value) - value;
-        ensures result.value == value;
-    }
-
     /// Withdraw all balance. After this the remaining balance must be 0.
     public fun withdraw_all<T>(self: &mut Balance<T>): Balance<T> {
         let value = self.value;
         split(self, value)
-    }
-
-    spec withdraw_all {
-        ensures self.value == 0;
     }
 
     /// Destroy a zero `Balance`.
@@ -114,16 +91,12 @@ module sui::balance {
         let Balance { value: _ } = balance;
     }
 
-    spec destroy_zero {
-        aborts_if balance.value != 0 with ENonZero;
-    }
-
     #[allow(unused_function)]
     /// CAUTION: this function creates a `Balance` without increasing the supply.
     /// It should only be called by the epoch change system txn to create staking rewards,
     /// and nowhere else.
     fun create_staking_rewards<T>(value: u64, ctx: &TxContext): Balance<T> {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
         Balance { value }
     }
 
@@ -132,12 +105,12 @@ module sui::balance {
     /// It should only be called by the epoch change system txn to destroy storage rebates,
     /// and nowhere else.
     fun destroy_storage_rebates<T>(self: Balance<T>, ctx: &TxContext) {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
         let Balance { value: _ } = self;
     }
 
     /// Destroy a `Supply` preventing any further minting and burning.
-    public(friend) fun destroy_supply<T>(self: Supply<T>): u64 {
+    public(package) fun destroy_supply<T>(self: Supply<T>): u64 {
         let Supply { value } = self;
         value
     }
@@ -154,6 +127,12 @@ module sui::balance {
         let Balance { value } = self;
         value
     }
+
+    #[test_only]
+    /// Create a `Supply` of any coin for testing purposes.
+    public fun create_supply_for_testing<T>(): Supply<T> {
+        Supply { value: 0 }
+    }
 }
 
 #[test_only]
@@ -164,22 +143,22 @@ module sui::balance_tests {
 
     #[test]
     fun test_balance() {
-        let balance = balance::zero<SUI>();
+        let mut balance = balance::zero<SUI>();
         let another = balance::create_for_testing(1000);
 
-        balance::join(&mut balance, another);
+        balance.join(another);
 
-        assert!(balance::value(&balance) == 1000, 0);
+        assert!(balance.value() == 1000);
 
-        let balance1 = balance::split(&mut balance, 333);
-        let balance2 = balance::split(&mut balance, 333);
-        let balance3 = balance::split(&mut balance, 334);
+        let balance1 = balance.split(333);
+        let balance2 = balance.split(333);
+        let balance3 = balance.split(334);
 
-        balance::destroy_zero(balance);
+        balance.destroy_zero();
 
-        assert!(balance::value(&balance1) == 333, 1);
-        assert!(balance::value(&balance2) == 333, 2);
-        assert!(balance::value(&balance3) == 334, 3);
+        assert!(balance1.value() == 333);
+        assert!(balance2.value() == 333);
+        assert!(balance3.value() == 334);
 
         test_utils::destroy(balance1);
         test_utils::destroy(balance2);

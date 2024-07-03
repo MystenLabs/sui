@@ -35,15 +35,16 @@ import {
 	isExceedingSlippageTolerance,
 	useSwapData,
 } from '_pages/swap/utils';
+import { ampli } from '_shared/analytics/ampli';
 import { DeepBookContextProvider, useDeepBookContext } from '_shared/deepBook/context';
 import { useTransactionSummary, useZodForm } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowDown12, ArrowRight16 } from '@mysten/icons';
-import { type DryRunTransactionBlockResponse } from '@mysten/sui.js/client';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { type DryRunTransactionBlockResponse } from '@mysten/sui/client';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
 import { useWatch, type SubmitHandler } from 'react-hook-form';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -242,8 +243,8 @@ export function SwapPageContent() {
 		control,
 	});
 
-	const baseBalance = new BigNumber(amount).shiftedBy(USDC_CONVERSION_RATE).toString();
-	const quoteBalance = new BigNumber(amount).shiftedBy(SUI_CONVERSION_RATE).toString();
+	const baseBalance = amount && new BigNumber(amount).shiftedBy(USDC_CONVERSION_RATE).toString();
+	const quoteBalance = amount && new BigNumber(amount).shiftedBy(SUI_CONVERSION_RATE).toString();
 
 	const isPayAll = amount === (isAsk ? formattedBaseTokenBalance : formattedQuoteTokenBalance);
 
@@ -255,9 +256,12 @@ export function SwapPageContent() {
 	}, [isAsk, baseCoinSymbol, baseCoinType, coinsMap, quoteCoinSymbol, quoteCoinType]);
 
 	const {
+		error: estimateError,
 		data: dataFromEstimate,
-		isPending: dataFromEstimateLoading,
-		isError: dataFromEstimateError,
+		isPending: dataFromEstimatePending,
+		isFetching: dataFromEstimateFetching,
+		isError: isDataFromEstimateError,
+		refetch: refetchEstimate,
 	} = useGetEstimate({
 		signer,
 		accountCapId,
@@ -270,6 +274,8 @@ export function SwapPageContent() {
 		totalQuoteBalance: formattedQuoteTokenBalance,
 		baseConversionRate: USDC_CONVERSION_RATE,
 		quoteConversionRate: SUI_CONVERSION_RATE,
+		enabled: isValid,
+		amount,
 	});
 
 	const recognizedPackagesList = useRecognizedPackages();
@@ -339,6 +345,13 @@ export function SwapPageContent() {
 		onSuccess: (response) => {
 			queryClient.invalidateQueries({ queryKey: ['get-coins'] });
 			queryClient.invalidateQueries({ queryKey: ['coin-balance'] });
+
+			ampli.swappedCoin({
+				fromCoinType: isAsk ? baseCoinType : quoteCoinType,
+				toCoinType: isAsk ? quoteCoinType : baseCoinType,
+				totalBalance: Number(amount),
+				estimatedReturnBalance: Number(formattedBalance),
+			});
 
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
 				response.digest,
@@ -437,6 +450,9 @@ export function SwapPageContent() {
 									balanceChanges={balanceChanges}
 									baseCoinType={baseCoinType}
 									quoteCoinType={quoteCoinType}
+									refetch={refetchEstimate}
+									loading={isValid && dataFromEstimateFetching}
+									error={isValid && estimateError ? estimateError : null}
 								/>
 
 								{isValid && (
@@ -454,9 +470,8 @@ export function SwapPageContent() {
 									<GasFeeSection
 										totalGas={totalGas || ''}
 										activeCoinType={activeCoinType}
-										amount={amount}
 										isValid={isValid}
-										averages={averages}
+										balanceChanges={balanceChanges}
 									/>
 								</div>
 							</Form>
@@ -469,7 +484,11 @@ export function SwapPageContent() {
 								variant="primary"
 								loading={isSubmitting || isSwapLoading}
 								disabled={
-									!isValid || isSubmitting || dataFromEstimateLoading || dataFromEstimateError
+									!isValid ||
+									isSubmitting ||
+									dataFromEstimatePending ||
+									dataFromEstimateFetching ||
+									isDataFromEstimateError
 								}
 								size="tall"
 								text={atcText}

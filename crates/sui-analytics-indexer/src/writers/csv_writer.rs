@@ -89,7 +89,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for CSVWriter {
         Ok(())
     }
 
-    fn flush(&mut self, end_checkpoint_seq_num: u64) -> Result<()> {
+    fn flush(&mut self, end_checkpoint_seq_num: u64) -> Result<bool> {
         self.writer.flush()?;
         let old_file_path = self.file_path(self.epoch, self.checkpoint_range.clone())?;
         let new_file_path = self.file_path(
@@ -97,7 +97,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for CSVWriter {
             self.checkpoint_range.start..end_checkpoint_seq_num,
         )?;
         fs::rename(old_file_path, new_file_path)?;
-        Ok(())
+        Ok(true)
     }
 
     fn reset(&mut self, epoch_num: EpochId, start_checkpoint_seq_num: u64) -> Result<()> {
@@ -111,5 +111,11 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for CSVWriter {
             self.checkpoint_range.clone(),
         )?;
         Ok(())
+    }
+
+    fn file_size(&self) -> Result<Option<u64>> {
+        let file_path = self.file_path(self.epoch, self.checkpoint_range.clone())?;
+        let len = fs::metadata(file_path)?.len();
+        Ok(Some(len))
     }
 }

@@ -8,9 +8,8 @@ use itertools::Itertools;
 use move_binary_format::file_format::CodeOffset;
 use move_core_types::u256;
 use move_model::{
-    ast::{Exp, ExpData, MemoryLabel, TempIndex, TraceKind},
-    exp_rewriter::{ExpRewriter, ExpRewriterFunctions, RewriteTarget},
-    model::{FunId, GlobalEnv, ModuleId, NodeId, QualifiedInstId, SpecVarId, StructId},
+    ast::TempIndex,
+    model::{DatatypeId, FunId, GlobalEnv, ModuleId, QualifiedInstId, RefType, VariantId},
     ty::{Type, TypeDisplayContext},
 };
 use num::BigUint;
@@ -121,22 +120,22 @@ pub enum Operation {
     OpaqueCallEnd(ModuleId, FunId, Vec<Type>),
 
     // Pack/Unpack
-    Pack(ModuleId, StructId, Vec<Type>),
-    Unpack(ModuleId, StructId, Vec<Type>),
+    Pack(ModuleId, DatatypeId, Vec<Type>),
+    Unpack(ModuleId, DatatypeId, Vec<Type>),
 
     // Resources
-    MoveTo(ModuleId, StructId, Vec<Type>),
-    MoveFrom(ModuleId, StructId, Vec<Type>),
-    Exists(ModuleId, StructId, Vec<Type>),
+    MoveTo(ModuleId, DatatypeId, Vec<Type>),
+    MoveFrom(ModuleId, DatatypeId, Vec<Type>),
+    Exists(ModuleId, DatatypeId, Vec<Type>),
 
     // Borrow
     BorrowLoc,
-    BorrowField(ModuleId, StructId, Vec<Type>, usize),
-    BorrowGlobal(ModuleId, StructId, Vec<Type>),
+    BorrowField(ModuleId, DatatypeId, Vec<Type>, usize),
+    BorrowGlobal(ModuleId, DatatypeId, Vec<Type>),
 
     // Get
-    GetField(ModuleId, StructId, Vec<Type>, usize),
-    GetGlobal(ModuleId, StructId, Vec<Type>),
+    GetField(ModuleId, DatatypeId, Vec<Type>, usize),
+    GetGlobal(ModuleId, DatatypeId, Vec<Type>),
 
     // Builtins
     Uninit,
@@ -184,16 +183,14 @@ pub enum Operation {
     Neq,
     CastU256,
 
+    // Variants
+    PackVariant(ModuleId, DatatypeId, VariantId, Vec<Type>),
+    UnpackVariant(ModuleId, DatatypeId, VariantId, Vec<Type>, RefType),
+
     // Debugging
     TraceLocal(TempIndex),
     TraceReturn(usize),
     TraceAbort,
-    TraceExp(TraceKind, NodeId),
-    TraceGlobalMem(QualifiedInstId<StructId>),
-
-    // Event
-    EmitEvent,
-    EventStoreDiverge,
 }
 
 impl Operation {
@@ -254,10 +251,8 @@ impl Operation {
             Operation::TraceLocal(..) => false,
             Operation::TraceAbort => false,
             Operation::TraceReturn(..) => false,
-            Operation::TraceExp(..) => false,
-            Operation::EmitEvent => false,
-            Operation::EventStoreDiverge => false,
-            Operation::TraceGlobalMem(..) => false,
+            Operation::PackVariant(_, _, _, _) => false,
+            Operation::UnpackVariant(_, _, _, _, _) => false,
         }
     }
 }
@@ -265,7 +260,7 @@ impl Operation {
 /// A borrow node -- used in memory operations.
 #[derive(Debug, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BorrowNode {
-    GlobalRoot(QualifiedInstId<StructId>),
+    GlobalRoot(QualifiedInstId<DatatypeId>),
     LocalRoot(TempIndex),
     Reference(TempIndex),
     // Used in summaries to represent a returned mutation at return index. This does not
@@ -307,7 +302,7 @@ pub enum BorrowEdge {
     /// Direct borrow.
     Direct,
     /// Field borrow with static offset.
-    Field(QualifiedInstId<StructId>, usize),
+    Field(QualifiedInstId<DatatypeId>, usize),
     /// Vector borrow with dynamic index.
     Index(IndexEdgeKind),
     /// Composed sequence of edges.
@@ -334,13 +329,6 @@ impl BorrowEdge {
         }
     }
 }
-/// A specification property kind.
-#[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
-pub enum PropKind {
-    Assert,
-    Assume,
-    Modifies,
-}
 
 /// Information about the action to take on abort. The label represents the
 /// destination to jump to, and the temporary where to store the abort code before
@@ -362,16 +350,14 @@ pub enum Bytecode {
     ),
     Ret(AttrId, Vec<TempIndex>),
 
+    VariantSwitch(AttrId, TempIndex, Vec<Label>),
+
     Load(AttrId, TempIndex, Constant),
     Branch(AttrId, Label, Label, TempIndex),
     Jump(AttrId, Label),
     Label(AttrId, Label),
     Abort(AttrId, TempIndex),
     Nop(AttrId),
-
-    SaveMem(AttrId, MemoryLabel, QualifiedInstId<StructId>),
-    SaveSpecVar(AttrId, MemoryLabel, QualifiedInstId<SpecVarId>),
-    Prop(AttrId, PropKind, Exp),
 }
 
 impl Bytecode {
@@ -381,15 +367,13 @@ impl Bytecode {
             Assign(id, ..)
             | Call(id, ..)
             | Ret(id, ..)
+            | VariantSwitch(id, ..)
             | Load(id, ..)
             | Branch(id, ..)
             | Jump(id, ..)
             | Label(id, ..)
             | Abort(id, ..)
-            | Nop(id)
-            | SaveMem(id, ..)
-            | SaveSpecVar(id, ..)
-            | Prop(id, ..) => *id,
+            | Nop(id) => *id,
         }
     }
 
@@ -410,6 +394,7 @@ impl Bytecode {
             Bytecode::Ret(..)
                 | Bytecode::Jump(..)
                 | Bytecode::Abort(..)
+                | Bytecode::VariantSwitch(..)
                 | Bytecode::Call(_, _, Operation::Stop, _, _)
         )
     }
@@ -432,6 +417,7 @@ impl Bytecode {
             Bytecode::Jump(_, label) | Bytecode::Call(_, _, _, _, Some(AbortAction(label, _))) => {
                 vec![*label]
             }
+            Bytecode::VariantSwitch(_, _, dests) => dests.clone(),
             _ => vec![],
         }
     }
@@ -469,9 +455,7 @@ impl Bytecode {
             }
         }
         // always give successors in ascending order
-        if v.len() > 1 && v[0] > v[1] {
-            v.swap(0, 1);
-        }
+        v.sort();
         v
     }
 
@@ -506,7 +490,7 @@ impl Bytecode {
         })
     }
 
-    fn remap_vars_internal<F>(self, func_target: &FunctionTarget<'_>, f: &mut F) -> Self
+    fn remap_vars_internal<F>(self, _func_target: &FunctionTarget<'_>, f: &mut F) -> Self
     where
         F: FnMut(bool, TempIndex) -> TempIndex,
     {
@@ -553,29 +537,11 @@ impl Bytecode {
                 Branch(attr, if_label, else_label, f(true, cond))
             }
             Abort(attr, cond) => Abort(attr, f(true, cond)),
-            Prop(attr, kind, exp) => {
-                let new_exp = Bytecode::remap_exp(func_target, &mut |idx| f(true, idx), exp);
-                Prop(attr, kind, new_exp)
-            }
             _ => self,
         }
     }
 
-    fn remap_exp<F>(func_target: &FunctionTarget<'_>, f: &mut F, exp: Exp) -> Exp
-    where
-        F: FnMut(TempIndex) -> TempIndex,
-    {
-        let mut replacer = |node_id: NodeId, target: RewriteTarget| {
-            if let RewriteTarget::Temporary(idx) = target {
-                Some(ExpData::Temporary(node_id, f(idx)).into_exp())
-            } else {
-                None
-            }
-        };
-        ExpRewriter::new(func_target.global_env(), &mut replacer).rewrite_exp(exp)
-    }
-
-    pub fn instantiate(&self, env: &GlobalEnv, params: &[Type]) -> Self {
+    pub fn instantiate(&self, _env: &GlobalEnv, params: &[Type]) -> Self {
         use Operation::*;
         match self {
             Self::Call(attr_id, dsts, op, srcs, on_abort) => {
@@ -635,19 +601,6 @@ impl Bytecode {
                     on_abort.clone(),
                 )
             }
-            Self::SaveMem(attr_id, label, qid) => {
-                Self::SaveMem(*attr_id, *label, qid.instantiate_ref(params))
-            }
-            Self::SaveSpecVar(attr_id, label, qid) => {
-                Self::SaveSpecVar(*attr_id, *label, qid.instantiate_ref(params))
-            }
-            Self::Prop(attr_id, kind, exp) => Self::Prop(
-                *attr_id,
-                *kind,
-                ExpData::rewrite_node_id(exp.clone(), &mut |id| {
-                    ExpData::instantiate_node(env, id, params)
-                }),
-            ),
             _ => self.clone(),
         }
     }
@@ -822,29 +775,12 @@ impl<'env> fmt::Display for BytecodeDisplay<'env> {
             Nop(_) => {
                 write!(f, "nop")?;
             }
-            SaveMem(_, label, qid) => {
-                let env = self.func_target.global_env();
-                write!(f, "@{} := save_mem({})", label.as_usize(), env.display(qid))?;
-            }
-            SaveSpecVar(_, label, qid) => {
-                let env = self.func_target.global_env();
-                let module_env = env.get_module(qid.module_id);
-                let spec_var = module_env.get_spec_var(qid.id);
-                write!(
-                    f,
-                    "@{} := save_spec_var({}::{})",
-                    label.as_usize(),
-                    module_env.get_name().display(env.symbol_pool()),
-                    spec_var.name.display(env.symbol_pool())
-                )?;
-            }
-            Prop(_, kind, exp) => {
-                let exp_display = exp.display(self.func_target.func_env.module_env.env);
-                match kind {
-                    PropKind::Assume => write!(f, "assume {}", exp_display)?,
-                    PropKind::Assert => write!(f, "assert {}", exp_display)?,
-                    PropKind::Modifies => write!(f, "modifies {}", exp_display)?,
+            VariantSwitch(_, src, labels) => {
+                write!(f, "switch {} {{", self.lstr(*src))?;
+                for (i, l) in labels.iter().enumerate() {
+                    write!(f, " {} => {}", i, self.label_str(*l))?;
                 }
+                write!(f, "}}")?;
             }
         }
         Ok(())
@@ -1093,18 +1029,43 @@ impl<'env> fmt::Display for OperationDisplay<'env> {
             }
             TraceAbort => write!(f, "trace_abort")?,
             TraceReturn(r) => write!(f, "trace_return[{}]", r)?,
-            TraceExp(kind, node_id) => {
-                let loc = self.func_target.global_env().get_node_loc(*node_id);
+            PackVariant(mid, did, vid, tys) => {
+                let enum_env = self
+                    .func_target
+                    .global_env()
+                    .get_module(*mid)
+                    .into_enum(*did);
                 write!(
                     f,
-                    "trace_exp[{}, {}]",
-                    kind,
-                    loc.display(self.func_target.global_env())
-                )?
+                    "pack_variant<{}>::{}",
+                    self.struct_str(*mid, *did, tys),
+                    enum_env
+                        .get_variant(*vid)
+                        .get_name()
+                        .display(enum_env.symbol_pool())
+                )?;
             }
-            EmitEvent => write!(f, "emit_event")?,
-            EventStoreDiverge => write!(f, "event_store_diverge")?,
-            TraceGlobalMem(_) => write!(f, "trace_global_mem")?,
+            UnpackVariant(mid, did, vid, tys, reftype) => {
+                let enum_env = self
+                    .func_target
+                    .global_env()
+                    .get_module(*mid)
+                    .into_enum(*did);
+                write!(
+                    f,
+                    "{}unpack_variant<{}>::{}",
+                    match reftype {
+                        RefType::ByValue => "",
+                        RefType::ByImmRef => "&",
+                        RefType::ByMutRef => "&mut ",
+                    },
+                    self.struct_str(*mid, *did, tys),
+                    enum_env
+                        .get_variant(*vid)
+                        .get_name()
+                        .display(enum_env.symbol_pool())
+                )?;
+            }
         }
         Ok(())
     }
@@ -1129,8 +1090,8 @@ impl<'env> OperationDisplay<'env> {
         Ok(())
     }
 
-    fn struct_str(&self, mid: ModuleId, sid: StructId, targs: &[Type]) -> String {
-        let ty = Type::Struct(mid, sid, targs.to_vec());
+    fn struct_str(&self, mid: ModuleId, sid: DatatypeId, targs: &[Type]) -> String {
+        let ty = Type::Datatype(mid, sid, targs.to_vec());
         let tctx = TypeDisplayContext::WithEnv {
             env: self.func_target.global_env(),
             type_param_names: None,
@@ -1189,7 +1150,7 @@ impl<'env> fmt::Display for BorrowNodeDisplay<'env> {
         use BorrowNode::*;
         match self.node {
             GlobalRoot(s) => {
-                let ty = Type::Struct(s.module_id, s.id, s.inst.to_owned());
+                let ty = Type::Datatype(s.module_id, s.id, s.inst.to_owned());
                 let tctx = TypeDisplayContext::WithEnv {
                     env: self.func_target.global_env(),
                     type_param_names: None,

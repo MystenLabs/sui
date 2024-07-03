@@ -4,7 +4,8 @@
 import { execSync } from 'child_process';
 import { existsSync, promises as fs } from 'fs';
 import * as path from 'path';
-import { build, BuildOptions } from 'esbuild';
+import type { BuildOptions } from 'esbuild';
+import { build } from 'esbuild';
 
 interface PackageJSON {
 	name?: string;
@@ -18,7 +19,7 @@ interface PackageJSON {
 	sideEffects?: boolean;
 }
 
-const ignorePatterns = [/\.test.ts$/];
+const ignorePatterns = [/\.test.ts$/, /\.graphql$/];
 
 export async function buildPackage(buildOptions?: BuildOptions) {
 	const allFiles = await findAllFiles(path.join(process.cwd(), 'src'));
@@ -126,7 +127,7 @@ async function buildImportDirectories({ exports, sideEffects }: PackageJSON) {
 	const ignoredWorkspaces = [];
 
 	for (const [exportName, exportMap] of Object.entries(exports)) {
-		if (typeof exportMap !== 'object' || !exportName.match(/^\.\/[\w\-_/]+$/)) {
+		if (typeof exportMap !== 'object' || !exportName.match(/^\.\/[\w\-_/]+/)) {
 			continue;
 		}
 

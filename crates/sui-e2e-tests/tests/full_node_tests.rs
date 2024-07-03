@@ -2,21 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future;
-use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
+use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::ident_str;
-use move_core_types::parser::parse_struct_tag;
-use move_core_types::value::MoveStructLayout;
 use rand::rngs::OsRng;
-use serde_json::json;
 use std::sync::Arc;
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
-use sui_core::authority::EffectsNotifyRead;
-use sui_json_rpc_types::{
-    type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-};
+use sui::client_commands::{OptsWithGas, SuiClientCommandResult, SuiClientCommands};
+use sui_config::node::RunWithRange;
 use sui_json_rpc_types::{EventFilter, TransactionFilter};
+use sui_json_rpc_types::{
+    EventPage, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+};
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
@@ -32,7 +30,7 @@ use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
-use sui_types::event::{Event, EventID};
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::message_envelope::Message;
 use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
@@ -41,6 +39,7 @@ use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     QuorumDriverResponse,
 };
+use sui_types::storage::ObjectStore;
 use sui_types::transaction::{
     CallArg, GasData, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -50,7 +49,6 @@ use sui_types::utils::{
 };
 use test_cluster::TestClusterBuilder;
 use tokio::sync::Mutex;
-use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
@@ -69,8 +67,8 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     fullnode
         .state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
 
@@ -93,7 +91,13 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 
     let context = &mut test_cluster.wallet;
 
-    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context
+        .config
+        .keystore
+        .addresses()
+        .first()
+        .cloned()
+        .unwrap();
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context).await;
 
     let response = increment_counter(
@@ -109,8 +113,8 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     handle
         .sui_node
         .state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
 
@@ -502,8 +506,8 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 
     fullnode
         .state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
 
@@ -520,7 +524,16 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
+async fn test_full_node_sync_flood() {
+    do_test_full_node_sync_flood().await
+}
+
+#[sim_test(check_determinism)]
+async fn test_full_node_sync_flood_determinism() {
+    do_test_full_node_sync_flood().await
+}
+
+async fn do_test_full_node_sync_flood() {
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     // Start a new fullnode that is not on the write path
@@ -542,7 +555,13 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
             let (sender, object_to_split, gas_obj) = {
                 let context = &mut context.lock().await;
 
-                let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+                let sender = context
+                    .config
+                    .keystore
+                    .addresses()
+                    .first()
+                    .cloned()
+                    .unwrap();
 
                 let mut coins = context.gas_objects(sender).await.unwrap();
                 let object_to_split = coins.swap_remove(0).1.object_ref();
@@ -560,21 +579,23 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                         amounts: Some(vec![1]),
                         count: None,
                         coin_id: object_to_split.0,
-                        gas: Some(gas_object_id),
-                        gas_budget: TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
-                            * context.get_reference_gas_price().await.unwrap(),
-                        serialize_unsigned_transaction: false,
-                        serialize_signed_transaction: false,
+                        opts: OptsWithGas::for_testing(
+                            Some(gas_object_id),
+                            TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
+                                * context.get_reference_gas_price().await.unwrap(),
+                        ),
                     }
                     .execute(context)
                     .await
                     .unwrap()
                 };
 
-                owned_tx_digest = if let SuiClientCommandResult::SplitCoin(resp) = res {
+                owned_tx_digest = if let SuiClientCommandResult::TransactionBlock(resp) = res {
                     Some(resp.digest)
                 } else {
-                    panic!("transfer command did not return WalletCommandResult::Transfer");
+                    panic!(
+                        "SplitCoin command did not return SuiClientCommandResult::TransactionBlock"
+                    );
                 };
 
                 let context = &context.lock().await;
@@ -598,7 +619,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     }
 
     // make sure the node syncs up to the last digest sent by each task.
-    let digests = future::join_all(futures)
+    let digests: Vec<_> = future::join_all(futures)
         .await
         .iter()
         .map(|r| r.clone().unwrap())
@@ -606,113 +627,10 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .collect();
     fullnode
         .state()
-        .db()
-        .notify_read_executed_effects(digests)
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&digests)
         .await
         .unwrap();
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new()
-        .enable_fullnode_events()
-        .build()
-        .await;
-
-    // Start a new fullnode that is not on the write path
-    let fullnode = test_cluster.spawn_new_fullnode().await;
-
-    let ws_client = fullnode.ws_client().await;
-    let node = fullnode.sui_node;
-
-    let context = &mut test_cluster.wallet;
-    let package_id = publish_nfts_package(context).await.0;
-
-    let struct_tag_str = format!("{package_id}::devnet_nft::MintNFTEvent");
-    let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
-
-    let mut sub: Subscription<SuiEvent> = ws_client
-        .subscribe(
-            "suix_subscribeEvent",
-            rpc_params![EventFilter::MoveEventType(struct_tag.clone())],
-            "suix_unsubscribeEvent",
-        )
-        .await
-        .unwrap();
-
-    let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
-    node.state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
-        .await
-        .unwrap();
-
-    // Wait for streaming
-    let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
-        Ok(Some(Ok(SuiEvent {
-            type_,
-            parsed_json,
-            bcs,
-            ..
-        }))) => {
-            assert_eq!(&type_, &struct_tag);
-            assert_eq!(
-                parsed_json,
-                json!({
-                    "creator" : sender,
-                    "name": "example_nft_name",
-                    "object_id" : object_id,
-                })
-            );
-            bcs
-        }
-        other => panic!("Failed to get SuiEvent, but {:?}", other),
-    };
-    let type_tag = parse_struct_tag(&struct_tag_str).unwrap();
-    let expected_parsed_event = Event::move_event_to_move_struct(
-        &type_tag,
-        &bcs,
-        &**node.state().epoch_store_for_testing().module_cache(),
-    )
-    .unwrap();
-    let (_, expected_parsed_event) =
-        type_and_fields_from_move_struct(&type_tag, expected_parsed_event);
-    let expected_event = SuiEvent {
-        id: EventID {
-            tx_digest: digest,
-            event_seq: 0,
-        },
-        package_id,
-        transaction_module: ident_str!("devnet_nft").into(),
-        sender,
-        type_: type_tag,
-        parsed_json: expected_parsed_event.to_json_value(),
-        bcs,
-        timestamp_ms: None,
-    };
-
-    // get tx events
-    let events = test_cluster
-        .sui_client()
-        .event_api()
-        .get_events(digest)
-        .await?;
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0], expected_event);
-    assert_eq!(events[0].id.tx_digest, digest);
-
-    // No more
-    match timeout(Duration::from_secs(5), sub.next()).await {
-        Err(_) => (),
-        other => panic!(
-            "Expect to time out because no new events are coming in. Got {:?}",
-            other
-        ),
-    }
-
-    Ok(())
 }
 
 // Test fullnode has event read jsonrpc endpoints working
@@ -835,10 +753,13 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
     let res = transaction_orchestrator
-        .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn,
-            request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
-        })
+        .execute_transaction_block(
+            ExecuteTransactionRequest {
+                transaction: txn,
+                request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
+            },
+            None,
+        )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
@@ -848,13 +769,14 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         QuorumDriverResponse {
             effects_cert: certified_txn_effects,
             events: txn_events,
+            ..
         },
     ) = rx.recv().await.unwrap().unwrap();
     let (cte, events, is_executed_locally) = *res;
     assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
-    assert_eq!(events.digest(), txn_events.digest());
+    assert_eq!(events.digest(), txn_events.unwrap_or_default().digest());
     // verify that the node has sequenced and executed the txn
     fullnode.state().get_executed_transaction_and_effects(digest, kv_store.clone()).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
@@ -863,10 +785,13 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
     let res = transaction_orchestrator
-        .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn,
-            request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-        })
+        .execute_transaction_block(
+            ExecuteTransactionRequest {
+                transaction: txn,
+                request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+            },
+            None,
+        )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
@@ -876,17 +801,18 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         QuorumDriverResponse {
             effects_cert: certified_txn_effects,
             events: txn_events,
+            ..
         },
     ) = rx.recv().await.unwrap().unwrap();
     let (cte, events, is_executed_locally) = *res;
     assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
-    assert_eq!(txn_events.digest(), events.digest());
+    assert_eq!(txn_events.unwrap_or_default().digest(), events.digest());
     assert!(!is_executed_locally);
     fullnode
         .state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
     fullnode.state().get_executed_transaction_and_effects(digest, kv_store).await
@@ -908,7 +834,6 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
         assert!(node
             .subscribe_to_transaction_orchestrator_effects()
             .is_err());
-        assert!(node.get_google_jwk_bytes().is_ok());
     });
 }
 
@@ -919,11 +844,11 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     context
         .config
         .keystore
-        .add_key(SuiKeyPair::Secp256k1(get_key_pair().1))?;
+        .add_key(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
     context
         .config
         .keystore
-        .add_key(SuiKeyPair::Ed25519(get_key_pair().1))?;
+        .add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
 
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
@@ -1185,8 +1110,8 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
         .sui_node;
 
     node.state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
 
@@ -1205,8 +1130,8 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     let (_transferred_object, _, _, digest_after_restore, ..) =
         transfer_coin(&test_cluster.wallet).await?;
     node.state()
-        .db()
-        .notify_read_executed_effects(vec![digest_after_restore])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[digest_after_restore])
         .await
         .unwrap();
     Ok(())
@@ -1221,7 +1146,13 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
 
     let context = &mut test_cluster.wallet;
 
-    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context
+        .config
+        .keystore
+        .addresses()
+        .first()
+        .cloned()
+        .unwrap();
 
     // TODO: this is publishing the wrong package - we should be publishing the one in `sui-core/src/unit_tests/data` instead.
     let package_ref = publish_basics_package(context).await;
@@ -1258,10 +1189,13 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
 
     let digest = *tx.digest();
     let _res = transaction_orchestrator
-        .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: tx,
-            request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
-        })
+        .execute_transaction_block(
+            ExecuteTransactionRequest {
+                transaction: tx,
+                request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
+            },
+            None,
+        )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
     println!("res: {:?}", _res);
@@ -1271,9 +1205,87 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
         QuorumDriverResponse {
             effects_cert: _certified_txn_effects,
             events: _txn_events,
+            ..
         },
     ) = rx.recv().await.unwrap().unwrap();
     Ok(())
+}
+
+#[sim_test]
+async fn test_access_old_object_pruned() {
+    // This test checks that when we ask a validator to handle a transaction that uses
+    // an old object that's already been pruned, it's able to return an non-retriable
+    // error ObjectVersionUnavailableForConsumption, instead of the retriable error
+    // ObjectNotFound.
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let tx_builder = test_cluster.test_transaction_builder().await;
+    let sender = tx_builder.sender();
+    let gas_object = tx_builder.gas_object();
+    let effects = test_cluster
+        .sign_and_execute_transaction(&tx_builder.transfer_sui(None, sender).build())
+        .await
+        .effects
+        .unwrap();
+    let new_gas_version = effects.gas_object().reference.version;
+    test_cluster.trigger_reconfiguration().await;
+    // Construct a new transaction that uses the old gas object reference.
+    let tx = test_cluster.sign_transaction(
+        &test_cluster
+            .test_transaction_builder_with_gas_object(sender, gas_object)
+            .await
+            // Make sure we are doing something different from the first transaction.
+            // Otherwise we would just end up with the same digest.
+            .transfer_sui(Some(1), sender)
+            .build(),
+    );
+    for validator in test_cluster.swarm.active_validators() {
+        validator
+            .get_node_handle()
+            .unwrap()
+            .with_async(|node| async {
+                let state = node.state();
+                state
+                    .database_for_testing()
+                    .prune_objects_and_compact_for_testing(
+                        state.get_checkpoint_store(),
+                        state.rest_index.as_deref(),
+                    )
+                    .await;
+                // Make sure the old version of the object is already pruned.
+                assert!(state
+                    .database_for_testing()
+                    .get_object_by_key(&gas_object.0, gas_object.1)
+                    .unwrap()
+                    .is_none());
+                let epoch_store = state.epoch_store_for_testing();
+                assert_eq!(
+                    state
+                        .handle_transaction(
+                            &epoch_store,
+                            epoch_store.verify_transaction(tx.clone()).unwrap()
+                        )
+                        .await
+                        .unwrap_err(),
+                    SuiError::UserInputError {
+                        error: UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: gas_object,
+                            current_version: new_gas_version,
+                        }
+                    }
+                );
+            })
+            .await;
+    }
+
+    // Check that fullnode would return the same error.
+    let result = test_cluster.wallet.execute_transaction_may_fail(tx).await;
+    assert!(result.unwrap_err().to_string().contains(
+        &UserInputError::ObjectVersionUnavailableForConsumption {
+            provided_obj_ref: gas_object,
+            current_version: new_gas_version,
+        }
+        .to_string()
+    ))
 }
 
 async fn transfer_coin(
@@ -1301,4 +1313,95 @@ async fn transfer_coin(
     );
     let resp = context.execute_transaction_must_succeed(txn).await;
     Ok((object_to_send.0, sender, receiver, resp.digest, gas_object))
+}
+
+#[sim_test]
+async fn test_full_node_run_with_range_checkpoint() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let stop_after_checkpoint_seq = 5;
+    let want_run_with_range = Some(RunWithRange::Checkpoint(stop_after_checkpoint_seq));
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10_000)
+        .with_fullnode_run_with_range(want_run_with_range)
+        .build()
+        .await;
+
+    // wait for node to signal that we reached and processed our desired epoch
+    let got_run_with_range = test_cluster.wait_for_run_with_range_shutdown_signal().await;
+
+    // ensure we got the expected RunWithRange on shutdown channel
+    assert_eq!(got_run_with_range, want_run_with_range);
+
+    // ensure the highest synced checkpoint matches
+    assert!(test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            == Some(stop_after_checkpoint_seq)
+    }));
+
+    // sleep some time to ensure we don't see further ccheckpoints executed
+    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+
+    // verify again execution has not progressed beyond expectations
+    assert!(test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            == Some(stop_after_checkpoint_seq)
+    }));
+
+    // we dont want transaction orchestrator enabled when run_with_range != None
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.transaction_orchestrator())
+        .is_none());
+    Ok(())
+}
+
+#[sim_test]
+async fn test_full_node_run_with_range_epoch() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let stop_after_epoch = 2;
+    let want_run_with_range = Some(RunWithRange::Epoch(stop_after_epoch));
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10_000)
+        .with_fullnode_run_with_range(want_run_with_range)
+        .build()
+        .await;
+
+    // wait for node to signal that we reached and processed our desired epoch
+    let got_run_with_range = test_cluster.wait_for_run_with_range_shutdown_signal().await;
+
+    // ensure we get the shutdown signal
+    assert_eq!(got_run_with_range, want_run_with_range);
+
+    // ensure we end up at epoch + 1
+    // this is because we execute the target epoch, reconfigure, and then send shutdown signal at
+    // epoch + 1
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1));
+
+    // epoch duration is 10s for testing, lets sleep long enough that epoch would normally progress
+    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+
+    // ensure we are still at epoch + 1
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1));
+
+    // we dont want transaction orchestrator enabled when run_with_range != None
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.transaction_orchestrator())
+        .is_none());
+
+    Ok(())
 }

@@ -13,9 +13,9 @@ prometheus = "0.13.3"
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.36"
 once_cell.workspace = true
-reqwest = { version = "0.11.13", default_features= false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "0.11.13", default_features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1.0.144", features = ["derive", "rc"] }
-serde_json = { version = "1.0.1"}
+serde_json = { version = "1.0.1" }
 jsonpath_lib = "0.3.0"
 chrono.workspace = true
 tap.workspace = true
@@ -27,4 +27,11 @@ sui-sdk = { path = "../sui-sdk" }
 sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 telemetry-subscribers.workspace = true
-workspace-hack.workspace = true
+
+[dev-dependencies]
+sui-keys = { path = "../sui-keys" }
+sui-move-build = { path = "../sui-move-build" }
+shared-crypto = { path = "../shared-crypto" }
+bcs = "0.1.5"
+rand = "0.8.5"
+dirs = "4.0.0"

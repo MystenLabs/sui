@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use codespan_reporting::diagnostic::Severity;
-use move_model::model::{GlobalEnv, VerificationScope};
+use move_model::model::GlobalEnv;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
@@ -43,8 +43,6 @@ pub struct ProverOptions {
     /// Whether output for e.g. diagnosis shall be stable/redacted so it can be used in test
     /// output.
     pub stable_test_output: bool,
-    /// Scope of what functions to verify.
-    pub verify_scope: VerificationScope,
     /// [deprecated] Whether to emit global axiom that resources are well-formed.
     pub resource_wellformed_axiom: bool,
     /// Whether to assume wellformedness when elements are read from memory, instead of on
@@ -101,7 +99,6 @@ impl Default for ProverOptions {
             minimize_execution_trace: true,
             omit_model_debug: false,
             stable_test_output: false,
-            verify_scope: VerificationScope::All,
             resource_wellformed_axiom: false,
             assume_wellformed_on_access: false,
             mutation: false,

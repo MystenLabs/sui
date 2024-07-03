@@ -1,0 +1,536 @@
+---
+title: Prevent Bots
+description: Write and deploy a smart contract in Move that uses reCAPTCHA to verify users are human (and not bots) before they interact with the contract.
+draft: true
+---
+
+This guide shows you how to write and deploy a smart contract in Move that uses reCAPTCHA to verify users are human (and not bots) before they interact with the contract. CAPTCHA is a method of bot mitigation that requires you to pass a challenge test to prove that you are human. CAPTCHA tests are effective in preventing bots from performing tasks, but the tests can become annoying or frustrating for legitimate users if they are too difficult or frequent. reCAPTCHA is a form of CAPTCHA testing.
+
+This guide assumes you have [installed Sui](../getting-started/sui-install.mdx) and understand Sui fundamentals.
+
+## Move smart contract
+
+As with all Sui dApps, a Move package on chain powers the logic of the reCAPTCHA module. The following instruction walks you through creating and publishing the module.
+
+### reCAPTCHA module
+
+Before you get started, you must initialize a Move package. Open a terminal or console in the directory you want to store the example and run the following command to create an empty package with the name `recaptcha`:
+
+```bash
+sui move new recaptcha
+```
+
+With that done, it's time to jump into some code. Create a new file in the `sources` directory with the name `recaptcha.move` and populate the file with the following code:
+
+```rust title='recaptcha.move'
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+module recaptcha::recaptcha {
+    // Import the vector module for manipulating vectors.
+    use std::vector;
+
+    // Import the clock module for getting the current time.
+    use sui::clock::Clock;
+    // Import the dynamic_field module for adding custom fields to objects.
+    use sui::dynamic_field as df;
+    // Import the ed25519 module for verifying signatures.
+    use sui::ed25519::ed25519_verify;
+    // Import the event module for emitting events.
+    use sui::event::emit;
+    // Import the math module for performing mathematical operations.
+    use sui::math;
+    // Import the object module for creating and manipulating objects.
+    use sui::object::{Self, UID};
+    // Import the transfer module for sharing and transferring objects.
+    use sui::transfer;
+    // Import the tx_context module for accessing transaction information.
+    use sui::tx_context::{sender, TxContext};
+
+    /// Error code for transactions that violate the cooldown period.
+    const EVerificationExpired: u64 = 0;
+    /// Error code for invalid signatures.
+    const EInvalidSignature: u64 = 1;
+    /// Error code for senders that are not yet verified.
+    const ENotYetVerified: u64 = 2;
+
+    // Define a constant for the duration of the time window in milliseconds
+    const TIME_WINDOW: u64 = 60_000;
+}
+```
+
+There are few details to take note of in this code:
+
+1. The fourth line declares the module name as `recaptcha` within the package `recaptcha`.
+1. The next eight lines use the use keyword to import types and functions from other modules, such as `sui::clock::Clock`, `sui::dynamic_field as df`, `sui::ed25519::ed25519_verify`, `sui::event::emit,sui::math`, `sui::object::{Self, UID}`, `sui::transfer`, and `sui::tx_context::{sender, TxContext}`. These modules are needed for the implementation of the reCAPTCHA verification and the interaction logic.
+1. The following three lines declare the error codes, namely: `EVerificationExpired`, `EInvalidSignature`, and `ENotYetVerified`, that are used to check the validity of the reCAPTCHA test result and the eligibility of the user. The error codes are also used in the unit tests to verify the correctness of the program.
+1. The last line declares the constant `TIME_WINDOW`, which specifies the duration of the time window in milliseconds. The time window is the period of time that the user is eligible to interact with the smart contract after passing the reCAPTCHA test.
+
+Next, add some more code to this module:
+
+```rust title='recaptcha.move'
+struct Interaction has copy, drop {
+    sender: address, // The address of the sender
+    timestamp_ms: u64, // The timestamp in milliseconds
+}
+
+// Define a struct for the registry object that has a key field
+struct Registry has key {
+    id: UID, // The unique identifier of the registry object
+    window: u64, // The length of the time window in milliseconds
+}
+
+// Define a function for initializing the registry
+fun init(ctx: &mut TxContext) {
+    // Share the registry object with other participants
+    transfer::share_object(
+        Registry {
+            id: object::new(ctx), // Create a new object with a unique id
+            window: TIME_WINDOW, // Set the time window to the constant value
+        }
+    );
+}
+```
+
+- The `Interaction` struct is used to define the data that is emitted as an event when a user successfully interacts with the smart contract. The `Interaction` event has two fields: the sender's address and the timestamp in milliseconds. The sender's address is the account that initiated the interaction, and the timestamp is the current time when the event is triggered.
+- The `Registry` struct stores the mapping of the user’s address to the expiration time of the eligibility to interact with the smart contract. It also has a `window` field that specifies the length of the time window in milliseconds. The time window is the period of time that the user is eligible to interact with the smart contract after passing the reCAPTCHA test.
+- The [`init` function](concepts/sui-move-concepts/init.mdx) creates a [shared object](concepts/object-ownership/shared.mdx) for the `Registry`. The function is called when the smart contract is deployed to the blockchain. The function creates a new registry object with a unique id and sets the time window to the constant value.
+
+So far, you've set up the data structures within the module.
+Now, create a function that verifies the message
+
+```rust title='recaptcha.move'
+/// @param registry: The registry object.
+/// @param signature: 32-byte signature that is a point on the Ed25519 elliptic curve.
+/// @param public_key: 32-byte signature that is a point on the Ed25519 elliptic curve.
+/// @param msg: The message that we test the signature against.
+public fun verify(
+    registry: &mut Registry,
+    signature: vector<u8>,
+    public_key: vector<u8>,
+    msg: vector<u8>,
+    ctx: &mut TxContext
+) {
+    let verified = ed25519_verify(&signature, &public_key, &msg);
+    assert!(verified, EInvalidSignature);
+
+    if (!df::exists_with_type<address, u64>(&registry.id, sender(ctx))) {
+        df::add<address, u64>(
+            &mut registry.id,
+            sender(ctx),
+            msg_to_ts(&msg)
+        );
+    } else {
+        let timestamp_ms = df::borrow_mut<address, u64>(&mut registry.id, sender(ctx));
+        *timestamp_ms = msg_to_ts(&msg);
+    }
+}
+
+/// Function to get the timestamp_ms from the message, which is a vector of bytes, and transform it to a u64.
+public fun msg_to_ts(
+    message: &vector<u8>
+): u64 {
+    let vec_length = vector::length(message);
+
+    let (value, i) = (0u64, 0u8);
+    while (i < 13) {
+        let element = (*vector::borrow(message, vec_length - (i as u64) - 1) - 48 as u64); // '0' = 48
+        value = value + element * math::pow(10, i); // 10^i
+        i = i + 1;
+    };
+    value
+}
+```
+
+The `verify` function is a public function that allows anyone to register themselves as non-bot using the function call. The function takes five parameters:
+
+- `registry`: The registry object that stores the mapping of the user's address to the expiration time of the eligibility.
+- `signature`: The 32-byte signature that is a point on the Ed25519 elliptic curve. The signature is generated by the oracle using its private key and the message that contains the user's address and the current timestamp.
+- `public_key`: The 32-byte public key that is a point on the Ed25519 elliptic curve. The public key is the oracle's public key that is used to verify the signature.
+- `msg`: The message that contains the user's address and the current timestamp. The message is encoded as a vector of bytes.
+- `ctx`: The transaction context that provides information about the sender, the gas limit, and the gas price.
+
+The function performs the following steps:
+
+- It calls the `ed25519_verify` function from the `sui::ed25519` module to check if the signature is valid for the given public key and message. The `ed25519_verify` function returns a boolean value that indicates the validity of the signature.
+- It asserts that the signature is valid, otherwise it aborts the execution with the error code `EInvalidSignature`.
+- It checks if the user's address exists as a key in the dynamic field of the registry object. The dynamic field is a way of storing key-value pairs in an object without declaring them in advance and it can be accessed, modified, or deleted using the `sui::dynamic_field` module.
+- If the user's address does not exist as a key in the dynamic field, it adds a new key-value pair to the dynamic field. The key is the user's address and the value is the expiration time of the eligibility. The expiration time is calculated by calling the `msg_to_ts` function that converts the message to a timestamp in milliseconds.
+- If the user's address already exists as a key in the dynamic field, it updates the value of the key to the new expiration time of the eligibility.
+
+Now that you have implemented `verify`, you can move on to the next step, which is to demonstrate how someone can interact with the contract. Write an `interact` function that checks whether the user is verified or not.
+
+```rust title='recaptcha.move'
+// Define a public function for interacting with the registry object
+public fun interact(
+    registry: &mut Registry,  // A mutable reference to the registry object
+    clock: &Clock,  // A reference to the clock object
+    ctx: &mut TxContext  // A mutable reference to the transaction context
+) {
+    // Check if there is an existing interaction history for the sender address with the registry object
+    if (df::exists_with_type<address, u64>(&registry.id, sender(ctx))) {
+        // Borrow a mutable reference to the interaction history object
+        let timestamp_ms = df::borrow_mut<address, u64>(&mut registry.id, sender(ctx));
+        // Get the current timestamp in milliseconds from the clock object
+        let current_timestamp = sui::clock::timestamp_ms(clock);
+
+        if (current_timestamp - *timestamp_ms <= registry.window) {
+            emit(
+                Interaction{
+                    sender: sender(ctx),
+                    timestamp_ms: sui::clock::timestamp_ms(clock)
+                }
+            );
+        } else {
+            abort EVerificationExpired
+        }
+    } else {
+        abort ENotYetVerified
+    }
+}
+```
+
+The `interact` function is a public function that allows the user to interact with the smart contract after passing the reCAPTCHA test. The function is linked to the `verify` function, which verifies the reCAPTCHA test result and registers the user's eligibility to interact with the smart contract.
+The function takes three parameters:
+
+- `registry`: A mutable reference to the registry object that stores the mapping of the user's address to the expiration time of the eligibility.
+- `clock`: A reference to the clock object that provides the current timestamp in milliseconds.
+- `ctx`: A mutable reference to the transaction context that provides information about the sender, the gas limit, and the gas price.
+
+The function performs the following steps:
+
+- It checks if there is an existing interaction history for the sender address with the registry object. The interaction history is stored as a dynamic field in the registry object. The dynamic field is a way of storing key-value pairs in an object without declaring them in advance. The dynamic field can be accessed, modified, or deleted using the `sui::dynamic_field` module.
+- If there is an existing interaction history, it borrows a mutable reference to the interaction history object. The interaction history object contains the expiration time of the eligibility in milliseconds.
+- It gets the current timestamp in milliseconds from the clock object and compares it with the expiration time of the eligibility. If the current timestamp is within the time window of the eligibility, it emits an interaction event. The interaction event is a struct that contains the sender address and the timestamp in milliseconds. The interaction event can be used to implement the logic of the decentralized application, such as voting, bidding, or playing.
+- If the current timestamp is outside the time window of the eligibility, it aborts the execution with the error code `EVerificationExpired`. This means that the user has to pass the reCAPTCHA test again to interact with the smart contract.
+- If there is no existing interaction history, it aborts the execution with the error code `ENotYetVerified`. This means that the user has not passed the reCAPTCHA test yet and cannot interact with the smart contract.
+
+And with that, your `recaptcha.move` code is complete.
+
+## Deployment
+
+{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+
+{@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
+
+The package should successfully deploy. Next, set up a backend server that verifies whether the user has successfully completed the reCAPTCHA challenge and then signs a message that should be passed to the `verify` function.
+
+## Backend
+
+To implement the backend for the reCAPTCHA, you need to create an `express` app that can handle HTTP requests and responses. You also need to install some dependencies, such as `@noble/ed25519`, `axios`, `cors`, `helmet`, `morgan`, and `dotenv`. These packages help you with cryptography, HTTP requests, cross-origin resource sharing, security, logging, and environment variables.
+
+Here are the steps to create the backend:
+
+1. Initialize a new project with `npm init -y`.
+2. Install the dependencies with `npm install --save @noble/ed25519 axios cors helmet morgan dotenv` or `yarn add @noble/ed25519 axios cors helmet morgan dotenv`.
+3. Create a file named `app.ts` and paste the following code.
+
+```typescript title='app.ts'
+import * as ed from '@noble/ed25519';
+import axios from 'axios';
+import cors from 'cors';
+import express from 'express';
+import helmet from 'helmet';
+import morgan from 'morgan';
+
+import api from './api';
+import MessageResponse from './interfaces/MessageResponse';
+import * as middlewares from './middlewares';
+
+require('dotenv').config();
+
+const app = express();
+
+app.use(morgan('dev'));
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+
+app.get<{}, MessageResponse>('/', (req, res) => {
+	res.json({
+		message: 'Express + TypeScript Server',
+	});
+});
+
+interface RecaptchaApiResponse {
+	success: boolean;
+	challenge_ts: string; // timestamp of the challenge load (ISO format yyyy-MM-dd'T'HH:mm:ssZZ)
+	hostname: string; // the hostname of the site where the reCAPTCHA was solved
+	signature?: Uint8Array;
+	pubKey?: Uint8Array;
+	message?: Uint8Array;
+	'error-codes'?: any[]; // optional
+}
+
+app.post('/verify-token', async (req, res) => {
+	const now: number = Date.now();
+	const privKey = process.env.SK!;
+
+	const pubKey = await ed.getPublicKey(privKey);
+	const { response, secret, userAddress } = req.body;
+
+	console.log('userAddress: ' + userAddress);
+	console.log('secret: ' + secret);
+	console.log('response: ' + response);
+	console.log('now: ' + now);
+	console.log('privKey: ' + privKey);
+
+	const message: string = stringToHex(userAddress.replace('0x', '').concat(now.toString()));
+
+	console.log('message: ' + message);
+
+	const signature = await ed.sign(message, privKey);
+	const isValid = await ed.verify(signature, message, pubKey);
+
+	console.log({ message, pubKey, signature, isValid });
+
+	try {
+		let axiosResponse = await axios.post<RecaptchaApiResponse>(
+			`https://www.google.com/recaptcha/api/siteverify?secret=${secret}&response=${response}`,
+		);
+		console.log(axiosResponse.data);
+		return res.status(200).json({
+			success: axiosResponse.data.success,
+			verificationInfo: axiosResponse.data,
+			signature: Array.from(signature),
+			pubKey: Array.from(pubKey),
+			message: Array.from(Uint8Array.from(Buffer.from(message, 'hex'))),
+		});
+	} catch (error) {
+		console.log(error);
+		return res.status(500).json({
+			success: false,
+		});
+	}
+});
+
+function stringToHex(str: string): string {
+	let hex = '';
+	for (let i = 0; i < str.length; i++) {
+		const charCode = str.charCodeAt(i);
+		const hexValue = charCode.toString(16);
+
+		// Pad with zeros to ensure two-digit representation
+		hex += hexValue.padStart(2, '0');
+	}
+	return hex;
+}
+
+app.use('/api/v1', api);
+
+app.use(middlewares.notFound);
+app.use(middlewares.errorHandler);
+
+export default app;
+```
+
+4. Examine the code to see what it does.
+
+- First, you import the modules that you need for your app.
+- Next, you create an express app and use some middlewares to enhance its functionality. You use `morgan` for logging, `helmet` for security, `cors` for cross-origin resource sharing, and `express.json` for parsing JSON data.
+- Then, you define a `GET` route for the root path (`/`) that returns a simple JSON message.
+- After that, you define an interface for the reCAPTCHA API response. This is the data that you receive from Google when you verify the user's response token. It contains some fields such as `success`, `challenge_ts`, `hostname`, and `error-codes`. It also has some optional fields that you will add later, such as `signature`, `pubKey`, and `message`.
+- Next, you define a `POST` route for the `/verify-token` path that handles the verification of the user's response token. This is the main logic of your backend. Here are the steps that you follow in this route:
+  - Get the current time in milliseconds and store it in a variable named `now`.
+  - Get the secret key from the environment variable `SK` and store it in a variable named `privKey`. This is the key that you use to sign your message and verify your identity to the smart contract.
+  - Use the `@noble/ed25519` module to get the public key from the private key and store it in a variable named `pubKey`. This is the key that you share with the smart contract and the user.
+  - Get the response token, the secret key, and the user's address from the request body and store them in variables named `response`, `secret`, and `userAddress`.
+  - Log the values of these variables for debugging purposes.
+  - Create a message that consists of the user's address (without the `0x` prefix) and the current time, and convert it to a hexadecimal string. Store it in a variable named `message`.
+  - Use the `@noble/ed25519` module to sign the message with the private key and store the signature in a variable named `signature`.
+  - Use the `@noble/ed25519` module to verify the signature with the message and the public key and store the result in a variable named `isValid`.
+  - Log the values of these variables for debugging purposes.
+  - Use the axios module to send a POST request to the reCAPTCHA API with the secret key and the response token as parameters. Store the response in a variable named `axiosResponse`.
+  - Check if the response data has a success field and if it is true. If so, return a JSON object with the following fields:
+    - `success`: true
+    - `verificationInfo`: the response data from the reCAPTCHA API
+    - `signature`: the signature converted to an array of numbers
+    - `pubKey`: the public key converted to an array of numbers
+    - `message`: the message converted to an array of numbers
+  - If not, catch the error and return a JSON object with the following field:
+    - `success`: false
+- Next, define a helper function named `stringToHex` that takes a string as an input and returns a hexadecimal string as an output. This function is used to convert the message to a hexadecimal format.
+- Finally, use some custom middlewares to handle not found and error cases, and export the app as a default module.
+
+That's it! You have implemented the backend for the reCAPTCHA. To run the app, you can use `node app.ts` or `ts-node app.ts` if you have TypeScript installed. You can also use a tool like `nodemon` to automatically restart the app when you make changes. To test the app, you can use a tool like Postman or curl to send requests to the app and see the responses.
+
+## Frontend
+
+To implement the frontend for the reCAPTCHA, you need to create a react app that can render a user interface and interact with the backend and the smart contract. You also need to install some dependencies, such as `@mysten/dapp-kit`, `@mysten/sui`, `axios`, and `react-google-recaptcha`. These packages help you with wallet integration, transaction execution, HTTP requests, and reCAPTCHA rendering.
+
+Here are the steps to create the frontend:
+
+1. Initialize a new project with `pnpm create vite recaptcha-app --template react-ts`.
+2. Install the dependencies with `pnpm install --save @mysten/dapp-kit @mysten/sui axios react-google-recaptcha`.
+3. Create a file named `.env` and add the following environment variables:
+   - `VITE_reCAPTCHA_SITE_KEY`: the site key that you get from Google when you register your site for reCAPTCHA
+   - `VITE_reCAPTCHA_SECRET_KEY`: the secret key that you get from Google when you register your site for reCAPTCHA
+   - `VITE_PACKAGE_ID`: the package ID of the smart contract that you want to interact with
+   - `VITE_REGISTRY_ID`: the registry ID of the smart contract that you want to interact with
+4. Create a file named `App.tsx` and paste the code you have provided.
+
+```typescript title='App.tsx'
+import './App.css';
+
+import {
+	ConnectButton,
+	useCurrentAccount,
+	useCurrentWallet,
+	useSignAndExecuteTransaction,
+} from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
+import { SUI_CLOCK_OBJECT_ID } from '@mysten/sui/utils';
+import Axios from 'axios';
+import { useEffect, useState } from 'react';
+import ReCAPTCHA from 'react-google-recaptcha';
+
+interface RecaptchaApiResponse {
+	success: boolean;
+	challenge_ts: string; // timestamp of the challenge load (ISO format yyyy-MM-dd'T'HH:mm:ssZZ)
+	hostname: string; // the hostname of the site where the reCAPTCHA was solved
+	signature?: Uint8Array;
+	pubKey?: Uint8Array;
+	message?: Uint8Array;
+	'error-codes'?: any[]; // optional
+}
+
+function App() {
+	const { currentWallet } = useCurrentWallet();
+	const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+	const currentAccount = useCurrentAccount();
+
+	const SITE_KEY = import.meta.env.VITE_reCAPTCHA_SITE_KEY!;
+	const SECRET_KEY = import.meta.env.VITE_reCAPTCHA_SECRET_KEY!;
+	const packageId = import.meta.env.VITE_PACKAGE_ID!;
+	const registryId = import.meta.env.VITE_REGISTRY_ID!;
+	const moduleId: string = 'recaptcha';
+
+	const [isRecaptchaValid, setRecaptchaValidation] = useState(false);
+
+	const [verificationPassedOneTime, setVerificationPassedOneTime] = useState(false);
+
+	const [message, setMessage] = useState(new Uint8Array());
+	const [pubKey, setPubKey] = useState(new Uint8Array());
+	const [signature, setSignature] = useState(new Uint8Array());
+
+	const onChange = async (token: string | null) => {
+		if (token === null) {
+			setRecaptchaValidation(false);
+		} else {
+			const recaptchaApiResponse: RecaptchaApiResponse = await verifyToken(token);
+
+			setRecaptchaValidation(true);
+
+			if (!verificationPassedOneTime) setVerificationPassedOneTime(true);
+
+			if (recaptchaApiResponse.message !== undefined) setMessage(recaptchaApiResponse.message);
+			if (recaptchaApiResponse.pubKey !== undefined) setPubKey(recaptchaApiResponse.pubKey);
+			if (recaptchaApiResponse.signature !== undefined)
+				setSignature(recaptchaApiResponse.signature);
+		}
+	};
+
+	async function verifyToken(token: string): Promise<RecaptchaApiResponse> {
+		try {
+			const response = await Axios.post(`https://bot-prevention-api.vercel.app/verify-token`, {
+				response: token,
+				secret: SECRET_KEY,
+				userAddress: currentAccount?.address,
+			});
+			return response['data'];
+		} catch (error) {
+			console.log(error);
+		}
+		return {} as RecaptchaApiResponse;
+	}
+
+	useEffect(() => {
+		// You can do something with `currentWallet` here.
+	}, [currentWallet]);
+
+	return (
+		<div className="App">
+			<ConnectButton />
+			<div>
+				<button
+					disabled={!verificationPassedOneTime}
+					onClick={async () => {
+						const transaction = new Transaction();
+
+						transaction.moveCall({
+							target: `${packageId}::${moduleId}::interact`,
+							arguments: [transaction.object(registryId), transaction.object(SUI_CLOCK_OBJECT_ID)],
+						});
+
+						console.log(
+							await signAndExecuteTransaction({
+								transaction: transaction,
+							}),
+						);
+					}}
+				>
+					Interact
+				</button>
+			</div>
+
+			<div>
+				<button
+					disabled={!isRecaptchaValid}
+					onClick={async () => {
+						const transaction = new Transaction();
+
+						transaction.moveCall({
+							target: `${packageId}::${moduleId}::verify`,
+							arguments: [
+								transaction.object(registryId),
+								transaction.pure(signature),
+								transaction.pure(pubKey),
+								transaction.pure(message),
+							],
+						});
+
+						console.log(
+							await signAndExecuteTransaction({
+								transaction,
+							}),
+						);
+					}}
+				>
+					Verify
+				</button>
+			</div>
+
+			<hr />
+			<ReCAPTCHA sitekey={SITE_KEY} onChange={onChange} />
+		</div>
+	);
+}
+
+export default App;
+```
+
+5. Examine the code to see what it does.
+
+- First, import the modules that you need for your app.
+- Next, use hooks from `@mysten/dapp-kit` to get access to the current wallet, the current account, and the `signAndExecuteTransaction` function. These help you connect to the wallet and execute transactions on the blockchain.
+- Then, define some constants for the site key, the secret key, the package ID, the registry ID, and the module ID. These are the values that you use to interact with the reCAPTCHA API and the smart contract.
+- After that, define some state variables to store the status of the reCAPTCHA validation, the verification result, and the message, the public key, and the signature that you get from the backend. Use the `useState` hook from React to manage these state variables.
+- Next, define a function named `onChange` that takes a token as an input and handles the change of the reCAPTCHA component. This function is triggered when the user completes the reCAPTCHA challenge. Here are the steps that you follow in this function:
+  - Check if the token is null. If so, set the reCAPTCHA validation state to false.
+  - If not, call the `verifyToken` function with the token as an argument and store the result in a variable named `recaptchaApiResponse`. This function sends a POST request to the backend and gets the verification result and the data that you need to interact with the smart contract.
+  - Set the reCAPTCHA validation state to true.
+  - Check if the `verificationPassedOneTime` state is false. If so, set it to true. This state is used to enable the interact button only once after the user passes the verification.
+  - Check if the `recaptchaApiResponse` has the message, the `pubKey`, and the `signature` fields. If so, set the corresponding state variables with the values from the response.
+- Next, define a function named `verifyToken` that takes a token as an input and returns a promise of the reCAPTCHA API response. This function is used to communicate with the backend. Here are the steps that you follow in this function:
+  - Try to send a POST request to the backend URL with the token, the secret key, and the user's address as the body parameters. Use the `axios` module to send the request and store the response in a variable named `response`.
+  - Return the data field of the response as the reCAPTCHA API response.
+  - Catch any error and log it to the console.
+  - Return an empty object as the default reCAPTCHA API response.
+- Next, use the `useEffect` hook from React to run some code when the `currentWallet` state changes. In this case, you don't do anything, but you could add some logic here if you want to.
+- Finally, return a JSX element that renders the app. The app consists of the following components:
+  - A `ConnectButton` component from `@mysten/dapp-kit` that allows the user to connect to their wallet.
+  - A button that allows the user to interact with the smart contract. This button is disabled unless the user passes the verification at least once. When the user clicks this button, create a new `Transaction` object from `@mysten/sui` and add a `moveCall` action that calls the `interact` function of the smart contract with the registry ID and the clock object ID as arguments. Then, use the `signAndExecuteTransaction` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
+  - A button that allows the user to verify their identity to the smart contract. This button is disabled unless the user passes the reCAPTCHA challenge. When the user clicks this button, create a new `Transaction` object from `@mysten/sui` and add a `moveCall` action that calls the verify function of the smart contract with the registry ID, the signature, the public key, and the message as arguments. Then, use the `signAndExecuteTransaction` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
+  - A `ReCAPTCHA` component from `react-google-recaptcha` that renders the reCAPTCHA widget. You pass the site key and the `onChange` function as props to this component.
+
+That's it! You have implemented the frontend for the reCAPTCHA. To run the app, you can use `pnpm run dev`. To test the app, you can open the browser and go to the `localhost:5173` URL. You should see the app and can interact with the reCAPTCHA and the smart contract.

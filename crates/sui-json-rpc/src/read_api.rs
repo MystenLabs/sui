@@ -7,26 +7,29 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future::join_all;
+use indexmap::map::IndexMap;
 use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use linked_hash_map::LinkedHashMap;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveValue};
 use move_core_types::language_storage::StructTag;
-use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use tap::TapFallible;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::{
+    validate_limit, JsonRpcMetrics, ReadApiOpenRpc, ReadApiServer, QUERY_MAX_RESULT_LIMIT,
+    QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
+};
 use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, EventFilter,
     ObjectChange, ProtocolConfigResponse, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct,
-    SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiMoveValue, SuiMoveVariant, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionBlock, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{SuiLoadedChildObject, SuiLoadedChildObjectsResponse};
 use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::key_value_store::TransactionKeyValueStore;
@@ -46,15 +49,12 @@ use sui_types::sui_serde::BigInt;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::api::JsonRpcMetrics;
-use crate::api::{validate_limit, ReadApiServer};
-use crate::api::{QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
 use crate::authority_state::{StateRead, StateReadError, StateReadResult};
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
-use crate::with_tracing;
 use crate::{
     get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
 };
+use crate::{with_tracing, ObjectProvider};
 
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 
@@ -199,6 +199,8 @@ impl ReadApi {
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> Result<Vec<SuiTransactionBlockResponse>, Error> {
+        trace!("start");
+
         let num_digests = digests.len();
         if num_digests > *QUERY_MAX_RESULT_LIMIT {
             Err(SuiRpcInputError::SizeLimitExceeded(
@@ -212,8 +214,8 @@ impl ReadApi {
         let opts = opts.unwrap_or_default();
 
         // use LinkedHashMap to dedup and can iterate in insertion order.
-        let mut temp_response: LinkedHashMap<&TransactionDigest, IntermediateTransactionResponse> =
-            LinkedHashMap::from_iter(
+        let mut temp_response: IndexMap<&TransactionDigest, IntermediateTransactionResponse> =
+            IndexMap::from_iter(
                 digests
                     .iter()
                     .map(|k| (k, IntermediateTransactionResponse::new(*k))),
@@ -223,6 +225,7 @@ impl ReadApi {
         }
 
         if opts.require_input() {
+            trace!("getting input");
             let digests_clone = digests.clone();
             let transactions =
                 self.transaction_kv_store.multi_get_tx(&digests_clone).await.tap_err(
@@ -238,6 +241,7 @@ impl ReadApi {
 
         // Fetch effects when `show_events` is true because events relies on effects
         if opts.require_effects() {
+            trace!("getting effects");
             let digests_clone = digests.clone();
             let effects_list = self.transaction_kv_store
                 .multi_get_fx_by_tx_digest(&digests_clone)
@@ -252,6 +256,7 @@ impl ReadApi {
             }
         }
 
+        trace!("getting checkpoint sequence numbers");
         let checkpoint_seq_list = self
             .transaction_kv_store
             .multi_get_transaction_checkpoint(&digests)
@@ -274,6 +279,7 @@ impl ReadApi {
             .collect::<Vec<CheckpointSequenceNumber>>();
 
         // fetch timestamp from the DB
+        trace!("getting checkpoint summaries");
         let timestamps = self
             .transaction_kv_store
             .multi_get_checkpoints_summaries(&unique_checkpoint_numbers)
@@ -308,6 +314,8 @@ impl ReadApi {
         }
 
         if opts.show_events {
+            trace!("getting events");
+
             let event_digests_list = temp_response
                 .values()
                 .filter_map(|cache_entry| match &cache_entry.effects {
@@ -369,6 +377,8 @@ impl ReadApi {
         let object_cache =
             ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
         if opts.show_balance_changes {
+            trace!("getting balance changes");
+
             let mut results = vec![];
             for resp in temp_response.values() {
                 let input_objects = if let Some(tx) = resp.transaction() {
@@ -406,6 +416,8 @@ impl ReadApi {
         }
 
         if opts.show_object_changes {
+            trace!("getting object changes");
+
             let mut results = vec![];
             for resp in temp_response.values() {
                 let effects = resp.effects.as_ref().ok_or_else(|| {
@@ -457,6 +469,9 @@ impl ReadApi {
         self.metrics
             .get_tx_blocks_result_size_total
             .inc_by(converted_tx_block_resps.len() as u64);
+
+        trace!("done");
+
         Ok(converted_tx_block_resps)
     }
 }
@@ -620,6 +635,27 @@ impl ReadApiServer for ReadApi {
                 }),
             }
         })
+    }
+
+    #[instrument(skip(self))]
+    async fn try_get_object_before_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> RpcResult<SuiPastObjectResponse> {
+        let version = self
+            .state
+            .find_object_lt_or_eq_version(&object_id, &version)
+            .await
+            .map_err(Error::from)?
+            .map(|obj| obj.version())
+            .unwrap_or_default();
+        self.try_get_past_object(
+            object_id,
+            version,
+            Some(SuiObjectDataOptions::bcs_lossless()),
+        )
+        .await
     }
 
     #[instrument(skip(self))]
@@ -871,12 +907,13 @@ impl ReadApiServer for ReadApi {
                 .into_iter()
                 .enumerate()
                 .map(|(seq, e)| {
+                    let layout = store.executor().type_layout_resolver(Box::new(&state.get_backing_package_store().as_ref())).get_annotated_layout(&e.type_)?;
                     SuiEvent::try_from(
                         e,
                         *effect.transaction_digest(),
                         seq as u64,
                         None,
-                        store.module_cache(),
+                        layout,
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()
@@ -976,32 +1013,6 @@ impl ReadApiServer for ReadApi {
     }
 
     #[instrument(skip(self))]
-    async fn get_loaded_child_objects(
-        &self,
-        digest: TransactionDigest,
-    ) -> RpcResult<SuiLoadedChildObjectsResponse> {
-        with_tracing!(async move {
-            Ok(SuiLoadedChildObjectsResponse {
-                loaded_child_objects: match self
-                    .state
-                    .loaded_child_object_versions(&digest)
-                    .map_err(|e| {
-                        error!(
-                            "Failed to get loaded child objects at {digest:?} with error: {e:?}"
-                        );
-                        Error::StateReadError(e)
-                    })? {
-                    Some(v) => v
-                        .into_iter()
-                        .map(|q| SuiLoadedChildObject::new(q.0, q.1))
-                        .collect::<Vec<_>>(),
-                    None => vec![],
-                },
-            })
-        })
-    }
-
-    #[instrument(skip(self))]
     async fn get_protocol_config(
         &self,
         version: Option<BigInt<u64>>,
@@ -1043,7 +1054,7 @@ impl SuiRpcModule for ReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::ReadApiOpenRpc::module_doc()
+        ReadApiOpenRpc::module_doc()
     }
 }
 
@@ -1052,20 +1063,16 @@ fn to_sui_transaction_events(
     tx_digest: TransactionDigest,
     events: TransactionEvents,
 ) -> Result<SuiTransactionBlockEvents, Error> {
+    let epoch_store = fullnode_api.state.load_epoch_store_one_call_per_task();
+    let backing_package_store = fullnode_api.state.get_backing_package_store();
+    let mut layout_resolver = epoch_store
+        .executor()
+        .type_layout_resolver(Box::new(backing_package_store.as_ref()));
     Ok(SuiTransactionBlockEvents::try_from(
         events,
         tx_digest,
         None,
-        // threading the epoch_store through this API does not
-        // seem possible, so we just read it from the state and fetch
-        // the module cache out of it.
-        // Notice that no matter what module cache we get things
-        // should work
-        fullnode_api
-            .state
-            .load_epoch_store_one_call_per_task()
-            .module_cache()
-            .as_ref(),
+        layout_resolver.as_mut(),
     )?)
 }
 
@@ -1271,6 +1278,17 @@ fn get_value_from_move_struct(
                         "Unexpected move struct type for field {}",
                         var_name
                     )))?;
+                }
+            }
+            SuiMoveValue::Variant(SuiMoveVariant {
+                fields, variant, ..
+            }) => {
+                if let Some(value) = fields.get(part) {
+                    current_value = value;
+                } else {
+                    Err(anyhow!(
+                        "Field value {var_name} cannot be found in variant {variant}",
+                    ))?
                 }
             }
             _ => {

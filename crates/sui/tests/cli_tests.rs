@@ -4,12 +4,19 @@
 use std::collections::BTreeSet;
 use std::io::Read;
 use std::os::unix::prelude::FileExt;
-use std::str::FromStr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
+#[cfg(not(msim))]
+use std::str::FromStr;
+
 use expect_test::expect;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildConfig};
 use serde_json::json;
+use sui::client_ptb::ptb::PTB;
+use sui::key_identity::{get_identity_address, KeyIdentity};
+#[cfg(feature = "indexer")]
+use sui::sui_commands::IndexerFeatureArgs;
+use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
 use sui_types::transaction::{
@@ -19,19 +26,22 @@ use sui_types::transaction::{
 };
 use tokio::time::sleep;
 
-use sui::client_commands::SwitchResponse;
 use sui::{
-    client_commands::{SuiClientCommandResult, SuiClientCommands},
+    client_commands::{
+        estimate_gas_budget, Opts, OptsWithGas, SuiClientCommandResult, SuiClientCommands,
+        SwitchResponse,
+    },
     sui_commands::SuiCommand,
 };
 use sui_config::{
     PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
-    SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
+    SUI_KEYSTORE_ALIASES_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    get_new_package_obj_from_response, OwnedObjectRef, SuiExecutionStatus, SuiObjectData,
+    SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiTransactionBlockDataAPI, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -46,7 +56,7 @@ use sui_types::crypto::{
 };
 use sui_types::error::SuiObjectResponseError;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
-use test_cluster::TestClusterBuilder;
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 const TEST_DATA_DIR: &str = "tests/data/";
 
@@ -58,8 +68,14 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
     // Start network without authorities
     let start = SuiCommand::Start {
-        config: Some(config),
+        config_dir: Some(config),
+        force_regenesis: false,
+        with_faucet: None,
+        fullnode_rpc_port: 9000,
+        epoch_duration_ms: None,
         no_full_node: false,
+        #[cfg(feature = "indexer")]
+        indexer_feature_args: IndexerFeatureArgs::for_testing(),
     }
     .execute()
     .await;
@@ -82,13 +98,13 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(9, files.len());
+    assert_eq!(10, files.len());
     assert!(files.contains(&SUI_CLIENT_CONFIG.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&SUI_FULLNODE_CONFIG.to_string()));
     assert!(files.contains(&SUI_GENESIS_FILENAME.to_string()));
-
     assert!(files.contains(&SUI_KEYSTORE_FILENAME.to_string()));
+    assert!(files.contains(&SUI_KEYSTORE_ALIASES_FILENAME.to_string()));
 
     // Check network config
     let network_conf =
@@ -131,15 +147,17 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .add_key(SuiKeyPair::Ed25519(get_key_pair().1))?;
+            .add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
     }
 
     // Print all addresses
-    SuiClientCommands::Addresses
-        .execute(&mut context)
-        .await
-        .unwrap()
-        .print(true);
+    SuiClientCommands::Addresses {
+        sort_by_alias: true,
+    }
+    .execute(&mut context)
+    .await
+    .unwrap()
+    .print(true);
 
     Ok(())
 }
@@ -149,10 +167,21 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-
+    let alias = context
+        .config
+        .keystore
+        .get_alias_by_address(&address)
+        .unwrap();
     // Print objects owned by `address`
     SuiClientCommands::Objects {
-        address: Some(address),
+        address: Some(KeyIdentity::Address(address)),
+    }
+    .execute(context)
+    .await?
+    .print(true);
+    // Print objects owned by `address`, passing its alias
+    SuiClientCommands::Objects {
+        address: Some(KeyIdentity::Alias(alias)),
     }
     .execute(context)
     .await?
@@ -176,6 +205,127 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[sim_test]
+async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Error> {
+    // Publish the package
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("ptb_complex_args_test_functions");
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+    }
+    .execute(context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    let SuiClientCommandResult::TransactionBlock(response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    let package = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+    let package_id_str = package.reference.object_id.to_string();
+
+    let start_call_result = SuiClientCommands::Call {
+        package: package.reference.object_id,
+        module: "test_module".to_string(),
+        function: "new_shared".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![],
+    }
+    .execute(context)
+    .await?;
+
+    let shared_id_str =
+        if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
+            response.effects.unwrap().created().to_vec()[0]
+                .reference
+                .object_id
+                .to_string()
+        } else {
+            unreachable!("Invalid response");
+        };
+
+    let complex_ptb_string = format!(
+        r#"
+         --assign p @{package_id_str}
+         --assign s @{shared_id_str}
+         # Use the shared object by immutable reference first
+         --move-call "p::test_module::use_immut" s
+         # Now use mutably -- we need to update the mutability of the object
+         --move-call "p::test_module::use_mut" s
+         # Make sure we handle different more complex pure arguments
+         --move-call "p::test_module::use_ascii_string" "'foo bar baz'"
+         --move-call "p::test_module::use_utf8_string" "'foo †††˚˚¬¬'"
+         --gas-budget 100000000
+        "#
+    );
+
+    let args = shlex::split(&complex_ptb_string).unwrap();
+    sui::client_ptb::ptb::PTB { args: args.clone() }
+        .execute(context)
+        .await?;
+
+    let delete_object_ptb_string = format!(
+        r#"
+         --assign p @{package_id_str}
+         --assign s @{shared_id_str}
+         # Use the shared object by immutable reference first
+         --move-call "p::test_module::use_immut" s
+         --move-call "p::test_module::delete_shared_object" s
+         --gas-budget 100000000
+        "#
+    );
+
+    let args = shlex::split(&delete_object_ptb_string).unwrap();
+    sui::client_ptb::ptb::PTB { args: args.clone() }
+        .execute(context)
+        .await?;
+
+    Ok(())
+}
+
 // fixing issue https://github.com/MystenLabs/sui/issues/6546
 #[tokio::test]
 async fn test_regression_6546() -> Result<(), anyhow::Error> {
@@ -184,7 +334,7 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
-        address: Some(address),
+        address: Some(KeyIdentity::Address(address)),
     }
     .execute(context)
     .await?
@@ -235,7 +385,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 
     // Print objects owned by `address`
     SuiClientCommands::Objects {
-        address: Some(address),
+        address: Some(KeyIdentity::Address(address)),
     }
     .execute(context)
     .await?
@@ -293,6 +443,11 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
+    let alias = context
+        .config
+        .keystore
+        .get_alias_by_address(&address)
+        .unwrap();
 
     let client = context.get_client().await?;
     let object_refs = client
@@ -317,7 +472,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let object_to_send = object_refs.data.get(1).unwrap().object().unwrap().object_id;
 
     SuiClientCommands::Gas {
-        address: Some(address),
+        address: Some(KeyIdentity::Address(address)),
     }
     .execute(context)
     .await?
@@ -327,19 +482,16 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 
     // Send an object
     SuiClientCommands::Transfer {
-        to: SuiAddress::random_for_testing_only(),
+        to: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
         object_id: object_to_send,
-        gas: Some(object_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(object_id), rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
 
-    // Fetch gas again
+    // Fetch gas again, and use the alias instead of the address
     SuiClientCommands::Gas {
-        address: Some(address),
+        address: Some(KeyIdentity::Alias(alias)),
     }
     .execute(context)
     .await?
@@ -378,22 +530,22 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
 
-    let package = if let SuiClientCommandResult::Publish(response) = resp {
+    let package = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert!(
             response.status_ok().unwrap(),
             "Command failed: {:?}",
             response
+        );
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
         );
         response
             .effects
@@ -415,7 +567,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Print objects owned by `address1`
     SuiClientCommands::Objects {
-        address: Some(address1),
+        address: Some(KeyIdentity::Address(address1)),
     }
     .execute(context)
     .await?
@@ -462,17 +614,15 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "create".to_string(),
         type_args: vec![],
         args,
-        gas: None,
-        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
+        gas_price: None,
     }
     .execute(context)
     .await?;
     resp.print(true);
 
     // Get the created object
-    let created_obj: ObjectID = if let SuiClientCommandResult::Call(resp) = resp {
+    let created_obj: ObjectID = if let SuiClientCommandResult::TransactionBlock(resp) = resp {
         resp.effects
             .unwrap()
             .created()
@@ -486,7 +636,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Try a bad argument: decimal
     let args_json = json!([0.3f32, address1]);
-    assert!(SuiJsonValue::new(args_json.as_array().unwrap().get(0).unwrap().clone()).is_err());
+    assert!(SuiJsonValue::new(args_json.as_array().unwrap().first().unwrap().clone()).is_err());
 
     // Try a bad argument: too few args
     let args_json = json!([300usize]);
@@ -501,10 +651,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "create".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        gas: Some(gas),
-        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
+        gas_price: None,
     }
     .execute(context)
     .await;
@@ -527,15 +675,36 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        gas: Some(gas),
-        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
+        gas_price: None,
     }
     .execute(context)
     .await;
 
     assert!(resp.is_err());
+
+    // Try a transfer with explicitly set gas price.
+    // It should fail due to that gas price is below RGP.
+    let args = vec![
+        SuiJsonValue::new(json!(created_obj))?,
+        SuiJsonValue::new(json!(address2))?,
+    ];
+
+    let resp = SuiClientCommands::Call {
+        package,
+        module: "object_basics".to_string(),
+        function: "transfer".to_string(),
+        type_args: vec![],
+        args: args.to_vec(),
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
+        gas_price: Some(1),
+    }
+    .execute(context)
+    .await;
+
+    assert!(resp.is_err());
+    let err_string = format!("{} ", resp.err().unwrap());
+    assert!(err_string.contains("Gas price 1 under reference gas price"));
 
     // FIXME: uncomment once we figure out what is going on with `resolve_and_type_check`
     // let err_string = format!("{} ", resp.err().unwrap());
@@ -555,13 +724,38 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        gas: Some(gas),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        gas_price: None,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
     }
     .execute(context)
     .await?;
+
+    // Try a call with customized gas price.
+    let args = vec![
+        SuiJsonValue::new(json!("123"))?,
+        SuiJsonValue::new(json!(address1))?,
+    ];
+
+    let result = SuiClientCommands::Call {
+        package,
+        module: "object_basics".to_string(),
+        function: "create".to_string(),
+        type_args: vec![],
+        args,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
+        gas_price: Some(12345),
+    }
+    .execute(context)
+    .await?;
+
+    if let SuiClientCommandResult::TransactionBlock(txn_response) = result {
+        assert_eq!(
+            txn_response.transaction.unwrap().data.gas_data().price,
+            12345
+        );
+    } else {
+        panic!("Command failed with unexpected result.")
+    };
 
     Ok(())
 }
@@ -600,13 +794,9 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -614,7 +804,11 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         response
             .effects
             .as_ref()
@@ -631,6 +825,182 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     for obj_id in obj_ids {
         get_parsed_object_assert_existence(obj_id, context).await;
     }
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_package_management_on_publish_command() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_publish");
+    let build_config = BuildConfig::new_for_testing().config;
+    // Publish the package
+    let resp = SuiClientCommands::Publish {
+        package_path,
+        build_config: build_config.clone(),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    // Get Package ID and version
+    let (expect_original_id, expect_version, _) =
+        if let SuiClientCommandResult::TransactionBlock(response) = resp {
+            assert_eq!(
+                response.effects.as_ref().unwrap().gas_object().object_id(),
+                gas_obj_id
+            );
+            get_new_package_obj_from_response(&response)
+                .ok_or_else(|| anyhow::anyhow!("No package object response"))?
+        } else {
+            unreachable!("Invalid response");
+        };
+
+    // Get lock file that recorded Package ID and version
+    let lock_file = build_config.lock_file.expect("Lock file for testing");
+    let mut lock_file = std::fs::File::open(lock_file).unwrap();
+    let envs = ManagedPackage::read(&mut lock_file).unwrap();
+    let localnet = envs.get("localnet").unwrap();
+    assert_eq!(
+        expect_original_id.to_string(),
+        localnet.original_published_id,
+    );
+    assert_eq!(expect_original_id.to_string(), localnet.latest_published_id);
+    assert_eq!(
+        expect_version.value(),
+        localnet.version.parse::<u64>().unwrap(),
+    );
+    Ok(())
+}
+
+#[sim_test]
+async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("sod");
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path,
+        build_config,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
+        let x = response.effects.unwrap();
+        x.created().to_vec()
+    } else {
+        unreachable!("Invalid response");
+    };
+
+    // Check the objects
+    for OwnedObjectRef { reference, .. } in &owned_obj_ids {
+        get_parsed_object_assert_existence(reference.object_id, context).await;
+    }
+
+    let package_id = owned_obj_ids
+        .into_iter()
+        .find(|OwnedObjectRef { owner, .. }| owner == &Owner::Immutable)
+        .expect("Must find published package ID")
+        .reference;
+
+    // Start and then receive the object
+    let start_call_result = SuiClientCommands::Call {
+        package: (*package_id.object_id).into(),
+        module: "sod".to_string(),
+        function: "start".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![],
+    }
+    .execute(context)
+    .await?;
+
+    let shared_id = if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
+        response.effects.unwrap().created().to_vec()[0]
+            .reference
+            .object_id
+    } else {
+        unreachable!("Invalid response");
+    };
+
+    let delete_result = SuiClientCommands::Call {
+        package: (*package_id.object_id).into(),
+        module: "sod".to_string(),
+        function: "delete".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![SuiJsonValue::from_str(&shared_id.to_string()).unwrap()],
+    }
+    .execute(context)
+    .await?;
+
+    if let SuiClientCommandResult::TransactionBlock(response) = delete_result {
+        assert!(response.effects.unwrap().into_status().is_ok());
+    } else {
+        unreachable!("Invalid response");
+    };
 
     Ok(())
 }
@@ -668,18 +1038,18 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
 
-    let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         let x = response.effects.unwrap();
         x.created().to_vec()
     } else {
@@ -703,57 +1073,54 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
         args: vec![],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
 
-    let (parent, child) = if let SuiClientCommandResult::Call(response) = start_call_result {
-        let created = response.effects.unwrap().created().to_vec();
-        let owners: BTreeSet<ObjectID> = created
-            .iter()
-            .flat_map(|refe| {
-                refe.owner
-                    .get_address_owner_address()
-                    .ok()
-                    .map(|x| x.into())
-            })
-            .collect();
-        let child = created
-            .iter()
-            .find(|refe| !owners.contains(&refe.reference.object_id))
-            .unwrap();
-        let parent = created
-            .iter()
-            .find(|refe| owners.contains(&refe.reference.object_id))
-            .unwrap();
-        (parent.reference.clone(), child.reference.clone())
-    } else {
-        unreachable!("Invalid response");
-    };
+    let (parent, child) =
+        if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
+            let created = response.effects.unwrap().created().to_vec();
+            let owners: BTreeSet<ObjectID> = created
+                .iter()
+                .flat_map(|refe| {
+                    refe.owner
+                        .get_address_owner_address()
+                        .ok()
+                        .map(|x| x.into())
+                })
+                .collect();
+            let child = created
+                .iter()
+                .find(|refe| !owners.contains(&refe.reference.object_id))
+                .unwrap();
+            let parent = created
+                .iter()
+                .find(|refe| owners.contains(&refe.reference.object_id))
+                .unwrap();
+            (parent.reference.clone(), child.reference.clone())
+        } else {
+            unreachable!("Invalid response");
+        };
 
     let receive_result = SuiClientCommands::Call {
         package: (*package_id.object_id).into(),
         module: "tto".to_string(),
         function: "receiver".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
         ],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
 
-    if let SuiClientCommandResult::Call(response) = receive_result {
+    if let SuiClientCommandResult::TransactionBlock(response) = receive_result {
         assert!(response.effects.unwrap().into_status().is_ok());
     } else {
         unreachable!("Invalid response");
@@ -795,18 +1162,18 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
 
-    let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         let x = response.effects.unwrap();
         x.created().to_vec()
     } else {
@@ -830,57 +1197,54 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        gas_price: None,
         args: vec![],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
 
-    let (parent, child) = if let SuiClientCommandResult::Call(response) = start_call_result {
-        let created = response.effects.unwrap().created().to_vec();
-        let owners: BTreeSet<ObjectID> = created
-            .iter()
-            .flat_map(|refe| {
-                refe.owner
-                    .get_address_owner_address()
-                    .ok()
-                    .map(|x| x.into())
-            })
-            .collect();
-        let child = created
-            .iter()
-            .find(|refe| !owners.contains(&refe.reference.object_id))
-            .unwrap();
-        let parent = created
-            .iter()
-            .find(|refe| owners.contains(&refe.reference.object_id))
-            .unwrap();
-        (parent.reference.clone(), child.reference.clone())
-    } else {
-        unreachable!("Invalid response");
-    };
+    let (parent, child) =
+        if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
+            let created = response.effects.unwrap().created().to_vec();
+            let owners: BTreeSet<ObjectID> = created
+                .iter()
+                .flat_map(|refe| {
+                    refe.owner
+                        .get_address_owner_address()
+                        .ok()
+                        .map(|x| x.into())
+                })
+                .collect();
+            let child = created
+                .iter()
+                .find(|refe| !owners.contains(&refe.reference.object_id))
+                .unwrap();
+            let parent = created
+                .iter()
+                .find(|refe| owners.contains(&refe.reference.object_id))
+                .unwrap();
+            (parent.reference.clone(), child.reference.clone())
+        } else {
+            unreachable!("Invalid response");
+        };
 
     let receive_result = SuiClientCommands::Call {
         package: (*package_id.object_id).into(),
         module: "tto".to_string(),
         function: "invalid_call_immut_ref".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        gas_price: None,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
         ],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
 
-    if let SuiClientCommandResult::Call(response) = receive_result {
+    if let SuiClientCommandResult::TransactionBlock(response) = receive_result {
         assert!(response.effects.unwrap().into_status().is_ok());
     } else {
         unreachable!("Invalid response");
@@ -922,18 +1286,18 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
 
-    let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         let x = response.effects.unwrap();
         x.created().to_vec()
     } else {
@@ -957,57 +1321,54 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        gas_price: None,
         args: vec![],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
 
-    let (parent, child) = if let SuiClientCommandResult::Call(response) = start_call_result {
-        let created = response.effects.unwrap().created().to_vec();
-        let owners: BTreeSet<ObjectID> = created
-            .iter()
-            .flat_map(|refe| {
-                refe.owner
-                    .get_address_owner_address()
-                    .ok()
-                    .map(|x| x.into())
-            })
-            .collect();
-        let child = created
-            .iter()
-            .find(|refe| !owners.contains(&refe.reference.object_id))
-            .unwrap();
-        let parent = created
-            .iter()
-            .find(|refe| owners.contains(&refe.reference.object_id))
-            .unwrap();
-        (parent.reference.clone(), child.reference.clone())
-    } else {
-        unreachable!("Invalid response");
-    };
+    let (parent, child) =
+        if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
+            let created = response.effects.unwrap().created().to_vec();
+            let owners: BTreeSet<ObjectID> = created
+                .iter()
+                .flat_map(|refe| {
+                    refe.owner
+                        .get_address_owner_address()
+                        .ok()
+                        .map(|x| x.into())
+                })
+                .collect();
+            let child = created
+                .iter()
+                .find(|refe| !owners.contains(&refe.reference.object_id))
+                .unwrap();
+            let parent = created
+                .iter()
+                .find(|refe| owners.contains(&refe.reference.object_id))
+                .unwrap();
+            (parent.reference.clone(), child.reference.clone())
+        } else {
+            unreachable!("Invalid response");
+        };
 
     let receive_result = SuiClientCommands::Call {
         package: (*package_id.object_id).into(),
         module: "tto".to_string(),
         function: "invalid_call_mut_ref".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        gas_price: None,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
         ],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
 
-    if let SuiClientCommandResult::Call(response) = receive_result {
+    if let SuiClientCommandResult::TransactionBlock(response) = receive_result {
         assert!(response.effects.unwrap().into_status().is_ok());
     } else {
         unreachable!("Invalid response");
@@ -1051,13 +1412,9 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1065,7 +1422,11 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
     // Print it out to CLI/logs
     resp.print(true);
 
-    let obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         response
             .effects
             .as_ref()
@@ -1120,13 +1481,9 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1167,13 +1524,9 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1223,13 +1576,9 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1266,13 +1615,9 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1310,13 +1655,9 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1366,13 +1707,9 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1380,13 +1717,14 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let SuiClientCommandResult::Publish(response) = resp else {
+    let SuiClientCommandResult::TransactionBlock(response) = resp else {
         unreachable!("Invalid response");
     };
 
     let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
 
     assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
     let package = effects
         .created()
         .iter()
@@ -1439,25 +1777,22 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         package_path: upgrade_pkg_path,
         upgrade_capability: cap.reference.object_id,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
 
     resp.print(true);
 
-    let SuiClientCommandResult::Upgrade(response) = resp else {
+    let SuiClientCommandResult::TransactionBlock(response) = resp else {
         unreachable!("Invalid upgrade response");
     };
     let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
 
     assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
 
     let obj_ids = effects
         .created()
@@ -1470,6 +1805,258 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         get_parsed_object_assert_existence(obj_id, context).await;
     }
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Error> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_upgrade");
+    let build_config_publish = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config: build_config_publish.clone(),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    fs_extra::dir::copy(
+        &package_path,
+        tmp_dir.path(),
+        &fs_extra::dir::CopyOptions::default(),
+    )
+    .unwrap();
+    let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
+    upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
+    upgrade_pkg_path.pop();
+
+    // Create a new build config for the upgrade. Initialize its lock file
+    // to the package we published.
+    let build_config_upgrade = BuildConfig::new_for_testing().config;
+    let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
+    upgrade_lock_file_path.push("Move.lock");
+    let publish_lock_file_path = build_config_publish.lock_file.unwrap();
+    std::fs::copy(
+        publish_lock_file_path.clone(),
+        upgrade_lock_file_path.clone(),
+    )?;
+
+    // Now run the upgrade
+    let upgrade_response = SuiClientCommands::Upgrade {
+        package_path: upgrade_pkg_path,
+        upgrade_capability: cap.reference.object_id,
+        build_config: build_config_upgrade.clone(),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    // Get Original Package ID and version
+    let (expect_original_id, _, _) = get_new_package_obj_from_response(&publish_response)
+        .ok_or_else(|| anyhow::anyhow!("No package object response"))?;
+
+    // Get Upgraded Package ID and version
+    let (expect_upgrade_latest_id, expect_upgrade_version, _) =
+        if let SuiClientCommandResult::TransactionBlock(response) = upgrade_response {
+            assert_eq!(
+                response.effects.as_ref().unwrap().gas_object().object_id(),
+                gas_obj_id
+            );
+            get_new_package_obj_from_response(&response)
+                .ok_or_else(|| anyhow::anyhow!("No package object response"))?
+        } else {
+            unreachable!("Invalid response");
+        };
+
+    // Get lock file that recorded Package ID and version
+    let lock_file = build_config_upgrade
+        .lock_file
+        .expect("Lock file for testing");
+    let mut lock_file = std::fs::File::open(lock_file).unwrap();
+    let envs = ManagedPackage::read(&mut lock_file).unwrap();
+    let localnet = envs.get("localnet").unwrap();
+    // Original ID should correspond to first published package.
+    assert_eq!(
+        expect_original_id.to_string(),
+        localnet.original_published_id,
+    );
+    // Upgrade ID should correspond to upgraded package.
+    assert_eq!(
+        expect_upgrade_latest_id.to_string(),
+        localnet.latest_published_id,
+    );
+    // Version should correspond to upgraded package.
+    assert_eq!(
+        expect_upgrade_version.value(),
+        localnet.version.parse::<u64>().unwrap(),
+    );
+    Ok(())
+}
+
+#[sim_test]
+async fn test_package_management_on_upgrade_command_conflict() -> Result<(), anyhow::Error> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_upgrade");
+    let build_config_publish = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config: build_config_publish.clone(),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    let package = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    // Set up a temporary working directory  for upgrading.
+    let tmp_dir = tempfile::tempdir().unwrap();
+    fs_extra::dir::copy(
+        &package_path,
+        tmp_dir.path(),
+        &fs_extra::dir::CopyOptions::default(),
+    )
+    .unwrap();
+    let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
+    upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
+    let mut move_toml = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(&upgrade_pkg_path)
+        .unwrap();
+    upgrade_pkg_path.pop();
+    let mut buf = String::new();
+    move_toml.read_to_string(&mut buf).unwrap();
+    let mut lines: Vec<String> = buf.split('\n').map(|x| x.to_string()).collect();
+    let idx = lines.iter().position(|s| s == "[package]").unwrap();
+    // Purposely add a conflicting `published-at` address to the Move manifest.
+    lines.insert(idx + 1, "published-at = \"0xbad\"".to_string());
+    let new = lines.join("\n");
+    move_toml.write_at(new.as_bytes(), 0).unwrap();
+
+    // Create a new build config for the upgrade. Initialize its lock file to the package we published.
+    let build_config_upgrade = BuildConfig::new_for_testing().config;
+    let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
+    upgrade_lock_file_path.push("Move.lock");
+    let publish_lock_file_path = build_config_publish.lock_file.unwrap();
+    std::fs::copy(
+        publish_lock_file_path.clone(),
+        upgrade_lock_file_path.clone(),
+    )?;
+
+    // Now run the upgrade
+    let upgrade_response = SuiClientCommands::Upgrade {
+        package_path: upgrade_pkg_path,
+        upgrade_capability: cap.reference.object_id,
+        build_config: build_config_upgrade.clone(),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await;
+
+    let err_string = upgrade_response.unwrap_err().to_string();
+    let err_string = err_string.replace(&package.object_id().to_string(), "<elided-for-test>");
+
+    let expect = expect![[r#"
+        Conflicting published package address: `Move.toml` contains published-at address 0xbad but `Move.lock` file contains published-at address <elided-for-test>. You may want to:
+
+                         - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
+                         - update the `Move.lock` address using the `sui manage-package` command to be the same as the `Move.toml`; OR
+                         - check that your `sui active-env` (currently localnet) corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
+                         - contact the maintainer if this package is a dependency and request resolving the conflict."#]];
+    expect.assert_eq(&err_string);
     Ok(())
 }
 
@@ -1502,12 +2089,9 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let obj_id = object_refs.get(1).unwrap().object().unwrap().object_id;
 
     let resp = SuiClientCommands::Transfer {
-        gas: Some(gas_obj_id),
-        to: recipient,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+        to: KeyIdentity::Address(recipient),
         object_id: obj_id,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1516,11 +2100,15 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::Transfer(response) = resp {
+    let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert!(
             response.status_ok().unwrap(),
             "Command failed: {:?}",
             response
+        );
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
         );
         (
             response
@@ -1528,7 +2116,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 .as_ref()
                 .unwrap()
                 .mutated()
-                .get(0)
+                .first()
                 .unwrap()
                 .reference
                 .object_id,
@@ -1607,12 +2195,9 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let obj_id = object_refs.data.get(1).unwrap().object().unwrap().object_id;
 
     let resp = SuiClientCommands::Transfer {
-        gas: None,
-        to: recipient,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+        to: KeyIdentity::Address(recipient),
         object_id: obj_id,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1621,14 +2206,14 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::Transfer(response) = resp {
+    let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         (
             response
                 .effects
                 .as_ref()
                 .unwrap()
                 .mutated()
-                .get(0)
+                .first()
                 .unwrap()
                 .reference
                 .object_id,
@@ -1704,7 +2289,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
     // Switch the address
     let resp = SuiClientCommands::Switch {
-        address: Some(addr2),
+        address: Some(KeyIdentity::Address(addr2)),
         env: None,
     }
     .execute(context)
@@ -1716,7 +2301,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         format!(
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
-                address: Some(addr2),
+                address: Some(addr2.to_string()),
                 env: None
             })
         )
@@ -1728,6 +2313,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     // Create a new address
     let os = SuiClientCommands::NewAddress {
         key_scheme: SignatureScheme::ED25519,
+        alias: None,
         derivation_path: None,
         word_length: None,
     }
@@ -1742,7 +2328,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     // Check that we can switch to this address
     // Switch the address
     let resp = SuiClientCommands::Switch {
-        address: Some(new_addr),
+        address: Some(KeyIdentity::Address(new_addr)),
         env: None,
     }
     .execute(context)
@@ -1753,7 +2339,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         format!(
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
-                address: Some(new_addr),
+                address: Some(new_addr.to_string()),
                 env: None
             })
         )
@@ -1780,6 +2366,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
 
     SuiClientCommands::NewAddress {
         key_scheme: SignatureScheme::Secp256k1,
+        alias: None,
         derivation_path: None,
         word_length: None,
     }
@@ -1821,7 +2408,7 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
 
     let addr2 = context.config.keystore.addresses().get(1).cloned().unwrap();
     let resp = SuiClientCommands::Switch {
-        address: Some(addr2),
+        address: Some(KeyIdentity::Address(addr2)),
         env: None,
     }
     .execute(context)
@@ -1831,11 +2418,35 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
         format!(
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
-                address: Some(addr2),
+                address: Some(addr2.to_string()),
                 env: None
             })
         )
     );
+
+    // switch back to addr1 by using its alias
+    let alias1 = context
+        .config
+        .keystore
+        .get_alias_by_address(&addr1)
+        .unwrap();
+    let resp = SuiClientCommands::Switch {
+        address: Some(KeyIdentity::Alias(alias1)),
+        env: None,
+    }
+    .execute(context)
+    .await?;
+    assert_eq!(
+        format!("{resp}"),
+        format!(
+            "{}",
+            SuiClientCommandResult::Switch(SwitchResponse {
+                address: Some(addr1.to_string()),
+                env: None
+            })
+        )
+    );
+
     Ok(())
 }
 
@@ -1898,15 +2509,13 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::MergeCoin {
         primary_coin,
         coin_to_merge,
-        gas: Some(gas),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC),
     }
     .execute(context)
     .await?;
-    let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
+    let g = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
+        assert_eq!(r.effects.as_ref().unwrap().gas_object().object_id(), gas);
         let object_id = r
             .effects
             .as_ref()
@@ -1953,15 +2562,12 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::MergeCoin {
         primary_coin,
         coin_to_merge,
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC),
     }
     .execute(context)
     .await?;
 
-    let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
+    let g = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         let object_id = r
             .effects
             .as_ref()
@@ -2016,19 +2622,17 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     // Test with gas specified
     let resp = SuiClientCommands::SplitCoin {
-        gas: Some(gas),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN),
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
 
-    let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
+    let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
+        assert_eq!(r.effects.as_ref().unwrap().gas_object().object_id(), gas);
         let updated_object_id = r
             .effects
             .as_ref()
@@ -2084,18 +2688,15 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     // Test split coin into equal parts
     let resp = SuiClientCommands::SplitCoin {
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN),
         coin_id: coin,
         amounts: None,
         count: Some(3),
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
 
-    let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
+    let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         let updated_object_id = r
             .effects
@@ -2155,18 +2756,15 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     // Test with no gas specified
     let resp = SuiClientCommands::SplitCoin {
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN),
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
 
-    let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
+    let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         let updated_object_id = r
             .effects
@@ -2241,6 +2839,11 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     let address = test_cluster.get_address_0();
     let address1 = test_cluster.get_address_1();
     let context = &mut test_cluster.wallet;
+    let alias1 = context
+        .config
+        .keystore
+        .get_alias_by_address(&address1)
+        .unwrap();
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
@@ -2260,26 +2863,69 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     let coin = object_refs.get(1).unwrap().object().unwrap().object_id;
 
     SuiClientCommands::TransferSui {
-        to: address1,
+        to: KeyIdentity::Address(address1),
         sui_coin_object_id: coin,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         amount: Some(1),
-        serialize_unsigned_transaction: true,
-        serialize_signed_transaction: false,
+        opts: Opts {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            dry_run: false,
+            serialize_unsigned_transaction: true,
+            serialize_signed_transaction: false,
+        },
     }
     .execute(context)
     .await?;
 
     SuiClientCommands::TransferSui {
-        to: address1,
+        to: KeyIdentity::Address(address1),
         sui_coin_object_id: coin,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         amount: Some(1),
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: true,
+        opts: Opts {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            dry_run: false,
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: true,
+        },
     }
     .execute(context)
     .await?;
+
+    // use alias for transfer
+    SuiClientCommands::TransferSui {
+        to: KeyIdentity::Alias(alias1),
+        sui_coin_object_id: coin,
+        amount: Some(1),
+        opts: Opts {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            dry_run: false,
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: true,
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let ptb_args = vec![
+        "--split-coins".to_string(),
+        "gas".to_string(),
+        "[1000]".to_string(),
+        "--assign".to_string(),
+        "new_coin".to_string(),
+        "--transfer-objects".to_string(),
+        "[new_coin]".to_string(),
+        format!("@{}", address1),
+        "--gas-budget".to_string(),
+        "50000000".to_string(),
+    ];
+    let mut args = ptb_args.clone();
+    args.push("--serialize-signed-transaction".to_string());
+    let ptb = PTB { args };
+    SuiClientCommands::PTB(ptb).execute(context).await.unwrap();
+    let mut args = ptb_args.clone();
+    args.push("--serialize-unsigned-transaction".to_string());
+    let ptb = PTB { args };
+    SuiClientCommands::PTB(ptb).execute(context).await.unwrap();
+
     Ok(())
 }
 
@@ -2475,6 +3121,7 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
 
 #[tokio::test]
 async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
+    const LINTER_MSG: &str = "Total number of linter warnings suppressed: 5 (unique lints: 3)";
     let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let args = vec!["move", "test", "--path", "tests/data/linter"];
     let output = cmd
@@ -2483,7 +3130,777 @@ async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
         .expect("failed to run 'sui move test'");
     let out_str = str::from_utf8(&output.stderr).unwrap();
     assert!(
-        out_str.contains("Total number of linter warnings suppressed: 5 (filtered categories: 3)")
+        out_str.contains(LINTER_MSG),
+        "Expected to match {LINTER_MSG}, got: {out_str}"
     );
+    // test no-lint suppresses
+    let args = vec!["move", "test", "--no-lint", "--path", "tests/data/linter"];
+    let output = cmd
+        .args(&args)
+        .output()
+        .expect("failed to run 'sui move test'");
+    let out_str = str::from_utf8(&output.stderr).unwrap();
+    assert!(
+        !out_str.contains(LINTER_MSG),
+        "Expected _not to_ match {LINTER_MSG}, got: {out_str}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn key_identity_test() {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let alias = context
+        .config
+        .keystore
+        .get_alias_by_address(&address)
+        .unwrap();
+
+    // by alias
+    assert_eq!(
+        address,
+        get_identity_address(Some(KeyIdentity::Alias(alias)), context).unwrap()
+    );
+    // by address
+    assert_eq!(
+        address,
+        get_identity_address(Some(KeyIdentity::Address(address)), context).unwrap()
+    );
+    // alias does not exist
+    assert!(get_identity_address(Some(KeyIdentity::Alias("alias".to_string())), context).is_err());
+
+    // get active address instead when no alias/address is given
+    assert_eq!(
+        context.active_address().unwrap(),
+        get_identity_address(None, context).unwrap()
+    );
+}
+
+fn assert_dry_run(dry_run: SuiClientCommandResult, object_id: ObjectID, command: &str) {
+    if let SuiClientCommandResult::DryRun(response) = dry_run {
+        assert_eq!(
+            *response.effects.status(),
+            SuiExecutionStatus::Success,
+            "{command} dry run test effects is not success"
+        );
+        assert_eq!(
+            response.effects.gas_object().object_id(),
+            object_id,
+            "{command} dry run test failed, gas object used is not the expected one"
+        );
+    } else {
+        panic!("{} dry run failed", command);
+    }
+}
+
+#[sim_test]
+async fn test_dry_run() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            None,
+            None,
+        )
+        .await?;
+
+    let object_id = object_refs
+        .data
+        .first()
+        .unwrap()
+        .object()
+        .unwrap()
+        .object_id;
+    let object_to_send = object_refs.data.get(1).unwrap().object().unwrap().object_id;
+
+    // === TRANSFER === //
+    let transfer_dry_run = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
+        object_id: object_to_send,
+        opts: OptsWithGas::for_testing_dry_run(
+            Some(object_id),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        ),
+    }
+    .execute(context)
+    .await?;
+
+    assert_dry_run(transfer_dry_run, object_id, "Transfer");
+
+    // === TRANSFER SUI === //
+    let transfer_sui_dry_run = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
+        sui_coin_object_id: object_to_send,
+        amount: Some(1),
+        opts: Opts::for_testing_dry_run(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await?;
+
+    assert_dry_run(transfer_sui_dry_run, object_to_send, "TransferSui");
+
+    // === PAY === //
+    let pay_dry_run = SuiClientCommands::Pay {
+        input_coins: vec![object_id],
+        recipients: vec![KeyIdentity::Address(SuiAddress::random_for_testing_only())],
+        amounts: vec![1],
+        opts: OptsWithGas::for_testing_dry_run(None, rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await?;
+
+    if let SuiClientCommandResult::DryRun(response) = pay_dry_run {
+        assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
+        assert_ne!(response.effects.gas_object().object_id(), object_id);
+    } else {
+        panic!("Pay dry run failed");
+    }
+
+    // specify which gas object to use
+    let gas_coin_id = object_refs.data.last().unwrap().object().unwrap().object_id;
+    let pay_dry_run = SuiClientCommands::Pay {
+        input_coins: vec![object_id],
+        recipients: vec![KeyIdentity::Address(SuiAddress::random_for_testing_only())],
+        amounts: vec![1],
+        opts: OptsWithGas::for_testing_dry_run(
+            Some(gas_coin_id),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        ),
+    }
+    .execute(context)
+    .await?;
+
+    assert_dry_run(pay_dry_run, gas_coin_id, "Pay");
+
+    // === PAY SUI === //
+    let pay_sui_dry_run = SuiClientCommands::PaySui {
+        input_coins: vec![object_id],
+        recipients: vec![KeyIdentity::Address(SuiAddress::random_for_testing_only())],
+        amounts: vec![1],
+        opts: Opts::for_testing_dry_run(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await?;
+
+    assert_dry_run(pay_sui_dry_run, object_id, "PaySui");
+
+    // === PAY ALL SUI === //
+    let pay_all_sui_dry_run = SuiClientCommands::PayAllSui {
+        input_coins: vec![object_id],
+        recipient: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
+        opts: Opts::for_testing_dry_run(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await?;
+
+    assert_dry_run(pay_all_sui_dry_run, object_id, "PayAllSui");
+
+    Ok(())
+}
+
+async fn test_cluster_helper() -> (
+    TestCluster,
+    SuiClient,
+    u64,
+    [ObjectID; 3],
+    [KeyIdentity; 2],
+    [SuiAddress; 2],
+) {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address1 = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await.unwrap();
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address1,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let object_id1 = object_refs
+        .data
+        .first()
+        .unwrap()
+        .object()
+        .unwrap()
+        .object_id;
+    let object_id2 = object_refs.data.get(1).unwrap().object().unwrap().object_id;
+    let object_id3 = object_refs.data.get(2).unwrap().object().unwrap().object_id;
+    let address2 = SuiAddress::random_for_testing_only();
+    let address3 = SuiAddress::random_for_testing_only();
+    let recipient1 = KeyIdentity::Address(address2);
+    let recipient2 = KeyIdentity::Address(address3);
+
+    (
+        test_cluster,
+        client,
+        rgp,
+        [object_id1, object_id2, object_id3],
+        [recipient1, recipient2],
+        [address2, address3],
+    )
+}
+
+#[sim_test]
+async fn test_pay() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id1, object_id2, object_id3) = (objects[0], objects[1], objects[2]);
+    let (recipient1, recipient2) = (&recipients[0], &recipients[1]);
+    let (address2, address3) = (addresses[0], addresses[1]);
+    let context = &mut test_cluster.wallet;
+    let pay = SuiClientCommands::Pay {
+        input_coins: vec![object_id1, object_id2],
+        recipients: vec![recipient1.clone(), recipient2.clone()],
+        amounts: vec![5000, 10000],
+        opts: OptsWithGas::for_testing(Some(object_id1), rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await;
+
+    // we passed the gas object to be one of the input coins, which should fail
+    assert!(pay.is_err());
+
+    let amounts = [5000, 10000];
+    // we expect this to be the gas coin used
+    let pay = SuiClientCommands::Pay {
+        input_coins: vec![object_id1, object_id2],
+        recipients: vec![recipient1.clone(), recipient2.clone()],
+        amounts: amounts.into(),
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await?;
+
+    // Pay command takes the input coins and transfers the given amounts from each input coin (in order)
+    // to the recipients
+    // this test checks if the recipients have received the objects, and if the gas object used is
+    // the right one (not one of the input coins, and in this setup it's the 3rd coin of sender)
+    // we also check if the balances are right!
+    if let SuiClientCommandResult::TransactionBlock(response) = pay {
+        // check tx status
+        assert!(response.status_ok().unwrap());
+        // check gas coin used
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            object_id3
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(!objs_refs.has_next_page);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            client
+                .coin_read_api()
+                .get_balance(address2, None)
+                .await?
+                .total_balance,
+            amounts[0] as u128
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address3,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(response.status_ok().unwrap());
+        assert!(!objs_refs.has_next_page);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            client
+                .coin_read_api()
+                .get_balance(address3, None)
+                .await?
+                .total_balance,
+            amounts[1] as u128
+        );
+    } else {
+        panic!("Pay test failed");
+    }
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_pay_sui() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id1, object_id2) = (objects[0], objects[1]);
+    let (recipient1, recipient2) = (&recipients[0], &recipients[1]);
+    let (address2, address3) = (addresses[0], addresses[1]);
+    let context = &mut test_cluster.wallet;
+    let amounts = [1000, 5000];
+    let pay_sui = SuiClientCommands::PaySui {
+        input_coins: vec![object_id1, object_id2],
+        recipients: vec![recipient1.clone(), recipient2.clone()],
+        amounts: amounts.into(),
+        opts: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await?;
+
+    // pay sui takes the input coins and transfers from each of them (in order) the amounts to the
+    // respective receipients.
+    // check if each recipient has one object, if the tx status is success,
+    // and if the gas object used was the first object in the input coins
+    // we also check if the balances of each recipient are right!
+    if let SuiClientCommandResult::TransactionBlock(response) = pay_sui {
+        assert!(response.status_ok().unwrap());
+        // check gas coin used
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            object_id1
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(!objs_refs.has_next_page);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            client
+                .coin_read_api()
+                .get_balance(address2, None)
+                .await?
+                .total_balance,
+            amounts[0] as u128
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address3,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(response.status_ok().unwrap());
+        assert!(!objs_refs.has_next_page);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            client
+                .coin_read_api()
+                .get_balance(address3, None)
+                .await?
+                .total_balance,
+            amounts[1] as u128
+        );
+    } else {
+        panic!("PaySui test failed");
+    }
+    Ok(())
+}
+
+#[sim_test]
+async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id1, object_id2) = (objects[0], objects[1]);
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+    let pay_all_sui = SuiClientCommands::PayAllSui {
+        input_coins: vec![object_id1, object_id2],
+        recipient: recipient1.clone(),
+        opts: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await?;
+
+    // pay all sui will take the input coins and smash them into one coin and transfer that coin to
+    // the recipient, so we check that the recipient has one object, if the tx status is success,
+    // and if the gas object used was the first object in the input coins
+    if let SuiClientCommandResult::TransactionBlock(response) = pay_all_sui {
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(response.status_ok().unwrap());
+        assert!(!objs_refs.has_next_page);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            response.effects.unwrap().gas_object().object_id(),
+            object_id1
+        );
+    } else {
+        panic!("PayAllSui test failed");
+    }
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_transfer() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id1, object_id2) = (objects[0], objects[1]);
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+    let transfer = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(address2),
+        object_id: object_id1,
+        opts: OptsWithGas::for_testing(Some(object_id1), rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await;
+
+    // passed the gas object to be the object to transfer, which should fail
+    assert!(transfer.is_err());
+
+    let transfer = SuiClientCommands::Transfer {
+        to: recipient1.clone(),
+        object_id: object_id1,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await?;
+    // transfer command will transfer the object_id1 to address2, and use object_id2 as gas
+    // we check if object1 is owned by address 2 and if the gas object used is object_id2
+    if let SuiClientCommandResult::TransactionBlock(response) = transfer {
+        assert!(response.status_ok().unwrap());
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            object_id2
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(!objs_refs.has_next_page);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            objs_refs.data.first().unwrap().object().unwrap().object_id,
+            object_id1
+        );
+    } else {
+        panic!("Transfer test failed");
+    }
+    Ok(())
+}
+
+#[sim_test]
+async fn test_transfer_sui() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let object_id1 = objects[0];
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+    let amount = 1000;
+    let transfer_sui = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(address2),
+        sui_coin_object_id: object_id1,
+        amount: Some(amount),
+        opts: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await?;
+
+    // transfer sui will transfer the amount from object_id1 to address2, and use the same object
+    // as gas, and we check if the recipient address received the object, and the expected balance
+    // is correct
+    if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
+        assert!(response.status_ok().unwrap());
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            object_id1
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(!objs_refs.has_next_page);
+        assert_eq!(objs_refs.data.len(), 1);
+        let balance = client
+            .coin_read_api()
+            .get_balance(address2, None)
+            .await?
+            .total_balance;
+        assert_eq!(balance, amount as u128);
+    } else {
+        panic!("TransferSui test failed");
+    }
+    // transfer the whole object by not passing an amount
+    let transfer_sui = SuiClientCommands::TransferSui {
+        to: recipient1.clone(),
+        sui_coin_object_id: object_id1,
+        amount: None,
+        opts: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+    }
+    .execute(context)
+    .await?;
+    if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
+        assert!(response.status_ok().unwrap());
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            object_id1
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(!objs_refs.has_next_page);
+        assert_eq!(
+            objs_refs.data.len(),
+            2,
+            "Expected to have two coins when calling transfer sui the 2nd time"
+        );
+        assert!(objs_refs
+            .data
+            .iter()
+            .any(|x| x.object().unwrap().object_id == object_id1));
+    } else {
+        panic!("TransferSui test failed");
+    }
+    Ok(())
+}
+
+#[sim_test]
+async fn test_gas_estimation() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, objects, _, addresses) = test_cluster_helper().await;
+    let object_id1 = objects[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+    let amount = 1000;
+    let sender = context.active_address().unwrap();
+    let tx_builder = client.transaction_builder();
+    let tx_kind = tx_builder.transfer_sui_tx_kind(address2, Some(amount));
+    let gas_estimate = estimate_gas_budget(&client, sender, tx_kind, rgp, None, None).await;
+    assert!(gas_estimate.is_ok());
+
+    let transfer_sui_cmd = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(address2),
+        sui_coin_object_id: object_id1,
+        amount: Some(amount),
+        opts: Opts {
+            gas_budget: None,
+            dry_run: false,
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: false,
+        },
+    }
+    .execute(context)
+    .await
+    .unwrap();
+    if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui_cmd {
+        assert!(response.status_ok().unwrap());
+        let gas_used = response.effects.as_ref().unwrap().gas_object().object_id();
+        assert_eq!(gas_used, object_id1);
+        assert!(
+            response
+                .effects
+                .as_ref()
+                .unwrap()
+                .gas_cost_summary()
+                .gas_used()
+                <= gas_estimate.unwrap()
+        );
+    } else {
+        panic!("TransferSui test failed");
+    }
+    Ok(())
+}
+
+#[sim_test]
+async fn test_clever_errors() -> Result<(), anyhow::Error> {
+    // Publish the package
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("clever_errors");
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+    }
+    .execute(context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    let SuiClientCommandResult::TransactionBlock(response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    let package = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+
+    let elide_transaction_digest = |s: String| -> String {
+        let mut x = s.splitn(5, '\'').collect::<Vec<_>>();
+        x[1] = "ELIDED_TRANSACTION_DIGEST";
+        let tmp = format!("ELIDED_ADDRESS{}", &x[3][66..]);
+        x[3] = &tmp;
+        x.join("'")
+    };
+
+    // Normal abort
+    let non_clever_abort = SuiClientCommands::Call {
+        package: package.reference.object_id,
+        module: "clever_errors".to_string(),
+        function: "aborter".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![],
+    }
+    .execute(context)
+    .await
+    .unwrap_err();
+
+    // Line-only abort
+    let line_only_abort = SuiClientCommands::Call {
+        package: package.reference.object_id,
+        module: "clever_errors".to_string(),
+        function: "aborter_line_no".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![],
+    }
+    .execute(context)
+    .await
+    .unwrap_err();
+
+    // Full clever error with utf-8 string
+    let clever_error_utf8 = SuiClientCommands::Call {
+        package: package.reference.object_id,
+        module: "clever_errors".to_string(),
+        function: "clever_aborter".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![],
+    }
+    .execute(context)
+    .await
+    .unwrap_err();
+
+    // Full clever error with non-utf-8 string
+    let clever_error_non_utf8 = SuiClientCommands::Call {
+        package: package.reference.object_id,
+        module: "clever_errors".to_string(),
+        function: "clever_aborter_not_a_string".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![],
+    }
+    .execute(context)
+    .await
+    .unwrap_err();
+
+    let error_string = format!(
+        "Non-clever-abort\n---\n{}\n---\nLine-only-abort\n---\n{}\n---\nClever-error-utf8\n---\n{}\n---\nClever-error-non-utf8\n---\n{}\n---\n",
+        elide_transaction_digest(non_clever_abort.to_string()),
+        elide_transaction_digest(line_only_abort.to_string()),
+        elide_transaction_digest(clever_error_utf8.to_string()),
+        elide_transaction_digest(clever_error_non_utf8.to_string())
+    );
+
+    insta::assert_snapshot!(error_string);
     Ok(())
 }

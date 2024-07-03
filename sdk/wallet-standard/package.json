@@ -1,46 +1,44 @@
 {
 	"name": "@mysten/wallet-standard",
-	"version": "0.8.7",
+	"version": "0.12.11",
 	"description": "A suite of standard utilities for implementing wallets based on the Wallet Standard.",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
-	"main": "./dist/index.js",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.ts",
+	"type": "commonjs",
+	"main": "./dist/cjs/index.js",
+	"module": "./dist/esm/index.js",
+	"types": "./dist/cjs/index.d.ts",
 	"exports": {
 		".": {
-			"types": "./dist/index.d.ts",
-			"source": "./src/index.ts",
-			"import": "./dist/index.mjs",
-			"require": "./dist/index.js"
+			"import": "./dist/esm/index.js",
+			"require": "./dist/cjs/index.js"
 		}
 	},
 	"sideEffects": false,
 	"files": [
+		"CHANGELOG.md",
 		"dist",
-		"src",
-		"CHANGELOG.md"
+		"src"
 	],
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-		"dev": "pnpm build --watch",
-		"build": "pnpm build:types && pnpm build:tsup",
-		"build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
-		"build:types": "tsc --build",
+		"build": "build-package",
 		"prepublishOnly": "pnpm build",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
 		"eslint:check": "eslint --max-warnings=0 .",
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
-		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+		"json-schema": "typescript-json-schema src/types.ts SerializedTransactionDataV2 --required --strictNullChecks > serialized-transaction-data-v2.schema.json && prettier -w serialized-transaction-data-v2.schema.json"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@wallet-standard/core": "1.0.3"
 	},
 	"devDependencies": {
-		"tsup": "^7.1.0",
-		"typescript": "^5.1.6"
+		"@mysten/build-scripts": "workspace:*",
+		"typescript": "^5.3.3",
+		"typescript-json-schema": "^0.63.0"
 	}
 }

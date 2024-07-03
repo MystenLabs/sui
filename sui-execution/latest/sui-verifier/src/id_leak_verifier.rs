@@ -12,30 +12,32 @@
 //! 2. Written into a mutable reference
 //! 3. Added to a vector
 //! 4. Passed to a function cal::;
+use move_abstract_interpreter::absint::{
+    AbstractDomain, AbstractInterpreter, FunctionContext, JoinResult, TransferFunctions,
+};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
-    binary_views::{BinaryIndexedView, FunctionView},
     errors::PartialVMError,
     file_format::{
         Bytecode, CodeOffset, CompiledModule, FunctionDefinitionIndex, FunctionHandle, LocalIndex,
         StructDefinition, StructFieldInformation,
     },
 };
-use move_bytecode_verifier::{
-    absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
-    meter::{Meter, Scope},
-};
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::IdentStr, vm_status::StatusCode,
 };
 use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
+use sui_types::bridge::BRIDGE_MODULE_NAME;
+use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::{
     authenticator_state::AUTHENTICATOR_STATE_MODULE_NAME,
     clock::CLOCK_MODULE_NAME,
     error::{ExecutionError, VMMVerifierErrorSubStatusCode},
     id::OBJECT_MODULE_NAME,
+    randomness_state::RANDOMNESS_MODULE_NAME,
     sui_system_state::SUI_SYSTEM_MODULE_NAME,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
+    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 
 use crate::{
@@ -83,11 +85,27 @@ const SUI_AUTHENTICATOR_STATE_CREATE: FunctionIdent = (
     AUTHENTICATOR_STATE_MODULE_NAME,
     ident_str!("create"),
 );
+const SUI_RANDOMNESS_STATE_CREATE: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    RANDOMNESS_MODULE_NAME,
+    ident_str!("create"),
+);
+const SUI_DENY_LIST_CREATE: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    DENY_LIST_MODULE,
+    DENY_LIST_CREATE_FUNC,
+);
+
+const SUI_BRIDGE_CREATE: FunctionIdent =
+    (&BRIDGE_ADDRESS, BRIDGE_MODULE_NAME, ident_str!("create"));
 const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[OBJECT_NEW, OBJECT_NEW_UID_FROM_HASH, TS_NEW_OBJECT];
 const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_SYSTEM_CREATE,
     SUI_CLOCK_CREATE,
     SUI_AUTHENTICATOR_STATE_CREATE,
+    SUI_RANDOMNESS_STATE_CREATE,
+    SUI_DENY_LIST_CREATE,
+    SUI_BRIDGE_CREATE,
 ];
 
 impl AbstractValue {
@@ -102,23 +120,25 @@ impl AbstractValue {
 
 pub fn verify_module(
     module: &CompiledModule,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> Result<(), ExecutionError> {
     verify_id_leak(module, meter)
 }
 
-fn verify_id_leak(module: &CompiledModule, meter: &mut impl Meter) -> Result<(), ExecutionError> {
-    let binary_view = BinaryIndexedView::Module(module);
+fn verify_id_leak(
+    module: &CompiledModule,
+    meter: &mut (impl Meter + ?Sized),
+) -> Result<(), ExecutionError> {
     for (index, func_def) in module.function_defs.iter().enumerate() {
         let code = match func_def.code.as_ref() {
             Some(code) => code,
             None => continue,
         };
-        let handle = binary_view.function_handle_at(func_def.function);
+        let handle = module.function_handle_at(func_def.function);
         let func_view =
-            FunctionView::function(module, FunctionDefinitionIndex(index as u16), code, handle);
+            FunctionContext::new(module, FunctionDefinitionIndex(index as u16), code, handle);
         let initial_state = AbstractState::new(&func_view);
-        let mut verifier = IDLeakAnalysis::new(&binary_view, &func_view);
+        let mut verifier = IDLeakAnalysis::new(module, &func_view);
         let function_to_verify = verifier.cur_function();
         if FUNCTIONS_TO_SKIP
             .iter()
@@ -133,8 +153,8 @@ fn verify_id_leak(module: &CompiledModule, meter: &mut impl Meter) -> Result<(),
                 if check_for_verifier_timeout(&err.major_status()) {
                     to_verification_timeout_error(err.to_string())
                 } else if let Some(message) = err.source().as_ref() {
-                    let function_name = binary_view
-                        .identifier_at(binary_view.function_handle_at(func_def.function).name);
+                    let function_name =
+                        module.identifier_at(module.function_handle_at(func_def.function).name);
                     let module_name = module.self_id();
                     verification_failure(format!(
                         "{} Found in {module_name}::{function_name}",
@@ -156,12 +176,12 @@ pub(crate) struct AbstractState {
 
 impl AbstractState {
     /// create a new abstract state
-    pub fn new(function_view: &FunctionView) -> Self {
+    pub fn new(function_context: &FunctionContext) -> Self {
         let mut state = AbstractState {
             locals: BTreeMap::new(),
         };
 
-        for param_idx in 0..function_view.parameters().len() {
+        for param_idx in 0..function_context.parameters().len() {
             state
                 .locals
                 .insert(param_idx as LocalIndex, AbstractValue::Other);
@@ -176,7 +196,7 @@ impl AbstractDomain for AbstractState {
     fn join(
         &mut self,
         state: &AbstractState,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> Result<JoinResult, PartialVMError> {
         meter.add(Scope::Function, JOIN_BASE_COST)?;
         meter.add_items(Scope::Function, JOIN_PER_LOCAL_COST, state.locals.len())?;
@@ -196,16 +216,16 @@ impl AbstractDomain for AbstractState {
 }
 
 struct IDLeakAnalysis<'a> {
-    binary_view: &'a BinaryIndexedView<'a>,
-    function_view: &'a FunctionView<'a>,
+    binary_view: &'a CompiledModule,
+    function_context: &'a FunctionContext<'a>,
     stack: AbstractStack<AbstractValue>,
 }
 
 impl<'a> IDLeakAnalysis<'a> {
-    fn new(binary_view: &'a BinaryIndexedView<'a>, function_view: &'a FunctionView<'a>) -> Self {
+    fn new(binary_view: &'a CompiledModule, function_context: &'a FunctionContext<'a>) -> Self {
         Self {
             binary_view,
-            function_view,
+            function_context,
             stack: AbstractStack::new(),
         }
     }
@@ -245,8 +265,7 @@ impl<'a> IDLeakAnalysis<'a> {
     fn cur_function(&self) -> FunctionIdent<'a> {
         let fdef = self
             .binary_view
-            .function_def_at(self.function_view.index().unwrap())
-            .unwrap();
+            .function_def_at(self.function_context.index().unwrap());
         let handle = self.binary_view.function_handle_at(fdef.function);
         self.resolve_function(handle)
     }
@@ -262,7 +281,7 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
         bytecode: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> Result<(), PartialVMError> {
         execute_inner(self, state, bytecode, index, meter)?;
         // invariant: the stack should be empty at the end of the block
@@ -327,7 +346,7 @@ fn pack(
     // "id". That fields must come from one of the functions that creates a new UID.
     let handle = verifier
         .binary_view
-        .struct_handle_at(struct_def.struct_handle);
+        .datatype_handle_at(struct_def.struct_handle);
     let num_fields = num_fields(struct_def);
     verifier.stack_popn(num_fields - 1)?;
     let last_value = verifier.stack.pop().unwrap();
@@ -362,7 +381,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     _: CodeOffset,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> Result<(), PartialVMError> {
     meter.add(Scope::Function, STEP_BASE_COST)?;
     // TODO: Better diagnostics with location
@@ -449,16 +468,16 @@ fn execute_inner(
 
         // These bytecodes are not allowed, and will be
         // flagged as error in a different verifier.
-        Bytecode::MoveFrom(_)
-                | Bytecode::MoveFromGeneric(_)
-                | Bytecode::MoveTo(_)
-                | Bytecode::MoveToGeneric(_)
-                | Bytecode::ImmBorrowGlobal(_)
-                | Bytecode::MutBorrowGlobal(_)
-                | Bytecode::ImmBorrowGlobalGeneric(_)
-                | Bytecode::MutBorrowGlobalGeneric(_)
-                | Bytecode::Exists(_)
-                | Bytecode::ExistsGeneric(_) => {
+        Bytecode::MoveFromDeprecated(_)
+                | Bytecode::MoveFromGenericDeprecated(_)
+                | Bytecode::MoveToDeprecated(_)
+                | Bytecode::MoveToGenericDeprecated(_)
+                | Bytecode::ImmBorrowGlobalDeprecated(_)
+                | Bytecode::MutBorrowGlobalDeprecated(_)
+                | Bytecode::ImmBorrowGlobalGenericDeprecated(_)
+                | Bytecode::MutBorrowGlobalGenericDeprecated(_)
+                | Bytecode::ExistsDeprecated(_)
+                | Bytecode::ExistsGenericDeprecated(_) => {
             panic!("Should have been checked by global_storage_access_verifier.");
         }
 
@@ -473,7 +492,7 @@ fn execute_inner(
         }
 
         Bytecode::Ret => {
-            verifier.stack_popn(verifier.function_view.return_().len() as u64)?
+            verifier.stack_popn(verifier.function_context.return_().len() as u64)?
         }
 
         Bytecode::BrTrue(_) | Bytecode::BrFalse(_) | Bytecode::Abort => {
@@ -486,21 +505,21 @@ fn execute_inner(
         }
 
         Bytecode::Pack(idx) => {
-            let struct_def = expect_ok(verifier.binary_view.struct_def_at(*idx))?;
+            let struct_def = verifier.binary_view.struct_def_at(*idx);
             pack(verifier, struct_def)?;
         }
         Bytecode::PackGeneric(idx) => {
-            let struct_inst = expect_ok(verifier.binary_view.struct_instantiation_at(*idx))?;
-            let struct_def = expect_ok(verifier.binary_view.struct_def_at(struct_inst.def))?;
+            let struct_inst = verifier.binary_view.struct_instantiation_at(*idx);
+            let struct_def = verifier.binary_view.struct_def_at(struct_inst.def);
             pack(verifier, struct_def)?;
         }
         Bytecode::Unpack(idx) => {
-            let struct_def = expect_ok(verifier.binary_view.struct_def_at(*idx))?;
+            let struct_def = verifier.binary_view.struct_def_at(*idx);
             unpack(verifier, struct_def)?;
         }
         Bytecode::UnpackGeneric(idx) => {
-            let struct_inst = expect_ok(verifier.binary_view.struct_instantiation_at(*idx))?;
-            let struct_def = expect_ok(verifier.binary_view.struct_def_at(struct_inst.def))?;
+            let struct_inst = verifier.binary_view.struct_instantiation_at(*idx);
+            let struct_def = verifier.binary_view.struct_def_at(struct_inst.def);
             unpack(verifier, struct_def)?;
         }
 
@@ -524,21 +543,43 @@ fn execute_inner(
             verifier.stack.pop().unwrap();
             verifier.stack.pop().unwrap();
         }
+        Bytecode::PackVariant(vidx) =>  {
+            let handle = verifier.binary_view.variant_handle_at(*vidx);
+            let variant = verifier.binary_view.variant_def_at(handle.enum_def, handle.variant);
+            let num_fields = variant.fields.len();
+            verifier.stack_popn(num_fields as u64)?;
+            verifier.stack_push(AbstractValue::Other)?;
+        }
+        Bytecode::PackVariantGeneric(vidx) =>  {
+            let handle = verifier.binary_view.variant_instantiation_handle_at(*vidx);
+            let enum_inst = verifier.binary_view.enum_instantiation_at(handle.enum_def);
+            let variant = verifier.binary_view.variant_def_at(enum_inst.def, handle.variant);
+            let num_fields = variant.fields.len();
+            verifier.stack_popn(num_fields as u64)?;
+            verifier.stack_push(AbstractValue::Other)?;
+        }
+        Bytecode::UnpackVariant(vidx)
+        | Bytecode::UnpackVariantImmRef(vidx)
+        | Bytecode::UnpackVariantMutRef(vidx) =>  {
+            let handle = verifier.binary_view.variant_handle_at(*vidx);
+            let variant = verifier.binary_view.variant_def_at(handle.enum_def, handle.variant);
+            let num_fields = variant.fields.len();
+            verifier.stack.pop().unwrap();
+            verifier.stack_pushn(num_fields as u64, AbstractValue::Other)?;
+        }
+        Bytecode::UnpackVariantGeneric(vidx)
+        | Bytecode::UnpackVariantGenericImmRef(vidx)
+        | Bytecode::UnpackVariantGenericMutRef(vidx) =>  {
+            let handle = verifier.binary_view.variant_instantiation_handle_at(*vidx);
+            let enum_inst = verifier.binary_view.enum_instantiation_at(handle.enum_def);
+            let variant = verifier.binary_view.variant_def_at(enum_inst.def, handle.variant);
+            let num_fields = variant.fields.len();
+            verifier.stack.pop().unwrap();
+            verifier.stack_pushn(num_fields as u64, AbstractValue::Other)?;
+        }
+        Bytecode::VariantSwitch(_) =>  {
+            verifier.stack.pop().unwrap();
+        }
     };
     Ok(())
-}
-
-fn expect_ok<T>(res: Result<T, PartialVMError>) -> Result<T, PartialVMError> {
-    match res {
-        Ok(x) => Ok(x),
-        Err(partial_vm_error) => {
-            let msg = format!(
-                "Should have been verified to be safe by the Move bytecode verifier, \
-            Got error: {partial_vm_error:?}"
-            );
-            debug_assert!(false, "{msg}");
-            // This is an internal error, but we cannot accept the module as safe
-            Err(PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(msg))
-        }
-    }
 }

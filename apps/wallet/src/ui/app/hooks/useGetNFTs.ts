@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { hasDisplayData, isKioskOwnerToken, useGetOwnedObjects } from '@mysten/core';
-import { type SuiObjectData } from '@mysten/sui.js/client';
+import { useKioskClient } from '@mysten/core/src/hooks/useKioskClient';
+import { type SuiObjectData } from '@mysten/sui/client';
 import { useMemo } from 'react';
 
+import { useBuyNLargeAssets } from '../components/buynlarge/useBuyNLargeAssets';
 import { useHiddenAssets } from '../pages/home/hidden-assets/HiddenAssetsProvider';
 
 type OwnedAssets = {
@@ -19,6 +21,8 @@ export enum AssetFilterTypes {
 }
 
 export function useGetNFTs(address?: string | null) {
+	const kioskClient = useKioskClient();
+	const bnl = useBuyNLargeAssets();
 	const {
 		data,
 		isPending,
@@ -31,7 +35,12 @@ export function useGetNFTs(address?: string | null) {
 	} = useGetOwnedObjects(
 		address,
 		{
-			MatchNone: [{ StructType: '0x2::coin::Coin' }],
+			MatchNone: [
+				{ StructType: '0x2::coin::Coin' },
+				...(bnl
+					.filter((item) => !!item?.objectType)
+					.map((item) => ({ StructType: item?.objectType })) as { StructType: string }[]),
+			],
 		},
 		50,
 	);
@@ -43,18 +52,27 @@ export function useGetNFTs(address?: string | null) {
 			other: [],
 			hidden: [],
 		};
-		return data?.pages
+
+		const groupedAssets = data?.pages
 			.flatMap((page) => page.data)
 			.filter((asset) => !hiddenAssetIds.includes(asset.data?.objectId!))
 			.reduce((acc, curr) => {
-				if (hasDisplayData(curr) || isKioskOwnerToken(curr))
+				if (hasDisplayData(curr) || isKioskOwnerToken(kioskClient.network, curr))
 					acc.visual.push(curr.data as SuiObjectData);
 				if (!hasDisplayData(curr)) acc.other.push(curr.data as SuiObjectData);
 				if (hiddenAssetIds.includes(curr.data?.objectId!))
 					acc.hidden.push(curr.data as SuiObjectData);
 				return acc;
 			}, ownedAssets);
-	}, [hiddenAssetIds, data?.pages]);
+
+		bnl.forEach((item) => {
+			if (item?.asset?.data) {
+				groupedAssets?.visual.unshift(item.asset.data);
+			}
+		});
+
+		return groupedAssets;
+	}, [hiddenAssetIds, data?.pages, kioskClient.network, bnl]);
 
 	return {
 		data: assets,

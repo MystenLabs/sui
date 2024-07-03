@@ -61,7 +61,7 @@ mod test {
     use types::{CertificateDigest, Header, Round};
 
     pub fn create_header_for_round(round: Round) -> Header {
-        let builder = types::HeaderV2Builder::default();
+        let builder = types::HeaderV1Builder::default();
         let fixture = CommitteeFixture::builder().randomize_ports(true).build();
         let primary = fixture.authorities().next().unwrap();
         let id = primary.id();
@@ -77,7 +77,7 @@ mod test {
             )
             .build()
             .unwrap();
-        Header::V2(header)
+        Header::V1(header)
     }
 
     #[tokio::test]

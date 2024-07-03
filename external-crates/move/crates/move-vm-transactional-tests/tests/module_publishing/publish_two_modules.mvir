@@ -63,11 +63,12 @@ module 0x42.Bar {
 }
 
 //# run
+module 0x42.m {
 import 0x42.MoneyHolder;
 import 0x42.Bar;
 import 0x1.Coin;
 
-main() {
+entry foo() {
     let coin: Coin.Coin;
     let money_holder: MoneyHolder.T;
     let money_holder_ref: &MoneyHolder.T;
@@ -91,4 +92,5 @@ label b0:
     v2 = Bar.value(move(bar_ref));
     assert(copy(v) == copy(v2), 42);
     return;
+}
 }

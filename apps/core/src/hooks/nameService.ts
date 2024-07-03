@@ -8,18 +8,14 @@ import { useQuery } from '@tanstack/react-query';
 const SUI_NS_FEATURE_FLAG = 'suins';
 
 // This should align with whatever names we want to be able to resolve.
-const SUI_NS_DOMAINS = ['.sui'];
-export function isSuiNSName(name: string) {
-	return SUI_NS_DOMAINS.some((domain) => name.endsWith(domain));
-}
 
 export function useSuiNSEnabled() {
 	return useFeatureIsOn(SUI_NS_FEATURE_FLAG);
 }
 
-export function useResolveSuiNSAddress(name?: string | null) {
+export function useResolveSuiNSAddress(name?: string | null, enabled?: boolean) {
 	const client = useSuiClient();
-	const enabled = useSuiNSEnabled();
+	const enabledSuiNs = useSuiNSEnabled();
 
 	return useQuery({
 		queryKey: ['resolve-suins-address', name],
@@ -28,7 +24,7 @@ export function useResolveSuiNSAddress(name?: string | null) {
 				name: name!,
 			});
 		},
-		enabled: !!name && enabled,
+		enabled: !!name && enabled && enabledSuiNs,
 		refetchOnWindowFocus: false,
 		retry: false,
 	});

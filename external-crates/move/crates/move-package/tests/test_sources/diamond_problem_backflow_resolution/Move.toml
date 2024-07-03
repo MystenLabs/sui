@@ -16,7 +16,6 @@
 
 [package]
 name = "Root"
-version = "0.0.0"
 
 [dependencies]
 # This should be resolved to 0x1 by backflow from the BA instantiation

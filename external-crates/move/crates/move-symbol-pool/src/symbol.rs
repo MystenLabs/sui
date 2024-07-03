@@ -243,6 +243,66 @@ fn inline_symbol_slice_mut(x: &mut u64) -> &mut [u8] {
     }
 }
 
+#[macro_export]
+macro_rules! static_symbols_with_idx {
+    ($($str:tt => $idx:expr),* $(,)?) => {
+        pub mod static_symbols {
+            #[macro_export]
+            macro_rules! symbol {
+                $(($str) => { $crate::static_symbols::StaticSymbolConsts::<{$idx}>::SYMBOL };)*
+                ($non_static:expr) => {
+                    // TODO find a way to link to the file and line number of
+                    // static_symbols! invocation
+                    compile_error!(
+                        "Unknown static symbol. Static symbols can be added to the \
+                        list in move-symbol-pool",
+                    )
+                };
+            }
+
+            pub const STATIC_SYMBOLS: &[&str] = &[$($str,)*];
+            pub const STATIC_SYMBOL_IDX: phf::Map<&'static str, u32> = phf::phf_map! {
+                $($str => $idx,)*
+            };
+
+            pub struct StaticSymbolConsts<const N: u32>;
+            $(impl StaticSymbolConsts<{$idx}> {
+                pub const SYMBOL: $crate::symbol::Symbol = $crate::symbol::Symbol::pack_static($idx);
+            })*
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! expand_symbol_idxs {
+    ($count:expr, [$s:tt], [$(($accm:tt, $idx:expr)),* $(,)?], $callback:ident) => {
+        $callback! {
+            $s => 0,
+            $($accm => ($count - ($idx))),*
+        }
+    };
+    ($count:expr, [$s:tt, $($rest:tt),+], [$(($acc:tt, $idx:expr)),* $(,)?], $callback:ident) => {
+        expand_symbol_idxs! {
+            1 + $count,
+            [$($rest),+],
+            [($s, $count), $(($acc, $idx)),*],
+            $callback
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! static_symbols {
+    ($($str:tt),* $(,)?) => {
+        expand_symbol_idxs! {
+            0,
+            [$($str),*],
+            [],
+            static_symbols_with_idx
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -338,64 +398,4 @@ mod tests {
             assert_eq!(map_s, sym_s);
         }
     }
-}
-
-#[macro_export]
-macro_rules! static_symbols_with_idx {
-    ($($str:tt => $idx:expr),* $(,)?) => {
-        pub mod static_symbols {
-            #[macro_export]
-            macro_rules! symbol {
-                $(($str) => { $crate::static_symbols::StaticSymbolConsts::<{$idx}>::SYMBOL };)*
-                ($non_static:expr) => {
-                    // TODO find a way to link to the file and line number of
-                    // static_symbols! invocation
-                    compile_error!(
-                        "Unknown static symbol. Static symbols can be added to the \
-                        list in move-symbol-pool",
-                    )
-                };
-            }
-
-            pub const STATIC_SYMBOLS: &[&str] = &[$($str,)*];
-            pub const STATIC_SYMBOL_IDX: phf::Map<&'static str, u32> = phf::phf_map! {
-                $($str => $idx,)*
-            };
-
-            pub struct StaticSymbolConsts<const N: u32>;
-            $(impl StaticSymbolConsts<{$idx}> {
-                pub const SYMBOL: $crate::symbol::Symbol = $crate::symbol::Symbol::pack_static($idx);
-            })*
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! expand_symbol_idxs {
-    ($count:expr, [$s:tt], [$(($accm:tt, $idx:expr)),* $(,)?], $callback:ident) => {
-        $callback! {
-            $s => 0,
-            $($accm => ($count - ($idx))),*
-        }
-    };
-    ($count:expr, [$s:tt, $($rest:tt),+], [$(($acc:tt, $idx:expr)),* $(,)?], $callback:ident) => {
-        expand_symbol_idxs! {
-            1 + $count,
-            [$($rest),+],
-            [($s, $count), $(($acc, $idx)),*],
-            $callback
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! static_symbols {
-    ($($str:tt),* $(,)?) => {
-        expand_symbol_idxs! {
-            0,
-            [$($str),*],
-            [],
-            static_symbols_with_idx
-        }
-    };
 }

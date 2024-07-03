@@ -15,43 +15,62 @@ mod checked {
     };
     use sui_types::execution_mode::{self, ExecutionMode};
     use sui_types::gas_coin::GAS;
+    use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::object::OBJECT_START_VERSION;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::randomness_state::{
+        RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE_FUNCTION_NAME,
+        RANDOMNESS_STATE_UPDATE_FUNCTION_NAME,
+    };
+    use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
     use tracing::{info, instrument, trace, warn};
 
+    use crate::adapter::new_move_vm;
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
-    use move_binary_format::access::ModuleAccess;
+    use move_core_types::ident_str;
+    use sui_move_natives::all_natives;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
     };
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::bridge::BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER;
+    use sui_types::bridge::{
+        BridgeChainId, BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_INIT_COMMITTEE_FUNCTION_NAME,
+        BRIDGE_MODULE_NAME,
+    };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
+    use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
+    use sui_types::digests::{
+        get_mainnet_chain_identifier, get_testnet_chain_identifier, ChainIdentifier,
+    };
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
-    use sui_types::execution_status::ExecutionStatus;
+    use sui_types::execution_config_utils::to_binary_config;
+    use sui_types::execution_status::{CongestedObjects, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
+    use sui_types::id::UID;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
-    use sui_types::messages_consensus::ConsensusCommitPrologue;
     use sui_types::storage::BackingStore;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
-    use sui_types::transaction::InputObjects;
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg, ProgrammableTransaction,
         TransactionKind,
     };
+    use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
-        base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
-        object::Object,
+        base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
+        object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
         SUI_SYSTEM_PACKAGE_ID,
@@ -60,7 +79,7 @@ mod checked {
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -75,13 +94,21 @@ mod checked {
         certificate_deny_set: &HashSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
+        let input_objects = input_objects.into_inner();
+        let mutable_inputs = if enable_expensive_checks {
+            input_objects.mutable_inputs().keys().copied().collect()
+        } else {
+            HashSet::new()
+        };
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
         let contains_deleted_input = input_objects.contains_deleted_objects();
+        let congested_objects = input_objects.get_congested_objects();
 
         let mut temporary_store = TemporaryStore::new(
             store,
@@ -89,6 +116,7 @@ mod checked {
             receiving_objects,
             transaction_digest,
             protocol_config,
+            *epoch_id,
         );
 
         let mut gas_charger =
@@ -115,6 +143,7 @@ mod checked {
             enable_expensive_checks,
             deny_cert,
             contains_deleted_input,
+            congested_objects,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -170,12 +199,19 @@ mod checked {
             status
         );
 
-        // Remove from dependencies the generic hash
-        transaction_dependencies.remove(&TransactionDigest::genesis());
+        // Genesis writes a special digest to indicate that an object was created during
+        // genesis and not written by any normal transaction - remove that from the
+        // dependencies
+        transaction_dependencies.remove(&TransactionDigest::genesis_marker());
 
         if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
             temporary_store
-                .check_ownership_invariants(&transaction_signer, &mut gas_charger, is_epoch_change)
+                .check_ownership_invariants(
+                    &transaction_signer,
+                    &mut gas_charger,
+                    &mutable_inputs,
+                    is_epoch_change,
+                )
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
 
@@ -188,7 +224,13 @@ mod checked {
             &mut gas_charger,
             *epoch_id,
         );
-        (inner, effects, execution_result)
+
+        (
+            inner,
+            gas_charger.into_gas_status(),
+            effects,
+            execution_result,
+        )
     }
 
     pub fn execute_genesis_state_update(
@@ -197,15 +239,17 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         move_vm: &Arc<MoveVM>,
         tx_context: &mut TxContext,
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let input_objects = input_objects.into_inner();
         let mut temporary_store = TemporaryStore::new(
             store,
             input_objects,
             vec![],
             tx_context.digest(),
             protocol_config,
+            0,
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
@@ -233,6 +277,7 @@ mod checked {
         enable_expensive_checks: bool,
         deny_cert: bool,
         contains_deleted_input: bool,
+        congested_objects: Option<Vec<ObjectID>>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -260,6 +305,13 @@ mod checked {
             } else if contains_deleted_input {
                 Err(ExecutionError::new(
                     ExecutionErrorKind::InputObjectDeleted,
+                    None,
+                ))
+            } else if let Some(congested_objects) = congested_objects {
+                Err(ExecutionError::new(
+                    ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                        congested_objects: CongestedObjects(congested_objects),
+                    },
                     None,
                 ))
             } else {
@@ -515,13 +567,13 @@ mod checked {
                 for genesis_object in objects {
                     match genesis_object {
                         sui_types::transaction::GenesisObject::RawObject { data, owner } => {
-                            let object = Object {
+                            let object = ObjectInner {
                                 data,
                                 owner,
                                 previous_transaction: tx_ctx.digest(),
                                 storage_rebate: 0,
                             };
-                            temporary_store.create_object(object);
+                            temporary_store.create_object(object.into());
                         }
                     }
                 }
@@ -529,7 +581,7 @@ mod checked {
             }
             TransactionKind::ConsensusCommitPrologue(prologue) => {
                 setup_consensus_commit(
-                    prologue,
+                    prologue.commit_timestamp_ms,
                     temporary_store,
                     tx_ctx,
                     move_vm,
@@ -538,6 +590,32 @@ mod checked {
                     metrics,
                 )
                 .expect("ConsensusCommitPrologue cannot fail");
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::ConsensusCommitPrologueV2(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologueV2 cannot fail");
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::ConsensusCommitPrologueV3(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologueV3 cannot fail");
                 Ok(Mode::empty_results())
             }
             TransactionKind::ProgrammableTransaction(pt) => {
@@ -581,6 +659,22 @@ mod checked {
                             // safe mode.
                             builder = setup_authenticator_state_expire(builder, expire);
                         }
+                        EndOfEpochTransactionKind::RandomnessStateCreate => {
+                            assert!(protocol_config.random_beacon());
+                            builder = setup_randomness_state_create(builder);
+                        }
+                        EndOfEpochTransactionKind::DenyListStateCreate => {
+                            assert!(protocol_config.enable_coin_deny_list_v1());
+                            builder = setup_coin_deny_list_state_create(builder);
+                        }
+                        EndOfEpochTransactionKind::BridgeStateCreate(chain_id) => {
+                            assert!(protocol_config.enable_bridge());
+                            builder = setup_bridge_create(builder, chain_id)
+                        }
+                        EndOfEpochTransactionKind::BridgeCommitteeInit(bridge_shared_version) => {
+                            assert!(protocol_config.enable_bridge());
+                            builder = setup_bridge_committee_update(builder, bridge_shared_version)
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
@@ -588,6 +682,18 @@ mod checked {
             TransactionKind::AuthenticatorStateUpdate(auth_state_update) => {
                 setup_authenticator_state_update(
                     auth_state_update,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )?;
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::RandomnessStateUpdate(randomness_state_update) => {
+                setup_randomness_state_update(
+                    randomness_state_update,
                     temporary_store,
                     tx_ctx,
                     move_vm,
@@ -801,18 +907,50 @@ mod checked {
             }
         }
 
+        if protocol_config.fresh_vm_on_framework_upgrade() {
+            let new_vm = new_move_vm(
+                all_natives(/* silent */ true),
+                protocol_config,
+                /* enable_profiler */ None,
+            )
+            .expect("Failed to create new MoveVM");
+            process_system_packages(
+                change_epoch,
+                temporary_store,
+                tx_ctx,
+                &new_vm,
+                gas_charger,
+                protocol_config,
+                metrics,
+            );
+        } else {
+            process_system_packages(
+                change_epoch,
+                temporary_store,
+                tx_ctx,
+                move_vm,
+                gas_charger,
+                protocol_config,
+                metrics,
+            );
+        }
+        Ok(())
+    }
+
+    fn process_system_packages(
+        change_epoch: ChangeEpoch,
+        temporary_store: &mut TemporaryStore<'_>,
+        tx_ctx: &mut TxContext,
+        move_vm: &MoveVM,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) {
+        let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
-            let max_format_version = protocol_config.move_binary_format_version();
             let deserialized_modules: Vec<_> = modules
                 .iter()
-                .map(|m| {
-                    CompiledModule::deserialize_with_config(
-                        m,
-                        max_format_version,
-                        protocol_config.no_extraneous_module_bytes(),
-                    )
-                    .unwrap()
-                })
+                .map(|m| CompiledModule::deserialize_with_config(m, &binary_config).unwrap())
                 .collect();
 
             if version == OBJECT_START_VERSION {
@@ -860,8 +998,6 @@ mod checked {
                 temporary_store.upgrade_system_package(new_package);
             }
         }
-
-        Ok(())
     }
 
     /// Perform metadata updates in preparation for the transactions in the upcoming checkpoint:
@@ -869,7 +1005,7 @@ mod checked {
     /// - Set the timestamp for the `Clock` shared object from the timestamp in the header from
     ///   consensus.
     fn setup_consensus_commit(
-        prologue: ConsensusCommitPrologue,
+        consensus_commit_timestamp_ms: CheckpointTimestamp,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
         move_vm: &Arc<MoveVM>,
@@ -886,7 +1022,7 @@ mod checked {
                 vec![],
                 vec![
                     CallArg::CLOCK_MUT,
-                    CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&consensus_commit_timestamp_ms).unwrap()),
                 ],
             );
             assert_invariant!(
@@ -918,6 +1054,90 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate authenticator_state_create transaction!");
+        builder
+    }
+
+    fn setup_randomness_state_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                RANDOMNESS_MODULE_NAME.to_owned(),
+                RANDOMNESS_STATE_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate randomness_state_create transaction!");
+        builder
+    }
+
+    fn setup_bridge_create(
+        mut builder: ProgrammableTransactionBuilder,
+        chain_id: ChainIdentifier,
+    ) -> ProgrammableTransactionBuilder {
+        let bridge_uid = builder
+            .input(CallArg::Pure(UID::new(SUI_BRIDGE_OBJECT_ID).to_bcs_bytes()))
+            .expect("Unable to create Bridge object UID!");
+
+        let bridge_chain_id = if chain_id == get_mainnet_chain_identifier() {
+            BridgeChainId::SuiMainnet as u8
+        } else if chain_id == get_testnet_chain_identifier() {
+            BridgeChainId::SuiTestnet as u8
+        } else {
+            // How do we distinguish devnet from other test envs?
+            BridgeChainId::SuiCustom as u8
+        };
+
+        let bridge_chain_id = builder.pure(bridge_chain_id).unwrap();
+        builder.programmable_move_call(
+            BRIDGE_ADDRESS.into(),
+            BRIDGE_MODULE_NAME.to_owned(),
+            BRIDGE_CREATE_FUNCTION_NAME.to_owned(),
+            vec![],
+            vec![bridge_uid, bridge_chain_id],
+        );
+        builder
+    }
+
+    fn setup_bridge_committee_update(
+        mut builder: ProgrammableTransactionBuilder,
+        bridge_shared_version: SequenceNumber,
+    ) -> ProgrammableTransactionBuilder {
+        let bridge = builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_BRIDGE_OBJECT_ID,
+                initial_shared_version: bridge_shared_version,
+                mutable: true,
+            })
+            .expect("Unable to create Bridge object arg!");
+        let system_state = builder
+            .obj(ObjectArg::SUI_SYSTEM_MUT)
+            .expect("Unable to create System State object arg!");
+
+        let voting_power = builder.programmable_move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            ident_str!("validator_voting_powers").to_owned(),
+            vec![],
+            vec![system_state],
+        );
+
+        // Hardcoding min stake participation to 75.00%
+        // TODO: We need to set a correct value or make this configurable.
+        let min_stake_participation_percentage = builder
+            .input(CallArg::Pure(
+                bcs::to_bytes(&BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER).unwrap(),
+            ))
+            .unwrap();
+
+        builder.programmable_move_call(
+            BRIDGE_ADDRESS.into(),
+            BRIDGE_MODULE_NAME.to_owned(),
+            BRIDGE_INIT_COMMITTEE_FUNCTION_NAME.to_owned(),
+            vec![],
+            vec![bridge, voting_power, min_stake_participation_percentage],
+        );
         builder
     }
 
@@ -983,6 +1203,64 @@ mod checked {
                 ],
             )
             .expect("Unable to generate authenticator_state_expire transaction!");
+        builder
+    }
+
+    fn setup_randomness_state_update(
+        update: RandomnessStateUpdate,
+        temporary_store: &mut TemporaryStore<'_>,
+        tx_ctx: &mut TxContext,
+        move_vm: &Arc<MoveVM>,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) -> Result<(), ExecutionError> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let res = builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                RANDOMNESS_MODULE_NAME.to_owned(),
+                RANDOMNESS_STATE_UPDATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                        initial_shared_version: update.randomness_obj_initial_shared_version,
+                        mutable: true,
+                    }),
+                    CallArg::Pure(bcs::to_bytes(&update.randomness_round).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&update.random_bytes).unwrap()),
+                ],
+            );
+            assert_invariant!(
+                res.is_ok(),
+                "Unable to generate randomness_state_update transaction!"
+            );
+            builder.finish()
+        };
+        programmable_transactions::execution::execute::<execution_mode::System>(
+            protocol_config,
+            metrics,
+            move_vm,
+            temporary_store,
+            tx_ctx,
+            gas_charger,
+            pt,
+        )
+    }
+
+    fn setup_coin_deny_list_state_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                DENY_LIST_MODULE.to_owned(),
+                DENY_LIST_CREATE_FUNC.to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate coin_deny_list_create transaction!");
         builder
     }
 }

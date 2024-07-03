@@ -46,18 +46,18 @@ pub fn download_dependency_repos<Progress: Write>(
         lock_string,
     )?;
 
-    for pkg_name in graph.topological_order() {
-        if pkg_name == graph.root_package {
+    for pkg_id in graph.topological_order() {
+        if pkg_id == graph.root_package_id {
             continue;
         }
 
-        if !(build_options.dev_mode || graph.always_deps.contains(&pkg_name)) {
+        if !(build_options.dev_mode || graph.always_deps.contains(&pkg_id)) {
             continue;
         }
 
         let package = graph
             .package_table
-            .get(&pkg_name)
+            .get(&pkg_id)
             .expect("Metadata for package");
 
         let DependencyGraphBuilder {
@@ -65,7 +65,7 @@ pub fn download_dependency_repos<Progress: Write>(
             ref mut progress_output,
             ..
         } = dep_graph_builder;
-        dependency_cache.download_and_update_if_remote(pkg_name, &package.kind, progress_output)?;
+        dependency_cache.download_and_update_if_remote(pkg_id, &package.kind, progress_output)?;
     }
 
     Ok(())

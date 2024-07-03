@@ -7,7 +7,7 @@
 
 //# publish
 module test::m1 {
-    struct A has copy, drop, store {}
+    public struct A has copy, drop, store {}
     public fun a(): A { A {} }
 }
 

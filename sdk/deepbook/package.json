@@ -2,35 +2,30 @@
 	"name": "@mysten/deepbook",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui Deepbook SDK",
-	"version": "0.5.7",
+	"version": "0.8.10",
 	"license": "Apache-2.0",
-	"files": [
-		"dist",
-		"src",
-		"CHANGELOG.md"
-	],
-	"engines": {
-		"node": ">=16"
-	},
-	"main": "./dist/index.js",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.ts",
+	"type": "commonjs",
+	"main": "./dist/cjs/index.js",
+	"module": "./dist/esm/index.js",
+	"types": "./dist/cjs/index.d.ts",
 	"exports": {
 		".": {
-			"types": "./dist/index.d.ts",
-			"source": "./src/index.ts",
-			"import": "./dist/index.mjs",
-			"require": "./dist/index.js"
+			"import": "./dist/esm/index.js",
+			"require": "./dist/cjs/index.js"
 		}
+	},
+	"files": [
+		"CHANGELOG.md",
+		"dist",
+		"src"
+	],
+	"engines": {
+		"node": ">=18"
 	},
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-		"build": "pnpm build:types && pnpm build:tsup",
-		"build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
-		"build:types": "tsc --build",
+		"build": "build-package",
 		"prepublishOnly": "pnpm build",
-		"dev": "ts-node src/deepbook_sdk.ts",
-		"bfs": "ts-node src/bfs.ts",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
 		"eslint:check": "eslint --max-warnings=0 .",
@@ -38,20 +33,20 @@
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
 		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest run e2e",
-		"prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator"
+		"prepare:e2e": "cargo build --bin sui --profile dev && cross-env RUST_LOG=warn,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui -- start --with-faucet --force-regenesis"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*"
+		"@mysten/sui": "workspace:*"
 	},
 	"devDependencies": {
+		"@mysten/build-scripts": "workspace:*",
 		"@types/node": "^20.4.2",
 		"tmp": "^0.2.1",
 		"ts-node": "^10.9.1",
 		"ts-retry-promise": "^0.7.0",
-		"tsup": "^7.1.0",
-		"typescript": "^5.1.6",
+		"typescript": "^5.3.3",
 		"vite": "^4.4.4",
-		"vitest": "^0.33.0",
+		"vitest": "^1.6.0",
 		"wait-on": "^7.0.1"
 	}
 }

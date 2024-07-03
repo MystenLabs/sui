@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toHEX } from '@mysten/bcs';
-import type { PublicKey } from '@mysten/sui.js/cryptography';
+import type { PublicKey } from '@mysten/sui/cryptography';
 
 import { poseidonHash } from './poseidon.js';
 
@@ -12,15 +11,7 @@ const MAX_AUD_VALUE_LENGTH = 145;
 const PACK_WIDTH = 248;
 
 export function getExtendedEphemeralPublicKey(publicKey: PublicKey) {
-	return String(toBigIntBE(publicKey.toSuiBytes()));
-}
-
-export function toBigIntBE(bytes: Uint8Array) {
-	const hex = toHEX(bytes);
-	if (hex.length === 0) {
-		return BigInt(0);
-	}
-	return BigInt(`0x${hex}`);
+	return publicKey.toSuiPublicKey();
 }
 
 /**

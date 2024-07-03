@@ -32,37 +32,35 @@ The following represents the template the `init` function defines:
 {
     "name": "{name}",
     "link": "https://sui-heroes.io/hero/{id}",
-    "image_url": "ipfs://{img_url}",
+    "image_url": "ipfs://{image_url}",
     "description": "A true Hero of the Sui ecosystem!",
     "project_url": "https://sui-heroes.io",
     "creator": "Unknown Sui Fan"
 }
 ```
 
-```rust
+```move
 /// Example of an unlimited "Sui Hero" collection - anyone can
 /// mint their Hero. Shows how to initialize the `Publisher` and how
 /// to use it to get the `Display<Hero>` object - a way to describe a
 /// type for the ecosystem.
 module examples::my_hero {
-    use sui::tx_context::{sender, TxContext};
+    use sui::tx_context::{sender};
     use std::string::{utf8, String};
-    use sui::transfer::transfer;
-    use sui::object::{Self, UID};
 
     // The creator bundle: these two packages often go together.
     use sui::package;
     use sui::display;
 
     /// The Hero - an outstanding collection of digital art.
-    struct Hero has key, store {
+    public struct Hero has key, store {
         id: UID,
         name: String,
-        img_url: String,
+        image_url: String,
     }
 
     /// One-Time-Witness for the module.
-    struct MY_HERO has drop {}
+    public struct MY_HERO has drop {}
 
     /// In the module initializer one claims the `Publisher` object
     /// to then create a `Display`. The `Display` is initialized with
@@ -86,8 +84,8 @@ module examples::my_hero {
             utf8(b"{name}"),
             // For `link` one can build a URL using an `id` property
             utf8(b"https://sui-heroes.io/hero/{id}"),
-            // For `image_url` use an IPFS template + `img_url` property.
-            utf8(b"ipfs://{img_url}"),
+            // For `image_url` use an IPFS template + `image_url` property.
+            utf8(b"ipfs://{image_url}"),
             // Description is static for all `Hero` objects.
             utf8(b"A true Hero of the Sui ecosystem!"),
             // Project URL is usually static
@@ -100,21 +98,21 @@ module examples::my_hero {
         let publisher = package::claim(otw, ctx);
 
         // Get a new `Display` object for the `Hero` type.
-        let display = display::new_with_fields<Hero>(
+        let mut display = display::new_with_fields<Hero>(
             &publisher, keys, values, ctx
         );
 
         // Commit first version of `Display` to apply changes.
         display::update_version(&mut display);
 
-        transfer(publisher, sender(ctx));
-        transfer(display, sender(ctx));
+        transfer::public_transfer(publisher, sender(ctx));
+        transfer::public_transfer(display, sender(ctx));
     }
 
     /// Anyone can mint their `Hero`!
-    public fun mint(name: String, img_url: String, ctx: &mut TxContext): Hero {
+    public fun mint(name: String, image_url: String, ctx: &mut TxContext): Hero {
         let id = object::new(ctx);
-        Hero { id, name, img_url }
+        Hero { id, name, image_url }
     }
 }
 ```
@@ -124,7 +122,7 @@ module examples::my_hero {
 The `display::new<T>` call creates a `Display`, either in a custom function or module initializer, or as part of a programmable transaction.
 The following code sample demonstrates how to create a `Display`:
 
-```rust
+```move
 module sui::display {
     /// Get a new Display object for the `T`.
     /// Publisher must be the publisher of the T, `from_package`
@@ -135,7 +133,7 @@ module sui::display {
 
 After you create the `Display`, you can modify it. The following code sample demonstrates how to modify a `Display`:
 
-```rust
+```move
 module sui::display {
     /// Sets multiple fields at once
     public fun add_multiple(
@@ -156,7 +154,7 @@ Next, the `update_version` call applies the changes and sets the `Display` for t
 
 The following code sample demonstrates how to use the `update_version` call:
 
-```rust
+```move
 module sui::display {
     /// Update the version of Display and emit an event
     public fun update_version(self: &mut Display) { /* ... */ }
@@ -170,7 +168,7 @@ With capabilities, it is important to provide a meaningful description of object
 
 The following example demonstrates how to create a capy capability:
 
-```rust
+```move
 module capy::utility {
    /// A capability which grants Capy Manager permission to add
    /// new genes and manage the Capy Market
@@ -186,7 +184,7 @@ In some cases, users mint in-game items when a game allows them or when they pur
 
 The following example demonstrates how to create a Capy:
 
-```rust
+```move
 module capy::capy_items {
    /// A wearable Capy item. For some items there can be an
    /// unlimited supply. And items with the same name are identical.
@@ -205,7 +203,7 @@ To implement this, the Capys game API service refreshes the image in response to
 
 The following example demonstrates how to implement dynamic image generation:
 
-```rust
+```move
 module capy::capy {
    /// A Capy - very diverse object with different combination
    /// of genes. Created dynamically + for images a dynamic SVG
@@ -221,7 +219,7 @@ module capy::capy {
 
 This is the simplest scenario - an object represents everything itself. It is very easy to apply a metadata standard to an object of this kind, especially if the object stays immutable forever. However, if the metadata standard evolves and some ecosystem projects add new features for some properties, this object always stays in its original form and might require backward-compatible changes.
 
-```rust
+```move
 module sui::devnet_nft {
    /// A Collectible with a static data. URL, name, description are
    /// set only once on a mint event

@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module c::c {
-    struct C {
+    public struct C {
         x: u64
     }
 
-    struct D {
+    public struct D {
         x: u64,
         y: u64,
     }

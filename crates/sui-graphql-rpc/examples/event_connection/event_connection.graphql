@@ -1,23 +1,19 @@
 {
-  eventConnection(
+  events(
     filter: {
       eventType: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"
     }
   ) {
     nodes {
-      sendingModuleId {
+      sendingModule {
         name
-        package {
-          asObject {
-            digest
-          }
-        }
+        package { digest }
       }
-      eventType {
+      type {
         repr
       }
-      senders {
-        location
+      sender {
+        address
       }
       timestamp
       json

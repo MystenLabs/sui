@@ -1,0 +1,70 @@
+---
+source: consensus/config/tests/committee_test.rs
+expression: committee
+---
+epoch: 100
+total_stake: 55
+quorum_threshold: 37
+validity_threshold: 19
+authorities:
+  - stake: 1
+    address: ""
+    hostname: test_host
+    authority_key: mDymMjVAbD9dvp4JFE6AGTWhRmWUUMgcu3ngSzTdLDZkYDUMOlU6+7OL/xAYtp1rF6QP3LJAyEM6F2HOe7CRxHCyG4aJZHaHMO/NvjqZk8BkUerc6AxFlkqKoIZXxz9O
+    protocol_key: FqZOnpC9+yY05TuGV/eF7FcU4qUyUwzlqtPDsqJ/4Cc=
+    network_key: VnXFtZxaTby9AquydHFr9dy8+GlVoPcsm8icljGTbWQ=
+  - stake: 2
+    address: ""
+    hostname: test_host
+    authority_key: hLIJiig6cqajwuIlnxjL+bxhZxCgEWUGdN9VyJSqMAvuN6tDm7qTcBplvDICmgSlGJwHZ5IzyOH6N+Wj1Fa1odxsM86eLf9g+MjzT/h869sqV9EpyXtpYbufPYCW0fkT
+    protocol_key: +yTI/ZSBZa9CmHP/Qhjtf2bgTR0lC+9NUP8BgQq0OPw=
+    network_key: BpFcuO/0ux5y/AjZd5uiIM1RLa9lDLCzrixWLD26s9A=
+  - stake: 3
+    address: ""
+    hostname: test_host
+    authority_key: tigsWqTfTjWYKyWSadMs67Nt7xcittDMp05ZfITIop7tjqxeuTUv9+bhVs+vgLqoBzEFh1v1QuCpTSdXmBJyaYksY60POX75wGk+1W4Al95VQcze57f2/0xbPCL2EW5j
+    protocol_key: zYiyu2/Pht26Hn499pLepEsUzAROWMNdmYatcGai/LU=
+    network_key: 7DYZ4De7EKRhhH0GBMTKlBqUeXnFMgkzLKjekMAuesw=
+  - stake: 4
+    address: ""
+    hostname: test_host
+    authority_key: iM3E2wCApVtOKv1I/jSpNXO1kPRCnHo0c6H/qgyxvJngmgW1KYnWtycts8drNLIUGLtinT83V8D3Xnc3whUAqiKYrJ5vu2knQXqFBCmgrqo7N0xZ0T/uuKVWjoNqyHHl
+    protocol_key: B2I7VErvTa/POXtLemf+iDEt/966mNqq3F+DdHcvi8U=
+    network_key: d20nQz3k9ycSy5wXirVQ0FgTygI/v59O0beWvR/iRCc=
+  - stake: 5
+    address: ""
+    hostname: test_host
+    authority_key: rrLWOAYMh3RQTJGxr7UdJ3S7VHAjrZbFqsZTySFOO4lu+7I7ylpUMwH1fXs4GNNkEjkRQxV4YA8jTBCvVRldDmSJZB9BhFGrghhgW9NgnsbLCPXRML8fJafXFWtihJrV
+    protocol_key: FWIIqmDHCuPzJQUOSw0kK0XQwBNp+xgjt9O00469mNk=
+    network_key: +0ebVcUY7X8QIafWGbUmzlhy/Vc2LtNRqqLzk4NgLoU=
+  - stake: 6
+    address: ""
+    hostname: test_host
+    authority_key: jDvXpT0oTY7w9BWERszWiLBu9Aajj9WbbPkfmE9M+ijxGCooLK14P1lsqOZ67XMoAIfh8Z5t/hNanV5fH+3PtJT6o8APO5pCoTcLi5SoScRSQKMCevHqHAizI57wG4cl
+    protocol_key: YxoEz+3fDnLfrOkpqVkRxfj/HqlqsoQqt9bzSLjxJEc=
+    network_key: ebKuTwKcQhwyVqO2d64DdsWDPMnAQc23fBI1CXa05vo=
+  - stake: 7
+    address: ""
+    hostname: test_host
+    authority_key: tRwqYQatDzTkoQrm5CakqfAAri5UuWkeli6WQm8NMkf6zw10x2iWweAgBsLWtgp4EB6YGVNpvNb3uI/wYAfbTxn7NUOlxpV3E3dDRJBKDbK8yvCvi9ayJxFIdki8QAD3
+    protocol_key: 9ceGm+Ew/BvsSs4/PxU6btwNQy2ThQlh/7TbueVHkL8=
+    network_key: Ov4bLcrJ+q/p14z4MDX8Qyw6farqkOaXAsyYJCZMa0Q=
+  - stake: 8
+    address: ""
+    hostname: test_host
+    authority_key: h0zh/ZVohjK4SQvYaZ5EeFO8v0m5AQbtFkka3jST4LN5pyN4ve8U1HFE7IkiJ/uYD9ZrKp6PKDQvmERy1H0c2YsC7y4Vtol5BiUhnVWpG6nbHSphdQAc2n1K3g14aTH+
+    protocol_key: 7sr/v/qM67DaaDRN6sDXqxHb0ju78jkwX38oHvnbGls=
+    network_key: ryJ4Fkd0vnxNmuueLXsQGOPfQw4ZhflqlrycBLrd0zs=
+  - stake: 9
+    address: ""
+    hostname: test_host
+    authority_key: hMl/A0iNbz42T0gSXtDva81lf30AcQ8K3QP5NvrakR9zx+lWtVm097YG1fmEW3C4AALagcAV0Y9vYQNt8JoHbUbwYiJEUkGyqq4QXLl7c/rLJa3FwqqWdLpfpHe/4Y9D
+    protocol_key: C/90lYealIRsJ6ut8kDQ2g9O4jgaKHHFKscQicDTo1w=
+    network_key: OIM99Vk76Bq9rZQPgj9EOcq+WyoS95oio2orwG/r7b4=
+  - stake: 10
+    address: ""
+    hostname: test_host
+    authority_key: tC8uWyTrohwv5Gp+pEytkyFtTo7JKqgrOGlltChHjqGFN+t9jhIqo0P/opo5xly9DeFNmwlRMLmHdyvtTwRNvuYV06NgrXHnoLRoRcKC0XP93I10DHus5GdB1roOKoYf
+    protocol_key: Edh6VmJUkuP4TiU3owC8Qlg13OytuOpAdfHTUyLCGN8=
+    network_key: OKXew91B23hZ7ihzvjYptdWUWnQ8qTnvxzWxSIzR84c=
+

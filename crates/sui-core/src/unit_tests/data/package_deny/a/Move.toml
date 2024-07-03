@@ -1,9 +1,11 @@
 [package]
 name = "A"
 version = "0.0.1"
+edition = "2024.beta"
 
 [dependencies]
 B = { local = "../b" }
+Sui = { local = "../../../../../../sui-framework/packages/sui-framework" }
 
 [addresses]
 a = "0x0"

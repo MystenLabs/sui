@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let x: u64;
     let y: u64;
     let ref: &u64;
@@ -16,4 +18,6 @@ label b2:
 label b3:
     assert(*move(ref) == 1, 42); // valid to read reference even though different locals borrowed
     return;
+}
+
 }

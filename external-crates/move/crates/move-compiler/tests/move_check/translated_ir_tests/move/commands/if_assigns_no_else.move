@@ -1,4 +1,4 @@
-script {
+module 0x42::m {
 fun main() {
     let x;
     if (true) x = 42;

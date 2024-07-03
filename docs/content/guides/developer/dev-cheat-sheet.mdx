@@ -35,14 +35,19 @@ Quick reference on best practices for Sui Network developers.
 
 ## Apps
 
-- For optimal performance and data consistency, apps should submit writes and reads for the same full node. In the TS SDK, this means that apps should use the wallet's [`signTransactionBlock`](https://sui-typescript-docs.vercel.app/wallet-kit) API, then submit the transaction via a call to [`execute_transactionBlock`](https://docs.sui.io/sui-jsonrpc#sui_executeTransactionBlock) on the app's full node, _not_ use the wallet's `signAndExecuteTransactionBlock` API. This ensures read-after-write-consistency--reads from the app's full node will reflect writes from the transaction right away instead of waiting for a checkpoint.
-- For lower latency, use [`executeTransactionBlock`](https://docs.sui.io/sui-jsonrpc#sui_executeTransactionBlock) with `"showEffects": false` and `"showEvents": false` if your app needs to know that a transaction was confirmed, but does not immediately need to see the transaction effects or read the objects/events written by the transaction.
+- For optimal performance and data consistency, apps should submit writes and reads for the same full node. In the TS SDK, this means that apps should use the wallet's [`signTransactionBlock`](https://sdk.mystenlabs.com/dapp-kit) API, then submit the transaction via a call to [`execute_transactionBlock`](/sui-api-ref#sui_executetransactionblock) on the app's full node, _not_ use the wallet's `signAndExecuteTransactionBlock` API. This ensures read-after-write-consistency--reads from the app's full node will reflect writes from the transaction right away instead of waiting for a checkpoint.
+- For lower latency, use [`executeTransactionBlock`](/sui-api-ref#sui_executetransactionblock) with `"showEffects": false` and `"showEvents": false` if your app needs to know that a transaction was confirmed, but does not immediately need to see the transaction effects or read the objects/events written by the transaction.
 - Apps should implement a local cache for frequently read data rather than over-fetching from the full node.
-- Whenever possible, use programmable transaction blocks to compose existing on-chain functionality rather than publishing new smart contract code. Programmable transaction blocks allow large-scale batching and heterogenous composition, driving already-low gas fees down even further.
+- Whenever possible, use programmable transaction blocks to compose existing on-chain functionality rather than publishing new smart contract code. Programmable transaction blocks allow large-scale batching and heterogeneous composition, driving already-low gas fees down even further.
 - Apps should leave gas budget, gas price, and coin selection to the wallet. This gives wallets more flexibility, and it's the wallet's responsibility to dry run a transaction to ensure it doesn't fail.
 
 ## Signing
 
-- **Never** sign two concurrent transactions that are touching the same owned object. Either use independent owned objects, or wait for one transaction to conclude before sending the next one. Violating this rule might lead to client [equivocation](sui-glossary#equivocation), which locks up the owned objects involved in the two transactions until the end of the current epoch.
+- **Never** sign two concurrent transactions that are touching the same owned object. Either use independent owned objects, or wait for one transaction to conclude before sending the next one. Violating this rule might lead to client [equivocation](/references/sui-glossary.mdx#equivocation), which locks up the owned objects involved in the two transactions until the end of the current epoch.
 - Any `sui client` command that crafts a transaction (e.g., `sui client publish`, `sui client call`) can accept the `--serialize-output` flag to output a base64 transaction to be signed.
 - Sui supports several signature schemes for transaction signing, including native multisig.
+
+## zkLogin
+
+- Call the proving service as sparingly as possible. Design your app flows such that you call the proving service only when the user is about to perform a real transaction.
+- Beware of how you cache the ephemeral private key. Treat the private key akin to a piece of highly sensitive data, e.g., password. If an (unexpired) ephemeral private key and its corresponding ZK proof are leaked, then an attacker can steal user's assets.

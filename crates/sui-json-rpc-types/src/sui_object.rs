@@ -11,9 +11,9 @@ use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::{MoveStructLayout, MoveValue};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
-use move_core_types::value::{MoveStruct, MoveStructLayout};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -26,11 +26,13 @@ use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
 };
-use sui_types::error::{ExecutionError, SuiObjectResponseError, UserInputError, UserInputResult};
+use sui_types::error::{
+    ExecutionError, SuiError, SuiObjectResponseError, SuiResult, UserInputError, UserInputResult,
+};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
-use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
+use sui_types::object::{Data, MoveObject, Object, ObjectInner, ObjectRead, Owner};
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
 use sui_types::sui_serde::SuiStructTag;
@@ -512,6 +514,8 @@ impl
             None
         };
 
+        let o = o.into_inner();
+
         let content: Option<SuiParsedData> = if show_content {
             let data = match o.data {
                 Data::Move(m) => {
@@ -583,12 +587,10 @@ impl SuiObjectResponse {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
     pub fn object(&self) -> Result<&SuiObjectData, SuiObjectResponseError> {
-        let data = &self.data;
-        let error = self.error.clone();
-        if let Some(data) = data {
+        if let Some(data) = &self.data {
             Ok(data)
-        } else if let Some(error) = error {
-            Err(error)
+        } else if let Some(error) = &self.error {
+            Err(error.clone())
         } else {
             // We really shouldn't reach this code block since either data, or error field should always be filled.
             Err(SuiObjectResponseError::Unknown)
@@ -598,15 +600,9 @@ impl SuiObjectResponse {
     /// Returns the object value if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
     pub fn into_object(self) -> Result<SuiObjectData, SuiObjectResponseError> {
-        let data = self.data.clone();
-        let error = self.error;
-        if let Some(data) = data {
-            Ok(data)
-        } else if let Some(error) = error {
-            Err(error)
-        } else {
-            // We really shouldn't reach this code block since either data, or error field should always be filled.
-            Err(SuiObjectResponseError::Unknown)
+        match self.object() {
+            Ok(data) => Ok(data.clone()),
+            Err(error) => Err(error),
         }
     }
 }
@@ -638,7 +634,7 @@ impl TryInto<Object> for SuiObjectData {
                 "BCS data is required to convert SuiObjectData to Object"
             ))?,
         };
-        Ok(Object {
+        Ok(ObjectInner {
             data,
             owner: self
                 .owner
@@ -649,7 +645,8 @@ impl TryInto<Object> for SuiObjectData {
             storage_rebate: self.storage_rebate.ok_or_else(|| {
                 anyhow!("storage_rebate is required to convert SuiObjectData to Object")
             })?,
-        })
+        }
+        .into())
     }
 }
 
@@ -697,6 +694,7 @@ pub trait SuiData: Sized {
         -> Result<Self, anyhow::Error>;
     fn try_from_package(package: MovePackage) -> Result<Self, anyhow::Error>;
     fn try_as_move(&self) -> Option<&Self::ObjectType>;
+    fn try_into_move(self) -> Option<Self::ObjectType>;
     fn try_as_package(&self) -> Option<&Self::PackageType>;
     fn type_(&self) -> Option<&StructTag>;
 }
@@ -722,6 +720,13 @@ impl SuiData for SuiRawData {
     }
 
     fn try_as_move(&self) -> Option<&Self::ObjectType> {
+        match self {
+            Self::MoveObject(o) => Some(o),
+            Self::Package(_) => None,
+        }
+    }
+
+    fn try_into_move(self) -> Option<Self::ObjectType> {
         match self {
             Self::MoveObject(o) => Some(o),
             Self::Package(_) => None,
@@ -777,6 +782,13 @@ impl SuiData for SuiParsedData {
         }
     }
 
+    fn try_into_move(self) -> Option<Self::ObjectType> {
+        match self {
+            Self::MoveObject(o) => Some(o),
+            Self::Package(_) => None,
+        }
+    }
+
     fn try_as_package(&self) -> Option<&Self::PackageType> {
         match self {
             Self::MoveObject(_) => None,
@@ -818,7 +830,7 @@ impl SuiParsedData {
         match object_read {
             ObjectRead::NotExists(id) => Err(anyhow::anyhow!("Object {} does not exist", id)),
             ObjectRead::Exists(_object_ref, o, layout) => {
-                let data = match o.data {
+                let data = match o.into_inner().data {
                     Data::Move(m) => {
                         let layout = layout.ok_or_else(|| {
                             anyhow!("Layout is required to convert Move object to json")
@@ -844,7 +856,7 @@ pub trait SuiMoveObject: Sized {
         -> Result<Self, anyhow::Error>;
 
     fn try_from(o: MoveObject, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
-        let layout = o.get_layout(ObjectFormatOptions::default(), resolver)?;
+        let layout = o.get_layout(resolver)?;
         Self::try_from_layout(o, layout)
     }
 
@@ -900,23 +912,30 @@ impl SuiParsedMoveObject {
             SuiParsedData::Package(_) => Err(anyhow::anyhow!("Object is not a Move object")),
         }
     }
-
-    pub fn read_dynamic_field_value(&self, field_name: &str) -> Option<SuiMoveValue> {
-        match &self.fields {
-            SuiMoveStruct::WithFields(fields) => fields.get(field_name).cloned(),
-            SuiMoveStruct::WithTypes { fields, .. } => fields.get(field_name).cloned(),
-            _ => None,
-        }
-    }
 }
 
-pub fn type_and_fields_from_move_struct(
-    type_: &StructTag,
-    move_struct: MoveStruct,
-) -> (StructTag, SuiMoveStruct) {
-    match move_struct.into() {
-        SuiMoveStruct::WithTypes { type_, fields } => (type_, SuiMoveStruct::WithFields(fields)),
-        fields => (type_.clone(), fields),
+pub fn type_and_fields_from_move_event_data(
+    event_data: MoveValue,
+) -> SuiResult<(StructTag, serde_json::Value)> {
+    match event_data.into() {
+        SuiMoveValue::Struct(move_struct) => match &move_struct {
+            SuiMoveStruct::WithTypes { type_, .. } => {
+                Ok((type_.clone(), move_struct.clone().to_json_value()))
+            }
+            _ => Err(SuiError::ObjectDeserializationError {
+                error: "Found non-type SuiMoveStruct in MoveValue event".to_string(),
+            }),
+        },
+        SuiMoveValue::Variant(v) => Ok((v.type_.clone(), v.clone().to_json_value())),
+        SuiMoveValue::Vector(_)
+        | SuiMoveValue::Number(_)
+        | SuiMoveValue::Bool(_)
+        | SuiMoveValue::Address(_)
+        | SuiMoveValue::String(_)
+        | SuiMoveValue::UID { .. }
+        | SuiMoveValue::Option(_) => Err(SuiError::ObjectDeserializationError {
+            error: "Invalid MoveValue event type -- this should not be possible".to_string(),
+        }),
     }
 }
 

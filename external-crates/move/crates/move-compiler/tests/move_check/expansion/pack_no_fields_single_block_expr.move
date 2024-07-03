@@ -1,7 +1,7 @@
-module M {
+module 0x42::M {
     struct S { f: u64 }
     fun foo() {
-        let s = S { false };
-        let s = S { 0 };
+        let _s = S { false };
+        let _s = S { 0 };
     }
 }

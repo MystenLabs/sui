@@ -30,5 +30,8 @@
 28: WrittenObjectsTooLarge
 29: CertificateDenied
 30: SuiMoveVerificationTimedout
-31: SharedObjectWrapped
+31: SharedObjectOperationNotAllowed
 32: InputObjectDeleted
+33: ExecutionCancelledDueToSharedObjectCongestion
+34: AddressDeniedForCoin
+35: CoinTypeGlobalPause

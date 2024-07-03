@@ -1,0 +1,20 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────────╮
+│ PTB Preview                                              │
+├───────────────┬──────────────────────────────────────────┤
+│ command       │ values                                   │
+├───────────────┼──────────────────────────────────────────┤
+│ assign        │ s @0x1                                   │
+│ move-call     │ sui::coin::destroy_zero<sui::sui::SUI> s │
+│ assign        │ s @0x2                                   │
+│ make-move-vec │ <address> [s]                            │
+╰───────────────┴──────────────────────────────────────────╯
+ === BUILT PTB === 
+Input 0: ImmutableOrOwnedObject
+Input 1: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2])
+Command 0: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero<0x2::sui::SUI>(Input(0)))
+Command 1: MakeMoveVec(Someaddress,[Input(1)])

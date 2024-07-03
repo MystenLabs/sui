@@ -3,14 +3,14 @@
 
 use super::reroot_path;
 use clap::*;
-use move_compiler::compiled_unit::{CompiledUnit, NamedCompiledModule};
+use move_compiler::compiled_unit::NamedCompiledModule;
 use move_coverage::{
     coverage_map::CoverageMap, format_csv_summary, format_human_summary,
     source_coverage::SourceCoverageBuilder, summary::summarize_inst_cov,
 };
 use move_disassembler::disassembler::Disassembler;
 use move_package::BuildConfig;
-use std::path::PathBuf;
+use std::path::Path;
 
 #[derive(Parser)]
 pub enum CoverageSummaryOptions {
@@ -48,27 +48,18 @@ pub struct Coverage {
 }
 
 impl Coverage {
-    pub fn execute(self, path: Option<PathBuf>, config: BuildConfig) -> anyhow::Result<()> {
+    pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
         let path = reroot_path(path)?;
         let coverage_map = CoverageMap::from_binary_file(path.join(".coverage_map.mvcov"))?;
         let package = config.compile_package(&path, &mut Vec::new())?;
-        let modules: Vec<_> = package
-            .root_modules()
-            .filter_map(|unit| match &unit.unit {
-                CompiledUnit::Module(NamedCompiledModule { module, .. }) => Some(module.clone()),
-                _ => None,
-            })
-            .collect();
+        let modules = package.root_modules().map(|unit| &unit.unit.module);
         match self.options {
             CoverageSummaryOptions::Source { module_name } => {
                 let unit = package.get_module_by_name_from_root(&module_name)?;
                 let source_path = &unit.source_path;
-                let (module, source_map) = match &unit.unit {
-                    CompiledUnit::Module(NamedCompiledModule {
-                        module, source_map, ..
-                    }) => (module, source_map),
-                    _ => panic!("Should all be modules"),
-                };
+                let NamedCompiledModule {
+                    module, source_map, ..
+                } = &unit.unit;
                 let source_coverage = SourceCoverageBuilder::new(module, &coverage_map, source_map);
                 source_coverage
                     .compute_source_coverage(source_path)
@@ -83,14 +74,14 @@ impl Coverage {
                 let coverage_map = coverage_map.to_unified_exec_map();
                 if output_csv {
                     format_csv_summary(
-                        modules.as_slice(),
+                        modules,
                         &coverage_map,
                         summarize_inst_cov,
                         &mut std::io::stdout(),
                     )
                 } else {
                     format_human_summary(
-                        modules.as_slice(),
+                        modules,
                         &coverage_map,
                         summarize_inst_cov,
                         &mut std::io::stdout(),

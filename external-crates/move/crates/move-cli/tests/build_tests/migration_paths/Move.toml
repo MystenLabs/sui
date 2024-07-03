@@ -1,0 +1,13 @@
+
+# TOML FILE
+
+[package]
+name = "migration"
+
+# this is a comment
+[addresses]
+migration = "0x3"
+std = "0x1"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }

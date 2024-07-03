@@ -1,0 +1,11 @@
+# Too few arguments
+--transfer-objects @0x1
+
+# Too many arguments
+--transfer-objects @0x1 [@0x1, @0x2] @0x2
+
+# Invalid as we require an array literal for the transfer of the objects
+--split-coins gas [1,2,3] 
+--assign s
+--transfer-objects s @0x1
+

@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 8-19:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 4658800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4666400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 21-26:
 mutated: object(0,1)

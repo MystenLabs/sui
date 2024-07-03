@@ -1,18 +1,16 @@
-# Sui Rust SDK
-
-This crate provides the Sui Rust SDK, containing APIs to interact with the Sui network. 
+This crate provides the Sui Rust SDK, containing APIs to interact with the Sui network. Auto-generated documentation for this crate is [here](https://mystenlabs.github.io/sui/sui_sdk/index.html).
 
 ## Getting started
 
 Add the `sui-sdk` dependency as following:
 
 ```toml
-sui-sdk = { git = "https://github.com/mystenlabs/sui", package = "sui-sdk"}
+sui_sdk = { git = "https://github.com/mystenlabs/sui", package = "sui-sdk"}
 tokio = { version = "1.2", features = ["full"] }
 anyhow = "1.0"
 ```
 
-The main building block for the Sui Rust SDK is the `SuiClientBuilder`, which provides a simple and straightforward way of connectiong to a Sui network and having access to the different available APIs. 
+The main building block for the Sui Rust SDK is the `SuiClientBuilder`, which provides a simple and straightforward way of connecting to a Sui network and having access to the different available APIs. 
 
 In the following example, the application connects to the Sui `testnet` and `devnet` networks and prints out their respective RPC API versions.
 
@@ -34,17 +32,31 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ```
 
-# Rust SDK examples
+## Documentation for sui-sdk crate
+
+[GitHub Pages](https://mystenlabs.github.io/sui/sui_sdk/index.html) hosts the generated documentation for all Rust crates in the Sui repository.
+
+### Building documentation locally
+
+You can also build the documentation locally. To do so,
+
+1. Clone the `sui` repo locally. Open a Terminal or Console and go to the `sui/crates/sui-sdk` directory.
+
+1. Run `cargo doc` to build the documentation into the `sui/target` directory. Take note of location of the generated file from the last line of the output, for example `Generated /Users/foo/sui/target/doc/sui_sdk/index.html`.
+
+1. Use a web browser, like Chrome, to open the `.../target/doc/sui_sdk/index.html` file at the location your console reported in the previous step.
+
+## Rust SDK examples
 
 The [examples](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/examples) folder provides both basic and advanced examples.
 
-There are five files ending in `_api.rs` which provide code examples of the corresponding APIs and their methods. These showcase how to use the Sui Rust SDK, and can be run against the Sui testnet. Below are instructions on the prerequisites and how to run these examples.
+There are serveral files ending in `_api.rs` which provide code examples of the corresponding APIs and their methods. These showcase how to use the Sui Rust SDK, and can be run against the Sui testnet. Below are instructions on the prerequisites and how to run these examples.
 
-## Prerequisites
+### Prerequisites
 
 Unless otherwise specified, most of these examples assume `Rust` and `cargo` are installed, and that there is an available internet connection. The examples connect to the Sui testnet (`https://fullnode.testnet.sui.io:443`) and execute different APIs using the active address from the local wallet. If there is no local wallet, it will create one, generate two addresses, set one of them to be active, and it will request 1 SUI from the testnet faucet for the active address. 
 
-## Running the existing examples
+### Running the existing examples
 
 In the root folder of the `sui` repository (or in the `sui-sdk` crate folder), you can individually run examples using the command  `cargo run --example filename` (without `.rs` extension). For example:
 * `cargo run --example sui_client` -- this one requires a local Sui network running (see [here](#Connecting to Sui Network
@@ -54,10 +66,11 @@ In the root folder of the `sui` repository (or in the `sui-sdk` crate folder), y
 * `cargo run --example governance_api`
 * `cargo run --example read_api`
 * `cargo run --example programmable_transactions_api`
+* `cargo run --example sign_tx_guide`
 
-## Basic Examples
+### Basic Examples
 
-### Connecting to Sui Network
+#### Connecting to Sui Network
 The `SuiClientBuilder` struct provides a connection to the JSON-RPC server that you use for all read-only operations. The default URLs to connect to the Sui network are:
 
 - Local: http://127.0.0.1:9000
@@ -96,7 +109,7 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 ```
 
-### Read the total coin balance for each coin type owned by this address
+#### Read the total coin balance for each coin type owned by this address
 ```rust
 use std::str::FromStr;
 use sui_sdk::types::base_types::SuiAddress;
@@ -120,50 +133,51 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ## Advanced examples
 
-See the programmable transactions [example](examples/programmable_transactions_api.rs).
+See the programmable transactions [example](https://github.com/MystenLabs/sui/blob/main/crates/sui-sdk/examples/programmable_transactions_api.rs).
 
 ## Games examples
 
-## Tic Tac Toe
+### Tic Tac Toe quick start
 
-### Demo quick start
-
-#### 1. Prepare the environment 
-   1. Install `sui` binary following the [Sui installation](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md##install-sui-binaries) docs.
-   1. [Connect to Sui Devnet](https://github.com/MystenLabs/sui/blob/main/doc/src/build/connect-sui-network.md).
-   1. [Make sure you have two addresses with gas](https://github.com/MystenLabs/sui/blob/main/doc/src/build/cli-client.md#add-existing-accounts-to-clientyaml) by using the `new-address` command to create new addresses:
+1. Prepare the environment 
+   1. Install `sui` binary following the [Sui installation](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/sui-install.mdx) docs.
+   1. [Connect to Sui Devnet](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/connect.mdx).
+   1. [Make sure you have two addresses with gas](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/get-address.mdx) by using the `new-address` command to create new addresses:
       ```shell
       sui client new-address ed25519
       ```
       You must specify the key scheme, one of `ed25519` or `secp256k1` or `secp256r1`.
       You can skip this step if you are going to play with a friend. :)
-   1. [Request Sui tokens](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md#sui-tokens) for all addresses that will be used to join the game.
+   1. [Request Sui tokens](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/get-coins.mdx) for all addresses that will be used to join the game.
 
-#### 2. Publish the move contract
-   1. [Download the Sui source code](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md#source-code).
+2. Publish the move contract
+   1. [Download the Sui source code](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/sui-install.mdx).
    1. Publish the [`games` package](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games) 
       using the Sui client:
       ```shell
       sui client publish --path /path-to-sui-source-code/sui_programmability/examples/games --gas-budget 10000
       ```
    1. Record the package object ID.
-#### 3. Create a new tic-tac-toe game
+
+3. Create a new tic-tac-toe game
    1. Run the following command in the Sui source code directory to start a new game, replacing the game package objects ID with the one you recorded:
       ```shell
       cargo run --example tic-tac-toe -- --game-package-id <<games package object ID>> new-game
       ```
-        This will create a game for the first two addresses in your keystore by default. If you want to specify the identity of each player, 
-use the following command and replace the variables with the actual player's addresses:
+      This will create a game for the first two addresses in your keystore by default. If you want to specify the identity of each player,
+      use the following command and replace the variables with the actual player's addresses:
       ```shell
       cargo run --example tic-tac-toe -- --game-package-id <<games package object ID>> new-game --player-x <<player X address>> --player-o <<player O address>>
       ```
    1. Copy the game ID and pass it to your friend to join the game.
-#### 4. Joining the game
-Run the following command in the Sui source code directory to join the game, replacing the game ID and address accordingly:
-```shell
-cargo run --example tic-tac-toe -- --game-package-id <<games package object ID>> join-game --my-identity <<address>> --game-id <<game ID>>
-```
 
+4. Joining the game
 
-# License
+   Run the following command in the Sui source code directory to join the game, replacing the game ID and address accordingly:
+   ```shell
+   cargo run --example tic-tac-toe -- --game-package-id <<games package object ID>> join-game --my-identity <<address>> --game-id <<game ID>>
+   ```
+
+## License
+
 [SPDX-License-Identifier: Apache-2.0](https://github.com/MystenLabs/sui/blob/main/LICENSE) 

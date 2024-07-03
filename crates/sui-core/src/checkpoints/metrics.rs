@@ -18,9 +18,12 @@ pub struct CheckpointMetrics {
     pub checkpoint_participation: IntCounterVec,
     pub last_received_checkpoint_signatures: IntGaugeVec,
     pub last_sent_checkpoint_signature: IntGauge,
+    pub last_skipped_checkpoint_signature_submission: IntGauge,
+    pub last_ignored_checkpoint_signature_received: IntGauge,
     pub highest_accumulated_epoch: IntGauge,
     pub checkpoint_creation_latency_ms: Histogram,
     pub remote_checkpoint_forks: IntCounter,
+    pub split_brain_checkpoint_forks: IntCounter,
     pub last_created_checkpoint_age_ms: Histogram,
     pub last_certified_checkpoint_age_ms: Histogram,
 }
@@ -88,6 +91,18 @@ impl CheckpointMetrics {
                 registry
             )
             .unwrap(),
+            last_skipped_checkpoint_signature_submission: register_int_gauge_with_registry!(
+                "last_skipped_checkpoint_signature_submission",
+                "Last checkpoint signature that this validator skipped submitting because it was already certfied.",
+                registry
+            )
+            .unwrap(),
+            last_ignored_checkpoint_signature_received: register_int_gauge_with_registry!(
+                "last_ignored_checkpoint_signature_received",
+                "Last received checkpoint signature that this validator ignored because it was already certfied.",
+                registry
+            )
+            .unwrap(),
             highest_accumulated_epoch: register_int_gauge_with_registry!(
                 "highest_accumulated_epoch",
                 "Highest accumulated epoch",
@@ -102,6 +117,12 @@ impl CheckpointMetrics {
             remote_checkpoint_forks: register_int_counter_with_registry!(
                 "remote_checkpoint_forks",
                 "Number of remote checkpoints that forked from local checkpoints",
+                registry
+            )
+            .unwrap(),
+            split_brain_checkpoint_forks: register_int_counter_with_registry!(
+                "split_brain_checkpoint_forks",
+                "Number of checkpoints that have resulted in a split brain",
                 registry
             )
             .unwrap(),

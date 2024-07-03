@@ -9,6 +9,10 @@ export const connectedAccount = style({
 	gap: 8,
 });
 
+export const menuContainer = style({
+	zIndex: 999999999,
+});
+
 export const menuContent = style({
 	display: 'flex',
 	flexDirection: 'column',

@@ -3,7 +3,9 @@ title: Sui Keytool CLI
 description: The Sui Keytool CLI has commands for managing and generating addresses, working with private keys, signatures, or zkLogin. 
 ---
 
-The Sui Keytool CLI provides several commands for managing and generating addresses, working with private keys, signatures, or zkLogin. For example, a user could export a private key from the Sui Wallet and import it into the local Sui CLI wallet using the `sui keytool import [...]` command.
+The Sui CLI `keytool` command provides several command-level access for the management and generation of addresses, as well as working with private keys, signatures, or zkLogin. For example, a user could export a private key from the Sui Wallet and import it into the local Sui CLI wallet using the `sui keytool import [...]` command.
+
+{@include: ../../snippets/cli-check-install.mdx}
 
 ## Commands
 
@@ -11,9 +13,9 @@ The Sui Keytool CLI provides several commands for managing and generating addres
 Usage: sui keytool [OPTIONS] <COMMAND>
 
 Commands:
-  convert                           	Convert private key from wallet format (hex of 32 byte private key) to sui.keystore format (base64 of 33 byte flag || private key) or
-                                        	vice versa
-  decode-tx-bytes                   	Given a Base64 encoded transaction bytes, decode its components
+  convert                           	Convert private key from legacy formats (e.g. Hex or Base64) to Bech32 encoded 33 byte `flag || private key` begins with `suiprivkey`
+  decode-or-verify-tx                   Given a Base64 encoded transaction bytes, decode its components. If a signature is provided, verify the signature against the transaction 
+  											and output the result.
   decode-multi-sig                  	Given a Base64 encoded MultiSig signature, decode its components. If tx_bytes is passed in, verify the multisig
   generate                          	Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1} with optional derivation path, default to
                                         	m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be { word12 |
@@ -73,18 +75,18 @@ Use the `sui keytool list` command to output all the Sui addresses that exist in
 $ sui keytool list
 ╭────────────────────────────────────────────────────────────────────────────────────────────╮
 │ ╭─────────────────┬──────────────────────────────────────────────────────────────────────╮ │
-│ │ suiAddress  	│  0x3047f142a84297a42a65fb0a8c7a716d9d1b0bd0413d6bfa5ddfec45df175235  │ │
-│ │ publicBase64Key │  AHsXwcxaWNaNtCIIszwu7V2G6HO8aNM1598w/8y0zI5q                    	   │ │
-│ │ keyScheme   	│  ed25519                                                         	   │ │
-│ │ flag        	│  0                                                               	   │ │
-│ │ peerId      	│  7b17c1cc5a58d68db42208b33c2eed5d86e873bc68d335e7df30ffccb4cc8e6a    │ │
+│ │ suiAddress      │  0x3047f142a84297a42a65fb0a8c7a716d9d1b0bd0413d6bfa5ddfec45df175235  │ │
+│ │ publicBase64Key │  AHsXwcxaWNaNtCIIszwu7V2G6HO8aNM1598w/8y0zI5q                        │ │
+│ │ keyScheme       │  ed25519                                                             │ │
+│ │ flag            │  0                                                                   │ │
+│ │ peerId          │  7b17c1cc5a58d68db42208b33c2eed5d86e873bc68d335e7df30ffccb4cc8e6a    │ │
 │ ╰─────────────────┴──────────────────────────────────────────────────────────────────────╯ │
 │ ╭─────────────────┬──────────────────────────────────────────────────────────────────────╮ │
-│ │ suiAddress  	│  0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d  │ │
-│ │ publicBase64Key │  AKJCGi8R8TslhYdO2OHIjI6rbr+to1eR+vlOjigLY6SX                    	   │ │
-│ │ keyScheme   	│  ed25519                                                         	   │ │
-│ │ flag        	│  0                                                               	   │ │
-│ │ peerId      	│  a2421a2f11f13b2585874ed8e1c88c8eab6ebfada35791faf94e8e280b63a497	   │ │
+│ │ suiAddress      │  0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d  │ │
+│ │ publicBase64Key │  AKJCGi8R8TslhYdO2OHIjI6rbr+to1eR+vlOjigLY6SX                        │ │
+│ │ keyScheme       │  ed25519                                                             │ │
+│ │ flag            │  0                                                                   │ │
+│ │ peerId          │  a2421a2f11f13b2585874ed8e1c88c8eab6ebfada35791faf94e8e280b63a497    │ │
 │ ╰─────────────────┴──────────────────────────────────────────────────────────────────────╯ │
 ╰────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -96,12 +98,12 @@ To generate a new key pair with the `ed25519` scheme, use the `sui keytool gener
 ```shell
 $ sui keytool generate ed25519
 ╭─────────────────┬───────────────────────────────────────────────────────────────────────────────────╮
-│ suiAddress  	  │  0x5d8aa70f17d9343813d3ba6a59ecf5e8a23ffb487938e860999a722989eaef25           	  │
-│ publicBase64Key │  AKTAGf9iv0JqeLXXlsr4PUzBXb9VY8lK7xiZMS50GSu6                                 	  │
-│ keyScheme   	  │  ed25519                                                                      	  │
-│ flag        	  │  0                                                                            	  │
-│ mnemonic    	  │  cushion price ability recall payment embody kid media rude mosquito chalk broom  │
-│ peerId      	  │  a4c019ff62bf426a78b5d796caf83d4cc15dbf5563c94aef1899312e74192bba             	  │
+│ suiAddress      │  0x5d8aa70f17d9343813d3ba6a59ecf5e8a23ffb487938e860999a722989eaef25               │
+│ publicBase64Key │  AKTAGf9iv0JqeLXXlsr4PUzBXb9VY8lK7xiZMS50GSu6                                     │
+│ keyScheme       │  ed25519                                                                          │
+│ flag            │  0                                                                                │
+│ mnemonic        │  cushion price ability recall payment embody kid media rude mosquito chalk broom  │
+│ peerId          │  a4c019ff62bf426a78b5d796caf83d4cc15dbf5563c94aef1899312e74192bba                 │
 ╰─────────────────┴───────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -112,11 +114,11 @@ Use `sui keytool show [filename]` to show the key pair data that is stored in a 
 ```shell
 $ sui keytool show 0x5d8aa70f17d9343813d3ba6a59ecf5e8a23ffb487938e860999a722989eaef25.key
 ╭─────────────────┬──────────────────────────────────────────────────────────────────────╮
-│ suiAddress  	  │  0x5d8aa70f17d9343813d3ba6a59ecf5e8a23ffb487938e860999a722989eaef25  │
-│ publicBase64Key │  AC+AKTAGf9iv0JqeLXXlsr4PUzBXb9VY8lK7xiZMS50GSu6                   │
-│ keyScheme   	  │  ed25519                                                         	 │
-│ flag        	  │  0                                                               	 │
-│ peerId      	  │  a4c019ff62bf426a78b5d796caf83d4cc15dbf5563c94aef1899312e74192bba	 │
+│ suiAddress      │  0x5d8aa70f17d9343813d3ba6a59ecf5e8a23ffb487938e860999a722989eaef25  │
+│ publicBase64Key │  AC+AKTAGf9iv0JqeLXXlsr4PUzBXb9VY8lK7xiZMS50GSu6                     │
+│ keyScheme       │  ed25519                                                             │
+│ flag            │  0                                                                   │
+│ peerId          │  a4c019ff62bf426a78b5d796caf83d4cc15dbf5563c94aef1899312e74192bba    │
 ╰─────────────────┴──────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -126,18 +128,18 @@ $ sui keytool show 0x5d8aa70f17d9343813d3ba6a59ecf5e8a23ffb487938e860999a722989e
 $ sui keytool sign --data AAABACBRRpLwgknD6ZV3mc4pB0aVhAQiVkv/heQktW3kYpE+DQEBAQABAAAwR/FCqEKXpCpl+wqMenFtnRsL0EE9a/pd3+xF3xdSNQEaEUeErlBmGWxz3Bh+9BZh2mzayodzsri7xIZNDHRA3wIAAAAAAAAAILsR2d1FIZ5+ADDYZtJ2e9CWlpAxsGd4Y2rZrjlyTUF1MEfxQqhCl6QqZfsKjHpxbZ0bC9BBPWv6Xd/sRd8XUjXoAwAAAAAAAICWmAAAAAAAAA== --address 0x3047f142a84297a42a65fb0a8c7a716d9d1b0bd0413d6bfa5ddfec45df175235
 
 ╭──────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ suiAddress   │ 0x3047f142a84297a42a65fb0a8c7a716d9d1b0bd0413d6bfa5ddfec45df175235                                                                                           	  │
-│ rawTxData	   │ AAABACBRRpLwgknD6ZV3mc4pB0aVhAQiVkv/heQktW3kYpE+DQEBAQABAAAwR/FCqEKXpCpl+wqMenFtnRsL0EE9a/pd3+xF3xdSNQEaEUeErlBmGWxz3Bh+9BZh2mzayodzsri7xIZNDHRA3wIAAAAAAAAAILsR │
-│          	   │ 2d1FIZ5+ADDYZtJ2e9CWlpAxsGd4Y2rZrjlyTUF1MEfxQqhCl6QqZfsKjHpxbZ0bC9BBPWv6Xd/sRd8XUjXoAwAAAAAAAICWmAAAAAAAAA==                                                 	  │
-│ intent   	   │ ╭─────────┬─────╮                                                                                                                                            	  │
-│          	   │ │ scope   │  0  │                                                                                                                                            	  │
-│          	   │ │ version │  0  │                                                                                                                                            	  │
-│          	   │ │ app_id  │  0  │                                                                                                                                            	  │
-│          	   │ ╰─────────┴─────╯                                                                                                                                            	  │
+│ suiAddress   │ 0x3047f142a84297a42a65fb0a8c7a716d9d1b0bd0413d6bfa5ddfec45df175235                                                                                               │
+│ rawTxData    │ AAABACBRRpLwgknD6ZV3mc4pB0aVhAQiVkv/heQktW3kYpE+DQEBAQABAAAwR/FCqEKXpCpl+wqMenFtnRsL0EE9a/pd3+xF3xdSNQEaEUeErlBmGWxz3Bh+9BZh2mzayodzsri7xIZNDHRA3wIAAAAAAAAAILsR │
+│              │ 2d1FIZ5+ADDYZtJ2e9CWlpAxsGd4Y2rZrjlyTUF1MEfxQqhCl6QqZfsKjHpxbZ0bC9BBPWv6Xd/sRd8XUjXoAwAAAAAAAICWmAAAAAAAAA==                                                     │
+│ intent       │ ╭─────────┬─────╮                                                                                                                                                │
+│              │ │ scope   │  0  │                                                                                                                                                │
+│              │ │ version │  0  │                                                                                                                                                │
+│              │ │ app_id  │  0  │                                                                                                                                                │
+│              │ ╰─────────┴─────╯                                                                                                                                                │
 │ rawIntentMsg │ AAAAAAABACBRRpLwgknD6ZV3mc4pB0aVhAQiVkv/heQktW3kYpE+DQEBAQABAAAwR/FCqEKXpCpl+wqMenFtnRsL0EE9a/pd3+xF3xdSNQEaEUeErlBmGWxz3Bh+9BZh2mzayodzsri7xIZNDHRA3wIAAAAAAAAA │
-│          	   │ ILsR2d1FIZ5+ADDYZtJ2e9CWlpAxsGd4Y2rZrjlyTUF1MEfxQqhCl6QqZfsKjHpxbZ0bC9BBPWv6Xd/sRd8XUjXoAwAAAAAAAICWmAAAAAAAAA==                                             	  │
-│ digest   	   │ +B8Cbr16HfOVT50DoN/QF8HB0+oznm8KAYy8Rm+TQFo=                                                                                                                 	  │
-│ suiSignature │ ANucBEl9TIE0uv+w965DvOjlfDUll7NUtIpJgRhPc3D3y3EtZ4cvaNbm8i5pc7TNIov/qI0FhzIYf2J6PbqoNQ57F8HMWljWjbQiCLM8Lu1dhuhzvGjTNeffMP/MtMyOag==                         	  │
+│              │ ILsR2d1FIZ5+ADDYZtJ2e9CWlpAxsGd4Y2rZrjlyTUF1MEfxQqhCl6QqZfsKjHpxbZ0bC9BBPWv6Xd/sRd8XUjXoAwAAAAAAAICWmAAAAAAAAA==                                                 │
+│ digest       │ +B8Cbr16HfOVT50DoN/QF8HB0+oznm8KAYy8Rm+TQFo=                                                                                                                     │
+│ suiSignature │ ANucBEl9TIE0uv+w965DvOjlfDUll7NUtIpJgRhPc3D3y3EtZ4cvaNbm8i5pc7TNIov/qI0FhzIYf2J6PbqoNQ57F8HMWljWjbQiCLM8Lu1dhuhzvGjTNeffMP/MtMyOag==                             │
 ╰──────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
  ```
 

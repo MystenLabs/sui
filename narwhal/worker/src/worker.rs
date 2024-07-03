@@ -269,15 +269,14 @@ impl Worker {
                     network = n;
                     break;
                 }
-                Err(_) => {
+                Err(e) => {
                     retries_left -= 1;
 
                     if retries_left <= 0 {
                         panic!();
                     }
                     error!(
-                        "Address {} should be available for the primary Narwhal service, retrying in one second",
-                        addr
+                        "Address {addr} should be available for the primary Narwhal service, retrying in one second: {e:#?}",
                     );
                     sleep(Duration::from_secs(1));
                 }
@@ -479,8 +478,11 @@ impl Worker {
             .expect("Our public key or worker id is not in the worker cache")
             .transactions;
         let address = address
-            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
-            .unwrap();
+            .replace(0, |protocol| match protocol {
+                Protocol::Ip4(ip) if ip.is_loopback() => None,
+                _ => Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)),
+            })
+            .unwrap_or(address);
 
         let tx_server_handle = TxServer::spawn(
             address.clone(),

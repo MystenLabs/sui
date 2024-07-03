@@ -1,0 +1,27 @@
+query ByTxSender {
+  events(
+    first: 1
+    filter: {
+      sender: "0xdff57c401e125a7e0e06606380560b459a179aacd08ed396d0162d57dbbdadfb"
+    }
+  ) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      sendingModule {
+        name
+      }
+      type {
+        repr
+      }
+      sender {
+        address
+      }
+      timestamp
+      json
+      bcs
+    }
+  }
+}

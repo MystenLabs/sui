@@ -5,7 +5,7 @@ error[E04001]: restricted visibility
   ┌─ ./sources/B.move:3:31
   │
 3 │     public fun usage(): u64 { defn::definition() }
-  │                               ^^^^^^^^^^^^^^^^^^ Invalid call to 'A::defn::definition'
+  │                               ^^^^^^^^^^^^^^^^^^ Invalid call to 'public(package)' visible function 'A::defn::definition'
   │
   ┌─ ./defn/sources/A.move:2:5
   │

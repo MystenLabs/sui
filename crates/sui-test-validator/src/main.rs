@@ -46,6 +46,15 @@ struct Args {
     #[clap(long, default_value = "127.0.0.1:9124")]
     indexer_rpc_addr: String,
 
+    /// Host to start the GraphQl server on
+    #[clap(long, default_value = "127.0.0.1")]
+    graphql_host: String,
+
+    /// Port to start the GraphQl server on
+    /// Explicitly setting this enables the server
+    #[clap(long)]
+    graphql_port: Option<u16>,
+
     /// Port for the Indexer Postgres DB
     /// 5432 is the default port for postgres on Mac
     #[clap(long, default_value = "5432")]
@@ -55,6 +64,18 @@ struct Args {
     #[clap(long, default_value = "localhost")]
     pg_host: String,
 
+    /// DB name for the Indexer Postgres DB
+    #[clap(long, default_value = "sui_indexer")]
+    pg_db_name: String,
+
+    /// DB username for the Indexer Postgres DB
+    #[clap(long, default_value = "postgres")]
+    pg_user: String,
+
+    /// DB password for the Indexer Postgres DB
+    #[clap(long, default_value = "postgrespw")]
+    pg_password: String,
+
     /// The duration for epochs (defaults to one minute)
     #[clap(long, default_value = "60000")]
     epoch_duration_ms: u64,
@@ -62,10 +83,6 @@ struct Args {
     /// if we should run indexer
     #[clap(long)]
     pub with_indexer: bool,
-
-    /// TODO(gegao): remove this after indexer migration is complete.
-    #[clap(long)]
-    pub use_indexer_experimental_methods: bool,
 }
 
 #[tokio::main]
@@ -79,12 +96,16 @@ async fn main() -> Result<()> {
         config_dir,
         fullnode_rpc_addr,
         indexer_rpc_addr,
+        graphql_host,
+        graphql_port,
         pg_port,
         pg_host,
+        pg_db_name,
+        pg_user,
+        pg_password,
         epoch_duration_ms,
         faucet_addr,
         with_indexer,
-        use_indexer_experimental_methods,
     } = args;
 
     // We don't pass epoch duration if we have a genesis config.
@@ -94,19 +115,28 @@ async fn main() -> Result<()> {
         Some(epoch_duration_ms)
     };
 
-    let cluster = LocalNewCluster::start(&ClusterTestOpt {
+    if graphql_port.is_none() {
+        println!("Graphql port not provided. Graphql service will not run.")
+    }
+    if !with_indexer {
+        println!("`with_indexer` flag unset. Indexer service will not run.")
+    }
+
+    let cluster_config = ClusterTestOpt {
         env: Env::NewLocal,
         fullnode_address: Some(fullnode_rpc_addr.clone()),
         indexer_address: with_indexer.then_some(indexer_rpc_addr),
         pg_address: with_indexer.then_some(format!(
-            "postgres://postgres@{pg_host}:{pg_port}/sui_indexer"
+            "postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}"
         )),
-        faucet_address: None,
+        faucet_address: Some(format!("127.0.0.1:{}", faucet_port)),
         epoch_duration_ms,
-        use_indexer_experimental_methods,
         config_dir,
-    })
-    .await?;
+        graphql_address: graphql_port.map(|p| format!("{}:{}", graphql_host, p)),
+    };
+
+    println!("Starting Sui validator with config: {:#?}", cluster_config);
+    let cluster = LocalNewCluster::start(&cluster_config).await?;
 
     println!("Fullnode RPC URL: {}", cluster.fullnode_url());
 
@@ -149,6 +179,7 @@ async fn start_faucet(cluster: &LocalNewCluster, addr: String) -> Result<()> {
         );
 
     let faucet_addr = addr.parse::<SocketAddr>().expect("Unable to parse faucet address");
+
 
     println!("Faucet URL: http://{}", faucet_addr);
 

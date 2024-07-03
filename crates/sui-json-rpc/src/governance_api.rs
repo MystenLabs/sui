@@ -15,6 +15,7 @@ use tracing::{info, instrument};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::{GovernanceReadApiOpenRpc, GovernanceReadApiServer, JsonRpcMetrics};
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
 use sui_json_rpc_types::{SuiCommittee, ValidatorApy, ValidatorApys};
 use sui_open_rpc::Module;
@@ -31,7 +32,6 @@ use sui_types::sui_system_state::PoolTokenExchangeRate;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
-use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
 use crate::authority_state::StateRead;
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
 use crate::{with_tracing, ObjectProvider, SuiRpcModule};
@@ -395,7 +395,7 @@ async fn exchange_rates(
                 error: e.to_string(),
             })?;
         let validator = get_validator_from_table(
-            state.get_db().as_ref(),
+            state.get_object_store().as_ref(),
             system_state_summary.inactive_pools_id,
             &pool_id,
         )?; // TODO(wlmyng): roll this into StateReadError
@@ -422,7 +422,7 @@ async fn exchange_rates(
                 })?;
 
                 let exchange_rate: PoolTokenExchangeRate = get_dynamic_field_from_store(
-                    state.get_db().as_ref(),
+                    &state.get_object_store().as_ref(),
                     exchange_rates_id,
                     &epoch,
                 )?;
@@ -457,6 +457,6 @@ impl SuiRpcModule for GovernanceReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::GovernanceReadApiOpenRpc::module_doc()
+        GovernanceReadApiOpenRpc::module_doc()
     }
 }

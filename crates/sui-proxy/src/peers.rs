@@ -56,21 +56,30 @@ pub struct SuiPeer {
 #[derive(Debug, Clone)]
 pub struct SuiNodeProvider {
     nodes: SuiPeers,
+    static_nodes: SuiPeers,
     rpc_url: String,
     rpc_poll_interval: Duration,
 }
 
 impl Allower for SuiNodeProvider {
     fn allowed(&self, key: &Ed25519PublicKey) -> bool {
-        self.nodes.read().unwrap().contains_key(key)
+        self.static_nodes.read().unwrap().contains_key(key)
+            || self.nodes.read().unwrap().contains_key(key)
     }
 }
 
 impl SuiNodeProvider {
-    pub fn new(rpc_url: String, rpc_poll_interval: Duration) -> Self {
+    pub fn new(rpc_url: String, rpc_poll_interval: Duration, static_peers: Vec<SuiPeer>) -> Self {
+        // build our hashmap with the static pub keys. we only do this one time at binary startup.
+        let static_nodes: HashMap<Ed25519PublicKey, SuiPeer> = static_peers
+            .into_iter()
+            .map(|v| (v.public_key.clone(), v))
+            .collect();
+        let static_nodes = Arc::new(RwLock::new(static_nodes));
         let nodes = Arc::new(RwLock::new(HashMap::new()));
         Self {
             nodes,
+            static_nodes,
             rpc_url,
             rpc_poll_interval,
         }
@@ -79,6 +88,15 @@ impl SuiNodeProvider {
     /// get is used to retrieve peer info in our handlers
     pub fn get(&self, key: &Ed25519PublicKey) -> Option<SuiPeer> {
         debug!("look for {:?}", key);
+        // check static nodes first
+        if let Some(v) = self.static_nodes.read().unwrap().get(key) {
+            return Some(SuiPeer {
+                name: v.name.to_owned(),
+                p2p_address: v.p2p_address.to_owned(),
+                public_key: v.public_key.to_owned(),
+            });
+        }
+        // check dynamic nodes
         if let Some(v) = self.nodes.read().unwrap().get(key) {
             return Some(SuiPeer {
                 name: v.name.to_owned(),

@@ -15,7 +15,6 @@
 
 [package]
 name = "Root"
-version = "0.0.0"
 
 [dependencies]
 B = { local = "./deps_only/B" }

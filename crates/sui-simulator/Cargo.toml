@@ -22,7 +22,8 @@ telemetry-subscribers.workspace = true
 tower.workspace = true
 lru.workspace = true
 rand.workspace = true
-workspace-hack.workspace = true
+serde.workspace = true
+bcs.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true

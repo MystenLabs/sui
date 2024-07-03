@@ -3,11 +3,12 @@
 	"useAccounts": "useAccounts",
 	"useCurrentWallet": "useCurrentWallet",
 	"useCurrentAccount": "useCurrentAccount",
-	"useAutoConnectionStatus": "useAutoConnectionStatus",
+	"useAutoConnectWallet": "useAutoConnectWallet",
 	"useConnectWallet": "useConnectWallet",
 	"useDisconnectWallet": "useDisconnectWallet",
 	"useSwitchAccount": "useSwitchAccount",
 	"useSignPersonalMessage": "useSignPersonalMessage",
-	"useSignTransactionBlock": "useSignTransactionBlock",
-	"useSignAndExecuteTransactionBlock": "useSignAndExecuteTransactionBlock"
+	"useSignTransaction": "useSignTransaction",
+	"useSignAndExecuteTransaction": "useSignAndExecuteTransaction",
+	"useReportTransactionEffects": "useReportTransactionEffects"
 }

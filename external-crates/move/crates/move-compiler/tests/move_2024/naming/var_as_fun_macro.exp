@@ -1,0 +1,9 @@
+error[E04032]: unable to expand macro function
+  ┌─ tests/move_2024/naming/var_as_fun_macro.move:3:9
+  │
+3 │         $var();
+  │         ^^^^^^ Cannot call non-lambda argument
+  ·
+8 │         test_panic!(0)
+  │                     - Expected a lambda argument
+

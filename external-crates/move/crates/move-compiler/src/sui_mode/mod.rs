@@ -6,6 +6,7 @@ use move_symbol_pool::Symbol;
 use crate::diagnostics::codes::{custom, DiagnosticInfo, Severity};
 
 pub mod id_leak;
+pub mod linters;
 pub mod typing;
 
 pub const INIT_FUNCTION_NAME: Symbol = symbol!("init");
@@ -41,6 +42,15 @@ pub const SUI_CLOCK_CREATE: Symbol = symbol!("create");
 pub const AUTHENTICATOR_STATE_MODULE_NAME: Symbol = symbol!("authenticator_state");
 pub const AUTHENTICATOR_STATE_TYPE_NAME: Symbol = symbol!("AuthenticatorState");
 pub const AUTHENTICATOR_STATE_CREATE: Symbol = symbol!("create");
+pub const RANDOMNESS_MODULE_NAME: Symbol = symbol!("random");
+pub const RANDOMNESS_STATE_TYPE_NAME: Symbol = symbol!("Random");
+pub const RANDOMNESS_STATE_CREATE: Symbol = symbol!("create");
+pub const DENY_LIST_MODULE_NAME: Symbol = symbol!("deny_list");
+pub const DENY_LIST_CREATE: Symbol = symbol!("create");
+pub const BRIDGE_ADDR_NAME: Symbol = symbol!("bridge");
+pub const BRIDGE_MODULE_NAME: Symbol = symbol!("bridge");
+pub const BRIDGE_TYPE_NAME: Symbol = symbol!("Bridge");
+pub const BRIDGE_CREATE: Symbol = symbol!("create");
 
 pub const EVENT_MODULE_NAME: Symbol = symbol!("event");
 pub const EVENT_FUNCTION_NAME: Symbol = symbol!("emit");
@@ -49,12 +59,14 @@ pub const TRANSFER_MODULE_NAME: Symbol = symbol!("transfer");
 pub const TRANSFER_FUNCTION_NAME: Symbol = symbol!("transfer");
 pub const FREEZE_FUNCTION_NAME: Symbol = symbol!("freeze_object");
 pub const SHARE_FUNCTION_NAME: Symbol = symbol!("share_object");
+pub const RECEIVE_FUNCTION_NAME: Symbol = symbol!("receive");
 pub const RECEIVING_TYPE_NAME: Symbol = symbol!("Receiving");
 
 pub const PRIVATE_TRANSFER_FUNCTIONS: &[Symbol] = &[
     TRANSFER_FUNCTION_NAME,
     FREEZE_FUNCTION_NAME,
     SHARE_FUNCTION_NAME,
+    RECEIVE_FUNCTION_NAME,
 ];
 
 //**************************************************************************************************
@@ -75,13 +87,6 @@ pub const ID_LEAK_DIAG: DiagnosticInfo = custom(
     "invalid object construction",
 );
 
-pub const SCRIPT_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
-    Severity::NonblockingError,
-    /* category */ TYPING,
-    /* code */ 1,
-    "scripts are not supported",
-);
 pub const ENTRY_FUN_SIGNATURE_DIAG: DiagnosticInfo = custom(
     SUI_DIAG_PREFIX,
     Severity::NonblockingError,
@@ -138,3 +143,6 @@ pub const PRIVATE_TRANSFER_CALL_DIAG: DiagnosticInfo = custom(
     /* code */ 9,
     "invalid private transfer call",
 );
+
+// Bridge supported asset
+pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];

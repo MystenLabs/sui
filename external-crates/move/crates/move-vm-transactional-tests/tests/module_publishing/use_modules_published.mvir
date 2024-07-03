@@ -31,12 +31,14 @@ module 0x44.M {
 }
 
 //# run
+module 0x42.m {
 import 0x42.M;
 
-main() {
+entry foo() {
 label b0:
     M.run();
     return;
+}
 }
 
 //# publish
@@ -48,11 +50,12 @@ module 0x45.M {
 }
 
 //# run
+module 0x42.m {
 import 0x42.M as M1;
 import 0x43.M as M2;
 import 0x44.M as M3;
 
-main() {
+entry foo() {
     let x: u64;
 label b0:
     x = M1.foo();
@@ -62,4 +65,5 @@ label b0:
     x = M3.baz();
     assert(move(x) == 9, 42);
     return;
+}
 }

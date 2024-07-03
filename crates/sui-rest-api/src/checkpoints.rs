@@ -1,227 +1,193 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
+use axum::extract::Query;
+use axum::extract::{Path, State};
+use sui_sdk2::types::{
+    CheckpointData, CheckpointDigest, CheckpointSequenceNumber, SignedCheckpointSummary,
 };
+use sui_types::storage::ReadStore;
+use tap::Pipe;
 
-use anyhow::Result;
-use axum::{
-    extract::{Path, State},
-    Json, TypedHeader,
-};
-use serde::{Deserialize, Serialize};
-use sui_types::{
-    effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    messages_checkpoint::{
-        CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
-    },
-    object::Object,
-    storage::ObjectKey,
-    transaction::Transaction,
-};
+use crate::reader::StateReader;
+use crate::Direction;
+use crate::Page;
+use crate::{accept::AcceptFormat, response::ResponseContent, Result};
 
-use crate::{headers::Accept, node_state_getter::NodeStateGetter, AppError, Bcs};
-
-pub const GET_LATEST_CHECKPOINT_PATH: &str = "/checkpoints";
+pub const LIST_CHECKPOINT_PATH: &str = "/checkpoints";
 pub const GET_CHECKPOINT_PATH: &str = "/checkpoints/:checkpoint";
 pub const GET_FULL_CHECKPOINT_PATH: &str = "/checkpoints/:checkpoint/full";
 
 pub async fn get_full_checkpoint(
-    //TODO support digest as well as sequence number
-    Path(checkpoint_id): Path<CheckpointSequenceNumber>,
-    TypedHeader(accept): TypedHeader<Accept>,
-    State(state): State<Arc<dyn NodeStateGetter>>,
-) -> Result<Bcs<CheckpointData>, AppError> {
-    if accept.as_str() != crate::APPLICATION_BCS {
-        return Err(AppError(anyhow::anyhow!("invalid accept type")));
+    Path(checkpoint_id): Path<CheckpointId>,
+    accept: AcceptFormat,
+    State(state): State<StateReader>,
+) -> Result<ResponseContent<CheckpointData>> {
+    let verified_summary = match checkpoint_id {
+        CheckpointId::SequenceNumber(s) => state.inner().get_checkpoint_by_sequence_number(s),
+        CheckpointId::Digest(d) => state.inner().get_checkpoint_by_digest(&d.into()),
+    }?
+    .ok_or(CheckpointNotFoundError(checkpoint_id))?;
+
+    let checkpoint_contents = state
+        .inner()
+        .get_checkpoint_contents_by_digest(&verified_summary.content_digest)?
+        .ok_or(CheckpointNotFoundError(checkpoint_id))?;
+
+    let checkpoint_data = state
+        .inner()
+        .get_checkpoint_data(verified_summary, checkpoint_contents)?
+        .into();
+
+    match accept {
+        AcceptFormat::Json => ResponseContent::Json(checkpoint_data),
+        AcceptFormat::Bcs => ResponseContent::Bcs(checkpoint_data),
     }
-
-    let verified_summary = state.get_verified_checkpoint_by_sequence_number(checkpoint_id)?;
-    let checkpoint_contents = state.get_checkpoint_contents(verified_summary.content_digest)?;
-
-    let transaction_digests = checkpoint_contents
-        .iter()
-        .map(|execution_digests| execution_digests.transaction)
-        .collect::<Vec<_>>();
-
-    let transactions = state
-        .multi_get_transaction_blocks(&transaction_digests)?
-        .into_iter()
-        .map(|maybe_transaction| {
-            maybe_transaction.ok_or_else(|| anyhow::anyhow!("missing transaction"))
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    let effects = state
-        .multi_get_executed_effects(&transaction_digests)?
-        .into_iter()
-        .map(|maybe_effects| maybe_effects.ok_or_else(|| anyhow::anyhow!("missing effects")))
-        .collect::<Result<Vec<_>>>()?;
-
-    let event_digests = effects
-        .iter()
-        .flat_map(|fx| fx.events_digest().copied())
-        .collect::<Vec<_>>();
-
-    let events = state
-        .multi_get_events(&event_digests)?
-        .into_iter()
-        .map(|maybe_event| maybe_event.ok_or_else(|| anyhow::anyhow!("missing event")))
-        .collect::<Result<Vec<_>>>()?;
-
-    let events = event_digests
-        .into_iter()
-        .zip(events)
-        .collect::<HashMap<_, _>>();
-
-    let mut full_transactions = Vec::with_capacity(transactions.len());
-    for (tx, fx) in transactions.into_iter().zip(effects) {
-        let events = fx.events_digest().map(|event_digest| {
-            events
-                .get(event_digest)
-                .cloned()
-                .expect("event was already checked to be present")
-        });
-        // Note unwrapped_then_deleted contains **updated** versions.
-        let unwrapped_then_deleted_obj_ids = fx
-            .unwrapped_then_deleted()
-            .into_iter()
-            .map(|k| k.0)
-            .collect::<HashSet<_>>();
-
-        let input_object_keys = fx
-            .input_shared_objects()
-            .into_iter()
-            .map(|kind| {
-                let (id, version) = kind.id_and_version();
-                ObjectKey(id, version)
-            })
-            .chain(
-                fx.modified_at_versions()
-                    .into_iter()
-                    .map(|(object_id, version)| ObjectKey(object_id, version)),
-            )
-            .collect::<HashSet<_>>()
-            .into_iter()
-            // Unwrapped-then-deleted objects are not stored in state before the tx, so we have nothing to fetch.
-            .filter(|key| !unwrapped_then_deleted_obj_ids.contains(&key.0))
-            .collect::<Vec<_>>();
-
-        let input_objects = state
-            .multi_get_object_by_key(&input_object_keys)?
-            .into_iter()
-            .enumerate()
-            .map(|(idx, maybe_object)| {
-                maybe_object.ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "missing input object key {:?} from tx {}",
-                        input_object_keys[idx],
-                        tx.digest()
-                    )
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let output_object_keys = fx
-            .all_changed_objects()
-            .into_iter()
-            .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
-            .collect::<Vec<_>>();
-
-        let output_objects = state
-            .multi_get_object_by_key(&output_object_keys)?
-            .into_iter()
-            .enumerate()
-            .map(|(idx, maybe_object)| {
-                maybe_object.ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "missing output object key {:?} from tx {}",
-                        output_object_keys[idx],
-                        tx.digest()
-                    )
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let full_transaction = CheckpointTransaction {
-            transaction: tx.into(),
-            effects: fx,
-            events,
-            input_objects,
-            output_objects,
-        };
-
-        full_transactions.push(full_transaction);
-    }
-
-    Ok(Bcs(CheckpointData {
-        checkpoint_summary: verified_summary.into(),
-        checkpoint_contents,
-        transactions: full_transactions,
-    }))
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CheckpointData {
-    pub checkpoint_summary: CertifiedCheckpointSummary,
-    pub checkpoint_contents: CheckpointContents,
-    pub transactions: Vec<CheckpointTransaction>,
-}
-
-impl CheckpointData {
-    pub fn output_objects(&self) -> Vec<&Object> {
-        self.transactions
-            .iter()
-            .flat_map(|tx| &tx.output_objects)
-            .collect()
-    }
-
-    pub fn input_objects(&self) -> Vec<&Object> {
-        self.transactions
-            .iter()
-            .flat_map(|tx| &tx.input_objects)
-            .collect()
-    }
-
-    pub fn all_objects(&self) -> Vec<&Object> {
-        self.transactions
-            .iter()
-            .flat_map(|tx| &tx.input_objects)
-            .chain(self.transactions.iter().flat_map(|tx| &tx.output_objects))
-            .collect()
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CheckpointTransaction {
-    /// The input Transaction
-    pub transaction: Transaction,
-    /// The effects produced by executing this transaction
-    pub effects: TransactionEffects,
-    /// The events, if any, emitted by this transaciton during execution
-    pub events: Option<TransactionEvents>,
-    /// The state of all inputs to this transaction as they were prior to execution.
-    pub input_objects: Vec<Object>,
-    /// The state of all output objects created or mutated by this transaction.
-    pub output_objects: Vec<Object>,
-}
-
-pub async fn get_latest_checkpoint(
-    State(state): State<Arc<dyn NodeStateGetter>>,
-) -> Result<Json<CertifiedCheckpointSummary>, AppError> {
-    let latest_checkpoint_sequence_number = state.get_latest_checkpoint_sequence_number()?;
-    let verified_summary =
-        state.get_verified_checkpoint_by_sequence_number(latest_checkpoint_sequence_number)?;
-    Ok(Json(verified_summary.into()))
+    .pipe(Ok)
 }
 
 pub async fn get_checkpoint(
-    //TODO support digest as well as sequence number
-    Path(checkpoint_id): Path<CheckpointSequenceNumber>,
-    State(state): State<Arc<dyn NodeStateGetter>>,
-) -> Result<Json<CertifiedCheckpointSummary>, AppError> {
-    let verified_summary = state.get_verified_checkpoint_by_sequence_number(checkpoint_id)?;
-    Ok(Json(verified_summary.into()))
+    Path(checkpoint_id): Path<CheckpointId>,
+    accept: AcceptFormat,
+    State(state): State<StateReader>,
+) -> Result<ResponseContent<SignedCheckpointSummary>> {
+    let summary = match checkpoint_id {
+        CheckpointId::SequenceNumber(s) => state.inner().get_checkpoint_by_sequence_number(s),
+        CheckpointId::Digest(d) => state.inner().get_checkpoint_by_digest(&d.into()),
+    }?
+    .ok_or(CheckpointNotFoundError(checkpoint_id))?
+    .into_inner()
+    .into();
+
+    match accept {
+        AcceptFormat::Json => ResponseContent::Json(summary),
+        AcceptFormat::Bcs => ResponseContent::Bcs(summary),
+    }
+    .pipe(Ok)
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum CheckpointId {
+    SequenceNumber(CheckpointSequenceNumber),
+    Digest(CheckpointDigest),
+}
+
+impl<'de> serde::Deserialize<'de> for CheckpointId {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+
+        if let Ok(s) = raw.parse::<CheckpointSequenceNumber>() {
+            Ok(Self::SequenceNumber(s))
+        } else if let Ok(d) = raw.parse::<CheckpointDigest>() {
+            Ok(Self::Digest(d))
+        } else {
+            Err(serde::de::Error::custom(format!(
+                "unrecognized checkpoint-id {raw}"
+            )))
+        }
+    }
+}
+
+impl serde::Serialize for CheckpointId {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            CheckpointId::SequenceNumber(s) => serializer.serialize_str(&s.to_string()),
+            CheckpointId::Digest(d) => serializer.serialize_str(&d.to_string()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CheckpointNotFoundError(CheckpointId);
+
+impl std::fmt::Display for CheckpointNotFoundError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Checkpoint ")?;
+
+        match self.0 {
+            CheckpointId::SequenceNumber(n) => write!(f, "{n}")?,
+            CheckpointId::Digest(d) => write!(f, "{d}")?,
+        }
+
+        write!(f, " not found")
+    }
+}
+
+impl std::error::Error for CheckpointNotFoundError {}
+
+impl From<CheckpointNotFoundError> for crate::RestError {
+    fn from(value: CheckpointNotFoundError) -> Self {
+        Self::new(axum::http::StatusCode::NOT_FOUND, value.to_string())
+    }
+}
+
+pub async fn list_checkpoints(
+    Query(parameters): Query<ListCheckpointsQueryParameters>,
+    accept: AcceptFormat,
+    State(state): State<StateReader>,
+) -> Result<Page<SignedCheckpointSummary, CheckpointSequenceNumber>> {
+    let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
+    let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
+    let limit = parameters.limit();
+    let start = parameters.start(latest_checkpoint);
+    let direction = parameters.direction();
+
+    if start < oldest_checkpoint {
+        return Err(crate::RestError::new(
+            axum::http::StatusCode::GONE,
+            "Old checkpoints have been pruned",
+        ));
+    }
+
+    let checkpoints = state
+        .checkpoint_iter(direction, start)
+        .map(|result| {
+            result.map(|(checkpoint, _contents)| SignedCheckpointSummary::from(checkpoint))
+        })
+        .take(limit)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let cursor = checkpoints.last().and_then(|checkpoint| match direction {
+        Direction::Ascending => checkpoint.checkpoint.sequence_number.checked_add(1),
+        Direction::Descending => checkpoint.checkpoint.sequence_number.checked_sub(1),
+    });
+
+    match accept {
+        AcceptFormat::Json => ResponseContent::Json(checkpoints),
+        AcceptFormat::Bcs => ResponseContent::Bcs(checkpoints),
+    }
+    .pipe(|entries| Page { entries, cursor })
+    .pipe(Ok)
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct ListCheckpointsQueryParameters {
+    pub limit: Option<u32>,
+    /// The checkpoint to start listing from.
+    ///
+    /// Defaults to the latest checkpoint if not provided.
+    pub start: Option<CheckpointSequenceNumber>,
+    pub direction: Option<Direction>,
+}
+
+impl ListCheckpointsQueryParameters {
+    pub fn limit(&self) -> usize {
+        self.limit
+            .map(|l| (l as usize).clamp(1, crate::MAX_PAGE_SIZE))
+            .unwrap_or(crate::DEFAULT_PAGE_SIZE)
+    }
+
+    pub fn start(&self, default: CheckpointSequenceNumber) -> CheckpointSequenceNumber {
+        self.start.unwrap_or(default)
+    }
+
+    pub fn direction(&self) -> Direction {
+        self.direction.unwrap_or(Direction::Descending)
+    }
 }

@@ -1,0 +1,86 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 17,
+                    },
+                    value: Publish(
+                        Spanned {
+                            span: Span {
+                                start: 0,
+                                end: 17,
+                            },
+                            value: "foo/bar",
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 18,
+                        end: 32,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 17,
+                    },
+                    value: Publish(
+                        Spanned {
+                            span: Span {
+                                start: 0,
+                                end: 17,
+                            },
+                            value: "foo/bar",
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 18,
+                        end: 32,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+]

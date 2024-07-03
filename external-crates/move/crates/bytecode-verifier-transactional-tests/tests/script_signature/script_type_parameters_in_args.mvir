@@ -1,24 +1,32 @@
 //# run --type-args u64 --args 0
+module 0x1.m {
 // all invalid signatures
-main<T: copy + drop>(x: T) {
+entry foo<T: copy + drop>(x: T) {
 label b0:
     return;
+}
 }
 
 
 //# run --type-args u8 --args 1u8
-main<T>(x: &T) {
+module 0x2.m {
+
+entry foo<T>(x: &T) {
 label b0:
     return;
 }
 
+}
 
 //# run --type-args u8 --args b"hello"
-main<T: copy + drop>(v: vector<T>) {
+module 0x3.m {
+
+entry foo<T: copy + drop>(v: vector<T>) {
 label b0:
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -27,10 +35,12 @@ module 0x42.M {
 
 
 //# run --type-args u8 --args 0u8
+module 0x4.m {
 // bit of a hack but works because structs have no overhead
 import 0x42.M;
 
-main<T: copy + drop>(x: M.Box<M.Box<T>>) {
+entry foo<T: copy + drop>(x: M.Box<M.Box<T>>) {
 label b0:
     return;
+}
 }

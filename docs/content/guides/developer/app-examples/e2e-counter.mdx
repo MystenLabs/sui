@@ -9,13 +9,25 @@ This example walks you through building a basic distributed counter app, coverin
 If haven't followed Client App with Sui TypeScript SDK, run the following command in a terminal or console to scaffold a new app:
 
 ```bash
-pnpm create @mysten/create-dapp --template react-client-dapp
+pnpm create @mysten/dapp --template react-client-dapp
+```
+
+or
+
+```bash
+yarn create @mysten/dapp --template react-client-dapp
 ```
 
 To get a head start, you can automatically create this example using the following `template` value instead:
 
 ```bash
-pnpm create @mysten/create-dapp --template react-e2e-counter
+pnpm create @mysten/dapp --template react-e2e-counter
+```
+
+or
+
+```bash
+yarn create @mysten/dapp --template react-e2e-counter
 ```
 
 ## Adding a Move module
@@ -35,18 +47,14 @@ Next, use the [Sui Client CLI](references/cli/client.mdx) to generate a new Move
 sui move new counter
 ```
 
-This creates a new, empty Move package in a new `move/counter` directory with a [Move.toml](references/move/move-toml.mdx) file, and an empty `sources` directory.
+This creates a new, empty Move package in a new `move/counter` directory with a [Move.toml](https://move-book.com/concepts/manifest.html) file, and an empty `sources` directory.
 
 Add your Move code under `sources` by creating a new `counter.move` file:
 
-```rust
+```move
 module counter::counter {
-    use sui::transfer;
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-
     /// A shared counter.
-    struct Counter has key {
+    public struct Counter has key {
         id: UID,
         owner: address,
         value: u64
@@ -56,7 +64,7 @@ module counter::counter {
     public fun create(ctx: &mut TxContext) {
         transfer::share_object(Counter {
             id: object::new(ctx),
-            owner: tx_context::sender(ctx),
+            owner: ctx.sender(),
             value: 0
         })
     }
@@ -68,7 +76,7 @@ module counter::counter {
 
     /// Set value (only runnable by the Counter owner)
     public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
-        assert!(counter.owner == tx_context::sender(ctx), 0);
+        assert!(counter.owner == ctx.sender(), 0);
         counter.value = value;
     }
 }
@@ -78,7 +86,7 @@ Now that you have your Move code, you need to publish it. The Client App with Su
 
 First, update the Sui dependency in Move.toml by changing the `rev` from `framework/testnet` to `framework/devnet`.
 
-```rust
+```toml
 ...
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/devnet" }
@@ -99,11 +107,13 @@ sui client switch --env devnet
 
 Now, publish your Move code with the following command:
 
+{@include: ../../../snippets/info-gas-budget.mdx}
+
 ```bash
 sui client publish --gas-budget 10000000 counter
 ```
 
-:::info 
+:::info
 
 See [Sui Client CLI](/references/cli/client.mdx) for more information about `client` commands in the Sui CLI.
 
@@ -146,138 +156,140 @@ Now that you've published your Move code, you can start building your UI to use 
 
 ```ts
 export function CreateCounter(props: { onCreated: (id: string) => void }) {
-  return (
-    <div>
-      <button
-        onClick={() => {
-          create();
-        }}
-      >
-        Create Counter
-      </button>
-    </div>
-  );
+	return (
+		<div>
+			<button
+				onClick={() => {
+					create();
+				}}
+			>
+				Create Counter
+			</button>
+		</div>
+	);
 
-  function create() {
-    props.onCreated('TODO');
-  }
+	function create() {
+		props.onCreated('TODO');
+	}
 }
 ```
 
 This component renders a button that enables the user to create a counter. Now, update your `create` function so that it calls the `create` function in your Move module.
 
-To do this, you need to construct a `TransactionBlock`, with the appropriate `moveCall` transaction, and then sign and execute the programmable transaction block (PTB).
+To do this, you need to construct a `Transaction`, with the appropriate `moveCall` transaction, and then sign and execute the programmable transaction block (PTB).
 
-First, import `TransactionBlock` from `@mysten/sui.js`, `COUNTER_PACKAGE_ID` from your constants.ts file created previously, and `useSignAndExecuteTransactionBlock` from `@mysten/dapp-kit`.
+First, import `Transaction` from `@mysten/sui`, `COUNTER_PACKAGE_ID` from your constants.ts file created previously, and `useSignAndExecuteTransaction` from `@mysten/dapp-kit`.
 
 ```ts
-import { useSignAndExecuteTransactionBlock } from "@mysten/dapp-kit";
-import { TransactionBlock } from "@mysten/sui.js/transactions";
+import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
 
-import { COUNTER_PACKAGE_ID } from "./constants";
+import { COUNTER_PACKAGE_ID } from './constants';
 ```
 
-Next, call the `useSignAndExecuteTransactionBlock` hook in your component, which provides a `mutate` function you can use in your `create` function:
+Next, call the `useSignAndExecuteTransaction` hook in your component, which provides a `mutate` function you can use in your `create` function:
 
 ```ts
 export function CreateCounter(props: { onCreated: (id: string) => void }) {
-  const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
-  return (
-    <div>
-      <button
-        onClick={() => {
-          create();
-        }}
-      >
-        Create Counter
-      </button>
-    </div>
-  );
+	const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+	return (
+		<div>
+			<button
+				onClick={() => {
+					create();
+				}}
+			>
+				Create Counter
+			</button>
+		</div>
+	);
 
-  function create() {
-    // TODO
-  }
+	function create() {
+		// TODO
+	}
 }
 ```
 
-Finally, construct your `TransactionBlock`:
+Finally, construct your `Transaction`:
 
 ```ts
 function create() {
-  const txb = new TransactionBlock();
-    txb.moveCall({
-      arguments: [],
-      target: `${COUNTER_PACKAGE_ID}::counter::create`,
-    });
+	const tx = new Transaction();
+	tx.moveCall({
+		arguments: [],
+		target: `${COUNTER_PACKAGE_ID}::counter::create`,
+	});
 
-    signAndExecute(
-      {
-        transactionBlock: txb,
-        options: {
-          // We need the effects to get the objectId of the created counter object
-          showEffects: true,
-        },
-      },
-      {
-        onSuccess: (tx) => {
-          // The first created object in this TransactionBlock should be the new Counter
-          const objectId = tx.effects?.created?.[0]?.reference?.objectId;
-          if (objectId) {
-            props.onCreated(objectId);
-          }
-        },
-      },
-    );
-  }
+	signAndExecute(
+		{
+			transaction: tx,
+		},
+		{
+			onSuccess: async ({ digest }) => {
+				const tx = await suiClient.waitForTransaction({
+					digest,
+					options: {
+						showEffects: true,
+					},
+				});
+
+				// The first created object in this Transaction should be the new Counter
+				const objectId = tx.effects?.created?.[0]?.reference?.objectId;
+				if (objectId) {
+					props.onCreated(objectId);
+				}
+			},
+		},
+	);
 }
 ```
 
-You now have a functional component that can create a new `Counter` object, but if you use it as is, you might run into some consistency issues where you successfully execute the `TransactionBlock`, but the data isn't yet indexed to read from an RPC node. To ensure the `TransactionBlock` is available, you can use the `waitForTransactionBlock` method of `SuiClient`.
+You now have a functional component that can create a new `Counter` object, but if you use it as is, you might run into some consistency issues where you successfully execute the `Transaction`, but the data isn't yet indexed to read from an RPC node. To ensure the `Transaction` is available, you can use the `waitForTransaction` method of `SuiClient`.
 To get an instance of `SuiClient`, you can use the `useSuiClient` hook from dApp Kit:
 
 ```ts
-import { useSignAndExecuteTransactionBlock, useSuiClient } from '@mysten/dapp-kit';
+import { useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 
 export function CreateCounter(props: { onCreated: (id: string) => void }) {
-  const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
+	const suiClient = useSuiClient();
+	const { mutate: signAndExecute } = useSignAndExecuteTransaction();
 
-  return <button />;
+	return <button />;
 }
 ```
 
-Now you can use the `suiClient` in your `create` function to wait until the `TransactionBlock` is indexed:
+Now you can use the `suiClient` in your `create` function to wait until the `Transaction` is indexed:
 
 ```ts
 function create() {
-  const txb = new TransactionBlock();
-  txb.moveCall({
-    arguments: [],
-    target: `${COUNTER_PACKAGE_ID}::counter::create`,
-  });
+	const tx = new Transaction();
+	tx.moveCall({
+		arguments: [],
+		target: `${COUNTER_PACKAGE_ID}::counter::create`,
+	});
 
-  signAndExecute(
-    {
-      transactionBlock: txb,
-      options: {
-        showEffects: true,
-      },
-    },
-    {
-      onSuccess: (tx) => {
-        suiClient
-          .waitForTransactionBlock({
-            digest: tx.digest,
-          })
-          .then(() => {
-            const objectId = tx.effects?.created?.[0]?.reference?.objectId;
-            if (objectId) {
-              props.onCreated(objectId);
-            }
-          });
-      },
-    },
-  );
+	signAndExecute(
+		{
+			transaction: tx,
+		},
+		{
+			onSuccess: ({ digest }) => {
+				suiClient
+					.waitForTransaction({
+						digest,
+						options: {
+							showEffects: true,
+						},
+					})
+					.then((tx) => {
+						const objectId = tx.effects?.created?.[0]?.reference?.objectId;
+						if (objectId) {
+							props.onCreated(objectId);
+						}
+					});
+			},
+		},
+	);
 }
 ```
 
@@ -287,37 +299,37 @@ Now that your users can create counters, you need a way to route to them. Routin
 
 ```ts
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
-import { isValidSuiObjectId } from '@mysten/sui.js/utils';
+import { isValidSuiObjectId } from '@mysten/sui/utils';
 import { useState } from 'react';
 
 export default function App() {
-  const currentAccount = useCurrentAccount();
-  const [counterId, setCounter] = useState(() => {
-    const hash = window.location.hash.slice(1);
-    return isValidSuiObjectId(hash) ? hash : null;
-  });
+	const currentAccount = useCurrentAccount();
+	const [counterId, setCounter] = useState(() => {
+		const hash = window.location.hash.slice(1);
+		return isValidSuiObjectId(hash) ? hash : null;
+	});
 
-  return (
-    <div>
-      <nav>
-        <ConnectButton />
-      </nav>
-      <section>
-        {!currentAccount ? (
-          'Please connect your wallet'
-        ) : counterId ? (
-          <Counter id={counterId} />
-        ) : (
-          <CreateCounter
-            onCreated={(id) => {
-              window.location.hash = id;
-              setCounter(id);
-            }}
-          />
-        )}
-      </section>
-    </div>
-  );
+	return (
+		<div>
+			<nav>
+				<ConnectButton />
+			</nav>
+			<section>
+				{!currentAccount ? (
+					'Please connect your wallet'
+				) : counterId ? (
+					<Counter id={counterId} />
+				) : (
+					<CreateCounter
+						onCreated={(id) => {
+							window.location.hash = id;
+							setCounter(id);
+						}}
+					/>
+				)}
+			</section>
+		</div>
+	);
 }
 ```
 
@@ -333,43 +345,43 @@ For your counter, you want to display three elements:
 
 ```ts
 import { useCurrentAccount, useSuiClientQuery } from '@mysten/dapp-kit';
-import { SuiObjectData } from '@mysten/sui.js/client';
+import { SuiObjectData } from '@mysten/sui/client';
 
 export function Counter({ id }: { id: string }) {
-  const currentAccount = useCurrentAccount();
-  const { data, refetch } = useSuiClientQuery('getObject', {
-    id,
-    options: {
-      showContent: true,
-    },
-  });
+	const currentAccount = useCurrentAccount();
+	const { data, refetch } = useSuiClientQuery('getObject', {
+		id,
+		options: {
+			showContent: true,
+		},
+	});
 
-  if (!data?.data) return <div>Not found</div>;
+	if (!data?.data) return <div>Not found</div>;
 
-  const ownedByCurrentAccount = getCounterFields(data.data)?.owner === currentAccount?.address;
+	const ownedByCurrentAccount = getCounterFields(data.data)?.owner === currentAccount?.address;
 
-  return (
-    <div>
-      <div>Count: {getCounterFields(data.data)?.value}</div>
+	return (
+		<div>
+			<div>Count: {getCounterFields(data.data)?.value}</div>
 
-      <button onClick={() => executeMoveCall('increment')}>Increment</button>
-      {ownedByCurrentAccount ? (
-        <button onClick={() => executeMoveCall('reset')}>Reset</button>
-      ) : null}
-    </div>
-  );
+			<button onClick={() => executeMoveCall('increment')}>Increment</button>
+			{ownedByCurrentAccount ? (
+				<button onClick={() => executeMoveCall('reset')}>Reset</button>
+			) : null}
+		</div>
+	);
 
-  function executeMoveCall(method: 'increment' | 'reset') {
-    // TODO
-  }
+	function executeMoveCall(method: 'increment' | 'reset') {
+		// TODO
+	}
 }
 
 function getCounterFields(data: SuiObjectData) {
-  if (data.content?.dataType !== 'moveObject') {
-    return null;
-  }
+	if (data.content?.dataType !== 'moveObject') {
+		return null;
+	}
 
-  return data.content.fields as { value: number; owner: string };
+	return data.content.fields as { value: number; owner: string };
 }
 ```
 
@@ -379,52 +391,51 @@ The code also adds an `executeMoveCall` function that still needs implementing. 
 
 ```ts
 import {
-  useCurrentAccount,
-  useSignAndExecuteTransactionBlock,
-  useSuiClient,
-  useSuiClientQuery,
-} from "@mysten/dapp-kit";
-import { SuiObjectData } from "@mysten/sui.js/client";
-import { TransactionBlock } from "@mysten/sui.js/transactions";
+	useCurrentAccount,
+	useSignAndExecuteTransaction,
+	useSuiClient,
+	useSuiClientQuery,
+} from '@mysten/dapp-kit';
+import { SuiObjectData } from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
 
-import { COUNTER_PACKAGE_ID } from "./constants";
+import { COUNTER_PACKAGE_ID } from './constants';
 
 export function Counter({ id }: { id: string }) {
-  const currentAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
+	const currentAccount = useCurrentAccount();
+	const suiClient = useSuiClient();
+	const { mutate: signAndExecute } = useSignAndExecuteTransaction();
 
-  // ...
+	// ...
 
-  function executeMoveCall(method: "increment" | "reset") {
-    const txb = new TransactionBlock();
+	function executeMoveCall(method: 'increment' | 'reset') {
+		const tx = new Transaction();
 
-    if (method === "reset") {
-      txb.moveCall({
-        arguments: [txb.object(id), txb.pure.u64(0)],
-        target: `${COUNTER_PACKAGE_ID}::counter::set_value`,
-      });
-    } else {
-      txb.moveCall({
-        arguments: [txb.object(id)],
-        target: `${COUNTER_PACKAGE_ID}::counter::increment`,
-      });
-    }
+		if (method === 'reset') {
+			tx.moveCall({
+				arguments: [tx.object(id), tx.pure.u64(0)],
+				target: `${COUNTER_PACKAGE_ID}::counter::set_value`,
+			});
+		} else {
+			tx.moveCall({
+				arguments: [tx.object(id)],
+				target: `${COUNTER_PACKAGE_ID}::counter::increment`,
+			});
+		}
 
-    signAndExecute(
-      {
-        transactionBlock: txb,
-      },
-      {
-        onSuccess: (tx) => {
-          suiClient.waitForTransactionBlock({ digest: tx.digest }).then(() => {
-            refetch();
-          });
-        },
-      },
-    );
-  }
+		signAndExecute(
+			{
+				transaction: tx,
+			},
+			{
+				onSuccess: async (tx) => {
+					await suiClient.waitForTransaction({ digest: tx.digest });
+					refetch();
+				},
+			},
+		);
+	}
 }
 ```
 
-Your counter app is now ready to count. To learn more about dApp Kit, check out the [dApp Kit docs](https://sui-wallet-kit.vercel.app/dapp-kit).
+Your counter app is now ready to count. To learn more about dApp Kit, check out the [dApp Kit docs](https://sdk.mystenlabs.com/dapp-kit).

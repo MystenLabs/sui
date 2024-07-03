@@ -1,0 +1,19 @@
+{
+  "dependencies": [
+    {
+      "name": "a",
+      "path": "package_a",
+      "is_source_code": true
+    },
+    {
+      "name": "b",
+      "path": "package_b",
+      "is_source_code": true
+    }
+  ],
+  "root_package": {
+    "name": "c",
+    "path": "package_c",
+    "is_source_code": true
+  }
+}

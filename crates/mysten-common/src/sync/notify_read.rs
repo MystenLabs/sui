@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::{join_all, Either};
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::error::Error;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::mem;
@@ -56,7 +58,7 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
         }
     }
 
-    pub fn register_all(&self, keys: Vec<K>) -> Vec<Registration<K, V>> {
+    pub fn register_all(&self, keys: &[K]) -> Vec<Registration<K, V>> {
         self.count_pending.fetch_add(keys.len(), Ordering::Relaxed);
         let mut registrations = vec![];
         for key in keys.iter() {
@@ -115,6 +117,29 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
     }
 }
 
+impl<K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> NotifyRead<K, V> {
+    pub async fn read<E: Error>(
+        &self,
+        keys: &[K],
+        fetch: impl FnOnce(&[K]) -> Result<Vec<Option<V>>, E>,
+    ) -> Result<Vec<V>, E> {
+        let registrations = self.register_all(keys);
+
+        let results = fetch(keys)?;
+
+        let results = results
+            .into_iter()
+            .zip(registrations)
+            .map(|(a, r)| match a {
+                // Note that Some() clause also drops registration that is already fulfilled
+                Some(ready) => Either::Left(futures::future::ready(ready)),
+                None => Either::Right(r),
+            });
+
+        Ok(join_all(results).await)
+    }
+}
+
 /// Registration resolves to the value but also provides safe cancellation
 /// When Registration is dropped before it is resolved, we de-register from the pending list
 pub struct Registration<'a, K: Eq + Hash + Clone, V: Clone> {
@@ -163,7 +188,7 @@ mod tests {
     #[tokio::test]
     pub async fn test_notify_read() {
         let notify_read = NotifyRead::<u64, u64>::new();
-        let mut registrations = notify_read.register_all(vec![1, 2, 3]);
+        let mut registrations = notify_read.register_all(&[1, 2, 3]);
         assert_eq!(3, notify_read.count_pending.load(Ordering::Relaxed));
         registrations.pop();
         assert_eq!(2, notify_read.count_pending.load(Ordering::Relaxed));

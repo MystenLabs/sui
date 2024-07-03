@@ -5,22 +5,32 @@ description: Transaction security is arguably the most important feature of a bl
 
 Transaction authentication features on Sui provide security against unauthorized access to on-chain data. 
 
-## Keys and addresses 
+## Keys and Addresses 
 
-Sui adheres to widely accepted wallet specifications in the cryptocurrency industry, including BIP-32 (and its variation, SLIP-0010), BIP-44, and BIP-39, to facilitate key management for users. At present, Sui supports pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and multisig for signed transactions. See [Keys and Addresses](./transaction-auth/keys-addresses.mdx) to learn more.
+Sui adheres to widely accepted wallet specifications in the cryptocurrency industry, including BIP-32 (and its variation, SLIP-0010), BIP-44, and BIP-39, to facilitate key management for users. At present, Sui supports pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and multisig for signed transactions. 
+
+Go to [Keys and Addresses](./transaction-auth/keys-addresses.mdx).
 
 ## Signatures
 
-Cryptographic agility is core to Sui. The system supports multiple cryptography algorithms and primitives and can switch between them rapidly. With Sui, you can choose the right cryptography solution for your system and implement the latest algorithms as they become available. See [Signatures](./transaction-auth/signatures.mdx) to learn more.
+Cryptographic agility is core to Sui. The system supports multiple cryptography algorithms and primitives and can switch between them rapidly. With Sui, you can choose the right cryptography solution for your system and implement the latest algorithms as they become available. 
+
+Go to [Signatures](./transaction-auth/signatures.mdx).
 
 ## Multisig
 
-Sui supports multi-signature (multisig) transactions, which require multiple keys for authorization rather than a single, one-key signature. See [Multisig](./transaction-auth/multisig.mdx) to learn more.
+Sui supports multi-signature (multisig) transactions, which require multiple keys for authorization rather than a single, one-key signature. 
 
-## Offline signing
+Go to [Multisig](./transaction-auth/multisig.mdx).
 
-Sui supports offline signing, which is signing transactions using a device not connected to a Sui network, or in a wallet implemented in a different programming language without relying on the Sui key store. See [Offline Signing](./transaction-auth/offline-signing.mdx) to learn more.
+## Offline Signing
 
-## Intent signing
+Sui supports offline signing, which is signing transactions using a device not connected to a Sui network, or in a wallet implemented in a different programming language without relying on the Sui key store. 
 
-In Sui, an intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All signatures in Sui must commit to an intent message, instead of the message itself. See [Intent signing](./transaction-auth/intent-signing.mdx) to learn more.
+Go to [Offline Signing](./transaction-auth/offline-signing.mdx).
+
+## Intent Signing
+
+In Sui, an intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All signatures in Sui must commit to an intent message, instead of the message itself. 
+
+Go to [Intent Signing](./transaction-auth/intent-signing.mdx).

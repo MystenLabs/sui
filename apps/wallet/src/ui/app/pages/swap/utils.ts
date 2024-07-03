@@ -5,7 +5,7 @@ import { useCoinsReFetchingConfig } from '_hooks';
 import { roundFloat, useFormatCoin } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { type DeepBookClient } from '@mysten/deepbook';
-import { type BalanceChange } from '@mysten/sui.js/client';
+import { type BalanceChange } from '@mysten/sui/client';
 import BigNumber from 'bignumber.js';
 
 export function useSwapData({
@@ -61,7 +61,7 @@ export function getUSDCurrency(amount?: number | null) {
 		return null;
 	}
 
-	return roundFloat(amount).toLocaleString('en', {
+	return roundFloat(amount, 4).toLocaleString('en', {
 		style: 'currency',
 		currency: 'USD',
 	});

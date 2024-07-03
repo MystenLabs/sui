@@ -13,24 +13,27 @@ The `flag` is a 1-byte representation corresponding to the signature scheme that
 | ECDSA Secp256k1 | 0x01 |
 | ECDSA Secp256r1 | 0x02 |
 | multisig        | 0x03 |
+| zkLogin         | 0x05 |
 
 The `sig` bytes are the compressed bytes representation of the signature instead of DER encoding. The following table lists the expected size of each format:
 
-| Scheme          | Signature                                  |
-| --------------- | ------------------------------------------ |
-| Pure Ed25519    | Compressed, 64 bytes                       |
-| ECDSA Secp256k1 | Non-recoverable, compressed, 64 bytes      |
-| ECDSA Secp256r1 | Non-recoverable, compressed, 64 bytes      |
-| multisig        | BCS serialized all signatures, size varies |
+| Scheme          | Signature                                                                     |
+| --------------- | ------------------------------------------------------------------------------|
+| Pure Ed25519    | Compressed, 64 bytes                                                          |
+| ECDSA Secp256k1 | Non-recoverable, compressed, 64 bytes                                         |
+| ECDSA Secp256r1 | Non-recoverable, compressed, 64 bytes                                         |
+| multisig        | BCS serialized all signatures, size varies                                    |
+| zkLogin         | BCS serialized zkLogin inputs, max epoch and ephemeral signature, size varies |
 
 The `pk` bytes are the bytes representation of the public key corresponding to the signature.
 
-| Scheme          | Public key                                                |
-| --------------- | --------------------------------------------------------- |
-| Pure Ed25519    | Compressed, 32 bytes                                      |
-| ECDSA Secp256k1 | Compressed, 33 bytes                                      |
-| ECDSA Secp256r1 | Compressed, 33 bytes                                      |
-| multisig        | BCS serialized all participating public keys, size varies |
+| Scheme          | Public key                                                                           |
+| --------------- | ------------------------------------------------------------------------------------ |
+| Pure Ed25519    | Compressed, 32 bytes                                                                 |
+| ECDSA Secp256k1 | Compressed, 33 bytes                                                                 |
+| ECDSA Secp256r1 | Compressed, 33 bytes                                                                 |
+| multisig        | BCS serialized all participating public keys, size varies                            |
+| zkLogin         | Concatenation of iss length, iss bytes, address seed padded to 32-bytes, size varies |
 
 ## Signature requirements {#signature-requirements}
 

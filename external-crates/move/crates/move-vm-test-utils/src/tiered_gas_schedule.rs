@@ -16,7 +16,7 @@ use move_core_types::{
     language_storage::ModuleId,
     vm_status::StatusCode,
 };
-#[cfg(debug_assertions)]
+
 use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
@@ -180,7 +180,6 @@ pub struct GasStatus<'a> {
     instructions_next_tier_start: Option<u64>,
     instructions_current_tier_mult: u64,
 
-    #[cfg(debug_assertions)]
     profiler: Option<GasProfiler>,
 }
 
@@ -211,7 +210,6 @@ impl<'a> GasStatus<'a> {
             stack_height_next_tier_start,
             stack_size_next_tier_start,
             instructions_next_tier_start,
-            #[cfg(debug_assertions)]
             profiler: None,
         }
     }
@@ -236,7 +234,6 @@ impl<'a> GasStatus<'a> {
             stack_height_next_tier_start: None,
             stack_size_next_tier_start: None,
             instructions_next_tier_start: None,
-            #[cfg(debug_assertions)]
             profiler: None,
         }
     }
@@ -581,8 +578,12 @@ impl<'b> GasMeter for GasStatus<'b> {
         self.charge(1, num_fields, 1, 0, STRUCT_SIZE.into())
     }
 
+    fn charge_variant_switch(&mut self, val: impl ValueView) -> PartialVMResult<()> {
+        self.charge(1, 0, 1, 0, val.legacy_abstract_memory_size().into())
+    }
+
     fn charge_read_ref(&mut self, ref_val: impl ValueView) -> PartialVMResult<()> {
-        // We read the the reference so we are decreasing the size of the stack by the size of the
+        // We read the reference so we are decreasing the size of the stack by the size of the
         // reference, and adding to it the size of the value that has been read from that
         // reference.
         self.charge(
@@ -599,7 +600,7 @@ impl<'b> GasMeter for GasStatus<'b> {
         new_val: impl ValueView,
         old_val: impl ValueView,
     ) -> PartialVMResult<()> {
-        // TODO(tzakian): We should account for this elsewhere as the owner of data the the
+        // TODO(tzakian): We should account for this elsewhere as the owner of data the
         // reference points to won't be on the stack. For now though, we treat it as adding to the
         // stack size.
         self.charge(
@@ -625,62 +626,6 @@ impl<'b> GasMeter for GasStatus<'b> {
     fn charge_neq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
         let size_reduction = lhs.legacy_abstract_memory_size() + rhs.legacy_abstract_memory_size();
         self.charge(1, 1, 2, Type::Bool.size().into(), size_reduction.into())
-    }
-
-    fn charge_load_resource(
-        &mut self,
-        _loaded: Option<(NumBytes, impl ValueView)>,
-    ) -> PartialVMResult<()> {
-        // We don't have resource loading so don't need to account for it.
-        Ok(())
-    }
-
-    fn charge_borrow_global(
-        &mut self,
-        _is_mut: bool,
-        _is_generic: bool,
-        _ty: impl TypeView,
-        _is_success: bool,
-    ) -> PartialVMResult<()> {
-        self.charge(1, 1, 1, REFERENCE_SIZE.into(), Type::Address.size().into())
-    }
-
-    fn charge_exists(
-        &mut self,
-        _is_generic: bool,
-        _ty: impl TypeView,
-        // TODO(Gas): see if we can get rid of this param
-        _exists: bool,
-    ) -> PartialVMResult<()> {
-        self.charge(
-            1,
-            1,
-            1,
-            Type::Bool.size().into(),
-            Type::Address.size().into(),
-        )
-    }
-
-    fn charge_move_from(
-        &mut self,
-        _is_generic: bool,
-        ty: impl TypeView,
-        val: Option<impl ValueView>,
-    ) -> PartialVMResult<()> {
-        let size = val
-            .map(|val| val.legacy_abstract_memory_size())
-            .unwrap_or_else(|| ty.to_type_tag().abstract_size_for_gas_metering());
-        self.charge(1, 1, 1, size.into(), Type::Address.size().into())
-    }
-
-    fn charge_move_to(
-        &mut self,
-        _is_generic: bool,
-        _ty: impl TypeView,
-        _val: impl ValueView,
-        _is_success: bool,
-    ) -> PartialVMResult<()> {
-        self.charge(1, 0, 2, 0, Type::Address.size().into())
     }
 
     fn charge_vec_pack<'a>(
@@ -759,12 +704,10 @@ impl<'b> GasMeter for GasStatus<'b> {
         self.gas_left
     }
 
-    #[cfg(debug_assertions)]
     fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
         self.profiler.as_mut()
     }
 
-    #[cfg(debug_assertions)]
     fn set_profiler(&mut self, profiler: GasProfiler) {
         self.profiler = Some(profiler);
     }

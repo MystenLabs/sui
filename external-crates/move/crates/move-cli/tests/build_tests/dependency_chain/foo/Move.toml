@@ -1,6 +1,5 @@
 [package]
 name = "Foo"
-version = "0.0.0"
 
 [addresses]
 A = "_"

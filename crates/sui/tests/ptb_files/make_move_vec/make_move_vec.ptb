@@ -1,0 +1,16 @@
+# Can parse with spaces, basic make-move-vec works
+--make-move-vec <u64> [1, 2,3, 4]
+# Can have empty arrays
+--make-move-vec <u64> []
+# We don't type check -- this will only get caught at runtime
+--make-move-vec <0x1::a::b> [@0x1,@0x2]
+--make-move-vec <address> [@0x1,@0x2]
+# Can have vectors inside of arrays
+--make-move-vec <vector<address>> [vector[@0x1],vector[@0x2]]
+# Can have options inside of arrays
+--make-move-vec <std::option::Option<u64>> [none,none]
+--make-move-vec <std::option::Option<u64>> [none,none]
+--make-move-vec <std::option::Option<u64>> [none,some(1)]
+--make-move-vec <std::option::Option<u64>> [none,some(some(1))]
+# Can have non-pure values inside of arrays
+--make-move-vec <sui::coin::Coin<sui::sui::SUI>> [gas]

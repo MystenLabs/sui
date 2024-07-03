@@ -31,9 +31,8 @@ export function ImportPrivateKeyForm({ onSubmit }: ImportPrivateKeyFormProps) {
 		formState: { isSubmitting, isValid },
 	} = form;
 	const navigate = useNavigate();
-
 	return (
-		<Form className="flex flex-col h-full" form={form} onSubmit={onSubmit}>
+		<Form className="flex flex-col h-full gap-2" form={form} onSubmit={onSubmit}>
 			<TextAreaField label="Enter Private Key" rows={4} {...register('privateKey')} />
 			<div className="flex gap-2.5 mt-auto">
 				<Button variant="outline" size="tall" text="Cancel" onClick={() => navigate(-1)} />

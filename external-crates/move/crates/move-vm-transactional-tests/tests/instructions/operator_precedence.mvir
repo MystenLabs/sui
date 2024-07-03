@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     assert(true || true && false, 99); // "&&" has precedence over "||"
     assert(true != false && false != true, 100); // "&&" has precedence over comparisons
@@ -8,4 +10,6 @@ label b0:
     assert(3 & 3 + 1 == 0, 103); // addition has precedence over binary AND
     assert(1 + 2 * 3 == 7, 104); // multiplication has precedence over addition
     return;
+}
+
 }

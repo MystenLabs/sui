@@ -1,0 +1,11 @@
+[package]
+name = "owned_no_tto"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../crates/sui-framework/packages/sui-framework" }
+common = { local = "../common" }
+
+[addresses]
+owned_no_tto = "0x0"

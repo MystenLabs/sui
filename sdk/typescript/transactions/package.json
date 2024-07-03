@@ -1,6 +1,6 @@
 {
 	"private": true,
-	"import": "../dist/esm/builder/export.js",
-	"main": "../dist/cjs/builder/export.js",
+	"import": "../dist/esm/transactions/index.js",
+	"main": "../dist/cjs/transactions/index.js",
 	"sideEffects": false
 }

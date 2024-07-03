@@ -5,13 +5,3 @@ module M {
     fun ___() {}
 }
 }
-
-script {
-    fun _foo() {}
-}
-script {
-    fun _() {}
-}
-script {
-    fun ___() {}
-}

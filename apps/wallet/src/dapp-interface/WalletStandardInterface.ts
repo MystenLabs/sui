@@ -19,7 +19,6 @@ import type {
 	ExecuteTransactionResponse,
 	SignTransactionRequest,
 	SignTransactionResponse,
-	StakeRequest,
 } from '_payloads/transactions';
 import { API_ENV } from '_src/shared/api-env';
 import type { NetworkEnvType } from '_src/shared/api-env';
@@ -29,8 +28,9 @@ import {
 } from '_src/shared/messaging/messages/payloads/QredoConnect';
 import { type SignMessageRequest } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
-import { isTransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64, toB64 } from '@mysten/sui.js/utils';
+import { bcs } from '@mysten/sui/bcs';
+import { isTransaction } from '@mysten/sui/transactions';
+import { fromB64, toB64 } from '@mysten/sui/utils';
 import {
 	ReadonlyWalletAccount,
 	SUI_CHAINS,
@@ -45,9 +45,11 @@ import {
 	type StandardEventsOnMethod,
 	type SuiFeatures,
 	type SuiSignAndExecuteTransactionBlockMethod,
+	type SuiSignAndExecuteTransactionMethod,
 	type SuiSignMessageMethod,
 	type SuiSignPersonalMessageMethod,
 	type SuiSignTransactionBlockMethod,
+	type SuiSignTransactionMethod,
 	type Wallet,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
@@ -62,13 +64,6 @@ type WalletEventsMap = {
 // NOTE: Because this runs in a content script, we can't fetch the manifest.
 const name = process.env.APP_NAME || 'Sui Wallet';
 
-type StakeInput = { validatorAddress: string };
-type SuiWalletStakeFeature = {
-	'suiWallet:stake': {
-		version: '0.0.1';
-		stake: (input: StakeInput) => Promise<void>;
-	};
-};
 export type QredoConnectInput = {
 	service: string;
 	apiUrl: string;
@@ -125,7 +120,6 @@ export class SuiWallet implements Wallet {
 	get features(): StandardConnectFeature &
 		StandardEventsFeature &
 		SuiFeatures &
-		SuiWalletStakeFeature &
 		QredoConnectFeature {
 		return {
 			'standard:connect': {
@@ -140,13 +134,17 @@ export class SuiWallet implements Wallet {
 				version: '1.0.0',
 				signTransactionBlock: this.#signTransactionBlock,
 			},
+			'sui:signTransaction': {
+				version: '2.0.0',
+				signTransaction: this.#signTransaction,
+			},
 			'sui:signAndExecuteTransactionBlock': {
 				version: '1.0.0',
 				signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
 			},
-			'suiWallet:stake': {
-				version: '0.0.1',
-				stake: this.#stake,
+			'sui:signAndExecuteTransaction': {
+				version: '2.0.0',
+				signAndExecuteTransaction: this.#signAndExecuteTransaction,
 			},
 			'sui:signMessage': {
 				version: '1.0.0',
@@ -251,9 +249,9 @@ export class SuiWallet implements Wallet {
 		account,
 		...input
 	}) => {
-		if (!isTransactionBlock(transactionBlock)) {
+		if (!isTransaction(transactionBlock)) {
 			throw new Error(
-				'Unexpect transaction format found. Ensure that you are using the `Transaction` class.',
+				'Unexpected transaction format found. Ensure that you are using the `Transaction` class.',
 			);
 		}
 
@@ -272,10 +270,29 @@ export class SuiWallet implements Wallet {
 		);
 	};
 
+	#signTransaction: SuiSignTransactionMethod = async ({ transaction, account, ...input }) => {
+		return mapToPromise(
+			this.#send<SignTransactionRequest, SignTransactionResponse>({
+				type: 'sign-transaction-request',
+				transaction: {
+					...input,
+					// account might be undefined if previous version of adapters is used
+					// in that case use the first account address
+					account: account?.address || this.#accounts[0]?.address || '',
+					transaction: await transaction.toJSON(),
+				},
+			}),
+			({ result: { signature, transactionBlockBytes: bytes } }) => ({
+				signature,
+				bytes,
+			}),
+		);
+	};
+
 	#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = async (input) => {
-		if (!isTransactionBlock(input.transactionBlock)) {
+		if (!isTransaction(input.transactionBlock)) {
 			throw new Error(
-				'Unexpect transaction format found. Ensure that you are using the `Transaction` class.',
+				'Unexpected transaction format found. Ensure that you are using the `Transaction` class.',
 			);
 		}
 
@@ -295,11 +312,40 @@ export class SuiWallet implements Wallet {
 		);
 	};
 
-	#stake = async (input: StakeInput) => {
-		this.#send<StakeRequest, void>({
-			type: 'stake-request',
-			validatorAddress: input.validatorAddress,
-		});
+	#signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (input) => {
+		return mapToPromise(
+			this.#send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
+				type: 'execute-transaction-request',
+				transaction: {
+					type: 'transaction',
+					data: await input.transaction.toJSON(),
+					options: {
+						showRawEffects: true,
+						showRawInput: true,
+					},
+					// account might be undefined if previous version of adapters is used
+					// in that case use the first account address
+					account: input.account?.address || this.#accounts[0]?.address || '',
+				},
+			}),
+			({ result: { rawEffects, rawTransaction, digest } }) => {
+				const [
+					{
+						txSignatures: [signature],
+						intentMessage: { value: bcsTransaction },
+					},
+				] = bcs.SenderSignedData.parse(fromB64(rawTransaction!));
+
+				const bytes = bcs.TransactionData.serialize(bcsTransaction).toBase64();
+
+				return {
+					digest,
+					signature,
+					bytes,
+					effects: toB64(new Uint8Array(rawEffects!)),
+				};
+			},
+		);
 	};
 
 	#signMessage: SuiSignMessageMethod = async ({ message, account }) => {

@@ -6,12 +6,14 @@ mod package_lock;
 
 pub mod compilation;
 pub mod lock_file;
+pub mod migration;
 pub mod package_hooks;
 pub mod resolution;
 pub mod source_package;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::*;
+use lock_file::LockFile;
 use move_compiler::{
     editions::{Edition, Flavor},
     Flags,
@@ -20,10 +22,14 @@ use move_core_types::account_address::AccountAddress;
 use move_model::model::GlobalEnv;
 use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
 use serde::{Deserialize, Serialize};
-use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
+use source_package::{
+    layout::SourcePackageLayout,
+    manifest_parser::{parse_move_manifest_string, parse_source_manifest},
+    parsed_manifest::DependencyKind,
+};
 use std::{
     collections::BTreeMap,
-    io::Write,
+    io::{BufRead, Write},
     path::{Path, PathBuf},
 };
 
@@ -31,11 +37,13 @@ use crate::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage, model_builder::ModelBuilder,
     },
+    lock_file::schema::update_compiler_toolchain,
     package_lock::PackageLock,
 };
+use move_compiler::linters::LintLevel;
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
-#[clap(author, version, about)]
+#[clap(about)]
 pub struct BuildConfig {
     /// Compile in 'dev' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used if
     /// this flag is set. This flag is useful for development of packages that expose named
@@ -52,10 +60,6 @@ pub struct BuildConfig {
     #[clap(name = "generate-docs", long = "doc", global = true)]
     pub generate_docs: bool,
 
-    /// Generate ABIs for packages
-    #[clap(name = "generate-abis", long = "abi", global = true)]
-    pub generate_abis: bool,
-
     /// Installation directory for compiled artifacts. Defaults to current directory.
     #[clap(long = "install-dir", global = true)]
     pub install_dir: Option<PathBuf>,
@@ -67,10 +71,6 @@ pub struct BuildConfig {
     /// Optional location to save the lock file to, if package resolution succeeds.
     #[clap(skip)]
     pub lock_file: Option<PathBuf>,
-
-    /// Additional named address mapping. Useful for tools in rust
-    #[clap(skip)]
-    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 
     /// Only fetch dependency repos to MOVE_HOME
     #[clap(long = "fetch-deps-only", global = true)]
@@ -100,6 +100,73 @@ pub struct BuildConfig {
     /// If set, warnings become errors
     #[clap(long = move_compiler::command_line::WARNINGS_ARE_ERRORS, global = true)]
     pub warnings_are_errors: bool,
+
+    /// If set, reports errors at JSON
+    #[clap(long = move_compiler::command_line::JSON_ERRORS, global = true)]
+    pub json_errors: bool,
+
+    /// Additional named address mapping. Useful for tools in rust
+    #[clap(skip)]
+    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
+
+    #[clap(flatten)]
+    pub lint_flag: LintFlag,
+}
+
+#[derive(
+    Parser, Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default,
+)]
+pub struct LintFlag {
+    /// If `true`, disable linters
+    #[clap(
+        name = "no-lint",
+        long = "no-lint",
+        global = true,
+        group = "lint-level"
+    )]
+    no_lint: bool,
+
+    /// If `true`, enables extra linters
+    #[clap(name = "lint", long = "lint", global = true, group = "lint-level")]
+    lint: bool,
+}
+
+impl LintFlag {
+    pub const LEVEL_NONE: Self = Self {
+        no_lint: true,
+        lint: false,
+    };
+    pub const LEVEL_DEFAULT: Self = Self {
+        no_lint: false,
+        lint: false,
+    };
+    pub const LEVEL_ALL: Self = Self {
+        no_lint: false,
+        lint: true,
+    };
+
+    pub fn get(self) -> LintLevel {
+        match self {
+            Self::LEVEL_NONE => LintLevel::None,
+            Self::LEVEL_DEFAULT => LintLevel::Default,
+            Self::LEVEL_ALL => LintLevel::All,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn set(&mut self, level: LintLevel) {
+        *self = level.into();
+    }
+}
+
+impl From<LintLevel> for LintFlag {
+    fn from(level: LintLevel) -> Self {
+        match level {
+            LintLevel::None => Self::LEVEL_NONE,
+            LintLevel::Default => Self::LEVEL_DEFAULT,
+            LintLevel::All => Self::LEVEL_ALL,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
@@ -120,6 +187,29 @@ impl BuildConfig {
         BuildPlan::create(resolved_graph)?.compile(writer)
     }
 
+    /// Compile the package at `path` or the containing Move package. Exit process on warning or
+    /// failure. Will trigger migration if the package is missing an edition.
+    pub fn cli_compile_package<W: Write, R: BufRead>(
+        self,
+        path: &Path,
+        writer: &mut W,
+        _reader: &mut R, // Reader here for enabling migration mode
+    ) -> Result<CompiledPackage> {
+        let resolved_graph = self.resolution_graph_for_package(path, writer)?;
+        let _mutx = PackageLock::lock(); // held until function returns
+        let build_plan = BuildPlan::create(resolved_graph)?;
+        // TODO: When we are ready to release and enable automatic migration, uncomment this.
+        // if !build_plan.root_crate_edition_defined() {
+        //     // We would also like to call build here, but the edition is already computed and
+        //     // the lock + build config have been used for this build already. The user will
+        //     // have to call build a second time -- this is reasonable...
+        //     migration::migrate(build_plan, writer, _reader)?;
+        // } else {
+        //     build_plan.compile(writer)
+        // }
+        build_plan.compile(writer)
+    }
+
     /// Compile the package at `path` or the containing Move package. Do not exit process on warning
     /// or failure.
     pub fn compile_package_no_exit<W: Write>(
@@ -130,6 +220,24 @@ impl BuildConfig {
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         BuildPlan::create(resolved_graph)?.compile_no_exit(writer)
+    }
+
+    /// Compile the package at `path` or the containing Move package. Exit process on warning or
+    /// failure.
+    pub fn migrate_package<W: Write, R: BufRead>(
+        mut self,
+        path: &Path,
+        writer: &mut W,
+        reader: &mut R,
+    ) -> Result<()> {
+        // we set test and dev mode to migrate all the code
+        self.test_mode = true;
+        self.dev_mode = true;
+        let resolved_graph = self.resolution_graph_for_package(path, writer)?;
+        let _mutx = PackageLock::lock(); // held until function returns
+        let build_plan = BuildPlan::create(resolved_graph)?;
+        migration::migrate(build_plan, writer, reader)?;
+        Ok(())
     }
 
     // NOTE: If there are no renamings, then the root package has the global resolution of all named
@@ -171,9 +279,11 @@ impl BuildConfig {
         let path = SourcePackageLayout::try_find_root(path)?;
         let manifest_string =
             std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
-        let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
+        let lock_path = path.join(SourcePackageLayout::Lock.path());
+        let lock_string = std::fs::read_to_string(lock_path.clone()).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
+        let install_dir_set = self.install_dir.is_some();
         let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
 
         let mut dep_graph_builder = DependencyGraphBuilder::new(
@@ -188,8 +298,10 @@ impl BuildConfig {
             lock_string,
         )?;
 
-        if modified {
-            let lock = dependency_graph.write_to_lock(install_dir)?;
+        if modified || install_dir_set {
+            // (1) Write the Move.lock file if the existing one is `modified`, or
+            // (2) `install_dir` is set explicitly, which may be a different directory, and where a Move.lock does not exist yet.
+            let lock = dependency_graph.write_to_lock(install_dir, Some(lock_path))?;
             if let Some(lock_path) = &self.lock_file {
                 lock.commit(lock_path)?;
             }
@@ -217,6 +329,42 @@ impl BuildConfig {
         };
         flags
             .set_warnings_are_errors(self.warnings_are_errors)
+            .set_json_errors(self.json_errors)
             .set_silence_warnings(self.silence_warnings)
+    }
+
+    pub fn update_lock_file_toolchain_version(
+        &self,
+        path: &Path,
+        compiler_version: String,
+    ) -> Result<()> {
+        let Some(lock_file) = self.lock_file.as_ref() else {
+            return Ok(());
+        };
+        let path = &SourcePackageLayout::try_find_root(path)
+            .map_err(|e| anyhow!("Unable to find package root for {}: {e}", path.display()))?;
+
+        // Resolve edition and flavor from `Move.toml` or assign defaults.
+        let manifest_string =
+            std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
+        let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
+        let root_manifest = parse_source_manifest(toml_manifest)?;
+        let edition = root_manifest
+            .package
+            .edition
+            .or(self.default_edition)
+            .unwrap_or_default();
+        let flavor = root_manifest
+            .package
+            .flavor
+            .or(self.default_flavor)
+            .unwrap_or_default();
+
+        let install_dir = self.install_dir.as_ref().unwrap_or(path).to_owned();
+        let mut lock = LockFile::from(install_dir, lock_file)?;
+        update_compiler_toolchain(&mut lock, compiler_version, edition, flavor)?;
+        let _mutx = PackageLock::lock();
+        lock.commit(lock_file)?;
+        Ok(())
     }
 }

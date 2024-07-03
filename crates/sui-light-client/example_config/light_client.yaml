@@ -1,0 +1,3 @@
+full_node_url: "http://ord-mnt-rpcbig-06.mainnet.sui.io:9000"
+checkpoint_summary_dir: "checkpoints_dir"
+genesis_filename: "genesis.blob"

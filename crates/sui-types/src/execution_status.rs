@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::SuiAddress;
 use crate::ObjectID;
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
+use std::fmt::{self, Display, Formatter};
 use sui_macros::EnumVariantOrder;
 use thiserror::Error;
 
@@ -23,6 +24,18 @@ pub enum ExecutionStatus {
         /// Which command the error occurred
         command: Option<CommandIndex>,
     },
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct CongestedObjects(pub Vec<ObjectID>);
+
+impl fmt::Display for CongestedObjects {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        for obj in &self.0 {
+            write!(f, "{}, ", obj)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, EnumVariantOrder)]
@@ -183,11 +196,23 @@ pub enum ExecutionFailureStatus {
     )]
     SuiMoveVerificationTimedout,
 
-    #[error("Wrapping a shared object is not allowed.")]
-    SharedObjectWrapped,
+    #[error("The shared object operation is not allowed.")]
+    SharedObjectOperationNotAllowed,
 
     #[error("Certificate cannot be executed due to a dependency on a deleted shared object")]
     InputObjectDeleted,
+
+    #[error("Certificate is cancelled due to congestion on shared objects: {congested_objects}")]
+    ExecutionCancelledDueToSharedObjectCongestion { congested_objects: CongestedObjects },
+
+    #[error("Address {address:?} is denied for coin {coin_type}")]
+    AddressDeniedForCoin {
+        address: SuiAddress,
+        coin_type: String,
+    },
+
+    #[error("Coin type is globally paused for use: {coin_type}")]
+    CoinTypeGlobalPause { coin_type: String },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

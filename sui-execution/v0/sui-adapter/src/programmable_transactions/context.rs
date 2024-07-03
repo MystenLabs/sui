@@ -24,17 +24,13 @@ mod checked {
         account_address::AccountAddress,
         language_storage::{ModuleId, StructTag, TypeTag},
     };
-    #[cfg(debug_assertions)]
-    use move_vm_profiler::GasProfiler;
     use move_vm_runtime::{move_vm::MoveVM, session::Session};
-    #[cfg(debug_assertions)]
-    use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::storage::PackageObjectArc;
+    use sui_types::storage::PackageObject;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
@@ -48,7 +44,7 @@ mod checked {
         },
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Data, MoveObject, Object, Owner},
+        object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::{
             BackingPackageStore, ChildObjectResolver, DeleteKind, DeleteKindWithOldVersion,
             ObjectChange, WriteKind,
@@ -187,10 +183,8 @@ mod checked {
             // the session was just used for ability and layout metadata fetching, no changes should
             // exist. Plus, Sui Move does not use these changes or events
             let (res, linkage) = tmp_session.finish();
-            let (change_set, move_events) =
-                res.map_err(|e| crate::error::convert_vm_error(e, vm, &linkage))?;
+            let change_set = res.map_err(|e| crate::error::convert_vm_error(e, vm, &linkage))?;
             assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
-            assert_invariant!(move_events.is_empty(), "Events must be empty");
             // make the real session
             let session = new_session(
                 vm,
@@ -202,9 +196,12 @@ mod checked {
                 metrics.clone(),
             );
 
-            // Set the profiler if in debug mode
-            #[cfg(debug_assertions)]
-            {
+            // Set the profiler if in CLI
+            #[skip_checked_arithmetic]
+            move_vm_profiler::gas_profiler_feature_enabled! {
+                use move_vm_profiler::GasProfiler;
+                use move_vm_types::gas::GasMeter;
+
                 let tx_digest = tx_context.digest();
                 let remaining_gas: u64 =
                     move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
@@ -519,6 +516,7 @@ mod checked {
                 modules,
                 self.tx_context.digest(),
                 self.protocol_config.max_move_package_size(),
+                self.protocol_config.move_binary_format_version(),
                 dependencies,
             )
         }
@@ -681,15 +679,8 @@ mod checked {
             }
 
             let (res, linkage) = session.finish_with_extensions();
-            let (change_set, events, mut native_context_extensions) =
+            let (_, mut native_context_extensions) =
                 res.map_err(|e| convert_vm_error(e, vm, &linkage))?;
-            // Sui Move programs should never touch global state, so resources should be empty
-            assert_invariant!(
-                change_set.resources().next().is_none(),
-                "Change set must be empty"
-            );
-            // Sui Move no longer uses Move's internal event system
-            assert_invariant!(events.is_empty(), "Events must be empty");
             let object_runtime: ObjectRuntime = native_context_extensions.remove();
             let new_ids = object_runtime.new_ids().clone();
             // tell the object runtime what input objects were taken and which were transferred
@@ -841,12 +832,11 @@ mod checked {
             }
 
             let (res, linkage) = tmp_session.finish();
-            let (change_set, move_events) = res.map_err(|e| convert_vm_error(e, vm, &linkage))?;
+            let change_set = res.map_err(|e| convert_vm_error(e, vm, &linkage))?;
 
             // the session was just used for ability and layout metadata fetching, no changes should
             // exist. Plus, Sui Move does not use these changes or events
             assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
-            assert_invariant!(move_events.is_empty(), "Events must be empty");
 
             Ok(ExecutionResults::V1(ExecutionResultsV1 {
                 object_changes,
@@ -1024,7 +1014,7 @@ mod checked {
     fn package_for_linkage(
         session: &Session<LinkageView>,
         package_id: ObjectID,
-    ) -> VMResult<PackageObjectArc> {
+    ) -> VMResult<PackageObject> {
         use move_binary_format::errors::PartialVMError;
         use move_core_types::vm_status::StatusCode;
 
@@ -1096,7 +1086,7 @@ mod checked {
                 }
 
                 if type_params.is_empty() {
-                    Type::Struct(idx)
+                    Type::Datatype(idx)
                 } else {
                     let loaded_type_params = type_params
                         .iter()
@@ -1111,7 +1101,7 @@ mod checked {
                         }
                     }
 
-                    Type::StructInstantiation(idx, loaded_type_params)
+                    Type::DatatypeInstantiation(Box::new((idx, loaded_type_params)))
                 }
             }
         })
@@ -1150,10 +1140,10 @@ mod checked {
         session: &mut Session<'state, 'vm, LinkageView<'state>>,
         object: &Object,
     ) -> Result<ObjectValue, ExecutionError> {
-        let Object {
+        let ObjectInner {
             data: Data::Move(object),
             ..
-        } = object
+        } = object.as_inner()
         else {
             invariant_violation!("Expected a Move object");
         };

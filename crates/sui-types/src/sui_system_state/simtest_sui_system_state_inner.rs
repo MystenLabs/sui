@@ -184,7 +184,7 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV1 {
         }
     }
 
-    fn get_pending_active_validators<S: ObjectStore>(
+    fn get_pending_active_validators<S: ObjectStore + ?Sized>(
         &self,
         _object_store: &S,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError> {
@@ -298,7 +298,7 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerShallowV2 {
         }
     }
 
-    fn get_pending_active_validators<S: ObjectStore>(
+    fn get_pending_active_validators<S: ObjectStore + ?Sized>(
         &self,
         _object_store: &S,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError> {
@@ -441,7 +441,7 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerDeepV2 {
         }
     }
 
-    fn get_pending_active_validators<S: ObjectStore>(
+    fn get_pending_active_validators<S: ObjectStore + ?Sized>(
         &self,
         _object_store: &S,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError> {

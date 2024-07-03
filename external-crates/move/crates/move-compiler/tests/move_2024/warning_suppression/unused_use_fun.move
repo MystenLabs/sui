@@ -6,7 +6,7 @@ module a::m {
 }
 
 #[allow(unused_use)]
-script {
+module 1::m {
     use fun a::m::foo as a::m::X.f;
     fun main() {}
 }
@@ -25,7 +25,7 @@ module a::m2 {
 }
 
 #[allow(unused)]
-script {
+module 2::m {
     use fun a::m::foo as a::m::X.f;
     fun main2() {}
 }

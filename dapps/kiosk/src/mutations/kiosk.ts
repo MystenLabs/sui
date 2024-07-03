@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { Kiosk, KioskTransaction } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { useWalletKit } from '@mysten/wallet-kit';
+import { Transaction } from '@mysten/sui/transactions';
 import { useMutation } from '@tanstack/react-query';
-// import { useRpc } from '../context/RpcClientContext';
 import { toast } from 'react-hot-toast';
 
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
@@ -28,18 +27,18 @@ const defaultOnError = (e: Error) => {
  * Create a new kiosk.
  */
 export function useCreateKioskMutation({ onSuccess, onError }: MutationParams) {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 	const { signAndExecute } = useTransactionExecution();
 	const kioskClient = useKioskClient();
 
 	return useMutation({
 		mutationFn: () => {
 			if (!currentAccount?.address) throw new Error('You need to connect your wallet!');
-			const txb = new TransactionBlock();
-			new KioskTransaction({ transactionBlock: txb, kioskClient }).createAndShare(
+			const tx = new Transaction();
+			new KioskTransaction({ transaction: tx, kioskClient }).createAndShare(
 				currentAccount?.address,
 			);
-			return signAndExecute({ tx: txb });
+			return signAndExecute({ tx: tx });
 		},
 		onSuccess,
 		onError: onError || defaultOnError,
@@ -50,7 +49,7 @@ export function useCreateKioskMutation({ onSuccess, onError }: MutationParams) {
  * Place & List or List for sale in kiosk.
  */
 export function usePlaceAndListMutation({ onSuccess, onError }: MutationParams) {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
 	const { signAndExecute } = useTransactionExecution();
 	const kioskClient = useKioskClient();
@@ -72,9 +71,9 @@ export function usePlaceAndListMutation({ onSuccess, onError }: MutationParams) 
 
 			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 
-			const txb = new TransactionBlock();
+			const tx = new Transaction();
 
-			const kioskTx = new KioskTransaction({ kioskClient, transactionBlock: txb, cap });
+			const kioskTx = new KioskTransaction({ kioskClient, transaction: tx, cap });
 
 			if (shouldPlace) {
 				kioskTx.placeAndList({
@@ -92,7 +91,7 @@ export function usePlaceAndListMutation({ onSuccess, onError }: MutationParams) 
 
 			kioskTx.finalize();
 
-			return signAndExecute({ tx: txb });
+			return signAndExecute({ tx: tx });
 		},
 		onSuccess,
 		onError: onError || defaultOnError,
@@ -103,7 +102,7 @@ export function usePlaceAndListMutation({ onSuccess, onError }: MutationParams) 
  * Mutation to place an item in the kiosk.
  */
 export function usePlaceMutation({ onSuccess, onError }: MutationParams) {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
 	const { signAndExecute } = useTransactionExecution();
 	const kioskClient = useKioskClient();
@@ -115,13 +114,13 @@ export function usePlaceMutation({ onSuccess, onError }: MutationParams) {
 
 			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 
-			const txb = new TransactionBlock();
+			const tx = new Transaction();
 
-			new KioskTransaction({ transactionBlock: txb, kioskClient, cap })
+			new KioskTransaction({ transaction: tx, kioskClient, cap })
 				.place({ itemType: item.type, item: item.objectId })
 				.finalize();
 
-			return signAndExecute({ tx: txb });
+			return signAndExecute({ tx: tx });
 		},
 		onSuccess,
 		onError: onError || defaultOnError,
@@ -132,7 +131,7 @@ export function usePlaceMutation({ onSuccess, onError }: MutationParams) {
  * Withdraw profits from kiosk
  */
 export function useWithdrawMutation({ onError, onSuccess }: MutationParams) {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
 
 	const { signAndExecute } = useTransactionExecution();
@@ -144,13 +143,13 @@ export function useWithdrawMutation({ onError, onSuccess }: MutationParams) {
 			const cap = findActiveCap(ownedKiosk?.caps, id);
 
 			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
-			const txb = new TransactionBlock();
+			const tx = new Transaction();
 
-			new KioskTransaction({ transactionBlock: txb, kioskClient, cap })
+			new KioskTransaction({ transaction: tx, kioskClient, cap })
 				.withdraw(currentAccount.address, profits)
 				.finalize();
 
-			return signAndExecute({ tx: txb });
+			return signAndExecute({ tx: tx });
 		},
 		onSuccess,
 		onError: onError || defaultOnError,
@@ -161,7 +160,7 @@ export function useWithdrawMutation({ onError, onSuccess }: MutationParams) {
  * Mutation to take an item from the kiosk.
  */
 export function useTakeMutation({ onSuccess, onError }: MutationParams) {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
 	const { signAndExecute } = useTransactionExecution();
 	const kioskClient = useKioskClient();
@@ -174,9 +173,9 @@ export function useTakeMutation({ onSuccess, onError }: MutationParams) {
 			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 
 			if (!item?.objectId) throw new Error('Missing item.');
-			const txb = new TransactionBlock();
+			const tx = new Transaction();
 
-			new KioskTransaction({ transactionBlock: txb, kioskClient, cap })
+			new KioskTransaction({ transaction: tx, kioskClient, cap })
 				.transfer({
 					itemType: item.type,
 					itemId: item.objectId,
@@ -184,7 +183,7 @@ export function useTakeMutation({ onSuccess, onError }: MutationParams) {
 				})
 				.finalize();
 
-			return signAndExecute({ tx: txb });
+			return signAndExecute({ tx: tx });
 		},
 		onSuccess,
 		onError: onError || defaultOnError,
@@ -195,7 +194,7 @@ export function useTakeMutation({ onSuccess, onError }: MutationParams) {
  * Mutation to delist an item.
  */
 export function useDelistMutation({ onSuccess, onError }: MutationParams) {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
 	const { signAndExecute } = useTransactionExecution();
 	const kioskClient = useKioskClient();
@@ -209,16 +208,16 @@ export function useDelistMutation({ onSuccess, onError }: MutationParams) {
 
 			if (!item?.objectId) throw new Error('Missing item.');
 
-			const txb = new TransactionBlock();
+			const tx = new Transaction();
 
-			new KioskTransaction({ transactionBlock: txb, kioskClient, cap })
+			new KioskTransaction({ transaction: tx, kioskClient, cap })
 				.delist({
 					itemType: item.type,
 					itemId: item.objectId,
 				})
 				.finalize();
 
-			return signAndExecute({ tx: txb });
+			return signAndExecute({ tx: tx });
 		},
 		onSuccess,
 		onError: onError || defaultOnError,
@@ -229,7 +228,7 @@ export function useDelistMutation({ onSuccess, onError }: MutationParams) {
  * Mutation to delist an item.
  */
 export function usePurchaseItemMutation({ onSuccess, onError }: MutationParams) {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
 	const { signAndExecute } = useTransactionExecution();
 	const kioskClient = useKioskClient();
@@ -249,8 +248,8 @@ export function usePurchaseItemMutation({ onSuccess, onError }: MutationParams) 
 			const cap = findActiveCap(ownedKiosk?.caps, ownedKiosk.kioskId);
 			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 
-			const txb = new TransactionBlock();
-			const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
+			const tx = new Transaction();
+			const kioskTx = new KioskTransaction({ transaction: tx, kioskClient, cap });
 
 			(
 				await kioskTx.purchaseAndResolve({
@@ -261,7 +260,7 @@ export function usePurchaseItemMutation({ onSuccess, onError }: MutationParams) 
 				})
 			).finalize();
 
-			return await signAndExecute({ tx: txb });
+			return await signAndExecute({ tx: tx });
 		},
 		onSuccess,
 		onError: onError || defaultOnError,

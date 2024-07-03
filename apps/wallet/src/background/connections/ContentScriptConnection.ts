@@ -19,7 +19,6 @@ import {
 import {
 	isExecuteTransactionRequest,
 	isSignTransactionRequest,
-	isStakeRequest,
 	type ExecuteTransactionResponse,
 	type SignTransactionResponse,
 } from '_payloads/transactions';
@@ -32,14 +31,12 @@ import {
 	type SignMessageRequest,
 } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 import { type SignedTransaction } from '_src/ui/app/WalletSigner';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
-import Browser from 'webextension-polyfill';
+import { type SuiTransactionBlockResponse } from '@mysten/sui/client';
 import type { Runtime } from 'webextension-polyfill';
 
 import { getAccountsStatusData } from '../accounts';
 import NetworkEnv from '../NetworkEnv';
 import { requestUserApproval } from '../qredo';
-import { Window } from '../Window';
 import { Connection } from './Connection';
 
 export class ContentScriptConnection extends Connection {
@@ -124,12 +121,6 @@ export class ContentScriptConnection extends Connection {
 						msg.id,
 					),
 				);
-			} else if (isStakeRequest(payload)) {
-				const window = new Window(
-					Browser.runtime.getURL('ui.html') +
-						`#/stake/new?address=${encodeURIComponent(payload.validatorAddress)}`,
-				);
-				await window.show();
 			} else if (isBasePayload(payload) && payload.type === 'get-network') {
 				this.send(
 					createMessage<SetNetworkPayload>(

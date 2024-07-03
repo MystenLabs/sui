@@ -3,20 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the abstract state for the type and memory safety analysis.
-use crate::{
-    absint::{AbstractDomain, JoinResult},
-    meter::{Meter, Scope},
-};
+use move_abstract_interpreter::absint::{AbstractDomain, FunctionContext, JoinResult};
 use move_binary_format::{
-    binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        CodeOffset, FieldHandleIndex, FunctionDefinitionIndex, LocalIndex, Signature,
-        SignatureToken, StructDefinitionIndex,
+        CodeOffset, EnumDefinitionIndex, FieldHandleIndex, FunctionDefinitionIndex, LocalIndex,
+        MemberCount, Signature, SignatureToken, StructDefinitionIndex, VariantDefinition,
+        VariantTag,
     },
     safe_unwrap,
 };
 use move_borrow_graph::references::RefID;
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -58,7 +56,8 @@ impl AbstractValue {
 enum Label {
     Local(LocalIndex),
     Global(StructDefinitionIndex),
-    Field(FieldHandleIndex),
+    StructField(FieldHandleIndex),
+    VariantField(EnumDefinitionIndex, VariantTag, MemberCount),
 }
 
 // Needed for debugging with the borrow graph
@@ -67,7 +66,10 @@ impl std::fmt::Display for Label {
         match self {
             Label::Local(i) => write!(f, "local#{}", i),
             Label::Global(i) => write!(f, "resource@{}", i),
-            Label::Field(i) => write!(f, "field#{}", i),
+            Label::StructField(i) => write!(f, "struct_field#{}", i),
+            Label::VariantField(eidx, tag, field_idx) => {
+                write!(f, "variant_field#{}#{}#{}", eidx, tag, field_idx)
+            }
         }
     }
 }
@@ -97,19 +99,19 @@ pub(crate) struct AbstractState {
 
 impl AbstractState {
     /// create a new abstract state
-    pub fn new(function_view: &FunctionView) -> Self {
-        let num_locals = function_view.parameters().len() + function_view.locals().len();
+    pub fn new(function_context: &FunctionContext) -> Self {
+        let num_locals = function_context.parameters().len() + function_context.locals().len();
         // ids in [0, num_locals) are reserved for constructing canonical state
         // id at num_locals is reserved for the frame root
         let next_id = num_locals + 1;
         let mut state = AbstractState {
-            current_function: function_view.index(),
+            current_function: function_context.index(),
             locals: vec![AbstractValue::NonReference; num_locals],
             borrow_graph: BorrowGraph::new(),
             next_id,
         };
 
-        for (param_idx, param_ty) in function_view.parameters().0.iter().enumerate() {
+        for (param_idx, param_ty) in function_context.parameters().0.iter().enumerate() {
             if param_ty.is_reference() {
                 let id = RefID::new(param_idx);
                 state
@@ -174,7 +176,7 @@ impl AbstractState {
 
     fn add_field_borrow(&mut self, parent: RefID, field: FieldHandleIndex, child: RefID) {
         self.borrow_graph
-            .add_strong_field_borrow((), parent, Label::Field(field), child)
+            .add_strong_field_borrow((), parent, Label::StructField(field), child)
     }
 
     fn add_local_borrow(&mut self, local: LocalIndex, id: RefID) {
@@ -185,6 +187,22 @@ impl AbstractState {
     fn add_resource_borrow(&mut self, resource: StructDefinitionIndex, id: RefID) {
         self.borrow_graph
             .add_weak_field_borrow((), self.frame_root(), Label::Global(resource), id)
+    }
+
+    fn add_variant_field_borrow(
+        &mut self,
+        parent: RefID,
+        enum_def_idx: EnumDefinitionIndex,
+        variant_tag: VariantTag,
+        field_index: MemberCount,
+        child_id: RefID,
+    ) {
+        self.borrow_graph.add_strong_field_borrow(
+            (),
+            parent,
+            Label::VariantField(enum_def_idx, variant_tag, field_index),
+            child_id,
+        )
     }
 
     /// removes `id` from borrow graph
@@ -250,7 +268,7 @@ impl AbstractState {
     /// - Immutable references are not freezable by the typing rules
     fn is_freezable(&self, id: RefID, at_field_opt: Option<FieldHandleIndex>) -> bool {
         assert!(self.borrow_graph.is_mutable(id));
-        !self.has_consistent_mutable_borrows(id, at_field_opt.map(Label::Field))
+        !self.has_consistent_mutable_borrows(id, at_field_opt.map(Label::StructField))
     }
 
     /// checks if `id` is readable
@@ -443,13 +461,53 @@ impl AbstractState {
 
         if is_mut_borrow_with_full_borrows() || is_imm_borrow_with_mut_borrows() {
             // TODO improve error for mutable case
-            return Err(self.error(StatusCode::BORROWFIELD_EXISTS_MUTABLE_BORROW_ERROR, offset));
+            return Err(self.error(StatusCode::FIELD_EXISTS_MUTABLE_BORROW_ERROR, offset));
         }
 
         let field_borrow_id = self.new_ref(mut_);
         self.add_field_borrow(id, field, field_borrow_id);
         self.release(id);
         Ok(AbstractValue::Reference(field_borrow_id))
+    }
+
+    pub fn unpack_enum_variant_ref(
+        &mut self,
+        offset: CodeOffset,
+        enum_def_idx: EnumDefinitionIndex,
+        variant_tag: VariantTag,
+        variant_def: &VariantDefinition,
+        mut_: bool,
+        id: RefID,
+    ) -> PartialVMResult<Vec<AbstractValue>> {
+        // Any field borrows will be factored out, so don't check in the mutable case
+        let is_mut_borrow_with_full_borrows = || mut_ && self.has_full_borrows(id);
+        // For new immutable borrow, the reference to the variant must be readable.
+        // This means that there _does not_ exist a mutable borrow on some other field
+        let is_imm_borrow_with_mut_borrows = || !mut_ && !self.is_readable(id, None);
+
+        if is_mut_borrow_with_full_borrows() || is_imm_borrow_with_mut_borrows() {
+            return Err(self.error(StatusCode::FIELD_EXISTS_MUTABLE_BORROW_ERROR, offset));
+        }
+
+        let field_borrows = variant_def
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let field_borrow_id = self.new_ref(mut_);
+                self.add_variant_field_borrow(
+                    id,
+                    enum_def_idx,
+                    variant_tag,
+                    i as MemberCount,
+                    field_borrow_id,
+                );
+                AbstractValue::Reference(field_borrow_id)
+            })
+            .collect();
+
+        self.release(id);
+        Ok(field_borrows)
     }
 
     pub fn borrow_global(
@@ -521,7 +579,7 @@ impl AbstractState {
         arguments: Vec<AbstractValue>,
         acquired_resources: &BTreeSet<StructDefinitionIndex>,
         return_: &Signature,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Vec<AbstractValue>> {
         meter.add_items(
             Scope::Function,
@@ -716,7 +774,7 @@ impl AbstractDomain for AbstractState {
     fn join(
         &mut self,
         state: &AbstractState,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
         let joined = Self::join_(self, state);
         assert!(joined.is_canonical());

@@ -2,37 +2,36 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::effects_v2::TransactionEffectsV2;
-use crate::base_types::{random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
-use crate::committee::EpochId;
+use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
+use crate::committee::{Committee, EpochId};
 use crate::crypto::{
-    default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, EmptySignInfo,
+    default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo,
+    EmptySignInfo,
 };
 use crate::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
 };
-use crate::error::{SuiError, SuiResult};
+use crate::error::SuiResult;
 use crate::event::Event;
 use crate::execution::SharedInput;
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
-use crate::message_envelope::{
-    Envelope, Message, TrustedEnvelope, UnauthenticatedMessage, VerifiedEnvelope,
-};
+use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::object::Owner;
 use crate::storage::WriteKind;
-use crate::transaction::{SenderSignedData, TransactionDataAPI, VersionedProtocolMessage};
 use effects_v1::TransactionEffectsV1;
 pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
-pub use object_change::{EffectsObjectChange, IDOperation, ObjectIn, ObjectOut};
+pub use object_change::{EffectsObjectChange, ObjectIn, ObjectOut};
 use serde::{Deserialize, Serialize};
-use shared_crypto::intent::IntentScope;
+use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::BTreeMap;
-use sui_protocol_config::ProtocolConfig;
+pub use test_effects_builder::TestEffectsBuilder;
 
 mod effects_v1;
 mod effects_v2;
 mod object_change;
+mod test_effects_builder;
 
 // Since `std::mem::size_of` may not be stable across platforms, we use rough constants
 // We need these for estimating effects sizes
@@ -60,33 +59,6 @@ pub enum TransactionEffects {
     V2(TransactionEffectsV2),
 }
 
-impl VersionedProtocolMessage for TransactionEffects {
-    fn message_version(&self) -> Option<u64> {
-        Some(match self {
-            Self::V1(_) => 1,
-            Self::V2(_) => 2,
-        })
-    }
-
-    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        match self {
-            Self::V1(_) => Ok(()),
-            Self::V2(_) => {
-                if protocol_config.enable_effects_v2() {
-                    Ok(())
-                } else {
-                    Err(SuiError::WrongMessageVersion {
-                        error: format!(
-                            "TransactionEffectsV2 is not supported at protocol {:?}.",
-                            protocol_config.version
-                        ),
-                    })
-                }
-            }
-        }
-    }
-}
-
 impl Message for TransactionEffects {
     type DigestType = TransactionEffectsDigest;
     const SCOPE: IntentScope = IntentScope::TransactionEffects;
@@ -94,19 +66,12 @@ impl Message for TransactionEffects {
     fn digest(&self) -> Self::DigestType {
         TransactionEffectsDigest::new(default_hash(self))
     }
-
-    fn verify_epoch(&self, _: EpochId) -> SuiResult {
-        // Authorities are allowed to re-sign effects from prior epochs, so we do not verify the
-        // epoch here.
-        Ok(())
-    }
 }
 
-impl UnauthenticatedMessage for TransactionEffects {}
-
+// TODO: Get rid of this and use TestEffectsBuilder instead.
 impl Default for TransactionEffects {
     fn default() -> Self {
-        TransactionEffects::V1(Default::default())
+        TransactionEffects::V2(Default::default())
     }
 }
 
@@ -269,6 +234,17 @@ impl TransactionEffects {
             .collect()
     }
 
+    /// Returns all objects that will become a tombstone after this transaction.
+    /// This includes deleted, unwrapped_then_deleted and wrapped objects.
+    pub fn all_tombstones(&self) -> Vec<(ObjectID, SequenceNumber)> {
+        self.deleted()
+            .into_iter()
+            .chain(self.unwrapped_then_deleted())
+            .chain(self.wrapped())
+            .map(|obj_ref| (obj_ref.0, obj_ref.1))
+            .collect()
+    }
+
     /// Return an iterator of mutated objects, but excluding the gas object.
     pub fn mutated_excluding_gas(&self) -> Vec<(ObjectRef, Owner)> {
         self.mutated()
@@ -293,35 +269,13 @@ impl TransactionEffects {
     }
 }
 
-// testing helpers.
-impl TransactionEffects {
-    pub fn new_with_tx(tx: &SenderSignedData) -> TransactionEffects {
-        Self::new_with_tx_and_gas(
-            tx,
-            (
-                random_object_ref(),
-                Owner::AddressOwner(tx.transaction_data().sender()),
-            ),
-        )
-    }
-
-    pub fn new_with_tx_and_gas(tx: &SenderSignedData, gas_object: (ObjectRef, Owner)) -> Self {
-        // TODO: Figure out who is calling this and why.
-        // This creates an inconsistent effects where gas object is not mutated.
-        TransactionEffects::V2(TransactionEffectsV2::new_with_tx_and_gas(tx, gas_object))
-    }
-
-    pub fn new_with_tx_and_status(tx: &SenderSignedData, status: ExecutionStatus) -> Self {
-        TransactionEffects::V2(TransactionEffectsV2::new_with_tx_and_status(tx, status))
-    }
-}
-
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum InputSharedObject {
     Mutate(ObjectRef),
     ReadOnly(ObjectRef),
     ReadDeleted(ObjectID, SequenceNumber),
     MutateDeleted(ObjectID, SequenceNumber),
+    Cancelled(ObjectID, SequenceNumber),
 }
 
 impl InputSharedObject {
@@ -337,6 +291,9 @@ impl InputSharedObject {
             | InputSharedObject::MutateDeleted(id, version) => {
                 (*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED)
             }
+            InputSharedObject::Cancelled(id, version) => {
+                (*id, *version, ObjectDigest::OBJECT_DIGEST_CANCELLED)
+            }
         }
     }
 }
@@ -347,6 +304,9 @@ pub trait TransactionEffectsAPI {
     fn into_status(self) -> ExecutionStatus;
     fn executed_epoch(&self) -> EpochId;
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
+
+    /// The version assigned to all output objects (apart from packages).
+    fn lamport_version(&self) -> SequenceNumber;
 
     /// Metadata of objects prior to modification. This includes any object that exists in the
     /// store prior to this transaction and is modified in this transaction.
@@ -365,6 +325,8 @@ pub trait TransactionEffectsAPI {
     fn deleted(&self) -> Vec<ObjectRef>;
     fn unwrapped_then_deleted(&self) -> Vec<ObjectRef>;
     fn wrapped(&self) -> Vec<ObjectRef>;
+
+    fn object_changes(&self) -> Vec<ObjectChange>;
 
     // TODO: We should consider having this function to return Option.
     // When the gas object is not available (i.e. system transaction), we currently return
@@ -385,10 +347,14 @@ pub trait TransactionEffectsAPI {
                 InputSharedObject::MutateDeleted(id, _) => Some(id),
                 InputSharedObject::Mutate(..)
                 | InputSharedObject::ReadOnly(..)
-                | InputSharedObject::ReadDeleted(..) => None,
+                | InputSharedObject::ReadDeleted(..)
+                | InputSharedObject::Cancelled(..) => None,
             })
             .collect()
     }
+
+    /// Returns all root shared objects (i.e. not child object) that are read-only in the transaction.
+    fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)>;
 
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.
@@ -403,6 +369,23 @@ pub trait TransactionEffectsAPI {
 
     // Adding a tombstone for a deleted object.
     fn unsafe_add_object_tombstone_for_testing(&mut self, obj_ref: ObjectRef);
+}
+
+#[derive(Clone)]
+pub struct ObjectChange {
+    pub id: ObjectID,
+    pub input_version: Option<SequenceNumber>,
+    pub input_digest: Option<ObjectDigest>,
+    pub output_version: Option<SequenceNumber>,
+    pub output_digest: Option<ObjectDigest>,
+    pub id_operation: IDOperation,
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum IDOperation {
+    None,
+    Created,
+    Deleted,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Default)]
@@ -442,3 +425,18 @@ pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEff
 pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
+
+impl CertifiedTransactionEffects {
+    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
+        self.auth_sig().verify_secure(
+            self.data(),
+            Intent::sui_app(IntentScope::TransactionEffects),
+            committee,
+        )
+    }
+
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCertifiedTransactionEffects> {
+        self.verify_authority_signatures(committee)?;
+        Ok(VerifiedCertifiedTransactionEffects::new_from_verified(self))
+    }
+}

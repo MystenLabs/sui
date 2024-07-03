@@ -1,0 +1,4 @@
+migrate
+> diff -r -s sources migration_sources
+> diff -r -s tests migration_tests
+> diff -s Move.toml Move.toml.expected

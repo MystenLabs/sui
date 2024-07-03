@@ -19,10 +19,6 @@ use types::{Certificate, CertificateAPI, CommittedSubDag, HeaderAPI, ReputationS
 #[path = "tests/bullshark_tests.rs"]
 pub mod bullshark_tests;
 
-#[cfg(test)]
-#[path = "tests/randomized_tests.rs"]
-pub mod randomized_tests;
-
 pub struct Bullshark {
     /// The committee information.
     pub committee: Committee,

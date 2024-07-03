@@ -8,15 +8,14 @@ use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::{CallError, INTERNAL_ERROR_CODE};
 use jsonrpsee::types::ErrorObject;
 use std::collections::BTreeMap;
+use sui_json_rpc_api::{TRANSACTION_EXECUTION_CLIENT_ERROR_CODE, TRANSIENT_ERROR_CODE};
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
 use crate::authority_state::StateReadError;
-
-pub const TRANSIENT_ERROR_CODE: i32 = -32050;
-pub const TRANSACTION_EXECUTION_CLIENT_ERROR_CODE: i32 = -32002;
+use crate::name_service::NameServiceError;
 
 pub type RpcInterimResult<T = ()> = Result<T, Error>;
 
@@ -66,6 +65,9 @@ pub enum Error {
 
     #[error("Unsupported Feature: {0}")]
     UnsupportedFeature(String),
+
+    #[error("transparent")]
+    NameServiceError(#[from] NameServiceError),
 }
 
 impl From<SuiError> for Error {
@@ -93,6 +95,17 @@ impl From<Error> for RpcError {
                 | SuiObjectResponseError::DynamicFieldNotFound { .. }
                 | SuiObjectResponseError::Deleted { .. }
                 | SuiObjectResponseError::DisplayError { .. } => {
+                    RpcError::Call(CallError::InvalidParams(err.into()))
+                }
+                _ => RpcError::Call(CallError::Failed(err.into())),
+            },
+            Error::NameServiceError(err) => match err {
+                NameServiceError::ExceedsMaxLength { .. }
+                | NameServiceError::InvalidHyphens { .. }
+                | NameServiceError::InvalidLength { .. }
+                | NameServiceError::InvalidUnderscore { .. }
+                | NameServiceError::LabelsEmpty { .. }
+                | NameServiceError::InvalidSeparator { .. } => {
                     RpcError::Call(CallError::InvalidParams(err.into()))
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
@@ -229,7 +242,8 @@ impl From<Error> for RpcError {
                         );
                         RpcError::Call(CallError::Custom(error_object))
                     }
-                    QuorumDriverError::SystemOverload { .. } => {
+                    QuorumDriverError::SystemOverload { .. }
+                    | QuorumDriverError::SystemOverloadRetryAfter { .. } => {
                         let error_object =
                             ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>);
                         RpcError::Call(CallError::Custom(error_object))
@@ -427,7 +441,7 @@ mod tests {
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message =
-                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again: Balance of gas object 10 is lower than the needed amount: 100., Object (0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(0), o#11111111111111111111111111111111) is not available for consumption, its current version: SequenceNumber(10).."];
+                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again: Balance of gas object 10 is lower than the needed amount: 100, Object (0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(0), o#11111111111111111111111111111111) is not available for consumption, its current version: SequenceNumber(10)."];
             expected_message.assert_eq(error_object.message());
         }
 
@@ -459,7 +473,7 @@ mod tests {
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message =
-                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again: Could not find the referenced object 0x0000000000000000000000000000000000000000000000000000000000000000 at version None.."];
+                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again: Could not find the referenced object 0x0000000000000000000000000000000000000000000000000000000000000000 at version None."];
             expected_message.assert_eq(error_object.message());
         }
 

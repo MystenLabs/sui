@@ -39,4 +39,10 @@ module Symbols::M6 {
     fun other_doc_struct_import(): OtherDocStruct {
         M7::create_other_struct(7)
     }
+
+    /// A documented function with type params.
+    fun type_param_doc<T: copy + drop>(param: T): T {
+        param
+    }
+
 }

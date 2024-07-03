@@ -1,7 +1,7 @@
 //# init --addresses A=42
 
 //# run --args @A
-script {
+module 0x42::m {
     fun main(a: &address) {
         assert!(*a == @42, 1000);
     }

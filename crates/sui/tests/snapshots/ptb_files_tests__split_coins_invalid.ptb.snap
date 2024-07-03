@@ -1,0 +1,33 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[2:1]
+ 1 │ --split-coins 1
+ 2 │ --split-coins gas [0] 5
+   · ──────┬──────
+   ·       ╰── Expected '[' but found command '--split-coins'
+ 3 │ --split-coins [1] gas 
+   ╰────
+
+  × Error when processing PTB
+   ╭─[2:23]
+ 1 │ --split-coins 1
+ 2 │ --split-coins gas [0] 5
+   ·                       ┬
+   ·                       ╰── Unexpected number '5'
+ 3 │ --split-coins [1] gas 
+   ╰────
+  help: Expected to find a command here
+
+  × Error when processing PTB
+   ╭─[3:15]
+ 2 │ --split-coins gas [0] 5
+ 3 │ --split-coins [1] gas 
+   ·               ┬
+   ·               ╰── Unexpected '['
+   ╰────
+  help: Expected an argument here
+

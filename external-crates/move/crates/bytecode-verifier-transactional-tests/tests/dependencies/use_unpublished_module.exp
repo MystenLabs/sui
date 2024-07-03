@@ -1,7 +1,7 @@
 processed 1 task
 
-task 0 'run'. lines 1-8:
-Error: Script execution failed with VMError: {
+task 0 'run'. lines 1-10:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: LINKER_ERROR,
     sub_status: None,
     location: undefined,

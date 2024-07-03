@@ -37,3 +37,16 @@ module 0x0.m {
         return;
     }
 }
+
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+    import 0x2.object;
+
+    t<T: key>(uid: &mut object.UID, coin: transfer.Receiving<T>): T {
+        let c: T;
+        label l0:
+        c = transfer.receive<T>(move(uid), move(coin));
+        return move(c);
+    }
+}

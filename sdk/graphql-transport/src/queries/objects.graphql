@@ -1,0 +1,198 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getOwnedObjects(
+	$owner: SuiAddress!
+	$limit: Int
+	$cursor: String
+	$showBcs: Boolean = false
+	$showContent: Boolean = false
+	$showDisplay: Boolean = false
+	$showType: Boolean = false
+	$showOwner: Boolean = false
+	$showPreviousTransaction: Boolean = false
+	$showStorageRebate: Boolean = false
+	$filter: ObjectFilter
+) {
+	address(address: $owner) {
+		objects(first: $limit, after: $cursor, filter: $filter) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				...RPC_MOVE_OBJECT_FIELDS
+			}
+		}
+	}
+}
+
+query getObject(
+	$id: SuiAddress!
+	$showBcs: Boolean = false
+	$showOwner: Boolean = false
+	$showPreviousTransaction: Boolean = false
+	$showContent: Boolean = false
+	$showDisplay: Boolean = false
+	$showType: Boolean = false
+	$showStorageRebate: Boolean = false
+) {
+	object(address: $id) {
+		...RPC_OBJECT_FIELDS
+	}
+}
+
+query tryGetPastObject(
+	$id: SuiAddress!
+	$version: Int
+	$showBcs: Boolean = false
+	$showOwner: Boolean = false
+	$showPreviousTransaction: Boolean = false
+	$showContent: Boolean = false
+	$showDisplay: Boolean = false
+	$showType: Boolean = false
+	$showStorageRebate: Boolean = false
+) {
+	current: object(address: $id) {
+		address
+		version
+	}
+	object(address: $id, version: $version) {
+		...RPC_OBJECT_FIELDS
+	}
+}
+
+query multiGetObjects(
+	$ids: [SuiAddress!]!
+	$limit: Int
+	$cursor: String
+	$showBcs: Boolean = false
+	$showContent: Boolean = false
+	$showDisplay: Boolean = false
+	$showType: Boolean = false
+	$showOwner: Boolean = false
+	$showPreviousTransaction: Boolean = false
+	$showStorageRebate: Boolean = false
+) {
+	objects(first: $limit, after: $cursor, filter: { objectIds: $ids }) {
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
+		nodes {
+			...RPC_OBJECT_FIELDS
+		}
+	}
+}
+
+fragment RPC_OBJECT_FIELDS on Object {
+	objectId: address
+	version
+	asMoveObject @include(if: $showType) {
+		contents {
+			type {
+				repr
+			}
+		}
+	}
+	asMoveObject @include(if: $showContent) {
+		hasPublicTransfer
+		contents {
+			data
+			type {
+				repr
+				layout
+				signature
+			}
+		}
+	}
+	asMoveObject @include(if: $showBcs) {
+		hasPublicTransfer
+		contents {
+			bcs
+			type {
+				repr
+			}
+		}
+	}
+	owner @include(if: $showOwner) {
+		...RPC_OBJECT_OWNER_FIELDS
+	}
+	previousTransactionBlock @include(if: $showPreviousTransaction) {
+		digest
+	}
+
+	storageRebate @include(if: $showStorageRebate)
+	digest
+	version
+	display @include(if: $showDisplay) {
+		key
+		value
+		error
+	}
+}
+
+fragment RPC_MOVE_OBJECT_FIELDS on MoveObject {
+	objectId: address
+	bcs @include(if: $showBcs)
+	contents @include(if: $showType) {
+		type {
+			repr
+		}
+	}
+	hasPublicTransfer @include(if: $showContent)
+	contents @include(if: $showContent) {
+		data
+		type {
+			repr
+			layout
+			signature
+		}
+	}
+
+	hasPublicTransfer @include(if: $showBcs)
+	contents @include(if: $showBcs) {
+		bcs
+		type {
+			repr
+		}
+	}
+
+	owner @include(if: $showOwner) {
+		...RPC_OBJECT_OWNER_FIELDS
+	}
+	previousTransactionBlock @include(if: $showPreviousTransaction) {
+		digest
+	}
+
+	storageRebate @include(if: $showStorageRebate)
+	digest
+	version
+	display @include(if: $showDisplay) {
+		key
+		value
+		error
+	}
+}
+
+fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+	__typename
+	... on AddressOwner {
+		owner {
+			asObject {
+				address
+			}
+			asAddress {
+				address
+			}
+		}
+	}
+	... on Parent {
+		parent {
+			address
+		}
+	}
+	... on Shared {
+		initialSharedVersion
+	}
+}

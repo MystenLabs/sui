@@ -1,0 +1,34 @@
+[package]
+name = "sui-data-ingestion-core"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+version = "0.1.0"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+backoff.workspace = true
+bcs.workspace = true
+futures.workspace = true
+mysten-metrics.workspace = true
+notify.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+object_store.workspace = true
+prometheus.workspace = true
+telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+sui-storage.workspace = true
+sui-types.workspace = true
+url.workspace = true
+tempfile.workspace = true
+tap.workspace = true
+sui-protocol-config.workspace = true
+sui-rest-api.workspace = true
+
+[dev-dependencies]
+rand.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }

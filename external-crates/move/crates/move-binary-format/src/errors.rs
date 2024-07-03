@@ -8,7 +8,7 @@ use crate::{
 };
 use move_core_types::{
     language_storage::ModuleId,
-    vm_status::{self, StatusCode, StatusType, VMStatus},
+    vm_status::{StatusCode, StatusType},
 };
 use std::fmt;
 
@@ -19,7 +19,6 @@ pub type PartialVMResult<T> = ::std::result::Result<T, PartialVMError>;
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Location {
     Undefined,
-    Script,
     Module(ModuleId),
 }
 
@@ -27,16 +26,16 @@ pub enum Location {
 /// error point.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ExecutionState {
-    stack_trace: Vec<(Option<ModuleId>, FunctionDefinitionIndex, CodeOffset)>,
+    stack_trace: Vec<(ModuleId, FunctionDefinitionIndex, CodeOffset)>,
     // we may consider adding more state if necessary
 }
 
 impl ExecutionState {
-    pub fn new(stack_trace: Vec<(Option<ModuleId>, FunctionDefinitionIndex, CodeOffset)>) -> Self {
+    pub fn new(stack_trace: Vec<(ModuleId, FunctionDefinitionIndex, CodeOffset)>) -> Self {
         Self { stack_trace }
     }
 
-    pub fn stack_trace(&self) -> &Vec<(Option<ModuleId>, FunctionDefinitionIndex, CodeOffset)> {
+    pub fn stack_trace(&self) -> &Vec<(ModuleId, FunctionDefinitionIndex, CodeOffset)> {
         &self.stack_trace
     }
 }
@@ -56,75 +55,6 @@ struct VMError_ {
 }
 
 impl VMError {
-    pub fn into_vm_status(self) -> VMStatus {
-        let VMError_ {
-            major_status,
-            sub_status,
-            location,
-            mut offsets,
-            ..
-        } = *self.0;
-        match (major_status, sub_status, location) {
-            (StatusCode::EXECUTED, sub_status, _) => {
-                debug_assert!(sub_status.is_none());
-                VMStatus::Executed
-            }
-            (StatusCode::ABORTED, Some(code), Location::Script) => {
-                VMStatus::MoveAbort(vm_status::AbortLocation::Script, code)
-            }
-            (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
-                VMStatus::MoveAbort(vm_status::AbortLocation::Module(id), code)
-            }
-
-            (StatusCode::ABORTED, sub_status, location) => {
-                debug_assert!(
-                    false,
-                    "Expected a code and module/script location with ABORTED, but got {:?} and {}",
-                    sub_status, location
-                );
-                VMStatus::Error(StatusCode::ABORTED)
-            }
-
-            (major_status, sub_status, location)
-                if major_status.status_type() == StatusType::Execution =>
-            {
-                let abort_location = match &location {
-                    Location::Script => vm_status::AbortLocation::Script,
-                    Location::Module(id) => vm_status::AbortLocation::Module(id.clone()),
-                    Location::Undefined => {
-                        return VMStatus::Error(major_status);
-                    }
-                };
-                // Errors for OUT_OF_GAS do not always have index set: if it does not, it should already return above.
-                debug_assert!(
-                    offsets.len() == 1,
-                    "Unexpected offsets. major_status: {:?}\
-                    sub_status: {:?}\
-                    location: {:?}\
-                    offsets: {:#?}",
-                    major_status,
-                    sub_status,
-                    location,
-                    offsets
-                );
-                let (function, code_offset) = match offsets.pop() {
-                    None => {
-                        return VMStatus::Error(major_status);
-                    }
-                    Some((fdef_idx, code_offset)) => (fdef_idx.0, code_offset),
-                };
-                VMStatus::ExecutionFailure {
-                    status_code: major_status,
-                    location: abort_location,
-                    function,
-                    code_offset,
-                }
-            }
-
-            (major_status, _, _) => VMStatus::Error(major_status),
-        }
-    }
-
     pub fn major_status(&self) -> StatusCode {
         self.0.major_status
     }
@@ -386,7 +316,6 @@ impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Location::Undefined => write!(f, "UNDEFINED"),
-            Location::Script => write!(f, "Script"),
             Location::Module(id) => write!(f, "Module {:?}", id),
         }
     }
@@ -449,18 +378,6 @@ impl fmt::Display for VMError {
 ////////////////////////////////////////////////////////////////////////////
 /// Conversion functions from internal VM statuses into external VM statuses
 ////////////////////////////////////////////////////////////////////////////
-impl From<VMError> for VMStatus {
-    fn from(vm_error: VMError) -> VMStatus {
-        vm_error.into_vm_status()
-    }
-}
-
-pub fn vm_status_of_result<T>(result: VMResult<T>) -> VMStatus {
-    match result {
-        Ok(_) => VMStatus::Executed,
-        Err(err) => err.into_vm_status(),
-    }
-}
 
 pub fn offset_out_of_bounds(
     status: StatusCode,

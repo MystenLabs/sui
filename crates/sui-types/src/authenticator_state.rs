@@ -90,7 +90,7 @@ fn jwk_ord(a: &ActiveJwk, b: &ActiveJwk) -> std::cmp::Ordering {
     }
 }
 
-#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl std::cmp::PartialOrd for ActiveJwk {
     // This must match the sort order defined by jwk_lt in authenticator_state.move
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -106,7 +106,7 @@ impl std::cmp::Ord for ActiveJwk {
 }
 
 pub fn get_authenticator_state(
-    object_store: &dyn ObjectStore,
+    object_store: impl ObjectStore,
 ) -> SuiResult<Option<AuthenticatorStateInner>> {
     let outer = object_store.get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)?;
     let Some(outer) = outer else {
@@ -125,7 +125,7 @@ pub fn get_authenticator_state(
 
     let id = outer.id.id.bytes;
     let inner: AuthenticatorStateInner =
-        get_dynamic_field_from_store(object_store, id, &outer.version).map_err(|err| {
+        get_dynamic_field_from_store(&object_store, id, &outer.version).map_err(|err| {
             SuiError::DynamicFieldReadError(format!(
                 "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                 id, outer.version, err

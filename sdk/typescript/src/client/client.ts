@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
 
-import type { TransactionBlock } from '../builder/index.js';
-import { isTransactionBlock } from '../builder/index.js';
-import type { Keypair } from '../cryptography/index.js';
+import type { Signer } from '../cryptography/index.js';
+import type { Transaction } from '../transactions/index.js';
+import { isTransaction } from '../transactions/index.js';
 import {
 	isValidSuiAddress,
 	isValidSuiObjectId,
@@ -12,6 +12,7 @@ import {
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 } from '../utils/sui-types.js';
+import { normalizeSuiNSName } from '../utils/suins.js';
 import { SuiHTTPTransport } from './http-transport.js';
 import type { SuiTransport } from './http-transport.js';
 import type {
@@ -30,6 +31,7 @@ import type {
 	DryRunTransactionBlockResponse,
 	DynamicFieldPage,
 	EpochInfo,
+	EpochMetricsPage,
 	EpochPage,
 	ExecuteTransactionBlockParams,
 	GetAllBalancesParams,
@@ -106,7 +108,7 @@ export interface OrderArguments {
  */
 export type SuiClientOptions = NetworkOrTransport;
 
-export type NetworkOrTransport =
+type NetworkOrTransport =
 	| {
 			url: string;
 			transport?: never;
@@ -116,7 +118,7 @@ export type NetworkOrTransport =
 			url?: never;
 	  };
 
-export const SUI_CLIENT_BRAND = Symbol.for('@mysten/SuiClient');
+const SUI_CLIENT_BRAND = Symbol.for('@mysten/SuiClient');
 
 export function isSuiClient(client: unknown): client is SuiClient {
 	return (
@@ -422,27 +424,27 @@ export class SuiClient {
 		});
 	}
 
-	async signAndExecuteTransactionBlock({
-		transactionBlock,
+	async signAndExecuteTransaction({
+		transaction,
 		signer,
 		...input
 	}: {
-		transactionBlock: Uint8Array | TransactionBlock;
-		signer: Keypair;
+		transaction: Uint8Array | Transaction;
+		signer: Signer;
 	} & Omit<
 		ExecuteTransactionBlockParams,
 		'transactionBlock' | 'signature'
 	>): Promise<SuiTransactionBlockResponse> {
 		let transactionBytes;
 
-		if (transactionBlock instanceof Uint8Array) {
-			transactionBytes = transactionBlock;
+		if (transaction instanceof Uint8Array) {
+			transactionBytes = transaction;
 		} else {
-			transactionBlock.setSenderIfNotSet(await signer.getPublicKey().toSuiAddress());
-			transactionBytes = await transactionBlock.build({ client: this });
+			transaction.setSenderIfNotSet(signer.toSuiAddress());
+			transactionBytes = await transaction.build({ client: this });
 		}
 
-		const { signature, bytes } = await signer.signTransactionBlock(transactionBytes);
+		const { signature, bytes } = await signer.signTransaction(transactionBytes);
 
 		return this.executeTransactionBlock({
 			transactionBlock: bytes,
@@ -561,7 +563,7 @@ export class SuiClient {
 		input: DevInspectTransactionBlockParams,
 	): Promise<DevInspectResults> {
 		let devInspectTxBytes;
-		if (isTransactionBlock(input.transactionBlock)) {
+		if (isTransaction(input.transactionBlock)) {
 			input.transactionBlock.setSenderIfNotSet(input.sender);
 			devInspectTxBytes = toB64(
 				await input.transactionBlock.build({
@@ -579,7 +581,7 @@ export class SuiClient {
 
 		return await this.transport.request({
 			method: 'sui_devInspectTransactionBlock',
-			params: [input.sender, devInspectTxBytes, input.gasPrice, input.epoch],
+			params: [input.sender, devInspectTxBytes, input.gasPrice?.toString(), input.epoch],
 		});
 	}
 
@@ -670,6 +672,15 @@ export class SuiClient {
 		return await this.transport.request({ method: 'suix_getLatestAddressMetrics', params: [] });
 	}
 
+	async getEpochMetrics(
+		input?: { descendingOrder?: boolean } & PaginationArguments<EpochMetricsPage['nextCursor']>,
+	): Promise<EpochMetricsPage> {
+		return await this.transport.request({
+			method: 'suix_getEpochMetrics',
+			params: [input?.cursor, input?.limit, input?.descendingOrder],
+		});
+	}
+
 	async getAllEpochAddressMetrics(input?: {
 		descendingOrder?: boolean;
 	}): Promise<AllEpochsAddressMetrics> {
@@ -728,13 +739,23 @@ export class SuiClient {
 		});
 	}
 
-	async resolveNameServiceNames(
-		input: ResolveNameServiceNamesParams,
-	): Promise<ResolvedNameServiceNames> {
-		return await this.transport.request({
-			method: 'suix_resolveNameServiceNames',
-			params: [input.address, input.cursor, input.limit],
-		});
+	async resolveNameServiceNames({
+		format = 'dot',
+		...input
+	}: ResolveNameServiceNamesParams & {
+		format?: 'at' | 'dot';
+	}): Promise<ResolvedNameServiceNames> {
+		const { nextCursor, hasNextPage, data }: ResolvedNameServiceNames =
+			await this.transport.request({
+				method: 'suix_resolveNameServiceNames',
+				params: [input.address, input.cursor, input.limit],
+			});
+
+		return {
+			hasNextPage,
+			nextCursor,
+			data: data.map((name) => normalizeSuiNSName(name, format)),
+		};
 	}
 
 	async getProtocolConfig(input?: GetProtocolConfigParams): Promise<ProtocolConfig> {
@@ -750,7 +771,7 @@ export class SuiClient {
 	 * be available via the API.
 	 * This currently polls the `getTransactionBlock` API to check for the transaction.
 	 */
-	async waitForTransactionBlock({
+	async waitForTransaction({
 		signal,
 		timeout = 60 * 1000,
 		pollInterval = 2 * 1000,

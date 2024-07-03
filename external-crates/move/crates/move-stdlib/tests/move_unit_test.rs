@@ -4,10 +4,8 @@
 
 use move_cli::base::test::{run_move_unit_tests, UnitTestResult};
 use move_core_types::account_address::AccountAddress;
-use move_stdlib::{
-    natives::{all_natives, nursery_natives, GasParameters, NurseryGasParameters},
-    path_in_crate,
-};
+use move_stdlib::path_in_crate;
+use move_stdlib_natives::{all_natives, nursery_natives, GasParameters, NurseryGasParameters};
 use move_unit_test::UnitTestingConfig;
 use tempfile::tempdir;
 
@@ -38,10 +36,9 @@ fn run_tests_for_pkg(path_to_pkg: impl Into<String>, include_nursery_natives: bo
         None,
         /* compute_coverage */ false,
         &mut std::io::stdout(),
-        &mut std::io::stdout(),
     )
     .unwrap();
-    if result != UnitTestResult::Success {
+    if result.0 != UnitTestResult::Success {
         panic!("aborting because of Move unit test failures");
     }
 }

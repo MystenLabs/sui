@@ -3,80 +3,80 @@ processed 18 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 8-115:
+task 1 'publish'. lines 8-110:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 13452000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 117-117:
+task 2 'run'. lines 112-112:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 119-123:
+task 3 'run'. lines 114-118:
 mutated: object(0,0)
 deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
-task 4 'run'. lines 125-125:
+task 4 'run'. lines 120-120:
 created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5 'run'. lines 127-127:
+task 5 'run'. lines 122-122:
 created: object(5,0), object(5,1)
 mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 6665200,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
-task 6 'run'. lines 129-133:
-Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: 0xc7f065f57e819836de7be3316b9106fb484b971ea18fdbd5034904850342d3ca, parent_id: 0xffddb920cb12e53ca4fb828fb0ecad515e6e889d3f183889a4e10908cb39b2e0 }
+task 6 'run'. lines 124-128:
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(5,0), parent_id: object(5,1) }
 
-task 7 'run'. lines 135-135:
+task 7 'run'. lines 130-130:
 created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2652400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'run'. lines 137-140:
+task 8 'run'. lines 132-135:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 9 'run'. lines 142-142:
+task 9 'run'. lines 137-137:
 created: object(9,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2652400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 10 'run'. lines 144-144:
+task 10 'run'. lines 139-139:
 created: object(10,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 11 'run'. lines 146-149:
+task 11 'run'. lines 141-144:
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(0) } }
 
-task 12 'run'. lines 151-151:
+task 12 'run'. lines 146-146:
 created: object(12,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 13 'run'. lines 153-156:
+task 13 'run'. lines 148-151:
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by-value.
 Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue } at command Some(0)
 
-task 14 'run'. lines 158-158:
+task 14 'run'. lines 153-153:
 created: object(14,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 15 'run'. lines 160-163:
+task 15 'run'. lines 155-158:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }
 
-task 16 'run'. lines 165-165:
+task 16 'run'. lines 160-160:
 created: object(16,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 17 'run'. lines 167-167:
+task 17 'run'. lines 162-162:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }

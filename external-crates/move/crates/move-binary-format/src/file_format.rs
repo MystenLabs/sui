@@ -28,7 +28,6 @@
 //! those structs translate to tables and table specifications.
 
 use crate::{
-    access::ModuleAccess,
     errors::{PartialVMError, PartialVMResult},
     file_format_common,
     internals::ModuleIndex,
@@ -57,6 +56,8 @@ macro_rules! define_index {
         kind: $kind: ident,
         doc: $comment: literal,
     } => {
+        define_index!(internal $name, $kind);
+
         #[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
         #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
@@ -64,7 +65,35 @@ macro_rules! define_index {
         #[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
         #[doc=$comment]
         pub struct $name(pub TableIndex);
+    };
+    {
+        name: $name: ident,
+        kind: $kind: ident,
+        doc: $comment: literal,
+        bounds: $max: literal,
+    } => {
+        define_index!(internal $name, $kind);
+        #[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
+        #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+        #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+        #[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
+        #[doc=$comment]
+        pub struct $name(
+            #[cfg_attr(
+                any(test, feature = "fuzzing"),
+                proptest(strategy = $max)
+            )]
+            pub TableIndex
+        );
 
+    };
+
+    {
+        internal
+        $name: ident,
+        $kind: ident
+    } => {
         /// Returns an instance of the given `Index`.
         impl $name {
             pub fn new(idx: TableIndex) -> Self {
@@ -101,9 +130,9 @@ define_index! {
     doc: "Index into the `ModuleHandle` table.",
 }
 define_index! {
-    name: StructHandleIndex,
-    kind: StructHandle,
-    doc: "Index into the `StructHandle` table.",
+    name: DatatypeHandleIndex,
+    kind: DatatypeHandle,
+    doc: "Index into the `DatatypeHandle` table.",
 }
 define_index! {
     name: FunctionHandleIndex,
@@ -160,6 +189,34 @@ define_index! {
     kind: FunctionDefinition,
     doc: "Index into the `FunctionDefinition` table.",
 }
+define_index! {
+    name: EnumDefinitionIndex,
+    kind: EnumDefinition,
+    doc: "Index into the `EnumDefinition` table.",
+}
+define_index! {
+    name: EnumDefInstantiationIndex,
+    kind: EnumDefInstantiation,
+    doc: "Index into the `EnumDefInstantiation` table.",
+}
+define_index! {
+    name: VariantJumpTableIndex,
+    kind: VariantJumpTable,
+    doc: "Index into the `VariantJumpTable` table.",
+    bounds: "0u16..128u16",
+}
+define_index! {
+    name: VariantHandleIndex,
+    kind: VariantHandle,
+    doc: "Index into the `VariantHandle` table.",
+    bounds: "0u16..1024u16",
+}
+define_index! {
+    name: VariantInstantiationHandleIndex,
+    kind: VariantInstantiationHandle,
+    doc: "Index into the `VariantInstantiationHandle` table.",
+    bounds: "0u16..1024u16",
+}
 
 /// Index of a local variable in a function.
 ///
@@ -170,6 +227,9 @@ pub type MemberCount = u16;
 /// Index into the code stream for a jump. The offset is relative to the beginning of
 /// the instruction stream.
 pub type CodeOffset = u16;
+
+/// Tag reperesenting the variant of an enum.
+pub type VariantTag = MemberCount;
 
 /// The pool of identifiers.
 pub type IdentifierPool = Vec<Identifier>;
@@ -227,13 +287,13 @@ pub struct ModuleHandle {
     pub name: IdentifierIndex,
 }
 
-/// A `StructHandle` is a reference to a user defined type. It is composed by a `ModuleHandle`
+/// A `DatatypeHandle` is a reference to a user defined type. It is composed by a `ModuleHandle`
 /// and the name of the type within that module.
 ///
 /// A type in a module is uniquely identified by its name and as such the name is enough
 /// to perform resolution.
 ///
-/// The `StructHandle` is polymorphic: it can have type parameters in its fields and carries the
+/// The `DatatypeHandle` is polymorphic: it can have type parameters in its fields and carries the
 /// ability constraints for these type parameters (empty list for non-generic structs). It also
 /// carries the abilities of the struct itself so that the verifier can check
 /// ability semantics without having to load the referenced type.
@@ -245,7 +305,7 @@ pub struct ModuleHandle {
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
 #[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
-pub struct StructHandle {
+pub struct DatatypeHandle {
     /// The module that defines the type.
     pub module: ModuleHandleIndex,
     /// The name of the type.
@@ -255,10 +315,10 @@ pub struct StructHandle {
     /// that ability being satisfied for all type parameters.
     pub abilities: AbilitySet,
     /// The type formals (identified by their index into the vec)
-    pub type_parameters: Vec<StructTypeParameter>,
+    pub type_parameters: Vec<DatatypeTyParameter>,
 }
 
-impl StructHandle {
+impl DatatypeHandle {
     pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = AbilitySet> + '_ {
         self.type_parameters.iter().map(|param| param.constraints)
     }
@@ -269,7 +329,7 @@ impl StructHandle {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
-pub struct StructTypeParameter {
+pub struct DatatypeTyParameter {
     /// The type parameter constraints.
     pub constraints: AbilitySet,
     /// Whether the parameter is declared as phantom.
@@ -380,9 +440,9 @@ pub struct FieldInstantiation {
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
 #[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
 pub struct StructDefinition {
-    /// The `StructHandle` for this `StructDefinition`. This has the name and the abilities
+    /// The `DatatypeHandle` for this `StructDefinition`. This has the name and the abilities
     /// for the type.
-    pub struct_handle: StructHandleIndex,
+    pub struct_handle: DatatypeHandleIndex,
     /// Contains either
     /// - Information indicating the struct is native and has no accessible fields
     /// - Information indicating the number of fields and the start `FieldDefinition`s
@@ -403,6 +463,13 @@ impl StructDefinition {
         match &self.field_information {
             StructFieldInformation::Native => None,
             StructFieldInformation::Declared(fields) => fields.get(offset),
+        }
+    }
+
+    pub fn fields(&self) -> Option<&[FieldDefinition]> {
+        match &self.field_information {
+            StructFieldInformation::Native => None,
+            StructFieldInformation::Declared(fields) => Some(fields),
         }
     }
 }
@@ -578,7 +645,7 @@ impl Signature {
 }
 
 /// Type parameters are encoded as indices. This index can also be used to lookup the kind of a
-/// type parameter in the `FunctionHandle` and `StructHandle`.
+/// type parameter in the `FunctionHandle` and `DatatypeHandle`.
 pub type TypeParameterIndex = u16;
 
 /// An `Ability` classifies what operations are permitted for a given type
@@ -599,6 +666,95 @@ pub enum Ability {
     Store = 0x4,
     /// Allows the type to serve as a key for global storage operations: MoveTo, MoveFrom, etc.
     Key = 0x8,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
+pub struct EnumDefinition {
+    /// The `DatatypeHandle` for this `EnumDefinition`. This has the name and the abilities
+    /// for the type.
+    pub enum_handle: DatatypeHandleIndex,
+    /// NB: variant tag == index in this vector
+    pub variants: Vec<VariantDefinition>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
+pub struct EnumDefInstantiation {
+    /// The `EnumDefinition` for this `EnumDefInstantiation`.
+    pub def: EnumDefinitionIndex,
+    /// The type parameters for this instantiation.
+    pub type_parameters: SignatureIndex,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
+pub struct VariantDefinition {
+    /// The name of this variant.
+    pub variant_name: IdentifierIndex,
+    /// The fields of this variant.
+    pub fields: Vec<FieldDefinition>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
+pub struct VariantHandle {
+    /// The `EnumDefinition` that this `VariantHandle` is part of.
+    pub enum_def: EnumDefinitionIndex,
+    /// The tag of this variant. Note that this is the index of the variant in the `EnumDefinition`
+    /// `variants` field.
+    #[cfg_attr(any(test, feature = "fuzzing"), proptest(strategy = "0u16..128u16"))]
+    pub variant: VariantTag,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
+pub struct VariantInstantiationHandle {
+    /// The `EnumDefInstantiationIndex` that this `VariantInstantiationHandle` is part of.
+    pub enum_def: EnumDefInstantiationIndex,
+    /// The tag of this variant. Note that this is the index of the variant in the `EnumDefinition`
+    /// `variants` field.
+    #[cfg_attr(any(test, feature = "fuzzing"), proptest(strategy = "0u16..128u16"))]
+    pub variant: VariantTag,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
+pub struct VariantJumpTable {
+    /// The enum definition that this jump table is switching on.
+    pub head_enum: EnumDefinitionIndex,
+    /// The jump table itself.
+    pub jump_table: JumpTableInner,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
+#[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
+pub enum JumpTableInner {
+    // Full or "complete" jump table (i.e., every tag in the enum value being switched on is
+    // present in the jump table). The `CodeOffset` to jump to for a given variant tag `t` is at
+    // index `t` in this vector of code offsets.
+    Full(Vec<CodeOffset>),
 }
 
 impl Ability {
@@ -643,7 +799,7 @@ pub struct AbilitySet(u8);
 impl AbilitySet {
     /// The empty ability set
     pub const EMPTY: Self = Self(0);
-    /// Abilities for `Bool`, `U8`, `U64`, `U128`, and `Address`
+    /// Abilities for `Bool`, `U8`, `U16`, `U32`, `U64`, `U128`, `U256`, and `Address`
     pub const PRIMITIVES: AbilitySet =
         Self((Ability::Copy as u8) | (Ability::Drop as u8) | (Ability::Store as u8));
     /// Abilities for `Reference` and `MutableReference`
@@ -867,8 +1023,8 @@ pub enum SignatureToken {
     /// Vector
     Vector(Box<SignatureToken>),
     /// User defined type
-    Struct(StructHandleIndex),
-    StructInstantiation(StructHandleIndex, Vec<SignatureToken>),
+    Datatype(DatatypeHandleIndex),
+    DatatypeInstantiation(Box<(DatatypeHandleIndex, Vec<SignatureToken>)>),
     /// Reference to a type.
     Reference(Box<SignatureToken>),
     /// Mutable reference to a type.
@@ -904,11 +1060,12 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIter<'a> {
                         self.stack.push(inner_tok)
                     }
 
-                    StructInstantiation(_, inner_toks) => {
+                    DatatypeInstantiation(inst) => {
+                        let (_, inner_toks) = &**inst;
                         self.stack.extend(inner_toks.iter().rev())
                     }
 
-                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Struct(_)
+                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Datatype(_)
                     | TypeParameter(_) => (),
                 }
                 Some(tok)
@@ -937,11 +1094,13 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIterWithDepth<'a> {
                         self.stack.push((inner_tok, depth + 1))
                     }
 
-                    StructInstantiation(_, inner_toks) => self
-                        .stack
-                        .extend(inner_toks.iter().map(|tok| (tok, depth + 1)).rev()),
+                    DatatypeInstantiation(inst) => {
+                        let (_, inner_toks) = &**inst;
+                        self.stack
+                            .extend(inner_toks.iter().map(|tok| (tok, depth + 1)).rev())
+                    }
 
-                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Struct(_)
+                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Datatype(_)
                     | TypeParameter(_) => (),
                 }
                 Some((tok, depth))
@@ -969,7 +1128,7 @@ impl Arbitrary for SignatureToken {
             Just(U128),
             Just(U256),
             Just(Address),
-            any::<StructHandleIndex>().prop_map(Struct),
+            any::<DatatypeHandleIndex>().prop_map(Datatype),
             any::<TypeParameterIndex>().prop_map(TypeParameter),
         ];
         leaf.prop_recursive(
@@ -1001,8 +1160,9 @@ impl std::fmt::Debug for SignatureToken {
             SignatureToken::Address => write!(f, "Address"),
             SignatureToken::Signer => write!(f, "Signer"),
             SignatureToken::Vector(boxed) => write!(f, "Vector({:?})", boxed),
-            SignatureToken::Struct(idx) => write!(f, "Struct({:?})", idx),
-            SignatureToken::StructInstantiation(idx, types) => {
+            SignatureToken::Datatype(idx) => write!(f, "Struct({:?})", idx),
+            SignatureToken::DatatypeInstantiation(inst) => {
+                let (idx, types) = &**inst;
                 write!(f, "StructInstantiation({:?}, {:?})", idx, types)
             }
             SignatureToken::Reference(boxed) => write!(f, "Reference({:?})", boxed),
@@ -1032,8 +1192,8 @@ impl SignatureToken {
             | U256
             | Address
             | Signer
-            | Struct(_)
-            | StructInstantiation(_, _)
+            | Datatype(_)
+            | DatatypeInstantiation(_)
             | Vector(_) => SignatureTokenKind::Value,
             // TODO: This is a temporary hack to please the verifier. SignatureTokenKind will soon
             // be completely removed. `SignatureTokenView::kind()` should be used instead.
@@ -1050,8 +1210,8 @@ impl SignatureToken {
             | Address
             | Signer
             | Vector(_)
-            | Struct(_)
-            | StructInstantiation(_, _)
+            | Datatype(_)
+            | DatatypeInstantiation(_)
             | Reference(_)
             | MutableReference(_)
             | TypeParameter(_) => false,
@@ -1088,8 +1248,8 @@ impl SignatureToken {
             Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => true,
             Vector(inner) => inner.is_valid_for_constant(),
             Signer
-            | Struct(_)
-            | StructInstantiation(_, _)
+            | Datatype(_)
+            | DatatypeInstantiation(_)
             | Reference(_)
             | MutableReference(_)
             | TypeParameter(_) => false,
@@ -1099,10 +1259,10 @@ impl SignatureToken {
     /// Set the index to this one. Useful for random testing.
     ///
     /// Panics if this token doesn't contain a struct handle.
-    pub fn debug_set_sh_idx(&mut self, sh_idx: StructHandleIndex) {
+    pub fn debug_set_sh_idx(&mut self, sh_idx: DatatypeHandleIndex) {
         match self {
-            SignatureToken::Struct(ref mut wrapped) => *wrapped = sh_idx,
-            SignatureToken::StructInstantiation(ref mut wrapped, _) => *wrapped = sh_idx,
+            SignatureToken::Datatype(ref mut wrapped) => *wrapped = sh_idx,
+            SignatureToken::DatatypeInstantiation(ref mut inst) => Box::as_mut(inst).0 = sh_idx,
             SignatureToken::Reference(ref mut token)
             | SignatureToken::MutableReference(ref mut token) => token.debug_set_sh_idx(sh_idx),
             other => panic!(
@@ -1150,6 +1310,8 @@ pub struct CodeUnit {
         proptest(strategy = "vec(any::<Bytecode>(), 0..=params)")
     )]
     pub code: Vec<Bytecode>,
+    #[cfg_attr(any(test, feature = "fuzzing"), proptest(value = "vec![]"))]
+    pub jump_tables: Vec<VariantJumpTable>,
 }
 
 /// `Bytecode` is a VM instruction of variable size. The type of the bytecode (opcode) defines
@@ -1215,7 +1377,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```... -> ..., u128_value```
-    LdU128(u128),
+    LdU128(Box<u128>),
     /// Convert the value at the top of the stack into u8.
     ///
     /// Stack transition:
@@ -1235,7 +1397,7 @@ pub enum Bytecode {
     /// ```..., integer_value -> ..., u128_value```
     CastU128,
     /// Push a `Constant` onto the stack. The value is loaded and deserialized (according to its
-    /// type) from the the `ConstantPool` via `ConstantPoolIndex`
+    /// type) from the `ConstantPool` via `ConstantPoolIndex`
     ///
     /// Stack transition:
     ///
@@ -1285,7 +1447,7 @@ pub enum Bytecode {
     /// return_value(k)```
     Call(FunctionHandleIndex),
     CallGeneric(FunctionInstantiationIndex),
-    /// Create an instance of the type specified via `StructHandleIndex` and push it on the stack.
+    /// Create an instance of the type specified via `DatatypeHandleIndex` and push it on the stack.
     /// The values of the fields of the struct, in the order they appear in the struct declaration,
     /// must be pushed on the stack. All fields must be provided.
     ///
@@ -1382,24 +1544,6 @@ pub enum Bytecode {
     ///
     /// ```..., reference -> ..., field_reference```
     ImmBorrowFieldGeneric(FieldInstantiationIndex),
-    /// Return a mutable reference to an instance of type `StructDefinitionIndex` published at the
-    /// address passed as argument. Abort execution if such an object does not exist or if a
-    /// reference has already been handed out.
-    ///
-    /// Stack transition:
-    ///
-    /// ```..., address_value -> ..., reference_value```
-    MutBorrowGlobal(StructDefinitionIndex),
-    MutBorrowGlobalGeneric(StructDefInstantiationIndex),
-    /// Return an immutable reference to an instance of type `StructDefinitionIndex` published at
-    /// the address passed as argument. Abort execution if such an object does not exist or if a
-    /// reference has already been handed out.
-    ///
-    /// Stack transition:
-    ///
-    /// ```..., address_value -> ..., reference_value```
-    ImmBorrowGlobal(StructDefinitionIndex),
-    ImmBorrowGlobalGeneric(StructDefInstantiationIndex),
     /// Add the 2 u64 at the top of the stack and pushes the result on the stack.
     /// The operation aborts the transaction in case of overflow.
     ///
@@ -1526,31 +1670,6 @@ pub enum Bytecode {
     ///
     /// Stack transition: none
     Nop,
-    /// Returns whether or not a given address has an object of type StructDefinitionIndex
-    /// published already
-    ///
-    /// Stack transition:
-    ///
-    /// ```..., address_value -> ..., bool_value```
-    Exists(StructDefinitionIndex),
-    ExistsGeneric(StructDefInstantiationIndex),
-    /// Move the instance of type StructDefinitionIndex, at the address at the top of the stack.
-    /// Abort execution if such an object does not exist.
-    ///
-    /// Stack transition:
-    ///
-    /// ```..., address_value -> ..., value```
-    MoveFrom(StructDefinitionIndex),
-    MoveFromGeneric(StructDefInstantiationIndex),
-    /// Move the instance at the top of the stack to the address of the `Signer` on the stack below
-    /// it
-    /// Abort execution if an object of type StructDefinitionIndex already exists in address.
-    ///
-    /// Stack transition:
-    ///
-    /// ```..., signer_value, value -> ...```
-    MoveTo(StructDefinitionIndex),
-    MoveToGeneric(StructDefInstantiationIndex),
     /// Shift the (second top value) left (top value) bits and pushes the result on the stack.
     ///
     /// Stack transition:
@@ -1632,7 +1751,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```... -> ..., u256_value```
-    LdU256(move_core_types::u256::U256),
+    LdU256(Box<move_core_types::u256::U256>),
     /// Convert the value at the top of the stack into u16.
     ///
     /// Stack transition:
@@ -1651,6 +1770,56 @@ pub enum Bytecode {
     ///
     /// ```..., integer_value -> ..., u256_value```
     CastU256,
+    /// Create a variant of the enum type specified via `VariantHandleIndex` and push it on the stack.
+    /// The values of the fields of the variant, in the order they appear in the variant declaration,
+    /// must be pushed on the stack. All fields for the variant must be provided.
+    ///
+    /// A PackVariant/PackVariantGeneric instruction must fully initialize an instance.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., field(1)_value, field(2)_value, ..., field(n)_value -> ..., variant_value```
+    PackVariant(VariantHandleIndex),
+    PackVariantGeneric(VariantInstantiationHandleIndex),
+    /// Destroy a variant value specified by the `VariantHandleIndex` and push the values bound to
+    /// each variant field on the stack.
+    ///
+    /// The values of the fields of the instance appear on the stack in the order defined
+    /// in the enum variant's definition.
+    ///
+    /// This order makes UnpackVariant<T>(tag) the inverse of PackVariant<T>(tag). So
+    /// `UnpackVariant<T>(tag); PackVariant<T>(tag)` is the identity for enum T and variant V with
+    /// tag `t`.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., instance_value -> ..., field(1)_value, field(2)_value, ..., field(n)_value```
+    UnpackVariant(VariantHandleIndex),
+    UnpackVariantImmRef(VariantHandleIndex),
+    UnpackVariantMutRef(VariantHandleIndex),
+    UnpackVariantGeneric(VariantInstantiationHandleIndex),
+    UnpackVariantGenericImmRef(VariantInstantiationHandleIndex),
+    UnpackVariantGenericMutRef(VariantInstantiationHandleIndex),
+    /// Branch on the tag value of the enum value reference that is on the top of the value stack,
+    /// and jumps to the matching code offset for that tag within the `CodeUnit`. Code offsets are
+    /// relative to the start of the instruction stream.
+    ///
+    /// Stack transition:
+    /// ```..., enum_value_ref -> ...```
+    VariantSwitch(VariantJumpTableIndex),
+
+    // ******** DEPRECATED BYTECODES ********
+    ExistsDeprecated(StructDefinitionIndex),
+    ExistsGenericDeprecated(StructDefInstantiationIndex),
+    MoveFromDeprecated(StructDefinitionIndex),
+    MoveFromGenericDeprecated(StructDefInstantiationIndex),
+    MoveToDeprecated(StructDefinitionIndex),
+    MoveToGenericDeprecated(StructDefInstantiationIndex),
+    MutBorrowGlobalDeprecated(StructDefinitionIndex),
+    MutBorrowGlobalGenericDeprecated(StructDefInstantiationIndex),
+    ImmBorrowGlobalDeprecated(StructDefinitionIndex),
+    ImmBorrowGlobalGenericDeprecated(StructDefInstantiationIndex),
+    // ******** END DEPRECATED BYTECODES ********
 }
 
 impl ::std::fmt::Debug for Bytecode {
@@ -1694,10 +1863,14 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::MutBorrowFieldGeneric(a) => write!(f, "MutBorrowFieldGeneric({:?})", a),
             Bytecode::ImmBorrowField(a) => write!(f, "ImmBorrowField({:?})", a),
             Bytecode::ImmBorrowFieldGeneric(a) => write!(f, "ImmBorrowFieldGeneric({:?})", a),
-            Bytecode::MutBorrowGlobal(a) => write!(f, "MutBorrowGlobal({:?})", a),
-            Bytecode::MutBorrowGlobalGeneric(a) => write!(f, "MutBorrowGlobalGeneric({:?})", a),
-            Bytecode::ImmBorrowGlobal(a) => write!(f, "ImmBorrowGlobal({:?})", a),
-            Bytecode::ImmBorrowGlobalGeneric(a) => write!(f, "ImmBorrowGlobalGeneric({:?})", a),
+            Bytecode::MutBorrowGlobalDeprecated(a) => write!(f, "MutBorrowGlobal({:?})", a),
+            Bytecode::MutBorrowGlobalGenericDeprecated(a) => {
+                write!(f, "MutBorrowGlobalGeneric({:?})", a)
+            }
+            Bytecode::ImmBorrowGlobalDeprecated(a) => write!(f, "ImmBorrowGlobal({:?})", a),
+            Bytecode::ImmBorrowGlobalGenericDeprecated(a) => {
+                write!(f, "ImmBorrowGlobalGeneric({:?})", a)
+            }
             Bytecode::Add => write!(f, "Add"),
             Bytecode::Sub => write!(f, "Sub"),
             Bytecode::Mul => write!(f, "Mul"),
@@ -1719,12 +1892,12 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::Ge => write!(f, "Ge"),
             Bytecode::Abort => write!(f, "Abort"),
             Bytecode::Nop => write!(f, "Nop"),
-            Bytecode::Exists(a) => write!(f, "Exists({:?})", a),
-            Bytecode::ExistsGeneric(a) => write!(f, "ExistsGeneric({:?})", a),
-            Bytecode::MoveFrom(a) => write!(f, "MoveFrom({:?})", a),
-            Bytecode::MoveFromGeneric(a) => write!(f, "MoveFromGeneric({:?})", a),
-            Bytecode::MoveTo(a) => write!(f, "MoveTo({:?})", a),
-            Bytecode::MoveToGeneric(a) => write!(f, "MoveToGeneric({:?})", a),
+            Bytecode::ExistsDeprecated(a) => write!(f, "Exists({:?})", a),
+            Bytecode::ExistsGenericDeprecated(a) => write!(f, "ExistsGeneric({:?})", a),
+            Bytecode::MoveFromDeprecated(a) => write!(f, "MoveFrom({:?})", a),
+            Bytecode::MoveFromGenericDeprecated(a) => write!(f, "MoveFromGeneric({:?})", a),
+            Bytecode::MoveToDeprecated(a) => write!(f, "MoveTo({:?})", a),
+            Bytecode::MoveToGenericDeprecated(a) => write!(f, "MoveToGeneric({:?})", a),
             Bytecode::VecPack(a, n) => write!(f, "VecPack({}, {})", a, n),
             Bytecode::VecLen(a) => write!(f, "VecLen({})", a),
             Bytecode::VecImmBorrow(a) => write!(f, "VecImmBorrow({})", a),
@@ -1733,6 +1906,27 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::VecPopBack(a) => write!(f, "VecPopBack({})", a),
             Bytecode::VecUnpack(a, n) => write!(f, "VecUnpack({}, {})", a, n),
             Bytecode::VecSwap(a) => write!(f, "VecSwap({})", a),
+            Bytecode::PackVariant(handle) => {
+                write!(f, "PackVariant({:?})", handle)
+            }
+            Bytecode::PackVariantGeneric(handle) => write!(f, "PackVariantGeneric({:?})", handle),
+            Bytecode::UnpackVariant(handle) => write!(f, "UnpackVariant({:?})", handle),
+            Bytecode::UnpackVariantGeneric(handle) => {
+                write!(f, "UnpackVariantGeneric({:?})", handle)
+            }
+            Bytecode::UnpackVariantImmRef(handle) => {
+                write!(f, "UnpackVariantImmRef({:?})", handle)
+            }
+            Bytecode::UnpackVariantGenericImmRef(handle) => {
+                write!(f, "UnpackVariantGenericImmRef({:?})", handle)
+            }
+            Bytecode::UnpackVariantMutRef(handle) => {
+                write!(f, "UnpackVariantMutRef({:?})", handle)
+            }
+            Bytecode::UnpackVariantGenericMutRef(handle) => {
+                write!(f, "UnpackVariantGenericMutRef({:?})", handle)
+            }
+            Bytecode::VariantSwitch(jt) => write!(f, "VariantSwitch({:?})", jt),
         }
     }
 }
@@ -1740,13 +1934,188 @@ impl ::std::fmt::Debug for Bytecode {
 impl Bytecode {
     /// Return true if this bytecode instruction always branches
     pub fn is_unconditional_branch(&self) -> bool {
-        matches!(self, Bytecode::Ret | Bytecode::Abort | Bytecode::Branch(_))
+        match self {
+            Bytecode::Ret | Bytecode::Abort | Bytecode::Branch(_) => true,
+            // NB: Since `VariantSwitch` is guaranteed to be exhaustive by the bytecode verifier,
+            // it is an unconditional branch.
+            Bytecode::VariantSwitch(_) => true,
+            Bytecode::Pop
+            | Bytecode::BrTrue(_)
+            | Bytecode::BrFalse(_)
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::CallGeneric(_)
+            | Bytecode::Pack(_)
+            | Bytecode::PackGeneric(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::UnpackGeneric(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::MutBorrowFieldGeneric(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::ImmBorrowFieldGeneric(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_, _)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_, _)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::PackVariantGeneric(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::UnpackVariantGeneric(_)
+            | Bytecode::UnpackVariantGenericImmRef(_)
+            | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::ExistsGenericDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveFromGenericDeprecated(_)
+            | Bytecode::MoveToDeprecated(_)
+            | Bytecode::MoveToGenericDeprecated(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::MutBorrowGlobalGenericDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalGenericDeprecated(_) => false,
+        }
     }
 
     /// Return true if the branching behavior of this bytecode instruction depends on a runtime
     /// value
     pub fn is_conditional_branch(&self) -> bool {
-        matches!(self, Bytecode::BrFalse(_) | Bytecode::BrTrue(_))
+        match self {
+            Bytecode::BrFalse(_) | Bytecode::BrTrue(_) => true,
+            // NB: since `VariantSwitch` is guaranteed to branch (since it is exhaustive), it is
+            // not conditional.
+            Bytecode::VariantSwitch(_) => false,
+            Bytecode::Pop
+            | Bytecode::Ret
+            | Bytecode::Branch(_)
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::CallGeneric(_)
+            | Bytecode::Pack(_)
+            | Bytecode::PackGeneric(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::UnpackGeneric(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::MutBorrowFieldGeneric(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::ImmBorrowFieldGeneric(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Abort
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_, _)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_, _)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::PackVariantGeneric(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::UnpackVariantGeneric(_)
+            | Bytecode::UnpackVariantGenericImmRef(_)
+            | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::ExistsGenericDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveFromGenericDeprecated(_)
+            | Bytecode::MoveToDeprecated(_)
+            | Bytecode::MoveToGenericDeprecated(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::MutBorrowGlobalGenericDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalGenericDeprecated(_) => false,
+        }
     }
 
     /// Returns true if this bytecode instruction is either a conditional or an unconditional branch
@@ -1756,17 +2125,115 @@ impl Bytecode {
 
     /// Returns the offset that this bytecode instruction branches to, if any.
     /// Note that return and abort are branch instructions, but have no offset.
-    pub fn offset(&self) -> Option<&CodeOffset> {
+    pub fn offsets(&self, jump_tables: &[VariantJumpTable]) -> Vec<CodeOffset> {
         match self {
             Bytecode::BrFalse(offset) | Bytecode::BrTrue(offset) | Bytecode::Branch(offset) => {
-                Some(offset)
+                vec![*offset]
             }
-            _ => None,
+            // NB: bounds checking has already been performed at this point.
+            Bytecode::VariantSwitch(jt_idx) => {
+                assert!(
+                    // The jump table index must be within the bounds of the jump tables. This is
+                    // checked in the bounds checker.
+                    (jt_idx.0 as usize) < jump_tables.len(),
+                    "Jump table index out of bounds"
+                );
+                let JumpTableInner::Full(offsets) = &jump_tables[jt_idx.0 as usize].jump_table;
+                offsets.clone()
+            }
+            // Separated out for clarity -- these are branch instructions, but have no offset so we
+            // don't return any offsets for them.
+            Bytecode::Ret | Bytecode::Abort => vec![],
+
+            Bytecode::Pop
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::CallGeneric(_)
+            | Bytecode::Pack(_)
+            | Bytecode::PackGeneric(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::UnpackGeneric(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::MutBorrowFieldGeneric(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::ImmBorrowFieldGeneric(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_, _)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_, _)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::PackVariantGeneric(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::UnpackVariantGeneric(_)
+            | Bytecode::UnpackVariantGenericImmRef(_)
+            | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::ExistsGenericDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveFromGenericDeprecated(_)
+            | Bytecode::MoveToDeprecated(_)
+            | Bytecode::MoveToGenericDeprecated(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::MutBorrowGlobalGenericDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalGenericDeprecated(_) => vec![],
         }
     }
 
     /// Return the successor offsets of this bytecode instruction.
-    pub fn get_successors(pc: CodeOffset, code: &[Bytecode]) -> Vec<CodeOffset> {
+    pub fn get_successors(
+        pc: CodeOffset,
+        code: &[Bytecode],
+        jump_tables: &[VariantJumpTable],
+    ) -> Vec<CodeOffset> {
         assert!(
             // The program counter must remain within the bounds of the code
             pc < u16::MAX && (pc as usize) < code.len(),
@@ -1776,9 +2243,7 @@ impl Bytecode {
         let bytecode = &code[pc as usize];
         let mut v = vec![];
 
-        if let Some(offset) = bytecode.offset() {
-            v.push(*offset);
-        }
+        v.extend(bytecode.offsets(jump_tables));
 
         let next_pc = pc + 1;
         if next_pc >= code.len() as CodeOffset {
@@ -1791,54 +2256,12 @@ impl Bytecode {
         }
 
         // always give successors in ascending order
-        if v.len() > 1 && v[0] > v[1] {
-            v.swap(0, 1);
-        }
+        // NB: the size of `v` is generally quite small (bounded by maximum # of variants allowed
+        // in a variant jump table), so a sort here is not a performance concern.
+        v.sort();
 
         v
     }
-}
-
-/// Contains the main function to execute and its dependencies.
-///
-/// A CompiledScript does not have definition tables because it can only have a `main(args)`.
-/// A CompiledScript defines the constant pools (string, address, signatures, etc.), the handle
-/// tables (external code references) and it has a `main` definition.
-#[derive(Clone, Default, Eq, PartialEq, Debug)]
-#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
-pub struct CompiledScript {
-    /// Version number found during deserialization
-    pub version: u32,
-    /// Handles to all modules referenced.
-    pub module_handles: Vec<ModuleHandle>,
-    /// Handles to external/imported types.
-    pub struct_handles: Vec<StructHandle>,
-    /// Handles to external/imported functions.
-    pub function_handles: Vec<FunctionHandle>,
-
-    /// Function instantiations.
-    pub function_instantiations: Vec<FunctionInstantiation>,
-
-    pub signatures: SignaturePool,
-
-    /// All identifiers used in this transaction.
-    pub identifiers: IdentifierPool,
-    /// All address identifiers used in this transaction.
-    pub address_identifiers: AddressIdentifierPool,
-    /// Constant pool. The constant values used in the transaction.
-    pub constant_pool: ConstantPool,
-
-    pub metadata: Vec<Metadata>,
-
-    pub code: CodeUnit,
-    pub type_parameters: Vec<AbilitySet>,
-
-    pub parameters: SignatureIndex,
-}
-
-impl CompiledScript {
-    /// Returns the index of `main` in case a script is converted to a module.
-    pub const MAIN_INDEX: FunctionDefinitionIndex = FunctionDefinitionIndex(0);
 }
 
 /// A `CompiledModule` defines the structure of a module which is the unit of published code.
@@ -1858,7 +2281,7 @@ pub struct CompiledModule {
     /// Handles to external dependency modules and self.
     pub module_handles: Vec<ModuleHandle>,
     /// Handles to external and internal types.
-    pub struct_handles: Vec<StructHandle>,
+    pub datatype_handles: Vec<DatatypeHandle>,
     /// Handles to external and internal functions.
     pub function_handles: Vec<FunctionHandle>,
     /// Handles to fields.
@@ -1885,65 +2308,19 @@ pub struct CompiledModule {
 
     pub metadata: Vec<Metadata>,
 
-    /// Types defined in this module.
+    /// Struc types defined in this module.
     pub struct_defs: Vec<StructDefinition>,
     /// Function defined in this module.
     pub function_defs: Vec<FunctionDefinition>,
-}
 
-// Need a custom implementation of Arbitrary because as of proptest-derive 0.1.1, the derivation
-// doesn't work for structs with more than 10 fields.
-#[cfg(any(test, feature = "fuzzing"))]
-impl Arbitrary for CompiledScript {
-    type Strategy = BoxedStrategy<Self>;
-    /// The size of the compiled script.
-    type Parameters = usize;
-
-    fn arbitrary_with(size: Self::Parameters) -> Self::Strategy {
-        (
-            (
-                vec(any::<ModuleHandle>(), 0..=size),
-                vec(any::<StructHandle>(), 0..=size),
-                vec(any::<FunctionHandle>(), 0..=size),
-            ),
-            vec(any_with::<Signature>(size), 0..=size),
-            (
-                vec(any::<Identifier>(), 0..=size),
-                vec(any::<AccountAddress>(), 0..=size),
-            ),
-            vec(any::<AbilitySet>(), 0..=size),
-            any::<SignatureIndex>(),
-            any::<CodeUnit>(),
-        )
-            .prop_map(
-                |(
-                    (module_handles, struct_handles, function_handles),
-                    signatures,
-                    (identifiers, address_identifiers),
-                    type_parameters,
-                    parameters,
-                    code,
-                )| {
-                    // TODO actual constant generation
-                    CompiledScript {
-                        version: file_format_common::VERSION_MAX,
-                        module_handles,
-                        struct_handles,
-                        function_handles,
-                        function_instantiations: vec![],
-                        signatures,
-                        identifiers,
-                        address_identifiers,
-                        constant_pool: vec![],
-                        metadata: vec![],
-                        type_parameters,
-                        parameters,
-                        code,
-                    }
-                },
-            )
-            .boxed()
-    }
+    /// Enum types defined in this module.
+    pub enum_defs: Vec<EnumDefinition>,
+    /// Enum instantiations.
+    pub enum_def_instantiations: Vec<EnumDefInstantiation>,
+    // Enum packs
+    pub variant_handles: Vec<VariantHandle>,
+    // Enum pack instantiations
+    pub variant_instantiation_handles: Vec<VariantInstantiationHandle>,
 }
 
 #[cfg(any(test, feature = "fuzzing"))]
@@ -1956,7 +2333,7 @@ impl Arbitrary for CompiledModule {
         (
             (
                 vec(any::<ModuleHandle>(), 0..=size),
-                vec(any::<StructHandle>(), 0..=size),
+                vec(any::<DatatypeHandle>(), 0..=size),
                 vec(any::<FunctionHandle>(), 0..=size),
             ),
             any::<ModuleHandleIndex>(),
@@ -1973,7 +2350,7 @@ impl Arbitrary for CompiledModule {
         )
             .prop_map(
                 |(
-                    (module_handles, struct_handles, function_handles),
+                    (module_handles, datatype_handles, function_handles),
                     self_module_handle_idx,
                     friend_decls,
                     signatures,
@@ -1984,7 +2361,7 @@ impl Arbitrary for CompiledModule {
                     CompiledModule {
                         version: file_format_common::VERSION_MAX,
                         module_handles,
-                        struct_handles,
+                        datatype_handles,
                         function_handles,
                         self_module_handle_idx,
                         field_handles: vec![],
@@ -1999,6 +2376,10 @@ impl Arbitrary for CompiledModule {
                         metadata: vec![],
                         struct_defs,
                         function_defs,
+                        enum_defs: vec![],
+                        enum_def_instantiations: vec![],
+                        variant_handles: vec![],
+                        variant_instantiation_handles: vec![],
                     }
                 },
             )
@@ -2016,10 +2397,12 @@ impl CompiledModule {
                 | IndexKind::FieldDefinition
                 | IndexKind::TypeParameter
                 | IndexKind::MemberCount
+                | IndexKind::VariantTag
+                | IndexKind::VariantJumpTable
         ));
         match kind {
             IndexKind::ModuleHandle => self.module_handles.len(),
-            IndexKind::StructHandle => self.struct_handles.len(),
+            IndexKind::DatatypeHandle => self.datatype_handles.len(),
             IndexKind::FunctionHandle => self.function_handles.len(),
             IndexKind::FieldHandle => self.field_handles.len(),
             IndexKind::FriendDeclaration => self.friend_decls.len(),
@@ -2032,12 +2415,315 @@ impl CompiledModule {
             IndexKind::Identifier => self.identifiers.len(),
             IndexKind::AddressIdentifier => self.address_identifiers.len(),
             IndexKind::ConstantPool => self.constant_pool.len(),
+            IndexKind::EnumDefinition => self.enum_defs.len(),
+            IndexKind::EnumDefInstantiation => self.enum_def_instantiations.len(),
+            IndexKind::VariantHandle => self.variant_handles.len(),
+            IndexKind::VariantInstantiationHandle => self.variant_instantiation_handles.len(),
             // XXX these two don't seem to belong here
-            other @ IndexKind::LocalPool
-            | other @ IndexKind::CodeDefinition
-            | other @ IndexKind::FieldDefinition
-            | other @ IndexKind::TypeParameter
-            | other @ IndexKind::MemberCount => unreachable!("invalid kind for count: {:?}", other),
+            other @ (IndexKind::LocalPool
+            | IndexKind::CodeDefinition
+            | IndexKind::FieldDefinition
+            | IndexKind::TypeParameter
+            | IndexKind::VariantTag
+            | IndexKind::VariantJumpTable
+            | IndexKind::MemberCount) => unreachable!("invalid kind for count: {:?}", other),
+        }
+    }
+
+    pub fn self_handle_idx(&self) -> ModuleHandleIndex {
+        self.self_module_handle_idx
+    }
+
+    /// Returns the `ModuleHandle` for `self`.
+    pub fn self_handle(&self) -> &ModuleHandle {
+        let handle = self.module_handle_at(self.self_handle_idx());
+        debug_assert!(handle.address.into_index() < self.address_identifiers.len()); // invariant
+        debug_assert!(handle.name.into_index() < self.identifiers.len()); // invariant
+        handle
+    }
+
+    /// Returns the name of the module.
+    pub fn name(&self) -> &IdentStr {
+        self.identifier_at(self.self_handle().name)
+    }
+
+    /// Returns the address of the module.
+    pub fn address(&self) -> &AccountAddress {
+        self.address_identifier_at(self.self_handle().address)
+    }
+
+    pub fn struct_name(&self, idx: StructDefinitionIndex) -> &IdentStr {
+        let struct_def = self.struct_def_at(idx);
+        let handle = self.datatype_handle_at(struct_def.struct_handle);
+        self.identifier_at(handle.name)
+    }
+
+    pub fn enum_name(&self, idx: EnumDefinitionIndex) -> &IdentStr {
+        let enum_def = self.enum_def_at(idx);
+        let handle = self.datatype_handle_at(enum_def.enum_handle);
+        self.identifier_at(handle.name)
+    }
+
+    pub fn module_handle_at(&self, idx: ModuleHandleIndex) -> &ModuleHandle {
+        let handle = &self.module_handles[idx.into_index()];
+        debug_assert!(handle.address.into_index() < self.address_identifiers.len()); // invariant
+        debug_assert!(handle.name.into_index() < self.identifiers.len()); // invariant
+        handle
+    }
+
+    pub fn datatype_handle_at(&self, idx: DatatypeHandleIndex) -> &DatatypeHandle {
+        let handle = &self.datatype_handles[idx.into_index()];
+        debug_assert!(handle.module.into_index() < self.module_handles.len()); // invariant
+        handle
+    }
+
+    pub fn function_handle_at(&self, idx: FunctionHandleIndex) -> &FunctionHandle {
+        let handle = &self.function_handles[idx.into_index()];
+        debug_assert!(handle.parameters.into_index() < self.signatures.len()); // invariant
+        debug_assert!(handle.return_.into_index() < self.signatures.len()); // invariant
+        handle
+    }
+
+    pub fn field_handle_at(&self, idx: FieldHandleIndex) -> &FieldHandle {
+        let handle = &self.field_handles[idx.into_index()];
+        debug_assert!(handle.owner.into_index() < self.struct_defs.len()); // invariant
+        handle
+    }
+
+    pub fn variant_handle_at(&self, idx: VariantHandleIndex) -> &VariantHandle {
+        let handle = &self.variant_handles[idx.into_index()];
+        debug_assert!(handle.enum_def.into_index() < self.enum_defs.len());
+        handle
+    }
+
+    pub fn variant_instantiation_handle_at(
+        &self,
+        idx: VariantInstantiationHandleIndex,
+    ) -> &VariantInstantiationHandle {
+        let handle = &self.variant_instantiation_handles[idx.into_index()];
+        debug_assert!(handle.enum_def.into_index() < self.enum_def_instantiations.len()); // invariant
+        handle
+    }
+
+    pub fn struct_instantiation_at(
+        &self,
+        idx: StructDefInstantiationIndex,
+    ) -> &StructDefInstantiation {
+        &self.struct_def_instantiations[idx.into_index()]
+    }
+
+    pub fn enum_instantiation_at(&self, idx: EnumDefInstantiationIndex) -> &EnumDefInstantiation {
+        &self.enum_def_instantiations[idx.into_index()]
+    }
+
+    pub fn function_instantiation_at(
+        &self,
+        idx: FunctionInstantiationIndex,
+    ) -> &FunctionInstantiation {
+        &self.function_instantiations[idx.into_index()]
+    }
+
+    pub fn field_instantiation_at(&self, idx: FieldInstantiationIndex) -> &FieldInstantiation {
+        &self.field_instantiations[idx.into_index()]
+    }
+
+    pub fn signature_at(&self, idx: SignatureIndex) -> &Signature {
+        &self.signatures[idx.into_index()]
+    }
+
+    pub fn identifier_at(&self, idx: IdentifierIndex) -> &IdentStr {
+        &self.identifiers[idx.into_index()]
+    }
+
+    pub fn address_identifier_at(&self, idx: AddressIdentifierIndex) -> &AccountAddress {
+        &self.address_identifiers[idx.into_index()]
+    }
+
+    pub fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
+        &self.constant_pool[idx.into_index()]
+    }
+
+    pub fn struct_def_at(&self, idx: StructDefinitionIndex) -> &StructDefinition {
+        &self.struct_defs[idx.into_index()]
+    }
+
+    pub fn enum_def_at(&self, idx: EnumDefinitionIndex) -> &EnumDefinition {
+        &self.enum_defs[idx.into_index()]
+    }
+
+    pub fn variant_def_at(
+        &self,
+        enum_idx: EnumDefinitionIndex,
+        variant_tag: VariantTag,
+    ) -> &VariantDefinition {
+        // invariant
+        debug_assert!(self.enum_def_at(enum_idx).variants.len() > variant_tag as usize);
+        &self.enum_def_at(enum_idx).variants[variant_tag as usize]
+    }
+
+    pub fn function_def_at(&self, idx: FunctionDefinitionIndex) -> &FunctionDefinition {
+        let result = &self.function_defs[idx.into_index()];
+        debug_assert!(result.function.into_index() < self.function_handles().len()); // invariant
+        debug_assert!(match &result.code {
+            Some(code) => code.locals.into_index() < self.signatures().len(),
+            None => true,
+        }); // invariant
+        result
+    }
+
+    pub fn module_handles(&self) -> &[ModuleHandle] {
+        &self.module_handles
+    }
+
+    pub fn datatype_handles(&self) -> &[DatatypeHandle] {
+        &self.datatype_handles
+    }
+
+    pub fn function_handles(&self) -> &[FunctionHandle] {
+        &self.function_handles
+    }
+
+    pub fn field_handles(&self) -> &[FieldHandle] {
+        &self.field_handles
+    }
+
+    pub fn struct_instantiations(&self) -> &[StructDefInstantiation] {
+        &self.struct_def_instantiations
+    }
+
+    pub fn enum_instantiations(&self) -> &[EnumDefInstantiation] {
+        &self.enum_def_instantiations
+    }
+
+    pub fn function_instantiations(&self) -> &[FunctionInstantiation] {
+        &self.function_instantiations
+    }
+
+    pub fn field_instantiations(&self) -> &[FieldInstantiation] {
+        &self.field_instantiations
+    }
+
+    pub fn signatures(&self) -> &[Signature] {
+        &self.signatures
+    }
+
+    pub fn constant_pool(&self) -> &[Constant] {
+        &self.constant_pool
+    }
+
+    pub fn identifiers(&self) -> &[Identifier] {
+        &self.identifiers
+    }
+
+    pub fn address_identifiers(&self) -> &[AccountAddress] {
+        &self.address_identifiers
+    }
+
+    pub fn struct_defs(&self) -> &[StructDefinition] {
+        &self.struct_defs
+    }
+
+    pub fn enum_defs(&self) -> &[EnumDefinition] {
+        &self.enum_defs
+    }
+
+    pub fn variant_handles(&self) -> &[VariantHandle] {
+        &self.variant_handles
+    }
+
+    pub fn variant_instantiation_handles(&self) -> &[VariantInstantiationHandle] {
+        &self.variant_instantiation_handles
+    }
+
+    pub fn function_defs(&self) -> &[FunctionDefinition] {
+        &self.function_defs
+    }
+
+    pub fn friend_decls(&self) -> &[ModuleHandle] {
+        &self.friend_decls
+    }
+
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+
+    pub fn immediate_dependencies(&self) -> Vec<ModuleId> {
+        let self_handle = self.self_handle();
+        self.module_handles()
+            .iter()
+            .filter(|&handle| handle != self_handle)
+            .map(|handle| self.module_id_for_handle(handle))
+            .collect()
+    }
+
+    pub fn immediate_friends(&self) -> Vec<ModuleId> {
+        self.friend_decls()
+            .iter()
+            .map(|handle| self.module_id_for_handle(handle))
+            .collect()
+    }
+
+    pub fn find_struct_def(&self, idx: DatatypeHandleIndex) -> Option<&StructDefinition> {
+        self.struct_defs().iter().find(|d| d.struct_handle == idx)
+    }
+
+    pub fn find_enum_def(&self, idx: DatatypeHandleIndex) -> Option<&EnumDefinition> {
+        self.enum_defs().iter().find(|d| d.enum_handle == idx)
+    }
+
+    pub fn find_struct_def_by_name(&self, name: &IdentStr) -> Option<&StructDefinition> {
+        self.struct_defs().iter().find(|def| {
+            let handle = self.datatype_handle_at(def.struct_handle);
+            name == self.identifier_at(handle.name)
+        })
+    }
+
+    pub fn find_enum_def_by_name(&self, name: &IdentStr) -> Option<&EnumDefinition> {
+        self.enum_defs().iter().find(|def| {
+            let handle = self.datatype_handle_at(def.enum_handle);
+            name == self.identifier_at(handle.name)
+        })
+    }
+
+    // Return the `AbilitySet` of a `SignatureToken` given a context.
+    // A `TypeParameter` has the abilities of its `constraints`.
+    // `StructInstantiation` abilities are predicated on the particular instantiation
+    pub fn abilities(
+        &self,
+        ty: &SignatureToken,
+        constraints: &[AbilitySet],
+    ) -> PartialVMResult<AbilitySet> {
+        use SignatureToken::*;
+
+        match ty {
+            Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => Ok(AbilitySet::PRIMITIVES),
+
+            Reference(_) | MutableReference(_) => Ok(AbilitySet::REFERENCES),
+            Signer => Ok(AbilitySet::SIGNER),
+            TypeParameter(idx) => Ok(constraints[*idx as usize]),
+            Vector(ty) => AbilitySet::polymorphic_abilities(
+                AbilitySet::VECTOR,
+                vec![false],
+                vec![self.abilities(ty, constraints)?],
+            ),
+            Datatype(idx) => {
+                let sh = self.datatype_handle_at(*idx);
+                Ok(sh.abilities)
+            }
+            DatatypeInstantiation(inst) => {
+                let (idx, type_args) = &**inst;
+                let sh = self.datatype_handle_at(*idx);
+                let declared_abilities = sh.abilities;
+                let type_arguments = type_args
+                    .iter()
+                    .map(|arg| self.abilities(arg, constraints))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                AbilitySet::polymorphic_abilities(
+                    declared_abilities,
+                    sh.type_parameters.iter().map(|param| param.is_phantom),
+                    type_arguments,
+                )
+            }
         }
     }
 
@@ -2070,7 +2756,7 @@ pub fn empty_module() -> CompiledModule {
         metadata: vec![],
         function_defs: vec![],
         struct_defs: vec![],
-        struct_handles: vec![],
+        datatype_handles: vec![],
         function_handles: vec![],
         field_handles: vec![],
         friend_decls: vec![],
@@ -2078,6 +2764,10 @@ pub fn empty_module() -> CompiledModule {
         function_instantiations: vec![],
         field_instantiations: vec![],
         signatures: vec![Signature(vec![])],
+        enum_defs: vec![],
+        enum_def_instantiations: vec![],
+        variant_handles: vec![],
+        variant_instantiation_handles: vec![],
     }
 }
 
@@ -2109,10 +2799,11 @@ pub fn basic_test_module() -> CompiledModule {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
-    m.struct_handles.push(StructHandle {
+    m.datatype_handles.push(DatatypeHandle {
         module: ModuleHandleIndex(0),
         name: IdentifierIndex(m.identifiers.len() as u16),
         abilities: AbilitySet::EMPTY,
@@ -2122,7 +2813,7 @@ pub fn basic_test_module() -> CompiledModule {
         .push(Identifier::new("Bar".to_string()).unwrap());
 
     m.struct_defs.push(StructDefinition {
-        struct_handle: StructHandleIndex(0),
+        struct_handle: DatatypeHandleIndex(0),
         field_information: StructFieldInformation::Declared(vec![FieldDefinition {
             name: IdentifierIndex(m.identifiers.len() as u16),
             signature: TypeSignature(SignatureToken::U64),
@@ -2130,36 +2821,29 @@ pub fn basic_test_module() -> CompiledModule {
     });
     m.identifiers
         .push(Identifier::new("x".to_string()).unwrap());
-
     m
 }
 
-/// Return a simple script that contains only a return in the main()
-pub fn empty_script() -> CompiledScript {
-    CompiledScript {
-        version: file_format_common::VERSION_MAX,
-        module_handles: vec![],
-        struct_handles: vec![],
-        function_handles: vec![],
-
-        function_instantiations: vec![],
-
-        signatures: vec![Signature(vec![])],
-
-        identifiers: vec![],
-        address_identifiers: vec![],
-        constant_pool: vec![],
-        metadata: vec![],
-
+pub fn basic_test_module_with_enum() -> CompiledModule {
+    let mut m = basic_test_module();
+    m.datatype_handles.push(DatatypeHandle {
+        module: ModuleHandleIndex(0),
+        name: IdentifierIndex(m.identifiers.len() as u16),
+        abilities: AbilitySet::EMPTY,
         type_parameters: vec![],
-        parameters: SignatureIndex(0),
-        code: CodeUnit {
-            locals: SignatureIndex(0),
-            code: vec![Bytecode::Ret],
-        },
-    }
-}
-
-pub fn basic_test_script() -> CompiledScript {
-    empty_script()
+    });
+    m.identifiers
+        .push(Identifier::new("enum".to_string()).unwrap());
+    m.enum_defs.push(EnumDefinition {
+        enum_handle: DatatypeHandleIndex::new(1),
+        variants: vec![VariantDefinition {
+            variant_name: IdentifierIndex::new(0),
+            fields: vec![],
+        }],
+    });
+    m.variant_handles.push(VariantHandle {
+        enum_def: EnumDefinitionIndex::new(0),
+        variant: 0,
+    });
+    m
 }

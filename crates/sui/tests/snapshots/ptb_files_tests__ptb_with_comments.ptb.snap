@@ -1,0 +1,20 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭────────────────────────────────────╮
+│ PTB Preview                        │
+├──────────────────┬─────────────────┤
+│ command          │ values          │
+├──────────────────┼─────────────────┤
+│ split-coins      │ @0x5 [1000]     │
+│ assign           │ result          │
+│ transfer-objects │ [result.0] @0x6 │
+╰──────────────────┴─────────────────╯
+ === BUILT PTB === 
+Input 0: SharedObject(mutable: true)
+Input 1: Pure([232, 3, 0, 0, 0, 0, 0, 0])
+Input 2: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6])
+Command 0: SplitCoins(Input(0)Input(1))
+Command 1: TransferObjects([NestedResult(0,0)],Input(2))

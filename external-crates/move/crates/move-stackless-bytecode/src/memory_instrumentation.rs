@@ -6,7 +6,6 @@ use std::collections::BTreeSet;
 
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
-    ast::ConditionKind,
     exp_generator::ExpGenerator,
     model::{FunctionEnv, StructEnv},
     ty::{Type, BOOL_TYPE},
@@ -40,7 +39,7 @@ impl FunctionTargetProcessor for MemoryInstrumentationProcessor {
         mut data: FunctionData,
         _scc_opt: Option<&[FunctionEnv]>,
     ) -> FunctionData {
-        if func_env.is_native_or_intrinsic() {
+        if func_env.is_native() {
             return data;
         }
         let borrow_annotation = data
@@ -92,7 +91,7 @@ impl<'a> Instrumenter<'a> {
         use Type::*;
         let env = self.builder.global_env();
         match ty.skip_reference() {
-            Struct(mid, sid, inst) => {
+            Datatype(mid, sid, inst) => {
                 self.is_pack_ref_struct(&env.get_struct_qid(mid.qualified(*sid)))
                     || inst.iter().any(|t| self.is_pack_ref_ty(t))
             }
@@ -111,9 +110,8 @@ impl<'a> Instrumenter<'a> {
 
     /// Determines whether the struct needs a pack ref.
     fn is_pack_ref_struct(&self, struct_env: &StructEnv<'_>) -> bool {
-        struct_env.get_spec().any_kind(ConditionKind::StructInvariant)
         // If any of the fields has it, it inherits to the struct.
-        ||  struct_env
+        struct_env
             .get_fields()
             .any(|fe| self.is_pack_ref_ty(&fe.get_type()))
     }

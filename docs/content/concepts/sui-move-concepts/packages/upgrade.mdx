@@ -1,13 +1,11 @@
 ---
-title: Package Upgrades
+title: Upgrading Packages
 description: Sui provides a method of upgrading your packages while still retaining their immutable properties.
 ---
 
-Sui smart contracts are represented by immutable package objects consisting of a collection of Move modules. Because the packages are immutable, transactions can safely access smart contracts without full consensus (fast-path transactions). If someone could change these packages, they would become [shared objects](../../../concepts/object-ownership/shared.mdx#shared), which would require full consensus before completing a transaction. 
+Sui smart contracts are immutable package objects consisting of a collection of Move modules. Because the packages are immutable, transactions can safely access smart contracts without full consensus (fastpath transactions). If someone could change these packages, they would become [shared objects](/concepts/object-ownership/shared.mdx#shared), which would require full consensus before completing a transaction.
 
-The inability to change package objects, however, becomes a problem when considering the iterative nature of code development. Builders require the ability to update their code and pull changes from other developers while still being able to reap the benefits of fast-path transactions. Fortunately, the Sui network provides a method of upgrading your packages while still retaining their immutable properties.   
-
-This topic examines how to upgrade packages using the Sui Client CLI. Move developers can reference the [package module documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/package.md) for options on working with package upgrades on a code level.  
+The inability to change package objects, however, becomes a problem when considering the iterative nature of code development. Builders require the ability to update their code and pull changes from other developers while still being able to reap the benefits of fastpath transactions. Fortunately, the Sui network provides a method of upgrading your packages while still retaining their immutable properties.
 
 ## Upgrade considerations
 
@@ -19,20 +17,20 @@ As alluded to previously, all packages on the Sui network are immutable. Because
 
 For example, you might define an `increment` function in your original package:
 
-```rust
-public entry fun increment(c: &mut Counter) {
+```move
+public fun increment(c: &mut Counter) {
     c.value = c.value + 1;
 }
 ```
 
 Then, your package upgrade might add an emit event to the `increment` function:
 
-```rust
+```move
 struct Progress has copy, drop {
     reached: u64
 }
 
-public entry fun increment(c: &mut Counter) {
+public fun increment(c: &mut Counter) {
     c.value = c.value + 1;
 
     if (c.value % 100 == 0) {
@@ -41,11 +39,11 @@ public entry fun increment(c: &mut Counter) {
 }
 ```
 
-If there is a mix of callers for both the old and upgraded `increment` function, then the process fails because the old function is not aware of the `Progress` event. 
+If there is a mix of callers for both the old and upgraded `increment` function, then the process fails because the old function is not aware of the `Progress` event.
 
 Similar to mismatched function definitions, you might also run into issues maintaining dynamic fields that need to remain in sync with a struct's original fields. To address these issues, you can introduce a new type as part of the upgrade and port users over to it, breaking backwards compatibility. For example, if you're using owned objects to demonstrate proof, like proof of ownership, and you develop a new version of your package to address problematic code, you can introduce a new type in the upgraded package. You can then add a function to your package that trades old objects for new ones. Because your logic only recognizes objects with the new type, you effectively force users to update.
 
-Another example of having users update to the latest package is when you have a bookkeeping shared object in your package that you discover has flawed logic so is not functioning as expected. As in the previous example, you want users to use only the object defined in the upgraded package with the correct logic, so you add a new type and migration function to your package upgrade. This process requires a couple of transactions, one for the upgrade and another that you call from the upgraded package to set up the new shared object that replaces the existing one. To protect the setup function, you would need to create an `AdminCap` object or similar as part of your package to make sure you, as the package owner, are the only authorized initiator of that function. Perhaps even more useful, you might include a flag in the shared object that allows you, as the package owner, to toggle the enabled state of that shared object. You can add a check for the enabled state to prevent access to that object from the on-chain public while you perform the migration. Of course, you would probably create this flag only if you expected to perform this migration at some point in the future, not because you're intentionally developing objects with flawed logic. 
+Another example of having users update to the latest package is when you have a bookkeeping shared object in your package that you discover has flawed logic so is not functioning as expected. As in the previous example, you want users to use only the object defined in the upgraded package with the correct logic, so you add a new type and migration function to your package upgrade. This process requires a couple of transactions, one for the upgrade and another that you call from the upgraded package to set up the new shared object that replaces the existing one. To protect the setup function, you would need to create an `AdminCap` object or similar as part of your package to make sure you, as the package owner, are the only authorized initiator of that function. Perhaps even more useful, you might include a flag in the shared object that allows you, as the package owner, to toggle the enabled state of that shared object. You can add a check for the enabled state to prevent access to that object from the on-chain public while you perform the migration. Of course, you would probably create this flag only if you expected to perform this migration at some point in the future, not because you're intentionally developing objects with flawed logic.
 
 ### Versioned shared objects
 
@@ -53,7 +51,7 @@ When you create packages that involve shared objects, you need to think about up
 
 Considering the earlier `counter` example, which might have started life as follows:
 
-```rust
+```move
 module example::counter {
     use sui::object::{Self, UID};
     use sui::transfer;
@@ -71,7 +69,7 @@ module example::counter {
         })
     }
 
-    public entry fun increment(c: &mut Counter) {
+    public fun increment(c: &mut Counter) {
         c.value = c.value + 1;
     }
 }
@@ -83,16 +81,16 @@ To ensure that upgrades to this package can limit access of the shared object to
 2. Track the current version of the shared object, `Counter`, in a new `version` field.
 3. Introduce an `AdminCap` to protect privileged calls, and associate the `Counter` with its `AdminCap` with a new field (you might already have a similar type for shared object administration, in which case you can re-use that). This cap is used to protect calls to migrate the shared object from version to version.
 4. Guard the entry of all functions that access the shared object with a check that its `version` matches the package `VERSION`.
-  
+
 An upgrade-aware `counter` module that incorporates all these ideas looks as follows:
 
-```rust
+```move
 module example::counter {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    // 1. Track the current version of the module 
+    // 1. Track the current version of the module
     const VERSION: u64 = 1;
 
     struct Counter has key {
@@ -129,8 +127,8 @@ module example::counter {
         transfer::transfer(admin, tx_context::sender(ctx));
     }
 
-    public entry fun increment(c: &mut Counter) {
-        // 4. Guard the entry of all functions that access the shared object 
+    public fun increment(c: &mut Counter) {
+        // 4. Guard the entry of all functions that access the shared object
         //    with a version check.
         assert!(c.version == VERSION, EWrongVersion);
         c.value = c.value + 1;
@@ -145,7 +143,7 @@ To upgrade a module using this pattern requires making two extra changes, on top
 
 The following module is an upgraded `counter` that emits `Progress` events as originally discussed, but also provides tools for an admin (`AdminCap` holder) to prevent accesses to the counter from older package versions:
 
-```rust
+```move
 module example::counter {
     use sui::event;
     use sui::object::{Self, ID, UID};
@@ -194,7 +192,7 @@ module example::counter {
         transfer::transfer(admin, tx_context::sender(ctx));
     }
 
-    public entry fun increment(c: &mut Counter) {
+    public fun increment(c: &mut Counter) {
         assert!(c.version == VERSION, EWrongVersion);
         c.value = c.value + 1;
 
@@ -214,9 +212,9 @@ module example::counter {
 
 Upgrading to this version of the package requires performing the package upgrade, and calling the `migrate` function in a follow-up transaction.  Note that the `migrate` function:
 
-* Is an `entry` function and **not `public`**.  This allows it to be entirely changed (including changing its signature or removing it entirely) in later upgrades.
-* Accepts an `AdminCap` and checks that its ID matches the ID of the counter being migrated, making it a privileged operation.
-* Includes a sanity check that the version of the module is actually an upgrade for the object. This helps catch errors such as failing to bump the module version before upgrading.
+- Is an `entry` function and **not `public`**.  This allows it to be entirely changed (including changing its signature or removing it entirely) in later upgrades.
+- Accepts an `AdminCap` and checks that its ID matches the ID of the counter being migrated, making it a privileged operation.
+- Includes a sanity check that the version of the module is actually an upgrade for the object. This helps catch errors such as failing to bump the module version before upgrading.
 
 After a successful upgrade, calls to `increment` on the previous version of the package aborts on the version check, while calls on the later version should succeed.
 
@@ -224,38 +222,45 @@ After a successful upgrade, calls to `increment` on the previous version of the 
 
 This pattern forms the basis for upgradeable packages involving shared objects, but you can extend it in a number of ways, depending on your package's needs:
 
-* The version constraints can be made more expressive:
-  * Rather than using a single `u64`, versions could be specified as a `String`, or a pair of upper and lower bounds.
-  * You can control access to specific functions or sets of functions by adding and removing marker types as dynamic fields on the shared object.
-* The `migrate` function could be made more sophisticated (modifying other fields in the shared object, adding/removing dynamic fields, migrating multiple shared objects simultaneously).
-* You can implement large migrations that need to run over multiple transactions in a three phase set-up:
-  * Disable general access to the shared object by setting its version to a sentinel value (e.g. `U64_MAX`), using an `AdminCap`-guarded call.
-  * Run the migration over the course of multiple transactions (e.g. if a large volume of objects need to be moved, it is best to do this in batches, to avoid hitting transaction limits).
-  * Set the version of the shared object back to a usable value.
+- The version constraints can be made more expressive:
+  - Rather than using a single `u64`, versions could be specified as a `String`, or a pair of upper and lower bounds.
+  - You can control access to specific functions or sets of functions by adding and removing marker types as dynamic fields on the shared object.
+- The `migrate` function could be made more sophisticated (modifying other fields in the shared object, adding/removing dynamic fields, migrating multiple shared objects simultaneously).
+- You can implement large migrations that need to run over multiple transactions in a three phase set-up:
+  - Disable general access to the shared object by setting its version to a sentinel value (e.g. `U64_MAX`), using an `AdminCap`-guarded call.
+  - Run the migration over the course of multiple transactions (e.g. if a large volume of objects need to be moved, it is best to do this in batches, to avoid hitting transaction limits).
+  - Set the version of the shared object back to a usable value.
 
-## Requirements
+## Upgrade requirements
 
 To upgrade a package, your package must satisfy the following requirements:
-* You must have an `UpgradeTicket` for the package you want to upgrade. The Sui network issues `UpgradeCap`s when you publish a package, then you can issue `UpgradeTicket`s as the owner of that `UpgradeCap`. The Sui Client CLI handles this requirement automatically.
-* Your changes must be layout-compatible with the previous version. 
-    * Existing `public` function signatures and struct layouts must remain the same.
-    * You can add new structs and functions.
-    * You can remove generic type constraints from existing functions (public or otherwise).
-    * You can change function implementations.
-    * You can change non-`public` function signatures, including `friend` and `entry` function signatures.
+- You must have an `UpgradeTicket` for the package you want to upgrade. The Sui network issues `UpgradeCap`s when you publish a package, then you can issue `UpgradeTicket`s as the owner of that `UpgradeCap`. The Sui Client CLI handles this requirement automatically.
+- Your changes must be layout-compatible with the previous version.
+    - Existing `public` function signatures must remain the same.
+    - Existing struct layouts (including struct abilities) must remain the same.
+    - You can add new structs and functions.
+    - You can remove generic type constraints from existing functions (public or otherwise).
+    - You can change function implementations.
+    - You can change non-`public` function signatures, including `friend` and `entry` function signatures.
 
-**Note:** If you have a package with a dependency, and that dependency is upgraded, your package does not automatically depend on the newer version. You must explicitly upgrade your own package to point to the new dependency.
+:::info
+
+If you have a package with a dependency, and that dependency is upgraded, your package does not automatically depend on the newer version. You must explicitly upgrade your own package to point to the new dependency.
+
+:::
 
 ## Upgrading
 
 Use the `sui client upgrade` command to upgrade packages that meet the previous requirements, providing values for the following flags:
 
-* `--gas-budget`: The maximum number of gas units that can be expended before the network cancels the transaction.
-* `--cap`: The ID of the `UpgradeCap`. You receive this ID as a return from the publish command.
+{@include: ../../../snippets/info-gas-budget.mdx}
 
-Developers upgrading packages using Move code have access to types and functions to define custom upgrade policies. For example, a Move developer might want to disallow upgrading a package, regardless of the current package owner. The [`make_immutable` function](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/package.md#0x2_package_make_immutable) is available to them to create this behavior. More advanced policies using available types like `UpgradeTicket` and `Upgrade Receipt` are also possible. For an example, see this [custom upgrade policy](https://github.com/MystenLabs/sui/issues/2045#:~:text=Implement%20a%20custom%20upgrade%20policy) on GitHub.
+- `--gas-budget`: The maximum number of gas units that can be expended before the network cancels the transaction.
+- `--cap`: The ID of the `UpgradeCap`. You receive this ID as a return from the publish command.
 
-When you use the Sui Client CLI, the `upgrade` command handles generating the upgrade digest, authorizing the upgrade with the `UpgradeCap` to get an `UpgradeTicket`, and updating the `UpgradeCap` with the `UpgradeReceipt` after a successful upgrade. To learn more about these processes, see the Move documentation for the [package module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/package.md). 
+Developers upgrading packages using Move code have access to types and functions to define custom upgrade policies. For example, a Move developer might want to disallow upgrading a package, regardless of the current package owner. The [`make_immutable` function](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/package.md#0x2_package_make_immutable) is available to them to create this behavior. More advanced policies using available types like `UpgradeTicket` and `Upgrade Receipt` are also possible. For an example, see this [custom upgrade policy](https://github.com/MystenLabs/sui/issues/2045#:~:text=Implement%20a%20custom%20upgrade%20policy) on GitHub.
+
+When you use the Sui Client CLI, the `upgrade` command handles generating the upgrade digest, authorizing the upgrade with the `UpgradeCap` to get an `UpgradeTicket`, and updating the `UpgradeCap` with the `UpgradeReceipt` after a successful upgrade. To learn more about these processes, see the Move documentation for the [package module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/package.md).
 
 ## Example
 
@@ -294,7 +299,7 @@ Commands: [
 ]
 
 Sender: <PUBLISHER-ID>
-Gas Payment: Object ID:, version: 0x6, digest: HLAcq3SFPZm4xvcPryXk5MjA718xGVnTYCdtWbFsaJpe 
+Gas Payment: Object ID:, version: 0x6, digest: HLAcq3SFPZm4xvcPryXk5MjA718xGVnTYCdtWbFsaJpe
 Gas Owner: <PUBLISHER-ID>
 Gas Price: 1
 Gas Budget: <GAS-BUDGET-AMOUNT>
@@ -368,11 +373,26 @@ Array [
 ]
 ```
 
-The result includes an **Object changes** section with two pieces of information you need for upgrading, an `UpgradeCap` ID and your package ID. 
+The result includes an **Object changes** section with two pieces of information you need for upgrading, an `UpgradeCap` ID and your package ID.
 
 You can identify the different objects using the `Object.objectType` value in the response. The `UpgradeCap` entry has a value of `String("0x2::package::UpgradeCap")` and the `objectType` for the package reads `String("<PACKAGE-ID>::sui_package::<MODULE-NAME>")`
 
-To make sure your other packages can use this package as a dependency, you must update the manifest (Move.toml file) for your package to include this information. 
+To make sure your other packages can use this package as a dependency, you must update the `Move.toml` manifest file for your package to include this information.
+
+<Tabs>
+
+<TabItem value="automated-address-management" label="Automated Addresses">
+
+Add an entry for the package in the `[addresses]` section that points to the value of the on-chain ID:
+
+```toml
+[addresses]
+sui_package = "<ORIGINAL-PACKAGE-ID>"
+```
+
+</TabItem>
+
+<TabItem value="manual-address-management" label="Manual Addresses">
 
 Update the alias address and add a new `published-at` entry in the `[package]` section, both pointing to the value of the on-chain ID:
 
@@ -386,9 +406,29 @@ published-at = "<ORIGINAL-PACKAGE-ID>"
 sui_package = "<ORIGINAL-PACKAGE-ID>"
 ```
 
-The `published-at` value allows the Move compiler to verify dependencies against on-chain versions of those packages.
+</TabItem>
 
-After a while, you decide to upgrade your `sui_package` to include some requested features. Before running the `upgrade` command, you need to edit the manifest again. In the `[addresses]` section, you update the `sui_package` address value to `0x0` again so the validator issues a new address for the upgrade package. You can leave the `published-at` value the same, because it is only read by the toolchain when publishing a dependent package. The saved manifest now resembles the following:
+</Tabs>
+
+
+After a while, you decide to upgrade your `sui_package` to include some requested features. Before running the `upgrade` command, you need to edit the manifest again.
+
+<Tabs>
+
+<TabItem value="automated-address-management" label="Automated Addresses">
+
+In the `[addresses]` section, you update the `sui_package` address value to `0x0` again so the validator issues a new address for the upgrade package.
+
+```toml
+[addresses]
+sui_package = "0x0"
+```
+
+</TabItem>
+
+<TabItem value="manual-address-management" label="Manual Addresses">
+
+In the `[addresses]` section, you update the `sui_package` address value to `0x0` again so the validator issues a new address for the upgrade package. You can leave the `published-at` value the same, because it is only read by the toolchain when publishing a dependent package. The saved manifest now resembles the following:
 
 ```toml
 [package]
@@ -398,7 +438,12 @@ published-at = "<ORIGINAL-PACKAGE-ID>"
 
 [addresses]
 sui_package = "0x0"
-```    
+```
+
+</TabItem>
+
+</Tabs>
+
 
 With the new manifest and code in place, it's time to use the `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` ID (the `<UPGRADE-CAP-ID>` value from the example) to the `--upgrade-capability` flag.
 
@@ -426,7 +471,7 @@ Commands: [
 ]
 
 Sender: <PUBLISHER-ID>
-Gas Payment: Object ID: <GAS-COIN-ID>, version: 0x9, digest: 84ZKQcZZLTCmyAoRp9QhDrxxZ7nzGtdoBw18UbNm26ad 
+Gas Payment: Object ID: <GAS-COIN-ID>, version: 0x9, digest: 84ZKQcZZLTCmyAoRp9QhDrxxZ7nzGtdoBw18UbNm26ad
 Gas Owner: <PUBLISHER-ID>
 Gas Price: 1
 Gas Budget: <GAS-BUDGET-AMOUNT>
@@ -491,10 +536,26 @@ Array [
 
 ```
 
-The result provides a new ID for the upgraded package. As was the case before the upgrade, you need to include that information in your manifest so any of your other packages that depend on your `sui_package` know where to find the on-chain bytecode for verification. Edit your manifest once again to provide the upgraded package ID for the `published-at` value, and return the original `sui_package` ID value in the `[addresses]` section:
+The result provides a new ID for the upgraded package.
+
+<Tabs>
+
+<TabItem value="automated-address-management" label="Automated Addresses">
+
+After upgrading, return the original `sui_package` ID value in the `[addresses]` section:
+
+```toml
+[addresses]
+sui_package = "<ORIGINAL-PACKAGE-ID>"
+```
+</TabItem>
+
+<TabItem value="manual-address-management" label="Manual Addresses">
+
+So that packages that depend on your `sui_package` know where to find the on-chain bytecode for verification, edit your manifest again. Provide the upgraded package ID for the `published-at` value and return the original `sui_package` ID value in the `[addresses]` section:
 
 
-```rust
+```toml
 [package]
 name = "sui_package"
 version = "0.0.1"
@@ -504,4 +565,10 @@ published-at = "<UPGRADED-PACKAGE-ID>"
 sui_package = "<ORIGINAL-PACKAGE-ID>"
 ```
 
-The `published-at` value changes with every upgrade. The ID for the `sui_package` in the `[addresses]` section always points to the original package ID after upgrading. You must always change that value back to `0x0`, however, before running the `upgrade` command so the validator knows to create a new ID for the upgrade. 
+Note the `published-at` value changes with every upgrade and needs to be updated after every upgrade.
+
+</TabItem>
+
+</Tabs>
+
+The ID for the `sui_package` in the `[addresses]` section always points to the original package ID after upgrading. You must always change that value back to `0x0`, however, before running the `upgrade` command so the validator knows to create a new ID for the upgrade.

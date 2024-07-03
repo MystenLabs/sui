@@ -9,42 +9,36 @@ pub mod util;
 #[cfg(test)]
 mod unit_tests;
 
+use std::collections::BTreeMap;
+
 use anyhow::Result;
-use move_binary_format::file_format::{CompiledModule, CompiledScript};
+use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::source_map::SourceMap;
-use move_ir_to_bytecode::{
-    compiler::{compile_module, compile_script},
-    parser::{parse_module, parse_script},
-};
+use move_core_types::account_address::AccountAddress;
+use move_ir_to_bytecode::{compiler::compile_module, parser::parse_module_with_named_addresses};
 
 /// An API for the compiler. Supports setting custom options.
 #[derive(Clone, Debug)]
 pub struct Compiler<'a> {
     /// Extra dependencies to compile with.
     pub deps: Vec<&'a CompiledModule>,
+    pub named_addresses: BTreeMap<String, AccountAddress>,
 }
 
 impl<'a> Compiler<'a> {
     pub fn new(deps: Vec<&'a CompiledModule>) -> Self {
-        Self { deps }
+        Self {
+            deps,
+            named_addresses: BTreeMap::new(),
+        }
     }
 
-    /// Compiles into a `CompiledScript` where the bytecode hasn't been serialized.
-    pub fn into_compiled_script_and_source_map(
-        self,
-        code: &str,
-    ) -> Result<(CompiledScript, SourceMap)> {
-        let (compiled_script, source_map) = self.compile_script(code)?;
-        Ok((compiled_script, source_map))
-    }
-
-    /// Compiles the script into a serialized form.
-    pub fn into_script_blob(self, code: &str) -> Result<Vec<u8>> {
-        let compiled_script = self.compile_script(code)?.0;
-
-        let mut serialized_script = Vec::<u8>::new();
-        compiled_script.serialize(&mut serialized_script)?;
-        Ok(serialized_script)
+    pub fn with_named_addresses(
+        mut self,
+        named_addresses: BTreeMap<String, AccountAddress>,
+    ) -> Self {
+        self.named_addresses.extend(named_addresses);
+        self
     }
 
     /// Compiles the module.
@@ -57,19 +51,12 @@ impl<'a> Compiler<'a> {
         let compiled_module = self.compile_mod(code)?.0;
 
         let mut serialized_module = Vec::<u8>::new();
-        compiled_module.serialize(&mut serialized_module)?;
+        compiled_module.serialize_with_version(compiled_module.version, &mut serialized_module)?;
         Ok(serialized_module)
     }
 
-    fn compile_script(self, code: &str) -> Result<(CompiledScript, SourceMap)> {
-        let parsed_script = parse_script(code)?;
-        let (compiled_script, source_map) =
-            compile_script(parsed_script, self.deps.iter().copied())?;
-        Ok((compiled_script, source_map))
-    }
-
     fn compile_mod(self, code: &str) -> Result<(CompiledModule, SourceMap)> {
-        let parsed_module = parse_module(code)?;
+        let parsed_module = parse_module_with_named_addresses(code, &self.named_addresses)?;
         let (compiled_module, source_map) =
             compile_module(parsed_module, self.deps.iter().copied())?;
         Ok((compiled_module, source_map))

@@ -6,14 +6,17 @@ use crate::authority_client::{
     make_authority_clients_with_timeout_config, make_network_authority_clients_with_network_config,
     AuthorityAPI, NetworkAuthorityClient,
 };
+use crate::execution_cache::ObjectCacheRead;
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use fastcrypto::traits::ToFromBytes;
-use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::histogram::Histogram;
 use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard};
 use mysten_network::config::Config;
 use std::convert::AsRef;
+use std::net::SocketAddr;
+use sui_authority_aggregation::ReduceOutput;
+use sui_authority_aggregation::{quorum_map_then_reduce_with_timeout, AsyncResult};
 use sui_config::genesis::Genesis;
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
@@ -24,7 +27,7 @@ use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
-use sui_types::quorum_driver_types::GroupedErrors;
+use sui_types::quorum_driver_types::{GroupedErrors, QuorumDriverResponse};
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
@@ -39,23 +42,22 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::committee::{CommitteeWithNetworkMetadata, StakeUnit};
+use sui_types::committee::{CommitteeTrait, CommitteeWithNetworkMetadata, StakeUnit};
 use sui_types::effects::{
     CertifiedTransactionEffects, SignedTransactionEffects, TransactionEffects, TransactionEvents,
     VerifiedCertifiedTransactionEffects,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, ObjectInfoRequest, TransactionInfoRequest,
+    HandleCertificateRequestV3, HandleCertificateResponseV3, LayoutGenerationOption,
+    ObjectInfoRequest, TransactionInfoRequest,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
-use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 
-use crate::authority::AuthorityStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 
@@ -64,8 +66,6 @@ pub const DEFAULT_RETRIES: usize = 4;
 #[cfg(test)]
 #[path = "unit_tests/authority_aggregator_tests.rs"]
 pub mod authority_aggregator_tests;
-
-pub type AsyncResult<'a, T, E> = BoxFuture<'a, Result<T, E>>;
 
 #[derive(Clone)]
 pub struct TimeoutConfig {
@@ -248,6 +248,18 @@ pub enum AggregatorProcessTransactionError {
 
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSignatures,
+
+    #[error(
+        "{} of the validators by stake are overloaded and requested the client to retry after {} seconds. Validator errors: {:?}",
+        overload_stake,
+        retry_after_secs,
+        errors
+    )]
+    SystemOverloadRetryAfter {
+        overload_stake: StakeUnit,
+        errors: GroupedErrors,
+        retry_after_secs: u64,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -273,7 +285,7 @@ pub fn group_errors(errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>) -> G
         entry.1.extend(
             names
                 .into_iter()
-                .map(|n| n.into_concise())
+                .map(|n| n.concise_owned())
                 .collect::<Vec<_>>(),
         );
     }
@@ -281,6 +293,45 @@ pub fn group_errors(errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>) -> G
         .into_iter()
         .map(|(e, (s, n))| (e, s, n))
         .collect()
+}
+
+#[derive(Debug, Default)]
+pub struct RetryableOverloadInfo {
+    // Total stake of validators that are overloaded and request client to retry.
+    pub total_stake: StakeUnit,
+
+    // Records requested retry duration by stakes.
+    pub stake_requested_retry_after: BTreeMap<Duration, StakeUnit>,
+}
+
+impl RetryableOverloadInfo {
+    pub fn add_stake_retryable_overload(&mut self, stake: StakeUnit, retry_after: Duration) {
+        self.total_stake += stake;
+        self.stake_requested_retry_after
+            .entry(retry_after)
+            .and_modify(|s| *s += stake)
+            .or_insert(stake);
+    }
+
+    // Gets the duration of retry requested by a quorum of validators with smallest retry durations.
+    pub fn get_quorum_retry_after(
+        &self,
+        good_stake: StakeUnit,
+        quorum_threshold: StakeUnit,
+    ) -> Duration {
+        if self.stake_requested_retry_after.is_empty() {
+            return Duration::from_secs(0);
+        }
+
+        let mut quorum_stake = good_stake;
+        for (retry_after, stake) in self.stake_requested_retry_after.iter() {
+            quorum_stake += *stake;
+            if quorum_stake >= quorum_threshold {
+                return *retry_after;
+            }
+        }
+        *self.stake_requested_retry_after.last_key_value().unwrap().0
+    }
 }
 
 #[derive(Debug)]
@@ -296,6 +347,8 @@ struct ProcessTransactionState {
     object_or_package_not_found_stake: StakeUnit,
     // Validators that are overloaded with txns pending execution.
     overloaded_stake: StakeUnit,
+    // Validators that are overloaded and request client to retry.
+    retryable_overload_info: RetryableOverloadInfo,
     // If there are conflicting transactions, we note them down and may attempt to retry
     conflicting_tx_digests:
         BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
@@ -393,25 +446,40 @@ struct ProcessCertificateState {
     // 1) >= 2f+1 signatures
     // 2) >= f+1 non-retryable errors
     retryable: bool,
+
+    // collection of extended data returned from the validators.
+    // Not all validators will be asked to return this data so we need to hold onto it when one
+    // validator has provided it
+    events: Option<TransactionEvents>,
+    input_objects: Option<Vec<Object>>,
+    output_objects: Option<Vec<Object>>,
+    auxiliary_data: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
 pub enum ProcessTransactionResult {
-    Certified(CertifiedTransaction),
+    Certified {
+        certificate: CertifiedTransaction,
+        /// Whether this certificate is newly created by aggregating 2f+1 signatures.
+        /// If a validator returned a cert directly, this will be false.
+        /// This is used to inform the quorum driver, which could make better decisions on telemetry
+        /// such as settlement latency.
+        newly_formed: bool,
+    },
     Executed(VerifiedCertifiedTransactionEffects, TransactionEvents),
 }
 
 impl ProcessTransactionResult {
     pub fn into_cert_for_testing(self) -> CertifiedTransaction {
         match self {
-            Self::Certified(cert) => cert,
+            Self::Certified { certificate, .. } => certificate,
             Self::Executed(..) => panic!("Wrong type"),
         }
     }
 
     pub fn into_effects_for_testing(self) -> VerifiedCertifiedTransactionEffects {
         match self {
-            Self::Certified(..) => panic!("Wrong type"),
+            Self::Certified { .. } => panic!("Wrong type"),
             Self::Executed(effects, ..) => effects,
         }
     }
@@ -625,12 +693,15 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
     /// This function needs metrics parameters because registry will panic
     /// if we attempt to register already-registered metrics again.
     pub fn new_from_local_system_state(
-        store: &Arc<AuthorityStore>,
+        store: &Arc<dyn ObjectCacheRead>,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,
     ) -> anyhow::Result<Self> {
-        let sui_system_state = store.get_sui_system_state_object()?;
+        // TODO: We should get the committee from the epoch store instead to ensure consistency.
+        // Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
+        // besides when we are reading fields for the current epoch
+        let sui_system_state = store.get_sui_system_state_object_unsafe()?;
         let committee = sui_system_state.get_current_epoch_committee();
         let validator_display_names = sui_system_state
             .into_sui_system_state_summary()
@@ -676,157 +747,10 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
     }
 }
 
-pub enum ReduceOutput<R, S> {
-    Continue(S),
-    ContinueWithTimeout(S, Duration),
-    Failed(S),
-    Success(R),
-}
-
 impl<A> AuthorityAggregator<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    /// This function takes an initial state, than executes an asynchronous function (FMap) for each
-    /// authority, and folds the results as they become available into the state using an async function (FReduce).
-    ///
-    /// FMap can do io, and returns a result V. An error there may not be fatal, and could be consumed by the
-    /// MReduce function to overall recover from it. This is necessary to ensure byzantine authorities cannot
-    /// interrupt the logic of this function.
-    ///
-    /// FReduce returns a result to a ReduceOutput. If the result is Err the function
-    /// shortcuts and the Err is returned. An Ok ReduceOutput result can be used to shortcut and return
-    /// the resulting state (ReduceOutput::End), continue the folding as new states arrive (ReduceOutput::Continue),
-    /// or continue with a timeout maximum waiting time (ReduceOutput::ContinueWithTimeout).
-    ///
-    /// This function provides a flexible way to communicate with a quorum of authorities, processing and
-    /// processing their results into a safe overall result, and also safely allowing operations to continue
-    /// past the quorum to ensure all authorities are up to date (up to a timeout).
-    pub(crate) async fn quorum_map_then_reduce_with_timeout<
-        'a,
-        S: 'a,
-        V: 'a,
-        R: 'a,
-        FMap,
-        FReduce,
-    >(
-        committee: Arc<Committee>,
-        authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
-        // The initial state that will be used to fold in values from authorities.
-        initial_state: S,
-        // The async function used to apply to each authority. It takes an authority name,
-        // and authority client parameter and returns a Result<V>.
-        map_each_authority: FMap,
-        // The async function that takes an accumulated state, and a new result for V from an
-        // authority and returns a result to a ReduceOutput state.
-        reduce_result: FReduce,
-        // The initial timeout applied to all
-        initial_timeout: Duration,
-    ) -> Result<
-        (
-            R,
-            FuturesUnordered<impl Future<Output = (AuthorityName, Result<V, SuiError>)> + 'a>,
-        ),
-        S,
-    >
-    where
-        FMap:
-            FnOnce(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, V, SuiError> + Clone + 'a,
-        FReduce: Fn(
-                S,
-                AuthorityName,
-                StakeUnit,
-                Result<V, SuiError>,
-            ) -> BoxFuture<'a, ReduceOutput<R, S>>
-            + 'a,
-    {
-        AuthorityAggregator::quorum_map_then_reduce_with_timeout_and_prefs(
-            committee,
-            authority_clients,
-            None,
-            initial_state,
-            map_each_authority,
-            reduce_result,
-            initial_timeout,
-        )
-        .await
-    }
-
-    pub(crate) async fn quorum_map_then_reduce_with_timeout_and_prefs<'a, S, V, R, FMap, FReduce>(
-        committee: Arc<Committee>,
-        authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
-        authority_preferences: Option<&BTreeSet<AuthorityName>>,
-        initial_state: S,
-        map_each_authority: FMap,
-        reduce_result: FReduce,
-        initial_timeout: Duration,
-    ) -> Result<
-        (
-            R,
-            FuturesUnordered<impl Future<Output = (AuthorityName, Result<V, SuiError>)>>,
-        ),
-        S,
-    >
-    where
-        FMap: FnOnce(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, V, SuiError> + Clone,
-        FReduce: Fn(
-            S,
-            AuthorityName,
-            StakeUnit,
-            Result<V, SuiError>,
-        ) -> BoxFuture<'a, ReduceOutput<R, S>>,
-    {
-        let authorities_shuffled = committee.shuffle_by_stake(authority_preferences, None);
-
-        // First, execute in parallel for each authority FMap.
-        let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
-            .into_iter()
-            .map(|name| {
-                let client = authority_clients[&name].clone();
-                let execute = map_each_authority.clone();
-                monitored_future!(async move {
-                    (
-                        name,
-                        execute(name, client)
-                            .instrument(tracing::trace_span!("quorum_map_auth", authority =? name.concise()))
-                            .await,
-                    )
-                })
-            })
-            .collect();
-
-        let mut current_timeout = initial_timeout;
-        let mut accumulated_state = initial_state;
-        // Then, as results become available fold them into the state using FReduce.
-        while let Ok(Some((authority_name, result))) =
-            timeout(current_timeout, responses.next()).await
-        {
-            let authority_weight = committee.weight(&authority_name);
-            accumulated_state =
-                match reduce_result(accumulated_state, authority_name, authority_weight, result)
-                    .await
-                {
-                    // In the first two cases we are told to continue the iteration.
-                    ReduceOutput::Continue(state) => state,
-                    ReduceOutput::ContinueWithTimeout(state, duration) => {
-                        // Adjust the waiting timeout.
-                        current_timeout = duration;
-                        state
-                    }
-                    ReduceOutput::Failed(state) => {
-                        return Err(state);
-                    }
-                    ReduceOutput::Success(result) => {
-                        // The reducer tells us that we have the result needed. Just return it.
-                        return Ok((result, responses));
-                    }
-                }
-        }
-        // If we have exhausted all authorities and still have not returned a result, return
-        // error with the accumulated state.
-        Err(accumulated_state)
-    }
-
     // Repeatedly calls the provided closure on a randomly selected validator until it succeeds.
     // Once all validators have been attempted, starts over at the beginning. Intended for cases
     // that must eventually succeed as long as the network is up (or comes back up) eventually.
@@ -1029,14 +953,14 @@ where
             total_weight: StakeUnit,
         }
         let initial_state = State::default();
-        let result = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+        let result = quorum_map_then_reduce_with_timeout(
                 self.committee.clone(),
                 self.authority_clients.clone(),
                 initial_state,
                 |_name, client| {
                     Box::pin(async move {
                         let request =
-                            ObjectInfoRequest::latest_object_info_request(object_id, None);
+                            ObjectInfoRequest::latest_object_info_request(object_id, /* generate_layout */ LayoutGenerationOption::None);
                         client.handle_object_info_request(request).await
                     })
                 },
@@ -1088,7 +1012,7 @@ where
             total_weight: StakeUnit,
         }
         let initial_state = State::default();
-        let result = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+        let result = quorum_map_then_reduce_with_timeout(
             self.committee.clone(),
             self.authority_clients.clone(),
             initial_state,
@@ -1141,6 +1065,7 @@ where
     pub async fn process_transaction(
         &self,
         transaction: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
         // Now broadcast the transaction to all authorities.
         let tx_digest = transaction.digest();
@@ -1160,6 +1085,7 @@ where
             object_or_package_not_found_stake: 0,
             non_retryable_stake: 0,
             overloaded_stake: 0,
+            retryable_overload_info: Default::default(),
             retryable: true,
             conflicting_tx_digests: Default::default(),
             conflicting_tx_total_stake: 0,
@@ -1171,7 +1097,7 @@ where
         let validity_threshold = committee.validity_threshold();
         let quorum_threshold = committee.quorum_threshold();
         let validator_display_names = self.validator_display_names.clone();
-        let result = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+        let result = quorum_map_then_reduce_with_timeout(
                 committee.clone(),
                 self.authority_clients.clone(),
                 state,
@@ -1179,7 +1105,7 @@ where
                     Box::pin(
                         async move {
                             let _guard = GaugeGuard::acquire(&self.metrics.inflight_transaction_requests);
-                            client.handle_transaction(transaction_ref.clone()).await
+                            client.handle_transaction(transaction_ref.clone(), client_addr).await
                         },
                     )
                 },
@@ -1219,7 +1145,20 @@ where
                                     // Special case for validator overload too. Once we have >= 2f + 1
                                     // overloaded validators we consider the system overloaded so we exit
                                     // and notify the user.
+                                    // Note that currently, this overload account for
+                                    //   - per object queue overload
+                                    //   - consensus overload
                                     state.overloaded_stake += weight;
+                                }
+                                else if err.is_retryable_overload() {
+                                    // Different from above overload error, retryable overload targets authority overload (entire
+                                    // authority server is overload). In this case, the retry behavior is different from
+                                    // above that we may perform continuous retry due to that objects may have been locked
+                                    // in the validator.
+                                    //
+                                    // TODO: currently retryable overload and above overload error look redundant. We want to have a unified
+                                    // code path to handle both overload scenarios.
+                                    state.retryable_overload_info.add_stake_retryable_overload(weight, Duration::from_secs(err.retry_after_secs()));
                                 }
                                 else if !retryable && !state.record_conflicting_transaction_if_any(name, weight, &err) {
                                     // We don't count conflicting transactions as non-retryable errors here
@@ -1240,7 +1179,7 @@ where
                                 good_stake,
                                 most_staked_conflicting_tx_stake =? state.most_staked_conflicting_tx_stake,
                                 retryable_stake,
-                                "No chance for any tx to get quorum, exiting. Confliting_txes: {:?}",
+                                "No chance for any tx to get quorum, exiting. Conflicting_txes: {:?}",
                                 state.conflicting_tx_digests
                             );
                             // If there is no chance for any tx to get quorum, exit.
@@ -1248,8 +1187,9 @@ where
                             return ReduceOutput::Failed(state);
                         }
 
+                        // TODO: add more comments to explain each condition.
                         if state.non_retryable_stake >= validity_threshold
-                            || state.object_or_package_not_found_stake >= quorum_threshold
+                            || state.object_or_package_not_found_stake >= quorum_threshold // In normal case, object/package not found should be more than f+1
                             || state.overloaded_stake >= quorum_threshold {
                             // We have hit an exit condition, f+1 non-retryable err or 2f+1 object not found or overload,
                             // so we no longer consider the transaction state as retryable.
@@ -1359,6 +1299,24 @@ where
             };
         }
 
+        // When state is in a retryable state and process transaction was not successful, it indicates that
+        // we have heard from *all* validators. Check if any SystemOverloadRetryAfter error caused the txn
+        // to fail. If so, return explicit SystemOverloadRetryAfter error for continuous retry (since objects
+        // are locked in validators). If not, retry regular RetryableTransaction error.
+        if state.tx_signatures.total_votes() + state.retryable_overload_info.total_stake
+            >= quorum_threshold
+        {
+            let retry_after_secs = state
+                .retryable_overload_info
+                .get_quorum_retry_after(state.tx_signatures.total_votes(), quorum_threshold)
+                .as_secs();
+            return AggregatorProcessTransactionError::SystemOverloadRetryAfter {
+                overload_stake: state.retryable_overload_info.total_stake,
+                errors: group_errors(state.errors),
+                retry_after_secs,
+            };
+        }
+
         // No conflicting transaction, the system is not overloaded and transaction state is still retryable.
         AggregatorProcessTransactionError::RetryableTransaction {
             errors: group_errors(state.errors),
@@ -1398,11 +1356,6 @@ where
             Ok(PlainTransactionInfoResponse::Signed(signed)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
                 self.handle_transaction_response_with_signed(state, signed)
-                    .tap_ok(|opt_cert| {
-                        if let Some(cert) = opt_cert.as_ref() {
-                            debug!(?tx_digest, ?cert, "Collected tx certificate for digest")
-                        }
-                    })
             }
             Ok(PlainTransactionInfoResponse::ExecutedWithCert(cert, effects, events)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received prev certificate and effects from validator handle_transaction");
@@ -1440,13 +1393,13 @@ where
             }
             InsertResult::Failed { error } => Err(error),
             InsertResult::QuorumReached(cert_sig) => {
-                let ct =
+                let certificate =
                     CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
-                let ct_bytes = bcs::to_bytes(&ct).expect("to_bytes should never fail");
-                let ct_digest = ct.digest();
-                debug!(?ct, ?ct_bytes, ?ct_digest, "Collected tx certificate");
-                ct.verify_committee_sigs_only(&self.committee)?;
-                Ok(Some(ProcessTransactionResult::Certified(ct)))
+                certificate.verify_committee_sigs_only(&self.committee)?;
+                Ok(Some(ProcessTransactionResult::Certified {
+                    certificate,
+                    newly_formed: true,
+                }))
             }
         }
     }
@@ -1463,7 +1416,10 @@ where
                 // If we get a certificate in the same epoch, then we use it.
                 // A certificate in a past epoch does not guarantee finality
                 // and validators may reject to process it.
-                Ok(Some(ProcessTransactionResult::Certified(certificate)))
+                Ok(Some(ProcessTransactionResult::Certified {
+                    certificate,
+                    newly_formed: false,
+                }))
             }
             _ => {
                 // If we get 2f+1 effects, it's a proof that the transaction
@@ -1529,14 +1485,15 @@ where
             if most_staked_effects_digest_stake + self.get_retryable_stake(&state)
                 < self.committee.quorum_threshold()
             {
+                state.retryable = false;
                 if state.check_if_error_indicates_tx_finalized_with_different_user_sig(
                     self.committee.validity_threshold(),
                 ) {
-                    state.retryable = false;
                     state.tx_finalized_with_different_user_sig = true;
                 } else {
-                    panic!(
-                        "We have violated our safety assumption or there is a fork. Tx: {tx_digest:?}. Non-quorum effects: {non_quorum_effects:?}."
+                    // TODO: Figure out a more reliable way to detect invariance violations.
+                    error!(
+                        "We have seen signed effects but unable to reach quorum threshold even including retriable stakes. This is very rare. Tx: {tx_digest:?}. Non-quorum effects: {non_quorum_effects:?}."
                     );
                 }
             }
@@ -1570,23 +1527,39 @@ where
 
     pub async fn process_certificate(
         &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<
-        (VerifiedCertifiedTransactionEffects, TransactionEvents),
-        AggregatorProcessCertificateError,
-    > {
+        request: HandleCertificateRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<QuorumDriverResponse, AggregatorProcessCertificateError> {
         let state = ProcessCertificateState {
             effects_map: MultiStakeAggregator::new(self.committee.clone()),
             non_retryable_stake: 0,
             non_retryable_errors: vec![],
             retryable_errors: vec![],
             retryable: true,
+            events: None,
+            input_objects: None,
+            output_objects: None,
+            auxiliary_data: None,
         };
 
-        let tx_digest = *certificate.digest();
+        // create a set of validators that we should sample to request input/output objects from
+        let validators_to_sample =
+            if request.include_input_objects || request.include_output_objects {
+                // Always at least ask 1 validator
+                let number_to_sample = std::cmp::max(1, self.committee.num_members() / 2);
+
+                self.committee
+                    .choose_multiple_weighted_iter(number_to_sample)
+                    .cloned()
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+
+        let tx_digest = *request.certificate.digest();
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
 
-        let cert_ref = certificate;
+        let request_ref = request;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
@@ -1602,19 +1575,49 @@ where
         let metrics = self.metrics.clone();
         let metrics_clone = metrics.clone();
         let validator_display_names = self.validator_display_names.clone();
-        let (result, mut remaining_tasks) = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+        let (result, mut remaining_tasks) = quorum_map_then_reduce_with_timeout(
             committee.clone(),
             authority_clients.clone(),
             state,
             move |name, client| {
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
-                    client
-                        .handle_certificate_v2(cert_ref)
-                        .instrument(
-                            tracing::trace_span!("handle_certificate", authority =? name.concise()),
-                        )
-                        .await
+                    if request_ref.include_input_objects || request_ref.include_output_objects {
+
+                        // adjust the request to validators we aren't planning on sampling
+                        let req = if validators_to_sample.contains(&name) {
+                            request_ref
+                        } else {
+                            HandleCertificateRequestV3 {
+                                include_events: false,
+                                include_input_objects: false,
+                                include_output_objects: false,
+                                include_auxiliary_data: false,
+                                ..request_ref
+                            }
+                        };
+
+                        client
+                            .handle_certificate_v3(req, client_addr)
+                            .instrument(
+                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
+                            )
+                            .await
+                    } else {
+                        client
+                            .handle_certificate_v2(request_ref.certificate, client_addr)
+                            .instrument(
+                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
+                            )
+                            .await
+                            .map(|response| HandleCertificateResponseV3 {
+                                effects: response.signed_effects,
+                                events: Some(response.events),
+                                input_objects: None,
+                                output_objects: None,
+                                auxiliary_data: None,
+                            })
+                    }
                 })
             },
             move |mut state, name, weight, response| {
@@ -1740,20 +1743,39 @@ where
         committee: Arc<Committee>,
         tx_digest: &TransactionDigest,
         state: &mut ProcessCertificateState,
-        response: SuiResult<HandleCertificateResponseV2>,
+        response: SuiResult<HandleCertificateResponseV3>,
         name: AuthorityName,
-    ) -> SuiResult<Option<(VerifiedCertifiedTransactionEffects, TransactionEvents)>> {
+    ) -> SuiResult<Option<QuorumDriverResponse>> {
         match response {
-            Ok(HandleCertificateResponseV2 {
-                signed_effects,
+            Ok(HandleCertificateResponseV3 {
+                effects: signed_effects,
                 events,
-                ..
+                input_objects,
+                output_objects,
+                auxiliary_data,
             }) => {
                 debug!(
                     ?tx_digest,
                     name = ?name.concise(),
                     "Validator handled certificate successfully",
                 );
+
+                if events.is_some() && state.events.is_none() {
+                    state.events = events;
+                }
+
+                if input_objects.is_some() && state.input_objects.is_none() {
+                    state.input_objects = input_objects;
+                }
+
+                if output_objects.is_some() && state.output_objects.is_none() {
+                    state.output_objects = output_objects;
+                }
+
+                if auxiliary_data.is_some() && state.auxiliary_data.is_none() {
+                    state.auxiliary_data = auxiliary_data;
+                }
+
                 let effects_digest = *signed_effects.digest();
                 // Note: here we aggregate votes by the hash of the effects structure
                 match state.effects_map.insert(
@@ -1784,7 +1806,13 @@ where
                         );
                         ct.verify(&committee).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
-                            Some((ct, events))
+                            Some(QuorumDriverResponse {
+                                effects_cert: ct,
+                                events: state.events.take(),
+                                input_objects: state.input_objects.take(),
+                                output_objects: state.output_objects.take(),
+                                auxiliary_data: state.auxiliary_data.take(),
+                            })
                         })
                     }
                 }
@@ -1796,14 +1824,15 @@ where
     pub async fn execute_transaction_block(
         &self,
         transaction: &Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {
         let tx_guard = GaugeGuard::acquire(&self.metrics.inflight_transactions);
         let result = self
-            .process_transaction(transaction.clone())
+            .process_transaction(transaction.clone(), client_addr)
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         let cert = match result {
-            ProcessTransactionResult::Certified(cert) => cert,
+            ProcessTransactionResult::Certified { certificate, .. } => certificate,
             ProcessTransactionResult::Executed(effects, _) => {
                 return Ok(effects);
             }
@@ -1813,11 +1842,20 @@ where
 
         let _cert_guard = GaugeGuard::acquire(&self.metrics.inflight_certificates);
         let response = self
-            .process_certificate(cert.clone())
+            .process_certificate(
+                HandleCertificateRequestV3 {
+                    certificate: cert.clone(),
+                    include_events: true,
+                    include_input_objects: false,
+                    include_output_objects: false,
+                    include_auxiliary_data: false,
+                },
+                client_addr,
+            )
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
-        Ok(response.0)
+        Ok(response.effects_cert)
     }
 
     /// This function tries to get SignedTransaction OR CertifiedTransaction from

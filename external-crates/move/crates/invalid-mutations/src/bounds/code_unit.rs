@@ -8,7 +8,8 @@ use move_binary_format::{
         Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
         FieldInstantiationIndex, FunctionDefinitionIndex, FunctionHandleIndex,
         FunctionInstantiationIndex, LocalIndex, SignatureIndex, StructDefInstantiationIndex,
-        StructDefinitionIndex, TableIndex,
+        StructDefinitionIndex, TableIndex, VariantHandleIndex, VariantInstantiationHandleIndex,
+        VariantJumpTableIndex,
     },
     internals::ModuleIndex,
     IndexKind,
@@ -182,6 +183,7 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
         let code = func_def.code.as_mut().unwrap();
         let locals_len = self.module.signatures[func_handle.parameters.into_index()].len()
             + self.module.signatures[code.locals.into_index()].len();
+        let jump_table_len = code.jump_tables.len();
         let code = &mut code.code;
         let code_len = code.len();
 
@@ -199,6 +201,8 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
         let function_inst_len = self.module.function_instantiations.len();
         let field_inst_len = self.module.field_instantiations.len();
         let signature_pool_len = self.module.signatures.len();
+        let variant_handle_len = self.module.variant_handles.len();
+        let variant_inst_len = self.module.variant_instantiation_handles.len();
 
         mutations
             .iter()
@@ -296,86 +300,6 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
                         offset,
                         StructDefInstantiationIndex,
                         UnpackGeneric
-                    ),
-                    Exists(_) => struct_bytecode!(
-                        struct_defs_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefinitionIndex,
-                        Exists
-                    ),
-                    ExistsGeneric(_) => struct_bytecode!(
-                        struct_inst_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefInstantiationIndex,
-                        ExistsGeneric
-                    ),
-                    MutBorrowGlobal(_) => struct_bytecode!(
-                        struct_defs_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefinitionIndex,
-                        MutBorrowGlobal
-                    ),
-                    MutBorrowGlobalGeneric(_) => struct_bytecode!(
-                        struct_inst_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefInstantiationIndex,
-                        MutBorrowGlobalGeneric
-                    ),
-                    ImmBorrowGlobal(_) => struct_bytecode!(
-                        struct_defs_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefinitionIndex,
-                        ImmBorrowGlobal
-                    ),
-                    ImmBorrowGlobalGeneric(_) => struct_bytecode!(
-                        struct_inst_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefInstantiationIndex,
-                        ImmBorrowGlobalGeneric
-                    ),
-                    MoveFrom(_) => struct_bytecode!(
-                        struct_defs_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefinitionIndex,
-                        MoveFrom
-                    ),
-                    MoveFromGeneric(_) => struct_bytecode!(
-                        struct_inst_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefInstantiationIndex,
-                        MoveFromGeneric
-                    ),
-                    MoveTo(_) => struct_bytecode!(
-                        struct_defs_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefinitionIndex,
-                        MoveTo
-                    ),
-                    MoveToGeneric(_) => struct_bytecode!(
-                        struct_inst_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefInstantiationIndex,
-                        MoveToGeneric
                     ),
                     BrTrue(_) => {
                         code_bytecode!(code_len, current_fdef, bytecode_idx, offset, BrTrue)
@@ -475,9 +399,93 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
                         SignatureIndex,
                         VecSwap
                     ),
+                    PackVariant(_) => new_bytecode! {
+                        variant_handle_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantHandleIndex,
+                        PackVariant
+                    },
+                    PackVariantGeneric(_) => new_bytecode! {
+                        variant_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantInstantiationHandleIndex,
+                       PackVariantGeneric
+                    },
+                    UnpackVariant(_) => new_bytecode! {
+                        variant_handle_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantHandleIndex,
+                        UnpackVariant
+                    },
+                    UnpackVariantImmRef(_) => new_bytecode! {
+                        variant_handle_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantHandleIndex,
+                        UnpackVariantImmRef
+                    },
+                    UnpackVariantMutRef(_) => new_bytecode! {
+                        variant_handle_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantHandleIndex,
+                        UnpackVariantMutRef
+                    },
+                    UnpackVariantGeneric(_) => new_bytecode! {
+                        variant_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantInstantiationHandleIndex,
+                       UnpackVariantGeneric
+                    },
+                    UnpackVariantGenericImmRef(_) => new_bytecode! {
+                        variant_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantInstantiationHandleIndex,
+                        UnpackVariantGenericImmRef
+                    },
+                    UnpackVariantGenericMutRef(_) => new_bytecode! {
+                        variant_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantInstantiationHandleIndex,
+                        UnpackVariantGenericMutRef
+                    },
+                    VariantSwitch(_) => new_bytecode! {
+                        jump_table_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantJumpTableIndex,
+                        VariantSwitch
+                    },
 
                     // List out the other options explicitly so there's a compile error if a new
                     // bytecode gets added.
+                    ExistsDeprecated(_)
+                    | ExistsGenericDeprecated(_)
+                    | MutBorrowGlobalDeprecated(_)
+                    | MutBorrowGlobalGenericDeprecated(_)
+                    | ImmBorrowGlobalDeprecated(_)
+                    | ImmBorrowGlobalGenericDeprecated(_)
+                    | MoveFromDeprecated(_)
+                    | MoveFromGenericDeprecated(_)
+                    | MoveToDeprecated(_)
+                    | MoveToGenericDeprecated(_) => {
+                        panic!("Bytecode deprecated: {:?}", code[bytecode_idx])
+                    }
                     FreezeRef | Pop | Ret | LdU8(_) | LdU16(_) | LdU32(_) | LdU64(_)
                     | LdU128(_) | LdU256(_) | CastU8 | CastU16 | CastU32 | CastU64 | CastU128
                     | CastU256 | LdTrue | LdFalse | ReadRef | WriteRef | Add | Sub | Mul | Mod
@@ -510,16 +518,6 @@ fn is_interesting(bytecode: &Bytecode) -> bool {
         | PackGeneric(_)
         | Unpack(_)
         | UnpackGeneric(_)
-        | Exists(_)
-        | ExistsGeneric(_)
-        | MutBorrowGlobal(_)
-        | MutBorrowGlobalGeneric(_)
-        | ImmBorrowGlobal(_)
-        | ImmBorrowGlobalGeneric(_)
-        | MoveFrom(_)
-        | MoveFromGeneric(_)
-        | MoveTo(_)
-        | MoveToGeneric(_)
         | BrTrue(_)
         | BrFalse(_)
         | Branch(_)
@@ -535,7 +533,27 @@ fn is_interesting(bytecode: &Bytecode) -> bool {
         | VecPushBack(_)
         | VecPopBack(_)
         | VecUnpack(..)
-        | VecSwap(_) => true,
+        | VecSwap(_)
+        | PackVariant(_)
+        | PackVariantGeneric(_)
+        | UnpackVariant(_)
+        | UnpackVariantImmRef(_)
+        | UnpackVariantMutRef(_)
+        | UnpackVariantGeneric(_)
+        | UnpackVariantGenericImmRef(_)
+        | UnpackVariantGenericMutRef(_)
+        | VariantSwitch(_) => true,
+        // Deprecated bytecodes
+        ExistsDeprecated(_)
+        | ExistsGenericDeprecated(_)
+        | MutBorrowGlobalDeprecated(_)
+        | MutBorrowGlobalGenericDeprecated(_)
+        | ImmBorrowGlobalDeprecated(_)
+        | ImmBorrowGlobalGenericDeprecated(_)
+        | MoveFromDeprecated(_)
+        | MoveFromGenericDeprecated(_)
+        | MoveToDeprecated(_)
+        | MoveToGenericDeprecated(_) => false,
 
         // List out the other options explicitly so there's a compile error if a new
         // bytecode gets added.

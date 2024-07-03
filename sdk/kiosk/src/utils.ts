@@ -1,61 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SharedObjectRef } from '@mysten/sui.js/bcs';
-import {
+import type {
+	DynamicFieldInfo,
 	PaginationArguments,
 	SuiClient,
 	SuiObjectData,
 	SuiObjectDataFilter,
 	SuiObjectDataOptions,
-	SuiObjectRef,
 	SuiObjectResponse,
-	type DynamicFieldInfo,
-} from '@mysten/sui.js/client';
-import { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
-import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
-
-import { bcs } from './bcs';
+} from '@mysten/sui/client';
 import {
-	Kiosk,
-	KIOSK_TYPE,
-	KioskData,
-	KioskListing,
-	TRANSFER_POLICY_CAP_TYPE,
-	TransferPolicyCap,
-} from './types';
+	fromB64,
+	normalizeStructTag,
+	normalizeSuiAddress,
+	parseStructTag,
+} from '@mysten/sui/utils';
+
+import { KioskType } from './bcs.js';
+import type { Kiosk, KioskData, KioskListing, TransferPolicyCap } from './types/index.js';
+import { TRANSFER_POLICY_CAP_TYPE } from './types/index.js';
 
 const DEFAULT_QUERY_LIMIT = 50;
-
-/**
- * Convert any valid input into a TransactionArgument.
- *
- * @param txb The Transaction Block
- * @param arg The argument to convert.
- * @returns The converted TransactionArgument.
- */
-export function objArg(
-	txb: TransactionBlock,
-	arg: string | SharedObjectRef | SuiObjectRef | TransactionObjectArgument,
-): TransactionObjectArgument {
-	if (typeof arg === 'string') {
-		return txb.object(arg);
-	}
-
-	if ('digest' in arg && 'version' in arg && 'objectId' in arg) {
-		return txb.objectRef(arg);
-	}
-
-	if ('objectId' in arg && 'initialSharedVersion' in arg && 'mutable' in arg) {
-		return txb.sharedObjectRef(arg);
-	}
-
-	if ('kind' in arg) {
-		return arg;
-	}
-
-	throw new Error('Invalid argument type');
-}
 
 export async function getKioskObject(client: SuiClient, id: string): Promise<Kiosk> {
 	const queryRes = await client.getObject({ id, options: { showBcs: true } });
@@ -68,7 +34,7 @@ export async function getKioskObject(client: SuiClient, id: string): Promise<Kio
 		throw new Error(`Invalid kiosk query: ${id}, expected object, got package`);
 	}
 
-	return bcs.de(KIOSK_TYPE, queryRes.data.bcs!.bcsBytes, 'base64');
+	return KioskType.parse(fromB64(queryRes.data.bcs!.bcsBytes));
 }
 
 // helper to extract kiosk data from dynamic fields.

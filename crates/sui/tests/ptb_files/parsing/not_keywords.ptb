@@ -1,0 +1,10 @@
+#  These are all non-keywords
+--assign gasa @0x1
+--assign somea @0x1
+--assign nonea @0x1
+--assign vectora @0x1
+--assign gas-a @0x1
+--assign some-a @0x1
+--assign none-a @0x1
+--assign vector-a @0x1
+

@@ -19,10 +19,12 @@ export default {
 	theme: {
 		extend: {
 			colors: {
+				black: '#000000',
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',
 				facebook: '#1877F2',
 				twitch: '#6441A5',
+				kakao: '#FEE500',
 			},
 			minHeight: {
 				8: '2rem',
@@ -59,6 +61,7 @@ export default {
 			},
 			maxWidth: {
 				'popup-width': '360px',
+				'token-width': '80px',
 			},
 			dropShadow: {
 				accountModal: ['0px 10px 30px rgba(0, 0, 0, 0.15)', '0px 10px 50px rgba(0, 0, 0, 0.15)'],

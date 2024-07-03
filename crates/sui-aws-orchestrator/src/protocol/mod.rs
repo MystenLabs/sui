@@ -8,6 +8,7 @@ use crate::{
     client::Instance,
 };
 
+pub mod narwhal;
 pub mod sui;
 
 /// The minimum interface that the protocol should implement to allow benchmarks from
@@ -55,7 +56,7 @@ pub trait ProtocolCommands<T: BenchmarkType> {
 pub trait ProtocolMetrics {
     /// The name of the metric reporting the total duration of the benchmark (in seconds).
     const BENCHMARK_DURATION: &'static str;
-    /// The name of the metric reporting the total number of finalized transactions/
+    /// The name of the metric reporting the total number of finalized transactions
     const TOTAL_TRANSACTIONS: &'static str;
     /// The name of the metric reporting the latency buckets.
     const LATENCY_BUCKETS: &'static str;

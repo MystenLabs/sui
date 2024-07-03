@@ -15,7 +15,6 @@ use futures::{StreamExt, TryStreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use integer_encoding::VarIntReader;
 use object_store::path::Path;
-use object_store::DynObjectStore;
 use std::collections::BTreeMap;
 use std::fs;
 use std::fs::File;
@@ -24,11 +23,13 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_core::authority::AuthorityStore;
 use sui_storage::blob::{Blob, BlobEncoding};
+use sui_storage::object_store::http::HttpDownloaderBuilder;
 use sui_storage::object_store::util::{copy_file, copy_files, path_to_filesystem};
-use sui_storage::object_store::ObjectStoreConfig;
+use sui_storage::object_store::{ObjectStoreGetExt, ObjectStorePutExt};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use tokio::sync::Mutex;
@@ -42,8 +43,8 @@ pub type DigestByBucketAndPartition = BTreeMap<u32, BTreeMap<u32, [u8; 32]>>;
 pub struct StateSnapshotReaderV1 {
     epoch: u64,
     local_staging_dir_root: PathBuf,
-    remote_object_store: Arc<DynObjectStore>,
-    local_object_store: Arc<DynObjectStore>,
+    remote_object_store: Arc<dyn ObjectStoreGetExt>,
+    local_object_store: Arc<dyn ObjectStorePutExt>,
     ref_files: BTreeMap<u32, BTreeMap<u32, FileMetadata>>,
     object_files: BTreeMap<u32, BTreeMap<u32, FileMetadata>>,
     indirect_objects_threshold: usize,
@@ -61,9 +62,13 @@ impl StateSnapshotReaderV1 {
         m: MultiProgress,
     ) -> Result<Self> {
         let epoch_dir = format!("epoch_{}", epoch);
-        let remote_object_store = remote_store_config.make()?;
-
-        let local_object_store = local_store_config.make()?;
+        let remote_object_store = if remote_store_config.no_sign_request {
+            remote_store_config.make_http()?
+        } else {
+            remote_store_config.make().map(Arc::new)?
+        };
+        let local_object_store: Arc<dyn ObjectStorePutExt> =
+            local_store_config.make().map(Arc::new)?;
         let local_staging_dir_root = local_store_config
             .directory
             .as_ref()
@@ -77,10 +82,10 @@ impl StateSnapshotReaderV1 {
         // Download MANIFEST first
         let manifest_file_path = Path::from(epoch_dir.clone()).child("MANIFEST");
         copy_file(
-            manifest_file_path.clone(),
-            manifest_file_path.clone(),
-            remote_object_store.clone(),
-            local_object_store.clone(),
+            &manifest_file_path,
+            &manifest_file_path,
+            &remote_object_store,
+            &local_object_store,
         )
         .await?;
         let manifest = Self::read_manifest(path_to_filesystem(
@@ -133,7 +138,7 @@ impl StateSnapshotReaderV1 {
         let progress_bar = m.add(
             ProgressBar::new(files.len() as u64).with_style(
                 ProgressStyle::with_template(
-                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .ref files done\n({msg})",
+                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .ref files done ({msg})",
                 )
                 .unwrap(),
             ),
@@ -141,8 +146,8 @@ impl StateSnapshotReaderV1 {
         copy_files(
             &files,
             &files,
-            remote_object_store.clone(),
-            local_object_store.clone(),
+            &remote_object_store,
+            &local_object_store,
             download_concurrency,
             Some(progress_bar.clone()),
         )
@@ -165,7 +170,7 @@ impl StateSnapshotReaderV1 {
         &mut self,
         perpetual_db: &AuthorityPerpetualTables,
         abort_registration: AbortRegistration,
-        sender: Option<tokio::sync::mpsc::Sender<Accumulator>>,
+        sender: Option<tokio::sync::mpsc::Sender<(Accumulator, u64)>>,
     ) -> Result<()> {
         // This computes and stores the sha3 digest of object references in REFERENCE file for each
         // bucket partition. When downloading objects, we will match sha3 digest of object references
@@ -191,6 +196,7 @@ impl StateSnapshotReaderV1 {
                 .unwrap(),
             ),
         );
+
         for (bucket, part_files) in self.ref_files.clone().iter() {
             for (part, _part_file) in part_files.iter() {
                 let mut sha3_digests = sha3_digests.lock().await;
@@ -233,7 +239,7 @@ impl StateSnapshotReaderV1 {
 
     fn spawn_accumulation_tasks(
         &self,
-        sender: tokio::sync::mpsc::Sender<Accumulator>,
+        sender: tokio::sync::mpsc::Sender<(Accumulator, u64)>,
         num_part_files: usize,
     ) -> JoinHandle<()> {
         // Spawn accumulation progress bar
@@ -243,7 +249,7 @@ impl StateSnapshotReaderV1 {
         let accum_progress_bar = self.m.add(
              ProgressBar::new(num_part_files as u64).with_style(
                  ProgressStyle::with_template(
-                     "[{elapsed_precise}] {wide_bar} {pos} out of {len} ref files accumulated ({msg})",
+                     "[{elapsed_precise}] {wide_bar} {pos} out of {len} ref files accumulated from snapshot ({msg})",
                  )
                  .unwrap(),
              ),
@@ -300,9 +306,10 @@ impl StateSnapshotReaderV1 {
                         let sender_clone = sender.clone();
                         tokio::spawn(async move {
                             let mut partial_acc = Accumulator::default();
+                            let num_objects = obj_digests.len();
                             partial_acc.insert_all(obj_digests);
                             sender_clone
-                                .send(partial_acc)
+                                .send((partial_acc, num_objects as u64))
                                 .await
                                 .expect("Unable to send accumulator from snapshot reader");
                         })
@@ -344,7 +351,7 @@ impl StateSnapshotReaderV1 {
         let obj_progress_bar = self.m.add(
             ProgressBar::new(input_files.len() as u64).with_style(
                 ProgressStyle::with_template(
-                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .obj files done\n({msg})",
+                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .obj files done ({msg})",
                 )
                 .unwrap(),
             ),
@@ -369,11 +376,9 @@ impl StateSnapshotReaderV1 {
                             timeout = std::cmp::min(max_timeout, timeout);
                             let mut attempts = 0usize;
                             let bytes = loop {
-                                let get_result = match remote_object_store.get(&file_path).await {
-                                    Ok(get_result) => {
-                                        timeout = Duration::from_secs(2);
-                                        attempts = 0usize;
-                                        get_result
+                                match remote_object_store.get_bytes(&file_path).await {
+                                    Ok(bytes) => {
+                                        break bytes;
                                     }
                                     Err(err) => {
                                         error!(
@@ -387,27 +392,6 @@ impl StateSnapshotReaderV1 {
                                                 "Failed to get obj file after {} attempts",
                                                 attempts
                                             );
-                                        } else {
-                                            attempts += 1;
-                                            tokio::time::sleep(timeout).await;
-                                            timeout += timeout / 2;
-                                            continue;
-                                        }
-                                    }
-                                };
-                                match get_result.bytes().await {
-                                    Ok(bytes) => {
-                                        break bytes;
-                                    }
-                                    Err(err) => {
-                                        error!(
-                                            "Obj {} bytes conversion (attempt {}) failed: {}",
-                                            file_metadata.file_path(&epoch_dir),
-                                            attempts,
-                                            err,
-                                        );
-                                        if timeout > max_timeout {
-                                            panic!("Failed bytes() after {} attempts", attempts);
                                         } else {
                                             attempts += 1;
                                             tokio::time::sleep(timeout).await;

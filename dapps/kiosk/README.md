@@ -13,7 +13,7 @@ pnpm install
 2. Run the development server
 
 ```sh
-pnpm dev
+pnpm turbo dev
 ```
 
 ## Kiosk Management

@@ -1,0 +1,18 @@
+# Invalid number of arguments
+--merge-coins @0x1
+
+# Non-array argument for coins
+--merge-coins @0x1 true
+
+## These will be fine to construct, but will fail at runtime
+## (again, because we don't do any real type of type-checking during the building of the transaction).
+
+# Non-object arguments in array
+--merge-coins @0x1 [true, false]
+
+# Non-object arguments for destination
+--merge-coins true [@0x1]
+
+# Merge empty array of coins into the gas coin
+# We can build this, but it will result in a runtime error
+--merge-coins gas []

@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
+use std::{env, fmt};
 
 use crate::{error::SuiError, sui_serde::Readable};
 use fastcrypto::encoding::{Base58, Encoding};
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 use sui_protocol_config::Chain;
+use tracing::info;
 
 /// A representation of a 32 byte digest
 #[serde_as]
@@ -159,16 +160,42 @@ pub struct ChainIdentifier(CheckpointDigest);
 pub static MAINNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 pub static TESTNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
+/// For testing purposes or bootstrapping regenesis chain configuration, you can set
+/// this environment variable to force protocol config to use a specific Chain.
+const SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME: &str = "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE";
+
+static SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: Lazy<Option<Chain>> = Lazy::new(|| {
+    if let Ok(s) = env::var(SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME) {
+        info!("SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: {:?}", s);
+        match s.as_str() {
+            "mainnet" => Some(Chain::Mainnet),
+            "testnet" => Some(Chain::Testnet),
+            "" => None,
+            _ => panic!("unrecognized SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: {s:?}"),
+        }
+    } else {
+        None
+    }
+});
+
 impl ChainIdentifier {
     pub fn chain(&self) -> Chain {
         let mainnet_id = get_mainnet_chain_identifier();
         let testnet_id = get_testnet_chain_identifier();
 
-        match self {
+        let chain = match self {
             id if *id == mainnet_id => Chain::Mainnet,
             id if *id == testnet_id => Chain::Testnet,
             _ => Chain::Unknown,
+        };
+        if let Some(override_chain) = *SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE {
+            if chain != Chain::Unknown {
+                panic!("not allowed to override real chain {chain:?}");
+            }
+            return override_chain;
         }
+
+        chain
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {
@@ -315,7 +342,11 @@ impl std::str::FromStr for CheckpointDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(CheckpointDigest::new(result))
     }
 }
@@ -396,7 +427,11 @@ impl std::str::FromStr for CheckpointContentsDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(CheckpointContentsDigest::new(result))
     }
 }
@@ -470,8 +505,10 @@ impl TransactionDigest {
 
     /// A digest we use to signify the parent transaction was the genesis,
     /// ie. for an object there is no parent digest.
+    /// Note that this is not the same as the digest of the genesis transaction,
+    /// which cannot be known ahead of time.
     // TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
-    pub const fn genesis() -> Self {
+    pub const fn genesis_marker() -> Self {
         Self::ZERO
     }
 
@@ -564,7 +601,11 @@ impl std::str::FromStr for TransactionDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(TransactionDigest::new(result))
     }
 }
@@ -703,7 +744,11 @@ impl std::str::FromStr for TransactionEventsDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(Self::new(result))
     }
 }
@@ -757,7 +802,11 @@ impl std::str::FromStr for EffectsAuxDataDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(Self::new(result))
     }
 }
@@ -771,6 +820,7 @@ impl ObjectDigest {
     pub const MAX: ObjectDigest = Self::new([u8::MAX; 32]);
     pub const OBJECT_DIGEST_DELETED_BYTE_VAL: u8 = 99;
     pub const OBJECT_DIGEST_WRAPPED_BYTE_VAL: u8 = 88;
+    pub const OBJECT_DIGEST_CANCELLED_BYTE_VAL: u8 = 77;
 
     /// A marker that signifies the object is deleted.
     pub const OBJECT_DIGEST_DELETED: ObjectDigest =
@@ -779,6 +829,9 @@ impl ObjectDigest {
     /// A marker that signifies the object is wrapped into another object.
     pub const OBJECT_DIGEST_WRAPPED: ObjectDigest =
         Self::new([Self::OBJECT_DIGEST_WRAPPED_BYTE_VAL; 32]);
+
+    pub const OBJECT_DIGEST_CANCELLED: ObjectDigest =
+        Self::new([Self::OBJECT_DIGEST_CANCELLED_BYTE_VAL; 32]);
 
     pub const fn new(digest: [u8; 32]) -> Self {
         Self(Digest::new(digest))
@@ -881,7 +934,11 @@ impl std::str::FromStr for ObjectDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(ObjectDigest::new(result))
     }
 }
@@ -893,5 +950,60 @@ pub struct ZKLoginInputsDigest(Digest);
 impl ZKLoginInputsDigest {
     pub const fn new(digest: [u8; 32]) -> Self {
         Self(Digest::new(digest))
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct ConsensusCommitDigest(Digest);
+
+impl ConsensusCommitDigest {
+    pub const ZERO: Self = Self(Digest::ZERO);
+
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Digest::new(digest))
+    }
+
+    pub const fn inner(&self) -> &[u8; 32] {
+        self.0.inner()
+    }
+
+    pub const fn into_inner(self) -> [u8; 32] {
+        self.0.into_inner()
+    }
+
+    pub fn random() -> Self {
+        Self(Digest::random())
+    }
+}
+
+impl Default for ConsensusCommitDigest {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
+impl From<ConsensusCommitDigest> for [u8; 32] {
+    fn from(digest: ConsensusCommitDigest) -> Self {
+        digest.into_inner()
+    }
+}
+
+impl From<[u8; 32]> for ConsensusCommitDigest {
+    fn from(digest: [u8; 32]) -> Self {
+        Self::new(digest)
+    }
+}
+
+impl fmt::Display for ConsensusCommitDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for ConsensusCommitDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ConsensusCommitDigest")
+            .field(&self.0)
+            .finish()
     }
 }

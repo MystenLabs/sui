@@ -8,33 +8,31 @@
 
 mod abstract_state;
 
-use crate::{
-    absint::{AbstractInterpreter, TransferFunctions},
-    locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST},
-    meter::{Meter, Scope},
-};
+use crate::locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST};
 use abstract_state::{AbstractState, LocalState};
+use move_abstract_interpreter::absint::{AbstractInterpreter, FunctionContext, TransferFunctions};
 use move_binary_format::{
-    binary_views::{BinaryIndexedView, FunctionView},
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset},
+    CompiledModule,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
 pub(crate) fn verify<'a>(
-    resolver: &BinaryIndexedView,
-    function_view: &'a FunctionView<'a>,
-    meter: &mut impl Meter,
+    module: &CompiledModule,
+    function_context: &'a FunctionContext<'a>,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let initial_state = AbstractState::new(resolver, function_view)?;
-    LocalsSafetyAnalysis().analyze_function(initial_state, function_view, meter)
+    let initial_state = AbstractState::new(module, function_context)?;
+    LocalsSafetyAnalysis().analyze_function(initial_state, function_context, meter)
 }
 
 fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     offset: CodeOffset,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     meter.add(Scope::Function, STEP_BASE_COST)?;
     match bytecode {
@@ -142,16 +140,16 @@ fn execute_inner(
         | Bytecode::Gt
         | Bytecode::Le
         | Bytecode::Ge
-        | Bytecode::MutBorrowGlobal(_)
-        | Bytecode::MutBorrowGlobalGeneric(_)
-        | Bytecode::ImmBorrowGlobal(_)
-        | Bytecode::ImmBorrowGlobalGeneric(_)
-        | Bytecode::Exists(_)
-        | Bytecode::ExistsGeneric(_)
-        | Bytecode::MoveFrom(_)
-        | Bytecode::MoveFromGeneric(_)
-        | Bytecode::MoveTo(_)
-        | Bytecode::MoveToGeneric(_)
+        | Bytecode::MutBorrowGlobalDeprecated(_)
+        | Bytecode::MutBorrowGlobalGenericDeprecated(_)
+        | Bytecode::ImmBorrowGlobalDeprecated(_)
+        | Bytecode::ImmBorrowGlobalGenericDeprecated(_)
+        | Bytecode::ExistsDeprecated(_)
+        | Bytecode::ExistsGenericDeprecated(_)
+        | Bytecode::MoveFromDeprecated(_)
+        | Bytecode::MoveFromGenericDeprecated(_)
+        | Bytecode::MoveToDeprecated(_)
+        | Bytecode::MoveToGenericDeprecated(_)
         | Bytecode::VecPack(..)
         | Bytecode::VecLen(_)
         | Bytecode::VecImmBorrow(_)
@@ -159,7 +157,16 @@ fn execute_inner(
         | Bytecode::VecPushBack(_)
         | Bytecode::VecPopBack(_)
         | Bytecode::VecUnpack(..)
-        | Bytecode::VecSwap(_) => (),
+        | Bytecode::VecSwap(_)
+        | Bytecode::PackVariant(_)
+        | Bytecode::PackVariantGeneric(_)
+        | Bytecode::UnpackVariant(_)
+        | Bytecode::UnpackVariantImmRef(_)
+        | Bytecode::UnpackVariantMutRef(_)
+        | Bytecode::UnpackVariantGeneric(_)
+        | Bytecode::UnpackVariantGenericImmRef(_)
+        | Bytecode::UnpackVariantGenericMutRef(_)
+        | Bytecode::VariantSwitch(_) => (),
     };
     Ok(())
 }
@@ -176,7 +183,7 @@ impl TransferFunctions for LocalsSafetyAnalysis {
         bytecode: &Bytecode,
         index: CodeOffset,
         _last_index: CodeOffset,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         execute_inner(state, bytecode, index, meter)
     }

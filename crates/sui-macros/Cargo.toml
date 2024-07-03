@@ -11,4 +11,3 @@ sui-proc-macros.workspace = true
 once_cell.workspace = true
 futures.workspace = true
 tracing.workspace = true
-workspace-hack.workspace = true

@@ -11,7 +11,6 @@ use rand::{
     Rng,
 };
 use std::collections::{HashMap, HashSet};
-use sui_core::authority::EffectsNotifyRead;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use tokio::time::{sleep, Duration, Instant};
@@ -132,6 +131,7 @@ async fn test_net_determinism() {
         // consensus. It does not appear to be caused by this feature itself, so I'm disabling this
         // until I have time to debug further.
         config.set_enable_jwk_consensus_updates_for_testing(false);
+        config.set_random_beacon_for_testing(false);
         config
     });
 
@@ -147,8 +147,8 @@ async fn test_net_determinism() {
     handle
         .sui_node
         .state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
 }

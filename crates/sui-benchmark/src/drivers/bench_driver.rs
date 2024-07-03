@@ -10,13 +10,13 @@ use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
-use prometheus::HistogramVec;
+use prometheus::register_histogram_vec_with_registry;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
 use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_registry};
-use prometheus::{register_histogram_vec_with_registry, register_int_counter_with_registry};
 use prometheus::{register_int_counter_vec_with_registry, CounterVec};
-use prometheus::{GaugeVec, IntCounter};
+use prometheus::{register_int_gauge_with_registry, GaugeVec};
+use prometheus::{HistogramVec, IntGauge};
 use rand::seq::SliceRandom;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::OnceCell;
@@ -35,6 +35,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::Committee;
+use sui_types::quorum_driver_types::QuorumDriverError;
 use sui_types::transaction::{Transaction, TransactionDataAPI};
 use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
@@ -45,7 +46,7 @@ use tracing::{debug, error, info, warn};
 use super::Interval;
 use super::{BenchmarkStats, StressStats};
 pub struct BenchMetrics {
-    pub benchmark_duration: IntCounter,
+    pub benchmark_duration: IntGauge,
     pub num_success: IntCounterVec,
     pub num_error: IntCounterVec,
     pub num_submitted: IntCounterVec,
@@ -65,7 +66,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 impl BenchMetrics {
     fn new(registry: &Registry) -> Self {
         BenchMetrics {
-            benchmark_duration: register_int_counter_with_registry!(
+            benchmark_duration: register_int_gauge_with_registry!(
                 "benchmark_duration",
                 "Duration of the benchmark",
                 registry,
@@ -168,6 +169,8 @@ enum NextOp {
         /// The payload updated with the effects of the transaction
         payload: Box<dyn Payload>,
     },
+    // The transaction failed and could not be retried
+    Failure,
     Retry(RetryType),
 }
 
@@ -708,12 +711,9 @@ async fn run_bench_worker(
                 let latency = start.elapsed();
                 let time_from_start = total_benchmark_start_time.elapsed();
 
-                if let Some(delta) = time_from_start
-                    .as_secs()
-                    .checked_sub(metrics_cloned.benchmark_duration.get())
-                {
-                    metrics_cloned.benchmark_duration.inc_by(delta);
-                }
+                metrics_cloned
+                    .benchmark_duration
+                    .set(time_from_start.as_secs() as i64);
 
                 let square_latency_ms = latency.as_secs_f64().powf(2.0);
                 metrics_cloned
@@ -760,11 +760,28 @@ async fn run_bench_worker(
             }
             Err(err) => {
                 error!("{}", err);
-                metrics_cloned
-                    .num_error
-                    .with_label_values(&[&payload.to_string()])
-                    .inc();
-                NextOp::Retry(Box::new((transaction, payload)))
+                if err
+                    .downcast::<QuorumDriverError>()
+                    .and_then(|err| {
+                        if matches!(
+                            err,
+                            QuorumDriverError::NonRecoverableTransactionError { .. }
+                        ) {
+                            Err(err.into())
+                        } else {
+                            Ok(())
+                        }
+                    })
+                    .is_err()
+                {
+                    NextOp::Failure
+                } else {
+                    metrics_cloned
+                        .num_error
+                        .with_label_values(&[&payload.to_string()])
+                        .inc();
+                    NextOp::Retry(Box::new((transaction, payload)))
+                }
             }
         }
     };
@@ -896,6 +913,14 @@ async fn run_bench_worker(
                             break;
                         }
                     }
+                    NextOp::Failure => {
+                        error!("Permanent failure to execute payload. May result in gas objects being leaked");
+                        num_error_txes += 1;
+                        // Update total benchmark progress
+                        if update_progress(1) {
+                            break;
+                        }
+                    }
                     NextOp::Response { latency, num_commands, payload, gas_used } => {
                         num_success_txes += 1;
                         num_success_cmds += num_commands as u64;
@@ -947,6 +972,12 @@ async fn run_bench_worker(
     );
     while let Some(result) = futures.next().await {
         let p = match result {
+            NextOp::Failure => {
+                error!(
+                    "Permanent failure to execute payload. May result in gas objects being leaked"
+                );
+                continue;
+            }
             NextOp::Response {
                 latency: _,
                 num_commands: _,
@@ -968,14 +999,23 @@ async fn run_bench_worker(
 /// Creates a new progress bar based on the provided duration. The method is agnostic to the actual
 /// usage - weather we want to track the overall benchmark duration or an individual benchmark run.
 fn create_progress_bar(duration: Interval) -> ProgressBar {
+    fn new_progress_bar(len: u64) -> ProgressBar {
+        if cfg!(msim) {
+            // don't print any progress when running in the simulator
+            ProgressBar::hidden()
+        } else {
+            ProgressBar::new(len)
+        }
+    }
+
     match duration {
-        Interval::Count(count) => ProgressBar::new(count)
+        Interval::Count(count) => new_progress_bar(count)
             .with_prefix("Running benchmark(count):")
             .with_style(
                 ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}: {msg}").unwrap(),
             ),
         Interval::Time(Duration::MAX) => ProgressBar::hidden(),
-        Interval::Time(duration) => ProgressBar::new(duration.as_secs())
+        Interval::Time(duration) => new_progress_bar(duration.as_secs())
             .with_prefix("Running benchmark(duration):")
             .with_style(ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap()),
     }

@@ -20,23 +20,19 @@ use axum::{Json, Router, Server};
 use hyper::http::{HeaderName, HeaderValue, Method};
 use hyper::server::conn::AddrIncoming;
 use hyper::{HeaderMap, StatusCode};
-use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::params::ArrayParams;
-use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use mysten_metrics::RegistryService;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 use url::Url;
 
-use move_compiler::compiled_unit::CompiledUnitEnum;
 use move_core_types::account_address::AccountAddress;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
 use move_symbol_pool::Symbol;
-use sui_move::build::resolve_lock_file_path;
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
-use sui_sdk::rpc_types::{SuiTransactionBlockEffects, TransactionFilter};
+use sui_sdk::rpc_types::SuiTransactionBlockEffects;
 use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::SuiClientBuilder;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
@@ -82,14 +78,19 @@ pub enum PackageSource {
 #[derive(Clone, Deserialize, Debug)]
 pub struct RepositorySource {
     pub repository: String,
-    pub branch: String,
-    pub packages: Vec<Package>,
     pub network: Option<Network>,
+    pub branches: Vec<Branch>,
+}
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct Branch {
+    pub branch: String,
+    pub paths: Vec<Package>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct DirectorySource {
-    pub packages: Vec<Package>,
+    pub paths: Vec<Package>,
     pub network: Option<Network>,
 }
 
@@ -101,14 +102,15 @@ pub struct Package {
     pub watch: Option<ObjectID>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub struct SourceInfo {
     pub path: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
     // Is Some when content is hydrated from disk.
     pub source: Option<String>,
 }
 
-#[derive(Eq, PartialEq, Clone, Default, Deserialize, Debug, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Clone, Default, Serialize, Deserialize, Debug, Ord, PartialOrd)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {
     #[default]
@@ -149,18 +151,7 @@ pub async fn verify_package(
     package_path: impl AsRef<Path>,
 ) -> anyhow::Result<(Network, AddressLookup)> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let config = resolve_lock_file_path(
-        MoveBuildConfig::default(),
-        Some(package_path.as_ref().to_path_buf()),
-    )?;
-    let build_config = BuildConfig {
-        config,
-        run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
-        print_diags_to_stderr: false,
-        lint: false,
-    };
-    let compiled_package = build_config.build(package_path.as_ref().to_path_buf())?;
-
+    // TODO(rvantonder): use config RPC URL instead of hardcoded URLs
     let network_url = match network {
         Network::Mainnet => MAINNET_URL,
         Network::Testnet => TESTNET_URL,
@@ -168,13 +159,27 @@ pub async fn verify_package(
         Network::Localnet => LOCALNET_URL,
     };
     let client = SuiClientBuilder::default().build(network_url).await?;
+    let chain_id = client.read_api().get_chain_identifier().await?;
+    let mut config =
+        resolve_lock_file_path(MoveBuildConfig::default(), Some(package_path.as_ref()))?;
+    config.lint_flag = LintFlag::LEVEL_NONE;
+    config.silence_warnings = true;
+    let build_config = BuildConfig {
+        config,
+        run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
+        print_diags_to_stderr: false,
+        chain_id: Some(chain_id),
+    };
+    let compiled_package = build_config.build(package_path.as_ref())?;
+
     BytecodeSourceVerifier::new(client.read_api())
         .verify_package(
             &compiled_package,
             /* verify_deps */ false,
             SourceMode::Verify,
         )
-        .await?;
+        .await
+        .map_err(|e| anyhow!("Network {network}: {e}"))?;
 
     let mut address_map = AddressLookup::new();
     let address = compiled_package
@@ -186,10 +191,7 @@ pub async fn verify_package(
     for v in &compiled_package.package.root_compiled_units {
         let path = v.source_path.to_path_buf();
         let source = Some(fs::read_to_string(path.as_path())?);
-        let name = match v.unit {
-            CompiledUnitEnum::Module(ref m) => m.name,
-            CompiledUnitEnum::Script(ref m) => m.name,
-        };
+        let name = v.unit.name;
         if let Some(existing) = address_map.get_mut(&address) {
             existing.insert(name, SourceInfo { path, source });
         } else {
@@ -227,10 +229,14 @@ pub struct CloneCommand {
 }
 
 impl CloneCommand {
-    pub fn new(p: &RepositorySource, dest: &Path) -> anyhow::Result<CloneCommand> {
+    pub fn new(p: &RepositorySource, b: &Branch, dest: &Path) -> anyhow::Result<CloneCommand> {
         let repo_name = repo_name_from_url(&p.repository)?;
         let network = p.network.clone().unwrap_or_default().to_string();
-        let dest = dest.join(network).join(repo_name).into_os_string();
+        let sanitized_branch = b.branch.replace('/', "__");
+        let dest = dest
+            .join(network)
+            .join(format!("{repo_name}__{sanitized_branch}"))
+            .into_os_string();
 
         macro_rules! ostr {
             ($arg:expr) => {
@@ -245,9 +251,9 @@ impl CloneCommand {
             ostr!("--no-checkout"),
             ostr!("--depth=1"), // implies --single-branch
             ostr!("--filter=tree:0"),
-            ostr!(format!("--branch={}", p.branch)),
+            ostr!(format!("--branch={}", b.branch)),
             ostr!(&p.repository),
-            dest.clone(),
+            ostr!(dest.clone()),
         ];
         args.push(cmd_args);
 
@@ -259,8 +265,8 @@ impl CloneCommand {
             ostr!("set"),
             ostr!("--no-cone"),
         ];
-        let path_args: Vec<OsString> = p
-            .packages
+        let path_args: Vec<OsString> = b
+            .paths
             .iter()
             .map(|p| OsString::from(p.path.clone()))
             .collect();
@@ -304,10 +310,17 @@ impl CloneCommand {
 pub async fn clone_repositories(repos: Vec<&RepositorySource>, dir: &Path) -> anyhow::Result<()> {
     let mut tasks = vec![];
     for p in &repos {
-        let command = CloneCommand::new(p, dir)?;
-        info!("cloning {} to {}", &p.repository, dir.display());
-        let t = tokio::spawn(async move { command.run().await });
-        tasks.push(t);
+        for b in &p.branches {
+            let command = CloneCommand::new(p, b, dir)?;
+            info!(
+                "cloning {}:{} to {}",
+                &p.repository,
+                &b.branch,
+                dir.display()
+            );
+            let t = tokio::spawn(async move { command.run().await });
+            tasks.push(t);
+        }
     }
 
     for t in tasks {
@@ -316,7 +329,10 @@ pub async fn clone_repositories(repos: Vec<&RepositorySource>, dir: &Path) -> an
     Ok(())
 }
 
-pub async fn initialize(config: &Config, dir: &Path) -> anyhow::Result<NetworkLookup> {
+pub async fn initialize(
+    config: &Config,
+    dir: &Path,
+) -> anyhow::Result<(NetworkLookup, NetworkLookup)> {
     let mut repos = vec![];
     for s in &config.packages {
         match s {
@@ -325,7 +341,31 @@ pub async fn initialize(config: &Config, dir: &Path) -> anyhow::Result<NetworkLo
         }
     }
     clone_repositories(repos, dir).await?;
-    verify_packages(config, dir).await
+    let sources = verify_packages(config, dir).await?;
+    let sources_list = sources_list(&sources).await;
+    Ok((sources, sources_list))
+}
+
+pub async fn sources_list(sources: &NetworkLookup) -> NetworkLookup {
+    let mut sources_list = NetworkLookup::new();
+    for (network, addresses) in sources {
+        let mut address_map = AddressLookup::new();
+        for (address, symbols) in addresses {
+            let mut symbol_map = SourceLookup::new();
+            for (symbol, source_info) in symbols {
+                symbol_map.insert(
+                    *symbol,
+                    SourceInfo {
+                        path: source_info.path.file_name().unwrap().into(),
+                        source: None,
+                    },
+                );
+            }
+            address_map.insert(*address, symbol_map);
+        }
+        sources_list.insert(network.clone(), address_map);
+    }
+    sources_list
 }
 
 pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<NetworkLookup> {
@@ -335,17 +375,25 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
             PackageSource::Repository(r) => {
                 let repo_name = repo_name_from_url(&r.repository)?;
                 let network_name = r.network.clone().unwrap_or_default().to_string();
-                let packages_dir = dir.join(network_name).join(repo_name);
-                for p in &r.packages {
-                    let package_path = packages_dir.join(p.path.clone()).clone();
-                    let network = r.network.clone().unwrap_or_default();
-                    let t =
-                        tokio::spawn(async move { verify_package(&network, package_path).await });
-                    tasks.push(t)
+                for b in &r.branches {
+                    for p in &b.paths {
+                        let sanitized_branch = b.branch.replace('/', "__");
+                        let package_path = dir
+                            .join(network_name.clone())
+                            .join(format!("{repo_name}__{sanitized_branch}"))
+                            .join(p.path.clone())
+                            .clone();
+                        let network = r.network.clone().unwrap_or_default();
+                        let t =
+                            tokio::spawn(
+                                async move { verify_package(&network, package_path).await },
+                            );
+                        tasks.push(t)
+                    }
                 }
             }
             PackageSource::Directory(packages_dir) => {
-                for p in &packages_dir.packages {
+                for p in &packages_dir.paths {
                     let package_path = PathBuf::from(p.path.clone());
                     let network = packages_dir.network.clone().unwrap_or_default();
                     let t =
@@ -383,79 +431,18 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
 // falsely report outdated sources for a package. Pass an optional `channel` to observe the upgrade transaction(s).
 // The `channel` parameter exists for testing.
 pub async fn watch_for_upgrades(
-    packages: Vec<PackageSource>,
-    app_state: Arc<RwLock<AppState>>,
-    network: Network,
-    channel: Option<Sender<SuiTransactionBlockEffects>>,
+    _packages: Vec<PackageSource>,
+    _app_state: Arc<RwLock<AppState>>,
+    _network: Network,
+    _channel: Option<Sender<SuiTransactionBlockEffects>>,
 ) -> anyhow::Result<()> {
-    let mut watch_ids = ArrayParams::new();
-    let mut num_packages = 0;
-    for s in packages {
-        let packages = match s {
-            PackageSource::Repository(RepositorySource { packages, .. }) => packages,
-            PackageSource::Directory(DirectorySource { packages, .. }) => packages,
-        };
-        for p in packages {
-            if let Some(id) = p.watch {
-                num_packages += 1;
-                watch_ids.insert(TransactionFilter::ChangedObject(id))?
-            }
-        }
-    }
-
-    let websocket_url = match network {
-        Network::Mainnet => MAINNET_WS_URL,
-        Network::Testnet => TESTNET_WS_URL,
-        Network::Devnet => DEVNET_WS_URL,
-        Network::Localnet => LOCALNET_WS_URL,
-    };
-
-    let client: WsClient = WsClientBuilder::default()
-        .ping_interval(WS_PING_INTERVAL)
-        .build(websocket_url)
-        .await?;
-    let mut subscription: Subscription<SuiTransactionBlockEffects> = client
-        .subscribe(
-            "suix_subscribeTransaction",
-            watch_ids,
-            "suix_unsubscribeTransaction",
-        )
-        .await
-        .map_err(|e| anyhow!("Failed to open websocket connection for {}: {}", network, e))?;
-
-    info!("Listening for upgrades on {num_packages} package(s) on {websocket_url}...");
-    loop {
-        let result: Option<Result<SuiTransactionBlockEffects, _>> = subscription.next().await;
-        match result {
-            Some(Ok(result)) => {
-                // We see an upgrade transaction. Clear all sources since all of part of these may now be invalid.
-                // Currently we need to restart the server within some time delta of this observation to resume
-                // returning source. Restarting revalidates the latest release sources per repositories in the config file.
-                // Restarting is a manual side-effect outside of this server because we need to ensure that sources in the
-                // repositories _actually contain_ the latest source corresponding to on-chain data (which is subject to
-                // manual syncing itself currently).
-                info!("Saw upgrade txn: {:?}", result);
-                let mut app_state = app_state.write().unwrap();
-                app_state.sources = NetworkLookup::new(); // Clear all sources.
-                if let Some(channel) = channel {
-                    channel.send(result).unwrap();
-                    break Ok(());
-                }
-            }
-            Some(_) => {
-                info!("Saw failed transaction when listening to upgrades.")
-            }
-            None => {
-                error!("Fatal: WebSocket connection lost while listening for upgrades. Shutting down server.");
-                std::process::exit(1)
-            }
-        }
-    }
+    Err(anyhow!("Fatal: JsonRPC Subscriptions no longer supported. Reimplement without using subscriptions."))
 }
 
 pub struct AppState {
     pub sources: NetworkLookup,
     pub metrics: Option<SourceServiceMetrics>,
+    pub sources_list: NetworkLookup,
 }
 
 pub fn serve(
@@ -587,8 +574,12 @@ async fn check_version_header<B>(
     response
 }
 
-async fn list_route(State(_app_state): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
-    (StatusCode::OK, "").into_response()
+async fn list_route(State(app_state): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
+    let app_state = app_state.read().unwrap();
+    (
+        StatusCode::OK,
+        Json(app_state.sources_list.clone()).into_response(),
+    )
 }
 
 pub struct SourceServiceMetrics {

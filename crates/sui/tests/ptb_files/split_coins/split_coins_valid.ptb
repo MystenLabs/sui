@@ -1,0 +1,11 @@
+# Split off from gas
+--split-coins gas [0,1,2,3]
+--assign coins
+--move-call sui::coin::destroy_zero<sui::sui::SUI> coins.0
+# Can further split a split coin (and through variable bindings/result accesses)
+--split-coins coins.1 [0,0]
+--assign zcoins
+--move-call sui::coin::destroy_zero<sui::sui::SUI> zcoins.0
+--move-call sui::coin::destroy_zero<sui::sui::SUI> zcoins.1
+# Can merge the split coins back
+--merge-coins gas [coins.1, coins.2, coins.3]

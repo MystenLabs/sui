@@ -1,0 +1,6 @@
+--assign some @0x1
+--assign vector @0x1
+
+--assign none @0x1
+--assign gas @0x1
+

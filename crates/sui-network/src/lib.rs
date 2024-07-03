@@ -6,6 +6,7 @@ use std::time::Duration;
 
 pub mod api;
 pub mod discovery;
+pub mod randomness;
 pub mod state_sync;
 pub mod utils;
 

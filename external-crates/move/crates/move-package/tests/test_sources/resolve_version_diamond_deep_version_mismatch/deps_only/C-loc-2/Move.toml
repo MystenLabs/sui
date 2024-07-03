@@ -1,0 +1,6 @@
+[package]
+name = "C"
+version = "2"
+
+[dependencies]
+D = { local = "../D-loc-2" }

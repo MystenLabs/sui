@@ -29,6 +29,8 @@ pub struct P2pConfig {
     pub state_sync: Option<StateSyncConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discovery: Option<DiscoveryConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub randomness: Option<RandomnessConfig>,
     /// Size in bytes above which network messages are considered excessively large. Excessively
     /// large messages will still be handled, but logged and reported in metrics for debugging.
     ///
@@ -50,6 +52,7 @@ impl Default for P2pConfig {
             anemo_config: Default::default(),
             state_sync: None,
             discovery: None,
+            randomness: None,
             excessive_message_size: None,
         }
     }
@@ -96,7 +99,7 @@ pub struct StateSyncConfig {
     /// - in case of a fork, to prevent the node from syncing to the wrong chain.
     /// - in case of a network stall, to force the node to proceed with a manually-injected
     ///   checkpoint.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub pinned_checkpoints: Vec<(CheckpointSequenceNumber, CheckpointDigest)>,
 
     /// Query peers for their latest checkpoint every interval period.
@@ -107,25 +110,25 @@ pub struct StateSyncConfig {
 
     /// Size of the StateSync actor's mailbox.
     ///
-    /// If unspecified, this will default to `128`.
+    /// If unspecified, this will default to `1,024`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mailbox_capacity: Option<usize>,
 
     /// Size of the broadcast channel use for notifying other systems of newly sync'ed checkpoints.
     ///
-    /// If unspecified, this will default to `128`.
+    /// If unspecified, this will default to `1,024`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub synced_checkpoint_broadcast_channel_capacity: Option<usize>,
 
     /// Set the upper bound on the number of checkpoint headers to be downloaded concurrently.
     ///
-    /// If unspecified, this will default to `100`.
+    /// If unspecified, this will default to `400`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_header_download_concurrency: Option<usize>,
 
     /// Set the upper bound on the number of checkpoint contents to be downloaded concurrently.
     ///
-    /// If unspecified, this will default to `100`.
+    /// If unspecified, this will default to `400`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_content_download_concurrency: Option<usize>,
 
@@ -179,6 +182,11 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to no limit.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub get_checkpoint_contents_per_checkpoint_limit: Option<usize>,
+
+    /// The amount of time to wait before retry if there are no peers to sync content from.
+    /// If unspecified, this will set to default value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wait_interval_when_no_peer_to_sync_content_ms: Option<u64>,
 }
 
 impl StateSyncConfig {
@@ -189,27 +197,27 @@ impl StateSyncConfig {
     }
 
     pub fn mailbox_capacity(&self) -> usize {
-        const MAILBOX_CAPACITY: usize = 128;
+        const MAILBOX_CAPACITY: usize = 1_024;
 
         self.mailbox_capacity.unwrap_or(MAILBOX_CAPACITY)
     }
 
     pub fn synced_checkpoint_broadcast_channel_capacity(&self) -> usize {
-        const SYNCED_CHECKPOINT_BROADCAST_CHANNEL_CAPACITY: usize = 128;
+        const SYNCED_CHECKPOINT_BROADCAST_CHANNEL_CAPACITY: usize = 1_024;
 
         self.synced_checkpoint_broadcast_channel_capacity
             .unwrap_or(SYNCED_CHECKPOINT_BROADCAST_CHANNEL_CAPACITY)
     }
 
     pub fn checkpoint_header_download_concurrency(&self) -> usize {
-        const CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY: usize = 100;
+        const CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY: usize = 400;
 
         self.checkpoint_header_download_concurrency
             .unwrap_or(CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY)
     }
 
     pub fn checkpoint_content_download_concurrency(&self) -> usize {
-        const CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY: usize = 100;
+        const CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY: usize = 400;
 
         self.checkpoint_content_download_concurrency
             .unwrap_or(CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY)
@@ -236,6 +244,20 @@ impl StateSyncConfig {
         self.checkpoint_content_timeout_ms
             .map(Duration::from_millis)
             .unwrap_or(DEFAULT_TIMEOUT)
+    }
+
+    pub fn wait_interval_when_no_peer_to_sync_content(&self) -> Duration {
+        self.wait_interval_when_no_peer_to_sync_content_ms
+            .map(Duration::from_millis)
+            .unwrap_or(self.default_wait_interval_when_no_peer_to_sync_content())
+    }
+
+    fn default_wait_interval_when_no_peer_to_sync_content(&self) -> Duration {
+        if cfg!(msim) {
+            Duration::from_secs(5)
+        } else {
+            Duration::from_secs(10)
+        }
     }
 }
 
@@ -321,5 +343,78 @@ impl DiscoveryConfig {
     pub fn access_type(&self) -> AccessType {
         // defaults None to Public
         self.access_type.unwrap_or(AccessType::Public)
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RandomnessConfig {
+    /// Maximum number of rounds ahead of our most recent completed round for which we should
+    /// accept partial signatures from other validators.
+    ///
+    /// If unspecified, this will default to 50.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_partial_sigs_rounds_ahead: Option<u64>,
+
+    /// Maximum number of rounds for which partial signatures should be concurrently sent.
+    ///
+    /// If unspecified, this will default to 20.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_partial_sigs_concurrent_sends: Option<usize>,
+
+    /// Interval at which to retry sending partial signatures until the round is complete.
+    ///
+    /// If unspecified, this will default to `5,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub partial_signature_retry_interval_ms: Option<u64>,
+
+    /// Size of the Randomness actor's mailbox. This should be set large enough to never
+    /// overflow unless a bug is encountered.
+    ///
+    /// If unspecified, this will default to `1,000,000`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mailbox_capacity: Option<usize>,
+
+    /// Per-peer inflight limit for the SendPartialSignatures RPC.
+    ///
+    /// If unspecified, this will default to 20.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub send_partial_signatures_inflight_limit: Option<usize>,
+}
+
+impl RandomnessConfig {
+    pub fn max_partial_sigs_rounds_ahead(&self) -> u64 {
+        const MAX_PARTIAL_SIGS_ROUNDS_AHEAD: u64 = 50;
+
+        self.max_partial_sigs_rounds_ahead
+            .unwrap_or(MAX_PARTIAL_SIGS_ROUNDS_AHEAD)
+    }
+
+    pub fn max_partial_sigs_concurrent_sends(&self) -> usize {
+        const MAX_PARTIAL_SIGS_CONCURRENT_SENDS: usize = 20;
+
+        self.max_partial_sigs_concurrent_sends
+            .unwrap_or(MAX_PARTIAL_SIGS_CONCURRENT_SENDS)
+    }
+    pub fn partial_signature_retry_interval(&self) -> Duration {
+        const PARTIAL_SIGNATURE_RETRY_INTERVAL: u64 = 5_000; // 5 seconds
+
+        Duration::from_millis(
+            self.partial_signature_retry_interval_ms
+                .unwrap_or(PARTIAL_SIGNATURE_RETRY_INTERVAL),
+        )
+    }
+
+    pub fn mailbox_capacity(&self) -> usize {
+        const MAILBOX_CAPACITY: usize = 1_000_000;
+
+        self.mailbox_capacity.unwrap_or(MAILBOX_CAPACITY)
+    }
+
+    pub fn send_partial_signatures_inflight_limit(&self) -> usize {
+        const SEND_PARTIAL_SIGNATURES_INFLIGHT_LIMIT: usize = 20;
+
+        self.send_partial_signatures_inflight_limit
+            .unwrap_or(SEND_PARTIAL_SIGNATURES_INFLIGHT_LIMIT)
     }
 }

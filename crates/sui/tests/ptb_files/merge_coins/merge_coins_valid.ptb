@@ -1,0 +1,15 @@
+# Split gas coin, and then assign out to its different parts
+--split-coins gas [1,2,3]
+--assign coins
+--assign c0 coins.0
+--assign c1 coins.1
+--assign c2 coins.2
+--merge-coins c0 [c1, c2]
+--merge-coins gas [c0]
+
+# Now do the same thing, but access the coins directly inside of the array
+# inside of assigning to temporary variables.
+--split-coins gas [1,2,3]
+--assign coins
+--merge-coins coins.0 [coins.1, coins.2]
+--merge-coins gas [coins.0]

@@ -7,10 +7,10 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 
-use sui_json_rpc::api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
+    DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
@@ -41,12 +41,10 @@ impl WriteApiServer for WriteApi {
         options: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        let fast_path_options = SuiTransactionBlockResponseOptions::full_content();
         let sui_transaction_response = self
             .fullnode
-            .execute_transaction_block(tx_bytes, signatures, Some(fast_path_options), request_type)
+            .execute_transaction_block(tx_bytes, signatures, options.clone(), request_type)
             .await?;
-
         Ok(SuiTransactionBlockResponseWithOptions {
             response: sui_transaction_response,
             options: options.unwrap_or_default(),
@@ -60,9 +58,16 @@ impl WriteApiServer for WriteApi {
         tx_bytes: Base64,
         gas_price: Option<BigInt<u64>>,
         epoch: Option<BigInt<u64>>,
+        additional_args: Option<DevInspectArgs>,
     ) -> RpcResult<DevInspectResults> {
         self.fullnode
-            .dev_inspect_transaction_block(sender_address, tx_bytes, gas_price, epoch)
+            .dev_inspect_transaction_block(
+                sender_address,
+                tx_bytes,
+                gas_price,
+                epoch,
+                additional_args,
+            )
             .await
     }
 
@@ -80,6 +85,6 @@ impl SuiRpcModule for WriteApi {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::WriteApiOpenRpc::module_doc()
+        sui_json_rpc_api::WriteApiOpenRpc::module_doc()
     }
 }

@@ -7,8 +7,8 @@
 
 //# publish
 module test::m1 {
-    struct A has copy, drop { value: u64 }
-    struct B has copy, drop { value: u256 }
+    public struct A has copy, drop { value: u64 }
+    public struct B has copy, drop { value: u256 }
 
     public fun a(): A { A { value: 0 } }
     public fun b(): B { B { value: 0 } }

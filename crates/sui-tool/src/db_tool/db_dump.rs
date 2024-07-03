@@ -15,12 +15,13 @@ use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics,
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::{StoreData, StoreObject};
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
+use sui_core::rest_index::RestIndexStore;
 use sui_storage::mutex_table::RwLockTable;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
@@ -200,6 +201,7 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
         None,
         None,
     ));
+    let rest_index = RestIndexStore::new_without_init(db_path.join("rest_index"));
     let highest_pruned_checkpoint = checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
     let latest_checkpoint = checkpoint_store.get_highest_executed_checkpoint()?;
     info!(
@@ -218,10 +220,12 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
     AuthorityStorePruner::prune_objects_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
+        Some(&rest_index),
         &lock_table,
         pruning_config,
         metrics,
         usize::MAX,
+        EPOCH_DURATION_MS_FOR_TESTING,
     )
     .await?;
     Ok(())
@@ -235,6 +239,7 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         None,
         None,
     ));
+    let rest_index = RestIndexStore::new_without_init(db_path.join("rest_index"));
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
     let lock_table = Arc::new(RwLockTable::new(1));
     info!("Pruning setup for db at path: {:?}", db_path.display());
@@ -247,11 +252,13 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
     AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
+        Some(&rest_index),
         &lock_table,
         pruning_config,
         metrics,
         usize::MAX,
         archive_readers,
+        EPOCH_DURATION_MS_FOR_TESTING,
     )
     .await?;
     Ok(())

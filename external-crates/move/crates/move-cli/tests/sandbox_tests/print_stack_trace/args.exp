@@ -1,7 +1,7 @@
 Command `sandbox publish`:
-Command `sandbox run scripts/print_stack_trace.move --dry-run`:
+Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000042/modules/print_stack_trace.mv print_stack_trace --dry-run`:
 Call Stack:
-    [0] main
+    [0] 0000000000000000000000000000000000000000000000000000000000000042::print_stack_trace::print_stack_trace
 
         Code:
             [10] LdU64(1)
@@ -90,7 +90,7 @@ Operand Stack:
 
 [debug] 10
 Call Stack:
-    [0] main
+    [0] 0000000000000000000000000000000000000000000000000000000000000042::print_stack_trace::print_stack_trace
 
         Code:
             [16] CallGeneric(1)

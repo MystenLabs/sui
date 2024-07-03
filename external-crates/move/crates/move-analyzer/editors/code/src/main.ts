@@ -2,12 +2,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-import { Configuration } from './configuration';
 import { Context } from './context';
 import { Extension } from './extension';
 import { log } from './log';
 
 import * as childProcess from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import * as commands from './commands';
 
@@ -18,7 +19,9 @@ import * as commands from './commands';
  */
 async function serverVersion(context: Readonly<Context>): Promise<void> {
     const version = childProcess.spawnSync(
-        context.configuration.serverPath, ['--version'], { encoding: 'utf8' },
+        context.resolvedServerPath,
+        context.resolvedServerArgs.concat(['--version']),
+        { encoding: 'utf8' },
     );
     if (version.stdout) {
         await vscode.window.showInformationMessage(version.stdout);
@@ -31,6 +34,72 @@ async function serverVersion(context: Readonly<Context>): Promise<void> {
             `A problem occurred when executing '${context.configuration.serverPath}'.`,
         );
     }
+}
+
+async function findPkgRoot(): Promise<string | undefined> {
+    const activeEditor = vscode.window.activeTextEditor;
+    if (!activeEditor) {
+        await vscode.window.showErrorMessage('Cannot find package manifest (no active editor window)');
+        return undefined;
+    }
+
+    const containsManifest = (dir: string): boolean => {
+        const filesInDir = fs.readdirSync(dir);
+        return filesInDir.includes('Move.toml');
+    };
+
+    const activeFileDir = path.dirname(activeEditor.document.uri.fsPath);
+    let currentDir = activeFileDir;
+    while (currentDir !== path.parse(currentDir).root) {
+        if (containsManifest(currentDir)) {
+            return currentDir;
+        }
+        currentDir = path.resolve(currentDir, '..');
+    }
+
+    if (containsManifest(currentDir)) {
+        return currentDir;
+    }
+
+    await vscode.window.showErrorMessage(`Cannot find package manifest for file in '${activeFileDir}' directory`);
+    return undefined;
+}
+
+async function suiMoveCmd(context: Readonly<Context>, cmd: string): Promise<void> {
+    const version = childProcess.spawnSync(
+        context.configuration.suiPath, ['--version'], { encoding: 'utf8' },
+    );
+    if (version.stdout) {
+        const pkgRoot = await findPkgRoot();
+        if (pkgRoot !== undefined) {
+            const terminalName = 'sui move';
+            let terminal = vscode.window.terminals.find(t => t.name === terminalName);
+            if (!terminal) {
+                terminal = vscode.window.createTerminal(terminalName);
+            }
+            terminal.show(true);
+            terminal.sendText('cd ' + pkgRoot, true);
+            terminal.sendText(`sui move ${cmd}`, true);
+        }
+    } else {
+        await vscode.window.showErrorMessage(
+            `A problem occurred when executing the Sui command: '${context.configuration.suiPath}'`,
+        );
+    }
+}
+
+/**
+ * An extension command that that builds the current Move project.
+ */
+async function buildProject(context: Readonly<Context>): Promise<void> {
+    return suiMoveCmd(context, 'build');
+}
+
+/**
+ * An extension command that that builds the current Move project.
+ */
+async function testProject(context: Readonly<Context>): Promise<void> {
+    return suiMoveCmd(context, 'test');
 }
 
 /**
@@ -51,22 +120,18 @@ export async function activate(extensionContext: Readonly<vscode.ExtensionContex
     const extension = new Extension();
     log.info(`${extension.identifier} version ${extension.version}`);
 
-    const configuration = new Configuration();
-    log.info(`configuration: ${configuration.toString()}`);
-
-    const context = Context.create(extensionContext, configuration);
-    // An error here -- for example, if the path to the `move-analyzer` binary that the user
-    // specified in their settings is not valid -- prevents the extension from providing any
-    // more utility, so return early.
-    if (context instanceof Error) {
-        void vscode.window.showErrorMessage(
-            `Could not activate move-analyzer: ${context.message}.`,
-        );
+    log.info('Creating extension context');
+    const context = new Context(extensionContext);
+    const success = await context.installServerBinary(extensionContext);
+    if (!success) {
+        // Return early (errors have already been reported)
         return;
     }
 
     // Register handlers for VS Code commands that the user explicitly issues.
     context.registerCommand('serverVersion', serverVersion);
+    context.registerCommand('build', buildProject);
+    context.registerCommand('test', testProject);
 
     // Configure other language features.
     context.configureLanguage();
@@ -76,4 +141,6 @@ export async function activate(extensionContext: Readonly<vscode.ExtensionContex
     context.registerCommand('textDocumentDocumentSymbol', commands.textDocumentDocumentSymbol);
     context.registerCommand('textDocumentHover', commands.textDocumentHover);
     context.registerCommand('textDocumentCompletion', commands.textDocumentCompletion);
+
+    context.registerOnDidChangeConfiguration();
 }

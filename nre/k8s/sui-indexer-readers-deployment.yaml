@@ -1,0 +1,54 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: indexer-readers
+  name: indexer-readers
+  namespace: rpc-mainnet
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: indexer-readers
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9184"
+        prometheus.io/scrape: "true"
+      labels:
+        app: indexer-readers
+    spec:
+      containers:
+      - command:
+        - /usr/local/bin/sui-indexer
+        - --db-url
+        - postgres://x:x@x:5432/defaultdb
+        - --rpc-client-url
+        - http://sui-node.rpc-mainnet.svc.cluster.local:9000
+        - --rpc-server-worker
+        env:
+        - name: RUST_BACKTRACE
+          value: "1"
+        - name: RUST_LOG
+          value: info,jsonrpsee=error,jsonrpsee_types=error
+        - name: RUST_JSON_LOG
+          value: "true"
+        - name: DB_CONNECTION_TIMEOUT
+          value: "3600"
+        - name: DB_STATEMENT_TIMEOUT
+          value: "3600"
+        image: x
+        imagePullPolicy: Always
+        name: sui-indexer
+        ports:
+        - containerPort: 9000
+          protocol: TCP
+        resources:
+          requests:
+            cpu: "2"
+            memory: 8G
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30

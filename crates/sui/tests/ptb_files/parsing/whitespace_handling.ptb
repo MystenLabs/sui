@@ -1,0 +1,16 @@
+# Note: Yes, it looks messed up --  it should so don't try and format this nicely!
+
+# Make sure we handle weird spacing inside vectors and arrays
+--assign x vector[1,               2,       3,4                        ]
+--assign x "vector[1,               2,       3,4                        ]"
+--assign x  "vector['1',               '2,       3','',\"4                        \"]"
+--assign x  "vector['1',               '2,       3','',\"4                       
+            \"]"
+
+# Same tests but with arrays
+--make-move-vec <u16> [1,               2,       3,4                        ]
+--make-move-vec <sui::string::String> "[1,               2,       3,4                        ]"
+--make-move-vec <sui::string::String> "['1',               '2,       3','',\"4                        \"]"
+--make-move-vec  <sui::string::String> "['1',               '2,       3','',\"4                       
+            \"]"
+

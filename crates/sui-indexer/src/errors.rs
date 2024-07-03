@@ -4,6 +4,7 @@
 use fastcrypto::error::FastCryptoError;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
+use sui_json_rpc::name_service::NameServiceError;
 use thiserror::Error;
 
 use sui_types::base_types::ObjectIDParseError;
@@ -125,6 +126,9 @@ pub enum IndexerError {
 
     #[error("Indexer failed to send item to channel with error: `{0}`")]
     MpscChannelError(String),
+
+    #[error(transparent)]
+    NameServiceError(#[from] NameServiceError),
 }
 
 pub trait Context<T> {

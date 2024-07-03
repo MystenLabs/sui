@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, cx, type VariantProps } from 'class-variance-authority';
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { forwardRef, type ComponentProps, type ReactNode } from 'react';
 
 const styles = cva(

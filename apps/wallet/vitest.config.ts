@@ -14,7 +14,4 @@ export default defineConfig({
 		setupFiles: ['./testSetup.ts'],
 		restoreMocks: true,
 	},
-	resolve: {
-		conditions: ['source'],
-	},
 });

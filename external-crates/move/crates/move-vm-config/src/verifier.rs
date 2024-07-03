@@ -1,8 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::file_format_common::VERSION_MAX;
+
 pub const DEFAULT_MAX_CONSTANT_VECTOR_LEN: u64 = 1024 * 1024;
 pub const DEFAULT_MAX_IDENTIFIER_LENGTH: u64 = 128;
+pub const DEFAULT_MAX_VARIANTS: u64 = 127;
 
 #[derive(Debug, Clone)]
 pub struct VerifierConfig {
@@ -14,16 +17,25 @@ pub struct VerifierConfig {
     pub max_type_nodes: Option<usize>,
     pub max_push_size: Option<usize>,
     pub max_dependency_depth: Option<usize>,
-    pub max_struct_definitions: Option<usize>,
+    pub max_data_definitions: Option<usize>,
     pub max_fields_in_struct: Option<usize>,
     pub max_function_definitions: Option<usize>,
     pub max_constant_vector_len: Option<u64>,
     pub max_back_edges_per_function: Option<usize>,
     pub max_back_edges_per_module: Option<usize>,
     pub max_basic_blocks_in_script: Option<usize>,
+    pub max_idenfitier_len: Option<u64>,
+    pub allow_receiving_object_id: bool,
+    pub reject_mutable_random_on_entry_functions: bool,
+    pub bytecode_version: u32,
+    pub max_variants_in_enum: Option<u64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MeterConfig {
     pub max_per_fun_meter_units: Option<u128>,
     pub max_per_mod_meter_units: Option<u128>,
-    pub max_idenfitier_len: Option<u64>,
+    pub max_per_pkg_meter_units: Option<u128>,
 }
 
 impl Default for VerifierConfig {
@@ -41,7 +53,7 @@ impl Default for VerifierConfig {
             // Max depth in dependency tree for both direct and friend dependencies
             max_dependency_depth: None,
             // Max count of structs in a module
-            max_struct_definitions: None,
+            max_data_definitions: None,
             // Max count of fields in a struct
             max_fields_in_struct: None,
             // Max count of functions in a module
@@ -49,29 +61,38 @@ impl Default for VerifierConfig {
             // Max size set to 10000 to restrict number of pushes in one function
             // max_push_size: Some(10000),
             // max_dependency_depth: Some(100),
-            // max_struct_definitions: Some(200),
+            // max_data_definitions: Some(200),
             // max_fields_in_struct: Some(30),
             // max_function_definitions: Some(1000),
             max_back_edges_per_function: None,
             max_back_edges_per_module: None,
             max_basic_blocks_in_script: None,
-            /// General metering for the verifier. This defaults to a bound which should align
-            /// with production, so all existing test cases apply it.
-            max_per_fun_meter_units: Some(1000 * 8000),
-            max_per_mod_meter_units: Some(1000 * 8000),
             max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),
             max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
+            allow_receiving_object_id: true,
+            reject_mutable_random_on_entry_functions: true,
+            bytecode_version: VERSION_MAX,
+            max_variants_in_enum: Some(DEFAULT_MAX_VARIANTS),
         }
     }
 }
 
-impl VerifierConfig {
-    /// Returns truly unbounded config, even relaxing metering.
+impl Default for MeterConfig {
+    fn default() -> Self {
+        Self {
+            max_per_fun_meter_units: Some(1000 * 8000),
+            max_per_mod_meter_units: Some(1000 * 8000),
+            max_per_pkg_meter_units: Some(1000 * 8000),
+        }
+    }
+}
+
+impl MeterConfig {
     pub fn unbounded() -> Self {
         Self {
             max_per_fun_meter_units: None,
             max_per_mod_meter_units: None,
-            ..VerifierConfig::default()
+            max_per_pkg_meter_units: None,
         }
     }
 }

@@ -1,15 +1,17 @@
-use std::num::NonZeroUsize;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::AuthorityIdentifier;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use storage::{CertificateStore, CertificateStoreCache, ConsensusStore};
 use store::rocks::MetricConf;
 use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions};
 use types::{Certificate, CertificateDigest, ConsensusCommit, Round, SequenceNumber};
 
-pub(crate) const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
+#[allow(unused)]
+pub const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
+#[allow(unused)]
 pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore> {
     const LAST_COMMITTED_CF: &str = "last_committed";
     const COMMITTED_SUB_DAG_CF: &str = "committed_sub_dag";
@@ -33,6 +35,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     ))
 }
 
+#[allow(unused)]
 pub fn make_certificate_store(store_path: &std::path::Path) -> CertificateStore {
     const CERTIFICATES_CF: &str = "certificates";
     const CERTIFICATE_DIGEST_BY_ROUND_CF: &str = "certificate_digest_by_round";

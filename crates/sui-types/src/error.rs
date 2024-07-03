@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
 use thiserror::Error;
 use tonic::Status;
-use typed_store::rocks::TypedStoreError;
+use typed_store_error::TypedStoreError;
 
 pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
 pub const TRANSACTIONS_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transactions";
@@ -85,12 +85,12 @@ macro_rules! assert_invariant {
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
 )]
 pub enum UserInputError {
-    #[error("Mutable object {object_id} cannot appear more than one in one transaction.")]
+    #[error("Mutable object {object_id} cannot appear more than one in one transaction")]
     MutableObjectUsedMoreThanOnce { object_id: ObjectID },
-    #[error("Wrong number of parameters for the transaction.")]
+    #[error("Wrong number of parameters for the transaction")]
     ObjectInputArityViolation,
     #[error(
-        "Could not find the referenced object {:?} at version {:?}.",
+        "Could not find the referenced object {:?} at version {:?}",
         object_id,
         version
     )]
@@ -98,7 +98,7 @@ pub enum UserInputError {
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     },
-    #[error("Object {provided_obj_ref:?} is not available for consumption, its current version: {current_version:?}.")]
+    #[error("Object {provided_obj_ref:?} is not available for consumption, its current version: {current_version:?}")]
     ObjectVersionUnavailableForConsumption {
         provided_obj_ref: ObjectRef,
         current_version: SequenceNumber,
@@ -107,26 +107,26 @@ pub enum UserInputError {
     PackageVerificationTimedout { err: String },
     #[error("Dependent package not found on-chain: {package_id:?}")]
     DependentPackageNotFound { package_id: ObjectID },
-    #[error("Mutable parameter provided, immutable parameter expected.")]
+    #[error("Mutable parameter provided, immutable parameter expected")]
     ImmutableParameterExpectedError { object_id: ObjectID },
     #[error("Size limit exceeded: {limit} is {value}")]
     SizeLimitExceeded { limit: String, value: String },
     #[error(
         "Object {child_id:?} is owned by object {parent_id:?}. \
-        Objects owned by other objects cannot be used as input arguments."
+        Objects owned by other objects cannot be used as input arguments"
     )]
     InvalidChildObjectArgument {
         child_id: ObjectID,
         parent_id: ObjectID,
     },
     #[error(
-        "Invalid Object digest for object {object_id:?}. Expected digest : {expected_digest:?}."
+        "Invalid Object digest for object {object_id:?}. Expected digest : {expected_digest:?}"
     )]
     InvalidObjectDigest {
         object_id: ObjectID,
         expected_digest: ObjectDigest,
     },
-    #[error("Sequence numbers above the maximal value are not usable for transfers.")]
+    #[error("Sequence numbers above the maximal value are not usable for transfers")]
     InvalidSequenceNumber,
     #[error("A move object is expected, instead a move package is passed: {object_id}")]
     MovePackageAsObject { object_id: ObjectID },
@@ -135,22 +135,22 @@ pub enum UserInputError {
     #[error("Transaction was not signed by the correct sender: {}", error)]
     IncorrectUserSignature { error: String },
 
-    #[error("Object used as shared is not shared.")]
+    #[error("Object used as shared is not shared")]
     NotSharedObjectError,
     #[error("The transaction inputs contain duplicated ObjectRef's")]
     DuplicateObjectRefInput,
 
     // Gas related errors
-    #[error("Transaction gas payment missing.")]
+    #[error("Transaction gas payment missing")]
     MissingGasPayment,
-    #[error("Gas object is not an owned object with owner: {:?}.", owner)]
+    #[error("Gas object is not an owned object with owner: {:?}", owner)]
     GasObjectNotOwnedObject { owner: Owner },
-    #[error("Gas budget: {:?} is higher than max: {:?}.", gas_budget, max_budget)]
+    #[error("Gas budget: {:?} is higher than max: {:?}", gas_budget, max_budget)]
     GasBudgetTooHigh { gas_budget: u64, max_budget: u64 },
-    #[error("Gas budget: {:?} is lower than min: {:?}.", gas_budget, min_budget)]
+    #[error("Gas budget: {:?} is lower than min: {:?}", gas_budget, min_budget)]
     GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
     #[error(
-        "Balance of gas object {:?} is lower than the needed amount: {:?}.",
+        "Balance of gas object {:?} is lower than the needed amount: {:?}",
         gas_balance,
         needed_gas_amount
     )]
@@ -182,7 +182,7 @@ pub enum UserInputError {
         asked_version: SequenceNumber,
         latest_version: SequenceNumber,
     },
-    #[error("Object deleted at reference {:?}.", object_ref)]
+    #[error("Object deleted at reference {:?}", object_ref)]
     ObjectDeleted { object_ref: ObjectRef },
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
@@ -191,13 +191,13 @@ pub enum UserInputError {
     #[error("Empty input coins for Pay related transaction")]
     EmptyInputCoins,
 
-    #[error("SUI payment transactions use first input coin for gas payment, but found a different gas object.")]
+    #[error("SUI payment transactions use first input coin for gas payment, but found a different gas object")]
     UnexpectedGasPaymentObject,
 
     #[error("Wrong initial version given for shared object")]
     SharedObjectStartingVersionMismatch,
 
-    #[error("Attempt to transfer object {object_id} that does not have public transfer. Object transfer must be done instead using a distinct Move function call.")]
+    #[error("Attempt to transfer object {object_id} that does not have public transfer. Object transfer must be done instead using a distinct Move function call")]
     TransferObjectWithoutPublicTransferError { object_id: ObjectID },
 
     #[error(
@@ -234,7 +234,7 @@ pub enum UserInputError {
     TransactionCursorNotFound(u64),
 
     #[error(
-        "Object {:?} is a system object and cannot be accessed by user transactions.",
+        "Object {:?} is a system object and cannot be accessed by user transactions",
         object_id
     )]
     InaccessibleSystemObject { object_id: ObjectID },
@@ -246,8 +246,44 @@ pub enum UserInputError {
         publish_count: u64,
     },
 
-    #[error("Immutable parameter provided, mutable parameter expected.")]
+    #[error("Immutable parameter provided, mutable parameter expected")]
     MutableParameterExpected { object_id: ObjectID },
+
+    #[error("Address {address:?} is denied for coin {coin_type}")]
+    AddressDeniedForCoin {
+        address: SuiAddress,
+        coin_type: String,
+    },
+
+    #[error("Commands following a command with Random can only be TransferObjects or MergeCoins")]
+    PostRandomCommandRestrictions,
+
+    // Soft Bundle related errors
+    #[error(
+        "Number of transactions exceeds the maximum allowed ({:?}) in a Soft Bundle",
+        limit
+    )]
+    TooManyTransactionsInSoftBundle { limit: u64 },
+    #[error("Transaction {:?} in Soft Bundle contains no shared objects", digest)]
+    NoSharedObjectError { digest: TransactionDigest },
+    #[error("Transaction {:?} in Soft Bundle has already been executed", digest)]
+    AlreadyExecutedError { digest: TransactionDigest },
+    #[error("At least one certificate in Soft Bundle has already been processed")]
+    CeritificateAlreadyProcessed,
+    #[error(
+        "Gas price for transaction {:?} in Soft Bundle mismatch: want {:?}, have {:?}",
+        digest,
+        expected,
+        actual
+    )]
+    GasPriceMismatchError {
+        digest: TransactionDigest,
+        expected: u64,
+        actual: u64,
+    },
+
+    #[error("Coin type is globally paused for use: {coin_type}")]
+    CoinTypeGlobalPause { coin_type: String },
 }
 
 #[derive(
@@ -265,9 +301,9 @@ pub enum UserInputError {
 )]
 #[serde(tag = "code", rename = "ObjectResponseError", rename_all = "camelCase")]
 pub enum SuiObjectResponseError {
-    #[error("Object {:?} does not exist.", object_id)]
+    #[error("Object {:?} does not exist", object_id)]
     NotExists { object_id: ObjectID },
-    #[error("Cannot find dynamic field for parent object {:?}.", parent_object_id)]
+    #[error("Cannot find dynamic field for parent object {:?}", parent_object_id)]
     DynamicFieldNotFound { parent_object_id: ObjectID },
     #[error(
         "Object has been deleted object_id: {:?} at version: {:?} in digest {:?}",
@@ -282,7 +318,7 @@ pub enum SuiObjectResponseError {
         /// Base64 string representing the object digest
         digest: ObjectDigest,
     },
-    #[error("Unknown Error.")]
+    #[error("Unknown Error")]
     Unknown,
     #[error("Display Error: {:?}", error)]
     DisplayError { error: String },
@@ -323,15 +359,18 @@ pub enum SuiError {
         threshold: u64,
     },
 
+    #[error("Soft bundle must only contain transactions of UserTransaction kind")]
+    InvalidTxKindInSoftBundle,
+
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
-    #[error("Required Signature from {expected} is absent {:?}.", actual)]
+    #[error("Required Signature from {expected} is absent {:?}", actual)]
     SignerSignatureAbsent {
         expected: String,
         actual: Vec<String>,
     },
-    #[error("Expect {actual} signer signatures but got {expected}.")]
+    #[error("Expect {expected} signer signatures but got {actual}")]
     SignerSignatureNumberMismatch { expected: usize, actual: usize },
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },
@@ -384,8 +423,6 @@ pub enum SuiError {
     },
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSigs,
-    #[error("System Transaction not accepted")]
-    InvalidSystemTransaction,
 
     // Account access
     #[error("Invalid authenticator")]
@@ -397,6 +434,8 @@ pub enum SuiError {
 
     #[error("Invalid digest length. Expected {expected}, got {actual}")]
     InvalidDigestLength { expected: usize, actual: usize },
+    #[error("Invalid DKG message size")]
+    InvalidDkgMessageSize,
 
     #[error("Unexpected message.")]
     UnexpectedMessage,
@@ -461,10 +500,14 @@ pub enum SuiError {
         authority: AuthorityName,
         reason: String,
     },
-    #[error("Storage error")]
-    StorageError(#[from] TypedStoreError),
-    #[error("Non-RocksDB Storage error: {0}")]
-    GenericStorageError(String),
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "StorageError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_StorageError,
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "GenericStorageError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_GenericStorageError,
     #[error(
         "Attempted to access {object} through parent {given_parent}, \
         but it's actual parent is {actual_owner}"
@@ -475,13 +518,20 @@ pub enum SuiError {
         actual_owner: Owner,
     },
 
-    #[error("Missing fields/data in storage error: {0}")]
-    StorageMissingFieldError(String),
-    #[error("Corrupted fields/data in storage error: {0}")]
-    StorageCorruptedFieldError(String),
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "StorageMissingFieldError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_StorageMissingFieldError,
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "StorageCorruptedFieldError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_StorageCorruptedFieldError,
 
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
+
+    #[error("Generic Bridge Error: {error:?}")]
+    GenericBridgeError { error: String },
 
     #[error("Failed to dispatch subscription: {error:?}")]
     FailedToDispatchSubscription { error: String },
@@ -523,10 +573,6 @@ pub enum SuiError {
     HandleConsensusTransactionFailure(String),
 
     // Cryptography errors.
-    #[error("Signature seed invalid length, input byte size was: {0}")]
-    SignatureSeedInvalidLength(usize),
-    #[error("HKDF error: {0}")]
-    HkdfError(String),
     #[error("Signature key generation error: {0}")]
     SignatureKeyGenError(String),
     #[error("Key Conversion Error: {0}")]
@@ -541,6 +587,8 @@ pub enum SuiError {
     // Epoch related errors.
     #[error("Validator temporarily stopped processing transactions due to epoch change")]
     ValidatorHaltedAtEpochEnd,
+    #[error("Operations for epoch {0} have ended")]
+    EpochEnded(EpochId),
     #[error("Error when advancing epoch: {:?}", error)]
     AdvanceEpochError { error: String },
 
@@ -552,6 +600,10 @@ pub enum SuiError {
     #[error("{1} - {0}")]
     RpcError(String, String),
 
+    #[error("Method not allowed")]
+    InvalidRpcMethodError,
+
+    // TODO: We should fold this into UserInputError::Unsupported.
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
 
@@ -579,6 +631,9 @@ pub enum SuiError {
     #[error("Failed to read or deserialize system state related data structures on-chain: {0}")]
     SuiSystemStateReadError(String),
 
+    #[error("Failed to read or deserialize bridge related data structures on-chain: {0}")]
+    SuiBridgeReadError(String),
+
     #[error("Unexpected version error: {0}")]
     UnexpectedVersion(String),
 
@@ -593,6 +648,18 @@ pub enum SuiError {
 
     #[error("Failed to get JWK")]
     JWKRetrievalError,
+
+    #[error("Storage error: {0}")]
+    Storage(String),
+
+    #[error("Validator cannot handle the request at the moment. Please retry after at least {retry_after_secs} seconds.")]
+    ValidatorOverloadedRetryAfter { retry_after_secs: u64 },
+
+    #[error("Too many requests")]
+    TooManyRequests,
+
+    #[error("The request did not contain a certificate")]
+    NoCertificateProvidedError,
 }
 
 #[repr(u64)]
@@ -637,6 +704,10 @@ impl From<ExecutionError> for SuiError {
 
 impl From<Status> for SuiError {
     fn from(status: Status) -> Self {
+        if status.message() == "Too many requests" {
+            return Self::TooManyRequests;
+        }
+
         let result = bcs::from_bytes::<SuiError>(status.details());
         if let Ok(sui_error) = result {
             sui_error
@@ -646,6 +717,18 @@ impl From<Status> for SuiError {
                 status.code().description().to_owned(),
             )
         }
+    }
+}
+
+impl From<TypedStoreError> for SuiError {
+    fn from(e: TypedStoreError) -> Self {
+        Self::Storage(e.to_string())
+    }
+}
+
+impl From<crate::storage::error::Error> for SuiError {
+    fn from(e: crate::storage::error::Error) -> Self {
+        Self::Storage(e.to_string())
     }
 }
 
@@ -669,17 +752,6 @@ impl From<&str> for SuiError {
         }
     }
 }
-
-// impl From<FastCryptoError> for SuiError {
-//     fn from(kind: FastCryptoError) -> Self {
-//         match kind {
-//             FastCryptoError::InvalidSignature => SuiError::InvalidSignature {
-//                 error: "Invalid signature".to_string(),
-//             },
-//             _ => SuiError::Unknown("Unknown cryptography error".to_string()),
-//         }
-//     }
-// }
 
 impl TryFrom<SuiError> for UserInputError {
     type Error = anyhow::Error;
@@ -717,44 +789,51 @@ impl SuiError {
     /// There should be only a handful of retryable errors. For now we list common
     /// non-retryable error below to help us find more retryable errors in logs.
     pub fn is_retryable(&self) -> (bool, bool) {
-        match self {
+        let retryable = match self {
             // Network error
-            SuiError::RpcError { .. } => (true, true),
+            SuiError::RpcError { .. } => true,
 
             // Reconfig error
-            SuiError::ValidatorHaltedAtEpochEnd => (true, true),
-            SuiError::MissingCommitteeAtEpoch(..) => (true, true),
-            SuiError::WrongEpoch { .. } => (true, true),
+            SuiError::ValidatorHaltedAtEpochEnd => true,
+            SuiError::MissingCommitteeAtEpoch(..) => true,
+            SuiError::WrongEpoch { .. } => true,
 
             SuiError::UserInputError { error } => {
                 match error {
                     // Only ObjectNotFound and DependentPackageNotFound is potentially retryable
-                    UserInputError::ObjectNotFound { .. } => (true, true),
-                    UserInputError::DependentPackageNotFound { .. } => (true, true),
-                    _ => (false, true),
+                    UserInputError::ObjectNotFound { .. } => true,
+                    UserInputError::DependentPackageNotFound { .. } => true,
+                    _ => false,
                 }
             }
 
-            SuiError::PotentiallyTemporarilyInvalidSignature { .. } => (true, true),
+            SuiError::PotentiallyTemporarilyInvalidSignature { .. } => true,
 
             // Overload errors
-            SuiError::TooManyTransactionsPendingExecution { .. } => (true, true),
-            SuiError::TooManyTransactionsPendingOnObject { .. } => (true, true),
-            SuiError::TooOldTransactionPendingOnObject { .. } => (true, true),
-            SuiError::TooManyTransactionsPendingConsensus => (true, true),
+            SuiError::TooManyTransactionsPendingExecution { .. } => true,
+            SuiError::TooManyTransactionsPendingOnObject { .. } => true,
+            SuiError::TooOldTransactionPendingOnObject { .. } => true,
+            SuiError::TooManyTransactionsPendingConsensus => true,
+            SuiError::ValidatorOverloadedRetryAfter { .. } => true,
 
             // Non retryable error
-            SuiError::ExecutionError(..) => (false, true),
-            SuiError::ByzantineAuthoritySuspicion { .. } => (false, true),
-            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
-                (false, true)
-            }
-            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => (false, true),
-            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => (false, true),
-            SuiError::ObjectLockConflict { .. } => (false, true),
+            SuiError::ExecutionError(..) => false,
+            SuiError::ByzantineAuthoritySuspicion { .. } => false,
+            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => false,
+            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => false,
+            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => false,
+            SuiError::ObjectLockConflict { .. } => false,
 
-            _ => (false, false),
-        }
+            // NB: This is not an internal overload, but instead an imposed rate
+            // limit / blocking of a client. It must be non-retryable otherwise
+            // we will make the threat worse through automatic retries.
+            SuiError::TooManyRequests => false,
+
+            // For all un-categorized errors, return here with categorized = false.
+            _ => return (false, false),
+        };
+
+        (retryable, true)
     }
 
     pub fn is_object_or_package_not_found(&self) -> bool {
@@ -778,6 +857,17 @@ impl SuiError {
                 | SuiError::TooOldTransactionPendingOnObject { .. }
                 | SuiError::TooManyTransactionsPendingConsensus
         )
+    }
+
+    pub fn is_retryable_overload(&self) -> bool {
+        matches!(self, SuiError::ValidatorOverloadedRetryAfter { .. })
+    }
+
+    pub fn retry_after_secs(&self) -> u64 {
+        match self {
+            SuiError::ValidatorOverloadedRetryAfter { retry_after_secs } => *retry_after_secs,
+            _ => 0,
+        }
     }
 }
 

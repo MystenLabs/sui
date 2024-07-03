@@ -38,7 +38,7 @@ impl CommitteeStore {
     pub fn new(path: PathBuf, genesis_committee: &Committee, db_options: Option<Options>) -> Self {
         let tables = CommitteeStoreTables::open_tables_read_write(
             path,
-            MetricConf::default(),
+            MetricConf::new("committee"),
             db_options,
             None,
         );
@@ -122,7 +122,7 @@ impl CommitteeStore {
         self.tables
             .committee_map
             .checkpoint_db(path)
-            .map_err(SuiError::StorageError)
+            .map_err(Into::into)
     }
 
     fn database_is_empty(&self) -> bool {

@@ -1,5 +1,60 @@
 # Change Log
 
+## 1.0.2
+
+### Patch Changes
+
+- 369b924343: Improve error messages when attempting to serialze non-array values that should be arrays
+
+## 1.0.1
+
+### Patch Changes
+
+- f1e828f557: Remove undefined from bcs.option output types
+
+## 1.0.0
+
+### Major Changes
+
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
+  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+
+## 0.11.1
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+
+## 0.11.0
+
+### Minor Changes
+
+- bae8802fe3: Update base64 encoding to use global `atob` and `btoa` functions.
+
+## 0.10.1
+
+### Patch Changes
+
+- 9ac0a4ec01: Add extensions to all sdk import paths
+
+## 0.10.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+## 0.9.1
+
+### Patch Changes
+
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+
+## 0.9.0
+
+### Minor Changes
+
+- fce0a08d0f: Deprecate the bcs.generic helper. This helper causes typescript performance issues, and the generated generics can't be exported
+
 ## 0.8.1
 
 ### Patch Changes
@@ -10,7 +65,7 @@
 
 ### Minor Changes
 
-- 1bc430161: Add new type-safe schema builder. See https://sui-typescript-docs.vercel.app/bcs for updated documentation
+- 1bc430161: Add new type-safe schema builder. See https://sdk.mystenlabs.com/bcs for updated documentation
 - e4484852b: Add isSerializedBcs helper
 
 ## 0.7.4

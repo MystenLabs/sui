@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB58, toB58 } from './b58';
-import { fromB64, toB64 } from './b64';
-import { fromHEX, toHEX } from './hex';
-import { Encoding } from './types';
+import { fromB58, toB58 } from './b58.js';
+import { fromB64, toB64 } from './b64.js';
+import { fromHEX, toHEX } from './hex.js';
+import type { Encoding } from './types.js';
 
 /**
  * Encode data with either `hex` or `base64`.

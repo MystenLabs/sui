@@ -20,18 +20,8 @@ struct Args {
     config_path: PathBuf,
 }
 
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = "DIRTY"
-        )
-    }
-};
-
-pub const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
+// Define the `GIT_REVISION` and `VERSION` consts
+bin_version::bin_version!();
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
@@ -40,7 +30,7 @@ pub async fn main() -> anyhow::Result<()> {
     let package_config = parse_config(args.config_path)?;
     let tmp_dir = tempfile::tempdir()?;
     let start = tokio::time::Instant::now();
-    let sources = initialize(&package_config, tmp_dir.path()).await?;
+    let (sources, sources_list) = initialize(&package_config, tmp_dir.path()).await?;
     info!("verification complete in {:?}", start.elapsed());
 
     let metrics_listener = std::net::TcpListener::bind(METRICS_HOST_PORT)?;
@@ -51,6 +41,7 @@ pub async fn main() -> anyhow::Result<()> {
     let app_state = Arc::new(RwLock::new(AppState {
         sources,
         metrics: Some(metrics),
+        sources_list,
     }));
     let mut threads = vec![];
     let networks_to_watch = vec![

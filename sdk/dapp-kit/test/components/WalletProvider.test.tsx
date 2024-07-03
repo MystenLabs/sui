@@ -107,7 +107,7 @@ describe('WalletProvider', () => {
 		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
 
 		const wrapper = createWalletProviderContextWrapper({
-			requiredFeatures: ['my-dapp:super-cool-feature'],
+			walletFilter: (wallet) => !!wallet.features['my-dapp:super-cool-feature'],
 		});
 		const { result } = renderHook(() => useWallets(), { wrapper });
 		const walletNames = result.current.map((wallet) => wallet.name);
@@ -137,10 +137,13 @@ describe('WalletProvider', () => {
 		);
 
 		result.current.connectWallet.mutate({ wallet: mockWallet });
+
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
 
 		// Simulate deleting the account we're currently connected to.
-		mockWallet.deleteFirstAccount();
+		act(() => {
+			mockWallet.deleteFirstAccount();
+		});
 
 		expect(result.current.currentAccount).toBeTruthy();
 		await waitFor(() => {
@@ -196,6 +199,50 @@ describe('WalletProvider', () => {
 			);
 
 			act(() => unregister());
+		});
+
+		test('auto-connecting to an id-based wallet works', async () => {
+			const wallet1 = registerMockWallet({
+				id: '1',
+				walletName: 'Mock Wallet',
+				features: suiFeatures,
+			});
+
+			const wallet2 = registerMockWallet({
+				id: '2',
+				walletName: 'Mock Wallet',
+				features: suiFeatures,
+			});
+
+			const wrapper = createWalletProviderContextWrapper({
+				autoConnect: true,
+			});
+			const { result, unmount } = renderHook(() => useConnectWallet(), { wrapper });
+
+			result.current.mutate({ wallet: wallet1.mockWallet });
+
+			await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+			// Now unmount our component tree to simulate someone leaving the page.
+			unmount();
+
+			// Render our component tree again and auto-connect to our previously connected wallet account.
+			const { result: updatedResult } = renderHook(
+				() => ({
+					currentWallet: useCurrentWallet(),
+					currentAccount: useCurrentAccount(),
+				}),
+				{ wrapper },
+			);
+
+			await waitFor(() => expect(updatedResult.current.currentWallet.isConnected).toBe(true));
+			expect(updatedResult.current.currentWallet.currentWallet!.id).toStrictEqual('1');
+			expect(updatedResult.current.currentAccount).toBeTruthy();
+
+			act(() => {
+				wallet1.unregister();
+				wallet2.unregister();
+			});
 		});
 
 		test('wallet connection info is removed upon disconnection', async () => {

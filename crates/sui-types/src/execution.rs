@@ -8,6 +8,7 @@ use crate::{
     error::{ExecutionError, ExecutionErrorKind, SuiError},
     event::Event,
     execution_status::CommandArgumentError,
+    is_system_package,
     object::{Data, Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
     transfer::Receiving,
@@ -24,7 +25,7 @@ pub trait SuiResolver: ResourceResolver<Error = SuiError> + BackingPackageStore 
 }
 
 /// A type containing all of the information needed to work with a deleted shared object in
-/// execution and when commiting the execution effects of the transaction. This holds:
+/// execution and when committing the execution effects of the transaction. This holds:
 /// 0. The object ID of the deleted shared object.
 /// 1. The version of the shared object.
 /// 2. Whether the object appeared as mutable (or owned) in the transaction, or as a read-only shared object.
@@ -39,6 +40,7 @@ pub type DeletedSharedObjects = Vec<DeletedSharedObjectInfo>;
 pub enum SharedInput {
     Existing(ObjectRef),
     Deleted(DeletedSharedObjectInfo),
+    Cancelled((ObjectID, SequenceNumber)),
 }
 
 impl<T> SuiResolver for T
@@ -129,6 +131,8 @@ impl ExecutionResultsV2 {
         &mut self,
         lamport_version: SequenceNumber,
         prev_tx: TransactionDigest,
+        input_objects: &BTreeMap<ObjectID, Object>,
+        reshare_at_initial_version: bool,
     ) {
         for (id, obj) in self.written_objects.iter_mut() {
             // TODO: We can now get rid of the following logic by passing in lamport version
@@ -146,6 +150,7 @@ impl ExecutionResultsV2 {
                     // only applies to system packages).  All other packages can only be created,
                     // and they are left alone.
                     if self.modified_objects.contains(id) {
+                        debug_assert!(is_system_package(*id));
                         pkg.increment_version();
                     }
                 }
@@ -165,6 +170,23 @@ impl ExecutionResultsV2 {
                         "Initial version should be blank before this point for {id:?}",
                     );
                     *initial_shared_version = lamport_version;
+                }
+
+                // Update initial_shared_version for reshared objects
+                if reshare_at_initial_version {
+                    if let Some(Owner::Shared {
+                        initial_shared_version: previous_initial_shared_version,
+                    }) = input_objects.get(id).map(|obj| &obj.owner)
+                    {
+                        debug_assert!(!self.created_object_ids.contains(id));
+                        debug_assert!(!self.deleted_object_ids.contains(id));
+                        debug_assert!(
+                            *initial_shared_version == SequenceNumber::new()
+                                || *initial_shared_version == *previous_initial_shared_version
+                        );
+
+                        *initial_shared_version = *previous_initial_shared_version;
+                    }
                 }
             }
 

@@ -3,21 +3,21 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 9-29:
+task 1 'publish'. lines 9-26:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 31-35:
+task 2 'programmable'. lines 28-32:
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'programmable'. lines 37-41:
+task 3 'programmable'. lines 34-38:
 mutated: object(0,0)
 deleted: object(2,0), object(2,1), object(2,2)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 4589640, non_refundable_storage_fee: 46360
 
-task 4 'programmable'. lines 43-46:
+task 4 'programmable'. lines 40-43:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

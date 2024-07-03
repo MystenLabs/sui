@@ -1,0 +1,1538 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 17,
+                    },
+                    value: Publish(
+                        Spanned {
+                            span: Span {
+                                start: 0,
+                                end: 17,
+                            },
+                            value: "foo/bar",
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 18,
+                        end: 32,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 21,
+                    },
+                    value: Publish(
+                        Spanned {
+                            span: Span {
+                                start: 0,
+                                end: 21,
+                            },
+                            value: "foo/bar.ptb",
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 22,
+                        end: 36,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 18,
+                    },
+                    value: Upgrade(
+                        Spanned {
+                            span: Span {
+                                start: 0,
+                                end: 13,
+                            },
+                            value: "foo",
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 14,
+                                end: 18,
+                            },
+                            value: Address(
+                                0x1,
+                            ),
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 19,
+                        end: 33,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 27,
+                    },
+                    value: TransferObjects(
+                        Spanned {
+                            span: Span {
+                                start: 19,
+                                end: 25,
+                            },
+                            value: [
+                                Spanned {
+                                    span: Span {
+                                        start: 20,
+                                        end: 21,
+                                    },
+                                    value: Identifier(
+                                        "b",
+                                    ),
+                                },
+                                Spanned {
+                                    span: Span {
+                                        start: 23,
+                                        end: 24,
+                                    },
+                                    value: Identifier(
+                                        "c",
+                                    ),
+                                },
+                            ],
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 26,
+                                end: 27,
+                            },
+                            value: Identifier(
+                                "a",
+                            ),
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 28,
+                        end: 42,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 24,
+                    },
+                    value: TransferObjects(
+                        Spanned {
+                            span: Span {
+                                start: 19,
+                                end: 22,
+                            },
+                            value: [
+                                Spanned {
+                                    span: Span {
+                                        start: 20,
+                                        end: 21,
+                                    },
+                                    value: Identifier(
+                                        "b",
+                                    ),
+                                },
+                            ],
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 23,
+                                end: 24,
+                            },
+                            value: Identifier(
+                                "a",
+                            ),
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 25,
+                        end: 39,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 26,
+                    },
+                    value: TransferObjects(
+                        Spanned {
+                            span: Span {
+                                start: 19,
+                                end: 22,
+                            },
+                            value: [
+                                Spanned {
+                                    span: Span {
+                                        start: 20,
+                                        end: 21,
+                                    },
+                                    value: Identifier(
+                                        "b",
+                                    ),
+                                },
+                            ],
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 23,
+                                end: 26,
+                            },
+                            value: VariableAccess(
+                                Spanned {
+                                    span: Span {
+                                        start: 23,
+                                        end: 24,
+                                    },
+                                    value: "a",
+                                },
+                                [
+                                    Spanned {
+                                        span: Span {
+                                            start: 25,
+                                            end: 26,
+                                        },
+                                        value: "0",
+                                    },
+                                ],
+                            ),
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 27,
+                        end: 41,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 22,
+                    },
+                    value: SplitCoins(
+                        Spanned {
+                            span: Span {
+                                start: 14,
+                                end: 15,
+                            },
+                            value: Identifier(
+                                "a",
+                            ),
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 16,
+                                end: 22,
+                            },
+                            value: [
+                                Spanned {
+                                    span: Span {
+                                        start: 17,
+                                        end: 18,
+                                    },
+                                    value: Identifier(
+                                        "b",
+                                    ),
+                                },
+                                Spanned {
+                                    span: Span {
+                                        start: 20,
+                                        end: 21,
+                                    },
+                                    value: Identifier(
+                                        "c",
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 23,
+                        end: 37,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 19,
+                    },
+                    value: SplitCoins(
+                        Spanned {
+                            span: Span {
+                                start: 14,
+                                end: 15,
+                            },
+                            value: Identifier(
+                                "a",
+                            ),
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 16,
+                                end: 19,
+                            },
+                            value: [
+                                Spanned {
+                                    span: Span {
+                                        start: 17,
+                                        end: 18,
+                                    },
+                                    value: Identifier(
+                                        "c",
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 20,
+                        end: 34,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 22,
+                    },
+                    value: MergeCoins(
+                        Spanned {
+                            span: Span {
+                                start: 14,
+                                end: 15,
+                            },
+                            value: Identifier(
+                                "a",
+                            ),
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 16,
+                                end: 22,
+                            },
+                            value: [
+                                Spanned {
+                                    span: Span {
+                                        start: 17,
+                                        end: 18,
+                                    },
+                                    value: Identifier(
+                                        "b",
+                                    ),
+                                },
+                                Spanned {
+                                    span: Span {
+                                        start: 20,
+                                        end: 21,
+                                    },
+                                    value: Identifier(
+                                        "c",
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 23,
+                        end: 37,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 19,
+                    },
+                    value: MergeCoins(
+                        Spanned {
+                            span: Span {
+                                start: 14,
+                                end: 15,
+                            },
+                            value: Identifier(
+                                "a",
+                            ),
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 16,
+                                end: 19,
+                            },
+                            value: [
+                                Spanned {
+                                    span: Span {
+                                        start: 17,
+                                        end: 18,
+                                    },
+                                    value: Identifier(
+                                        "c",
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 20,
+                        end: 34,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 24,
+                    },
+                    value: MakeMoveVec(
+                        Spanned {
+                            span: Span {
+                                start: 17,
+                                end: 20,
+                            },
+                            value: U64,
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 22,
+                                end: 24,
+                            },
+                            value: [],
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 25,
+                        end: 39,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 31,
+                    },
+                    value: MakeMoveVec(
+                        Spanned {
+                            span: Span {
+                                start: 17,
+                                end: 19,
+                            },
+                            value: U8,
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 21,
+                                end: 31,
+                            },
+                            value: [
+                                Spanned {
+                                    span: Span {
+                                        start: 22,
+                                        end: 25,
+                                    },
+                                    value: U8(
+                                        1,
+                                    ),
+                                },
+                                Spanned {
+                                    span: Span {
+                                        start: 27,
+                                        end: 30,
+                                    },
+                                    value: U8(
+                                        2,
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 32,
+                        end: 46,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 71,
+                    },
+                    value: MoveCall(
+                        Spanned {
+                            span: Span {
+                                start: 12,
+                                end: 46,
+                            },
+                            value: ModuleAccess {
+                                address: Spanned {
+                                    span: Span {
+                                        start: 12,
+                                        end: 15,
+                                    },
+                                    value: Numerical(
+                                        0x3,
+                                    ),
+                                },
+                                module_name: Spanned {
+                                    span: Span {
+                                        start: 17,
+                                        end: 27,
+                                    },
+                                    value: Identifier(
+                                        "sui_system",
+                                    ),
+                                },
+                                function_name: Spanned {
+                                    span: Span {
+                                        start: 29,
+                                        end: 46,
+                                    },
+                                    value: Identifier(
+                                        "request_add_stake",
+                                    ),
+                                },
+                            },
+                        },
+                        None,
+                        [
+                            Spanned {
+                                span: Span {
+                                    start: 47,
+                                    end: 53,
+                                },
+                                value: Identifier(
+                                    "system",
+                                ),
+                            },
+                            Spanned {
+                                span: Span {
+                                    start: 54,
+                                    end: 61,
+                                },
+                                value: VariableAccess(
+                                    Spanned {
+                                        span: Span {
+                                            start: 54,
+                                            end: 59,
+                                        },
+                                        value: "coins",
+                                    },
+                                    [
+                                        Spanned {
+                                            span: Span {
+                                                start: 60,
+                                                end: 61,
+                                            },
+                                            value: "0",
+                                        },
+                                    ],
+                                ),
+                            },
+                            Spanned {
+                                span: Span {
+                                    start: 62,
+                                    end: 71,
+                                },
+                                value: Identifier(
+                                    "validator",
+                                ),
+                            },
+                        ],
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 72,
+                        end: 86,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 40,
+                    },
+                    value: MoveCall(
+                        Spanned {
+                            span: Span {
+                                start: 12,
+                                end: 32,
+                            },
+                            value: ModuleAccess {
+                                address: Spanned {
+                                    span: Span {
+                                        start: 12,
+                                        end: 15,
+                                    },
+                                    value: Named(
+                                        "std",
+                                    ),
+                                },
+                                module_name: Spanned {
+                                    span: Span {
+                                        start: 17,
+                                        end: 23,
+                                    },
+                                    value: Identifier(
+                                        "option",
+                                    ),
+                                },
+                                function_name: Spanned {
+                                    span: Span {
+                                        start: 25,
+                                        end: 32,
+                                    },
+                                    value: Identifier(
+                                        "is_none",
+                                    ),
+                                },
+                            },
+                        },
+                        Some(
+                            Spanned {
+                                span: Span {
+                                    start: 33,
+                                    end: 38,
+                                },
+                                value: [
+                                    U64,
+                                ],
+                            },
+                        ),
+                        [
+                            Spanned {
+                                span: Span {
+                                    start: 39,
+                                    end: 40,
+                                },
+                                value: Identifier(
+                                    "p",
+                                ),
+                            },
+                        ],
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 41,
+                        end: 55,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 39,
+                    },
+                    value: MoveCall(
+                        Spanned {
+                            span: Span {
+                                start: 12,
+                                end: 32,
+                            },
+                            value: ModuleAccess {
+                                address: Spanned {
+                                    span: Span {
+                                        start: 12,
+                                        end: 15,
+                                    },
+                                    value: Named(
+                                        "std",
+                                    ),
+                                },
+                                module_name: Spanned {
+                                    span: Span {
+                                        start: 17,
+                                        end: 23,
+                                    },
+                                    value: Identifier(
+                                        "option",
+                                    ),
+                                },
+                                function_name: Spanned {
+                                    span: Span {
+                                        start: 25,
+                                        end: 32,
+                                    },
+                                    value: Identifier(
+                                        "is_some",
+                                    ),
+                                },
+                            },
+                        },
+                        Some(
+                            Spanned {
+                                span: Span {
+                                    start: 32,
+                                    end: 37,
+                                },
+                                value: [
+                                    U32,
+                                ],
+                            },
+                        ),
+                        [
+                            Spanned {
+                                span: Span {
+                                    start: 38,
+                                    end: 39,
+                                },
+                                value: Identifier(
+                                    "q",
+                                ),
+                            },
+                        ],
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 40,
+                        end: 54,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 10,
+                    },
+                    value: Assign(
+                        Spanned {
+                            span: Span {
+                                start: 9,
+                                end: 10,
+                            },
+                            value: "a",
+                        },
+                        None,
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 11,
+                        end: 25,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 14,
+                    },
+                    value: Assign(
+                        Spanned {
+                            span: Span {
+                                start: 9,
+                                end: 10,
+                            },
+                            value: "a",
+                        },
+                        Some(
+                            Spanned {
+                                span: Span {
+                                    start: 11,
+                                    end: 14,
+                                },
+                                value: VariableAccess(
+                                    Spanned {
+                                        span: Span {
+                                            start: 11,
+                                            end: 12,
+                                        },
+                                        value: "b",
+                                    },
+                                    [
+                                        Spanned {
+                                            span: Span {
+                                                start: 13,
+                                                end: 14,
+                                            },
+                                            value: "1",
+                                        },
+                                    ],
+                                ),
+                            },
+                        ),
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 15,
+                        end: 29,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 14,
+                    },
+                    value: Assign(
+                        Spanned {
+                            span: Span {
+                                start: 9,
+                                end: 10,
+                            },
+                            value: "a",
+                        },
+                        Some(
+                            Spanned {
+                                span: Span {
+                                    start: 11,
+                                    end: 14,
+                                },
+                                value: U8(
+                                    1,
+                                ),
+                            },
+                        ),
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 15,
+                        end: 29,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 15,
+                    },
+                    value: Assign(
+                        Spanned {
+                            span: Span {
+                                start: 9,
+                                end: 10,
+                            },
+                            value: "a",
+                        },
+                        Some(
+                            Spanned {
+                                span: Span {
+                                    start: 11,
+                                    end: 15,
+                                },
+                                value: Address(
+                                    0x1,
+                                ),
+                            },
+                        ),
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 16,
+                        end: 30,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 26,
+                    },
+                    value: Assign(
+                        Spanned {
+                            span: Span {
+                                start: 9,
+                                end: 10,
+                            },
+                            value: "a",
+                        },
+                        Some(
+                            Spanned {
+                                span: Span {
+                                    start: 11,
+                                    end: 26,
+                                },
+                                value: Vector(
+                                    [
+                                        Spanned {
+                                            span: Span {
+                                                start: 18,
+                                                end: 19,
+                                            },
+                                            value: InferredNum(
+                                                U256(
+                                                    1,
+                                                ),
+                                            ),
+                                        },
+                                        Spanned {
+                                            span: Span {
+                                                start: 21,
+                                                end: 22,
+                                            },
+                                            value: InferredNum(
+                                                U256(
+                                                    2,
+                                                ),
+                                            ),
+                                        },
+                                        Spanned {
+                                            span: Span {
+                                                start: 24,
+                                                end: 25,
+                                            },
+                                            value: InferredNum(
+                                                U256(
+                                                    3,
+                                                ),
+                                            ),
+                                        },
+                                    ],
+                                ),
+                            },
+                        ),
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 27,
+                        end: 41,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 15,
+                    },
+                    value: Assign(
+                        Spanned {
+                            span: Span {
+                                start: 9,
+                                end: 10,
+                            },
+                            value: "a",
+                        },
+                        Some(
+                            Spanned {
+                                span: Span {
+                                    start: 11,
+                                    end: 15,
+                                },
+                                value: Option(
+                                    Spanned {
+                                        span: Span {
+                                            start: 11,
+                                            end: 15,
+                                        },
+                                        value: None,
+                                    },
+                                ),
+                            },
+                        ),
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 16,
+                        end: 30,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 18,
+                    },
+                    value: Assign(
+                        Spanned {
+                            span: Span {
+                                start: 9,
+                                end: 10,
+                            },
+                            value: "a",
+                        },
+                        Some(
+                            Spanned {
+                                span: Span {
+                                    start: 11,
+                                    end: 18,
+                                },
+                                value: Option(
+                                    Spanned {
+                                        span: Span {
+                                            start: 16,
+                                            end: 17,
+                                        },
+                                        value: Some(
+                                            InferredNum(
+                                                U256(
+                                                    1,
+                                                ),
+                                            ),
+                                        ),
+                                    },
+                                ),
+                            },
+                        ),
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 19,
+                        end: 33,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: Some(
+                Spanned {
+                    span: Span {
+                        start: 11,
+                        end: 15,
+                    },
+                    value: 0x0000000000000000000000000000000000000000000000000000000000000001,
+                },
+            ),
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 16,
+                        end: 30,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: true,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 10,
+                        end: 24,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: true,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 7,
+                        end: 21,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: true,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 10,
+                        end: 24,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+    (
+        Program {
+            commands: [],
+            warn_shadows_set: true,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 15,
+                        end: 29,
+                    },
+                    value: 1,
+                },
+            ),
+        },
+    ),
+]

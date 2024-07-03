@@ -1,0 +1,36 @@
+// Tests if in presence of parsing errors for one module (M1), symbolication information will still
+// be correctly constructed for another independent module (M2).
+
+{
+  "project": "tests/parse-error",
+  "file_tests": {
+    "M1.move": [
+      {
+        "UseDefTest": {
+          "use_line": 8,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 14,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 21,
+          "use_ndx": 0
+        }
+      }
+    ],
+    "M2.move": [
+      {
+        "UseDefTest": {
+          "use_line": 2,
+          "use_ndx": 0
+        }
+      }
+    ]
+  }
+}

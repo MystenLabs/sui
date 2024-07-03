@@ -20,14 +20,14 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
-    value::MoveValue,
+    runtime_value::MoveValue,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::{
     gas::UnmeteredGasMeter,
-    loaded_data::runtime_types::{DepthFormula, StructType, Type},
+    loaded_data::runtime_types::{CachedDatatype, DepthFormula, Type},
 };
 
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc, thread};
@@ -136,7 +136,7 @@ impl Adapter {
                 .publish_module(binary, DEFAULT_ACCOUNT, &mut UnmeteredGasMeter)
                 .unwrap_or_else(|e| panic!("failure publishing module: {e:?}\n{:#?}", module));
         }
-        let (changeset, _) = session.finish().0.expect("failure getting write set");
+        let changeset = session.finish().0.expect("failure getting write set");
         self.store
             .apply(changeset)
             .expect("failure applying write set");
@@ -173,7 +173,7 @@ impl Adapter {
             .publish_module_bundle(binaries, DEFAULT_ACCOUNT, &mut UnmeteredGasMeter)
             .unwrap_or_else(|e| panic!("failure publishing module bundle: {e:?}"));
 
-        let (changeset, _) = session.finish().0.expect("failure getting write set");
+        let changeset = session.finish().0.expect("failure getting write set");
         self.store
             .apply(changeset)
             .expect("failure applying write set");
@@ -204,10 +204,10 @@ impl Adapter {
             .expect("Loading type should succeed")
     }
 
-    fn load_struct(&self, module_id: &ModuleId, struct_name: &IdentStr) -> Arc<StructType> {
+    fn load_datatype(&self, module_id: &ModuleId, struct_name: &IdentStr) -> Arc<CachedDatatype> {
         let session = self.vm.new_session(&self.store);
         session
-            .load_struct(module_id, struct_name)
+            .load_datatype(module_id, struct_name)
             .expect("Loading struct should succeed")
             .1
     }
@@ -395,13 +395,14 @@ fn get_relinker_tests_modules_with_deps<'s>(
     }
 
     let (_, units) = Compiler::from_files(
+        None,
         vec![fixture_string_path(module)],
         deps.into_iter().map(fixture_string_path).collect(),
         BTreeMap::<String, _>::new(),
     )
     .build_and_report()?;
 
-    expect_modules(units).collect()
+    Ok(expect_modules(units).collect())
 }
 
 #[test]
@@ -607,14 +608,14 @@ fn test_depth() {
     ];
     adapter.publish_modules(modules);
     // loads all structs sequentially
-    for (module_name, struct_name, expected_depth) in structs.iter() {
+    for (module_name, type_name, expected_depth) in structs.iter() {
         let computed_depth = &adapter
-            .load_struct(
+            .load_datatype(
                 &ModuleId::new(
                     DEFAULT_ACCOUNT,
                     Identifier::new(module_name.to_string()).unwrap(),
                 ),
-                ident_str!(struct_name),
+                ident_str!(type_name),
             )
             .depth;
         assert_eq!(computed_depth, expected_depth);
@@ -1013,7 +1014,7 @@ fn publish_bundle_with_err_retry() {
 }
 
 #[test]
-fn deep_dependency_list_err_0() {
+fn deep_dependency_list_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter = Adapter::new(data_store);
 
@@ -1029,11 +1030,11 @@ fn deep_dependency_list_err_0() {
     let dep_name = format!("A{}", max - 1);
     let deps = vec![dep_name];
     let module = empty_module_with_dependencies(name, deps);
-    adapter.publish_modules_with_error(vec![module]);
+    adapter.publish_module_bundle(vec![module]);
 }
 
 #[test]
-fn deep_dependency_list_err_1() {
+fn deep_dependency_list_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter = Adapter::new(data_store);
 
@@ -1049,7 +1050,7 @@ fn deep_dependency_list_err_1() {
     let dep_name = format!("A{}", max - 1);
     let deps = vec![dep_name];
     let module = empty_module_with_dependencies(name, deps);
-    adapter.publish_modules_with_error(vec![module]);
+    adapter.publish_module_bundle(vec![module]);
 }
 
 #[test]
@@ -1093,7 +1094,7 @@ fn deep_dependency_list_ok_1() {
 }
 
 #[test]
-fn deep_dependency_tree_err_0() {
+fn deep_dependency_tree_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter = Adapter::new(data_store);
 
@@ -1111,11 +1112,11 @@ fn deep_dependency_tree_err_0() {
     let dep_name = format!("A_{}_{}", height - 1, width - 1);
     let deps = vec![dep_name];
     let module = empty_module_with_dependencies(name, deps);
-    adapter.publish_modules_with_error(vec![module]);
+    adapter.publish_module_bundle(vec![module]);
 }
 
 #[test]
-fn deep_dependency_tree_err_1() {
+fn deep_dependency_tree_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter = Adapter::new(data_store);
 
@@ -1133,7 +1134,7 @@ fn deep_dependency_tree_err_1() {
     let dep_name = format!("A_{}_{}", height - 1, width - 1);
     let deps = vec![dep_name];
     let module = empty_module_with_dependencies(name, deps);
-    adapter.publish_modules_with_error(vec![module]);
+    adapter.publish_module_bundle(vec![module]);
 }
 
 #[test]

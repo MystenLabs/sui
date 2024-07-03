@@ -1,22 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod checkpoint_handler;
-pub mod checkpoint_handler_v2;
-pub mod committer;
-pub mod tx_processor;
-
 use std::collections::BTreeMap;
 
-use sui_types::base_types::ObjectRef;
-
 use crate::{
-    models_v2::display::StoredDisplay,
-    types_v2::{
-        IndexedCheckpoint, IndexedEpochInfo, IndexedEvent, IndexedObject, IndexedPackage,
-        IndexedTransaction, TxIndex,
+    models::display::StoredDisplay,
+    types::{
+        IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
+        IndexedPackage, IndexedTransaction, TxIndex,
     },
 };
+
+pub mod checkpoint_handler;
+pub mod committer;
+pub mod objects_snapshot_processor;
+pub mod tx_processor;
 
 #[derive(Debug)]
 pub struct CheckpointDataToCommit {
@@ -26,17 +24,18 @@ pub struct CheckpointDataToCommit {
     pub tx_indices: Vec<TxIndex>,
     pub display_updates: BTreeMap<String, StoredDisplay>,
     pub object_changes: TransactionObjectChangesToCommit,
+    pub object_history_changes: TransactionObjectChangesToCommit,
     pub packages: Vec<IndexedPackage>,
     pub epoch: Option<EpochToCommit>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TransactionObjectChangesToCommit {
     pub changed_objects: Vec<IndexedObject>,
-    pub deleted_objects: Vec<ObjectRef>,
+    pub deleted_objects: Vec<IndexedDeletedObject>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EpochToCommit {
     pub last_epoch: Option<IndexedEpochInfo>,
     pub new_epoch: IndexedEpochInfo,

@@ -1,6 +1,6 @@
 [package]
 name = "sui-metric-checker"
-version = "0.0.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -22,4 +22,3 @@ strum_macros.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
-workspace-hack.workspace = true

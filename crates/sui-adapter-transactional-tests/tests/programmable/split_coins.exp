@@ -3,97 +3,205 @@ processed 20 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 9-26:
+task 1 'publish'. lines 9-24:
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 5327600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5403600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 28-32:
+task 2 'programmable'. lines 26-30:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 33-33:
+task 3 'run'. lines 31-31:
 created: object(3,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 4 'view-object'. lines 35-37:
+task 4 'view-object'. lines 33-35:
 Owner: Account Address ( A )
 Version: 3
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 1000u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 1000u64,
+    },
+}
 
-task 5 'programmable'. lines 38-40:
+task 5 'programmable'. lines 36-38:
 created: object(5,0)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 6 'view-object'. lines 42-42:
+task 6 'view-object'. lines 40-40:
 Owner: Account Address ( A )
 Version: 4
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 900u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 900u64,
+    },
+}
 
-task 7 'view-object'. lines 44-47:
+task 7 'view-object'. lines 42-45:
 Owner: Account Address ( B )
 Version: 4
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(5,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
 
-task 8 'programmable'. lines 48-50:
+task 8 'programmable'. lines 46-48:
 created: object(8,0), object(8,1)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 9 'view-object'. lines 52-52:
+task 9 'view-object'. lines 50-50:
 Owner: Account Address ( A )
 Version: 5
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 700u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 700u64,
+    },
+}
 
-task 10 'view-object'. lines 54-54:
+task 10 'view-object'. lines 52-52:
 Owner: Account Address ( B )
 Version: 5
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(8,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
 
-task 11 'view-object'. lines 56-58:
+task 11 'view-object'. lines 54-56:
 Owner: Account Address ( B )
 Version: 5
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(8,1)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,1),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
 
-task 12 'programmable'. lines 59-62:
+task 12 'programmable'. lines 57-60:
 created: object(12,0), object(12,1)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 13 'view-object'. lines 64-64:
+task 13 'view-object'. lines 62-62:
 Owner: Account Address ( A )
 Version: 6
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 500u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 500u64,
+    },
+}
 
-task 14 'view-object'. lines 66-66:
+task 14 'view-object'. lines 64-64:
 Owner: Account Address ( B )
 Version: 6
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(12,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
 
-task 15 'view-object'. lines 68-71:
+task 15 'view-object'. lines 66-69:
 Owner: Account Address ( B )
 Version: 6
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(12,1)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,1),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
 
-task 16 'programmable'. lines 72-76:
+task 16 'programmable'. lines 70-74:
 created: object(16,0), object(16,1)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 17 'view-object'. lines 78-78:
+task 17 'view-object'. lines 76-76:
 Owner: Account Address ( A )
 Version: 7
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 300u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 300u64,
+    },
+}
 
-task 18 'view-object'. lines 80-80:
+task 18 'view-object'. lines 78-78:
 Owner: Account Address ( B )
 Version: 7
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(16,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(16,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
 
-task 19 'view-object'. lines 82-82:
+task 19 'view-object'. lines 80-80:
 Owner: Account Address ( B )
 Version: 7
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(16,1)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(16,1),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}

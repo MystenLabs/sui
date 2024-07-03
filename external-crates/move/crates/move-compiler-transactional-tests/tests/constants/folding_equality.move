@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
     const EQ_T_U8: bool = 0 == 0;
     const EQ_T_U64: bool = 0 == 0;
     const EQ_T_U128: bool = 0 == 0;

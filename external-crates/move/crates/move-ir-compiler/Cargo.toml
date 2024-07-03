@@ -11,11 +11,13 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+move-abstract-interpreter.workspace = true
 move-bytecode-verifier.workspace = true
 move-command-line-common.workspace = true
 move-ir-to-bytecode.workspace = true
 move-bytecode-source-map.workspace = true
 move-binary-format.workspace = true
+move-core-types.workspace = true
 clap.workspace = true
 serde_json.workspace = true
 

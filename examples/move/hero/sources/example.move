@@ -7,15 +7,10 @@ module hero::example {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::event;
-    use sui::object::{Self, ID, UID};
-    use sui::math;
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use std::option::{Self, Option};
 
     /// Our hero!
-    struct Hero has key, store {
+    public struct Hero has key, store {
         id: UID,
         /// Game this hero is playing in.
         game_id: ID,
@@ -28,7 +23,7 @@ module hero::example {
     }
 
     /// The hero's trusty sword
-    struct Sword has key, store {
+    public struct Sword has key, store {
         id: UID,
         /// Game this sword is from.
         game_id: ID,
@@ -40,7 +35,7 @@ module hero::example {
     }
 
     /// For healing wounded heroes
-    struct Potion has key, store {
+    public struct Potion has key, store {
         id: UID,
         /// Game this potion is from.
         game_id: ID,
@@ -49,7 +44,7 @@ module hero::example {
     }
 
     /// A creature that the hero can slay to level up
-    struct Boar has key, store {
+    public struct Boar has key, store {
         id: UID,
         /// Game this boar is from.
         game_id: ID,
@@ -61,14 +56,14 @@ module hero::example {
 
     /// Contains information about the game managed by a given `admin`.  Holds
     /// payments for player actions for the admin to collect.
-    struct Game has key {
+    public struct Game has key {
         id: UID,
         payments: Balance<SUI>,
     }
 
     /// Capability conveying the authority to create boars and potions, and take
     /// payments.
-    struct Admin has key, store {
+    public struct Admin has key, store {
         id: UID,
         /// ID of the game this admin manages
         game_id: ID,
@@ -79,7 +74,7 @@ module hero::example {
     }
 
     /// Event emitted each time a Hero slays a Boar
-    struct BoarSlainEvent has copy, drop {
+    public struct BoarSlainEvent has copy, drop {
         /// Address of the user that slayed the boar
         slayer_address: address,
         /// ID of the now-deceased boar
@@ -146,7 +141,7 @@ module hero::example {
         let magic = (value - MIN_SWORD_COST) / MIN_SWORD_COST;
         Sword {
             id: object::new(ctx),
-            magic: math::min(magic, MAX_MAGIC),
+            magic: magic.min(MAX_MAGIC),
             strength: 1,
             game_id: object::id(game)
         }
@@ -217,7 +212,7 @@ module hero::example {
         let Boar {
             id: boar_id,
             strength: boar_strength,
-            health: boar_health,
+            health: mut boar_health,
             game_id: _
         } = boar;
 
@@ -292,7 +287,7 @@ module hero::example {
         assert!(hero.game_id == game_id, EWrongGame);
 
         // cap hero's HP at MAX_HP to avoid int overflows
-        hero.health = math::min(hero.health + potency, MAX_HP)
+        hero.health = (hero.health + potency).min(MAX_HP)
     }
 
     /// Add `new_sword` to the hero's inventory and return the old sword
@@ -326,7 +321,7 @@ module hero::example {
 
     #[test]
     fun slay_boar_test() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let admin = @0xAD;
         let alice = @0xA;
         let bob = @0xb;
@@ -341,7 +336,7 @@ module hero::example {
         {
             ts::next_tx(&mut ts, admin);
             let game: Game = ts::take_shared(&ts);
-            let cap: Admin = ts::take_from_sender(&ts);
+            let mut cap: Admin = ts::take_from_sender(&ts);
             let boar = new_boar(&mut cap, 9, 9, ts::ctx(&mut ts));
             transfer::public_transfer(boar, alice);
             ts::return_to_sender(&ts, cap);
@@ -351,7 +346,7 @@ module hero::example {
         // Player slays the boar!
         {
             ts::next_tx(&mut ts, alice);
-            let hero: Hero = ts::take_from_sender(&ts);
+            let mut hero: Hero = ts::take_from_sender(&ts);
             let boar: Boar = ts::take_from_sender(&ts);
             slay(&mut hero, boar, ts::ctx(&mut ts));
             ts::return_to_sender(&ts, hero);
@@ -360,7 +355,7 @@ module hero::example {
         // Admin sends a potion to the player
         {
             ts::next_tx(&mut ts, admin);
-            let cap: Admin = ts::take_from_sender(&ts);
+            let mut cap: Admin = ts::take_from_sender(&ts);
             let potion = new_potion(&mut cap, 1, ts::ctx(&mut ts));
             transfer::public_transfer(potion, alice);
             ts::return_to_sender(&ts, cap);
@@ -369,7 +364,7 @@ module hero::example {
         // Player restores some health with the potion
         {
             ts::next_tx(&mut ts, alice);
-            let hero: Hero = ts::take_from_sender(&ts);
+            let mut hero: Hero = ts::take_from_sender(&ts);
             let potion: Potion = ts::take_from_sender(&ts);
 
             let potency = potion.potency;
@@ -386,7 +381,7 @@ module hero::example {
         // Admin takes payment for the swords sold so far
         {
             ts::next_tx(&mut ts, admin);
-            let game: Game = ts::take_shared(&ts);
+            let mut game: Game = ts::take_shared(&ts);
             let cap: Admin = ts::take_from_sender(&ts);
 
             let payment = take_payment(&cap, &mut game, ts::ctx(&mut ts));
@@ -403,7 +398,7 @@ module hero::example {
     #[test]
     #[expected_failure(abort_code = EWrongGame)]
     fun test_wrong_game() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let admin0 = @0xAD0;
         let admin1 = @0xAD1;
         let player = @0xA;
@@ -423,7 +418,7 @@ module hero::example {
         // Create a hero in the first game
         {
             ts::next_tx(&mut ts, player);
-            let game: Game = ts::take_shared_by_id(&ts, g0);
+            let mut game: Game = ts::take_shared_by_id(&ts, g0);
             let coin = coin::mint_for_testing(MIN_SWORD_COST, ts::ctx(&mut ts));
             let sword = new_sword(&mut game, coin, ts::ctx(&mut ts));
             let hero = new_hero(sword, ts::ctx(&mut ts));
@@ -434,7 +429,7 @@ module hero::example {
         // ...get a potion from the second game
         {
             ts::next_tx(&mut ts, admin1);
-            let cap: Admin = ts::take_from_sender(&ts);
+            let mut cap: Admin = ts::take_from_sender(&ts);
             let potion = new_potion(&mut cap, 1, ts::ctx(&mut ts));
             transfer::public_transfer(potion, player);
             ts::return_to_sender(&ts, cap);
@@ -443,7 +438,7 @@ module hero::example {
         // Try to use the potion with the hero.
         {
             ts::next_tx(&mut ts, player);
-            let hero: Hero = ts::take_from_sender(&ts);
+            let mut hero: Hero = ts::take_from_sender(&ts);
             let potion: Potion = ts::take_from_sender(&ts);
             heal(&mut hero, potion);
         };
@@ -454,7 +449,7 @@ module hero::example {
     #[test]
     #[expected_failure(abort_code = EHeroTired)]
     fun test_hero_tired() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let admin = @0xAD;
         let player = @0xA;
 
@@ -468,7 +463,7 @@ module hero::example {
         {
             ts::next_tx(&mut ts, admin);
             let game: Game = ts::take_shared(&ts);
-            let cap: Admin = ts::take_from_sender(&ts);
+            let mut cap: Admin = ts::take_from_sender(&ts);
             let boar = new_boar(&mut cap, 9, 9, ts::ctx(&mut ts));
             transfer::public_transfer(boar, player);
             ts::return_to_sender(&ts, cap);
@@ -478,7 +473,7 @@ module hero::example {
         // Hero is somehow tired (modified for test set-up)
         {
             ts::next_tx(&mut ts, player);
-            let hero: Hero = ts::take_from_sender(&ts);
+            let mut hero: Hero = ts::take_from_sender(&ts);
             let boar: Boar = ts::take_from_sender(&ts);
             hero.health = 0;
             slay(&mut hero, boar, ts::ctx(&mut ts));
@@ -490,7 +485,7 @@ module hero::example {
     #[test]
     #[expected_failure(abort_code = EBoarWon)]
     fun test_boar_win() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let admin = @0xAD;
         let player = @0xA;
 
@@ -504,7 +499,7 @@ module hero::example {
         {
             ts::next_tx(&mut ts, admin);
             let game: Game = ts::take_shared(&ts);
-            let cap: Admin = ts::take_from_sender(&ts);
+            let mut cap: Admin = ts::take_from_sender(&ts);
             let boar = new_boar(&mut cap, 9, 9, ts::ctx(&mut ts));
             transfer::public_transfer(boar, player);
             ts::return_to_sender(&ts, cap);
@@ -514,7 +509,7 @@ module hero::example {
         // Hero is very weak (modified for test set-up)
         {
             ts::next_tx(&mut ts, player);
-            let hero: Hero = ts::take_from_sender(&ts);
+            let mut hero: Hero = ts::take_from_sender(&ts);
             let boar: Boar = ts::take_from_sender(&ts);
             hero.health = 1;
             slay(&mut hero, boar, ts::ctx(&mut ts));
@@ -526,7 +521,7 @@ module hero::example {
     #[test]
     #[expected_failure(abort_code = EInsufficientFunds)]
     fun test_insufficient_funds() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let admin = @0xAD;
         let player = @0xA;
 
@@ -545,15 +540,15 @@ module hero::example {
         let admin = @0xAD;
         let player = @0xA;
 
-        let ts = ts::begin(admin);
+        let mut ts = ts::begin(admin);
         let _admin = new_game(ts::ctx(&mut ts));
 
         ts::next_tx(&mut ts, player);
-        let game: Game = ts::take_shared(&ts);
+        let mut game: Game = ts::take_shared(&ts);
         let coin = coin::mint_for_testing(MIN_SWORD_COST, ts::ctx(&mut ts));
 
         let sword = new_sword(&mut game, coin, ts::ctx(&mut ts));
-        let hero = new_hero(sword, ts::ctx(&mut ts));
+        let mut hero = new_hero(sword, ts::ctx(&mut ts));
 
         let _s0 = unequip(&mut hero);
         let _s1 = unequip(&mut hero); // Doesn't exist
@@ -567,18 +562,18 @@ module hero::example {
         let admin = @0xAD;
         let player = @0xA;
 
-        let ts = ts::begin(admin);
+        let mut ts = ts::begin(admin);
         let _admin = new_game(ts::ctx(&mut ts));
 
         ts::next_tx(&mut ts, player);
-        let game: Game = ts::take_shared(&ts);
+        let mut game: Game = ts::take_shared(&ts);
         let c0 = coin::mint_for_testing(MIN_SWORD_COST, ts::ctx(&mut ts));
         let s0 = new_sword(&mut game, c0, ts::ctx(&mut ts));
 
         let c1 = coin::mint_for_testing(MIN_SWORD_COST, ts::ctx(&mut ts));
         let s1 = new_sword(&mut game, c1, ts::ctx(&mut ts));
 
-        let hero = new_hero(s0, ts::ctx(&mut ts));
+        let mut hero = new_hero(s0, ts::ctx(&mut ts));
         equip(&mut hero, s1);
 
         abort 1337
@@ -594,7 +589,7 @@ module hero::example {
     #[test_only]
     fun acquire_hero(player: address, payment: u64, ts: &mut ts::Scenario) {
         ts::next_tx(ts, player);
-        let game: Game = ts::take_shared(ts);
+        let mut game: Game = ts::take_shared(ts);
         let coin = coin::mint_for_testing(payment, ts::ctx(ts));
         let sword = new_sword(&mut game, coin, ts::ctx(ts));
         let hero = new_hero(sword, ts::ctx(ts));

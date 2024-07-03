@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export type ZkLoginProvider = 'google' | 'twitch' | 'facebook';
+import Browser from 'webextension-polyfill';
+
+export type ZkLoginProvider = 'google' | 'twitch' | 'facebook' | 'kakao';
 
 export interface ZkLoginProviderData {
 	clientID: string;
@@ -15,6 +17,8 @@ export interface ZkLoginProviderData {
 	enabled: boolean;
 	hidden?: boolean;
 	mfaLink?: string;
+	extractJWT?: (authResponseURL: URL) => Promise<string>;
+	order: number;
 }
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -37,6 +41,7 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 		},
 		enabled: true,
 		mfaLink: 'https://support.google.com/accounts/answer/185839',
+		order: 0,
 	},
 	twitch: {
 		clientID: 'uzpfot3uotf7fp9hklsyctn2735bcw',
@@ -60,6 +65,7 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 		},
 		enabled: true,
 		mfaLink: 'https://help.twitch.tv/s/article/two-factor-authentication',
+		order: 1,
 	},
 	facebook: {
 		clientID: '829226485248571',
@@ -71,5 +77,38 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 		enabled: isDev,
 		hidden: !isDev,
 		mfaLink: 'https://www.facebook.com/help/148233965247823',
+		order: 2,
+	},
+	kakao: {
+		clientID: '5dea1191b184e641d271af1fff43fc44',
+		url: 'https://kauth.kakao.com/oauth/authorize',
+		extraParams: {
+			response_type: 'code',
+		},
+		buildExtraParams: ({ prompt, params }) => {
+			if (prompt) {
+				params.append('prompt', 'select_account');
+			}
+		},
+		enabled: isDev,
+		hidden: !isDev,
+		mfaLink: 'https://cs.kakao.com/helps?service=52&locale=en&category=561',
+		extractJWT: async (responseURL) => {
+			const code = responseURL.searchParams.get('code');
+			if (!code) {
+				throw new Error('Code not found');
+			}
+			const res = await fetch('https://kauth.kakao.com/oauth/token', {
+				method: 'POST',
+				body: new URLSearchParams({
+					grant_type: 'authorization_code',
+					client_id: zkLoginProviderDataMap.kakao.clientID,
+					redirect_uri: Browser.identity.getRedirectURL(),
+					code,
+				}),
+			});
+			return (await res.json())?.id_token;
+		},
+		order: 3,
 	},
 };

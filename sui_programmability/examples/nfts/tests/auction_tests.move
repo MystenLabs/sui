@@ -3,14 +3,9 @@
 
 #[test_only]
 module nfts::auction_tests {
-    use std::vector;
-
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
-    use sui::object::{Self, UID};
     use sui::test_scenario::Self;
-    use sui::transfer;
-    use sui::tx_context::TxContext;
 
     use nfts::auction::{Self, Bid};
     use nfts::auction_lib::Auction;
@@ -19,7 +14,7 @@ module nfts::auction_tests {
     const EWRONG_ITEM_VALUE: u64 = 1;
 
     // Example of an object type that could be sold at an auction.
-    struct SomeItemToSell has key, store {
+    public struct SomeItemToSell has key, store {
         id: UID,
         value: u64,
     }
@@ -27,7 +22,7 @@ module nfts::auction_tests {
     // Initializes the "state of the world" that mimics what should
     // be available in Sui genesis state (e.g., mints and distributes
     // coins to users).
-    fun init_bidders(ctx: &mut TxContext, bidders: vector<address>) {
+    fun init_bidders(ctx: &mut TxContext, mut bidders: vector<address>) {
         while (!vector::is_empty(&bidders)) {
             let bidder = vector::pop_back(&mut bidders);
             let coin = coin::mint_for_testing<SUI>(100, ctx);
@@ -42,10 +37,10 @@ module nfts::auction_tests {
         let bidder1 = @0xFACE;
         let bidder2 = @0xCAFE;
 
-        let scenario_val = test_scenario::begin(auctioneer);
+        let mut scenario_val = test_scenario::begin(auctioneer);
         let scenario = &mut scenario_val;
         {
-            let bidders = vector::empty();
+            let mut bidders = vector::empty();
             vector::push_back(&mut bidders, bidder1);
             vector::push_back(&mut bidders, bidder2);
             init_bidders(test_scenario::ctx(scenario), bidders);
@@ -72,7 +67,7 @@ module nfts::auction_tests {
         // a transaction by the auctioneer to update state of the auction
         test_scenario::next_tx(scenario, auctioneer);
         {
-            let auction = test_scenario::take_from_sender<Auction<SomeItemToSell>>(scenario);
+            let mut auction = test_scenario::take_from_sender<Auction<SomeItemToSell>>(scenario);
 
             let bid = test_scenario::take_from_sender<Bid>(scenario);
             auction::update_auction(&mut auction, bid, test_scenario::ctx(scenario));
@@ -92,7 +87,7 @@ module nfts::auction_tests {
         // a transaction by the auctioneer to update state of the auction
         test_scenario::next_tx(scenario, auctioneer);
         {
-            let auction = test_scenario::take_from_sender<Auction<SomeItemToSell>>(scenario);
+            let mut auction = test_scenario::take_from_sender<Auction<SomeItemToSell>>(scenario);
 
             let bid = test_scenario::take_from_sender<Bid>(scenario);
             auction::update_auction(&mut auction, bid, test_scenario::ctx(scenario));

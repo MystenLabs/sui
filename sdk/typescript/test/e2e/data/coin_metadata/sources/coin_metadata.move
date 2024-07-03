@@ -6,12 +6,11 @@ module coin_metadata::test {
     use sui::coin;
     use sui::transfer;
     use sui::url;
-    use sui::tx_context::{Self, TxContext};
 
-    struct TEST has drop {}
+    public struct TEST has drop {}
 
     fun init(witness: TEST, ctx: &mut TxContext) {
-        let (treasury_cap, metadata) = coin::create_currency<TEST>(
+        let (mut treasury_cap, metadata) = coin::create_currency<TEST>(
             witness,
             2,
             b"TEST",

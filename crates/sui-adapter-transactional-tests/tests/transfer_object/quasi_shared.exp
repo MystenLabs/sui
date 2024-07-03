@@ -3,30 +3,54 @@ processed 7 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 8-27:
+task 1 'publish'. lines 8-23:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 6148400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 29-29:
+task 2 'run'. lines 25-25:
 created: object(2,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'run'. lines 31-31:
+task 3 'run'. lines 27-27:
 created: object(3,0), object(3,1)
 mutated: object(0,2), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
-task 4 'view-object'. lines 33-33:
+task 4 'view-object'. lines 29-29:
 Owner: Object ID: ( fake(2,0) )
 Version: 4
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(3,1)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(3,1),
+    },
+}
 
-task 5 'transfer-object'. lines 35-35:
-Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: 0x88fe67d0d1d038fbea0dc20116688bf67b6290914b3f85bc2b8822a3746cd51f, parent_id: 0xab53a8a3065f7b7a657ea9399e7ef2443dfa87a78fde5962a0742842710586ca }
+task 5 'transfer-object'. lines 31-31:
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(3,0), parent_id: object(2,0) }
 
-task 6 'view-object'. lines 37-37:
+task 6 'view-object'. lines 33-33:
 Owner: Object ID: ( fake(2,0) )
 Version: 4
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(3,1)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(3,1),
+    },
+}

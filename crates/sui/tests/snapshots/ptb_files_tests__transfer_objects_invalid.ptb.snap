@@ -1,0 +1,30 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[1:20]
+ 1 │ --transfer-objects @0x1
+   ·                    ┬
+   ·                    ╰── Expected '[' but found '@'
+ 2 │ --transfer-objects @0x1 [@0x1, @0x2] @0x2
+   ╰────
+
+  × Error when processing PTB
+   ╭─[2:20]
+ 1 │ --transfer-objects @0x1
+ 2 │ --transfer-objects @0x1 [@0x1, @0x2] @0x2
+   ·                    ┬
+   ·                    ╰── Expected '[' but found '@'
+ 3 │ --split-coins gas [1,2,3]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[5:20]
+ 4 │ --assign s
+ 5 │ --transfer-objects s @0x1 
+   ·                    ┬
+   ·                    ╰── Expected '[' but found identifier 's'
+   ╰────
+

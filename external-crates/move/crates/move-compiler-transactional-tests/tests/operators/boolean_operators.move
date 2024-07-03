@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
 fun main() {
   assert!((true && false) == false, 99);
   assert!((true || false) == true, 100);

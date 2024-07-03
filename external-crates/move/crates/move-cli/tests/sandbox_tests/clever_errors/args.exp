@@ -1,0 +1,122 @@
+Command `test -t 1`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING PackageBasics
+Running Move unit tests
+[ FAIL    ] std::AModule::abort_in_macro_same_module
+[ PASS    ] std::AModule::double_three
+[ PASS    ] std::AModule::double_two
+[ PASS    ] std::AModuleTests::double_one_one
+[ PASS    ] std::AModuleTests::double_three
+[ PASS    ] std::AModuleTests::double_three_location_based_valid
+[ PASS    ] std::AModuleTests::double_zero_zero
+[ FAIL    ] std::AModuleTestsShouldAllFail::abort_in_macro
+[ FAIL    ] std::AModuleTestsShouldAllFail::clever_error_line_abort_in_non_macro
+[ FAIL    ] std::AModuleTestsShouldAllFail::double_three_const_based_different_module_fail
+[ FAIL    ] std::AModuleTestsShouldAllFail::double_three_location_based_invalid
+[ FAIL    ] std::AModuleTestsShouldAllFail::double_three_should_fail
+[ FAIL    ] std::AModuleTestsShouldAllFail::double_three_should_fail_named_const
+
+Test failures:
+
+Failures in std::AModule:
+
+┌── abort_in_macro_same_module ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:40:9
+│    │
+│ 39 │     fun abort_in_macro_same_module() {
+│    │         -------------------------- In this function in std::AModule
+│ 40 │         abort_!();
+│    │         ^^^^^^^^^^ Test was not expected to error, but it aborted originating in the module std::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+Failures in std::AModuleTestsShouldAllFail:
+
+┌── abort_in_macro ──────
+│ error[E11001]: test failure
+│    ┌─ ./tests/AModuleTestsShouldAllFail.move:33:9
+│    │
+│ 32 │     fun abort_in_macro() {
+│    │         -------------- In this function in std::AModuleTestsShouldAllFail
+│ 33 │         AModule::abort_!();
+│    │         ^^^^^^^^^^^^^^^^^^^ Test was not expected to error, but it aborted originating in the module std::AModuleTestsShouldAllFail rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── clever_error_line_abort_in_non_macro ──────
+│ error[E11001]: test failure
+│    ┌─ ./tests/AModuleTestsShouldAllFail.move:38:9
+│    │
+│ 37 │     fun clever_error_line_abort_in_non_macro() {
+│    │         ------------------------------------ In this function in std::AModuleTestsShouldAllFail
+│ 38 │         assert!(false);
+│    │         ^^^^^^^^^^^^^^ Test was not expected to error, but it aborted originating in the module std::AModuleTestsShouldAllFail rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_const_based_different_module_fail ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in std::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to abort with error constant 'EIsThree' originating in the module std::BModule but instead it aborted with error constant 'EIsThree' originating in the module std::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_location_based_invalid ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in std::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to abort with error constant 'EIsThree' originating in the module std::AModuleTestsShouldAllFail but instead it aborted with error constant 'EIsThree' originating in the module std::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_should_fail ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in std::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not abort with expected code. Expected test to abort with code 0, but instead it aborted with error constant 'EIsThree' originating in the module std::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_should_fail_named_const ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in std::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to abort with error constant 'ENotFound' originating in the module std::AModule but instead it aborted with error constant 'EIsThree' originating in the module std::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+Test result: FAILED. Total tests: 13; passed: 6; failed: 7
+warning[W10007]: issue with attribute value
+  ┌─ ./tests/AModuleTestsShouldAllFail.move:8:24
+  │
+8 │     #[expected_failure(abort_code = 0)]
+  │                        ^^^^^^^^^^   - Replace value with constant from expected module or add `location=...` attribute.
+  │                        │             
+  │                        WARNING: passes for an abort from any module.
+

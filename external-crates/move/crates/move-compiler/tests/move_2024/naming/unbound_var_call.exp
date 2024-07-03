@@ -1,0 +1,6 @@
+error[E03005]: unbound unscoped name
+  ┌─ tests/move_2024/naming/unbound_var_call.move:6:9
+  │
+6 │         fo();
+  │         ^^ Unbound function 'fo' in current scope
+

@@ -7,7 +7,7 @@ use anyhow::bail;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{self, Identifier},
-    language_storage::{StructTag, TypeTag},
+    language_storage::{ModuleId, StructTag, TypeTag},
 };
 
 use crate::{address::ParsedAddress, parser::Token};
@@ -24,10 +24,20 @@ pub enum TypeToken {
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct ParsedStructType {
+pub struct ParsedModuleId {
     pub address: ParsedAddress,
-    pub module: String,
     pub name: String,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct ParsedFqName {
+    pub module: ParsedModuleId,
+    pub name: String,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct ParsedStructType {
+    pub fq_name: ParsedFqName,
     pub type_args: Vec<ParsedType>,
 }
 
@@ -104,7 +114,12 @@ impl Token for TypeToken {
                 let len = 1 + chars.take_while(char::is_ascii_whitespace).count();
                 (Self::Whitespace, len)
             }
-            c if c.is_ascii_alphabetic() => {
+            c if c.is_ascii_alphabetic()
+                || (c == '_'
+                    && chars
+                        .peek()
+                        .is_some_and(|c| identifier::is_valid_identifier_char(*c))) =>
+            {
                 // c + remaining
                 let len = 1 + chars
                     .take_while(|c| identifier::is_valid_identifier_char(*c))
@@ -116,21 +131,37 @@ impl Token for TypeToken {
     }
 }
 
+impl ParsedModuleId {
+    pub fn into_module_id(
+        self,
+        mapping: &impl Fn(&str) -> Option<AccountAddress>,
+    ) -> anyhow::Result<ModuleId> {
+        Ok(ModuleId::new(
+            self.address.into_account_address(mapping)?,
+            Identifier::new(self.name)?,
+        ))
+    }
+}
+
+impl ParsedFqName {
+    pub fn into_fq_name(
+        self,
+        mapping: &impl Fn(&str) -> Option<AccountAddress>,
+    ) -> anyhow::Result<(ModuleId, String)> {
+        Ok((self.module.into_module_id(mapping)?, self.name))
+    }
+}
+
 impl ParsedStructType {
     pub fn into_struct_tag(
         self,
         mapping: &impl Fn(&str) -> Option<AccountAddress>,
     ) -> anyhow::Result<StructTag> {
-        let Self {
-            address,
-            module,
-            name,
-            type_args,
-        } = self;
+        let Self { fq_name, type_args } = self;
         Ok(StructTag {
-            address: address.into_account_address(mapping)?,
-            module: Identifier::new(module)?,
-            name: Identifier::new(name)?,
+            address: fq_name.module.address.into_account_address(mapping)?,
+            module: Identifier::new(fq_name.module.name)?,
+            name: Identifier::new(fq_name.name)?,
             type_params: type_args
                 .into_iter()
                 .map(|t| t.into_type_tag(mapping))

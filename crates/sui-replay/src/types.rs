@@ -10,7 +10,7 @@ use serde::Serialize;
 use std::fmt::Debug;
 use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_sdk::error::Error as SuiRpcError;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -19,21 +19,21 @@ use sui_types::object::Object;
 use sui_types::transaction::{InputObjectKind, SenderSignedData, TransactionKind};
 use thiserror::Error;
 use tokio::time::Duration;
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::config::ReplayableNetworkConfigSet;
 
 // TODO: make these configurable
-pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
-pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 2;
+pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(100_000);
+pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 3;
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 
 // Struct tag used in system epoch change events
 pub(crate) const EPOCH_CHANGE_STRUCT_TAG: &str =
     "0x3::sui_system_state_inner::SystemEpochInfoEvent";
 
-pub(crate) const ONE_DAY_MS: u64 = 24 * 60 * 60 * 1000;
-
+// TODO: A lot of the information in OnChainTransactionInfo is redundant from what's already in
+// SenderSignedData. We should consider removing them.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OnChainTransactionInfo {
     pub tx_digest: TransactionDigest,
@@ -48,15 +48,25 @@ pub struct OnChainTransactionInfo {
     pub gas_price: u64,
     pub executed_epoch: u64,
     pub dependencies: Vec<TransactionDigest>,
+    #[serde(skip)]
+    pub receiving_objs: Vec<(ObjectID, SequenceNumber)>,
+    // TODO: There are two problems with this being a json-rpc type:
+    // 1. The json-rpc type is not a perfect mirror with TransactionEffects since v2. We lost the
+    // ability to replay effects v2 specific forks. We need to fix this asap. Unfortunately at the moment
+    // it is really difficult to get the raw effects given a transaction digest.
+    // 2. This data structure is not bcs/bincode friendly. It makes it much more expensive to
+    // store the sandbox state for batch replay.
     pub effects: SuiTransactionBlockEffects,
     pub protocol_version: ProtocolVersion,
     pub epoch_start_timestamp: u64,
     pub reference_gas_price: u64,
+    #[serde(default = "unspecified_chain")]
+    pub chain: Chain,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct DiagInfo {
-    pub loaded_child_objects: Vec<(ObjectID, VersionNumber)>,
+fn unspecified_chain() -> Chain {
+    warn!("Unable to determine chain id. Defaulting to unknown");
+    Chain::Unknown
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -125,8 +135,15 @@ pub enum ReplayEngineError {
         local: Box<SuiTransactionBlockEffects>,
     },
 
-    #[error("Genesis replay not supported digest {:#?}", digest)]
-    GenesisReplayNotSupported { digest: TransactionDigest },
+    #[error(
+        "Transaction {:#?} not supported by replay. Reason: {:?}",
+        digest,
+        reason
+    )]
+    TransactionNotSupported {
+        digest: TransactionDigest,
+        reason: String,
+    },
 
     #[error(
         "Fatal! No framework versions for protocol version {protocol_version}. Make sure version tables are populated"
@@ -163,9 +180,6 @@ pub enum ReplayEngineError {
     #[error("Error getting dynamic fields loaded objects: {}", rpc_err)]
     UnableToGetDynamicFieldLoadedObjects { rpc_err: String },
 
-    #[error("Unsupported epoch in replay engine: {epoch}")]
-    EpochNotSupported { epoch: u64 },
-
     #[error("Unable to open yaml cfg file at {}: {}", path, err)]
     UnableToOpenYamlFile { path: String, err: String },
 
@@ -180,6 +194,9 @@ pub enum ReplayEngineError {
         cfgs
     )]
     UnableToExecuteWithNetworkConfigs { cfgs: ReplayableNetworkConfigSet },
+
+    #[error("Unable to get chain id: {}", err)]
+    UnableToGetChainId { err: String },
 }
 
 impl From<SuiObjectResponseError> for ReplayEngineError {

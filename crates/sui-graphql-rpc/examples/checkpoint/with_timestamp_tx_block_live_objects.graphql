@@ -1,16 +1,15 @@
-# Latest checkpoint's timestamp, liveObjectSetDigest, and transaction block data
+# Latest checkpoint's timestamp, and transaction block data
 {
   checkpoint {
     digest
     sequenceNumber
     timestamp
-    liveObjectSetDigest
-    transactionBlockConnection {
+    transactionBlocks {
       edges {
         node {
           digest
           sender {
-            location
+            address
           }
           expiration {
             epochId

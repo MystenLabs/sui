@@ -48,10 +48,11 @@ module 0x42.MoneyHolder {
 }
 
 //# run
+module 0x42.m {
 import 0x42.MoneyHolder;
 import 0x1.Coin;
 
-main() {
+entry foo() {
     let coin: Coin.Coin;
     let money_holder: MoneyHolder.T;
     let money_holder_ref: &MoneyHolder.T;
@@ -65,4 +66,5 @@ label b0:
     MoneyHolder.destroy_t(move(money_holder));
 
     return;
+}
 }

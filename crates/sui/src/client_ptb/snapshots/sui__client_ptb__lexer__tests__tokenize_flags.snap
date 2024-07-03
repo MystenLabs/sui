@@ -1,0 +1,56 @@
+---
+source: crates/sui/src/client_ptb/lexer.rs
+expression: lex(flags)
+---
+[
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 2,
+        },
+        value: Lexeme(
+            Flag,
+            "h",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 3,
+            end: 5,
+        },
+        value: Lexeme(
+            Flag,
+            "a",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 6,
+            end: 8,
+        },
+        value: Lexeme(
+            Flag,
+            "Z",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 9,
+            end: 11,
+        },
+        value: Lexeme(
+            Flag,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 11,
+            end: 11,
+        },
+        value: Lexeme(
+            Eof,
+            "",
+        ),
+    },
+]

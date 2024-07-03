@@ -26,12 +26,13 @@ use tokio::{
     },
     time::sleep,
 };
+use types::HeaderV1;
+use types::TimestampMs;
 use types::{
     BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, HeaderV1, Metadata,
-    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
-    SignatureVerificationState,
+    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, PreSubscribedBroadcastSender,
+    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
+    SendCertificateRequest, SendCertificateResponse, SignatureVerificationState,
 };
 
 pub struct NetworkProxy {
@@ -175,10 +176,10 @@ struct BadHeader {
     pub author: AuthorityIdentifier,
     pub round: Round,
     pub epoch: Epoch,
-    pub payload: IndexMap<BatchDigest, WorkerId>,
+    pub created_at: TimestampMs,
+    pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
     pub parents: BTreeSet<CertificateDigest>,
     pub id: OnceCell<HeaderDigest>,
-    pub metadata: Metadata,
 }
 
 // TODO: Remove after network has moved to CertificateV2
@@ -438,7 +439,7 @@ async fn fetch_certificates_v1_basic() {
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
     let cert_header =
-        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().clone().unwrap_v1()) };
+        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().as_v1().clone()) };
     let wrong_header = BadHeader { ..cert_header };
     let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV1>(wrong_header) };
     cert.update_header(wolf_header.into());
@@ -457,7 +458,7 @@ async fn fetch_certificates_v1_basic() {
 
     // Send out a batch of certificate V2s.
     let mut cert_v2_config = latest_protocol_version();
-    cert_v2_config.set_narwhal_certificate_v2(true);
+    cert_v2_config.set_narwhal_certificate_v2_for_testing(true);
     let mut certs = Vec::new();
     for cert in certificates.iter().skip(num_written).take(8) {
         certs.push(fixture.certificate(&cert_v2_config, cert.header()));
@@ -734,7 +735,7 @@ async fn fetch_certificates_v2_basic() {
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
     let cert_header =
-        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().clone().unwrap_v1()) };
+        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().as_v1().clone()) };
     let wrong_header = BadHeader { ..cert_header };
     let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV1>(wrong_header) };
     cert.update_header(Header::from(wolf_header));

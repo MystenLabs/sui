@@ -1,21 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
-import {
+import { bcs } from '@mysten/sui/bcs';
+import type {
+	Transaction,
 	TransactionArgument,
-	TransactionBlock,
 	TransactionObjectArgument,
-} from '@mysten/sui.js/transactions';
+} from '@mysten/sui/transactions';
 
-import { KIOSK_MODULE, KIOSK_TYPE, ObjectArgument } from '../types';
-import { objArg } from '../utils';
+import type { ObjectArgument } from '../types/index.js';
+import { KIOSK_MODULE, KIOSK_TYPE } from '../types/index.js';
 
 /**
  * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.
  */
 export function createKiosk(
-	tx: TransactionBlock,
+	tx: Transaction,
 ): [TransactionObjectArgument, TransactionObjectArgument] {
 	const [kiosk, kioskOwnerCap] = tx.moveCall({
 		target: `${KIOSK_MODULE}::new`,
@@ -28,7 +28,7 @@ export function createKiosk(
  * Calls the `kiosk::new()` function and shares the kiosk.
  * Returns the `kioskOwnerCap` object.
  */
-export function createKioskAndShare(tx: TransactionBlock): TransactionObjectArgument {
+export function createKioskAndShare(tx: Transaction): TransactionObjectArgument {
 	const [kiosk, kioskOwnerCap] = createKiosk(tx);
 	shareKiosk(tx, kiosk);
 	return kioskOwnerCap;
@@ -37,7 +37,7 @@ export function createKioskAndShare(tx: TransactionBlock): TransactionObjectArgu
 /**
  * Converts Transfer Policy to a shared object.
  */
-export function shareKiosk(tx: TransactionBlock, kiosk: TransactionArgument) {
+export function shareKiosk(tx: Transaction, kiosk: TransactionArgument) {
 	tx.moveCall({
 		target: `0x2::transfer::public_share_object`,
 		typeArguments: [KIOSK_TYPE],
@@ -50,7 +50,7 @@ export function shareKiosk(tx: TransactionBlock, kiosk: TransactionArgument) {
  * Place an item to the Kiosk.
  */
 export function place(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
@@ -59,7 +59,7 @@ export function place(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::place`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, item)],
+		arguments: [tx.object(kiosk), tx.object(kioskCap), tx.object(item)],
 	});
 }
 
@@ -72,7 +72,7 @@ export function place(
  * locked without an option to take it out.
  */
 export function lock(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
@@ -82,7 +82,7 @@ export function lock(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::lock`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, policy), objArg(tx, item)],
+		arguments: [tx.object(kiosk), tx.object(kioskCap), tx.object(policy), tx.object(item)],
 	});
 }
 
@@ -91,7 +91,7 @@ export function lock(
  * Take an item from the Kiosk.
  */
 export function take(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
@@ -100,7 +100,7 @@ export function take(
 	const [item] = tx.moveCall({
 		target: `${KIOSK_MODULE}::take`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure.id(itemId)],
+		arguments: [tx.object(kiosk), tx.object(kioskCap), tx.pure.id(itemId)],
 	});
 
 	return item;
@@ -111,7 +111,7 @@ export function take(
  * List an item for sale.
  */
 export function list(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
@@ -121,7 +121,7 @@ export function list(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::list`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure.id(itemId), tx.pure.u64(price)],
+		arguments: [tx.object(kiosk), tx.object(kioskCap), tx.pure.id(itemId), tx.pure.u64(price)],
 	});
 }
 
@@ -130,7 +130,7 @@ export function list(
  * List an item for sale.
  */
 export function delist(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
@@ -139,7 +139,7 @@ export function delist(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::delist`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure.id(itemId)],
+		arguments: [tx.object(kiosk), tx.object(kioskCap), tx.pure.id(itemId)],
 	});
 }
 
@@ -148,7 +148,7 @@ export function delist(
  * Place an item to the Kiosk and list it for sale.
  */
 export function placeAndList(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
@@ -158,7 +158,7 @@ export function placeAndList(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::place_and_list`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, item), tx.pure.u64(price)],
+		arguments: [tx.object(kiosk), tx.object(kioskCap), tx.object(item), tx.pure.u64(price)],
 	});
 }
 
@@ -167,7 +167,7 @@ export function placeAndList(
  * a TransferRequest which needs to be dealt with (via a matching TransferPolicy).
  */
 export function purchase(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	kiosk: ObjectArgument,
 	itemId: string,
@@ -176,7 +176,7 @@ export function purchase(
 	const [item, transferRequest] = tx.moveCall({
 		target: `${KIOSK_MODULE}::purchase`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), tx.pure.id(itemId), objArg(tx, payment)],
+		arguments: [tx.object(kiosk), tx.pure.id(itemId), tx.object(payment)],
 	});
 
 	return [item, transferRequest];
@@ -187,7 +187,7 @@ export function purchase(
  * If the amount is null, then the entire balance will be withdrawn.
  */
 export function withdrawFromKiosk(
-	tx: TransactionBlock,
+	tx: Transaction,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
 	amount?: string | bigint | number,
@@ -196,7 +196,7 @@ export function withdrawFromKiosk(
 
 	const [coin] = tx.moveCall({
 		target: `${KIOSK_MODULE}::withdraw`,
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), amountArg],
+		arguments: [tx.object(kiosk), tx.object(kioskCap), amountArg],
 	});
 
 	return coin;
@@ -209,7 +209,7 @@ export function withdrawFromKiosk(
  * Requires calling `returnValue` to return the item.
  */
 export function borrowValue(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
@@ -218,7 +218,7 @@ export function borrowValue(
 	const [item, promise] = tx.moveCall({
 		target: `${KIOSK_MODULE}::borrow_val`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure.id(itemId)],
+		arguments: [tx.object(kiosk), tx.object(kioskCap), tx.pure.id(itemId)],
 	});
 
 	return [item, promise];
@@ -229,7 +229,7 @@ export function borrowValue(
  * Return an item to the Kiosk after it was `borrowValue`-d.
  */
 export function returnValue(
-	tx: TransactionBlock,
+	tx: Transaction,
 	itemType: string,
 	kiosk: ObjectArgument,
 	item: TransactionArgument,
@@ -238,6 +238,6 @@ export function returnValue(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::return_val`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), item, promise],
+		arguments: [tx.object(kiosk), item, promise],
 	});
 }

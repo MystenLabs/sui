@@ -3,8 +3,8 @@
 
 import { Listbox, Transition } from '@headlessui/react';
 import { KioskOwnerCap } from '@mysten/kiosk';
-import { formatAddress } from '@mysten/sui.js/utils';
-import classNames from 'classnames';
+import { formatAddress } from '@mysten/sui/utils';
+import classNames from 'clsx';
 import { Fragment } from 'react';
 
 export function KioskSelector({

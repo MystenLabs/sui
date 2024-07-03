@@ -7,7 +7,7 @@ use bincode::Options;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::Direction;
 
-use super::{be_fix_int_ser, errors::TypedStoreError, RocksDBRawIter};
+use super::{be_fix_int_ser, RocksDBRawIter, TypedStoreError};
 use crate::metrics::RocksDBPerfContext;
 use crate::DBMetrics;
 use serde::{de::DeserializeOwned, Serialize};

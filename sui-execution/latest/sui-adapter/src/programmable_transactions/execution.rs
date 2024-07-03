@@ -7,10 +7,10 @@ pub use checked::*;
 mod checked {
     use crate::gas_charger::GasCharger;
     use move_binary_format::{
-        access::ModuleAccess,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
+        file_format_common::VERSION_6,
         normalized, CompiledModule,
     };
     use move_core_types::{
@@ -23,7 +23,7 @@ mod checked {
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
-    use move_vm_types::loaded_data::runtime_types::{StructType, Type};
+    use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use serde::{de::DeserializeSeed, Deserialize};
     use std::{
         collections::{BTreeMap, BTreeSet},
@@ -32,7 +32,8 @@ mod checked {
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::storage::{get_package_objects, PackageObjectArc};
+    use sui_types::execution_config_utils::to_binary_config;
+    use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::{
         base_types::{
             MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -92,6 +93,7 @@ mod checked {
                 let object_runtime: &ObjectRuntime = context.object_runtime();
                 // We still need to record the loaded child objects for replay
                 let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+                // we do not save the wrapped objects since on error, they should not be modified
                 drop(context);
                 state_view.save_loaded_runtime_objects(loaded_runtime_objects);
                 return Err(err.with_command_index(idx));
@@ -104,11 +106,15 @@ mod checked {
         // Record the objects loaded at runtime (dynamic fields + received) for
         // storage rebate calculation.
         let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+        // We record what objects were contained in at the start of the transaction
+        // for expensive invariant checks
+        let wrapped_object_containers = object_runtime.wrapped_object_containers();
 
         // apply changes
         let finished = context.finish::<Mode>();
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_runtime_objects(loaded_runtime_objects);
+        state_view.save_wrapped_object_containers(wrapped_object_containers);
         state_view.record_execution_results(finished?);
         Ok(mode_results)
     }
@@ -635,10 +641,8 @@ mod checked {
             ));
         };
 
-        let Ok(current_normalized) = existing_package.normalize(
-            context.protocol_config.move_binary_format_version(),
-            context.protocol_config.no_extraneous_module_bytes(),
-        ) else {
+        let binary_config = to_binary_config(context.protocol_config);
+        let Ok(current_normalized) = existing_package.normalize(&binary_config) else {
             invariant_violation!("Tried to normalize modules in existing package but failed")
         };
 
@@ -669,12 +673,14 @@ mod checked {
             UpgradePolicy::DepOnly => InclusionCheck::Equal.check(cur_module, new_module),
             UpgradePolicy::Compatible => {
                 let compatibility = Compatibility {
-                    check_struct_and_pub_function_linking: true,
-                    check_struct_layout: true,
+                    check_datatype_and_pub_function_linking: true,
+                    check_datatype_layout: true,
                     check_friend_linking: false,
                     check_private_entry_linking: false,
                     disallowed_new_abilities: AbilitySet::ALL,
-                    disallow_change_struct_type_params: true,
+                    disallow_change_datatype_type_params: true,
+                    // We disallow adding new variants to enums for now
+                    disallow_new_variants: true,
                 };
 
                 compatibility.check(cur_module, new_module)
@@ -693,7 +699,7 @@ mod checked {
     fn fetch_package(
         context: &ExecutionContext<'_, '_, '_>,
         package_id: &ObjectID,
-    ) -> Result<PackageObjectArc, ExecutionError> {
+    ) -> Result<PackageObject, ExecutionError> {
         let mut fetched_packages = fetch_packages(context, vec![package_id])?;
         assert_invariant!(
             fetched_packages.len() == 1,
@@ -710,7 +716,7 @@ mod checked {
     fn fetch_packages<'ctx, 'vm, 'state, 'a>(
         context: &'ctx ExecutionContext<'vm, 'state, 'a>,
         package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
-    ) -> Result<Vec<PackageObjectArc>, ExecutionError> {
+    ) -> Result<Vec<PackageObject>, ExecutionError> {
         let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
         match get_package_objects(&context.state_view, package_ids) {
             Err(e) => Err(ExecutionError::new_with_source(
@@ -789,15 +795,12 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         module_bytes: &[Vec<u8>],
     ) -> Result<Vec<CompiledModule>, ExecutionError> {
+        let binary_config = to_binary_config(context.protocol_config);
         let modules = module_bytes
             .iter()
             .map(|b| {
-                CompiledModule::deserialize_with_config(
-                    b,
-                    context.protocol_config.move_binary_format_version(),
-                    context.protocol_config.no_extraneous_module_bytes(),
-                )
-                .map_err(|e| e.finish(Location::Undefined))
+                CompiledModule::deserialize_with_config(b, &binary_config)
+                    .map_err(|e| e.finish(Location::Undefined))
             })
             .collect::<VMResult<Vec<CompiledModule>>>()
             .map_err(|e| context.convert_vm_error(e))?;
@@ -816,11 +819,17 @@ mod checked {
         modules: &[CompiledModule],
     ) -> Result<(), ExecutionError> {
         // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
+        let binary_version = context.protocol_config.move_binary_format_version();
         let new_module_bytes: Vec<_> = modules
             .iter()
             .map(|m| {
                 let mut bytes = Vec::new();
-                m.serialize(&mut bytes).unwrap();
+                let version = if binary_version > VERSION_6 {
+                    m.version
+                } else {
+                    VERSION_6
+                };
+                m.serialize_with_version(version, &mut bytes).unwrap();
                 bytes
             })
             .collect();
@@ -832,7 +841,13 @@ mod checked {
         for module in modules {
             // Run Sui bytecode verifier, which runs some additional checks that assume the Move
             // bytecode verifier has passed.
-            sui_verifier::verifier::sui_verify_module_unmetered(module, &BTreeMap::new())?;
+            sui_verifier::verifier::sui_verify_module_unmetered(
+                module,
+                &BTreeMap::new(),
+                &context
+                    .protocol_config
+                    .verifier_config(/* for_signing */ false),
+            )?;
         }
 
         Ok(())
@@ -1076,7 +1091,7 @@ mod checked {
                     Type::TyParam(_) => {
                         invariant_violation!("TyParam should have been substituted")
                     }
-                    Type::Struct(_) | Type::StructInstantiation(_, _) if abilities.has_key() => {
+                    Type::Datatype(_) | Type::DatatypeInstantiation(_) if abilities.has_key() => {
                         let type_tag = context
                             .vm
                             .get_runtime()
@@ -1090,8 +1105,8 @@ mod checked {
                             has_public_transfer: abilities.has_store(),
                         }
                     }
-                    Type::Struct(_)
-                    | Type::StructInstantiation(_, _)
+                    Type::Datatype(_)
+                    | Type::DatatypeInstantiation(_)
                     | Type::Bool
                     | Type::U8
                     | Type::U64
@@ -1324,16 +1339,17 @@ mod checked {
                 }
 
                 // Now make sure the param type is a struct instantiation of the receiving struct
-                let Type::StructInstantiation(sidx, targs) = param_ty else {
+                let Type::DatatypeInstantiation(inst) = param_ty else {
                     return Err(command_argument_error(
                         CommandArgumentError::TypeMismatch,
                         idx,
                     ));
                 };
-                let Some(s) = context.vm.get_runtime().get_struct_type(*sidx) else {
+                let (sidx, targs) = &**inst;
+                let Some(s) = context.vm.get_runtime().get_type(*sidx) else {
                     invariant_violation!("sui::transfer::Receiving struct not found in session")
                 };
-                let resolved_struct = get_struct_ident(&s);
+                let resolved_struct = get_datatype_ident(&s);
 
                 if resolved_struct != RESOLVED_RECEIVING_STRUCT || targs.len() != 1 {
                     return Err(command_argument_error(
@@ -1346,7 +1362,7 @@ mod checked {
         Ok(())
     }
 
-    fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
+    fn get_datatype_ident(s: &CachedDatatype) -> (&AccountAddress, &IdentStr, &IdentStr) {
         let module_id = &s.defining_id;
         let struct_name = &s.name;
         (
@@ -1368,13 +1384,13 @@ mod checked {
             Type::Reference(inner) => (false, inner),
             _ => return Ok(TxContextKind::None),
         };
-        let Type::Struct(idx) = &**inner else {
+        let Type::Datatype(idx) = &**inner else {
             return Ok(TxContextKind::None);
         };
-        let Some(s) = context.vm.get_runtime().get_struct_type(*idx) else {
+        let Some(s) = context.vm.get_runtime().get_type(*idx) else {
             invariant_violation!("Loaded struct not found")
         };
-        let (module_addr, module_name, struct_name) = get_struct_ident(&s);
+        let (module_addr, module_name, struct_name) = get_datatype_ident(&s);
         let is_tx_context_type = module_addr == &SUI_FRAMEWORK_ADDRESS
             && module_name == TX_CONTEXT_MODULE_NAME
             && struct_name == TX_CONTEXT_STRUCT_NAME;
@@ -1412,11 +1428,12 @@ mod checked {
                 let info_opt = primitive_serialization_layout(context, inner)?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
             }
-            Type::StructInstantiation(idx, targs) => {
-                let Some(s) = context.vm.get_runtime().get_struct_type(*idx) else {
+            Type::DatatypeInstantiation(inst) => {
+                let (idx, targs) = &**inst;
+                let Some(s) = context.vm.get_runtime().get_type(*idx) else {
                     invariant_violation!("Loaded struct not found")
                 };
-                let resolved_struct = get_struct_ident(&s);
+                let resolved_struct = get_datatype_ident(&s);
                 // is option of a string
                 if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                     let info_opt = primitive_serialization_layout(context, &targs[0])?;
@@ -1425,11 +1442,11 @@ mod checked {
                     None
                 }
             }
-            Type::Struct(idx) => {
-                let Some(s) = context.vm.get_runtime().get_struct_type(*idx) else {
+            Type::Datatype(idx) => {
+                let Some(s) = context.vm.get_runtime().get_type(*idx) else {
                     invariant_violation!("Loaded struct not found")
                 };
-                let resolved_struct = get_struct_ident(&s);
+                let resolved_struct = get_datatype_ident(&s);
                 if resolved_struct == RESOLVED_SUI_ID {
                     Some(PrimitiveArgumentLayout::Address)
                 } else if resolved_struct == RESOLVED_ASCII_STR {

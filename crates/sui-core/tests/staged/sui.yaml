@@ -1,12 +1,4 @@
 ---
-AbortLocation:
-  ENUM:
-    0:
-      Module:
-        NEWTYPE:
-          TYPENAME: ModuleId
-    1:
-      Script: UNIT
 AccountAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -60,6 +52,9 @@ CallArg:
       Object:
         NEWTYPE:
           TYPENAME: ObjectArg
+ChainIdentifier:
+  NEWTYPESTRUCT:
+    TYPENAME: CheckpointDigest
 ChangeEpoch:
   STRUCT:
     - epoch: U64
@@ -226,11 +221,52 @@ CompressedSignature:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 64
+    3:
+      ZkLogin:
+        NEWTYPE:
+          TYPENAME: ZkLoginAuthenticatorAsBytes
+CongestedObjects:
+  NEWTYPESTRUCT:
+    SEQ:
+      TYPENAME: ObjectID
+ConsensusCommitDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
     - round: U64
     - commit_timestamp_ms: U64
+ConsensusCommitPrologueV2:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - commit_timestamp_ms: U64
+    - consensus_commit_digest:
+        TYPENAME: ConsensusCommitDigest
+ConsensusCommitPrologueV3:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - sub_dag_index:
+        OPTION: U64
+    - commit_timestamp_ms: U64
+    - consensus_commit_digest:
+        TYPENAME: ConsensusCommitDigest
+    - consensus_determined_version_assignments:
+        TYPENAME: ConsensusDeterminedVersionAssignments
+ConsensusDeterminedVersionAssignments:
+  ENUM:
+    0:
+      CancelledTransactions:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: TransactionDigest
+              - SEQ:
+                  TUPLE:
+                    - TYPENAME: ObjectID
+                    - TYPENAME: SequenceNumber
 Data:
   ENUM:
     0:
@@ -292,6 +328,18 @@ EndOfEpochTransactionKind:
       AuthenticatorStateExpire:
         NEWTYPE:
           TYPENAME: AuthenticatorStateExpire
+    3:
+      RandomnessStateCreate: UNIT
+    4:
+      DenyListStateCreate: UNIT
+    5:
+      BridgeStateCreate:
+        NEWTYPE:
+          TYPENAME: ChainIdentifier
+    6:
+      BridgeCommitteeInit:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
 Envelope:
   STRUCT:
     - data:
@@ -411,9 +459,24 @@ ExecutionFailureStatus:
     30:
       SuiMoveVerificationTimedout: UNIT
     31:
-      SharedObjectWrapped: UNIT
+      SharedObjectOperationNotAllowed: UNIT
     32:
       InputObjectDeleted: UNIT
+    33:
+      ExecutionCancelledDueToSharedObjectCongestion:
+        STRUCT:
+          - congested_objects:
+              TYPENAME: CongestedObjects
+    34:
+      AddressDeniedForCoin:
+        STRUCT:
+          - address:
+              TYPENAME: SuiAddress
+          - coin_type: STR
+    35:
+      CoinTypeGlobalPause:
+        STRUCT:
+          - coin_type: STR
 ExecutionStatus:
   ENUM:
     0:
@@ -506,12 +569,6 @@ ModuleId:
         TYPENAME: AccountAddress
     - name:
         TYPENAME: Identifier
-MoveFieldLayout:
-  STRUCT:
-    - name:
-        TYPENAME: Identifier
-    - layout:
-        TYPENAME: MoveTypeLayout
 MoveLocation:
   STRUCT:
     - module:
@@ -568,54 +625,6 @@ MovePackage:
             TYPENAME: ObjectID
           VALUE:
             TYPENAME: UpgradeInfo
-MoveStructLayout:
-  ENUM:
-    0:
-      Runtime:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: MoveTypeLayout
-    1:
-      WithFields:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: MoveFieldLayout
-    2:
-      WithTypes:
-        STRUCT:
-          - type_:
-              TYPENAME: StructTag
-          - fields:
-              SEQ:
-                TYPENAME: MoveFieldLayout
-MoveTypeLayout:
-  ENUM:
-    0:
-      bool: UNIT
-    1:
-      u8: UNIT
-    2:
-      u64: UNIT
-    3:
-      u128: UNIT
-    4:
-      address: UNIT
-    5:
-      vector:
-        NEWTYPE:
-          TYPENAME: MoveTypeLayout
-    6:
-      struct:
-        NEWTYPE:
-          TYPENAME: MoveStructLayout
-    7:
-      signer: UNIT
-    8:
-      u16: UNIT
-    9:
-      u32: UNIT
-    10:
-      u256: UNIT
 MultiSig:
   STRUCT:
     - sigs:
@@ -789,6 +798,21 @@ PublicKey:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 33
+    3:
+      ZkLogin:
+        NEWTYPE:
+          TYPENAME: ZkLoginPublicIdentifier
+RandomnessRound:
+  NEWTYPESTRUCT: U64
+RandomnessStateUpdate:
+  STRUCT:
+    - epoch: U64
+    - randomness_round:
+        TYPENAME: RandomnessRound
+    - random_bytes:
+        SEQ: U8
+    - randomness_obj_initial_shared_version:
+        TYPENAME: SequenceNumber
 SenderSignedData:
   NEWTYPESTRUCT:
     SEQ:
@@ -994,6 +1018,18 @@ TransactionKind:
         NEWTYPE:
           SEQ:
             TYPENAME: EndOfEpochTransactionKind
+    6:
+      RandomnessStateUpdate:
+        NEWTYPE:
+          TYPENAME: RandomnessStateUpdate
+    7:
+      ConsensusCommitPrologueV2:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologueV2
+    8:
+      ConsensusCommitPrologueV3:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologueV3
 TypeArgumentError:
   ENUM:
     0:
@@ -1003,7 +1039,7 @@ TypeArgumentError:
 TypeOrigin:
   STRUCT:
     - module_name: STR
-    - struct_name: STR
+    - datatype_name: STR
     - package:
         TYPENAME: ObjectID
 TypeTag:
@@ -1067,10 +1103,20 @@ UnchangedSharedKind:
       ReadDeleted:
         NEWTYPE:
           TYPENAME: SequenceNumber
+    3:
+      Cancelled:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
 UpgradeInfo:
   STRUCT:
     - upgraded_id:
         TYPENAME: ObjectID
     - upgraded_version:
         TYPENAME: SequenceNumber
+ZkLoginAuthenticatorAsBytes:
+  NEWTYPESTRUCT:
+    SEQ: U8
+ZkLoginPublicIdentifier:
+  NEWTYPESTRUCT:
+    SEQ: U8
 

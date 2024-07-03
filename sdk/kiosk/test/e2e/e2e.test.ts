@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { normalizeSuiAddress } from '@mysten/sui.js/utils';
+import { Transaction } from '@mysten/sui/transactions';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -23,7 +23,7 @@ import {
 import {
 	createKiosk,
 	createPersonalKiosk,
-	executeTransactionBlock,
+	executeTransaction,
 	mintHero,
 	mintVillain,
 	publishExtensionsPackage,
@@ -69,6 +69,62 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 		await prepareVillainTransferPolicy({ toolbox, heroPackageId, kioskClient });
 		await createKiosk(toolbox, kioskClient);
 		await createPersonalKiosk(toolbox, kioskClient);
+	});
+
+	it('Should fetch the two already created owned kiosks in a single non-paginated request', async () => {
+		const page = await kioskClient.getOwnedKiosks({
+			address: toolbox.address(),
+		});
+		expect(page.hasNextPage).toBe(false);
+		expect(page.kioskIds).toHaveLength(2);
+		expect(page.kioskOwnerCaps).toHaveLength(2);
+
+		const emptyPage = await kioskClient.getOwnedKiosks({
+			address: toolbox.address(),
+			pagination: {
+				limit: 1,
+				cursor: page.nextCursor!,
+			},
+		});
+		expect(emptyPage.hasNextPage).toBe(false);
+		expect(emptyPage.nextCursor).toBe(page.nextCursor);
+		expect(emptyPage.kioskIds).toHaveLength(0);
+		expect(emptyPage.kioskOwnerCaps).toHaveLength(0);
+	});
+
+	it('Should fetch the two already created owned kiosks in two paginated requests', async () => {
+		const firstPage = await kioskClient.getOwnedKiosks({
+			address: toolbox.address(),
+			pagination: {
+				limit: 1,
+			},
+		});
+		expect(firstPage.hasNextPage).toBe(true);
+		expect(firstPage.kioskIds).toHaveLength(1);
+		expect(firstPage.kioskOwnerCaps).toHaveLength(1);
+
+		const secondPage = await kioskClient.getOwnedKiosks({
+			address: toolbox.address(),
+			pagination: {
+				limit: 1,
+				cursor: firstPage.nextCursor!,
+			},
+		});
+		expect(secondPage.hasNextPage).toBe(false);
+		expect(secondPage.kioskIds).toHaveLength(1);
+		expect(secondPage.kioskOwnerCaps).toHaveLength(1);
+
+		const emptyPage = await kioskClient.getOwnedKiosks({
+			address: toolbox.address(),
+			pagination: {
+				limit: 1,
+				cursor: secondPage.nextCursor!,
+			},
+		});
+		expect(emptyPage.hasNextPage).toBe(false);
+		expect(emptyPage.nextCursor).toBe(secondPage.nextCursor);
+		expect(emptyPage.kioskIds).toHaveLength(0);
+		expect(emptyPage.kioskOwnerCaps).toHaveLength(0);
 	});
 
 	it('Should take, list, delist, place, placeAndList, transfer in a normal sequence on a normal and on a personal kiosk.', async () => {
@@ -122,10 +178,10 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 			address: toolbox.address(),
 		});
 
-		const txb = new TransactionBlock();
+		const tx = new Transaction();
 		const kioskTx = new KioskTransaction({
 			kioskClient,
-			transactionBlock: txb,
+			transaction: tx,
 			cap: kioskOwnerCaps[0],
 		});
 
@@ -138,7 +194,7 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 			itemId: heroId,
 		});
 
-		txb.moveCall({
+		tx.moveCall({
 			target: `${heroPackageId}::hero::level_up`,
 			arguments: [item],
 		});
@@ -156,7 +212,7 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 				itemId: heroId,
 			},
 			(item) => {
-				txb.moveCall({
+				tx.moveCall({
 					target: `${heroPackageId}::hero::level_up`,
 					arguments: [item],
 				});
@@ -164,7 +220,7 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 		);
 
 		kioskTx.finalize();
-		await executeTransactionBlock(toolbox, txb);
+		await executeTransaction(toolbox, tx);
 	});
 
 	it('Should purchase and resolve an item that has all rules.', async () => {
@@ -221,10 +277,10 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 			address: toolbox.address(),
 		});
 
-		const txb = new TransactionBlock();
+		const tx = new Transaction();
 		const tpTx = new TransferPolicyTransaction({
 			kioskClient,
-			transactionBlock: txb,
+			transaction: tx,
 			cap: villainPolicyCaps[0],
 		});
 
@@ -239,7 +295,7 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 			.removePersonalKioskRule()
 			.withdraw(toolbox.address());
 
-		await executeTransactionBlock(toolbox, txb);
+		await executeTransaction(toolbox, tx);
 	});
 
 	it('Should fetch a kiosk by id', async () => {
@@ -265,13 +321,13 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 
 	it('Should error when trying to call any function after calling finalize()', async () => {
 		const kioskTx = new KioskTransaction({
-			transactionBlock: new TransactionBlock(),
+			transaction: new Transaction(),
 			kioskClient,
 		});
 		kioskTx.createPersonal().finalize();
 
 		expect(() => kioskTx.withdraw(toolbox.address())).toThrowError(
-			"You can't add more transactions to a finalized kiosk transaction block.",
+			"You can't add more transactions to a finalized kiosk transaction.",
 		);
 	});
 });

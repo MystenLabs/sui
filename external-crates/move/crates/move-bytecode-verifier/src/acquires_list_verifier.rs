@@ -13,9 +13,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use crate::meter::Meter;
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         Bytecode, CodeOffset, CompiledModule, FunctionDefinition, FunctionDefinitionIndex,
@@ -23,6 +21,7 @@ use move_binary_format::{
     },
     safe_unwrap,
 };
+use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
 
 pub(crate) struct AcquiresVerifier<'a> {
@@ -38,7 +37,7 @@ impl<'a> AcquiresVerifier<'a> {
         module: &'a CompiledModule,
         index: FunctionDefinitionIndex,
         function_definition: &'a FunctionDefinition,
-        _meter: &mut impl Meter, // currently unused
+        _meter: &mut (impl Meter + ?Sized), // currently unused
     ) -> PartialVMResult<()> {
         let annotated_acquires: BTreeSet<_> = function_definition
             .acquires_global_resources
@@ -73,7 +72,7 @@ impl<'a> AcquiresVerifier<'a> {
             }
 
             let struct_def = safe_unwrap!(module.struct_defs().get(annotation.0 as usize));
-            let struct_handle = module.struct_handle_at(struct_def.struct_handle);
+            let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
             if !struct_handle.abilities.has_key() {
                 return Err(PartialVMError::new(StatusCode::INVALID_ACQUIRES_ANNOTATION));
             }
@@ -93,12 +92,12 @@ impl<'a> AcquiresVerifier<'a> {
                 let fi = self.module.function_instantiation_at(*idx);
                 self.call_acquire(fi.handle, offset)
             }
-            Bytecode::MoveFrom(idx)
-            | Bytecode::MutBorrowGlobal(idx)
-            | Bytecode::ImmBorrowGlobal(idx) => self.struct_acquire(*idx, offset),
-            Bytecode::MoveFromGeneric(idx)
-            | Bytecode::MutBorrowGlobalGeneric(idx)
-            | Bytecode::ImmBorrowGlobalGeneric(idx) => {
+            Bytecode::MoveFromDeprecated(idx)
+            | Bytecode::MutBorrowGlobalDeprecated(idx)
+            | Bytecode::ImmBorrowGlobalDeprecated(idx) => self.struct_acquire(*idx, offset),
+            Bytecode::MoveFromGenericDeprecated(idx)
+            | Bytecode::MutBorrowGlobalGenericDeprecated(idx)
+            | Bytecode::ImmBorrowGlobalGenericDeprecated(idx) => {
                 let si = self.module.struct_instantiation_at(*idx);
                 self.struct_acquire(si.def, offset)
             }
@@ -160,10 +159,10 @@ impl<'a> AcquiresVerifier<'a> {
             | Bytecode::Gt
             | Bytecode::Le
             | Bytecode::Ge
-            | Bytecode::Exists(_)
-            | Bytecode::ExistsGeneric(_)
-            | Bytecode::MoveTo(_)
-            | Bytecode::MoveToGeneric(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::ExistsGenericDeprecated(_)
+            | Bytecode::MoveToDeprecated(_)
+            | Bytecode::MoveToGenericDeprecated(_)
             | Bytecode::VecPack(..)
             | Bytecode::VecLen(_)
             | Bytecode::VecImmBorrow(_)
@@ -171,7 +170,16 @@ impl<'a> AcquiresVerifier<'a> {
             | Bytecode::VecPushBack(_)
             | Bytecode::VecPopBack(_)
             | Bytecode::VecUnpack(..)
-            | Bytecode::VecSwap(_) => Ok(()),
+            | Bytecode::VecSwap(_)
+            | Bytecode::PackVariant(_)
+            | Bytecode::PackVariantGeneric(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::UnpackVariantGeneric(_)
+            | Bytecode::UnpackVariantGenericImmRef(_)
+            | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::VariantSwitch(_) => Ok(()),
         }
     }
 

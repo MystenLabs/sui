@@ -14,7 +14,6 @@ use sui_types::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, FullCheckpointContents,
         VerifiedCheckpoint,
     },
-    storage::ReadStore,
     storage::WriteStore,
 };
 use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
@@ -42,7 +41,6 @@ pub(super) struct Server<S> {
 impl<S> StateSync for Server<S>
 where
     S: WriteStore + Send + Sync + 'static,
-    <S as ReadStore>::Error: std::error::Error,
 {
     async fn push_checkpoint_summary(
         &self,

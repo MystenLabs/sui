@@ -3,5 +3,5 @@
 
 pub(crate) mod feature_gate;
 pub(crate) mod logger;
-pub(crate) mod query_limits_checker;
+pub mod query_limits_checker;
 pub(crate) mod timeout;

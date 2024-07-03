@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use futures::FutureExt;
 use std::collections::HashMap;
 use std::sync::Arc;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ExecutionDigests, ObjectID, VersionNumber};
 use sui_types::committee::Committee;
@@ -13,7 +14,9 @@ use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::digests::{
     CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
 };
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::{
+    TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+};
 use sui_types::error::SuiResult;
 use sui_types::event::Event;
 use sui_types::messages_checkpoint::{
@@ -37,7 +40,7 @@ fn random_tx() -> Transaction {
 
 fn random_fx() -> TransactionEffects {
     let tx = random_tx();
-    TransactionEffects::new_with_tx(&tx)
+    TestEffectsBuilder::new(tx.data()).build()
 }
 
 fn random_events() -> TransactionEvents {
@@ -104,6 +107,7 @@ impl MockTxStore {
 
         let (committee, keys) = Committee::new_simple_test_committee_of_size(1);
         let summary = CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             committee.epoch,
             next_seq,
             1,
@@ -112,6 +116,7 @@ impl MockTxStore {
             Default::default(),
             None,
             0,
+            Vec::new(),
         );
 
         let signed = SignedCheckpointSummary::new(

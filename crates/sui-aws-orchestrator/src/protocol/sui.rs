@@ -139,7 +139,7 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
                     &format!(
                         "--config-path {} --listen-address {}",
                         config_path.display(),
-                        network_address.zero_ip_multi_address()
+                        network_address.with_zero_ip()
                     ),
                 ]
                 .join(" ");

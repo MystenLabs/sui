@@ -1,0 +1,105 @@
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-54:
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: UNKNOWN_VERSION, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
+
+task 2 'programmable'. lines 56-58:
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+
+task 3 'create-checkpoint'. lines 60-60:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 62-83:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                        },
+                        "data": {
+                          "Struct": [
+                            {
+                              "name": "id",
+                              "value": {
+                                "UID": [
+                                  83,
+                                  182,
+                                  54,
+                                  89,
+                                  244,
+                                  145,
+                                  11,
+                                  5,
+                                  99,
+                                  87,
+                                  90,
+                                  133,
+                                  220,
+                                  163,
+                                  37,
+                                  79,
+                                  30,
+                                  180,
+                                  27,
+                                  214,
+                                  248,
+                                  35,
+                                  92,
+                                  242,
+                                  80,
+                                  142,
+                                  230,
+                                  193,
+                                  143,
+                                  66,
+                                  147,
+                                  171
+                                ]
+                              }
+                            },
+                            {
+                              "name": "balance",
+                              "value": {
+                                "Struct": [
+                                  {
+                                    "name": "value",
+                                    "value": {
+                                      "Number": "299999998012000"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        "json": {
+                          "id": "0x53b63659f4910b0563575a85dca3254f1eb41bd6f8235cf2508ee6c18f4293ab",
+                          "balance": {
+                            "value": "299999998012000"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -12,6 +12,7 @@ const concepts = [
 			id: 'concepts/app-devs',
 		},
 		items: [
+			'concepts/graphql-rpc',
 			{
 				type: 'category',
 				label: 'Object Model',
@@ -41,22 +42,16 @@ const concepts = [
 							type: 'doc',
 							id: 'concepts/dynamic-fields',
 						},
-						items: [
-							'concepts/dynamic-fields/dynamic-object-fields',
-							'concepts/dynamic-fields/tables-bags',
-						],
+						items: ['concepts/dynamic-fields/tables-bags'],
 					},
 					{
 						type: 'category',
 						label: 'Transfers',
 						link: {
 							type: 'doc',
-							id: 'concepts/dynamic-fields/transfers',
+							id: 'concepts/transfers',
 						},
-						items: [
-							'concepts/dynamic-fields/transfers/custom-rules',
-							'concepts/dynamic-fields/transfers/transfer-to-object',
-						],
+						items: ['concepts/transfers/custom-rules', 'concepts/transfers/transfer-to-object'],
 					},
 					'concepts/events',
 					'concepts/versioning',
@@ -85,24 +80,10 @@ const concepts = [
 						items: [
 							'concepts/sui-move-concepts/packages/upgrade',
 							'concepts/sui-move-concepts/packages/custom-policies',
+							'concepts/sui-move-concepts/packages/automated-address-management',
 						],
 					},
-					{
-						type: 'category',
-						label: 'Patterns',
-						link: {
-							type: 'doc',
-							id: 'concepts/sui-move-concepts/patterns',
-						},
-						items: [
-							'concepts/sui-move-concepts/patterns/capabilities',
-							'concepts/sui-move-concepts/patterns/witness',
-							'concepts/sui-move-concepts/patterns/transferrable-witness',
-							'concepts/sui-move-concepts/patterns/hot-potato',
-							'concepts/sui-move-concepts/patterns/id-pointer',
-							'concepts/sui-move-concepts/patterns/app-extensions',
-						],
-					},
+					'concepts/sui-move-concepts/conventions',
 				],
 			},
 			{
@@ -113,32 +94,7 @@ const concepts = [
 					id: 'concepts/transactions',
 				},
 				items: [
-					{
-						type: 'category',
-						label: 'Programmable Transaction Blocks',
-						link: {
-							type: 'doc',
-							id: 'concepts/transactions/prog-txn-blocks',
-						},
-						items: [
-							'concepts/transactions/input-types',
-							'concepts/transactions/result-and-nested',
-							{
-								type: 'category',
-								label: 'Transaction Types',
-								link: {
-									type: 'doc',
-									id: 'concepts/transactions/transaction-types',
-								},
-								items: [
-									'concepts/transactions/transaction-types/move-call',
-									'concepts/transactions/transaction-types/transfer-object',
-									'concepts/transactions/transaction-types/split-coin',
-									'concepts/transactions/transaction-types/merge-coin',
-								],
-							},
-						],
-					},
+					'concepts/transactions/prog-txn-blocks',
 					'concepts/transactions/sponsored-transactions',
 					'concepts/transactions/gas-smashing',
 				],
@@ -169,7 +125,8 @@ const concepts = [
 				],
 			},
 			'concepts/cryptography/zklogin',
-			{
+			'concepts/cryptography/system/checkpoint-verification',
+			/*{
 				type: 'category',
 				label: 'System',
 				link: {
@@ -181,7 +138,7 @@ const concepts = [
 					'concepts/cryptography/system/intents-for-validation',
 					'concepts/cryptography/system/checkpoint-verification',
 				],
-			},
+			},*/
 		],
 	},
 	{
@@ -193,22 +150,15 @@ const concepts = [
 		},
 		items: [
 			'concepts/sui-architecture/high-level',
-			{
-				type: 'category',
-				label: 'Lifetime of a Transaction',
-				link: {
-					type: 'doc',
-					id: 'concepts/transactions/transaction-lifecycle',
-				},
-				items: ['concepts/transactions/transaction-things'],
-			},
-			'concepts/sui-architecture/certification-overview',
+			'concepts/sui-architecture/sui-storage',
+			'concepts/sui-architecture/sui-security',
+			'concepts/sui-architecture/transaction-lifecycle',
 			'concepts/sui-architecture/consensus',
-			'concepts/sui-architecture/confirmation',
 			'concepts/sui-architecture/indexer-functions',
 			'concepts/sui-architecture/epochs',
 			'concepts/sui-architecture/protocol-upgrades',
 			'concepts/sui-architecture/data-management-things',
+			'concepts/sui-architecture/staking-rewards',
 		],
 	},
 	{
@@ -222,12 +172,13 @@ const concepts = [
 			'concepts/tokenomics/proof-of-stake',
 			'concepts/tokenomics/validators-staking',
 			'concepts/tokenomics/staking-unstaking',
-			'concepts/tokenomics/sui-token',
+			'concepts/tokenomics/sui-coin',
 			'concepts/tokenomics/sui-bridging',
 			'concepts/tokenomics/storage-fund',
 			'concepts/tokenomics/gas-pricing',
 			'concepts/tokenomics/gas-in-sui',
 		],
 	},
+	'concepts/research-papers',
 ];
 module.exports = concepts;

@@ -1,0 +1,19 @@
+//# publish
+module 0x42.m {
+    enum X  { A { }, B { } }
+
+    foo(x: Self.X) {
+        label b0:
+            variant_switch X (&x) {
+                A : b1,
+                B : b2,
+            };
+        label b1:
+            X.A { } = move(x);
+            jump b3;
+        label b2:
+            // Fail to unpack `x` here  so should result in an unused value with drop error
+        label b3:
+            return ;
+    }
+}

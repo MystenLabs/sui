@@ -7,11 +7,7 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-
-    struct R has key {
+    public struct R has key {
         id: UID,
     }
 
@@ -28,7 +24,7 @@ module test::m1 {
     }
 
     public fun imm(_: &R, _: R) { abort 0 }
-    public fun mut(_: &mut R, _: R) { abort 0 }
+    public fun mut_(_: &mut R, _: R) { abort 0 }
 }
 
 //# programmable
@@ -38,7 +34,7 @@ module test::m1 {
 //> test::m1::imm(Input(0), Input(0));
 
 //# programmable --inputs object(2,0)
-//> test::m1::mut(Input(0), Input(0));
+//> test::m1::mut_(Input(0), Input(0));
 
 //# programmable
 //> test::m1::freeze_r();
@@ -47,4 +43,4 @@ module test::m1 {
 //> test::m1::imm(Input(0), Input(0));
 
 //# programmable --inputs object(5,0)
-//> test::m1::mut(Input(0), Input(0));
+//> test::m1::mut_(Input(0), Input(0));

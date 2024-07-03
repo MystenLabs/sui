@@ -1,0 +1,117 @@
+processed 7 tasks
+
+task 1 'publish'. lines 6-22:
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 24-25:
+mutated: object(0,0)
+unchanged_shared: object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'programmable'. lines 27-28:
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+
+task 4 'programmable'. lines 30-32:
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+
+task 5 'create-checkpoint'. lines 34-34:
+Checkpoint created: 1
+
+task 6 'run-graphql'. lines 36-84:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "kind": {
+            "__typename": "ProgrammableTransactionBlock",
+            "transactions": {
+              "nodes": [
+                {
+                  "package": "0x7278306be47498a54e3c13e217967fb85179603767c1cf5dd2c0bc82934821a0",
+                  "module": "m",
+                  "functionName": "get"
+                }
+              ]
+            }
+          },
+          "effects": {
+            "status": "SUCCESS",
+            "unchangedSharedObjects": {
+              "nodes": [
+                {
+                  "__typename": "SharedObjectRead",
+                  "address": "0x2472a863b869f946b47f849d192b43c6e986713f22e98d9eca1c61dcbaf126d6",
+                  "version": 2,
+                  "digest": "9BKFVpwXjU9HWxqWpLjcE4vdPu7ksxKunBkKEHiyzVbK",
+                  "object": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x7278306be47498a54e3c13e217967fb85179603767c1cf5dd2c0bc82934821a0::m::Foo"
+                        },
+                        "json": {
+                          "id": "0x2472a863b869f946b47f849d192b43c6e986713f22e98d9eca1c61dcbaf126d6",
+                          "x": "0"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ProgrammableTransactionBlock",
+            "transactions": {
+              "nodes": [
+                {
+                  "package": "0x7278306be47498a54e3c13e217967fb85179603767c1cf5dd2c0bc82934821a0",
+                  "module": "m",
+                  "functionName": "inc"
+                }
+              ]
+            }
+          },
+          "effects": {
+            "status": "SUCCESS",
+            "unchangedSharedObjects": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ProgrammableTransactionBlock",
+            "transactions": {
+              "nodes": [
+                {
+                  "package": "0x7278306be47498a54e3c13e217967fb85179603767c1cf5dd2c0bc82934821a0",
+                  "module": "m",
+                  "functionName": "get"
+                },
+                {
+                  "package": "0x7278306be47498a54e3c13e217967fb85179603767c1cf5dd2c0bc82934821a0",
+                  "module": "m",
+                  "functionName": "inc"
+                }
+              ]
+            }
+          },
+          "effects": {
+            "status": "SUCCESS",
+            "unchangedSharedObjects": {
+              "nodes": []
+            }
+          }
+        }
+      ]
+    }
+  }
+}

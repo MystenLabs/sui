@@ -12,8 +12,12 @@ anyhow.workspace = true
 bincode.workspace = true
 bcs.workspace = true
 byteorder.workspace = true
+chrono.workspace = true
+consensus-config.workspace = true
+num_enum.workspace = true
 im.workspace = true
 itertools.workspace = true
+nonempty.workspace = true
 once_cell.workspace = true
 prometheus.workspace = true
 rand.workspace = true
@@ -35,7 +39,7 @@ enum_dispatch.workspace = true
 eyre.workspace = true
 indexmap.workspace = true
 derivative.workspace = true
-
+jsonrpsee.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-command-line-common.workspace = true
@@ -45,6 +49,8 @@ move-ir-types.workspace = true
 move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
 move-vm-profiler.workspace = true
+num-traits = "0.2.18"
+num-bigint = { version = "0.4", default-features = false, features = ["rand"] }
 
 narwhal-config.workspace = true
 narwhal-crypto.workspace = true
@@ -52,17 +58,22 @@ sui-protocol-config.workspace = true
 shared-crypto.workspace = true
 mysten-network.workspace = true
 mysten-metrics.workspace = true
+parking_lot.workspace = true
 sui-macros.workspace = true
 sui-enum-compat-util.workspace = true
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
+fastcrypto-tbls.workspace = true
 fastcrypto-zkp.workspace = true
 
-typed-store.workspace = true
+typed-store-error.workspace = true
 derive_more.workspace = true
 proptest.workspace = true
 proptest-derive.workspace = true
-workspace-hack.workspace = true
+better_any.workspace = true
+lru.workspace = true
+
+sui-sdk2.workspace = true
 
 [dev-dependencies]
 bincode.workspace = true
@@ -77,5 +88,11 @@ name = "accumulator_bench"
 harness = false
 
 [features]
+default = []
 test-utils = []
+gas-profiler = [
+    "move-vm-profiler/gas-profiler",
+    "move-vm-types/gas-profiler",
+    "move-vm-test-utils/gas-profiler",
+]
 fuzzing = ["move-core-types/fuzzing"]

@@ -4,7 +4,9 @@
 
 use crate::syntax::ParseError;
 use move_command_line_common::files::FileHash;
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
+use std::collections::BTreeMap;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tok {
@@ -35,7 +37,6 @@ pub enum Tok {
     Period,
     Slash,
     Colon,
-    ColonEqual,
     Semicolon,
     Less,
     LessEqual,
@@ -48,20 +49,12 @@ pub enum Tok {
     GreaterGreater,
     Caret,
     Underscore,
-    /// Abort statement in the Move language
     Abort,
-    /// Aborts if in the spec language
-    AbortsIf,
     As,
     Assert,
     Copy,
-    Ensures,
     False,
     Freeze,
-    /// Like borrow_global, but for spec language
-    Global,
-    /// Like exists, but for spec language
-    GlobalExists,
     ToU8,
     ToU16,
     ToU32,
@@ -69,29 +62,19 @@ pub enum Tok {
     ToU128,
     ToU256,
     Import,
-    /// For spec language
-    Invariant,
     Jump,
     JumpIf,
     JumpIfFalse,
     Label,
     Let,
-    Main,
     Module,
     Move,
     Native,
-    Old,
     Public,
     Script,
     Friend,
-    Requires,
-    /// Return in the specification language
-    SpecReturn,
-    /// Return statement in the Move language
     Return,
     Struct,
-    SucceedsIf,
-    Synthetic,
     True,
     VecPack(u64),
     VecLen,
@@ -107,18 +90,9 @@ pub enum Tok {
     RBrace,
     LSquare,
     RSquare,
-    PeriodPeriod,
-}
-
-impl Tok {
-    /// Return true if the given token is the beginning of a specification directive for the Move
-    /// prover
-    pub fn is_spec_directive(self) -> bool {
-        matches!(
-            self,
-            Tok::Ensures | Tok::Requires | Tok::SucceedsIf | Tok::AbortsIf
-        )
-    }
+    Enum,
+    VariantSwitch,
+    At,
 }
 
 pub struct Lexer<'input> {
@@ -129,10 +103,15 @@ pub struct Lexer<'input> {
     cur_start: usize,
     cur_end: usize,
     token: Tok,
+    named_addresses: &'input BTreeMap<String, AccountAddress>,
 }
 
 impl<'input> Lexer<'input> {
-    pub fn new(file_hash: FileHash, s: &'input str) -> Lexer<'input> {
+    pub fn new(
+        file_hash: FileHash,
+        s: &'input str,
+        named_addresses: &'input BTreeMap<String, AccountAddress>,
+    ) -> Lexer<'input> {
         Lexer {
             spec_mode: false, // read tokens without trailing punctuation during specs.
             file_hash,
@@ -141,6 +120,7 @@ impl<'input> Lexer<'input> {
             cur_start: 0,
             cur_end: 0,
             token: Tok::EOF,
+            named_addresses,
         }
     }
 
@@ -162,6 +142,10 @@ impl<'input> Lexer<'input> {
 
     pub fn previous_end_loc(&self) -> usize {
         self.prev_end
+    }
+
+    pub fn resolve_named_address(&self, name: &str) -> Option<AccountAddress> {
+        self.named_addresses.get(name).cloned()
     }
 
     fn trim_whitespace_and_comments(&self) -> &'input str {
@@ -267,7 +251,6 @@ impl<'input> Lexer<'input> {
                             "vec_push_back" => (Tok::VecPushBack, len),
                             "vec_pop_back" => (Tok::VecPopBack, len),
                             "vec_swap" => (Tok::VecSwap, len),
-                            "main" => (Tok::Main, len),
                             _ => {
                                 if let Some(stripped) = name.strip_prefix("vec_pack_") {
                                     match stripped.parse::<u64>() {
@@ -296,6 +279,7 @@ impl<'input> Lexer<'input> {
                     (get_name_token(name), len) // just return the name in spec_mode
                 }
             }
+            '@' => (Tok::At, 1),
             '&' => {
                 if text.starts_with("&mut ") {
                     (Tok::AmpMut, 5)
@@ -353,21 +337,9 @@ impl<'input> Lexer<'input> {
             '+' => (Tok::Plus, 1),
             ',' => (Tok::Comma, 1),
             '-' => (Tok::Minus, 1),
-            '.' => {
-                if text.starts_with("..") {
-                    (Tok::PeriodPeriod, 2) // range, for specs
-                } else {
-                    (Tok::Period, 1)
-                }
-            }
+            '.' => (Tok::Period, 1),
             '/' => (Tok::Slash, 1),
-            ':' => {
-                if text.starts_with(":=") {
-                    (Tok::ColonEqual, 2) // spec update
-                } else {
-                    (Tok::Colon, 1)
-                }
-            }
+            ':' => (Tok::Colon, 1),
             ';' => (Tok::Semicolon, 1),
             '^' => (Tok::Caret, 1),
             '{' => (Tok::LBrace, 1),
@@ -445,15 +417,11 @@ fn get_name_token(name: &str) -> Tok {
     match name {
         "_" => Tok::Underscore,
         "abort" => Tok::Abort,
-        "aborts_if" => Tok::AbortsIf,
         "as" => Tok::As,
         "copy" => Tok::Copy,
-        "ensures" => Tok::Ensures,
         "false" => Tok::False,
         "freeze" => Tok::Freeze,
         "friend" => Tok::Friend,
-        "global" => Tok::Global,              // spec language
-        "global_exists" => Tok::GlobalExists, // spec language
         "to_u8" => Tok::ToU8,
         "to_u16" => Tok::ToU16,
         "to_u32" => Tok::ToU32,
@@ -466,20 +434,15 @@ fn get_name_token(name: &str) -> Tok {
         "jump_if_false" => Tok::JumpIfFalse,
         "label" => Tok::Label,
         "let" => Tok::Let,
-        "main" => Tok::Main,
         "module" => Tok::Module,
         "native" => Tok::Native,
-        "invariant" => Tok::Invariant,
-        "old" => Tok::Old,
         "public" => Tok::Public,
-        "requires" => Tok::Requires,
-        "RET" => Tok::SpecReturn,
         "return" => Tok::Return,
         "script" => Tok::Script,
         "struct" => Tok::Struct,
-        "succeeds_if" => Tok::SucceedsIf,
-        "synthetic" => Tok::Synthetic,
         "true" => Tok::True,
+        "enum" => Tok::Enum,
+        "variant_switch" => Tok::VariantSwitch,
         _ => Tok::NameValue,
     }
 }

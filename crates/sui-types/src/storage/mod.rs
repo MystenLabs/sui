@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod error;
 mod object_store_trait;
 mod read_store;
 mod shared_in_memory_store;
@@ -8,10 +9,10 @@ mod write_store;
 
 use crate::base_types::{TransactionDigest, VersionNumber};
 use crate::committee::EpochId;
-use crate::error::SuiError;
+use crate::error::{ExecutionError, SuiError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use crate::move_package::MovePackage;
-use crate::transaction::{SenderSignedData, TransactionDataAPI};
+use crate::transaction::{SenderSignedData, TransactionDataAPI, TransactionKey};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
@@ -22,6 +23,7 @@ use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 pub use object_store_trait::ObjectStore;
 pub use read_store::ReadStore;
+pub use read_store::RestStateReader;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 pub use shared_in_memory_store::SharedInMemoryStore;
@@ -30,6 +32,59 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 pub use write_store::WriteStore;
+
+pub use read_store::AccountOwnedObjectInfo;
+pub use read_store::CoinInfo;
+pub use read_store::DynamicFieldIndexInfo;
+pub use read_store::DynamicFieldKey;
+
+/// A potential input to a transaction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum InputKey {
+    VersionedObject {
+        id: ObjectID,
+        version: SequenceNumber,
+    },
+    Package {
+        id: ObjectID,
+    },
+}
+
+impl InputKey {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            InputKey::VersionedObject { id, .. } => *id,
+            InputKey::Package { id } => *id,
+        }
+    }
+
+    pub fn version(&self) -> Option<SequenceNumber> {
+        match self {
+            InputKey::VersionedObject { version, .. } => Some(*version),
+            InputKey::Package { .. } => None,
+        }
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        match self {
+            InputKey::VersionedObject { version, .. } => version.is_cancelled(),
+            InputKey::Package { .. } => false,
+        }
+    }
+}
+
+impl From<&Object> for InputKey {
+    fn from(obj: &Object) -> Self {
+        if obj.is_package() {
+            InputKey::Package { id: obj.id() }
+        } else {
+            InputKey::VersionedObject {
+                id: obj.id(),
+                version: obj.version(),
+            }
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum WriteKind {
@@ -147,21 +202,29 @@ pub trait Storage {
         &mut self,
         loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     );
+
+    fn save_wrapped_object_containers(
+        &mut self,
+        wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
+    );
+
+    fn check_coin_deny_list(
+        &self,
+        written_objects: &BTreeMap<ObjectID, Object>,
+    ) -> Result<(), ExecutionError>;
 }
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
 
-#[derive(Clone)]
-pub struct PackageObjectArc {
-    package_object: Arc<Object>,
+#[derive(Clone, Debug)]
+pub struct PackageObject {
+    package_object: Object,
 }
 
-impl PackageObjectArc {
+impl PackageObject {
     pub fn new(package_object: Object) -> Self {
         assert!(package_object.is_package());
-        Self {
-            package_object: Arc::new(package_object),
-        }
+        Self { package_object }
     }
 
     pub fn object(&self) -> &Object {
@@ -173,24 +236,36 @@ impl PackageObjectArc {
     }
 }
 
-pub trait BackingPackageStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>>;
+impl From<PackageObject> for Object {
+    fn from(package_object_arc: PackageObject) -> Self {
+        package_object_arc.package_object
+    }
 }
 
-impl<S: BackingPackageStore> BackingPackageStore for Arc<S> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+pub trait BackingPackageStore {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>>;
+}
+
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for Box<S> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        BackingPackageStore::get_package_object(self.as_ref(), package_id)
+    }
+}
+
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for Arc<S> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(self.as_ref(), package_id)
     }
 }
 
 impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &S {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
 impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
@@ -198,7 +273,7 @@ impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
 pub fn load_package_object_from_object_store(
     store: &impl ObjectStore,
     package_id: &ObjectID,
-) -> SuiResult<Option<PackageObjectArc>> {
+) -> SuiResult<Option<PackageObject>> {
     let package = store.get_object(package_id)?;
     if let Some(obj) = &package {
         fp_ensure!(
@@ -208,7 +283,7 @@ pub fn load_package_object_from_object_store(
             }
         );
     }
-    Ok(package.map(PackageObjectArc::new))
+    Ok(package.map(PackageObject::new))
 }
 
 /// Returns Ok(<package object for each package id in `package_ids`>) if all package IDs in
@@ -217,7 +292,7 @@ pub fn load_package_object_from_object_store(
 pub fn get_package_objects<'a>(
     store: &impl BackingPackageStore,
     package_ids: impl IntoIterator<Item = &'a ObjectID>,
-) -> SuiResult<PackageFetchResults<PackageObjectArc>> {
+) -> SuiResult<PackageFetchResults<PackageObject>> {
     let packages: Vec<Result<_, _>> = package_ids
         .into_iter()
         .map(|id| match store.get_package_object(id) {
@@ -235,8 +310,8 @@ pub fn get_package_objects<'a>(
     }
 }
 
-pub fn get_module<S: BackingPackageStore>(
-    store: S,
+pub fn get_module(
+    store: impl BackingPackageStore,
     module_id: &ModuleId,
 ) -> Result<Option<Vec<u8>>, SuiError> {
     Ok(store
@@ -251,7 +326,7 @@ pub fn get_module<S: BackingPackageStore>(
 }
 
 pub fn get_module_by_id<S: BackingPackageStore>(
-    store: S,
+    store: &S,
     id: &ModuleId,
 ) -> anyhow::Result<Option<CompiledModule>, SuiError> {
     Ok(get_module(store, id)?
@@ -406,9 +481,32 @@ impl From<&ObjectRef> for ObjectKey {
     }
 }
 
+#[derive(Clone)]
+pub enum ObjectOrTombstone {
+    Object(Object),
+    Tombstone(ObjectRef),
+}
+
+impl ObjectOrTombstone {
+    pub fn as_objref(&self) -> ObjectRef {
+        match self {
+            ObjectOrTombstone::Object(obj) => obj.compute_object_reference(),
+            ObjectOrTombstone::Tombstone(obref) => *obref,
+        }
+    }
+}
+
+impl From<Object> for ObjectOrTombstone {
+    fn from(object: Object) -> Self {
+        ObjectOrTombstone::Object(object)
+    }
+}
+
 /// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,
 /// and immutable objects as well as the gas objects, but not move packages or shared objects.
-pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<ObjectKey>> {
+pub fn transaction_non_shared_input_object_keys(
+    tx: &SenderSignedData,
+) -> SuiResult<Vec<ObjectKey>> {
     use crate::transaction::InputObjectKind as I;
     Ok(tx
         .intent_message()
@@ -429,82 +527,6 @@ pub fn transaction_receiving_object_keys(tx: &SenderSignedData) -> Vec<ObjectKey
         .into_iter()
         .map(|oref| oref.into())
         .collect()
-}
-
-pub trait MarkerTableQuery {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError>;
-
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError>;
-
-    fn is_shared_object_deleted(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError>;
-}
-
-impl<T: MarkerTableQuery> MarkerTableQuery for Arc<T> {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        self.as_ref()
-            .have_received_object_at_version(object_id, version, epoch_id)
-    }
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError> {
-        self.as_ref()
-            .get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)
-    }
-    fn is_shared_object_deleted(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        self.as_ref().is_shared_object_deleted(object_id, epoch_id)
-    }
-}
-
-impl<T: MarkerTableQuery> MarkerTableQuery for &T {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        (*self).have_received_object_at_version(object_id, version, epoch_id)
-    }
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError> {
-        (*self).get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)
-    }
-    fn is_shared_object_deleted(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        (*self).is_shared_object_deleted(object_id, epoch_id)
-    }
 }
 
 impl Display for DeleteKind {
@@ -535,9 +557,9 @@ where
     }
 }
 
-pub trait GetSharedLocks {
+pub trait GetSharedLocks: Send + Sync {
     fn get_shared_locks(
         &self,
-        transaction_digest: &TransactionDigest,
+        key: &TransactionKey,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError>;
 }

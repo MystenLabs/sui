@@ -6,18 +6,18 @@ import { createStore } from 'zustand';
 import type { StateStorage } from 'zustand/middleware';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+import { getWalletUniqueIdentifier } from './utils/walletUtils.js';
 
-type WalletAutoConnectionStatus = 'disabled' | 'idle' | 'settled';
+type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
 export type WalletActions = {
 	setAccountSwitched: (selectedAccount: WalletAccount) => void;
 	setConnectionStatus: (connectionStatus: WalletConnectionStatus) => void;
-	setAutoConnectionStatus: (autoConnectionStatus: WalletAutoConnectionStatus) => void;
 	setWalletConnected: (
 		wallet: WalletWithRequiredFeatures,
 		connectedAccounts: readonly WalletAccount[],
 		selectedAccount: WalletAccount | null,
+		supportedIntents?: string[],
 	) => void;
 	updateWalletAccounts: (accounts: readonly WalletAccount[]) => void;
 	setWalletDisconnected: () => void;
@@ -31,6 +31,7 @@ export type WalletActions = {
 export type WalletStore = ReturnType<typeof createWalletStore>;
 
 export type StoreState = {
+	autoConnectEnabled: boolean;
 	wallets: WalletWithRequiredFeatures[];
 	accounts: readonly WalletAccount[];
 	currentWallet: WalletWithRequiredFeatures | null;
@@ -38,12 +39,12 @@ export type StoreState = {
 	lastConnectedAccountAddress: string | null;
 	lastConnectedWalletName: string | null;
 	connectionStatus: WalletConnectionStatus;
-	autoConnectionStatus: WalletAutoConnectionStatus;
+	supportedIntents: string[];
 } & WalletActions;
 
 type WalletConfiguration = {
+	autoConnectEnabled: boolean;
 	wallets: WalletWithRequiredFeatures[];
-	autoConnect: boolean;
 	storage: StateStorage;
 	storageKey: string;
 };
@@ -52,37 +53,34 @@ export function createWalletStore({
 	wallets,
 	storage,
 	storageKey,
-	autoConnect,
+	autoConnectEnabled,
 }: WalletConfiguration) {
 	return createStore<StoreState>()(
 		persist(
 			(set, get) => ({
+				autoConnectEnabled,
 				wallets,
-				accounts: [],
+				accounts: [] as WalletAccount[],
 				currentWallet: null,
 				currentAccount: null,
 				lastConnectedAccountAddress: null,
 				lastConnectedWalletName: null,
 				connectionStatus: 'disconnected',
-				autoConnectionStatus: autoConnect ? 'idle' : 'disabled',
+				supportedIntents: [],
 				setConnectionStatus(connectionStatus) {
 					set(() => ({
 						connectionStatus,
 					}));
 				},
-				setAutoConnectionStatus(autoConnectionStatus) {
-					set(() => ({
-						autoConnectionStatus,
-					}));
-				},
-				setWalletConnected(wallet, connectedAccounts, selectedAccount) {
+				setWalletConnected(wallet, connectedAccounts, selectedAccount, supportedIntents = []) {
 					set(() => ({
 						accounts: connectedAccounts,
 						currentWallet: wallet,
 						currentAccount: selectedAccount,
-						lastConnectedWalletName: wallet.name,
+						lastConnectedWalletName: getWalletUniqueIdentifier(wallet),
 						lastConnectedAccountAddress: selectedAccount?.address,
 						connectionStatus: 'connected',
+						supportedIntents,
 					}));
 				},
 				setWalletDisconnected() {
@@ -93,6 +91,7 @@ export function createWalletStore({
 						lastConnectedWalletName: null,
 						lastConnectedAccountAddress: null,
 						connectionStatus: 'disconnected',
+						supportedIntents: [],
 					}));
 				},
 				setAccountSwitched(selectedAccount) {
@@ -114,6 +113,7 @@ export function createWalletStore({
 							lastConnectedWalletName: null,
 							lastConnectedAccountAddress: null,
 							connectionStatus: 'disconnected',
+							supportedIntents: [],
 						}));
 					} else {
 						set(() => ({ wallets: updatedWallets }));
@@ -124,9 +124,10 @@ export function createWalletStore({
 
 					set(() => ({
 						accounts,
-						currentAccount: currentAccount
-							? accounts.find(({ address }) => address === currentAccount.address)
-							: accounts[0],
+						currentAccount:
+							(currentAccount &&
+								accounts.find(({ address }) => address === currentAccount.address)) ||
+							accounts[0],
 					}));
 				},
 			}),

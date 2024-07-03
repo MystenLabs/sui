@@ -63,10 +63,10 @@ impl WorkloadConfiguration {
                         num_workers[i],
                         opts.num_transfer_accounts,
                         shared_counter[i],
-                        shared_deletion[i],
                         transfer_object[i],
                         delegation[i],
                         batch_payment[i],
+                        shared_deletion[i],
                         adversarial[i],
                         AdversarialPayloadCfg::from_str(&adversarial_cfg[i]).unwrap(),
                         batch_payment_size[i],
@@ -156,6 +156,7 @@ impl WorkloadConfiguration {
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Option<WorkloadBuilderInfo>> {
         let total_weight = shared_counter_weight
+            + shared_deletion_weight
             + transfer_object_weight
             + delegation_weight
             + batch_payment_weight

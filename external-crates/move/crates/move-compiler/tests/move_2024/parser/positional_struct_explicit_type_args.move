@@ -1,5 +1,4 @@
-address 0x42 {
-module M {
+module 0x42::M {
     public struct Foo<T>(T) has drop;
     public struct Bar<T>{ x: T } has drop;
 
@@ -16,5 +15,4 @@ module M {
     fun should_fail() {
         let _ = Foo <u64>(0);
     }
-}
 }

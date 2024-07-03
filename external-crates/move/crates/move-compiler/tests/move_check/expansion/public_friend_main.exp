@@ -1,6 +1,0 @@
-error[E02002]: unnecessary or extraneous item
-  ┌─ tests/move_check/expansion/public_friend_main.move:2:1
-  │
-2 │ public(friend) fun main() {
-  │ ^^^^^^^^^^^^^^ Invalid 'public(friend)' visibility modifier. Script functions are not callable from other Move functions.
-

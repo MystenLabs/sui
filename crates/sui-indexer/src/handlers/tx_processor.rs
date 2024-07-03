@@ -5,8 +5,6 @@
 #![allow(dead_code)]
 
 use async_trait::async_trait;
-use move_binary_format::CompiledModule;
-use move_core_types::language_storage::ModuleId;
 use mysten_metrics::monitored_scope;
 use mysten_metrics::spawn_monitored_task;
 use sui_rest_api::CheckpointData;
@@ -25,7 +23,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::transaction::{TransactionData, TransactionDataAPI};
-use tracing::debug;
+use tracing::info;
 
 use sui_types::base_types::ObjectID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -33,23 +31,29 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 
-use crate::types_v2::IndexedPackage;
-use crate::types_v2::{IndexedObjectChange, IndexerResult};
+use crate::types::IndexedPackage;
+use crate::types::{IndexedObjectChange, IndexerResult};
 
-// GC the cache every 10 minutes
-pub const PACKAGE_CACHE_GC_INTERVAL: Duration = Duration::from_secs(600);
-
-/// An in-mem cache for packages during writer path indexing.
+// GC the buffer every 300 checkpoints, or 5 minutes
+pub const BUFFER_GC_INTERVAL: Duration = Duration::from_secs(300);
+/// An in-mem buffer for modules during writer path indexing.
 /// It has static lifetime. Since we batch process checkpoints,
 /// it's possible that when a package is looked up (e.g. to create dynamic field),
 /// it has not been persisted in the database yet. So it works as an in-mem
-/// store for package resolution. To avoid bloating memory, we GC packages
+/// store for package resolution. To avoid bloating memory, we GC modules
 /// that are older than the committed checkpoints.
-pub struct IndexingPackageCache {
-    packages: HashMap<(ObjectID, String), (Arc<CompiledModule>, CheckpointSequenceNumber)>,
+pub struct IndexingPackageBuffer {
+    packages: HashMap<
+        ObjectID,
+        (
+            Arc<Object>,
+            u64, /* package version */
+            CheckpointSequenceNumber,
+        ),
+    >,
 }
 
-impl IndexingPackageCache {
+impl IndexingPackageBuffer {
     pub fn start(
         commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
     ) -> Arc<Mutex<Self>> {
@@ -65,21 +69,23 @@ impl IndexingPackageCache {
         cache: Arc<Mutex<Self>>,
         commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
     ) {
-        let mut interval = tokio::time::interval_at(Instant::now(), PACKAGE_CACHE_GC_INTERVAL);
+        let mut interval = tokio::time::interval_at(Instant::now(), BUFFER_GC_INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            let _scope = monitored_scope("InMemObjectCache::remove_committed");
+            let _scope = monitored_scope("IndexingPackageBuffer::remove_committed");
             let Some(committed_checkpoint) = *commit_watcher.borrow() else {
                 continue;
             };
-            debug!("About to GC packages older than: {committed_checkpoint}");
-
             let mut cache = cache.lock().unwrap();
+            info!(
+                "About to GC packages older than: {committed_checkpoint}. Cache size is {}",
+                cache.packages.len()
+            );
             let mut to_remove = vec![];
-            for (id, (_, checkpoint_seq)) in cache.packages.iter() {
+            for (id, (_, _, checkpoint_seq)) in cache.packages.iter() {
                 if *checkpoint_seq <= committed_checkpoint {
-                    to_remove.push(id.clone());
+                    to_remove.push(*id);
                 }
             }
             for id in to_remove {
@@ -88,38 +94,35 @@ impl IndexingPackageCache {
         }
     }
 
-    pub fn insert_packages(&mut self, new_packages: &[IndexedPackage]) {
-        let new_packages = new_packages
-            .iter()
-            .flat_map(|p| {
-                p.move_package
-                    .serialized_module_map()
-                    .iter()
-                    .map(|(module_name, bytes)| {
-                        let module = CompiledModule::deserialize_with_defaults(bytes).unwrap();
-                        (
-                            (p.package_id, module_name.clone()),
-                            (Arc::new(module), p.checkpoint_sequence_number),
-                        )
-                    })
+    pub fn insert_packages(&mut self, new_package_objects: Vec<(IndexedPackage, Object)>) {
+        let new_packages = new_package_objects
+            .into_iter()
+            .map(|(p, obj)| {
+                (
+                    p.package_id,
+                    (
+                        Arc::new(obj),
+                        p.move_package.version().value(),
+                        p.checkpoint_sequence_number,
+                    ),
+                )
             })
             .collect::<HashMap<_, _>>();
         self.packages.extend(new_packages);
     }
 
-    pub fn get_module_by_id(&self, id: &ModuleId) -> Option<Arc<CompiledModule>> {
-        let package_id = ObjectID::from(*id.address());
-        let name = id.name().to_string();
-        self.packages
-            .get(&(package_id, name))
-            .as_ref()
-            .map(|(m, _)| m.clone())
+    pub fn get_package(&self, id: &ObjectID) -> Option<Arc<Object>> {
+        self.packages.get(id).as_ref().map(|(o, _, _)| o.clone())
+    }
+
+    pub fn get_version(&self, id: &ObjectID) -> Option<u64> {
+        self.packages.get(id).as_ref().map(|(_, v, _)| *v)
     }
 }
 
 pub struct InMemObjectCache {
-    id_map: HashMap<ObjectID, Arc<Object>>,
-    seq_map: HashMap<(ObjectID, SequenceNumber), Arc<Object>>,
+    id_map: HashMap<ObjectID, Object>,
+    seq_map: HashMap<(ObjectID, SequenceNumber), Object>,
 }
 
 impl InMemObjectCache {
@@ -130,18 +133,23 @@ impl InMemObjectCache {
         }
     }
 
-    pub fn insert_object(&mut self, object: Object) {
-        let obj = Arc::new(object);
+    pub fn insert_object(&mut self, obj: Object) {
         self.id_map.insert(obj.id(), obj.clone());
         self.seq_map.insert((obj.id(), obj.version()), obj);
     }
 
     pub fn get(&self, id: &ObjectID, version: Option<&SequenceNumber>) -> Option<&Object> {
         if let Some(version) = version {
-            self.seq_map.get(&(*id, *version)).map(|o| o.as_ref())
+            self.seq_map.get(&(*id, *version))
         } else {
-            self.id_map.get(id).map(|o| o.as_ref())
+            self.id_map.get(id)
         }
+    }
+}
+
+impl Default for InMemObjectCache {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -292,7 +300,7 @@ impl<'a> sui_types::storage::ObjectStore for EpochEndIndexingObjectStore<'a> {
     fn get_object(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         Ok(self
             .objects
             .iter()
@@ -305,7 +313,7 @@ impl<'a> sui_types::storage::ObjectStore for EpochEndIndexingObjectStore<'a> {
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         Ok(self
             .objects
             .iter()

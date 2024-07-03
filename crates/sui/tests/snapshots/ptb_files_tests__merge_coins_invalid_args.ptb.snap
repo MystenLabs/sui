@@ -1,0 +1,23 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[2:1]
+ 1 │ --merge-coins @0x1
+ 2 │ --merge-coins @0x1 true
+   · ──────┬──────
+   ·       ╰── Expected '[' but found command '--merge-coins'
+ 3 │ --merge-coins @0x1 [true, false]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[2:20]
+ 1 │ --merge-coins @0x1
+ 2 │ --merge-coins @0x1 true
+   ·                    ──┬─
+   ·                      ╰── Expected '[' but found identifier 'true'
+ 3 │ --merge-coins @0x1 [true, false]
+   ╰────
+
