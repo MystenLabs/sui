@@ -525,6 +525,8 @@ export class SuiClient {
 
 	/**
 	 * Subscribe to get notifications whenever an event matching the filter occurs
+	 *
+	 * @deprecated
 	 */
 	async subscribeEvent(
 		input: SubscribeEventParams & {
@@ -540,6 +542,9 @@ export class SuiClient {
 		});
 	}
 
+	/**
+	 * @deprecated
+	 */
 	async subscribeTransaction(
 		input: SubscribeTransactionParams & {
 			/** function to run when we receive a notification of a new event matching the filter */
