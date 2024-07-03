@@ -13444,6 +13444,7 @@ name = "sui-package-management"
 version = "1.29.0"
 dependencies = [
  "anyhow",
+ "move-core-types",
  "move-package",
  "move-symbol-pool",
  "sui-json-rpc-types",

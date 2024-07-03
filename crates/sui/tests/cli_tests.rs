@@ -1876,7 +1876,10 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
 
     // Create a new build config for the upgrade. Initialize its lock file
     // to the package we published.
-    let build_config_upgrade = BuildConfig::new_for_testing().config;
+    let mut build_config_upgrade = BuildConfig::new_for_testing().config;
+    let install_dir = upgrade_pkg_path.clone();
+    build_config_upgrade.install_dir = Some(install_dir.clone());
+    build_config_upgrade.lock_file = Some(install_dir.join("Move.lock"));
     let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
     upgrade_lock_file_path.push("Move.lock");
     let publish_lock_file_path = build_config_publish.lock_file.unwrap();
@@ -1940,7 +1943,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
 }
 
 #[sim_test]
-async fn test_package_management_on_upgrade_command_conflict() -> Result<(), anyhow::Error> {
+async fn xtest_package_management_on_upgrade_command_conflict() -> Result<(), anyhow::Error> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;

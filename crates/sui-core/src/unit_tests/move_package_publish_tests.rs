@@ -298,7 +298,7 @@ async fn test_custom_property_check_unpublished_dependencies() {
 
     let resolution_graph = build_config
         .config
-        .resolution_graph_for_package(&path, &mut std::io::sink())
+        .resolution_graph_for_package(&path, None, &mut std::io::sink())
         .expect("Could not build resolution graph.");
 
     let SuiError::ModulePublishFailure { error } = check_unpublished_dependencies(
