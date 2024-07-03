@@ -44,6 +44,16 @@ pub enum BuildMode {
     Beast,
 }
 
+#[derive(ValueEnum, Clone, Debug)]
+pub enum RepoRegion {
+    #[clap(name = "us-central1")]
+    UsCentral1,
+    #[clap(name = "us-west1")]
+    UsWest1,
+    #[clap(name = "us-east1")]
+    UsEast1,
+}
+
 impl Serialize for RefType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -77,7 +87,10 @@ pub enum ImageAction {
         /// The path to the dockerfile within the source code repository given by `--repo_name`
         #[arg(short, long)]
         dockerfile: String,
-        /// Optional image tag to use, by default the image is tagged with code repo commit SHA & "latest"
+        /// Optional repo region, default to "us-central1"
+        #[arg(long)]
+        repo_region: Option<RepoRegion>,
+        /// Optional image name, default to "app", only used if multiple images are built within one repo
         #[arg(long)]
         image_tag: Option<String>,
         /// Optional image name, default to "app", only used if multiple images are built within one repo
@@ -140,6 +153,7 @@ struct RequestBuildRequest {
     dockerfile: String,
     image_name: Option<String>,
     image_tag: Option<String>,
+    repo_region: String,
     ref_type: Option<RefType>,
     ref_val: Option<String>,
     cpu: String,
@@ -283,6 +297,7 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 image_tag,
                 ref_type,
                 ref_val,
+                repo_region: _,
                 build_mode: _,
                 cpu: _,
                 memory: _,
@@ -430,6 +445,7 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             repo_name,
             dockerfile,
             image_name,
+            repo_region,
             image_tag,
             ref_type,
             ref_val,
@@ -458,11 +474,27 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                         disk = "40Gi".to_string();
                     }
                     BuildMode::Beast => {
-                        cpu = "8".to_string();
-                        memory = "32Gi".to_string();
-                        disk = "100Gi".to_string();
+                        cpu = "6".to_string();
+                        memory = "16Gi".to_string();
+                        disk = "40Gi".to_string();
                     }
                 }
+            }
+            let mut region = "us-central1".to_string();
+            if let Some(repo_region) = repo_region {
+                match repo_region {
+                    RepoRegion::UsCentral1 => region = "us-central1".to_string(),
+                    RepoRegion::UsWest1 => region = "us-west1".to_string(),
+                    RepoRegion::UsEast1 => region = "us-east1".to_string(),
+                }
+            }
+            let mut args = vec![];
+            for arg in build_args.clone().iter_mut() {
+                let needle = "--";
+                if !arg.starts_with(needle) {
+                    arg.insert_str(0, needle);
+                }
+                args.push(arg.to_string())
             }
             let body = RequestBuildRequest {
                 repo_name: repo_name.clone(),
@@ -471,10 +503,11 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 image_tag: image_tag.clone(),
                 ref_type: ref_type.clone(),
                 ref_val: ref_val.clone(),
+                repo_region: region,
                 cpu,
                 memory,
                 disk,
-                build_args: build_args.clone(),
+                build_args: args,
             };
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))
