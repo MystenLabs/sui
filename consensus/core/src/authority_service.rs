@@ -53,6 +53,16 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
+        // Set the subscribed peers by default to 0
+        for (_, authority) in context.committee.authorities() {
+            context
+                .metrics
+                .node_metrics
+                .subscribed_peers
+                .with_label_values(&[authority.hostname.as_str()])
+                .set(0);
+        }
+
         let subscription_counter = Arc::new(SubscriptionCounter::new(core_dispatcher.clone()));
         Self {
             context,
