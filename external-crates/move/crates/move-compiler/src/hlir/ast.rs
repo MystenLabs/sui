@@ -564,6 +564,11 @@ impl Exp {
     pub fn is_unreachable(&self) -> bool {
         self.exp.value.is_unreachable()
     }
+
+    /// Returns the set of variables free in the expression.
+    pub fn free_vars(&self) -> BTreeSet<Var> {
+        self.exp.value.free_vars()
+    }
 }
 
 impl UnannotatedExp_ {
@@ -573,6 +578,58 @@ impl UnannotatedExp_ {
 
     pub fn is_unreachable(&self) -> bool {
         matches!(self, UnannotatedExp_::Unreachable)
+    }
+
+    /// Returns the set of variables free in the expression.
+    pub fn free_vars(&self) -> BTreeSet<Var> {
+        fn free_vars_recur(set: &mut BTreeSet<Var>, e: &UnannotatedExp_) {
+            use UnannotatedExp_ as UE;
+            match e {
+                UE::Unit { .. }
+                | UE::Value(_)
+                | UE::Constant(_)
+                | UE::ErrorConstant { .. }
+                | UE::Unreachable
+                | UE::UnresolvedError => (),
+                UE::BorrowLocal(_, var) | UE::Move { var, .. } | UE::Copy { var, .. } => {
+                    set.insert(*var);
+                }
+                UE::Freeze(e)
+                | UE::Borrow(_, e, _, _)
+                | UE::Cast(e, _)
+                | UE::Dereference(e)
+                | UE::UnaryExp(_, e) => {
+                    free_vars_recur(set, &e.exp.value);
+                }
+                UE::BinopExp(e0, _, e1) => {
+                    free_vars_recur(set, &e0.exp.value);
+                    free_vars_recur(set, &e1.exp.value);
+                }
+                UE::ModuleCall(call) => {
+                    let ModuleCall {
+                        module: _,
+                        name: _,
+                        type_arguments: _,
+                        arguments,
+                    } = &**call;
+                    arguments
+                        .iter()
+                        .for_each(|e| free_vars_recur(set, &e.exp.value));
+                }
+                UE::Pack(_, _, fields) | UE::PackVariant(_, _, _, fields) => {
+                    fields
+                        .iter()
+                        .for_each(|(_, _, e)| free_vars_recur(set, &e.exp.value));
+                }
+                UE::Vector(_, _, _, es) | UE::Multiple(es) => {
+                    es.iter().for_each(|e| free_vars_recur(set, &e.exp.value));
+                }
+            }
+        }
+
+        let mut set = BTreeSet::new();
+        free_vars_recur(&mut set, self);
+        set
     }
 }
 

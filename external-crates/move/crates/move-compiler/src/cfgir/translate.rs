@@ -593,6 +593,10 @@ fn function(
         body,
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
+    debug_print!(
+        context.debug.function_translation,
+        (msg format!("-- {name} @ {index} ------------"))
+    );
     let body = function_body(
         context,
         module,

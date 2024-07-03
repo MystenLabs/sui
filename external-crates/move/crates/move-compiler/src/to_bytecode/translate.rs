@@ -534,9 +534,9 @@ fn functions(
         //             .contains_key_(&fake_natives::FAKE_NATIVE_ATTR)
         // })
         .map(|(f, fdef)| {
-            let (res, info) = function(context, m, f, fdef);
+            let ((name, body), info) = function(context, m, f, fdef);
             collected_function_infos.add(f, info).unwrap();
-            res
+            (name, body)
         })
         .collect::<Vec<_>>();
     (collected_function_infos, functions_vec)
