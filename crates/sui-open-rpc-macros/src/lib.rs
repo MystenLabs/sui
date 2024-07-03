@@ -131,17 +131,6 @@ impl OptionalQuote for Option<LitStr> {
             quote!(None)
         }
     }
-
-    fn unwrap_quote<F>(&self, quote: F) -> TokenStream2
-    where
-        F: FnOnce(LitStr) -> TokenStream2,
-    {
-        if let Some(lit_str) = self {
-            quote(lit_str.clone())
-        } else {
-            quote!()
-        }
-    }
 }
 
 struct RpcDefinition {
