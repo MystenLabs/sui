@@ -190,6 +190,7 @@ pub const FILTER_UNUSED_MUT_REF: &str = "unused_mut_ref";
 pub const FILTER_UNUSED_MUT_PARAM: &str = "unused_mut_parameter";
 pub const FILTER_IMPLICIT_CONST_COPY: &str = "implicit_const_copy";
 pub const FILTER_DUPLICATE_ALIAS: &str = "duplicate_alias";
+pub const FILTER_DEPRECATED: &str = "deprecated_usage";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
@@ -331,6 +332,7 @@ impl CompilationEnv {
             known_code_filter!(FILTER_UNUSED_MUT_PARAM, UnusedItem::MutParam),
             known_code_filter!(FILTER_IMPLICIT_CONST_COPY, TypeSafety::ImplicitConstantCopy),
             known_code_filter!(FILTER_DUPLICATE_ALIAS, Declarations::DuplicateAlias),
+            known_code_filter!(FILTER_DEPRECATED, TypeSafety::DeprecatedUsage),
         ]);
         let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>> =
             BTreeMap::from([(None, known_filters_)]);
