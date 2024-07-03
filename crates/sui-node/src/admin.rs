@@ -374,8 +374,7 @@ async fn randomness_inject_partial_sigs(
         Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()),
     };
 
-    let sigs: Vec<u8> = match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&base64_sigs)
-    {
+    let sigs: Vec<u8> = match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(base64_sigs) {
         Ok(sigs) => sigs,
         Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()),
     };
@@ -405,7 +404,7 @@ async fn randomness_inject_full_sig(
 ) -> (StatusCode, String) {
     let Query(FullSigToInject { round, base64_sig }) = args;
 
-    let sig: Vec<u8> = match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&base64_sig) {
+    let sig: Vec<u8> = match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(base64_sig) {
         Ok(sig) => sig,
         Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()),
     };
