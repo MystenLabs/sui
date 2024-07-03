@@ -41,11 +41,11 @@ cargo run --bin sui --features indexer -- start --with-faucet --force-regenesis 
 ### Running standalone indexer
 1. DB setup, under `sui/crates/sui-indexer` run:
 ```sh
-# an example DATABASE_URL is "postgres://postgres:postgres@localhost/gegao"
+# an example DATABASE_URL is "postgres://postgres:postgres@localhost/exampledb"
 diesel setup --database-url="<DATABASE_URL>"
 diesel database reset --database-url="<DATABASE_URL>"
 ```
-Note that you'll need an existing database for the above to work. Replace `gegao` with the name of the database created.
+Note that you need an existing database for this to work. Using the DATABASE_URL example in the comment of the previous code, replace `exampledb` with the name of your database.
 
 2. Checkout to your target branch
 
@@ -115,8 +115,8 @@ diesel setup --database-url="<DATABASE_URL>" --migration-dir='migrations/mysql'
 diesel database reset --database-url="<DATABASE_URL>" --migration-dir='migrations/mysql'
 ```
 
-Note that you'll need an existing database for the above to work. Replace `test` with the name of the database created.
-4. run indexer as a writer, which pulls data from fullnode and writes data to DB
+Note that you need an existing database for this to work. Using the DATABASE_URL example in the comment of the previous code, replace `test` with the name of your database.
+4. Run indexer as a writer, which pulls data from fullnode and writes data to DB
 
 ```sh
 # Change the RPC_CLIENT_URL to http://0.0.0.0:9000 to run indexer against local validator & fullnode
