@@ -136,6 +136,7 @@ type JwkAggregator = GenericMultiStakeAggregator<(JwkId, JWK), true>;
 
 pub enum CancelConsensusCertificateReason {
     CongestionOnObjects(Vec<ObjectID>),
+    DkgFailed,
 }
 
 pub enum ConsensusCertificateResult {
@@ -2855,16 +2856,17 @@ impl AuthorityPerEpochStore {
 
         let mut shared_input_next_version = HashMap::new();
         for txn in transactions.iter() {
-            if let Some(CancelConsensusCertificateReason::CongestionOnObjects(_)) =
-                cancelled_txns.get(txn.digest())
-            {
-                let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
-                    txn,
-                    &mut shared_input_next_version,
-                    cancelled_txns,
-                );
-
-                version_assignment.push((*txn.digest(), assigned_versions));
+            match cancelled_txns.get(txn.digest()) {
+                Some(CancelConsensusCertificateReason::CongestionOnObjects(_))
+                | Some(CancelConsensusCertificateReason::DkgFailed) => {
+                    let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
+                        txn,
+                        &mut shared_input_next_version,
+                        cancelled_txns,
+                    );
+                    version_assignment.push((*txn.digest(), assigned_versions));
+                }
+                None => {}
             }
         }
 
@@ -3436,12 +3438,14 @@ impl AuthorityPerEpochStore {
                     && self.randomness_state_enabled()
                     && certificate.transaction_data().uses_randomness()
                 {
-                    // TODO: Cancel these immediately instead of waiting until end of epoch.
                     debug!(
-                        "Ignoring randomness-using certificate for transaction {:?} because DKG failed",
+                        "Canceling randomness-using certificate for transaction {:?} because DKG failed",
                         certificate.digest(),
                     );
-                    return Ok(ConsensusCertificateResult::Ignored);
+                    return Ok(ConsensusCertificateResult::Cancelled((
+                        certificate,
+                        CancelConsensusCertificateReason::DkgFailed,
+                    )));
                 }
 
                 // This certificate will be scheduled. Update object execution cost.
