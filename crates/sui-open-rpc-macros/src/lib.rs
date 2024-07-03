@@ -121,10 +121,6 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 trait OptionalQuote {
     fn to_quote(&self) -> TokenStream2;
-
-    fn unwrap_quote<F>(&self, quote: F) -> TokenStream2
-    where
-        F: FnOnce(LitStr) -> TokenStream2;
 }
 
 impl OptionalQuote for Option<LitStr> {

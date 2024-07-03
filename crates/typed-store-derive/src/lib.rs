@@ -93,7 +93,7 @@ fn extract_struct_info(
                 } else {
                     field_name.clone()
                 };
-                if attrs.get(DB_OPTIONS_DEPRECATE).is_some() {
+                if attrs.contains_key(DB_OPTIONS_DEPRECATE) {
                     deprecated_cfs.push(field_name.clone());
                 }
 
