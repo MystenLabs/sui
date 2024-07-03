@@ -1918,9 +1918,6 @@ PerTypeConfigCreated
 PerTypeList
 	public struct
 	0x2::deny_list
-migrate_v1_to_v2
-	public(package) fun
-	0x2::deny_list
 v2_add
 	public(package) fun
 	0x2::deny_list
@@ -1943,6 +1940,9 @@ v2_is_global_pause_enabled_current_epoch
 	public(package) fun
 	0x2::deny_list
 v2_is_global_pause_enabled_next_epoch
+	public(package) fun
+	0x2::deny_list
+migrate_v1_to_v2
 	public(package) fun
 	0x2::deny_list
 add_per_type_config

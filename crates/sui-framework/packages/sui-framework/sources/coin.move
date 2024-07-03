@@ -268,12 +268,15 @@ module sui::coin {
     }
 
     public fun migrate_regulated_currency_to_v2<T>(
+        deny_list: &mut DenyList,
         cap: DenyCap<T>,
         allow_global_pause: bool,
         ctx: &mut TxContext,
     ): DenyCapV2<T> {
         let DenyCap { id } = cap;
         object::delete(id);
+        let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+        deny_list.migrate_v1_to_v2(DENY_LIST_COIN_INDEX, ty, ctx);
         DenyCapV2 {
             id: object::new(ctx),
             allow_global_pause,
@@ -564,7 +567,7 @@ module sui::coin {
 
     /// Returns true iff the given address is denied for the given coin type. It will
     /// return false if given a non-coin type.
-    #[deprecated(note = b"Using `migrate_regulated_currency_to_v2` migrate to v2 and use `deny_list_v2_contains`")]
+    #[deprecated(note = b"Using `migrate_regulated_currency_to_v2` migrate to v2 and use `deny_list_v2_contains_next_epoch` or `deny_list_v2_contains_current_epoch`")]
     public fun deny_list_contains<T>(
        deny_list: &DenyList,
        addr: address,

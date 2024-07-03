@@ -15,7 +15,6 @@ list.
 -  [Struct `PerTypeConfigCreated`](#0x2_deny_list_PerTypeConfigCreated)
 -  [Resource `PerTypeList`](#0x2_deny_list_PerTypeList)
 -  [Constants](#@Constants_0)
--  [Function `migrate_v1_to_v2`](#0x2_deny_list_migrate_v1_to_v2)
 -  [Function `v2_add`](#0x2_deny_list_v2_add)
 -  [Function `v2_remove`](#0x2_deny_list_v2_remove)
 -  [Function `v2_contains_current_epoch`](#0x2_deny_list_v2_contains_current_epoch)
@@ -24,6 +23,7 @@ list.
 -  [Function `v2_disable_global_pause`](#0x2_deny_list_v2_disable_global_pause)
 -  [Function `v2_is_global_pause_enabled_current_epoch`](#0x2_deny_list_v2_is_global_pause_enabled_current_epoch)
 -  [Function `v2_is_global_pause_enabled_next_epoch`](#0x2_deny_list_v2_is_global_pause_enabled_next_epoch)
+-  [Function `migrate_v1_to_v2`](#0x2_deny_list_migrate_v1_to_v2)
 -  [Function `add_per_type_config`](#0x2_deny_list_add_per_type_config)
 -  [Function `borrow_per_type_config_mut`](#0x2_deny_list_borrow_per_type_config_mut)
 -  [Function `borrow_per_type_config`](#0x2_deny_list_borrow_per_type_config)
@@ -334,58 +334,6 @@ meaningless to add them to the deny list.
 
 
 
-<a name="0x2_deny_list_migrate_v1_to_v2"></a>
-
-## Function `migrate_v1_to_v2`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_migrate_v1_to_v2">migrate_v1_to_v2</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_migrate_v1_to_v2">migrate_v1_to_v2</a>(
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
-    per_type_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
-    ctx: &<b>mut</b> TxContext,
-) {
-
-    <b>let</b> bag_entry: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a> = &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists[per_type_index];
-    <b>let</b> elements =
-        <b>if</b> (!bag_entry.denied_addresses.contains(per_type_key)) <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[]
-        <b>else</b> bag_entry.denied_addresses.remove(per_type_key).into_keys();
-    elements.do_ref!(|addr| {
-        <b>let</b> addr = *addr;
-        <b>let</b> denied_count = &<b>mut</b> bag_entry.denied_count[addr];
-        *denied_count = *denied_count - 1;
-        <b>if</b> (*denied_count == 0) {
-            bag_entry.denied_count.remove(addr);
-        }
-    });
-    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.per_type_config_entry!(per_type_index, per_type_key, ctx);
-    elements.do!(|addr|  {
-        <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
-        <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_,<a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>, bool&gt;(
-            &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(),
-            setting_name,
-            |_deny_list, _cap, _ctx| <b>true</b>,
-            ctx,
-        );
-        *next_epoch_entry = <b>true</b>;
-    });
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_deny_list_v2_add"></a>
 
 ## Function `v2_add`
@@ -655,6 +603,57 @@ meaningless to add them to the deny list.
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<a href="../sui-framework/deny_list.md#0x2_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a>();
     per_type_config.read_setting_for_next_epoch(setting_name).destroy_or!(<b>false</b>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_deny_list_migrate_v1_to_v2"></a>
+
+## Function `migrate_v1_to_v2`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_migrate_v1_to_v2">migrate_v1_to_v2</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_migrate_v1_to_v2">migrate_v1_to_v2</a>(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
+    per_type_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> bag_entry: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a> = &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists[per_type_index];
+    <b>let</b> elements =
+        <b>if</b> (!bag_entry.denied_addresses.contains(per_type_key)) <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[]
+        <b>else</b> bag_entry.denied_addresses.remove(per_type_key).into_keys();
+    elements.do_ref!(|addr| {
+        <b>let</b> addr = *addr;
+        <b>let</b> denied_count = &<b>mut</b> bag_entry.denied_count[addr];
+        *denied_count = *denied_count - 1;
+        <b>if</b> (*denied_count == 0) {
+            bag_entry.denied_count.remove(addr);
+        }
+    });
+    <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.per_type_config_entry!(per_type_index, per_type_key, ctx);
+    elements.do!(|addr|  {
+        <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
+        <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_,<a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>, bool&gt;(
+            &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(),
+            setting_name,
+            |_deny_list, _cap, _ctx| <b>true</b>,
+            ctx,
+        );
+        *next_epoch_entry = <b>true</b>;
+    });
 }
 </code></pre>
 

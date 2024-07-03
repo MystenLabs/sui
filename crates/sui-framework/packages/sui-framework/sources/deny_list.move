@@ -71,38 +71,6 @@ module sui::deny_list {
         config_id: ID,
     }
 
-    public(package) fun migrate_v1_to_v2(
-        deny_list: &mut DenyList,
-        per_type_index: u64,
-        per_type_key: vector<u8>,
-        ctx: &mut TxContext,
-    ) {
-
-        let bag_entry: &mut PerTypeList = &mut deny_list.lists[per_type_index];
-        let elements =
-            if (!bag_entry.denied_addresses.contains(per_type_key)) vector[]
-            else bag_entry.denied_addresses.remove(per_type_key).into_keys();
-        elements.do_ref!(|addr| {
-            let addr = *addr;
-            let denied_count = &mut bag_entry.denied_count[addr];
-            *denied_count = *denied_count - 1;
-            if (*denied_count == 0) {
-                bag_entry.denied_count.remove(addr);
-            }
-        });
-        let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
-        elements.do!(|addr|  {
-            let setting_name = AddressKey(addr);
-            let next_epoch_entry = per_type_config.entry!<_,AddressKey, bool>(
-                &mut ConfigWriteCap(),
-                setting_name,
-                |_deny_list, _cap, _ctx| true,
-                ctx,
-            );
-            *next_epoch_entry = true;
-        });
-    }
-
     public(package) fun v2_add(
         deny_list: &mut DenyList,
         per_type_index: u64,
@@ -231,6 +199,37 @@ module sui::deny_list {
     // ): bool {
     //    // TODO can read from the config directly once the ID is set
     // }
+
+    public(package) fun migrate_v1_to_v2(
+        deny_list: &mut DenyList,
+        per_type_index: u64,
+        per_type_key: vector<u8>,
+        ctx: &mut TxContext,
+    ) {
+        let bag_entry: &mut PerTypeList = &mut deny_list.lists[per_type_index];
+        let elements =
+            if (!bag_entry.denied_addresses.contains(per_type_key)) vector[]
+            else bag_entry.denied_addresses.remove(per_type_key).into_keys();
+        elements.do_ref!(|addr| {
+            let addr = *addr;
+            let denied_count = &mut bag_entry.denied_count[addr];
+            *denied_count = *denied_count - 1;
+            if (*denied_count == 0) {
+                bag_entry.denied_count.remove(addr);
+            }
+        });
+        let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
+        elements.do!(|addr|  {
+            let setting_name = AddressKey(addr);
+            let next_epoch_entry = per_type_config.entry!<_,AddressKey, bool>(
+                &mut ConfigWriteCap(),
+                setting_name,
+                |_deny_list, _cap, _ctx| true,
+                ctx,
+            );
+            *next_epoch_entry = true;
+        });
+    }
 
     fun add_per_type_config(
         deny_list: &mut DenyList,
