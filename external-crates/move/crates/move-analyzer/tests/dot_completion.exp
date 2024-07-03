@@ -42,7 +42,7 @@ Field 'some_field'
 
 == macro_dot.move ========================================================
 -- test 0 -------------------
-use line: 9, use_col: 10
+use line: 8, use_col: 10
 Method 'foo!()'
 	INSERT TEXT: 'foo!(${1:_param1}, |${2}, ${3}| ${4}, ${5:_param3})'
 	TARGET     : '(Completion::macro_dot::foo)'

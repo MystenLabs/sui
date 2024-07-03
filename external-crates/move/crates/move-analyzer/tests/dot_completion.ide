@@ -31,7 +31,7 @@
     "macro_dot.move": [
       {
         "CompletionTest": {
-          "use_line": 9,
+          "use_line": 8,
           "use_col": 10
         }
       }
