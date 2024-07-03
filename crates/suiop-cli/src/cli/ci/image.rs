@@ -36,6 +36,14 @@ pub enum RefType {
     Commit,
 }
 
+#[derive(ValueEnum, Clone, Debug)]
+#[clap(rename_all = "lowercase")]
+pub enum BuildMode {
+    Light,
+    Moderate,
+    Beast,
+}
+
 impl Serialize for RefType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -81,6 +89,9 @@ pub enum ImageAction {
         /// Optional reference value, default to "main"
         #[arg(long)]
         ref_val: Option<String>,
+        /// Optional mode of the build, default to "light"
+        #[arg(long)]
+        build_mode: Option<BuildMode>,
         /// Optional cpu resource request, default to "2"
         #[arg(long)]
         cpu: Option<String>,
@@ -131,9 +142,9 @@ struct RequestBuildRequest {
     image_tag: Option<String>,
     ref_type: Option<RefType>,
     ref_val: Option<String>,
-    cpu: Option<String>,
-    memory: Option<String>,
-    disk: Option<String>,
+    cpu: String,
+    memory: String,
+    disk: String,
     build_args: Vec<String>,
 }
 
@@ -272,6 +283,7 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 image_tag,
                 ref_type,
                 ref_val,
+                build_mode: _,
                 cpu: _,
                 memory: _,
                 disk: _,
@@ -421,6 +433,7 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             image_tag,
             ref_type,
             ref_val,
+            build_mode,
             cpu,
             memory,
             disk,
@@ -429,6 +442,28 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
             let req = client.post(full_url);
+            let mut cpu = cpu.clone().unwrap_or("2".to_string());
+            let mut memory = memory.clone().unwrap_or("4Gi".to_string());
+            let mut disk = disk.clone().unwrap_or("20Gi".to_string());
+            if let Some(build_mode) = build_mode {
+                match build_mode {
+                    BuildMode::Light => {
+                        cpu = "2".to_string();
+                        memory = "4Gi".to_string();
+                        disk = "20Gi".to_string();
+                    }
+                    BuildMode::Moderate => {
+                        cpu = "4".to_string();
+                        memory = "8Gi".to_string();
+                        disk = "40Gi".to_string();
+                    }
+                    BuildMode::Beast => {
+                        cpu = "8".to_string();
+                        memory = "32Gi".to_string();
+                        disk = "100Gi".to_string();
+                    }
+                }
+            }
             let body = RequestBuildRequest {
                 repo_name: repo_name.clone(),
                 dockerfile: dockerfile.clone(),
@@ -436,9 +471,9 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 image_tag: image_tag.clone(),
                 ref_type: ref_type.clone(),
                 ref_val: ref_val.clone(),
-                cpu: cpu.clone(),
-                memory: memory.clone(),
-                disk: disk.clone(),
+                cpu,
+                memory,
+                disk,
                 build_args: build_args.clone(),
             };
             debug!("req body: {:?}", body);
