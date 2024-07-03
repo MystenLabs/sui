@@ -563,5 +563,88 @@ module sui::coin_tests {
         abort 0
     }
 
+    #[test]
+    fun test_add_remove() {
+        use sui::coin::{
+            deny_list_v2_add as add,
+            deny_list_v2_contains_next_epoch as contains_next_epoch,
+            deny_list_v2_contains_current_epoch as contains_current_epoch,
+            deny_list_v2_remove as remove,
+        };
+        let mut scenario = test_scenario::begin(@0);
+        deny_list::create_for_test(scenario.ctx());
+        scenario.next_tx(TEST_ADDR);
+
+        let witness = COIN_TESTS {};
+        let (treasury, mut deny_cap, metadata) = coin::create_regulated_currency_v2(
+            witness,
+            6,
+            b"COIN_TESTS",
+            b"coin_name",
+            b"description",
+            option::some(url::new_unsafe_from_bytes(b"icon_url")),
+            /* allow_global_pause */ true,
+            scenario.ctx(),
+        );
+        transfer::public_freeze_object(metadata);
+        transfer::public_freeze_object(treasury);
+
+        scenario.next_epoch(TEST_ADDR);
+        {
+            let mut deny_list: deny_list::DenyList = scenario.take_shared();
+            add(&mut deny_list, &mut deny_cap, @300, scenario.ctx());
+            add(&mut deny_list, &mut deny_cap, @400, scenario.ctx());
+            add(&mut deny_list, &mut deny_cap, @500, scenario.ctx());
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @200, scenario.ctx()));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @300, scenario.ctx()));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @400, scenario.ctx()));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @500, scenario.ctx()));
+            test_scenario::return_shared(deny_list);
+        };
+
+        scenario.next_epoch(TEST_ADDR);
+        {
+            let mut deny_list: deny_list::DenyList = scenario.take_shared();
+            add(&mut deny_list, &mut deny_cap, @200, scenario.ctx());
+            remove(&mut deny_list, &mut deny_cap, @300, scenario.ctx());
+            remove(&mut deny_list, &mut deny_cap, @400, scenario.ctx());
+            add(&mut deny_list, &mut deny_cap, @500, scenario.ctx());
+            remove(&mut deny_list, &mut deny_cap, @500, scenario.ctx());
+            test_scenario::return_shared(deny_list);
+        };
+
+        scenario.next_epoch(TEST_ADDR);
+        {
+            let mut deny_list: deny_list::DenyList = scenario.take_shared();
+            add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
+            remove(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
+            remove(&mut deny_list, &mut deny_cap, @200, scenario.ctx());
+            remove(&mut deny_list, &mut deny_cap, @300, scenario.ctx());
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @300, scenario.ctx()));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @400, scenario.ctx()));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @500, scenario.ctx()));
+            test_scenario::return_shared(deny_list);
+        };
+
+        scenario.next_epoch(TEST_ADDR);
+        {
+            let deny_list: deny_list::DenyList = scenario.take_shared();
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
+            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @200, scenario.ctx()));
+            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @200));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @300, scenario.ctx()));
+            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @300));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @400, scenario.ctx()));
+            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @400));
+            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @500, scenario.ctx()));
+            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @500));
+            test_scenario::return_shared(deny_list);
+        };
+        transfer::public_freeze_object(deny_cap);
+        scenario.end();
+    }
 
 }
