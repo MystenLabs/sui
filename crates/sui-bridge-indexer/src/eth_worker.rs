@@ -6,7 +6,9 @@ use crate::latest_eth_syncer::LatestEthSyncer;
 use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::get_latest_eth_token_transfer;
 use crate::postgres_manager::{write, PgPool};
-use crate::{BridgeDataSource, TokenTransfer, TokenTransferData, TokenTransferStatus};
+use crate::{
+    BridgeDataSource, ProcessedTxnData, TokenTransfer, TokenTransferData, TokenTransferStatus,
+};
 use anyhow::{anyhow, Result};
 use ethers::providers::Provider;
 use ethers::providers::{Http, Middleware};
@@ -248,7 +250,7 @@ async fn process_eth_events<E: EthEvent>(
             };
 
             // TODO: we either scream here or keep retrying this until we succeed
-            if let Err(e) = write(&pg_pool, vec![transfer]) {
+            if let Err(e) = write(&pg_pool, vec![ProcessedTxnData::TokenTransfer(transfer)]) {
                 error!("Error writing token transfer to database: {:?}", e);
             } else {
                 progress_gauge.set(block_number as i64);
