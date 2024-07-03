@@ -1838,10 +1838,10 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_upgrade");
-    let build_config_publish = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
-        build_config: build_config_publish.clone(),
+        build_config: build_config.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
@@ -1863,6 +1863,12 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
         .unwrap();
 
+    // We will upgrade the package in a `tmp_dir` using the `Move.lock` resulting from publish,
+    // so as not to clobber anything.
+    // The `Move.lock` needs to point to the root directory of the package-to-be-upgraded.
+    // The core implementation does not use support an arbitrary `lock_file` path specified in
+    // `BuildConfig` when the `Move.lock` file is an input for upgrades, so we change the `BuildConfig`
+    // `lock_file` to point to the root directory of package-to-be-upgraded.
     let tmp_dir = tempfile::tempdir().unwrap();
     fs_extra::dir::copy(
         &package_path,
@@ -1873,26 +1879,22 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
     upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
     upgrade_pkg_path.pop();
-
-    // Create a new build config for the upgrade. Initialize its lock file
-    // to the package we published.
-    let mut build_config_upgrade = BuildConfig::new_for_testing().config;
-    let install_dir = upgrade_pkg_path.clone();
-    build_config_upgrade.install_dir = Some(install_dir.clone());
-    build_config_upgrade.lock_file = Some(install_dir.join("Move.lock"));
+    // Place the `Move.lock` after publishing in the tmp dir for upgrading.
+    let published_lock_file_path = build_config.lock_file.clone().unwrap();
     let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
     upgrade_lock_file_path.push("Move.lock");
-    let publish_lock_file_path = build_config_publish.lock_file.unwrap();
     std::fs::copy(
-        publish_lock_file_path.clone(),
+        published_lock_file_path.clone(),
         upgrade_lock_file_path.clone(),
     )?;
+    // Point the `BuildConfig` lock_file to the package root.
+    build_config.lock_file = Some(upgrade_pkg_path.join("Move.lock"));
 
     // Now run the upgrade
     let upgrade_response = SuiClientCommands::Upgrade {
         package_path: upgrade_pkg_path,
         upgrade_capability: cap.reference.object_id,
-        build_config: build_config_upgrade.clone(),
+        build_config: build_config.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
@@ -1918,9 +1920,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         };
 
     // Get lock file that recorded Package ID and version
-    let lock_file = build_config_upgrade
-        .lock_file
-        .expect("Lock file for testing");
+    let lock_file = build_config.lock_file.expect("Lock file for testing");
     let mut lock_file = std::fs::File::open(lock_file).unwrap();
     let envs = ManagedPackage::read(&mut lock_file).unwrap();
     let localnet = envs.get("localnet").unwrap();
@@ -1943,7 +1943,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
 }
 
 #[sim_test]
-async fn xtest_package_management_on_upgrade_command_conflict() -> Result<(), anyhow::Error> {
+async fn test_package_management_on_upgrade_command_conflict() -> Result<(), anyhow::Error> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
