@@ -2948,6 +2948,7 @@ impl AuthorityState {
         let new_epoch = new_epoch_store.epoch();
         self.transaction_manager.reconfigure(new_epoch);
         self.epoch_store.store(new_epoch_store);
+        epoch_store.epoch_terminated().await;
         *execution_lock = new_epoch;
     }
 
