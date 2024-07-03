@@ -16,7 +16,7 @@ jobs:
   notify-prs:
     name: Dispatch workflow to notify slack channel on PRs
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' && github.event.action == 'opened' }}
+    if: ${{ github.event.action == 'opened' }}
     steps:
       - name: Dispatch github-issues-external-prs-monitor in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
