@@ -13,6 +13,41 @@ module sui::coin_tests {
 
     const TEST_ADDR: address = @0xA11CE;
 
+    fun assert_status(
+        deny_list: &deny_list::DenyList,
+        addr: address,
+        contains_current_epoch: bool,
+        contains_next_epoch: bool,
+        ctx: &TxContext,
+    ) {
+        use sui::coin::{
+            deny_list_v2_contains_next_epoch as contains_next_epoch,
+            deny_list_v2_contains_current_epoch as contains_current_epoch,
+        };
+        assert!(contains_current_epoch<COIN_TESTS>(deny_list, addr, ctx) == contains_current_epoch);
+        assert!(contains_next_epoch<COIN_TESTS>(deny_list, addr) == contains_next_epoch);
+    }
+
+    fun assert_global(
+        deny_list: &deny_list::DenyList,
+        paused_current_epoch: bool,
+        paused_next_epoch: bool,
+        ctx: &TxContext,
+    ) {
+        use sui::coin::{
+            deny_list_v2_is_global_pause_enabled_next_epoch as is_global_pause_enabled_next_epoch,
+            deny_list_v2_is_global_pause_enabled_current_epoch
+                as is_global_pause_enabled_current_epoch,
+        };
+        assert!(
+            is_global_pause_enabled_current_epoch<COIN_TESTS>(deny_list, ctx) ==
+            paused_current_epoch
+        );
+        assert!(
+            is_global_pause_enabled_next_epoch<COIN_TESTS>(deny_list) == paused_next_epoch
+        );
+    }
+
     #[test]
     fun coin_tests_metadata() {
         let mut scenario = test_scenario::begin(TEST_ADDR);
@@ -181,8 +216,6 @@ module sui::coin_tests {
     fun deny_list_v2() {
         use sui::coin::{
             deny_list_v2_add as add,
-            deny_list_v2_contains_next_epoch as contains_next_epoch,
-            deny_list_v2_contains_current_epoch as contains_current_epoch,
             deny_list_v2_remove as remove,
         };
         let mut scenario = test_scenario::begin(@0);
@@ -206,17 +239,14 @@ module sui::coin_tests {
         {
             // test freezing an address
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            assert!(contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            remove(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            add(&mut deny_list, &mut deny_cap, @102, scenario.ctx());
-            assert!(contains_next_epoch<COIN_TESTS>(&deny_list, @102));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @102, scenario.ctx()));
+            let ctx = scenario.ctx();
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            add(&mut deny_list, &mut deny_cap, @100, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ true, ctx);
+            remove(&mut deny_list, &mut deny_cap, @100, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            add(&mut deny_list, &mut deny_cap, @102, ctx);
+            assert_status(&deny_list, @102, /* current */ false, /* next */ true, ctx);
             test_scenario::return_shared(deny_list);
         };
 
@@ -224,39 +254,33 @@ module sui::coin_tests {
         {
             // test freezing an address over multiple "transactions"
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(contains_next_epoch<COIN_TESTS>(&deny_list, @102));
-            assert!(contains_current_epoch<COIN_TESTS>(&deny_list, @102, scenario.ctx()));
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @200));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @200, scenario.ctx()));
-            add(&mut deny_list, &mut deny_cap, @200, scenario.ctx());
-            assert!(contains_next_epoch<COIN_TESTS>(&deny_list, @200));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @200, scenario.ctx()));
-            remove(&mut deny_list, &mut deny_cap, @102, scenario.ctx());
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @102));
-            assert!(contains_current_epoch<COIN_TESTS>(&deny_list, @102, scenario.ctx()));
+            let ctx = scenario.ctx();
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @102, /* current */ true, /* next */ true, ctx);
+            assert_status(&deny_list, @200, /* current */ false, /* next */ false, ctx);
+            add(&mut deny_list, &mut deny_cap, @200, ctx);
+            assert_status(&deny_list, @200, /* current */ false, /* next */ true, ctx);
+            remove(&mut deny_list, &mut deny_cap, @102, ctx);
+            assert_status(&deny_list, @102, /* current */ true, /* next */ false, ctx);
             test_scenario::return_shared(deny_list);
         };
 
         scenario.next_tx(TEST_ADDR);
         {
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @102));
-            assert!(contains_current_epoch<COIN_TESTS>(&deny_list, @102, scenario.ctx()));
-            assert!(contains_next_epoch<COIN_TESTS>(&deny_list, @200));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @200, scenario.ctx()));
-            remove(&mut deny_list, &mut deny_cap, @200, scenario.ctx());
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @200));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @200, scenario.ctx()));
+            let ctx = scenario.ctx();
+            assert_status(&deny_list, @102, /* current */ true, /* next */ false, ctx);
+            assert_status(&deny_list, @200, /* current */ false, /* next */ true, ctx);
+            remove(&mut deny_list, &mut deny_cap, @200, ctx);
+            assert_status(&deny_list, @200, /* current */ false, /* next */ false, ctx);
             test_scenario::return_shared(deny_list);
         };
 
         scenario.next_epoch(TEST_ADDR);
         {
             let deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @102));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @102, scenario.ctx()));
+            let ctx = scenario.ctx();
+            assert_status(&deny_list, @102, /* current */ false, /* next */ false, ctx);
             test_scenario::return_shared(deny_list);
         };
         transfer::public_freeze_object(deny_cap);
@@ -267,14 +291,9 @@ module sui::coin_tests {
     fun deny_list_v2_global_pause() {
         use sui::coin::{
             deny_list_v2_add as add,
-            deny_list_v2_contains_next_epoch as contains_next_epoch,
-            deny_list_v2_contains_current_epoch as contains_current_epoch,
             deny_list_v2_remove as remove,
             deny_list_v2_enable_global_pause as enable_global_pause,
             deny_list_v2_disable_global_pause as disable_global_pause,
-            deny_list_v2_is_global_pause_enabled_next_epoch as is_global_pause_enabled_next_epoch,
-            deny_list_v2_is_global_pause_enabled_current_epoch
-                as is_global_pause_enabled_current_epoch,
         };
         let mut scenario = test_scenario::begin(@0);
         deny_list::create_for_test(scenario.ctx());
@@ -297,63 +316,48 @@ module sui::coin_tests {
         {
             // global pause =/=> contains
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!is_global_pause_enabled_current_epoch<COIN_TESTS>(&deny_list, scenario.ctx()));
-            assert!(!is_global_pause_enabled_next_epoch<COIN_TESTS>(&deny_list));
-            enable_global_pause(&mut deny_list, &mut deny_cap, scenario.ctx());
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!is_global_pause_enabled_current_epoch<COIN_TESTS>(&deny_list, scenario.ctx()));
-            assert!(is_global_pause_enabled_next_epoch<COIN_TESTS>(&deny_list));
+            let ctx = scenario.ctx();
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_global(&deny_list, /* current */ false, /* next */ false, ctx);
+            enable_global_pause(&mut deny_list, &mut deny_cap, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_global(&deny_list, /* current */ false, /* next */ true, ctx);
             // test double enable
-            enable_global_pause(&mut deny_list, &mut deny_cap, scenario.ctx());
-            assert!(!is_global_pause_enabled_current_epoch<COIN_TESTS>(&deny_list, scenario.ctx()));
-            assert!(is_global_pause_enabled_next_epoch<COIN_TESTS>(&deny_list));
+            enable_global_pause(&mut deny_list, &mut deny_cap, ctx);
+            assert_global(&deny_list, /* current */ false, /* next */ true, ctx);
             test_scenario::return_shared(deny_list);
         };
         scenario.next_epoch(TEST_ADDR);
         {
             // can still add/remove during global pause
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(is_global_pause_enabled_next_epoch<COIN_TESTS>(&deny_list));
-            assert!(is_global_pause_enabled_current_epoch<COIN_TESTS>(&deny_list, scenario.ctx()));
-            add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            assert!(contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(is_global_pause_enabled_next_epoch<COIN_TESTS>(&deny_list));
-            assert!(is_global_pause_enabled_current_epoch<COIN_TESTS>(&deny_list, scenario.ctx()));
-            remove(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(is_global_pause_enabled_next_epoch<COIN_TESTS>(&deny_list));
-            assert!(is_global_pause_enabled_current_epoch<COIN_TESTS>(&deny_list, scenario.ctx()));
+            let ctx = scenario.ctx();
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_global(&deny_list, /* current */ true, /* next */ true, ctx);
+            add(&mut deny_list, &mut deny_cap, @100, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ true, ctx);
+            assert_global(&deny_list, /* current */ true, /* next */ true, ctx);
+            remove(&mut deny_list, &mut deny_cap, @100, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_global(&deny_list, /* current */ true, /* next */ true, ctx);
             test_scenario::return_shared(deny_list);
         };
         scenario.next_epoch(TEST_ADDR);
         {
             // global pause does not affect contains when disabled
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(is_global_pause_enabled_next_epoch<COIN_TESTS>(&deny_list));
-            assert!(is_global_pause_enabled_current_epoch<COIN_TESTS>(&deny_list, scenario.ctx()));
-            add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            assert!(contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(is_global_pause_enabled_next_epoch<COIN_TESTS>(&deny_list));
-            assert!(is_global_pause_enabled_current_epoch<COIN_TESTS>(&deny_list, scenario.ctx()));
-            disable_global_pause(&mut deny_list, &mut deny_cap, scenario.ctx());
-            assert!(contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(!is_global_pause_enabled_next_epoch<COIN_TESTS>(&deny_list));
-            assert!(is_global_pause_enabled_current_epoch<COIN_TESTS>(&deny_list, scenario.ctx()));
+            let ctx = scenario.ctx();
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_global(&deny_list, /* current */ true, /* next */ true, ctx);
+            add(&mut deny_list, &mut deny_cap, @100, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ true, ctx);
+            assert_global(&deny_list, /* current */ true, /* next */ true, ctx);
+            disable_global_pause(&mut deny_list, &mut deny_cap, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ true, ctx);
+            assert_global(&deny_list, /* current */ true, /* next */ false, ctx);
             // test double disable
-            disable_global_pause(&mut deny_list, &mut deny_cap, scenario.ctx());
-            assert!(!is_global_pause_enabled_next_epoch<COIN_TESTS>(&deny_list));
-            assert!(is_global_pause_enabled_current_epoch<COIN_TESTS>(&deny_list, scenario.ctx()));
+            disable_global_pause(&mut deny_list, &mut deny_cap, ctx);
+            assert_global(&deny_list, /* current */ true, /* next */ false, ctx);
             test_scenario::return_shared(deny_list);
         };
         transfer::public_freeze_object(deny_cap);
@@ -364,7 +368,6 @@ module sui::coin_tests {
     fun deny_list_v2_double_add() {
         use sui::coin::{
             deny_list_v2_add as add,
-            deny_list_v2_contains_next_epoch as contains_next_epoch,
             deny_list_v2_remove as remove,
         };
         let mut scenario = test_scenario::begin(@0);
@@ -384,16 +387,17 @@ module sui::coin_tests {
         );
         transfer::public_freeze_object(metadata);
         transfer::public_freeze_object(treasury);
+        scenario.next_tx(TEST_ADDR);
         {
             // test freezing an address
-            scenario.next_tx(TEST_ADDR);
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            assert!(contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            remove(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
+            let ctx = scenario.ctx();
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            add(&mut deny_list, &mut deny_cap, @100, ctx);
+            add(&mut deny_list, &mut deny_cap, @100, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ true, ctx);
+            remove(&mut deny_list, &mut deny_cap, @100, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
             test_scenario::return_shared(deny_list);
         };
         transfer::public_freeze_object(deny_cap);
@@ -446,7 +450,7 @@ module sui::coin_tests {
 
 
     #[test]
-    fun test_migrate_regulated_currency_to_v2() {
+    fun migrate_regulated_currency_to_v2() {
         let mut scenario = test_scenario::begin(@0);
         deny_list::create_for_test(scenario.ctx());
         scenario.next_tx(TEST_ADDR);
@@ -468,44 +472,41 @@ module sui::coin_tests {
         {
             // test freezing an address
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            coin::deny_list_add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            coin::deny_list_add(&mut deny_list, &mut deny_cap, @200, scenario.ctx());
-            coin::deny_list_add(&mut deny_list, &mut deny_cap, @300, scenario.ctx());
+            let ctx = scenario.ctx();
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @100, ctx);
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @200, ctx);
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @300, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @200, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @300, /* current */ false, /* next */ false, ctx);
             test_scenario::return_shared(deny_list);
         };
         scenario.next_tx(TEST_ADDR);
         {
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
+            let ctx = scenario.ctx();
             assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @100));
             assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @200));
             assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @300));
-            assert!(!coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @200));
-            assert!(!coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @300));
-            deny_cap_v2 = coin::migrate_regulated_currency_to_v2(&mut deny_list, deny_cap, true, scenario.ctx());
-            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100));
-            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @200));
-            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @300));
-            assert!(coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @200));
-            assert!(coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @300));
-            assert!(!coin::deny_list_v2_contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(!coin::deny_list_v2_contains_current_epoch<COIN_TESTS>(&deny_list, @200, scenario.ctx()));
-            assert!(!coin::deny_list_v2_contains_current_epoch<COIN_TESTS>(&deny_list, @300, scenario.ctx()));
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @200, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @300, /* current */ false, /* next */ false, ctx);
+            deny_cap_v2 = coin::migrate_regulated_currency_to_v2(&mut deny_list, deny_cap, true, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ true, ctx);
+            assert_status(&deny_list, @200, /* current */ false, /* next */ true, ctx);
+            assert_status(&deny_list, @300, /* current */ false, /* next */ true, ctx);
             test_scenario::return_shared(deny_list);
         };
         scenario.next_epoch(TEST_ADDR);
         {
             let deny_list: deny_list::DenyList = scenario.take_shared();
+            let ctx = scenario.ctx();
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100));
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @200));
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @300));
-            assert!(coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @200));
-            assert!(coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @300));
-            assert!(coin::deny_list_v2_contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(coin::deny_list_v2_contains_current_epoch<COIN_TESTS>(&deny_list, @200, scenario.ctx()));
-            assert!(coin::deny_list_v2_contains_current_epoch<COIN_TESTS>(&deny_list, @300, scenario.ctx()));
+            assert_status(&deny_list, @100, /* current */ true, /* next */ true, ctx);
+            assert_status(&deny_list, @200, /* current */ true, /* next */ true, ctx);
+            assert_status(&deny_list, @300, /* current */ true, /* next */ true, ctx);
             test_scenario::return_shared(deny_list);
         };
         transfer::public_freeze_object(deny_cap_v2);
@@ -513,7 +514,7 @@ module sui::coin_tests {
     }
 
     #[test, expected_failure(abort_code = sui::coin::EGlobalPauseNotAllowed)]
-    fun test_migrate_regulated_currency_to_v2_disallow_global_pause() {
+    fun migrate_regulated_currency_to_v2_disallow_global_pause() {
         let mut scenario = test_scenario::begin(@0);
         deny_list::create_for_test(scenario.ctx());
         scenario.next_tx(TEST_ADDR);
@@ -542,19 +543,17 @@ module sui::coin_tests {
         {
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
             assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @100));
-            assert!(!coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @100));
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, scenario.ctx());
             deny_cap_v2 = coin::migrate_regulated_currency_to_v2(&mut deny_list, deny_cap, false, scenario.ctx());
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100));
-            assert!(coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!coin::deny_list_v2_contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
+            assert_status(&deny_list, @100, /* current */ false, /* next */ true, scenario.ctx());
             test_scenario::return_shared(deny_list);
         };
         scenario.next_epoch(TEST_ADDR);
         {
             let deny_list: deny_list::DenyList = scenario.take_shared();
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100));
-            assert!(coin::deny_list_v2_contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(coin::deny_list_v2_contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
+            assert_status(&deny_list, @100, /* current */ true, /* next */ true, scenario.ctx());
             test_scenario::return_shared(deny_list);
         };
         scenario.next_tx(TEST_ADDR);
@@ -564,11 +563,9 @@ module sui::coin_tests {
     }
 
     #[test]
-    fun test_add_remove() {
+    fun deny_list_v2_add_remove() {
         use sui::coin::{
             deny_list_v2_add as add,
-            deny_list_v2_contains_next_epoch as contains_next_epoch,
-            deny_list_v2_contains_current_epoch as contains_current_epoch,
             deny_list_v2_remove as remove,
         };
         let mut scenario = test_scenario::begin(@0);
@@ -592,59 +589,63 @@ module sui::coin_tests {
         scenario.next_epoch(TEST_ADDR);
         {
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            add(&mut deny_list, &mut deny_cap, @300, scenario.ctx());
-            add(&mut deny_list, &mut deny_cap, @400, scenario.ctx());
-            add(&mut deny_list, &mut deny_cap, @500, scenario.ctx());
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @200, scenario.ctx()));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @300, scenario.ctx()));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @400, scenario.ctx()));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @500, scenario.ctx()));
+            let ctx = scenario.ctx();
+            add(&mut deny_list, &mut deny_cap, @300, ctx);
+            add(&mut deny_list, &mut deny_cap, @400, ctx);
+            add(&mut deny_list, &mut deny_cap, @500, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @200, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @300, /* current */ false, /* next */ true, ctx);
+            assert_status(&deny_list, @400, /* current */ false, /* next */ true, ctx);
+            assert_status(&deny_list, @500, /* current */ false, /* next */ true, ctx);
             test_scenario::return_shared(deny_list);
         };
 
         scenario.next_epoch(TEST_ADDR);
         {
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            add(&mut deny_list, &mut deny_cap, @200, scenario.ctx());
-            remove(&mut deny_list, &mut deny_cap, @300, scenario.ctx());
-            remove(&mut deny_list, &mut deny_cap, @400, scenario.ctx());
-            add(&mut deny_list, &mut deny_cap, @500, scenario.ctx());
-            remove(&mut deny_list, &mut deny_cap, @500, scenario.ctx());
+            let ctx = scenario.ctx();
+            add(&mut deny_list, &mut deny_cap, @200, ctx);
+            remove(&mut deny_list, &mut deny_cap, @300, ctx);
+            remove(&mut deny_list, &mut deny_cap, @400, ctx);
+            add(&mut deny_list, &mut deny_cap, @500, ctx);
+            remove(&mut deny_list, &mut deny_cap, @500, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @200, /* current */ false, /* next */ true, ctx);
+            assert_status(&deny_list, @300, /* current */ true, /* next */ false, ctx);
+            assert_status(&deny_list, @400, /* current */ true, /* next */ false, ctx);
+            assert_status(&deny_list, @500, /* current */ true, /* next */ false, ctx);
             test_scenario::return_shared(deny_list);
         };
 
         scenario.next_epoch(TEST_ADDR);
         {
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            remove(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
-            remove(&mut deny_list, &mut deny_cap, @200, scenario.ctx());
-            remove(&mut deny_list, &mut deny_cap, @300, scenario.ctx());
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @300, scenario.ctx()));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @400, scenario.ctx()));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @500, scenario.ctx()));
+            let ctx = scenario.ctx();
+            add(&mut deny_list, &mut deny_cap, @100, ctx);
+            remove(&mut deny_list, &mut deny_cap, @100, ctx);
+            remove(&mut deny_list, &mut deny_cap, @200, ctx);
+            remove(&mut deny_list, &mut deny_cap, @300, ctx);
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @200, /* current */ true, /* next */ false, ctx);
+            assert_status(&deny_list, @300, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @400, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @500, /* current */ false, /* next */ false, ctx);
             test_scenario::return_shared(deny_list);
         };
 
         scenario.next_epoch(TEST_ADDR);
         {
             let deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @100, scenario.ctx()));
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @100));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @200, scenario.ctx()));
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @200));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @300, scenario.ctx()));
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @300));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @400, scenario.ctx()));
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @400));
-            assert!(!contains_current_epoch<COIN_TESTS>(&deny_list, @500, scenario.ctx()));
-            assert!(!contains_next_epoch<COIN_TESTS>(&deny_list, @500));
+            let ctx = scenario.ctx();
+            assert_status(&deny_list, @100, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @200, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @300, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @400, /* current */ false, /* next */ false, ctx);
+            assert_status(&deny_list, @500, /* current */ false, /* next */ false, ctx);
             test_scenario::return_shared(deny_list);
         };
         transfer::public_freeze_object(deny_cap);
         scenario.end();
     }
-
 }
