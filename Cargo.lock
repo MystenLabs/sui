@@ -14092,19 +14092,6 @@ dependencies = [
 [[package]]
 name = "sui-test-validator"
 version = "1.29.0"
-dependencies = [
- "anyhow",
- "axum",
- "clap",
- "http",
- "sui-cluster-test",
- "sui-faucet",
- "telemetry-subscribers",
- "tokio",
- "tower",
- "tower-http",
- "uuid 1.2.2",
-]
 
 [[package]]
 name = "sui-tls"
