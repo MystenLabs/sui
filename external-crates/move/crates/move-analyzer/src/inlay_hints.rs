@@ -125,22 +125,23 @@ fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayH
 #[cfg(test)]
 fn validate_type_hint(hints: &[InlayHint], path: &std::path::Path, line: u32, col: u32, ty: &str) {
     let lsp_line = line - 1; // 0th based
-    if let Some(label_parts) = hints.iter().find_map(|h| {
+    let Some(label_parts) = hints.iter().find_map(|h| {
         if h.position.line == lsp_line && h.position.character == col {
             if let InlayHintLabel::LabelParts(parts) = &h.label {
                 return Some(parts);
             }
         }
         None
-    }) {
-        let found_ty = &label_parts[1].value;
-        assert!(
-            found_ty == ty,
-            "incorrect type of hint (found '{found_ty}' instead of expected '{ty}') at line {line} and col {col} in {path:?}"
-        );
-    } else {
+    }) else {
         panic!("hint not found at line {line} and col {col} in {path:?}");
-    }
+    };
+
+    let found_ty = &label_parts[1].value;
+    assert!(
+        found_ty == ty,
+        "incorrect type of hint (found '{}' instead of expected '{}') at line {} and col {} in {:?}",
+            found_ty, ty, line, col, path
+    );
 }
 
 #[test]
