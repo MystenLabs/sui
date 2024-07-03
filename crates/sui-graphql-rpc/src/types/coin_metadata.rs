@@ -14,9 +14,7 @@ use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
-use super::transaction_block::{
-    self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
-};
+use super::transaction_block::{self, TransactionBlockConnection, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use crate::data::Db;
 use crate::error::Error;

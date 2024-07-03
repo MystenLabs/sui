@@ -3,7 +3,6 @@
 
 use crate::{
     data::{Conn, DbConnection},
-    error::Error,
     filter, inner_join, max_option, min_option, query,
     raw_query::RawQuery,
     types::{
@@ -159,52 +158,14 @@ impl TransactionBlockFilter {
             || self.transaction_ids.is_some()
     }
 
-    pub(crate) fn is_consistent(&self) -> Result<(), Error> {
-        if let Some(before) = self.before_checkpoint {
-            if before == 0 {
-                return Err(Error::Client(
-                    "`beforeCheckpoint` must be greater than 0".to_string(),
-                ));
-            }
-        }
-
-        if let (Some(after), Some(before)) = (self.after_checkpoint, self.before_checkpoint) {
-            // Because `after` and `before` are both exclusive, they must be at least one apart if
-            // both are provided.
-            if after + 1 >= before {
-                return Err(Error::Client(
-                    "`afterCheckpoint` must be less than `beforeCheckpoint`".to_string(),
-                ));
-            }
-        }
-
-        if let (Some(after), Some(at)) = (self.after_checkpoint, self.at_checkpoint) {
-            if after >= at {
-                return Err(Error::Client(
-                    "`afterCheckpoint` must be less than `atCheckpoint`".to_string(),
-                ));
-            }
-        }
-
-        if let (Some(at), Some(before)) = (self.at_checkpoint, self.before_checkpoint) {
-            if at >= before {
-                return Err(Error::Client(
-                    "`atCheckpoint` must be less than `beforeCheckpoint`".to_string(),
-                ));
-            }
-        }
-
-        if let (Some(TransactionBlockKindInput::SystemTx), Some(signer)) =
-            (self.kind, self.sign_address)
-        {
-            if signer != SuiAddress::from(NativeSuiAddress::ZERO) {
-                return Err(Error::Client(
-                    "System transactions cannot have a sender".to_string(),
-                ));
-            }
-        }
-
-        Ok(())
+    pub(crate) fn is_empty(&self) -> bool {
+        // consider rename .. is_empty or something
+        matches!(self.before_checkpoint, Some(0))
+            || matches!((self.after_checkpoint, self.before_checkpoint), (Some(after), Some(before)) if after >= before)
+            || matches!((self.after_checkpoint, self.at_checkpoint), (Some(after), Some(at)) if after >= at)
+            || matches!((self.at_checkpoint, self.before_checkpoint), (Some(at), Some(before)) if at >= before)
+            // If SystemTx, sender if specified must be 0x0. Conversely, if sender is 0x0, kind must be SystemTx.
+            || matches!((self.kind, self.sign_address), (Some(kind), Some(signer)) if (kind == TransactionBlockKindInput::SystemTx) != (signer == SuiAddress::from(NativeSuiAddress::ZERO)))
     }
 }
 
@@ -316,6 +277,9 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
             subqueries.push((select_sender(sender, tx_bounds), "tx_senders"));
         }
     }
+    if let Some(txs) = &filter.transaction_ids {
+        subqueries.push((select_ids(txs, tx_bounds), "tx_digests"));
+    }
 
     if subqueries.is_empty() {
         return None;
@@ -326,8 +290,7 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
     if !subqueries.is_empty() {
         subquery = query!("SELECT tx_sequence_number FROM ({}) AS initial", subquery);
         while let Some((subselect, alias)) = subqueries.pop() {
-            subquery =
-                inner_join!(subquery, rhs => (subselect, alias), using: ["tx_sequence_number"]);
+            subquery = inner_join!(subquery, alias => subselect, using: ["tx_sequence_number"]);
         }
     }
 

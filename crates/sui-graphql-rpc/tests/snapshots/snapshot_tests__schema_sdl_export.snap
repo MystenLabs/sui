@@ -3863,19 +3863,11 @@ type TransactionBlock {
 type TransactionBlockConnection {
 	"""
 	Information to aid in pagination.
-	
-	When `scanLimit` is specified on `TransactionBlock` queries:
-	- Even if the current page is empty, `hasNextPage` and `hasPreviousPage` will be true until
-	the caller paginates to the end of either range.
-	
-	When `scanLimit` is not specified, then:
-	- `hasNextPage` and `hasPreviousPage` behave conventionally, returning false
-	when there are no more results in the respective direction.
-	
-	This approach ensures consistent pagination behavior, allowing traversal through potentially
-	sparse data sets within the specified or default range.
 	"""
 	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
 	edges: [TransactionBlockEdge!]!
 	"""
 	A list of nodes.
