@@ -45,7 +45,7 @@ cargo run --bin sui --features indexer -- start --with-faucet --force-regenesis 
 diesel setup --database-url="<DATABASE_URL>"
 diesel database reset --database-url="<DATABASE_URL>"
 ```
-Note that you'll need an existing database for the above to work. Replace `gegao` with the name of the database created.
+Note that you need an existing database for the above to work. Using the DATABASE_URL example in the previous code, replace `gegao` with the name of your database.
 
 2. Checkout to your target branch
 
