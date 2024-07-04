@@ -1,98 +1,44 @@
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:1:1
-   │  
- 1 │ ╭ module a::m {
- 2 │ │ 
- 3 │ │     public struct A(u64) has copy, drop;
- 4 │ │ 
-   · │
-10 │ │     public fun t1(_s: B): u64 { abort 0 }
-11 │ │ }
-   │ ╰─^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
 warning[W09009]: unused struct field
-  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:3:21
+  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:4:21
   │
-3 │     public struct A(u64) has copy, drop;
+4 │     public struct A(u64) has copy, drop;
   │                     ^^^ The '0' field of the 'A' type is unused
   │
   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09009]: unused struct field
-  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:6:9
+  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:7:9
   │
-6 │         a: A
+7 │         a: A
   │         ^ The 'a' field of the 'B' type is unused
   │
   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:6:12
-  │
-6 │         a: A
-  │            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 't0 -> a::m::t0', or 't1 -> a::m::t1'
-
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:9:23
-  │
-9 │     public fun t0(_s: A): u64 { abort 0 }
-  │                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 't0 -> a::m::t0', or 't1 -> a::m::t1'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:10:23
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:19:23
    │
-10 │     public fun t1(_s: B): u64 { abort 0 }
-   │                       ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 't0 -> a::m::t0', or 't1 -> a::m::t1'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:13:1
-   │  
-13 │ ╭ module a::n {
-14 │ │     use a::m::{A,B};
-15 │ │ 
-16 │ │     public fun foo(_a: A, _b: B) {
-   · │
-19 │ │     }
-20 │ │ }
-   │ ╰─^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'Self -> a::n', 'option -> std::option', 'vector -> std::vector', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:16:24
-   │
-16 │     public fun foo(_a: A, _b: B) {
-   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::n::foo'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:16:31
-   │
-16 │     public fun foo(_a: A, _b: B) {
-   │                               ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::n::foo'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:17:23
-   │
-17 │         let _tmp1 = _a.;
+19 │         let _tmp1 = _a.;
    │                       ^ Possible dot names: 'a::m::t0'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:17:24
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:19:24
    │
-17 │         let _tmp1 = _a.;
+19 │         let _tmp1 = _a.;
    │                        ^
    │                        │
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:18:23
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:20:23
    │
-18 │         let _tmp2 = _b.;
+20 │         let _tmp2 = _b.;
    │                       ^ Possible dot names: 'a::m::t1'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:18:24
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:20:24
    │
-18 │         let _tmp2 = _b.;
+20 │         let _tmp2 = _b.;
    │                        ^
    │                        │
    │                        Unexpected ';'

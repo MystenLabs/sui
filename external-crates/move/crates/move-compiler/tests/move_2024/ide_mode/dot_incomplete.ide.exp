@@ -1,85 +1,55 @@
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:1:1
-   │  
- 1 │ ╭ module a::m {
- 2 │ │ 
- 3 │ │     public struct A has copy, drop {
- 4 │ │         x: u64
-   · │
-18 │ │     }
-19 │ │ }
-   │ ╰─^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/dot_incomplete.move:8:12
-  │
-8 │         a: A
-  │            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::m::foo'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:12:18
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:23
    │
-12 │         let _s = B { a: A { x: 0 } };
-   │                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::m::foo'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:12:25
-   │
-12 │         let _s = B { a: A { x: 0 } };
-   │                         ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::m::foo'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:13:23
-   │
-13 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+14 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
    │                       ^ Possible dot names: 'a'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:13:24
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:24
    │
-13 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+14 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
    │                        ^
    │                        │
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:24
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:24
    │
-14 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+15 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
    │                        ^ Possible dot names: 'a'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:25
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:25
    │
-14 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+15 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
    │                         ^ Possible dot names: 'x'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:26
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:26
    │
-14 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+15 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
    │                          ^
    │                          │
    │                          Unexpected ';'
    │                          Expected an identifier or a decimal number
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:24
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:16:24
    │
-15 │         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
+16 │         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
    │                        ^ Possible dot names: 'a'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:25
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:16:25
    │
-15 │         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
+16 │         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
    │                         ^ Possible dot names: 'x'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:16:9
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:17:9
    │
-16 │         let _tmp4 = _s.
+17 │         let _tmp4 = _s.
    │         ^^^
    │         │
    │         Unexpected 'let'

@@ -1,30 +1,44 @@
-error[E03009]: unbound variable
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:3:16
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:1:9
   │
-3 │         match (e) {
+1 │ #[allow(ide_path_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:2:3
+  │
+1 │ #[allow(ide_path_autocomplete)]
+  │   ----- Attribute previously given here
+2 │ #[allow(ide_dot_autocomplete)]
+  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:5:16
+  │
+5 │         match (e) {
   │                ^ Unbound variable 'e'
 
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:3:16
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:5:16
   │
-3 │         match (e) {
+5 │         match (e) {
   │                ^ Pattern '_' not covered
 
 error[E03009]: unbound variable
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:8:16
-  │
-8 │         match (e) {
-  │                ^ Unbound variable 'e'
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:16
+   │
+10 │         match (e) {
+   │                ^ Unbound variable 'e'
 
 error[E03006]: unexpected name in this position
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:13
-  │
-9 │             E::Two(n) => n
-  │             ^ Could not resolve the name 'E'
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:11:13
+   │
+11 │             E::Two(n) => n
+   │             ^ Could not resolve the name 'E'
 
 error[E03009]: unbound variable
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:26
-  │
-9 │             E::Two(n) => n
-  │                          ^ Unbound variable 'n'
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:11:26
+   │
+11 │             E::Two(n) => n
+   │                          ^ Unbound variable 'n'
 

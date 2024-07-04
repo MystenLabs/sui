@@ -1,3 +1,5 @@
+#[allow(ide_path_autocomplete)]
+#[allow(ide_dot_autocomplete)]
 module 0x42::m {
     public fun t0(): u64 {
         match (0) {

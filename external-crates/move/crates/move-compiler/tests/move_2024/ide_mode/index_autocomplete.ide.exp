@@ -1,214 +1,150 @@
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:3:1
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:2:1
   │  
-3 │ ╭ module std::vector {
-4 │ │     #[syntax(index)]
-5 │ │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
-6 │ │     #[syntax(index)]
-7 │ │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
-8 │ │ }
+2 │ ╭ module std::vector {
+3 │ │     #[syntax(index)]
+4 │ │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
+5 │ │     #[syntax(index)]
+6 │ │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+7 │ │ }
   │ ╰─^ Possible in-scope names: 'Option -> std::option::Option', 'Self -> std::vector', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
 
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:5:51
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:4:51
   │
-5 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
+4 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
   │                                                   ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
 
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:5:71
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:4:71
   │
-5 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
+4 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
   │                                                                       ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
 
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:7:59
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:6:59
   │
-7 │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+6 │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
   │                                                           ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
 
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:7:83
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:6:83
   │
-7 │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+6 │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
   │                                                                                   ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:10:1
-   │  
-10 │ ╭ module a::m {
-11 │ │ 
-12 │ │     public struct A<T>(vector<T>) has drop;
-13 │ │     public struct B<T>(A<T>) has drop;
-   · │
-26 │ │     }
-27 │ │ }
-   │ ╰─^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:12:31
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:10:3
    │
-12 │     public struct A<T>(vector<T>) has drop;
-   │                               ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:13:24
-   │
-13 │     public struct B<T>(A<T>) has drop;
-   │                        ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:13:26
-   │
-13 │     public struct B<T>(A<T>) has drop;
-   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', 'test2 -> a::m::test2', or 'T'
+ 9 │ #[allow(ide_path_autocomplete)]
+   │   ----- Attribute previously given here
+10 │ #[allow(ide_dot_autocomplete)]
+   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
 
 warning[W09009]: unused struct field
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:14:23
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:15:23
    │
-14 │     public struct C { c: u64, d: u64 } has drop;
+15 │     public struct C { c: u64, d: u64 } has drop;
    │                       ^ The 'c' field of the 'C' type is unused
    │
    = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09009]: unused struct field
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:14:31
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:15:31
    │
-14 │     public struct C { c: u64, d: u64 } has drop;
+15 │     public struct C { c: u64, d: u64 } has drop;
    │                               ^ The 'd' field of the 'C' type is unused
    │
    = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:16:26
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:18:21
    │
-16 │     public fun test0(in: B<A<u64>>) {
-   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:16:28
-   │
-16 │     public fun test0(in: B<A<u64>>) {
-   │                            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:21
-   │
-17 │         let _ = &in.0.0[1]. ;
+18 │         let _ = &in.0.0[1]. ;
    │                     ^ Possible dot names: 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:23
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:18:23
    │
-17 │         let _ = &in.0.0[1]. ;
+18 │         let _ = &in.0.0[1]. ;
    │                       ^ Possible dot names: '0'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:27
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:18:27
    │
-17 │         let _ = &in.0.0[1]. ;
+18 │         let _ = &in.0.0[1]. ;
    │                           ^ Possible dot names: '0'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:29
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:18:29
    │
-17 │         let _ = &in.0.0[1]. ;
+18 │         let _ = &in.0.0[1]. ;
    │                             ^
    │                             │
    │                             Unexpected ';'
    │                             Expected an identifier or a decimal number
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:20:26
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:21
    │
-20 │     public fun test1(in: B<A<u64>>) {
-   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:20:28
-   │
-20 │     public fun test1(in: B<A<u64>>) {
-   │                            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:21
-   │
-21 │         let _ = &in.0.0[1].0[0]. ;
+22 │         let _ = &in.0.0[1].0[0]. ;
    │                     ^ Possible dot names: 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:23
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:23
    │
-21 │         let _ = &in.0.0[1].0[0]. ;
+22 │         let _ = &in.0.0[1].0[0]. ;
    │                       ^ Possible dot names: '0'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:28
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:28
    │
-21 │         let _ = &in.0.0[1].0[0]. ;
+22 │         let _ = &in.0.0[1].0[0]. ;
    │                            ^ Possible dot names: '0'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:32
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:32
    │
-21 │         let _ = &in.0.0[1].0[0]. ;
+22 │         let _ = &in.0.0[1].0[0]. ;
    │                                ^ Possible dot names: 
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:34
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:34
    │
-21 │         let _ = &in.0.0[1].0[0]. ;
+22 │         let _ = &in.0.0[1].0[0]. ;
    │                                  ^
    │                                  │
    │                                  Unexpected ';'
    │                                  Expected an identifier or a decimal number
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:24:26
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:21
    │
-24 │     public fun test2(in: B<A<C>>) {
-   │                          ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:24:28
-   │
-24 │     public fun test2(in: B<A<C>>) {
-   │                            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:24:30
-   │
-24 │     public fun test2(in: B<A<C>>) {
-   │                              ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'C -> a::m::C', 'Option -> std::option::Option', 'test0 -> a::m::test0', 'test1 -> a::m::test1', or 'test2 -> a::m::test2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:21
-   │
-25 │         let _ = &in.0.0[1].0[0]. ;
+26 │         let _ = &in.0.0[1].0[0]. ;
    │                     ^ Possible dot names: 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:23
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:23
    │
-25 │         let _ = &in.0.0[1].0[0]. ;
+26 │         let _ = &in.0.0[1].0[0]. ;
    │                       ^ Possible dot names: '0'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:28
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:28
    │
-25 │         let _ = &in.0.0[1].0[0]. ;
+26 │         let _ = &in.0.0[1].0[0]. ;
    │                            ^ Possible dot names: '0'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:32
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:32
    │
-25 │         let _ = &in.0.0[1].0[0]. ;
+26 │         let _ = &in.0.0[1].0[0]. ;
    │                                ^ Possible dot names: 'c' or 'd'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:34
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:34
    │
-25 │         let _ = &in.0.0[1].0[0]. ;
+26 │         let _ = &in.0.0[1].0[0]. ;
    │                                  ^
    │                                  │
    │                                  Unexpected ';'

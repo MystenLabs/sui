@@ -1,41 +1,37 @@
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:1:1
-   │  
- 1 │ ╭ module 0x42::m {
- 2 │ │     public fun t0(): u64 {
- 3 │ │         match (true) {
- 4 │ │             true => 0
-   · │
-11 │ │     }
-12 │ │ }
-   │ ╰─^ Possible in-scope names: 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:2:3
+  │
+1 │ #[allow(ide_path_autocomplete)]
+  │   ----- Attribute previously given here
+2 │ #[allow(ide_dot_autocomplete)]
+  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
 
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:3:16
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:5:16
   │
-3 │         match (true) {
+5 │         match (true) {
   │                ^^^^ Pattern 'false' not covered
 
 note[I15004]: IDE missing match arms
-  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:3:22
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:5:22
   │  
-3 │           match (true) {
+5 │           match (true) {
   │ ╭──────────────────────^
-4 │ │             true => 0
-5 │ │         }
+6 │ │             true => 0
+7 │ │         }
   │ ╰─────────^ Missing arms: 'false'
 
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:9:16
-  │
-9 │         match (true) {
-  │                ^^^^ Pattern '_' not covered
+   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:11:16
+   │
+11 │         match (true) {
+   │                ^^^^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:9:22
+   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:11:22
    │  
- 9 │           match (true) {
+11 │           match (true) {
    │ ╭──────────────────────^
-10 │ │         }
+12 │ │         }
    │ ╰─────────^ Missing arms: 'false' and 'true'
 

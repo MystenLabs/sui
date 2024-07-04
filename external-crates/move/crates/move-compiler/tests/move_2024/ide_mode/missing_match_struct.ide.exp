@@ -1,56 +1,34 @@
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:1:1
-   │  
- 1 │ ╭ module 0x42::m {
- 2 │ │ 
- 3 │ │     public struct S { x: u64 , y: u64 }
- 4 │ │ 
-   · │
-14 │ │     }
-15 │ │ }
-   │ ╰─^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m::S', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:5:23
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:2:3
   │
-5 │     public fun t0(s: &S): u64 {
-  │                       ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m::S', 't0 -> 0x42::m::t0', or 't1 -> 0x42::m::t1'
+1 │ #[allow(ide_path_autocomplete)]
+  │   ----- Attribute previously given here
+2 │ #[allow(ide_dot_autocomplete)]
+  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
 
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:6:16
+  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:8:16
   │
-6 │         match (s) {
+8 │         match (s) {
   │                ^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:6:19
+  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:8:19
   │  
-6 │           match (s) {
+8 │           match (s) {
   │ ╭───────────────────^
-7 │ │         }
+9 │ │         }
   │ ╰─────────^ Missing arms: '0x42::m::S { x , y }'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:10:23
-   │
-10 │     public fun t1(s: &S): u64 {
-   │                       ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m::S', 't0 -> 0x42::m::t0', or 't1 -> 0x42::m::t1'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:12:13
-   │
-12 │             S { } => 0
-   │             ^ Possible in-scope names: 'Option -> std::option::Option', 'S -> 0x42::m::S', 't0 -> 0x42::m::t0', or 't1 -> 0x42::m::t1'
-
 error[E04016]: too few arguments
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:12:13
+   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:14:13
    │
-12 │             S { } => 0
+14 │             S { } => 0
    │             ^^^^^ Missing pattern for field 'x' in '0x42::m::S'
 
 error[E04016]: too few arguments
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:12:13
+   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:14:13
    │
-12 │             S { } => 0
+14 │             S { } => 0
    │             ^^^^^ Missing pattern for field 'y' in '0x42::m::S'
 

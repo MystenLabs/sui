@@ -1,49 +1,63 @@
-warning[W09002]: unused variable
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:16:22
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:9:9
+  │
+9 │ #[allow(ide_path_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:10:3
    │
-16 │     public fun test0(in: B<A<u64>>) {
+ 9 │ #[allow(ide_path_autocomplete)]
+   │   ----- Attribute previously given here
+10 │ #[allow(ide_dot_autocomplete)]
+   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:22
+   │
+17 │     public fun test0(in: B<A<u64>>) {
    │                      ^^ Unused parameter 'in'. Consider removing or prefixing with an underscore: '_in'
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:29
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:18:29
    │
-17 │         let _ = &in.0.0[1]. ;
+18 │         let _ = &in.0.0[1]. ;
    │                             ^
    │                             │
    │                             Unexpected ';'
    │                             Expected an identifier or a decimal number
 
 warning[W09002]: unused variable
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:20:22
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:22
    │
-20 │     public fun test1(in: B<A<u64>>) {
+21 │     public fun test1(in: B<A<u64>>) {
    │                      ^^ Unused parameter 'in'. Consider removing or prefixing with an underscore: '_in'
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:34
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:34
    │
-21 │         let _ = &in.0.0[1].0[0]. ;
+22 │         let _ = &in.0.0[1].0[0]. ;
    │                                  ^
    │                                  │
    │                                  Unexpected ';'
    │                                  Expected an identifier or a decimal number
 
 warning[W09002]: unused variable
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:24:22
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:22
    │
-24 │     public fun test2(in: B<A<C>>) {
+25 │     public fun test2(in: B<A<C>>) {
    │                      ^^ Unused parameter 'in'. Consider removing or prefixing with an underscore: '_in'
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:34
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:34
    │
-25 │         let _ = &in.0.0[1].0[0]. ;
+26 │         let _ = &in.0.0[1].0[0]. ;
    │                                  ^
    │                                  │
    │                                  Unexpected ';'

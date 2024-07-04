@@ -882,9 +882,9 @@ impl UnprefixedWarningFilters {
 
     fn is_filtered_by_info(&self, info: &DiagnosticInfo) -> bool {
         match self {
-            Self::All => info.severity() == Severity::Warning,
+            Self::All => info.severity() <= Severity::Warning,
             Self::Specified { categories, codes } => {
-                info.severity() == Severity::Warning
+                info.severity() <= Severity::Warning
                     && (categories.contains_key(&info.category())
                         || codes.contains_key(&(info.category(), info.code())))
             }

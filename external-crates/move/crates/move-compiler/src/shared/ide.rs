@@ -322,7 +322,7 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                     "Possible in-scope names: {}",
                     format_oxford_list!("or", "'{}'", names)
                 );
-                diag!(IDE::Autocomplete, (loc, msg))
+                diag!(IDE::PathAutocomplete, (loc, msg))
             }
             IDEAnnotation::DotAutocompleteInfo(info) => {
                 let DotAutocompleteInfo { methods, fields } = *info;
@@ -340,7 +340,7 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                     "Possible dot names: {}",
                     format_oxford_list!("or", "'{}'", names)
                 );
-                diag!(IDE::Autocomplete, (loc, msg))
+                diag!(IDE::DotAutocomplete, (loc, msg))
             }
             IDEAnnotation::MissingMatchArms(info) => {
                 let MissingMatchArmsInfo { arms } = *info;

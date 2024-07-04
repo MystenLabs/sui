@@ -1,127 +1,69 @@
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:1:1
-   │  
- 1 │ ╭ module 0x42::m {
- 2 │ │     public enum E {
- 3 │ │         One,
- 4 │ │         Two(u64),
-   · │
-31 │ │     }
-32 │ │ }
-   │ ╰─^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:8:23
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:2:3
   │
-8 │     public fun t0(e: &E): u64 {
-  │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', or 't3 -> 0x42::m::t3'
+1 │ #[allow(ide_path_autocomplete)]
+  │   ----- Attribute previously given here
+2 │ #[allow(ide_dot_autocomplete)]
+  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
 
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:9:16
-  │
-9 │         match (e) {
-  │                ^ Pattern '_' not covered
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:11:16
+   │
+11 │         match (e) {
+   │                ^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:9:19
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:11:19
    │  
- 9 │           match (e) {
+11 │           match (e) {
    │ ╭───────────────────^
-10 │ │         }
+12 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::One', '0x42::m::E::Two(_)', and '0x42::m::E::Three { x }'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:13:23
-   │
-13 │     public fun t1(e: &E): u64 {
-   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', or 't3 -> 0x42::m::t3'
-
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:14:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:16:16
    │
-14 │         match (e) {
+16 │         match (e) {
    │                ^ Pattern 'E::One' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:14:19
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:16:19
    │  
-14 │           match (e) {
+16 │           match (e) {
    │ ╭───────────────────^
-15 │ │             E::Two(n) => *n
-16 │ │         }
+17 │ │             E::Two(n) => *n
+18 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::One' and '0x42::m::E::Three { x }'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:15:13
-   │
-15 │             E::Two(n) => *n
-   │             ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:19:23
-   │
-19 │     public fun t2(e: &E): u64 {
-   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', or 't3 -> 0x42::m::t3'
-
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:20:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:22:16
    │
-20 │         match (e) {
+22 │         match (e) {
    │                ^ Pattern 'E::Three { x: _ }' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:20:19
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:22:19
    │  
-20 │           match (e) {
+22 │           match (e) {
    │ ╭───────────────────^
-21 │ │             E::One => 0,
-22 │ │             E::Two(n) => *n
-23 │ │         }
+23 │ │             E::One => 0,
+24 │ │             E::Two(n) => *n
+25 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::Three { x }'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:21:13
-   │
-21 │             E::One => 0,
-   │             ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:22:13
-   │
-22 │             E::Two(n) => *n
-   │             ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:26:23
-   │
-26 │     public fun t3(e: &E): u64 {
-   │                       ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 't0 -> 0x42::m::t0', 't1 -> 0x42::m::t1', 't2 -> 0x42::m::t2', or 't3 -> 0x42::m::t3'
-
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:27:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:29:16
    │
-27 │         match (e) {
+29 │         match (e) {
    │                ^ Pattern 'E::One' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:27:19
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:29:19
    │  
-27 │           match (e) {
+29 │           match (e) {
    │ ╭───────────────────^
-28 │ │             E::Three { x } => *x,
-29 │ │             E::Two(n) => *n
-30 │ │         }
+30 │ │             E::Three { x } => *x,
+31 │ │             E::Two(n) => *n
+32 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::One'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:28:13
-   │
-28 │             E::Three { x } => *x,
-   │             ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:29:13
-   │
-29 │             E::Two(n) => *n
-   │             ^ Possible in-scope names: 'E -> 0x42::m::E', 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
 

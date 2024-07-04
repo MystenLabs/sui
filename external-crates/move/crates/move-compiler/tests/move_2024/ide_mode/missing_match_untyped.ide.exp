@@ -1,65 +1,55 @@
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:1:1
-   │  
- 1 │ ╭ module 0x42::m {
- 2 │ │     public fun t0(): u64 {
- 3 │ │         match (e) {
- 4 │ │         }
-   · │
-11 │ │     }
-12 │ │ }
-   │ ╰─^ Possible in-scope names: 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:2:3
+  │
+1 │ #[allow(ide_path_autocomplete)]
+  │   ----- Attribute previously given here
+2 │ #[allow(ide_dot_autocomplete)]
+  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
 
 error[E03009]: unbound variable
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:3:16
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:5:16
   │
-3 │         match (e) {
+5 │         match (e) {
   │                ^ Unbound variable 'e'
 
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:3:16
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:5:16
   │
-3 │         match (e) {
+5 │         match (e) {
   │                ^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:3:19
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:5:19
   │  
-3 │           match (e) {
+5 │           match (e) {
   │ ╭───────────────────^
-4 │ │         }
+6 │ │         }
   │ ╰─────────^ Missing arms: '_'
 
 error[E03009]: unbound variable
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:8:16
-  │
-8 │         match (e) {
-  │                ^ Unbound variable 'e'
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:16
+   │
+10 │         match (e) {
+   │                ^ Unbound variable 'e'
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:8:19
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:19
    │  
- 8 │           match (e) {
+10 │           match (e) {
    │ ╭───────────────────^
- 9 │ │             E::Two(n) => n
-10 │ │         }
+11 │ │             E::Two(n) => n
+12 │ │         }
    │ ╰─────────^ Missing arms: '_'
 
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:13
-  │
-9 │             E::Two(n) => n
-  │             ^ Possible in-scope names: 'Option -> std::option::Option', 'Self -> 0x42::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
 error[E03006]: unexpected name in this position
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:13
-  │
-9 │             E::Two(n) => n
-  │             ^ Could not resolve the name 'E'
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:11:13
+   │
+11 │             E::Two(n) => n
+   │             ^ Could not resolve the name 'E'
 
 error[E03009]: unbound variable
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:26
-  │
-9 │             E::Two(n) => n
-  │                          ^ Unbound variable 'n'
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:11:26
+   │
+11 │             E::Two(n) => n
+   │                          ^ Unbound variable 'n'
 

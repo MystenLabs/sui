@@ -1,42 +1,12 @@
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:1:1
-   │  
- 1 │ ╭ module a::m {
- 2 │ │ 
- 3 │ │     public struct A has copy, drop {
- 4 │ │         x: u64
-   · │
-14 │ │     }
-15 │ │ }
-   │ ╰─^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
-
-note[I15001]: IDE autocomplete
-  ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:8:12
-  │
-8 │         a: A
-  │            ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::m::foo'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:12:18
-   │
-12 │         let _s = B { a: A { x: 0 } };
-   │                  ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::m::foo'
-
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:12:25
-   │
-12 │         let _s = B { a: A { x: 0 } };
-   │                         ^ Possible in-scope names: 'A -> a::m::A', 'B -> a::m::B', 'Option -> std::option::Option', or 'foo -> a::m::foo'
-
 error[E03010]: unbound field
-   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:13:21
+   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:14:21
    │
-13 │         let _tmp2 = _s.b.x;
+14 │         let _tmp2 = _s.b.x;
    │                     ^^^^ Unbound field 'b' in 'a::m::B'
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:13:24
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/named_struct_middle_autocomplete.move:14:24
    │
-13 │         let _tmp2 = _s.b.x;
+14 │         let _tmp2 = _s.b.x;
    │                        ^ Possible dot names: 'a'
 
