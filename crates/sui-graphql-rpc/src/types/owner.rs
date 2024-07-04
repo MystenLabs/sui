@@ -247,23 +247,13 @@ impl Owner {
     /// contents, Base64 encoded.
     ///
     /// This field exists as a convenience when accessing a dynamic field on a wrapped object.
-    ///
-    /// `root_version` represents the version of the root object in some nested chain of dynamic
-    /// fields. It allows historical queries for the case of wrapped objects, which don't have a
-    /// version. For example, if querying the dynamic field of a table wrapped in a parent object,
-    /// passing the parent object's version here will ensure we get the dynamic field's state at the
-    /// moment that parent's version was created.
-    ///
-    /// If `root_version` is left null, the dynamic field will be from a consistent snapshot of
-    /// the Sui state at the latest checkpoint known to the GraphQL RPC.
     async fn dynamic_field(
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-        root_version: Option<u64>,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_field(ctx, name, root_version)
+            .dynamic_field(ctx, name, /* parent_version */ None)
             .await
     }
 
@@ -273,38 +263,19 @@ impl Owner {
     /// off-chain directly via its address (e.g. using `Query.object`).
     ///
     /// This field exists as a convenience when accessing a dynamic field on a wrapped object.
-    ///
-    /// `root_version` represents the version of the root object in some nested chain of dynamic
-    /// fields. It allows historical queries for the case of wrapped objects, which don't have a
-    /// version. For example, if querying the dynamic object field of an object table wrapped in a
-    /// parent object, passing the parent object's version here will ensure we get the dynamic
-    /// object field's state at the moment that parent's version was created.
-    ///
-    /// If `root_version` is left null, the dynamic object field will be from a consistent snapshot
-    /// of the Sui state at the latest checkpoint known to the GraphQL RPC.
     async fn dynamic_object_field(
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-        root_version: Option<u64>,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_object_field(ctx, name, root_version)
+            .dynamic_object_field(ctx, name, /* parent_version */ None)
             .await
     }
 
     /// The dynamic fields and dynamic object fields on an object.
     ///
-    /// This field exists as a convenience when accessing dynamic fields on a wrapped object.
-    ///
-    /// `root_version` represents the version of the root object in some nested chain of dynamic
-    /// fields. It allows historical queries for the case of wrapped objects, which don't have a
-    /// version. For example, if querying the dynamic fields of a table wrapped in a parent object,
-    /// passing the parent object's version here will ensure we get the dynamic fields' state at the
-    /// moment that parent's version was created.
-    ///
-    /// If `root_version` is left null, the dynamic fields will be from a consistent snapshot of the
-    /// Sui state at the latest checkpoint known to the GraphQL RPC.
+    /// This field exists as a convenience when accessing a dynamic field on a wrapped object.
     async fn dynamic_fields(
         &self,
         ctx: &Context<'_>,
@@ -312,10 +283,11 @@ impl Owner {
         after: Option<object::Cursor>,
         last: Option<u64>,
         before: Option<object::Cursor>,
-        root_version: Option<u64>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_fields(ctx, first, after, last, before, root_version)
+            .dynamic_fields(
+                ctx, first, after, last, before, /* parent_version */ None,
+            )
             .await
     }
 }

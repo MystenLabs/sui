@@ -2814,17 +2814,8 @@ type Owner implements IOwner {
 	contents, Base64 encoded.
 	
 	This field exists as a convenience when accessing a dynamic field on a wrapped object.
-	
-	`root_version` represents the version of the root object in some nested chain of dynamic
-	fields. It allows historical queries for the case of wrapped objects, which don't have a
-	version. For example, if querying the dynamic field of a table wrapped in a parent object,
-	passing the parent object's version here will ensure we get the dynamic field's state at the
-	moment that parent's version was created.
-	
-	If `root_version` is left null, the dynamic field will be from a consistent snapshot of
-	the Sui state at the latest checkpoint known to the GraphQL RPC.
 	"""
-	dynamicField(name: DynamicFieldName!, rootVersion: Int): DynamicField
+	dynamicField(name: DynamicFieldName!): DynamicField
 	"""
 	Access a dynamic object field on an object using its name. Names are arbitrary Move values
 	whose type have `copy`, `drop`, and `store`, and are specified using their type, and their
@@ -2832,32 +2823,14 @@ type Owner implements IOwner {
 	off-chain directly via its address (e.g. using `Query.object`).
 	
 	This field exists as a convenience when accessing a dynamic field on a wrapped object.
-	
-	`root_version` represents the version of the root object in some nested chain of dynamic
-	fields. It allows historical queries for the case of wrapped objects, which don't have a
-	version. For example, if querying the dynamic object field of an object table wrapped in a
-	parent object, passing the parent object's version here will ensure we get the dynamic
-	object field's state at the moment that parent's version was created.
-	
-	If `root_version` is left null, the dynamic object field will be from a consistent snapshot
-	of the Sui state at the latest checkpoint known to the GraphQL RPC.
 	"""
-	dynamicObjectField(name: DynamicFieldName!, rootVersion: Int): DynamicField
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	"""
 	The dynamic fields and dynamic object fields on an object.
 	
-	This field exists as a convenience when accessing dynamic fields on a wrapped object.
-	
-	`root_version` represents the version of the root object in some nested chain of dynamic
-	fields. It allows historical queries for the case of wrapped objects, which don't have a
-	version. For example, if querying the dynamic fields of a table wrapped in a parent object,
-	passing the parent object's version here will ensure we get the dynamic fields' state at the
-	moment that parent's version was created.
-	
-	If `root_version` is left null, the dynamic fields will be from a consistent snapshot of the
-	Sui state at the latest checkpoint known to the GraphQL RPC.
+	This field exists as a convenience when accessing a dynamic field on a wrapped object.
 	"""
-	dynamicFields(first: Int, after: String, last: Int, before: String, rootVersion: Int): DynamicFieldConnection!
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection!
 }
 
 """
