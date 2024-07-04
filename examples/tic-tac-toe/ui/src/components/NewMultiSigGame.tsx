@@ -116,7 +116,7 @@ function Validation({
 
 /**
  * If `key` is a valid base64 encoded Sui public key, return it as a
- * Uint8Array, otherwise return null.
+ * `PublicKey`, otherwise return null.
  */
 function parsePublicKey(key?: string): PublicKey | null {
 	if (key == null) {
