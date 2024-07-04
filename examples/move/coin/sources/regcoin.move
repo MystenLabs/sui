@@ -25,11 +25,21 @@ module examples::regcoin {
     }
 
     //docs::/#regulate}
-    public fun add_addr_from_deny_list(denylist: &mut DenyList, denycap: &mut DenyCapV2<REGCOIN>, denyaddy: address, ctx: &mut TxContext) {
+    public fun add_addr_from_deny_list(
+        denylist: &mut DenyList,
+        denycap: &mut DenyCapV2<REGCOIN>,
+        denyaddy: address,
+        ctx: &mut TxContext,
+    ) {
         coin::deny_list_v2_add(denylist, denycap, denyaddy, ctx);
     }
 
-    public fun remove_addr_from_deny_list(denylist: &mut DenyList, denycap: &mut DenyCapV2<REGCOIN>, denyaddy: address, ctx: &mut TxContext){
+    public fun remove_addr_from_deny_list(
+        denylist: &mut DenyList,
+        denycap: &mut DenyCapV2<REGCOIN>,
+        denyaddy: address,
+        ctx: &mut TxContext,
+    ) {
         coin::deny_list_v2_remove(denylist, denycap, denyaddy, ctx);
     }
 }
