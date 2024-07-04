@@ -221,15 +221,16 @@ fn context_specific_lbrace(
     completions
 }
 
-fn fun_def_info(
-    symbols: &Symbols,
-    fhash: FileHash,
-    mod_ident: ModuleIdent_,
-    name: Symbol,
-) -> Option<&DefInfo> {
-    let Some(mdef) = symbols.mod_defs(&fhash, mod_ident) else {
+fn fun_def_info(symbols: &Symbols, mod_ident: ModuleIdent_, name: Symbol) -> Option<&DefInfo> {
+    let Some(mdef) = symbols
+        .file_mods
+        .values()
+        .flatten()
+        .find(|mdef| mdef.ident == mod_ident)
+    else {
         return None;
     };
+
     let Some(fdef) = mdef.functions.get(&name) else {
         return None;
     };
@@ -338,8 +339,7 @@ fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<Completi
             arg_types,
             ret_type,
             _,
-        )) =
-            fun_def_info(symbols, fhash, mod_ident.value, function_name.value())
+        )) = fun_def_info(symbols, mod_ident.value, function_name.value())
         {
             call_completion_item(
                 &mod_ident.value,
