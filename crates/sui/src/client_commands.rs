@@ -28,7 +28,7 @@ use fastcrypto::{
 
 use move_binary_format::CompiledModule;
 use move_bytecode_verifier_meter::Scope;
-use move_core_types::language_storage::TypeTag;
+use move_core_types::{account_address::AccountAddress, language_storage::TypeTag};
 use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
@@ -861,28 +861,52 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&opts.gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
+                let chain_id = client.read_api().get_chain_identifier().await.ok();
+
+                let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let package_path =
                     package_path
                         .canonicalize()
                         .map_err(|e| SuiError::ModulePublishFailure {
                             error: format!("Failed to canonicalize package path: {}", e),
                         })?;
+                let previous_id = if let Some(ref chain_id) = chain_id {
+                    sui_package_management::set_package_id(
+                        &package_path,
+                        build_config.install_dir.clone(),
+                        chain_id,
+                        AccountAddress::ZERO,
+                    )?
+                } else {
+                    None
+                };
                 let env_alias = context
                     .config
                     .get_active_env()
                     .map(|e| e.alias.clone())
                     .ok();
-                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
-                    upgrade_package(
-                        client.read_api(),
-                        build_config.clone(),
+                let upgrade_result = upgrade_package(
+                    client.read_api(),
+                    build_config.clone(),
+                    &package_path,
+                    upgrade_capability,
+                    with_unpublished_dependencies,
+                    skip_dependency_verification,
+                    env_alias,
+                )
+                .await;
+                // Restore original ID, then check result.
+                if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
+                    let _ = sui_package_management::set_package_id(
                         &package_path,
-                        upgrade_capability,
-                        with_unpublished_dependencies,
-                        skip_dependency_verification,
-                        env_alias,
-                    )
-                    .await?;
+                        build_config.install_dir.clone(),
+                        &chain_id,
+                        previous_id,
+                    )?;
+                }
+                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
+                    upgrade_result?;
+
                 let tx_kind = client
                     .transaction_builder()
                     .upgrade_tx_kind(
@@ -901,7 +925,6 @@ impl SuiClientCommands {
                 .await?;
 
                 if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                     if let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Upgrade,
@@ -946,20 +969,43 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&opts.gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
+                let chain_id = client.read_api().get_chain_identifier().await.ok();
+
+                let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
+                let previous_id = if let Some(ref chain_id) = chain_id {
+                    sui_package_management::set_package_id(
+                        &package_path,
+                        build_config.install_dir.clone(),
+                        chain_id,
+                        AccountAddress::ZERO,
+                    )?
+                } else {
+                    None
+                };
                 let package_path =
                     package_path
                         .canonicalize()
                         .map_err(|e| SuiError::ModulePublishFailure {
                             error: format!("Failed to canonicalize package path: {}", e),
                         })?;
-                let (dependencies, compiled_modules, _, _) = compile_package(
+                let compile_result = compile_package(
                     client.read_api(),
                     build_config.clone(),
                     &package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
                 )
-                .await?;
+                .await;
+                // Restore original ID, then check result.
+                if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
+                    let _ = sui_package_management::set_package_id(
+                        &package_path,
+                        build_config.install_dir.clone(),
+                        &chain_id,
+                        previous_id,
+                    )?;
+                }
+                let (dependencies, compiled_modules, _, _) = compile_result?;
 
                 let tx_kind = client
                     .transaction_builder()
@@ -975,7 +1021,6 @@ impl SuiClientCommands {
                 .await?;
 
                 if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                     if let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Publish,
@@ -1622,7 +1667,7 @@ fn compile_package_simple(
         print_diags_to_stderr: false,
         chain_id: chain_id.clone(),
     };
-    let resolution_graph = config.resolution_graph(package_path)?;
+    let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
 
     Ok(build_from_resolution_graph(
         resolution_graph,
@@ -1733,10 +1778,9 @@ pub(crate) async fn compile_package(
         config,
         run_bytecode_verifier,
         print_diags_to_stderr,
-        chain_id,
+        chain_id: chain_id.clone(),
     };
-    let resolution_graph = config.resolution_graph(package_path)?;
-    let chain_id = read_api.get_chain_identifier().await.ok();
+    let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
     let (package_id, dependencies) = gather_published_ids(&resolution_graph, chain_id.clone());
     check_invalid_dependencies(&dependencies.invalid)?;
     if !with_unpublished_dependencies {
