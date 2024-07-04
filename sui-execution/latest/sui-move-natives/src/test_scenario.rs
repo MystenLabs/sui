@@ -236,7 +236,7 @@ pub fn end_transaction(
         &mut all_wrapped,
         object_runtime_ref
             .all_active_child_objects()
-            .map(|child| (child.id, child.ty, child.copied_value)),
+            .filter_map(|child| Some((child.id, child.ty, child.copied_value?))),
     );
     // mark as "incorrect" if a shared/imm object was wrapped or is a child object
     incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
@@ -273,7 +273,7 @@ pub fn end_transaction(
         }
     }
     for (config, setting, ty, value) in config_settings {
-        object_runtime_ref.config_setting_cache_insert(config, setting, ty, value)
+        object_runtime_ref.config_setting_cache_update(config, setting, ty, value)
     }
     object_runtime_ref.state.input_objects = object_runtime_ref
         .test_inventories

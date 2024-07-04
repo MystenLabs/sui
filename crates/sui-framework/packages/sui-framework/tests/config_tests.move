@@ -445,5 +445,42 @@ module sui::config_tests {
         ts.end();
     }
 
+    // tests
+    #[test]
+    fun add_remove_cache() {
+        let mut ts = ts::begin(SENDER);
+        config_create(&mut WriteCap(), ts.ctx());
+        ts.next_tx(SENDER);
+
+        let id = ts::most_recent_id_shared<Config<WriteCap>>().destroy_some();
+        let n = b"hello";
+
+        ts.next_tx(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            config.add_for_next_epoch<_, _, u8>(&mut WriteCap(), n, 0, ts.ctx());
+            ts::return_shared(config);
+        };
+
+        ts.next_tx(SENDER);
+        {
+            let mut config: Config<WriteCap> = ts.take_shared_by_id(id);
+            let removed_value =
+                config.remove_for_next_epoch<_, _, u8>(&mut WriteCap(), n, ts.ctx());
+            assert_eq!(removed_value, option::some(0));
+            ts::return_shared(config);
+        };
+
+        ts.next_epoch(SENDER);
+        {
+            let config: Config<WriteCap> = ts.take_shared_by_id(id);
+            assert!(config.read_setting_for_next_epoch<_, _, u8>(n).is_none());
+            assert!(config::read_setting<_, u8>(id, n, ts.ctx()).is_none());
+            ts::return_shared(config);
+        };
+
+        ts.end();
+    }
+
 
 }
