@@ -11,6 +11,8 @@ This part of the demo illustrates how to:
 - Build UIs that represent on-chain data, and update in response to running
   transactions.
 - Interact with multi-sig accounts.
+- Using `devInspectTransactionBlock` to run Move code to extract more complex
+  state from on-chain.
 
 This dApp was created using `@mysten/create-dapp` that sets up a basic React
 Client dApp using the following tools:
