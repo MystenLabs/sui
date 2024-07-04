@@ -5,7 +5,6 @@ packages:
   - 'examples/**'
   - '!**/dist/**'
   - '!**/.next/**'
-  - '!examples/tic-tac-toe/**'
   - '!sdk/create-dapp/templates'
   - '!sdk/typescript/scripts'
   - '!sdk/typescript/transactions'
