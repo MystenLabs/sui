@@ -6,7 +6,7 @@ use crate::{
     context::Context,
     symbols::{
         get_symbols, mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
-        type_list_to_ide_string, type_to_ide_string, DefInfo, PrecompiledPkgDeps,
+        type_list_to_ide_string, type_to_ide_string, DefInfo, FunType, PrecompiledPkgDeps,
         SymbolicatorRunner, Symbols,
     },
     utils,
@@ -21,7 +21,7 @@ use move_compiler::{
     editions::Edition,
     expansion::ast::{ModuleIdent_, Visibility},
     linters::LintLevel,
-    naming::ast::Type,
+    naming::ast::{Type, Type_},
     parser::{
         ast::Ability_,
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
@@ -236,8 +236,25 @@ fn fun_def_info(
     symbols.def_info(&fdef.name_loc)
 }
 
-fn fun_completion_item(
+fn lamda_snippet(sp!(_, ty): &Type, snippet_idx: &mut i32) -> Option<String> {
+    if let Type_::Fun(vec, _) = ty {
+        let arg_snippets = vec
+            .iter()
+            .map(|_| {
+                *snippet_idx += 1;
+                format!("${{{snippet_idx}}}")
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        *snippet_idx += 1;
+        return Some(format!("|{arg_snippets}| ${{{snippet_idx}}}"));
+    }
+    None
+}
+
+fn call_completion_item(
     mod_ident: &ModuleIdent_,
+    fun_type: &FunType,
     method_name: &Symbol,
     function_name: &Symbol,
     type_args: &[Type],
@@ -253,12 +270,28 @@ fn fun_completion_item(
     );
     // we omit the first argument which is guaranteed to be there
     // as this is a method and needs a receiver
-    let arg_snippet = arg_names[1..]
+    let mut snippet_idx = 0;
+    let arg_snippet = arg_names
         .iter()
-        .enumerate()
-        .map(|(idx, name)| format!("${{{}:{}}}", idx + 1, name))
+        .zip(arg_types)
+        .skip(1)
+        .map(|(name, ty)| {
+            lamda_snippet(ty, &mut snippet_idx).unwrap_or_else(|| {
+                let mut arg_name = name.to_string();
+                if arg_name.starts_with('$') {
+                    arg_name = arg_name[1..].to_string();
+                }
+                snippet_idx += 1;
+                format!("${{{}:{}}}", snippet_idx, arg_name)
+            })
+        })
         .collect::<Vec<_>>()
         .join(", ");
+    let macro_suffix = if matches!(fun_type, FunType::Macro) {
+        "!"
+    } else {
+        ""
+    };
     let label_details = Some(CompletionItemLabelDetails {
         detail: Some(format!(
             " ({}::{})",
@@ -269,10 +302,10 @@ fn fun_completion_item(
     });
 
     CompletionItem {
-        label: format!("{}()", method_name,),
+        label: format!("{}{}()", method_name, macro_suffix),
         label_details,
-        kind: Some(CompletionItemKind::SNIPPET),
-        insert_text: Some(format!("{}({})", method_name, arg_snippet)),
+        kind: Some(CompletionItemKind::METHOD),
+        insert_text: Some(format!("{}{}({})", method_name, macro_suffix, arg_snippet)),
         insert_text_format: Some(InsertTextFormat::SNIPPET),
         ..Default::default()
     }
@@ -296,32 +329,41 @@ fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<Completi
         target_function: (mod_ident, function_name),
     } in &info.methods
     {
-        let init_completion =
-            if let Some(DefInfo::Function(.., type_args, arg_names, arg_types, ret_type, _)) =
-                fun_def_info(symbols, fhash, mod_ident.value, function_name.value())
-            {
-                fun_completion_item(
-                    &mod_ident.value,
-                    method_name,
-                    &function_name.value(),
-                    type_args,
-                    arg_names,
-                    arg_types,
-                    ret_type,
-                )
-            } else {
-                // this shouldn't really happen as we should be able to get
-                // `DefInfo` for a function but if for some reason we cannot,
-                // let's generate simpler autotompletion value
-                CompletionItem {
-                    label: format!("{method_name}()"),
-                    kind: Some(CompletionItemKind::METHOD),
-                    insert_text: Some(method_name.to_string()),
-                    insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
-                    ..Default::default()
-                }
-            };
-        completions.push(init_completion);
+        let call_completion = if let Some(DefInfo::Function(
+            ..,
+            fun_type,
+            _,
+            type_args,
+            arg_names,
+            arg_types,
+            ret_type,
+            _,
+        )) =
+            fun_def_info(symbols, fhash, mod_ident.value, function_name.value())
+        {
+            call_completion_item(
+                &mod_ident.value,
+                fun_type,
+                method_name,
+                &function_name.value(),
+                type_args,
+                arg_names,
+                arg_types,
+                ret_type,
+            )
+        } else {
+            // this shouldn't really happen as we should be able to get
+            // `DefInfo` for a function but if for some reason we cannot,
+            // let's generate simpler autotompletion value
+            CompletionItem {
+                label: format!("{method_name}()"),
+                kind: Some(CompletionItemKind::METHOD),
+                insert_text: Some(method_name.to_string()),
+                insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                ..Default::default()
+            }
+        };
+        completions.push(call_completion);
     }
     for (n, t) in &info.fields {
         let label_details = Some(CompletionItemLabelDetails {
@@ -562,7 +604,7 @@ pub fn on_completion_request(
 }
 
 /// Computes completion items for a given completion request.
-fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<CompletionItem> {
+pub fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<CompletionItem> {
     let mut items = vec![];
 
     let Some(fhash) = symbols.file_hash(path) else {
@@ -627,179 +669,4 @@ fn completion_items(pos: Position, path: &Path, symbols: &Symbols) -> Vec<Comple
         items.extend_from_slice(&builtins());
     }
     items
-}
-
-#[cfg(test)]
-fn validate_item(
-    loc: String,
-    items: &[CompletionItem],
-    idx: usize,
-    label: &str,
-    detail: Option<&str>,
-    description: Option<&str>,
-    text: &str,
-) {
-    let item = &items[idx];
-    assert!(
-        item.label == label,
-        "wrong label for item {} at {}:  {:#?}",
-        idx,
-        loc,
-        item
-    );
-    if item.label_details.is_none() {
-        if detail.is_some() || description.is_some() {
-            panic!("item {} at {} has no label details:  {:#?}", idx, loc, item);
-        }
-    } else {
-        assert!(
-            item.label_details.as_ref().unwrap().detail == detail.map(|s| s.to_string()),
-            "wrong label detail (detail) for item {} at {}:  {:#?}",
-            idx,
-            loc,
-            item
-        );
-        assert!(
-            item.label_details.as_ref().unwrap().description == description.map(|s| s.to_string()),
-            "wrong label detail (description) for item {} at {}:  {:#?}",
-            idx,
-            loc,
-            item
-        );
-        assert!(
-            item.insert_text == Some(text.to_string()),
-            "wrong inserted text for item {} at {}:  {:#?}",
-            idx,
-            loc,
-            item
-        );
-    }
-}
-
-#[test]
-/// Tests if symbolication + doc_string information for documented Move constructs is constructed correctly.
-fn completion_dot_test() {
-    use vfs::impls::memory::MemoryFS;
-
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-    path.push("tests/completion");
-
-    let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(
-        Arc::new(Mutex::new(BTreeMap::new())),
-        ide_files_layer,
-        path.as_path(),
-        LintLevel::None,
-    )
-    .unwrap();
-    let symbols = symbols_opt.unwrap();
-
-    let mut fpath = path.clone();
-    fpath.push("sources/dot.move");
-    let cpath = dunce::canonicalize(&fpath).unwrap();
-
-    // simple test
-    let pos = Position {
-        line: 14,
-        character: 10,
-    };
-    let items = completion_items(pos, &cpath, &symbols);
-    let loc = format!("{:?} (line: {}, col: {})", cpath, pos.line, pos.character);
-    assert!(
-        items.len() == 3,
-        "wrong number of items at {} (3 vs {})",
-        loc.clone(),
-        items.len()
-    );
-    validate_item(
-        loc.clone(),
-        &items,
-        0,
-        "bar()",
-        Some(" (Completion::dot::bar)"),
-        Some("fun <T>(SomeStruct, u64, T): SomeStruct"),
-        "bar(${1:_param1}, ${2:_param2})",
-    );
-    validate_item(
-        loc.clone(),
-        &items,
-        1,
-        "foo()",
-        Some(" (Completion::dot::foo)"),
-        Some("fun (SomeStruct)"),
-        "foo()",
-    );
-    validate_item(
-        loc,
-        &items,
-        2,
-        "some_field",
-        None,
-        Some("u64"),
-        "some_field",
-    );
-
-    // test with aliasing
-    let pos = Position {
-        line: 20,
-        character: 10,
-    };
-    let items = completion_items(pos, &cpath, &symbols);
-    let loc = format!("{:?} (line: {}, col: {}", cpath, pos.line, pos.character);
-    assert!(items.len() == 3, "wrong number of items at {}", loc.clone());
-    validate_item(
-        loc.clone(),
-        &items,
-        0,
-        "bak()",
-        Some(" (Completion::dot::bar)"),
-        Some("fun <T>(SomeStruct, u64, T): SomeStruct"),
-        "bak(${1:_param1}, ${2:_param2})",
-    );
-    validate_item(
-        loc.clone(),
-        &items,
-        1,
-        "foo()",
-        Some(" (Completion::dot::foo)"),
-        Some("fun (SomeStruct)"),
-        "foo()",
-    );
-    validate_item(
-        loc,
-        &items,
-        2,
-        "some_field",
-        None,
-        Some("u64"),
-        "some_field",
-    );
-
-    // test with shadowing
-    let pos = Position {
-        line: 26,
-        character: 10,
-    };
-    let items = completion_items(pos, &cpath, &symbols);
-    let loc = format!("{:?} (line: {}, col: {}", cpath, pos.line, pos.character);
-    assert!(items.len() == 2, "wrong number of items at {}", loc.clone());
-    validate_item(
-        loc.clone(),
-        &items,
-        0,
-        "foo()",
-        Some(" (Completion::dot::bar)"),
-        Some("fun <T>(SomeStruct, u64, T): SomeStruct"),
-        "foo(${1:_param1}, ${2:_param2})",
-    );
-    validate_item(
-        loc,
-        &items,
-        1,
-        "some_field",
-        None,
-        Some("u64"),
-        "some_field",
-    );
 }

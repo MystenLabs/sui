@@ -1,0 +1,55 @@
+== dot.move ========================================================
+-- test 0 -------------------
+use line: 15, use_col: 10
+Method 'bar()'
+	INSERT TEXT: 'bar(${1:_param1}, ${2:_param2})'
+	TARGET     : '(Completion::dot::bar)'
+	TYPE       : 'fun <T>(SomeStruct, u64, T): SomeStruct'
+Method 'foo()'
+	INSERT TEXT: 'foo()'
+	TARGET     : '(Completion::dot::foo)'
+	TYPE       : 'fun (SomeStruct)'
+Field 'some_field'
+	INSERT TEXT: 'some_field'
+	TYPE       : 'u64'
+
+
+-- test 1 -------------------
+use line: 21, use_col: 10
+Method 'bak()'
+	INSERT TEXT: 'bak(${1:_param1}, ${2:_param2})'
+	TARGET     : '(Completion::dot::bar)'
+	TYPE       : 'fun <T>(SomeStruct, u64, T): SomeStruct'
+Method 'foo()'
+	INSERT TEXT: 'foo()'
+	TARGET     : '(Completion::dot::foo)'
+	TYPE       : 'fun (SomeStruct)'
+Field 'some_field'
+	INSERT TEXT: 'some_field'
+	TYPE       : 'u64'
+
+
+-- test 2 -------------------
+use line: 27, use_col: 10
+Method 'foo()'
+	INSERT TEXT: 'foo(${1:_param1}, ${2:_param2})'
+	TARGET     : '(Completion::dot::bar)'
+	TYPE       : 'fun <T>(SomeStruct, u64, T): SomeStruct'
+Field 'some_field'
+	INSERT TEXT: 'some_field'
+	TYPE       : 'u64'
+
+
+== macro_dot.move ========================================================
+-- test 0 -------------------
+use line: 8, use_col: 10
+Method 'foo!()'
+	INSERT TEXT: 'foo!(${1:_param1}, |${2}, ${3}| ${4}, ${5:_param3})'
+	TARGET     : '(Completion::macro_dot::foo)'
+	TYPE       : 'fun (SomeStruct, u64, |u64, u64| -> u64, u64)'
+Method 'test()'
+	INSERT TEXT: 'test()'
+	TARGET     : '(Completion::macro_dot::test)'
+	TYPE       : 'fun (SomeStruct)'
+
+

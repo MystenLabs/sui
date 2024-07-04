@@ -5,13 +5,7 @@
     "M9.move": [
       {
         "UseDefTest": {
-          "use_line": 1,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 7,
+          "use_line": 2,
           "use_ndx": 0
         }
       },
@@ -19,12 +13,6 @@
         "UseDefTest": {
           "use_line": 8,
           "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 8,
-          "use_ndx": 1
         }
       },
       {
@@ -41,43 +29,55 @@
       },
       {
         "UseDefTest": {
-          "use_line": 9,
+          "use_line": 10,
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 10,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 10,
           "use_ndx": 2
         }
       },
       {
         "UseDefTest": {
-          "use_line": 9,
+          "use_line": 10,
           "use_ndx": 3
         }
       },
       {
         "UseDefTest": {
-          "use_line": 10,
+          "use_line": 11,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 10,
+          "use_line": 11,
           "use_ndx": 2
         }
       },
       {
         "UseDefTest": {
-          "use_line": 32,
+          "use_line": 33,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 32,
+          "use_line": 33,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 37,
+          "use_line": 38,
           "use_ndx": 1
         }
       }
