@@ -193,8 +193,10 @@ where
 
     async fn index_epoch(
         state: Arc<S>,
+        metrics: &IndexerMetrics,
         data: &CheckpointData,
     ) -> Result<Option<EpochToCommit>, IndexerError> {
+        let _timer = metrics.indexing_epoch_latency.start_timer();
         let checkpoint_object_store = EpochEndIndexingObjectStore::new(data);
 
         let CheckpointData {
@@ -282,17 +284,18 @@ where
         packages: Vec<IndexedPackage>,
         package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<CheckpointDataToCommit, IndexerError> {
+        let _timer = metrics.indexing_checkpoint_latency.start_timer();
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         info!(checkpoint_seq, "Indexing checkpoint data blob");
 
         // Index epoch
-        let epoch = Self::index_epoch(state, &data).await?;
+        let epoch = Self::index_epoch(state, &metrics, &data).await?;
 
         // Index Objects
         let object_changes: TransactionObjectChangesToCommit =
             Self::index_objects(data.clone(), &metrics, package_resolver.clone()).await?;
         let object_history_changes: TransactionObjectChangesToCommit =
-            Self::index_objects_history(data.clone(), package_resolver.clone()).await?;
+            Self::index_objects_history(data.clone(), &metrics, package_resolver.clone()).await?;
 
         let (checkpoint, db_transactions, db_events, db_tx_indices, db_event_indices, db_displays) = {
             let CheckpointData {
@@ -367,6 +370,7 @@ where
         Vec<EventIndex>,
         BTreeMap<String, StoredDisplay>,
     )> {
+        let _timer = metrics.indexing_transactions_latency.start_timer();
         let checkpoint_seq = checkpoint_summary.sequence_number();
 
         let mut tx_seq_num_iter = checkpoint_contents
@@ -610,8 +614,10 @@ where
     // similar to index_objects, but objects_history keeps all versions of objects
     async fn index_objects_history(
         data: CheckpointData,
+        metrics: &IndexerMetrics,
         package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<TransactionObjectChangesToCommit, IndexerError> {
+        let _timer = metrics.indexing_objects_history_latency.start_timer();
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         let deleted_objects = data
             .transactions

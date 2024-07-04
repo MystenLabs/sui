@@ -128,6 +128,10 @@ pub struct IndexerMetrics {
     pub indexing_module_resolver_in_mem_hit: IntCounter,
     pub indexing_package_resolver_in_mem_hit: IntCounter,
     pub indexing_packages_latency: Histogram,
+    pub indexing_objects_history_latency: Histogram,
+    pub indexing_transactions_latency: Histogram,
+    pub indexing_epoch_latency: Histogram,
+    pub indexing_checkpoint_latency: Histogram,
     pub checkpoint_objects_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
     pub checkpoint_db_commit_latency_step_1: Histogram,
@@ -396,6 +400,34 @@ impl IndexerMetrics {
             indexing_package_resolver_in_mem_hit: register_int_counter_with_registry!(
                 "indexing_package_resolver_in_mem_hit",
                 "Total number package resolver hit in mem",
+                registry,
+            )
+            .unwrap(),
+            indexing_objects_history_latency: register_histogram_with_registry!(
+                "indexing_objects_history_latency",
+                "Time spent in indexing objects history",
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            indexing_transactions_latency: register_histogram_with_registry!(
+                "indexing_transactions_latency",
+                "Time spent in indexing transactions",
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            indexing_epoch_latency: register_histogram_with_registry!(
+                "indexing_epoch_latency",
+                "Time spent in indexing epoch",
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            indexing_checkpoint_latency: register_histogram_with_registry!(
+                "indexing_checkpoint_latency",
+                "Time spent in indexing checkpoint",
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
