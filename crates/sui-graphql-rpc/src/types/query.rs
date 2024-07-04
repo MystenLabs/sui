@@ -175,11 +175,27 @@ impl Query {
         DryRunResult::try_from(res).extend()
     }
 
-    async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<Owner>> {
+    /// Look up an Owner by its SuiAddress.
+    ///
+    /// `root_version` represents the version of the root object in some nested chain of dynamic
+    /// fields. It allows consistent historical queries for the case of wrapped objects, which don't
+    /// have a version. For example, if querying the dynamic field of a table wrapped in a parent
+    /// object, passing the parent object's version here will ensure we get the dynamic field's
+    /// state at the moment that parent's version was created.
+    ///
+    /// If `root_version` is left null, dynamic fields will be from a consistent snapshot of
+    /// the Sui state at the latest checkpoint known to the GraphQL RPC.
+    async fn owner(
+        &self,
+        ctx: &Context<'_>,
+        address: SuiAddress,
+        root_version: Option<u64>,
+    ) -> Result<Option<Owner>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
         Ok(Some(Owner {
             address,
             checkpoint_viewed_at: checkpoint,
+            root_version,
         }))
     }
 

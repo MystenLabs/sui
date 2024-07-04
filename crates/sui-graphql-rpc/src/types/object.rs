@@ -552,6 +552,7 @@ impl ObjectImpl<'_> {
                     owner: Some(Owner {
                         address,
                         checkpoint_viewed_at: self.0.checkpoint_viewed_at,
+                        root_version: None,
                     }),
                 }))
             }
