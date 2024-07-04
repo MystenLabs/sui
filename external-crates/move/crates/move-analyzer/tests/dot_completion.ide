@@ -35,6 +35,16 @@
           "use_col": 10
         }
       }
+    ],
+    // tests completions coming from a different module
+    "other_mod_dot.move": [
+      {
+        "CompletionTest": {
+          "use_line": 4,
+          "use_col": 10
+        }
+      }
     ]
+    
   }
 }
