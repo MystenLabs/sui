@@ -57,6 +57,7 @@ use crate::{
     traffic_controller::metrics::TrafficControllerMetrics,
 };
 use nonempty::{nonempty, NonEmpty};
+use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
 use tonic::transport::server::TcpConnectInfo;
 
 #[cfg(test)]
@@ -102,10 +103,10 @@ pub struct AuthorityServer {
 
 impl AuthorityServer {
     pub fn new_for_test_with_consensus_adapter(
-        address: Multiaddr,
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
     ) -> Self {
+        let address = new_local_tcp_address_for_testing();
         let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
 
         Self {
@@ -116,11 +117,8 @@ impl AuthorityServer {
         }
     }
 
-    pub fn new_for_test(
-        address: Multiaddr,
-        state: Arc<AuthorityState>,
-        consensus_address: Multiaddr,
-    ) -> Self {
+    pub fn new_for_test(state: Arc<AuthorityState>) -> Self {
+        let consensus_address = new_local_tcp_address_for_testing();
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(LazyNarwhalClient::new(consensus_address)),
             state.name,
@@ -132,7 +130,7 @@ impl AuthorityServer {
             ConsensusAdapterMetrics::new_test(),
             state.epoch_store_for_testing().protocol_config().clone(),
         ));
-        Self::new_for_test_with_consensus_adapter(address, state, consensus_adapter)
+        Self::new_for_test_with_consensus_adapter(state, consensus_adapter)
     }
 
     pub async fn spawn_for_test(self) -> Result<AuthorityServerHandle, io::Error> {
