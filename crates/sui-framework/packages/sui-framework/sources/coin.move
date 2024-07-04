@@ -531,7 +531,7 @@ module sui::coin {
 
     /// Adds the given address to the deny list, preventing it
     /// from interacting with the specified coin type as an input to a transaction.
-    #[deprecated(note = b"Using `migrate_regulated_currency_to_v2` migrate to v2 and use `deny_list_v2_add`")]
+    #[deprecated(note = b"Use `migrate_regulated_currency_to_v2` to migrate to v2 and then use `deny_list_v2_add`")]
     public fun deny_list_add<T>(
        deny_list: &mut DenyList,
        _deny_cap: &mut DenyCap<T>,
@@ -549,7 +549,7 @@ module sui::coin {
 
     /// Removes an address from the deny list.
     /// Aborts with `ENotFrozen` if the address is not already in the list.
-    #[deprecated(note = b"Using `migrate_regulated_currency_to_v2` migrate to v2 and use `deny_list_v2_remove`")]
+    #[deprecated(note = b"Use `migrate_regulated_currency_to_v2` to migrate to v2 and then use `deny_list_v2_remove`")]
     public fun deny_list_remove<T>(
        deny_list: &mut DenyList,
        _deny_cap: &mut DenyCap<T>,
@@ -567,7 +567,7 @@ module sui::coin {
 
     /// Returns true iff the given address is denied for the given coin type. It will
     /// return false if given a non-coin type.
-    #[deprecated(note = b"Using `migrate_regulated_currency_to_v2` migrate to v2 and use `deny_list_v2_contains_next_epoch` or `deny_list_v2_contains_current_epoch`")]
+    #[deprecated(note = b"Use `migrate_regulated_currency_to_v2` to migrate to v2 and then use `deny_list_v2_contains_next_epoch` or `deny_list_v2_contains_current_epoch`")]
     public fun deny_list_contains<T>(
        deny_list: &DenyList,
        addr: address,
