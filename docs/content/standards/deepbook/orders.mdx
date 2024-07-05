@@ -1,106 +1,286 @@
 ---
-title: DeepBook Orders
-slug: /deepbook-orders
+title: Orders
 ---
 
-## Order book structure {#order-book-structure}
+Users can create limit or market orders, modify orders, and cancel orders. The `BalanceManager` must have the necessary funds to process orders. DeepBook has four order options and three self matching options. Initially, all trading fees are paid with the DEEP token. Consequently, if you set the `pay_with_deep` flag to `false`, orders automatically fail until the following upgrade.
 
-DeepBook adopts a hyper-efficient approach to store orders. Each pool stores the unfilled maker orders. Taker orders are filled instantaneously within the same transaction the order is submitted. Bid and ask orders are stored separately, each with a two-level nested crit-bit tree. The first level crit-bit tree is ordered using the price of the maker order, and the second level crit-bit tree is ordered using the order id of the maker order.
+Users can modify their existing order, reducing the size, lowering the expiration time, or both. Users cannot modify their order to increase their size or increase their expiration time. To do that, they must cancel the original order and place a new order.
 
-## Placing orders {#placing-orders}
+Users can cancel a single order or cancel all of their orders.
 
-DeepBook supports the placement of market orders and limit orders. DeepBook also supports a few configurations of limit orders, which is covered in the API section. When users submit a market order, it is matched against the existing maker orders on the order book instantaneously in the same transaction upon submission of the market order. When users submit a limit order, the limit order is first matched against the existing maker orders as a taker order. If the order cannot be fully filled, the remaining quantity can either be injected as a maker order or be dropped, depending on the configuration of the limit order. See the API section for further details.
+## API
+
+Following are the order related endpoints that `Pool` exposes.
+
+### Order options
+
+The following constants define the options available for orders.
 
 ```move
-struct Order has store, drop {
-    // For each pool, order id is incremental and unique for each opening order.
-    // Orders that are submitted earlier have lower order ids.
-    // 64 bits are sufficient for order ids, whereas 32 bits are not.
-    // Assuming a maximum TPS of 100K/s of Sui chain, it would take (1<<63) / 100000 / 3600 / 24 / 365 = 2924712 years to reach the full capacity.
-    // The highest bit of the order id denotes the order type, 0 for bid, 1 for ask.
-    order_id: u64,
-    // Only used for limit orders.
+// Restrictions on limit orders.
+// No restriction on the order.
+const NO_RESTRICTION: u8 = 0;
+// Mandates that whatever amount of an order that can be executed in the 
+// current transaction, be filled and then the rest of the order canceled.
+const IMMEDIATE_OR_CANCEL: u8 = 1;
+// Mandates that the entire order size be filled in the current transaction. 
+// Otherwise, the order is canceled.
+const FILL_OR_KILL: u8 = 2;
+// Mandates that the entire order be passive. Otherwise, cancel the order.
+const POST_ONLY: u8 = 3;
+```
+
+### Self-matching options
+
+The following constants define the options available for self-matching orders.
+
+```move
+// Self matching types.
+// Self matching is allowed.
+const SELF_MATCHING_ALLOWED: u8 = 0;
+// Cancel the taker order.
+const CANCEL_TAKER: u8 = 1;
+// Cancel the maker order.
+const CANCEL_MAKER: u8 = 2;
+```
+
+### OrderInfo struct
+
+Placing a limit order or a market order creates and returns an `OrderInfo` object. DeepBook automatically drops this object after the order completes or is placed in the book. Use `OrderInfo` to inspect the execution details of the request as it represents all order information. DeepBook does not catch any errors, so if there’s a failure of any kind, then the entire transaction fails.
+
+```move
+public struct OrderInfo has store, drop {
+    // ID of the pool
+    pool_id: ID,
+    // ID of the order within the pool
+    order_id: u128,
+    // ID of the account the order uses
+    balance_manager_id: ID,
+    // ID of the order defined by client
+    client_order_id: u64,
+    // Trader of the order
+    trader: address,
+    // Order type, NO_RESTRICTION, IMMEDIATE_OR_CANCEL, FILL_OR_KILL, POST_ONLY
+    order_type: u8,
+    // Self matching option,
+    self_matching_option: u8,
+    // Price, only used for limit orders
     price: u64,
-    quantity: u64,
+    // Whether the order is a buy or a sell
     is_bid: bool,
-    // Order can only be canceled by the owner.
-    owner: ID,
-    // Expiration timestamp in ms.
+    // Quantity (in base asset terms) when the order is placed
+    original_quantity: u64,
+    // Deep conversion used by the order
+    order_deep_price: OrderDeepPrice,
+    // Expiration timestamp in ms
+    expire_timestamp: u64,
+    // Quantity executed so far
+    executed_quantity: u64,
+    // Cumulative quote quantity executed so far
+    cumulative_quote_quantity: u64,
+    // Any partial fills
+    fills: vector<Fill>,
+    // Whether the fee is in DEEP terms
+    fee_is_deep: bool,
+    // Fees paid so far in base/quote/DEEP terms
+    paid_fees: u64,
+    epoch: u64,
+    // Status of the order
+    status: u8,
+    // Is a market_order
+    market_order: bool,
+}
+```
+
+### OrderDeepPrice struct
+
+The `OrderDeepPrice` struct represents the conversion rate of DEEP at the time the order was placed.
+```move
+public struct OrderDeepPrice has copy, store, drop {
+    asset_is_base: bool,
+    deep_per_asset: u64,
+}
+```
+
+### Fill struct
+
+The `Fill` struct represents the results of a match between two orders. Use this struct to update the state.
+
+```move
+public struct Fill has store, drop, copy {
+    // ID of the maker order
+    maker_order_id: u128,
+    // account_id of the maker order
+    balance_manager_id: ID,
+    // Whether the maker order is expired
+    expired: bool,
+    // Whether the maker order is fully filled
+    completed: bool,
+    // Quantity filled
+    base_quantity: u64,
+    // Quantity of quote currency filled
+    quote_quantity: u64,
+    // Whether the taker is bid
+    taker_is_bid: bool,
+    // Maker epoch
+    maker_epoch: u64,
+    // Maker deep price
+    maker_deep_price: OrderDeepPrice,
+}
+```
+
+### Events
+
+DeepBook emits `OrderFilled` when a maker order is filled.
+
+```move
+public struct OrderFilled has copy, store, drop {
+    pool_id: ID,
+    maker_order_id: u128,
+    taker_order_id: u128,
+    maker_client_order_id: u64,
+    taker_client_order_id: u64,
+    price: u64,
+    taker_is_bid: bool,
+    base_quantity: u64,
+    quote_quantity: u64,
+    maker_balance_manager_id: ID,
+    taker_balance_manager_id: ID,
+    timestamp: u64,
+}
+```
+
+DeepBook emits `OrderCanceled` when a maker order is canceled.
+
+```move
+public struct OrderCanceled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    pool_id: ID,
+    order_id: u128,
+    client_order_id: u64,
+    price: u64,
+    is_bid: bool,
+    base_asset_quantity_canceled: u64,
+    timestamp: u64,
+}
+```
+
+DeepBook emits `OrderModified` on modification of a maker order.
+
+```move
+public struct OrderModified<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    pool_id: ID,
+    order_id: u128,
+    client_order_id: u64,
+    price: u64,
+    is_bid: bool,
+    new_quantity: u64,
+    timestamp: u64,
+}
+```
+
+DeepBook emits `OrderPlaced` when it injects a maker order into the order book.
+
+```move
+public struct OrderPlaced has copy, store, drop {
+    balance_manager_id: ID,
+    pool_id: ID,
+    order_id: u128,
+    client_order_id: u64,
+    trader: address,
+    price: u64,
+    is_bid: bool,
+    placed_quantity: u64,
     expire_timestamp: u64,
 }
 ```
 
-## Order matching {#order-matching}
+### Place limit order
 
-Order matching occurs when a taker order is submitted to the CLOB without a centralized entity or crank involvement. Taker orders are matched against the existing maker orders in the CLOB in the same transaction the taker order is submitted.
+Place a limit order. Quantity is in base asset terms. For current version `pay_with_deep` must be true, so the 
+fee is paid with DEEP tokens. 
 
-## Order tracking {#order-tracking}
-
-DeepBook supports efficient tracking of maker orders. Each unfilled maker order is associated with a unique u64 order id, and users can query the order status using the order id together with the Sui RPC call. Users can also subscribe to the event stream emitted by DeepBook related to changes in order status. DeepBook currently supports the following events, `OrderPlaced`, `OrderFilled` and `OrderCanceled`.
+You must combine a `BalanceManager` call of generating a `TradeProof` before placing orders.
 
 ```move
-/// Emitted when a maker order is injected into the order book.
-struct OrderPlaced<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
-    order_id: u64,
+public fun place_limit_order<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &mut BalanceManager,
+    trade_proof: &TradeProof,
+    client_order_id: u64,
+    order_type: u8,
+    self_matching_option: u8,
+    price: u64,
+    quantity: u64,
     is_bid: bool,
-    owner: ID,
-    base_asset_quantity_placed: u64,
-    price: u64
-}
-
-/// Emitted when a maker order is canceled.
-struct OrderCanceled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
-    order_id: u64,
-    is_bid: bool,
-    owner: ID,
-    base_asset_quantity_canceled: u64,
-    price: u64
-}
-
-/// Emitted only when a maker order is filled.
-struct OrderFilled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
-    order_id: u64,
-    is_bid: bool,
-    owner: ID,
-    total_quantity: u64,
-    base_asset_quantity_filled: u64,
-    base_asset_quantity_remaining: u64,
-    price: u64
-}
+    pay_with_deep: bool,
+    expire_timestamp: u64,
+    clock: &Clock,
+    ctx: &TxContext,
+): OrderInfo
 ```
 
-The following example uses the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) to connect via websocket to listen to events.
+### Place market order
 
-```javascript
-const local_client = new SuiClient({ url: 'https://fullnode.mainnet.sui.io:443/' });
-const deepbook_client = new DeepBookClient(local_client);
+Place a market order. Quantity is in base asset terms. Calls `place_limit_order` with a price of `MAX_PRICE` for bids and `MIN_PRICE` for asks. DeepBook cancels the order for any quantity not filled.
 
-const deepbook = '0x000000000000000000000000000000000000000000000000000000000000dee9';
-const deepbookClobEventsFilter = {
-	MoveModule: { package: deepbook, module: 'clob_v2' },
-};
+```move
+public fun place_market_order<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &mut BalanceManager,
+    trade_proof: &TradeProof,
+    client_order_id: u64,
+    self_matching_option: u8,
+    quantity: u64,
+    is_bid: bool,
+    pay_with_deep: bool,
+    clock: &Clock,
+    ctx: &TxContext,
+): OrderInfo
+```
 
-// Note that these names must be exact
-const moveEventsFilter = {
-	MoveEventType:
-		'0xdee9::clob_v2::OrderPlaced<0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>',
-};
-const orderFilledFilter = {
-	MoveEventType:
-		'0xdee9::clob_v2::OrderFilled<0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>',
-};
-const poolFilter = {
-	MoveEventField: {
-		path: '/pool_id',
-		value: '0xd9e45ab5440d61cc52e3b2bd915cdd643146f7593d587c715bc7bfa48311d826',
-	},
-};
+### Modify order
 
-deepbook_client.suiClient.subscribeEvent({
-	filter: moveEventsFilter,
-	onMessage(event) {
-		console.log(event);
-		// handle subscription notification message here
-	},
-});
+Modifies an order given `order_id` and `new_quantity`. New quantity must be less than the original quantity and more than the filled quantity. Order must not have already expired.
+
+The `modify_order` function does not return anything. If the transaction is successful, then assume the modification was successful.
+
+```move
+public fun modify_order<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &mut BalanceManager,
+    trade_proof: &TradeProof,
+    order_id: u128,
+    new_quantity: u64,
+    clock: &Clock,
+    ctx: &TxContext,
+)
+```
+
+### Cancel order
+
+Cancel an order. The order must be owned by the `balance_manager`. The order is removed from the book and the `balance_manager` open orders. The `balance_manager` balance is updated with the order's remaining quantity.
+
+Similar to modify, `cancel_order` does not return anything. DeepBook emits `OrderCanceled` event.
+
+```move 
+public fun cancel_order<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &mut BalanceManager,
+    trade_proof: &TradeProof,
+    order_id: u128,
+    clock: &Clock,
+    ctx: &TxContext,
+)
+```
+
+### Withdraw settled amounts
+
+Withdraw settled amounts to the `balance_manager`. All orders automatically withdraw settled amounts. This can be called explicitly to withdraw all settled funds from the pool.
+
+```move
+public fun withdraw_settled_amounts<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &mut BalanceManager,
+    trade_proof: &TradeProof,
+)
 ```

@@ -100,6 +100,9 @@
       { "source": "/concepts/sui-move-concepts/patterns/id-pointer", "destination": "https://move-book.com/storage/uid-and-id.html", "permanent": true },
       { "source": "/concepts/sui-move-concepts/patterns/transferrable-witness", "destination": "https://move-book.com/programmability/witness-pattern.html", "permanent": true },
       { "source": "/guides/developer/advanced/asset-tokenization", "destination": "/guides/developer/nft/asset-tokenization", "permanent": true },
-      { "source": "/references/move/move-toml", "destination": "https://move-book.com/concepts/manifest.html", "permanent": true }
+      { "source": "/references/move/move-toml", "destination": "https://move-book.com/concepts/manifest.html", "permanent": true },
+      { "source": "/standards/deepbook/pools", "destination": "/standards/deepbook/design#pool", "permanent": true },
+      { "source": "/standards/deepbook/routing-a-swap", "destination": "/standards/deepbook/swaps", "permanent": true },
+      { "source": "/standards/deepbook/trade-and-swap", "destination": "/standards/deepbook/swaps", "permanent": true }
     ]
   }
