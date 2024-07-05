@@ -260,13 +260,10 @@ pub(crate) fn parse_tcp<'a, T: Iterator<Item = Protocol<'a>>>(protocols: &mut T)
 pub(crate) fn parse_http_https<'a, T: Iterator<Item = Protocol<'a>>>(
     protocols: &mut T,
 ) -> Result<&'static str> {
-    match protocols
-        .next()
-        .ok_or_else(|| eyre!("unexpected end of multiaddr"))?
-    {
-        Protocol::Http => Ok("http"),
-        Protocol::Https => Ok("https"),
-        _ => Err(eyre!("expected http/https protocol")),
+    match protocols.next() {
+        Some(Protocol::Http) => Ok("http"),
+        Some(Protocol::Https) => Ok("https"),
+        _ => Ok("http"),
     }
 }
 
