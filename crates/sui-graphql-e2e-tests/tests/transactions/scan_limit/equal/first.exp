@@ -1,0 +1,290 @@
+processed 22 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1 'publish'. lines 14-35:
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5798800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'create-checkpoint'. lines 37-37:
+Checkpoint created: 1
+
+task 3 'run'. lines 39-39:
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4 'run'. lines 41-41:
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5 'run'. lines 43-43:
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6 'run'. lines 45-45:
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7 'run'. lines 47-47:
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8 'create-checkpoint'. lines 49-49:
+Checkpoint created: 2
+
+task 9 'run'. lines 51-51:
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10 'run'. lines 53-53:
+created: object(10,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11 'run'. lines 55-55:
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12 'run'. lines 57-57:
+created: object(12,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13 'run'. lines 59-59:
+created: object(13,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14 'create-checkpoint'. lines 61-61:
+Checkpoint created: 3
+
+task 15 'run-graphql'. lines 63-82:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjozLCJ0IjoxMX0",
+        "startCursor": "eyJjIjozLCJ0IjoyfQ"
+      },
+      "nodes": [
+        {
+          "digest": "CReUjLynvpq4dD4w6zekGxvSyBBQF2e3KG3K2Rs7oD8L",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "BB6bMUxrBJX9wANzzptKnJM3bMVFKnD4xtY8DGWthaH9",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "Hs7VPKSy8mba36pvKiSPu3yoLVxvFZNHivc1Kr2kNrjv",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "BWYXBZPBViYGGRwCvN5oVjVWgFoHm1jdhiuAH7CEqcYX",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "FL9BoCUhPstZG4fyQV9scjS8GGBfFSsybB44VTzkidmh",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        },
+        {
+          "digest": "2fkJPVgstXd828Jofx3MpMmK1BVBc2gTYbaQCHEgfWQ5",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "FLACNu1N2FiLXK7Znvdky5z3P4qvzP1WVwcwHbenrYyT",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "2faB3pdjTjZR2Y6F6p3w3xB6cBY9LEuoxPNRSquZGWLL",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "7b1t2Z9dNq695LRtuz8air1mQ3KQnonPbNu3G6yMifvS",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        },
+        {
+          "digest": "2aaupMmejUPdfcLpbyjcNGRz4hL6tBBJ9TGfDfzF3Hew",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16 'run-graphql'. lines 85-105:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false,
+        "endCursor": "eyJjIjozLCJ0IjoyfQ",
+        "startCursor": "eyJjIjozLCJ0IjoyfQ"
+      },
+      "nodes": [
+        {
+          "digest": "CReUjLynvpq4dD4w6zekGxvSyBBQF2e3KG3K2Rs7oD8L",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 17 'run-graphql'. lines 107-126:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": true,
+        "endCursor": "eyJjIjo0LCJ0IjozfQ",
+        "startCursor": "eyJjIjo0LCJ0IjozfQ"
+      },
+      "nodes": [
+        {
+          "digest": "BB6bMUxrBJX9wANzzptKnJM3bMVFKnD4xtY8DGWthaH9",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 2
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 18 'run-graphql'. lines 128-147:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": true,
+        "endCursor": "eyJjIjo0LCJ0Ijo3fQ",
+        "startCursor": "eyJjIjo0LCJ0Ijo3fQ"
+      },
+      "nodes": [
+        {
+          "digest": "2fkJPVgstXd828Jofx3MpMmK1BVBc2gTYbaQCHEgfWQ5",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19 'run-graphql'. lines 149-168:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": true,
+        "endCursor": "eyJjIjo0LCJ0IjoxMX0",
+        "startCursor": "eyJjIjo0LCJ0IjoxMX0"
+      },
+      "nodes": [
+        {
+          "digest": "2aaupMmejUPdfcLpbyjcNGRz4hL6tBBJ9TGfDfzF3Hew",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 3
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 20 'run-graphql'. lines 170-189:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": null,
+        "startCursor": null
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 21 'run-graphql'. lines 191-210:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "endCursor": null,
+        "startCursor": null
+      },
+      "nodes": []
+    }
+  }
+}

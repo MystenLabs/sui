@@ -32,47 +32,34 @@ pub(crate) struct StoredTxBounds {
 
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct TxBounds {
+    /// The unmodified lower bound tx_sequence_number corresponding to the first tx_sequence_number
+    /// of the lower checkpoint bound.
     pub lo: u64,
+    /// The unmodified upper bound tx_sequence_number corresponding to the last tx_sequence_number
+    /// of the upper checkpoint bound.
     pub hi: u64,
-    pub has_prev_page: bool,
-    pub has_next_page: bool,
+    pub after: Option<u64>,
+    pub before: Option<u64>,
+    pub scan_limit: Option<u64>,
+    pub is_from_front: bool,
 }
 
 impl TxBounds {
-    /// Given the `tx_sequence_number` true lower and upper bound, optional cursors, and an optional
-    /// `scan_limit`, determine the new lower and upper bounds, and whether
     pub(crate) fn new(
         lo: u64,
         hi: u64,
         after: Option<u64>,
         before: Option<u64>,
-        is_from_front: bool,
         scan_limit: Option<u64>,
+        is_from_front: bool,
     ) -> Self {
-        let mut adjusted_lo = after.map_or(lo, |a| std::cmp::max(lo, a));
-        let mut adjusted_hi = before.map_or(hi, |b| std::cmp::min(hi, b));
-
-        (adjusted_lo, adjusted_hi) = if is_from_front {
-            (
-                adjusted_lo,
-                scan_limit.map_or(adjusted_hi, |limit| {
-                    std::cmp::min(adjusted_hi, adjusted_lo.saturating_add(limit))
-                }),
-            )
-        } else {
-            (
-                scan_limit.map_or(adjusted_lo, |limit| {
-                    std::cmp::max(adjusted_lo, adjusted_hi.saturating_sub(limit))
-                }),
-                adjusted_hi,
-            )
-        };
-
         Self {
-            lo: adjusted_lo,
-            hi: adjusted_hi,
-            has_prev_page: adjusted_lo > lo,
-            has_next_page: adjusted_hi < hi,
+            lo,
+            hi,
+            after,
+            before,
+            scan_limit,
+            is_from_front,
         }
     }
 
@@ -123,9 +110,76 @@ impl TxBounds {
             hi,
             page.after().map(|x| x.tx_sequence_number),
             page.before().map(|x| x.tx_sequence_number),
-            page.is_from_front(),
             scan_limit,
+            page.is_from_front(),
         ))
+    }
+
+    /// The lower bound tx_sequence_number to scan within. This defaults to the min
+    /// tx_sequence_number of the checkpoint bound. If a cursor is provided, the lower bound is
+    /// adjusted to the larger of the two, and this gets added to the scan limit if provided.
+    pub(crate) fn scan_lo(&self) -> u64 {
+        // if the cursor exceeds scan_hi then we probably don't even need to run the query?
+        let adjusted_lo = self.after.map_or(self.lo, |a| std::cmp::max(self.lo, a));
+
+        println!("true lo: {}, adjusted_lo: {}", self.lo, adjusted_lo);
+
+        let final_lo = if self.is_from_front {
+            adjusted_lo
+        } else {
+            std::cmp::max(
+                adjusted_lo,
+                self.scan_hi()
+                    .saturating_sub(self.scan_limit.unwrap_or(self.hi)),
+            )
+        };
+
+        println!("after applying scan_limit: {}", final_lo);
+
+        final_lo
+    }
+
+    /// The upper bound tx_sequence_number to scan within. This defaults to the max
+    /// tx_sequence_number of the checkpoint bound. If a cursor is provided, the upper bound is
+    /// adjusted to the smaller of the two, and this gets added to the scan limit if provided.
+    pub(crate) fn scan_hi(&self) -> u64 {
+        let adjusted_hi = self.before.map_or(self.hi, |b| std::cmp::min(self.hi, b));
+
+        println!("true hi: {}, adjusted_hi: {}", self.hi, adjusted_hi);
+
+        let final_hi = if self.is_from_front {
+            std::cmp::min(
+                adjusted_hi,
+                self.scan_lo()
+                    .saturating_add(self.scan_limit.unwrap_or(adjusted_hi)),
+            )
+        } else {
+            adjusted_hi
+        };
+
+        println!("after applying scan_limit: {}", final_hi);
+
+        final_hi
+    }
+
+    /// If the query result does not have a previous page, check whether the scan limit is within
+    /// the initial tx_sequence_number range.
+    pub(crate) fn scan_has_prev_page(&self) -> bool {
+        if self.after.unwrap_or(0) >= self.hi {
+            return false;
+        }
+
+        self.scan_lo() > self.lo
+    }
+
+    /// If the query result does not have a next page, check whether the scan limit is within the
+    /// initial tx_sequence_number range.
+    pub(crate) fn scan_has_next_page(&self) -> bool {
+        if self.before.unwrap_or(self.hi) <= self.lo {
+            return false;
+        }
+
+        self.scan_hi() < self.hi
     }
 }
 

@@ -309,8 +309,8 @@ impl TransactionBlock {
                         checkpoint_viewed_at,
                         move || {
                             tx::transactions
-                                .filter(tx::tx_sequence_number.ge(tx_bounds.lo as i64))
-                                .filter(tx::tx_sequence_number.le(tx_bounds.hi as i64))
+                                .filter(tx::tx_sequence_number.ge(tx_bounds.scan_lo() as i64))
+                                .filter(tx::tx_sequence_number.le(tx_bounds.scan_hi() as i64))
                                 .into_boxed()
                         },
                     )?;
@@ -354,27 +354,27 @@ impl TransactionBlock {
             conn.edges.push(Edge::new(cursor, transaction));
         }
 
-        // scan_limit = 100_000
-        // first: 50
-        // filters -> 10 actual results
-        // prev = false, next = false
         if scan_limit.is_some() {
             if !prev {
-                conn.has_previous_page = tx_bounds.has_prev_page;
+                println!("no previous page");
+                conn.has_previous_page = tx_bounds.scan_has_prev_page();
+                println!("scan prev page?: {}", conn.has_previous_page);
                 conn.start_cursor = Some(
                     Cursor::new(tx_cursor::TransactionBlockCursor {
                         checkpoint_viewed_at,
-                        tx_sequence_number: tx_bounds.lo,
+                        tx_sequence_number: tx_bounds.scan_lo(),
                     })
                     .encode_cursor(),
                 );
             }
             if !next {
-                conn.has_next_page = tx_bounds.has_next_page;
+                println!("no next page");
+                conn.has_next_page = tx_bounds.scan_has_next_page();
+                println!("scan next page?: {}", conn.has_next_page);
                 conn.end_cursor = Some(
                     Cursor::new(tx_cursor::TransactionBlockCursor {
                         checkpoint_viewed_at,
-                        tx_sequence_number: tx_bounds.hi,
+                        tx_sequence_number: tx_bounds.scan_hi(),
                     })
                     .encode_cursor(),
                 );
