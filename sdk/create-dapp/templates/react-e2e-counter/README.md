@@ -12,7 +12,8 @@ Client dApp using the following tools:
   wallets and loading data
 - [pnpm](https://pnpm.io/) for package management
 
-For a full guide on how to build this dApp from scratch, visit this [guide](http://docs.sui.io/guides/developer/app-examples/e2e-counter#frontend).
+For a full guide on how to build this dApp from scratch, visit this
+[guide](http://docs.sui.io/guides/developer/app-examples/e2e-counter#frontend).
 
 ## Deploying your Move code
 
