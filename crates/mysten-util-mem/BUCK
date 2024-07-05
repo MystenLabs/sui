@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -13,7 +13,7 @@ deps = [
   "//third-party:indexmap_2_1_0",
   "//third-party:once_cell_1_18_0",
   "//third-party:parking_lot_0_12_1",
-  "//third-party:roaring_0_10_1",
+  "//third-party:roaring_0_10_3",
   "//third-party:smallvec_1_13_2"
 ]
 # buckify!
@@ -23,12 +23,12 @@ rust_library(
     srcs = glob(["**/*"]),
     deps = deps,
     env = {
-        "CARGO_PKG_AUTHORS": "[Parity Technologies <admin@parity.io>,Andrew Schran <aschran@mystenlabs.com>]",
-        "OUT_DIR": "",
-        "CARGO_PKG_VERSION": "0.11.0",
         "CARGO_PKG_NAME": "mysten-util-mem",
-        "CARGO_MANIFEST_DIR": "",
         "CARGO_PKG_DESCRIPTION": "Collection of memory related utilities",
+        "CARGO_PKG_AUTHORS": "[Parity Technologies <admin@parity.io>,Andrew Schran <aschran@mystenlabs.com>]",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.11.0",
+        "OUT_DIR": "",
     },
     crate_root = "src/lib.rs",
     features = [

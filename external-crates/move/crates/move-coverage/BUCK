@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -15,7 +15,7 @@ deps = [
   "//third-party:codespan_0_11_1",
   "//third-party:colored_2_0_4",
   "//third-party:petgraph_0_5_1",
-  "//third-party:serde_1_0_190"
+  "//third-party:serde_1_0_202"
 ]
 # buckify!
 
@@ -25,10 +25,10 @@ rust_library(
     deps = deps,
     env = {
         "CARGO_PKG_DESCRIPTION": "Diem Move VM code coverage",
-        "CARGO_MANIFEST_DIR": "",
-        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
         "OUT_DIR": "",
         "CARGO_PKG_NAME": "move-coverage",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_MANIFEST_DIR": "",
         "CARGO_PKG_VERSION": "0.1.0",
     },
     crate_root = "src/lib.rs",
@@ -45,14 +45,14 @@ rust_binary(
         "move-trace-conversion": ":move-trace-conversion",
     },
     env = {
-        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
         "OUT_DIR": "",
-        "CARGO_PKG_BIN": "move-coverage",
         "CARGO_PKG_VERSION": "0.1.0",
-        "CARGO_BIN_NAME": "move-coverage",
-        "CARGO_MANIFEST_DIR": "",
         "CARGO_PKG_NAME": "move-coverage",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_BIN_NAME": "move-coverage",
         "CARGO_PKG_DESCRIPTION": "Diem Move VM code coverage",
+        "CARGO_PKG_BIN": "move-coverage",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
     },
     crate_root = "src/bin/move-trace-conversion.rs",
     edition = "2021",
@@ -68,14 +68,14 @@ rust_binary(
         "coverage-summaries": ":coverage-summaries",
     },
     env = {
-        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_NAME": "move-coverage",
+        "CARGO_PKG_BIN": "move-coverage",
+        "CARGO_PKG_DESCRIPTION": "Diem Move VM code coverage",
         "OUT_DIR": "",
         "CARGO_MANIFEST_DIR": "",
-        "CARGO_PKG_BIN": "move-coverage",
-        "CARGO_PKG_NAME": "move-coverage",
-        "CARGO_BIN_NAME": "move-coverage",
-        "CARGO_PKG_DESCRIPTION": "Diem Move VM code coverage",
         "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_BIN_NAME": "move-coverage",
     },
     crate_root = "src/bin/coverage-summaries.rs",
     edition = "2021",
@@ -91,14 +91,14 @@ rust_binary(
         "source-coverage": ":source-coverage",
     },
     env = {
-        "CARGO_PKG_VERSION": "0.1.0",
-        "CARGO_PKG_NAME": "move-coverage",
-        "OUT_DIR": "",
-        "CARGO_PKG_DESCRIPTION": "Diem Move VM code coverage",
         "CARGO_MANIFEST_DIR": "",
-        "CARGO_BIN_NAME": "move-coverage",
         "CARGO_PKG_BIN": "move-coverage",
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "move-coverage",
         "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_BIN_NAME": "move-coverage",
+        "CARGO_PKG_DESCRIPTION": "Diem Move VM code coverage",
     },
     crate_root = "src/bin/source-coverage.rs",
     edition = "2021",

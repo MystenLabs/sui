@@ -1,5 +1,10 @@
+# [env]
+# MIME_TYPES_GENERATED_PATH = "$(location :mime_guess-2.0.5-build-script-run[out_dir])/mime_types_generated.rs"
+# [env]
+# MIME_TYPES_GENERATED_PATH="$(location :mime_guess-2.0.5[out_dir])"
 [[buildscript]]
 [buildscript.rustc_flags]
-
+env = {"MIME_TYPES_GENERATED_PATH" = "/mime_types_generated.rs"}
 [[buildscript]]
 [buildscript.gen_srcs]
+env = {"MIME_TYPES_GENERATED_PATH" = "/mime_types_generated.rs"}

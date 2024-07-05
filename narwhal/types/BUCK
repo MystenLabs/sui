@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -25,8 +25,8 @@ deps = [
   "//third-party:proptest_1_1_0",
   "//third-party:prost_0_12_3",
   "//third-party:rand_0_8_5",
-  "//third-party:roaring_0_10_1",
-  "//third-party:serde_1_0_190",
+  "//third-party:roaring_0_10_3",
+  "//third-party:serde_1_0_202",
   "//third-party:serde_with_2_1_0",
   "//third-party:thiserror_1_0_56",
   "//third-party:tokio_1_36_0",
@@ -52,12 +52,12 @@ rust_library(
         "store": "//crates/typed-store:typed-store",
     },
     env = {
-        "CARGO_PKG_DESCRIPTION": "",
-        "CARGO_PKG_NAME": "narwhal-types",
         "CARGO_PKG_VERSION": "0.1.0",
-        "CARGO_MANIFEST_DIR": ".",
+        "CARGO_PKG_DESCRIPTION": "",
         "OUT_DIR": "$(location :narwhal-types-build-script-run[out_dir])",
+        "CARGO_MANIFEST_DIR": ".",
         "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_PKG_NAME": "narwhal-types",
     },
     crate_root = "src/lib.rs",
     edition = "2021",
@@ -77,8 +77,8 @@ rust_binary(
         "store": "//crates/typed-store:typed-store",
     },
     env = {
-        "CARGO_MANIFEST_DIR": "",
         "OUT_DIR": "",
+        "CARGO_MANIFEST_DIR": "",
     },
     crate_root = "build.rs",
     crate = "build_script_build",

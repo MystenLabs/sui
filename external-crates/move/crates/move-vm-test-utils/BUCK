@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -9,7 +9,7 @@ deps = [
   "//external-crates/move/crates/move-vm-types:move-vm-types",
   "//third-party:anyhow_1_0_81",
   "//third-party:once_cell_1_18_0",
-  "//third-party:serde_1_0_190"
+  "//third-party:serde_1_0_202"
 ]
 # buckify!
 
@@ -18,11 +18,11 @@ rust_library(
     srcs = glob(["**/*"]),
     deps = deps,
     env = {
-        "CARGO_MANIFEST_DIR": "",
-        "CARGO_PKG_NAME": "move-vm-test-utils",
-        "CARGO_PKG_VERSION": "0.1.0",
         "CARGO_PKG_DESCRIPTION": "Move VM Test Utils",
+        "CARGO_PKG_NAME": "move-vm-test-utils",
+        "CARGO_MANIFEST_DIR": "",
         "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_PKG_VERSION": "0.1.0",
         "OUT_DIR": "",
     },
     crate_root = "src/lib.rs",

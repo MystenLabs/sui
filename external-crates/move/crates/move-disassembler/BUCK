@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -24,12 +24,12 @@ rust_library(
     srcs = glob(["**/*"]),
     deps = deps,
     env = {
-        "CARGO_PKG_VERSION": "0.1.0",
-        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "OUT_DIR": "",
         "CARGO_PKG_NAME": "move-disassembler",
         "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.1.0",
         "CARGO_PKG_DESCRIPTION": "Print a human-readable version of Move bytecode (.mv files)",
-        "OUT_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
     },
     crate_root = "src/lib.rs",
     edition = "2021",
@@ -45,14 +45,14 @@ rust_binary(
         "move-disassembler": ":move-disassembler",
     },
     env = {
-        "CARGO_BIN_NAME": "move-disassembler",
         "CARGO_PKG_BIN": "move-disassembler",
-        "OUT_DIR": "",
-        "CARGO_MANIFEST_DIR": "",
-        "CARGO_PKG_NAME": "move-disassembler",
-        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
-        "CARGO_PKG_DESCRIPTION": "Print a human-readable version of Move bytecode (.mv files)",
         "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_PKG_NAME": "move-disassembler",
+        "OUT_DIR": "",
+        "CARGO_PKG_DESCRIPTION": "Print a human-readable version of Move bytecode (.mv files)",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_BIN_NAME": "move-disassembler",
     },
     crate_root = "src/main.rs",
     edition = "2021",

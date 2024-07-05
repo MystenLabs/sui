@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -29,8 +29,8 @@ deps = [
   "//third-party:reqwest_0_11_20",
   "//third-party:rustls-pemfile_1_0_2",
   "//third-party:rustls_0_21_12",
-  "//third-party:serde_1_0_190",
-  "//third-party:serde_json_1_0_95",
+  "//third-party:serde_1_0_202",
+  "//third-party:serde_json_1_0_112",
   "//third-party:serde_with_2_1_0",
   "//third-party:serde_yaml_0_8_26",
   "//third-party:snap_1_1_0",
@@ -49,10 +49,10 @@ rust_library(
     srcs = glob(["**/*"]),
     deps = deps,
     env = {
-        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_PKG_VERSION": "0.0.2",
         "CARGO_PKG_DESCRIPTION": "",
         "CARGO_MANIFEST_DIR": ".",
-        "CARGO_PKG_VERSION": "0.0.2",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
         "OUT_DIR": "$(location :sui-proxy-build-script-run[out_dir])",
         "CARGO_PKG_NAME": "sui-proxy",
     },
@@ -61,20 +61,6 @@ rust_library(
     visibility = ["PUBLIC"],
 )
 
-rustc_flags = [
-    "-C",
-    "target-feature=+crt-static",
-    # "-C",
-    # "opt-level=3",
-    "-C",
-    "debuginfo=1",
-    "-C",
-    "split-debuginfo=packed",
-    "-C",
-    "strip=debuginfo",
-    "-C",
-    "panic=abort",
-]
 
 rust_binary(
     name = "sui-proxy-bin",
@@ -84,16 +70,15 @@ rust_binary(
         "sui-proxy": ":sui-proxy",
     },
     env = {
-        "OUT_DIR": "$(location :sui-proxy-build-script-run[out_dir])",
         "CARGO_PKG_VERSION": "0.0.2",
-        "CARGO_MANIFEST_DIR": "",
-        "CARGO_PKG_BIN": "sui-proxy",
+        "CARGO_PKG_NAME": "sui-proxy",
         "CARGO_PKG_DESCRIPTION": "",
         "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_PKG_BIN": "sui-proxy",
         "CARGO_BIN_NAME": "sui-proxy",
-        "CARGO_PKG_NAME": "sui-proxy",
+        "OUT_DIR": "$(location :sui-proxy-build-script-run[out_dir])",
+        "CARGO_MANIFEST_DIR": "",
     },
-    rustc_flags = rustc_flags,
     crate_root = "src/main.rs",
     edition = "2021",
     visibility = ["PUBLIC"],
@@ -107,8 +92,8 @@ rust_binary(
     srcs = glob(["**/*"]),
     deps = deps + build_deps,
     env = {
-        "CARGO_MANIFEST_DIR": "",
         "OUT_DIR": "",
+        "CARGO_MANIFEST_DIR": "",
     },
     crate_root = "build.rs",
     crate = "build_script_build",

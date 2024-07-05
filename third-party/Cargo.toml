@@ -27,7 +27,7 @@ bcs_0_1_6 = { package = "bcs", version = "0.1.6" }
 better_any_0_1_1 = { package = "better_any", version = "0.1.1" }
 bincode_1_3_3 = { package = "bincode", version = "1.3.3" }
 bip32_0_4_0 = { package = "bip32", version = "0.4.0" }
-byteorder_1_4_3 = { package = "byteorder", version = "1.4.3" }
+byteorder_1_5_0 = { package = "byteorder", version = "1.5.0" }
 bytes_1_5_0 = { package = "bytes", version = "1.5.0", features = ["serde"] }
 bytes-varint_1_0_3 = { package = "bytes-varint", version = "1.0.3" }
 camino_1_1_2 = { package = "camino", version = "1.1.2" }
@@ -54,9 +54,9 @@ enum_dispatch_0_3_9 = { package = "enum_dispatch", version = "0.3.9" }
 ethnum_1_3_2 = { package = "ethnum", version = "1.3.2" }
 expect-test_1_4_1 = { package = "expect-test", version = "1.4.1" }
 eyre_0_6_8 = { package = "eyre", version = "0.6.8" }
-fastcrypto_0_1_8 = { package = "fastcrypto", git = "https://github.com/MystenLabs/fastcrypto", rev = "4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6", features = ["copy_key"] }
-fastcrypto-tbls_0_1_0 = { package = "fastcrypto-tbls", git = "https://github.com/MystenLabs/fastcrypto", rev = "4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6" }
-fastcrypto-zkp_0_1_3 = { package = "fastcrypto-zkp", git = "https://github.com/MystenLabs/fastcrypto", rev = "4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6" }
+fastcrypto_0_1_8 = { package = "fastcrypto", git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538", features = ["copy_key"] }
+fastcrypto-tbls_0_1_0 = { package = "fastcrypto-tbls", git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538" }
+fastcrypto-zkp_0_1_3 = { package = "fastcrypto-zkp", git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538" }
 fdlimit_0_2_1 = { package = "fdlimit", version = "0.2.1" }
 futures_0_3_29 = { package = "futures", version = "0.3.29" }
 git-version_0_3_5 = { package = "git-version", version = "0.3.5" }
@@ -79,6 +79,7 @@ leb128_0_2_5 = { package = "leb128", version = "0.2.5" }
 libc = { package = "libc", version = "0.2" }
 log_0_4_21 = { package = "log", version = "0.4.21", features = ["serde"] }
 lru_0_10_0 = { package = "lru", version = "0.10.0" }
+lsp-types_0_95_1 = { package = "lsp-types", version = "0.95.1" }
 match_opt_0_1_2 = { package = "match_opt", version = "0.1.2" }
 mime_0_3_17 = { package = "mime", version = "0.3.17" }
 mockall_0_11_4 = { package = "mockall", version = "0.11.4" }
@@ -117,8 +118,8 @@ rcgen_0_9_3 = { package = "rcgen", version = "0.9.3" }
 ref-cast_1_0_14 = { package = "ref-cast", version = "1.0.14" }
 regex_1_8_4 = { package = "regex", version = "1.8.4" }
 reqwest_0_11_20 = { package = "reqwest", version = "0.11.20", default_features = false, features = ["blocking", "json", "rustls-tls"] }
-roaring_0_10_1 = { package = "roaring", version = "0.10.1" }
-rocksdb_0_22_0 = { package = "rocksdb", version = "0.22.0", default_features = false, features = ["lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
+roaring_0_10_3 = { package = "roaring", version = "0.10.3" }
+rocksdb_0_21_0 = { package = "rocksdb", version = "0.21.0", default_features = false, features = ["lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 rstest_0_16_0 = { package = "rstest", version = "0.16.0" }
 rustls_0_21_12 = { package = "rustls", version = "0.21.12", features = ["dangerous_configuration"] }
 rustls-pemfile_1_0_2 = { package = "rustls-pemfile", version = "1.0.2" }
@@ -126,11 +127,11 @@ rustls-webpki_0_101_7 = { package = "rustls-webpki", version = "0.101.7", featur
 rustversion_1_0_11 = { package = "rustversion", version = "1.0.11" }
 schemars_0_8_12 = { package = "schemars", version = "0.8.12", features = ["either"] }
 scopeguard_1_1_0 = { package = "scopeguard", version = "1.1.0" }
-serde_1_0_190 = { package = "serde", version = "1.0.190", features = ["derive", "rc"] }
+serde_1_0_202 = { package = "serde", version = "1.0.202", features = ["derive", "rc"] }
 serde-name_0_2_1 = { package = "serde-name", version = "0.2.1" }
 serde-reflection_0_3_6 = { package = "serde-reflection", version = "0.3.6" }
 serde_bytes_0_11_9 = { package = "serde_bytes", version = "0.11.9" }
-serde_json_1_0_95 = { package = "serde_json", version = "1.0.95", features = ["arbitrary_precision", "preserve_order"] }
+serde_json_1_0_112 = { package = "serde_json", version = "1.0.112", features = ["arbitrary_precision", "preserve_order"] }
 serde_repr_0_1_10 = { package = "serde_repr", version = "0.1.10" }
 serde_test_1_0_152 = { package = "serde_test", version = "1.0.152" }
 serde_with_2_1_0 = { package = "serde_with", version = "2.1.0", features = ["hex"] }
@@ -145,6 +146,7 @@ stacker_0_1_15 = { package = "stacker", version = "0.1.15" }
 static_assertions_1_1_0 = { package = "static_assertions", version = "1.1.0" }
 strum_0_24_1 = { package = "strum", version = "0.24.1", features = ["derive"] }
 strum_macros_0_24_3 = { package = "strum_macros", version = "0.24.3" }
+sui-sdk_0_0_0 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "bb224b9e6b6edf5eeedcdf71c750a30b68073057", features = ["serde"] }
 syn_2_0_48 = { package = "syn", version = "2.0.48", features = ["derive", "extra-traits", "fold", "full"] }
 syn_1_0_107 = { package = "syn", version = "1.0.107", features = ["derive", "extra-traits", "fold", "full"] }
 synstructure_0_12_6 = { package = "synstructure", version = "0.12.6" }

@@ -1,16 +1,16 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 
 rust_library(
     name = "move-borrow-graph",
     srcs = glob(["**/*"]),
     env = {
-        "CARGO_PKG_NAME": "move-borrow-graph",
-        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
-        "OUT_DIR": "",
-        "CARGO_PKG_VERSION": "0.0.1",
-        "CARGO_MANIFEST_DIR": "",
         "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.0.1",
+        "OUT_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_PKG_NAME": "move-borrow-graph",
     },
     crate_root = "src/lib.rs",
     edition = "2021",

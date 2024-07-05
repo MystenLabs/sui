@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -14,12 +14,12 @@ rust_library(
     srcs = glob(["**/*"]),
     deps = deps,
     env = {
-        "OUT_DIR": "",
-        "CARGO_MANIFEST_DIR": "",
-        "CARGO_PKG_VERSION": "0.1.0",
-        "CARGO_PKG_AUTHORS": "[Andrew Schran <aschran@mystenlabs.com>]",
         "CARGO_PKG_DESCRIPTION": "Library for a Prometheus metric that computes its value by given closure at collection time",
+        "OUT_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Andrew Schran <aschran@mystenlabs.com>]",
+        "CARGO_MANIFEST_DIR": "",
         "CARGO_PKG_NAME": "prometheus-closure-metric",
+        "CARGO_PKG_VERSION": "0.1.0",
     },
     crate_root = "src/lib.rs",
     edition = "2021",

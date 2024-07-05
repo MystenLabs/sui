@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -15,12 +15,12 @@ rust_library(
     srcs = glob(["**/*"]),
     deps = deps,
     env = {
+        "CARGO_MANIFEST_DIR": "",
+        "OUT_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_PKG_NAME": "sui-proc-macros",
         "CARGO_PKG_VERSION": "0.7.0",
         "CARGO_PKG_DESCRIPTION": "",
-        "CARGO_MANIFEST_DIR": "",
-        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
-        "OUT_DIR": "",
-        "CARGO_PKG_NAME": "sui-proc-macros",
     },
     crate_root = "src/lib.rs",
     proc_macro = True,

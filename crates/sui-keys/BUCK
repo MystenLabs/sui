@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -10,8 +10,8 @@ deps = [
   "//third-party:fastcrypto_0_1_8",
   "//third-party:rand_0_8_5",
   "//third-party:regex_1_8_4",
-  "//third-party:serde_1_0_190",
-  "//third-party:serde_json_1_0_95",
+  "//third-party:serde_1_0_202",
+  "//third-party:serde_json_1_0_112",
   "//third-party:signature_1_6_4",
   "//third-party:slip10_ed25519_0_1_3",
   "//third-party:tiny-bip39_1_0_0"
@@ -24,11 +24,11 @@ rust_library(
     deps = deps,
     env = {
         "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_NAME": "sui-keys",
+        "CARGO_PKG_DESCRIPTION": "",
+        "OUT_DIR": "",
         "CARGO_PKG_VERSION": "0.0.0",
         "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
-        "CARGO_PKG_NAME": "sui-keys",
-        "OUT_DIR": "",
-        "CARGO_PKG_DESCRIPTION": "",
     },
     crate_root = "src/lib.rs",
     edition = "2021",

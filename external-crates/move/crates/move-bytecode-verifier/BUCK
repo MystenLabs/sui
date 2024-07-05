@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -21,10 +21,10 @@ rust_library(
     env = {
         "CARGO_MANIFEST_DIR": "",
         "CARGO_PKG_VERSION": "0.1.0",
-        "OUT_DIR": "",
-        "CARGO_PKG_DESCRIPTION": "Move bytecode verifier",
-        "CARGO_PKG_NAME": "move-bytecode-verifier",
         "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_PKG_NAME": "move-bytecode-verifier",
+        "CARGO_PKG_DESCRIPTION": "Move bytecode verifier",
+        "OUT_DIR": "",
     },
     crate_root = "src/lib.rs",
     edition = "2021",

@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -27,12 +27,12 @@ rust_library(
         "webpki": "//third-party:rustls-webpki_0_101_7",
     },
     env = {
-        "CARGO_PKG_NAME": "sui-tls",
-        "CARGO_PKG_DESCRIPTION": "tools for rustls-based certificate generation and verification",
         "CARGO_PKG_VERSION": "0.0.0",
-        "CARGO_PKG_AUTHORS": "[Brandon Williams <brandon@mystenlabs.com>]",
-        "OUT_DIR": "",
         "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_DESCRIPTION": "tools for rustls-based certificate generation and verification",
+        "CARGO_PKG_AUTHORS": "[Brandon Williams <brandon@mystenlabs.com>]",
+        "CARGO_PKG_NAME": "sui-tls",
+        "OUT_DIR": "",
     },
     crate_root = "src/lib.rs",
     edition = "2021",

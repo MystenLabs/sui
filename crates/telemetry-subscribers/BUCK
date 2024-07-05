@@ -1,5 +1,5 @@
 
-# Generated on Tue, 21 May 2024 20:02:41 +0000
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
 # !buckify
 # code within the buckify block will be auto-replaced when buckify is run
 deps = [
@@ -30,11 +30,11 @@ rust_library(
     srcs = glob(["**/*"]),
     deps = deps,
     env = {
+        "OUT_DIR": "",
         "CARGO_MANIFEST_DIR": "",
         "CARGO_PKG_AUTHORS": "[Evan Chan <echan@mystenlabs.com>]",
-        "OUT_DIR": "",
-        "CARGO_PKG_DESCRIPTION": "Library for common telemetry and observability functionality",
         "CARGO_PKG_NAME": "telemetry-subscribers",
+        "CARGO_PKG_DESCRIPTION": "Library for common telemetry and observability functionality",
         "CARGO_PKG_VERSION": "0.2.0",
     },
     crate_root = "src/lib.rs",
@@ -59,14 +59,14 @@ rust_binary(
         "import-trace": ":import-trace",
     },
     env = {
-        "CARGO_PKG_BIN": "telemetry-subscribers",
-        "CARGO_PKG_DESCRIPTION": "Library for common telemetry and observability functionality",
+        "CARGO_BIN_NAME": "telemetry-subscribers",
         "OUT_DIR": "",
-        "CARGO_PKG_NAME": "telemetry-subscribers",
-        "CARGO_PKG_AUTHORS": "[Evan Chan <echan@mystenlabs.com>]",
         "CARGO_PKG_VERSION": "0.2.0",
         "CARGO_MANIFEST_DIR": "",
-        "CARGO_BIN_NAME": "telemetry-subscribers",
+        "CARGO_PKG_NAME": "telemetry-subscribers",
+        "CARGO_PKG_AUTHORS": "[Evan Chan <echan@mystenlabs.com>]",
+        "CARGO_PKG_DESCRIPTION": "Library for common telemetry and observability functionality",
+        "CARGO_PKG_BIN": "telemetry-subscribers",
     },
     crate_root = "src/bin/import-trace.rs",
     features = [
