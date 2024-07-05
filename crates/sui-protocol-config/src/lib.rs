@@ -151,26 +151,12 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             std::config native functions.
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
 //             Enable soft bundle in devnet and testnet.
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 //             Core macro visibility in sui core framework.
 //             Enable Mysticeti on mainnet.
 //             Turn on count based shared object congestion control in devnet.
 // Version 53: Enable consensus commit prologue V3 in testnet.
 //             Enable enums on testnet.
-
-=======
-=======
-=======
->>>>>>> f61fc7319c (rebase)
->>>>>>> 43070af820 (rebase)
 //             Add support for passkey in devnet.
->>>>>>> 76a6eb2f98 (add protocol config, simtest)
-=======
-//             Add support for passkey in devnet.
-
->>>>>>> 7bb7af4712 (rebase after another feature)
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -2490,10 +2476,6 @@ impl ProtocolConfig {
                             PerObjectCongestionControlMode::TotalTxCount;
                     }
 
-                    if chain != Chain::Testnet && chain != Chain::Mainnet {
-                        cfg.feature_flags.passkey_auth = true;
-                    }
-
                     cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
                 }
                 53 => {
@@ -2504,10 +2486,15 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
                     }
+<<<<<<< HEAD
 
                     // Turn on enums in testnet and devnet
                     if chain != Chain::Mainnet {
                         cfg.move_binary_format_version = Some(7);
+=======
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.passkey_auth = true;
+>>>>>>> 5f83522619 (rebase 0705)
                     }
                 }
                 // Use this template when making changes:
