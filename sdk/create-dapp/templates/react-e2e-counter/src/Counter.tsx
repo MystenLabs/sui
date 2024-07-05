@@ -24,7 +24,7 @@ export function Counter({ id }: { id: string }) {
           showEffects: true,
         },
       }),
-  });	
+  });
   const { data, isPending, error, refetch } = useSuiClientQuery("getObject", {
     id,
     options: {

@@ -21,7 +21,7 @@ export function CreateCounter({
           showEffects: true,
         },
       }),
-  });	
+  });
 
   return (
     <Container>
