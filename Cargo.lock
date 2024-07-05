@@ -12393,7 +12393,6 @@ dependencies = [
  "tap",
  "telemetry-subscribers",
  "tempfile",
- "test-cluster",
  "test-fuzz",
  "thiserror",
  "tokio",
