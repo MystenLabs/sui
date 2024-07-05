@@ -177,14 +177,19 @@ impl Query {
 
     /// Look up an Owner by its SuiAddress.
     ///
-    /// `root_version` represents the version of the root object in some nested chain of dynamic
+    /// `rootVersion` represents the version of the root object in some nested chain of dynamic
     /// fields. It allows consistent historical queries for the case of wrapped objects, which don't
     /// have a version. For example, if querying the dynamic field of a table wrapped in a parent
     /// object, passing the parent object's version here will ensure we get the dynamic field's
     /// state at the moment that parent's version was created.
     ///
-    /// If `root_version` is left null, dynamic fields will be from a consistent snapshot of
-    /// the Sui state at the latest checkpoint known to the GraphQL RPC.
+    /// Also, if this Owner is an object itself, `rootVersion` will be used to bound its version
+    /// from above when querying `Owner.asObject`. This can be used, for example, to get the
+    /// contents of a dynamic object field when its parent was at `rootVersion`.
+    ///
+    /// If `rootVersion` is left null, dynamic fields will be from a consistent snapshot of
+    /// the Sui state at the latest checkpoint known to the GraphQL RPC. Similarly,
+    /// `Owner.asObject` will return the object's version at the latest checkpoint.
     async fn owner(
         &self,
         ctx: &Context<'_>,

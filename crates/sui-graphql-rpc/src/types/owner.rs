@@ -35,6 +35,9 @@ pub(crate) struct Owner {
     /// `Parent >= DOF1, DOF2` but `DOF1 < DOF2`. Thus, database queries for dynamic fields must
     /// bound the object versions by the version of the root object of the tree.
     ///
+    /// Also, if this Owner is an object itself, `root_version` will be used to bound its version
+    /// from above in [`Owner::as_object`].
+    ///
     /// Essentially, lamport timestamps of objects are updated for all top-level mutable objects
     /// provided as inputs to a transaction as well as any mutated dynamic child objects. However,
     /// any dynamic child objects that were loaded but not actually mutated don't end up having
@@ -248,7 +251,10 @@ impl Owner {
         Object::query(
             ctx,
             self.address,
-            Object::latest_at(self.checkpoint_viewed_at),
+            object::ObjectLookup::LatestAt {
+                parent_version: self.root_version,
+                checkpoint_viewed_at: self.checkpoint_viewed_at,
+            },
         )
         .await
         .extend()
