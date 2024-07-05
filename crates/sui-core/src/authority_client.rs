@@ -260,9 +260,15 @@ pub fn make_network_authority_clients_with_network_config(
                 SuiError::from("Missing network metadata in CommitteeWithNetworkMetadata")
             })?
             .network_address;
-        let channel = network_config
-            .connect_lazy(address)
-            .map_err(|err| anyhow!(err.to_string()))?;
+        let address = address.rewrite_udp_to_tcp();
+        let channel = network_config.connect_lazy(&address).map_err(|e| {
+            tracing::error!(
+                address = %address,
+                name = %name,
+                "unable to create authority client: {e}"
+            );
+            anyhow!(e.to_string())
+        })?;
         let client = NetworkAuthorityClient::new(channel);
         authority_clients.insert(*name, client);
     }

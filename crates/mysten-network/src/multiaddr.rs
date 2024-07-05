@@ -179,6 +179,20 @@ impl Multiaddr {
         }
         None
     }
+
+    pub fn rewrite_udp_to_tcp(&self) -> Self {
+        let mut new = Self::empty();
+
+        for component in self.iter() {
+            if let Protocol::Udp(port) = component {
+                new.push(Protocol::Tcp(port));
+            } else {
+                new.push(component);
+            }
+        }
+
+        new
+    }
 }
 
 impl std::fmt::Display for Multiaddr {
