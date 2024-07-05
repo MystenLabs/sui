@@ -242,7 +242,7 @@ pub fn make_network_authority_clients_with_network_config(
                 name = %name,
                 "unable to create authority client: {e}"
             );
-            anyhow!(err.to_string())
+            anyhow!(e.to_string())
         })?;
         let client = NetworkAuthorityClient::new(channel);
         authority_clients.insert(*name, client);
