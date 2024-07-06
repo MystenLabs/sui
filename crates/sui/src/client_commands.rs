@@ -863,13 +863,13 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
 
-                let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let package_path =
                     package_path
                         .canonicalize()
                         .map_err(|e| SuiError::ModulePublishFailure {
                             error: format!("Failed to canonicalize package path: {}", e),
                         })?;
+                let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
                     sui_package_management::set_package_id(
                         &package_path,
@@ -971,6 +971,12 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
 
+                let package_path =
+                    package_path
+                        .canonicalize()
+                        .map_err(|e| SuiError::ModulePublishFailure {
+                            error: format!("Failed to canonicalize package path: {}", e),
+                        })?;
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
                     sui_package_management::set_package_id(
@@ -982,12 +988,6 @@ impl SuiClientCommands {
                 } else {
                     None
                 };
-                let package_path =
-                    package_path
-                        .canonicalize()
-                        .map_err(|e| SuiError::ModulePublishFailure {
-                            error: format!("Failed to canonicalize package path: {}", e),
-                        })?;
                 let compile_result = compile_package(
                     client.read_api(),
                     build_config.clone(),
