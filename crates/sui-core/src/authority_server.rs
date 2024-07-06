@@ -798,7 +798,7 @@ impl ValidatorService {
         fp_ensure!(
             !epoch_store.is_any_tx_certs_consensus_message_processed(certificates.iter())?,
             SuiError::UserInputError {
-                error: UserInputError::CeritificateAlreadyProcessed
+                error: UserInputError::CertificateAlreadyProcessed
             }
             .into()
         );

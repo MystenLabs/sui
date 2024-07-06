@@ -104,7 +104,7 @@ pub enum UserInputError {
         current_version: SequenceNumber,
     },
     #[error("Package verification failed: {err:?}")]
-    PackageVerificationTimedout { err: String },
+    PackageVerificationTimeout { err: String },
     #[error("Dependent package not found on-chain: {package_id:?}")]
     DependentPackageNotFound { package_id: ObjectID },
     #[error("Mutable parameter provided, immutable parameter expected")]
@@ -269,7 +269,7 @@ pub enum UserInputError {
     #[error("Transaction {:?} in Soft Bundle has already been executed", digest)]
     AlreadyExecutedError { digest: TransactionDigest },
     #[error("At least one certificate in Soft Bundle has already been processed")]
-    CeritificateAlreadyProcessed,
+    CertificateAlreadyProcessed,
     #[error(
         "Gas price for transaction {:?} in Soft Bundle mismatch: want {:?}, have {:?}",
         digest,
