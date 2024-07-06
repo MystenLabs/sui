@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::net::IpAddr;
 use std::time::SystemTime;
 use std::{net::SocketAddr, sync::Arc};
 use sui_types::traffic_control::RemoteFirewallConfig;
@@ -21,7 +22,9 @@ use serde_json::value::RawValue;
 use sui_core::traffic_controller::{
     metrics::TrafficControllerMetrics, policies::TrafficTally, TrafficController,
 };
+use sui_types::traffic_control::ClientIdSource;
 use sui_types::traffic_control::{PolicyConfig, Weight};
+use tracing::error;
 
 use crate::routing_layer::RpcRouter;
 use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
@@ -39,6 +42,7 @@ pub struct JsonRpcService<L> {
     methods: Methods,
     rpc_router: RpcRouter,
     traffic_controller: Option<Arc<TrafficController>>,
+    client_id_source: Option<ClientIdSource>,
 }
 
 impl<L> JsonRpcService<L> {
@@ -55,13 +59,14 @@ impl<L> JsonRpcService<L> {
             rpc_router,
             logger,
             id_provider: Arc::new(RandomIntegerIdProvider),
-            traffic_controller: policy_config.map(|policy| {
+            traffic_controller: policy_config.clone().map(|policy| {
                 Arc::new(TrafficController::spawn(
                     policy,
                     traffic_controller_metrics,
                     remote_fw_config,
                 ))
             }),
+            client_id_source: policy_config.map(|policy| policy.client_id_source),
         }
     }
 }
@@ -139,11 +144,23 @@ async fn process_raw_request<L: Logger>(
     raw_request: &str,
     client_addr: SocketAddr,
 ) -> MethodResponse {
+    let client = match service.client_id_source {
+        Some(ClientIdSource::SocketAddr) => Some(client_addr.ip()),
+        Some(ClientIdSource::XForwardedFor) => {
+            // TODO - implement this later. Will need to read header at axum layer.
+            error!(
+                "X-Forwarded-For client ID source not yet supported on json \
+                rpc servers. Skipping traffic controller request handling.",
+            );
+            None
+        }
+        None => None,
+    };
     if let Ok(request) = serde_json::from_str::<Request>(raw_request) {
         // check if either IP is blocked, in which case return early
         if let Some(traffic_controller) = &service.traffic_controller {
             if let Err(blocked_response) =
-                handle_traffic_req(traffic_controller.clone(), client_addr).await
+                handle_traffic_req(traffic_controller.clone(), &client).await
             {
                 return blocked_response;
             }
@@ -152,7 +169,7 @@ async fn process_raw_request<L: Logger>(
 
         // handle response tallying
         if let Some(traffic_controller) = &service.traffic_controller {
-            handle_traffic_resp(traffic_controller.clone(), client_addr, &response);
+            handle_traffic_resp(traffic_controller.clone(), client, &response);
         }
         response
     } else if let Ok(_batch) = serde_json::from_str::<Vec<&RawValue>>(raw_request) {
@@ -168,9 +185,9 @@ async fn process_raw_request<L: Logger>(
 
 async fn handle_traffic_req(
     traffic_controller: Arc<TrafficController>,
-    client_ip: SocketAddr,
+    client: &Option<IpAddr>,
 ) -> Result<(), MethodResponse> {
-    if !traffic_controller.check(Some(client_ip.ip()), None).await {
+    if !traffic_controller.check(client, &None).await {
         // Entity in blocklist
         let err_obj =
             ErrorObject::borrowed(ErrorCode::ServerIsBusy.code(), &TOO_MANY_REQUESTS_MSG, None);
@@ -182,13 +199,13 @@ async fn handle_traffic_req(
 
 fn handle_traffic_resp(
     traffic_controller: Arc<TrafficController>,
-    client_ip: SocketAddr,
+    client: Option<IpAddr>,
     response: &MethodResponse,
 ) {
     let error = response.error_code.map(ErrorCode::from);
     traffic_controller.tally(TrafficTally {
-        connection_ip: Some(client_ip.ip()),
-        proxy_ip: None,
+        direct: client,
+        through_fullnode: None,
         error_weight: error.map(normalize).unwrap_or(Weight::zero()),
         timestamp: SystemTime::now(),
     });
