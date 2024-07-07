@@ -283,9 +283,14 @@ impl TransactionBlock {
 
         use transactions::dsl as tx;
 
-        let (prev, next, transactions, tx_bounds): (bool, bool, Vec<StoredTransaction>, TxBounds) =
-            db.execute_repeatable(move |conn| {
-                let tx_bounds = TxBounds::query(
+        let (prev, next, transactions, tx_bounds): (
+            bool,
+            bool,
+            Vec<StoredTransaction>,
+            Option<TxBounds>,
+        ) = db
+            .execute_repeatable(move |conn| {
+                let Some(tx_bounds) = TxBounds::query(
                     conn,
                     filter.after_checkpoint,
                     filter.at_checkpoint,
@@ -293,7 +298,10 @@ impl TransactionBlock {
                     checkpoint_viewed_at,
                     scan_limit,
                     &page,
-                )?;
+                )?
+                else {
+                    return Ok::<_, diesel::result::Error>((false, false, Vec::new(), None));
+                };
 
                 println!("filter: {:?}", filter);
                 println!("tx_bounds: {:?}", tx_bounds);
@@ -334,7 +342,7 @@ impl TransactionBlock {
                     (prev, next, transactions)
                 };
 
-                Ok::<_, diesel::result::Error>((prev, next, transactions, tx_bounds))
+                Ok::<_, diesel::result::Error>((prev, next, transactions, Some(tx_bounds)))
             })
             .await?;
 
@@ -343,6 +351,10 @@ impl TransactionBlock {
         // result but a user is still able to paginate forward and backwards?
 
         let mut conn = Connection::new(prev, next);
+
+        let Some(tx_bounds) = tx_bounds else {
+            return Ok(conn);
+        };
 
         for stored in transactions {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();

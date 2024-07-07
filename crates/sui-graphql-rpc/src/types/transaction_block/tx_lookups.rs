@@ -68,7 +68,9 @@ impl TxBounds {
     /// between `after_cp` and `at_cp`, and the smallest among `before_cp`, `at_cp`, and
     /// `checkpoint_viewed_at`. By incrementing `after` by 1 and decrementing `before` by 1, we can
     /// construct the tx_sequence_number equivalent by selecting the smallest `tx_sequence_number`
-    /// from `lo_cp` and the largest `tx_sequence_number` from `hi_cp`.
+    /// from `lo_cp` and the largest `tx_sequence_number` from `hi_cp`. Finally, cursors and the
+    /// scan limit are applied. If the after cursor exceeds rhs, or before cursor is below lhs, or
+    /// other inconsistency, return None.
     pub(crate) fn query(
         conn: &mut Conn,
         after_cp: Option<u64>,
@@ -77,7 +79,7 @@ impl TxBounds {
         checkpoint_viewed_at: u64,
         scan_limit: Option<u64>,
         page: &Page<Cursor>,
-    ) -> Result<Self, diesel::result::Error> {
+    ) -> Result<Option<Self>, diesel::result::Error> {
         let lo_cp = max_option!(after_cp.map(|x| x.saturating_add(1)), at_cp).unwrap_or(0);
         let hi_cp = min_option!(
             before_cp.map(|x| x.saturating_sub(1)),
@@ -105,14 +107,20 @@ impl TxBounds {
             page.is_from_front()
         );
 
-        Ok(Self::new(
+        if page.after().map_or(false, |x| x.tx_sequence_number >= hi)
+            || page.before().map_or(false, |x| x.tx_sequence_number <= lo)
+        {
+            return Ok(None);
+        }
+
+        Ok(Some(Self::new(
             lo,
             hi,
             page.after().map(|x| x.tx_sequence_number),
             page.before().map(|x| x.tx_sequence_number),
             scan_limit,
             page.is_from_front(),
-        ))
+        )))
     }
 
     /// The lower bound tx_sequence_number to scan within. This defaults to the min
