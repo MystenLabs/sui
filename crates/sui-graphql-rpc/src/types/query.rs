@@ -13,6 +13,7 @@ use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
 use super::suins_registration::NameService;
+use super::uint::UInt;
 use super::{
     address::Address,
     available_range::AvailableRange,
@@ -189,14 +190,16 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         address: SuiAddress,
-        version: Option<u64>,
+        version: Option<UInt>,
     ) -> Result<Option<Object>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
         match version {
-            Some(version) => Object::query(ctx, address, Object::at_version(version, checkpoint))
-                .await
-                .extend(),
+            Some(version) => {
+                Object::query(ctx, address, Object::at_version(version.into(), checkpoint))
+                    .await
+                    .extend()
+            }
             None => Object::query(ctx, address, Object::latest_at(checkpoint))
                 .await
                 .extend(),
@@ -224,9 +227,11 @@ impl Query {
     }
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
-    async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
+    async fn epoch(&self, ctx: &Context<'_>, id: Option<UInt>) -> Result<Option<Epoch>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
-        Epoch::query(ctx, id, checkpoint).await.extend()
+        Epoch::query(ctx, id.map(|id| id.into()), checkpoint)
+            .await
+            .extend()
     }
 
     /// Fetch checkpoint information by sequence number or digest (defaults to the latest available
@@ -378,9 +383,9 @@ impl Query {
     async fn protocol_config(
         &self,
         ctx: &Context<'_>,
-        protocol_version: Option<u64>,
+        protocol_version: Option<UInt>,
     ) -> Result<ProtocolConfigs> {
-        ProtocolConfigs::query(ctx.data_unchecked(), protocol_version)
+        ProtocolConfigs::query(ctx.data_unchecked(), protocol_version.map(|v| v.into()))
             .await
             .extend()
     }

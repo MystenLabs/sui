@@ -31,7 +31,7 @@ pub(crate) struct ShowUsage;
 #[derive(Clone, Debug, Default)]
 struct ValidationRes {
     input_nodes: u32,
-    output_nodes: u64,
+    output_nodes: u32,
     depth: u32,
     num_variables: u32,
     num_fragments: u32,
@@ -73,7 +73,7 @@ impl ExtensionFactory for QueryLimitsChecker {
 #[derive(Debug)]
 struct ComponentCost {
     pub input_nodes: u32,
-    pub output_nodes: u64,
+    pub output_nodes: u32,
     pub depth: u32,
 }
 
@@ -234,7 +234,7 @@ impl QueryLimitsChecker {
         // Use BFS to analyze the query and count the number of nodes and the depth of the query
         struct ToVisit<'s> {
             selection: &'s Positioned<Selection>,
-            parent_node_count: u64,
+            parent_node_count: u32,
         }
 
         // Queue to store the nodes at each level
@@ -431,8 +431,8 @@ fn check_directives(directives: &[Positioned<Directive>]) -> ServerResult<()> {
 fn estimate_output_nodes_for_curr_node(
     f: &Positioned<Field>,
     variables: &Variables,
-    default_page_size: u64,
-) -> u64 {
+    default_page_size: u32,
+) -> u32 {
     if !is_connection(f) {
         1
     } else {
@@ -447,10 +447,10 @@ fn estimate_output_nodes_for_curr_node(
 }
 
 /// Try to extract a u64 value from the given argument, or return None on failure.
-fn extract_limit(value: Option<&Positioned<GqlValue>>, variables: &Variables) -> Option<u64> {
+fn extract_limit(value: Option<&Positioned<GqlValue>>, variables: &Variables) -> Option<u32> {
     if let GqlValue::Variable(var) = &value?.node {
         return match variables.get(var) {
-            Some(Value::Number(num)) => num.as_u64(),
+            Some(Value::Number(num)) => num.as_u64().map(|v| v as u32),
             _ => None,
         };
     }
@@ -458,7 +458,7 @@ fn extract_limit(value: Option<&Positioned<GqlValue>>, variables: &Variables) ->
     let GqlValue::Number(value) = &value?.node else {
         return None;
     };
-    value.as_u64()
+    value.as_u64().map(|v| v as u32)
 }
 
 /// Checks if the given field is a connection field by whether it has 'edges' or 'nodes' selected.
