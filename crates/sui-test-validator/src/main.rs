@@ -14,15 +14,10 @@ How to install/build the sui binary IF:
         - cargo run --bin sui -- start --with-faucet --force-regenesis --with-indexer --with-graphql
 
 Running the local network:
- - In the simplest form, you can replace sui-test-validator with sui start --with-faucet --force-regenesis. This will create a network from a new genesis and start a faucet (127.0.0.1:9123). This will not persist state.
- - Use sui start --help to get all the flags and options.
+ - (Preferred) In the simplest form, you can replace sui-test-validator with sui start --with-faucet --force-regenesis. This will create a network from a new genesis and start a faucet (127.0.0.1:9123). This will not persist state.
  - Use the drop-in replacement script: sui/scripts/sui-test-validator.sh and pass in all the flags/options as you used to.
 
-If you used to use sui start before, the behavior is preserved so it should keep working as it used to.
-
-We recommend to migrate to using sui start instead of using the script. To do so, use sui start \
---help to see all the flags and options. You can also use the following options to start the local \
-network with more features:
+Use sui start --help to see all the flags and options, such as:
   * --with-indexer --> to start the indexer on the default host and port. Note that this requires \
 a Postgres database to be running locally, or you need to set the different options to connect to a \
 remote indexer database.
