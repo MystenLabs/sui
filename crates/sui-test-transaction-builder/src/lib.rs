@@ -6,9 +6,7 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
 use sui_move_build::{BuildConfig, CompiledPackage};
-use sui_sdk::rpc_types::{
-    get_new_package_obj_from_response, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-};
+use sui_sdk::rpc_types::{get_new_package_obj_from_response, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair, Signature, Signer};
@@ -17,6 +15,7 @@ use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
+use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
     CallArg, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
@@ -24,6 +23,7 @@ use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::object::Owner::Shared;
 
 pub struct TestTransactionBuilder {
     test_data: TestTransactionData,
@@ -605,6 +605,40 @@ pub async fn increment_counter(
     );
     context.execute_transaction_must_succeed(txn).await
 }
+
+/// Executes a transaction that generates a new random u128 using Random and emits it as an event.
+pub async fn emit_new_random_u128(
+    context: &WalletContext,
+    package_id: ObjectID,
+) -> SuiTransactionBlockResponse {
+    let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+    let rgp = context.get_reference_gas_price().await.unwrap();
+
+    let client = context.get_client().await.unwrap();
+    let random_obj = client
+        .read_api()
+        .get_object_with_options(SUI_RANDOMNESS_STATE_OBJECT_ID, SuiObjectDataOptions::new().with_owner())
+        .await
+        .unwrap()
+        .into_object()
+        .unwrap();
+    let random_obj_owner = random_obj.owner.expect("Expect Randomness object to have an owner");
+
+    let Shared { initial_shared_version } = random_obj_owner else { panic!("Expect Randomness to be shared object") };
+    let random_call_arg = CallArg::Object(ObjectArg::SharedObject {
+        id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+        initial_shared_version,
+        mutable: false,
+    });
+
+    let txn = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas_object, rgp)
+            .move_call(package_id, "random", "new", vec![random_call_arg])
+            .build(),
+    );
+    context.execute_transaction_must_succeed(txn).await
+}
+
 
 /// Executes a transaction to publish the `nfts` package and returns the package id, id of the gas
 /// object used, and the digest of the transaction.
