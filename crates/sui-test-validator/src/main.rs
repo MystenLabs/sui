@@ -6,7 +6,7 @@ fn main() {
 
 How to install/build the sui binary IF:
     A: you only need the basic functionality, so just faucet and no persistence (no indexer, no GraphQL service), build from source as usual (cargo build --bin sui) or download latest archive from release archives (starting from testnet v1.28.1 or devnet v1.29) and use sui binary.
-    B: you need to also start an indexer (--with-indexer ), or a graphql service (--with-graphql), you either:
+    B: you need to also start an indexer (--with-indexer ), or a GraphQL service (--with-graphql), you either:
     - download latest archive from release archives (starting from testnet v1.28.1 or devnet v1.29) and use sui-pg binary.
   OR
     - build from source. This requires passing the indexer feature when building the sui binary, as well as having libpq/postgresql dependencies installed (just as when using sui-test-validator):
