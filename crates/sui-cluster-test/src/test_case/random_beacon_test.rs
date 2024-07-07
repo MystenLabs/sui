@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{TestCaseImpl, TestContext};
-use anyhow::Error;
 use async_trait::async_trait;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_sdk::wallet_context::WalletContext;
@@ -68,6 +67,6 @@ impl RandomBeaconTest {
     async fn is_beacon_enabled(wallet_context: &WalletContext) -> bool {
         let client = wallet_context.get_client().await.unwrap();
         let config = client.read_api().get_protocol_config(None).await.unwrap();
-        config.feature_flags.get("random_beacon").unwrap()
+        *config.feature_flags.get("random_beacon").unwrap()
     }
 }
