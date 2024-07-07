@@ -129,7 +129,7 @@ async fn main() -> Result<()> {
         pg_address: with_indexer.then_some(format!(
             "postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}"
         )),
-        faucet_address: Some(format!("127.0.0.1:{}", faucet_port)),
+        faucet_address: Some(format!("{}", faucet_addr)),
         epoch_duration_ms,
         config_dir,
         graphql_address: graphql_port.map(|p| format!("{}:{}", graphql_host, p)),

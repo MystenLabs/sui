@@ -166,8 +166,8 @@ impl LocalNewCluster {
 #[async_trait]
 impl Cluster for LocalNewCluster {
     async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
-        let fullnode_address = options.fullnode_address.as_ref().map(|addr| {
         let data_ingestion_path = tempdir()?.into_path();
+        let fullnode_address = options.fullnode_address.as_ref().map(|addr| {
             addr.parse::<SocketAddr>()
                 .expect("Unable to parse fullnode address")
         });
