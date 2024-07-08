@@ -21,10 +21,10 @@ if [ -z "$1" ]; then
     echo "Error: No environment provided."
     exit 1
 fi
-ENV=$1
+ENV=$1; shift
 $SUI client switch --env $ENV
 
-PUBLISH=$($SUI client publish --json ../move)
+PUBLISH=$($SUI client publish ../move --json $@)
 
 STATUS=$(
     echo $PUBLISH |
