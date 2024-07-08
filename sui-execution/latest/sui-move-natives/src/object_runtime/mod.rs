@@ -432,14 +432,14 @@ impl<'a> ObjectRuntime<'a> {
         }
     }
 
-    pub(super) fn config_setting_cache_insert(
+    pub(super) fn config_setting_cache_update(
         &mut self,
         config_id: ObjectID,
         name_df_id: ObjectID,
         setting_value_object_type: MoveObjectType,
-        value: Value,
+        value: Option<Value>,
     ) {
-        self.child_object_store.config_setting_cache_insert(
+        self.child_object_store.config_setting_cache_update(
             config_id,
             name_df_id,
             setting_value_object_type,
