@@ -127,6 +127,7 @@ html[data-theme=dark] {
   background-color: var(--ifm-navbar-background-color);
 }
 
+/* Targeting the docusaurus theme switch */
 button[title^="Switch between dark and light mode"] {
   @apply !text-white hover:bg-sui-blue-primary
 }
@@ -338,6 +339,7 @@ h4 {
   margin-top: 1rem;
 }
 
+/*Targeting the search container so that the "start here" button displays alongside the search bar*/
 [class^="navbarSearchContainer"] {
   @apply min-[997px]:flex min-[997px]:gap-4
 }
