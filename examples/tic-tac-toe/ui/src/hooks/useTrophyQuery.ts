@@ -28,7 +28,7 @@ const REFETCH_INTERVAL = 5000;
  * depends on the value of `kind` (will not be enabled unless `kind`
  * is available).
  */
-export function useTrophyQuery(game?: Game): [UseTrophyQueryResponse, InvalidateTrophy] {
+export function useTrophyQuery(game?: Game): [UseTrophyQueryResponse, InvalidateTrophyQuery] {
 	const client = useSuiClient();
 	const queryClient = useQueryClient();
 	const tx = useTransactions()!!;
