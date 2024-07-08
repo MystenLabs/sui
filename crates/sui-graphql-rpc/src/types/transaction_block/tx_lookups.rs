@@ -192,9 +192,9 @@ impl TxBounds {
 }
 
 impl TransactionBlockFilter {
-    /// A TransactionBlockFilter has complex filters if it has at least one of `function`, `kind`,
-    /// `recv_address`, `input_object`, and `changed_object`.
-    pub(crate) fn has_complex_filters(&self) -> bool {
+    /// Returns the count of `function`, `kind`, `recv_address`, `input_object`, and
+    /// `changed_object`.
+    pub(crate) fn complex_filters(&self) -> usize {
         [
             self.function.is_some(),
             self.kind.is_some(),
@@ -205,7 +205,6 @@ impl TransactionBlockFilter {
         .iter()
         .filter(|&is_set| *is_set)
         .count()
-            > 0
     }
 
     /// A TransactionBlockFilter is considered not to have any filters if no filters are specified,
@@ -334,7 +333,7 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
         ));
     }
     if let Some(sender) = &sender {
-        if !filter.has_complex_filters() || filter.kind.is_some() {
+        if filter.complex_filters() == 0 || filter.kind.is_some() {
             subqueries.push((select_sender(sender, tx_bounds), "tx_senders"));
         }
     }

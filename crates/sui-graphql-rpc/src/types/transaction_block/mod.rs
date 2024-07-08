@@ -278,7 +278,11 @@ impl TransactionBlock {
             return Ok(Connection::new(false, false));
         }
 
-        if filter.has_complex_filters() && scan_limit.is_none() {
+        // If there is more than one `complex_filter` specified, then the caller has provided some
+        // arbitrary combination of `function`, `kind`, `recvAddress`, `inputObject`, or
+        // `changedObject`. Consequently, we require setting a `scanLimit`, or else we will return
+        // an error.
+        if filter.complex_filters() >= 2 && scan_limit.is_none() {
             return Err(Error::Client(
                 "A scan limit must be specified for filter combinations involving `function`, `kind`, `recvAddress`, `inputObject`, or `changedObject`".to_string(),
             ));
