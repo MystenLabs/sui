@@ -710,21 +710,32 @@ impl StateAccumulatorV2 {
             // bootstrap from the previous epoch's root state hash. Because this
             // should only occur at beginning of epoch, we shouldn't have to worry
             // about race conditions on reading the highest running root accumulator.
-            let (prev_epoch, (last_checkpoint_prev_epoch, prev_acc)) = self
-                .store
-                .get_root_state_accumulator_for_highest_epoch()?
-                .expect("Expected root state hash for previous epoch to exist");
-            if last_checkpoint_prev_epoch != checkpoint_seq_num - 1 {
+            if let Some((prev_epoch, (last_checkpoint_prev_epoch, prev_acc))) =
+                self.store.get_root_state_accumulator_for_highest_epoch()?
+            {
+                if last_checkpoint_prev_epoch != checkpoint_seq_num - 1 {
+                    epoch_store
+                        .notify_read_running_root(checkpoint_seq_num - 1)
+                        .await?
+                } else {
+                    assert_eq!(
+                        prev_epoch + 1,
+                        epoch_store.epoch(),
+                        "Expected highest existing root state hash to be for previous epoch",
+                    );
+                    prev_acc
+                }
+            } else {
+                // Rare edge case where we manage to somehow lag in checkpoint execution from genesis
+                // such that the end of epoch checkpoint is built before we execute any checkpoints.
+                assert_eq!(
+                    epoch_store.epoch(),
+                    0,
+                    "Expected epoch to be 0 if previous root state hash does not exist"
+                );
                 epoch_store
                     .notify_read_running_root(checkpoint_seq_num - 1)
                     .await?
-            } else {
-                assert_eq!(
-                    prev_epoch + 1,
-                    epoch_store.epoch(),
-                    "Expected highest existing root state hash to be for previous epoch",
-                );
-                prev_acc
             }
         } else {
             epoch_store
