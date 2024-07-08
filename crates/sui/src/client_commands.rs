@@ -18,6 +18,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, ensure, Context};
+use axum::http::StatusCode;
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -2524,15 +2525,26 @@ pub async fn request_tokens_from_faucet(
         .json(&json_body)
         .send()
         .await?;
-    if resp.status() == 429 {
-        bail!("Faucet received too many requests from this IP address. Please try again after 60 minutes.");
-    }
-    let faucet_resp: FaucetResponse = resp.json().await?;
 
-    if let Some(err) = faucet_resp.error {
-        bail!("Faucet request was unsuccessful: {err}")
-    } else {
-        println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
+    match resp.status() {
+        StatusCode::ACCEPTED => {
+            let faucet_resp: FaucetResponse = resp.json().await?;
+
+            if let Some(err) = faucet_resp.error {
+                bail!("Faucet request was unsuccessful: {err}")
+            } else {
+                println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
+            }
+        }
+        StatusCode::TOO_MANY_REQUESTS => {
+            bail!("Faucet service received too many requests from this IP address. Please try again after 60 minutes.");
+        }
+        StatusCode::SERVICE_UNAVAILABLE => {
+            bail!("Faucet service is currently overloaded or unavailable. Please try again later.");
+        }
+        status_code => {
+            bail!("Faucet request was unsuccessful: {status_code}");
+        }
     }
     Ok(())
 }
