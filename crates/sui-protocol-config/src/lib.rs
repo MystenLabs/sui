@@ -129,7 +129,7 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             Enable transactions to be signed with zkLogin inside multisig signature.
 //             Add native bridge.
 //             Enable native bridge in devnet
-//             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
+//             Enable Leader Scoring & Schedule Change for Mysticeti consensus on testnet.
 // Version 46: Enable native bridge in testnet
 //             Enable resharing at the same initial shared version.
 // Version 47: Deepbook changes (framework update)
@@ -153,7 +153,9 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
 //             Enable soft bundle in devnet and testnet.
 //             Core macro visibility in sui core framework.
+//             Enable checkpoint batching in mainnet.
 //             Enable Mysticeti on mainnet.
+//             Enable Leader Scoring & Schedule Change for Mysticeti consensus on mainnet.
 //             Turn on count based shared object congestion control in devnet.
 // Version 53: Enable consensus commit prologue V3 in testnet.
 //             Enable enums on testnet.
@@ -2479,7 +2481,15 @@ impl ProtocolConfig {
                             PerObjectCongestionControlMode::TotalTxCount;
                     }
 
+                    // Enable Mysticeti on mainnet.
                     cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
+
+                    // Enable leader scoring & schedule change on mainnet for mysticeti.
+                    cfg.feature_flags.mysticeti_leader_scoring_and_schedule = true;
+
+                    // Enable checkpoint batching on mainnet.
+                    cfg.checkpoint_summary_version_specific_data = Some(1);
+                    cfg.min_checkpoint_interval_ms = Some(200);
                 }
                 53 => {
                     // Enable consensus commit prologue V3 in testnet.
