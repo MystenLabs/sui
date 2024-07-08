@@ -4,6 +4,7 @@
 use crate::{randomness::*, utils};
 use fastcrypto::{groups::bls12381, serde_helpers::ToFromByteArray};
 use fastcrypto_tbls::{mocked_dkg, nodes};
+use std::collections::BTreeSet;
 use sui_swarm_config::test_utils::CommitteeFixture;
 use sui_types::{
     base_types::ConciseableName,
