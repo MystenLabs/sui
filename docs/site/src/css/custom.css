@@ -127,8 +127,12 @@ html[data-theme=dark] {
   background-color: var(--ifm-navbar-background-color);
 }
 
-.navbar-sidebar button[title^="Switch between dark and light mode"] {
+button[title^="Switch between dark and light mode"] {
   @apply !text-white hover:bg-sui-blue-primary
+}
+
+html[data-theme=light] .navbar-sidebar button.clean-btn.menu__caret {
+  @apply bg-sui-gray-65
 }
 
 /** setup global style overrides */
