@@ -12,10 +12,10 @@ module InlayHints::param_hints {
     }
 
     public fun test_mulit_line(s: SomeStruct) {
-        foo(42, 
+        foo(s.some_field + 42,
             s);
     }
-    
+
 
 
 }
