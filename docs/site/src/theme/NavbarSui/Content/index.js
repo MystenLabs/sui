@@ -1,19 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import React from "react";
+import Link from "@docusaurus/Link";
 import { useThemeConfig, ErrorCauseBoundary } from "@docusaurus/theme-common";
 import {
   splitNavbarItems,
   useNavbarMobileSidebar,
 } from "@docusaurus/theme-common/internal";
 import NavbarItem from "@theme/NavbarItem";
-import ThemeToggle from "@site/src/components/ThemeToggle";
-//import NavbarColorModeToggle from "@theme/Navbar/ColorModeToggle";
+import NavbarColorModeToggle from "@theme/Navbar/ColorModeToggle";
 import SearchBar from "@theme/SearchBar";
 import NavbarMobileSidebarToggle from "@theme/Navbar/MobileSidebar/Toggle";
 import NavbarLogo from "@theme/Navbar/Logo";
 import NavbarSearch from "@theme/Navbar/Search";
-import GetStartedLink from "@site/src/components/GetStartedLink";
+import styles from "./styles.module.css";
+import { useLocation } from "@docusaurus/router";
 
 function useNavbarItems() {
   // TODO temporary casting until ThemeConfig type is improved
@@ -21,7 +22,7 @@ function useNavbarItems() {
 }
 function NavbarItems({ items }) {
   return (
-    <div className="flex flex-[8_1_0%] items-center justify-start gap-8 min-[1100px]:gap-16">
+    <div className={styles.navbar__items_wrapper}>
       {items.map((item, i) => (
         <ErrorCauseBoundary
           key={i}
@@ -51,6 +52,7 @@ function NavbarContentLayout({ left, right }) {
 export default function NavbarContent() {
   const mobileSidebar = useNavbarMobileSidebar();
   const items = useNavbarItems();
+  const location = useLocation();
   const [leftItems, rightItems] = splitNavbarItems(items);
   const searchBarItem = items.find((item) => item.type === "search");
   const isHomePage = location.pathname === "/";
@@ -70,11 +72,20 @@ export default function NavbarContent() {
         // Ask the user to add the respective navbar items => more flexible
         <>
           <NavbarItems items={rightItems} />
-          <ThemeToggle />
+          {!isHomePage && (
+            <NavbarColorModeToggle className={styles.colorModeToggle} />
+          )}
           {!searchBarItem && (
             <NavbarSearch>
               <SearchBar />
-              <GetStartedLink />
+              {isHomePage && (
+                <Link
+                  to="/guides#get-started-developing-on-sui"
+                  className="button-cta"
+                >
+                  Get started
+                </Link>
+              )}
             </NavbarSearch>
           )}
         </>
