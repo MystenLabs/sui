@@ -155,6 +155,7 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             Enable Mysticeti on mainnet.
 //             Turn on count based shared object congestion control in devnet.
 // Version 53: Enable consensus commit prologue V3 in testnet.
+//             Enable enums on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2476,6 +2477,11 @@ impl ProtocolConfig {
                             .record_consensus_determined_version_assignments_in_prologue = true;
                         cfg.feature_flags
                             .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
+                    }
+
+                    // Turn on enums in testnet and devnet
+                    if chain != Chain::Mainnet {
+                        cfg.move_binary_format_version = Some(7);
                     }
                 }
                 // Use this template when making changes:
