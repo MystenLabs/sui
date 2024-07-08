@@ -17,8 +17,8 @@ use heuristic_graph_coloring as coloring;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 
-// DEBUG flag for general printing. Defined as a const so the code will be eliminated by the rustc
-// optimizer when debugging is not required.
+/// DEBUG flag for general printing. Defined as a const so the code will be eliminated by the rustc
+/// optimizer when debugging is not required.
 const DEBUG_COALESCE: bool = false;
 
 //**************************************************************************************************
@@ -31,7 +31,7 @@ pub fn optimize(
     infinite_loop_starts: &BTreeSet<Label>,
     locals: UniqueMap<Var, (Mutability, SingleType)>,
     cfg: &mut MutForwardCFG,
-) -> UniqueMap<Var, (Mutability, SingleType)> {
+) -> Option<UniqueMap<Var, (Mutability, SingleType)>> {
     macro_rules! unique_add_or_error {
         ($step:expr, $map:expr, $var:expr, $mut:expr, $ty:expr) => {{
             if let Err(_) = $map.add($var, ($mut, $ty)) {
@@ -40,7 +40,7 @@ pub fn optimize(
                     $var.value(),
                     $step
                 );
-                return locals;
+                return None;
             }
         }};
     }
@@ -59,7 +59,7 @@ pub fn optimize(
                 conflicts::Conflicts::Set(vars) => {
                     let var_string = vars
                         .iter()
-                        .map(|x| format!("{}", x.value()))
+                        .map(|x| format!("{}", x))
                         .collect::<Vec<_>>()
                         .join(", ");
                     println!("{{{}}}", var_string);
@@ -71,38 +71,20 @@ pub fn optimize(
 
     let mut new_locals = UniqueMap::new();
 
-    // Collect everything that is going to keep its name. This currently includes:
-    // - All parameters.
-    // - Anything that is borrowed.
-    // - Anything that is not used, but whose type does not have `drop`.
-    let param_set = signature
-        .parameters
-        .iter()
-        .map(|(_, var, _)| var)
-        .collect::<BTreeSet<_>>();
-    let all_set = locals
-        .key_cloned_iter()
-        .filter_map(|(var, (_mut, ty))| {
-            if param_set.contains(&var)
-                || (!(conflict_graph.used(&var)
-                    || ty.value.abilities(ty.loc).has_ability_(Ability_::Drop)))
-                || matches!(
-                    conflict_graph.get_conflicts(&var),
-                    Some(conflicts::Conflicts::All)
-                )
-            {
-                Some(var)
-            } else {
-                None
-            }
-        })
-        .collect::<BTreeSet<_>>();
+    // Set of things that cannot be coalesced.
+    let uncoalesced_set = uncoalescable_vars(&conflict_graph, &signature.parameters, &locals);
+    if DEBUG_COALESCE {
+        println!(
+            "\n\nuncoalescable: {}",
+            format_oxford_list!("and", "{}", &uncoalesced_set)
+        );
+    }
 
     let mut locals_by_type = BTreeMap::new();
     for (var, (mut_, ty)) in locals.clone().into_iter() {
         // Add the name-retaining variables to the rename map. This also inlcudes all the
         // parameters we've seen.
-        if all_set.contains(&var) {
+        if uncoalesced_set.contains(&var) {
             unique_add_or_error!("all_conflicting", new_locals, var, mut_, ty.clone());
             continue;
         } else {
@@ -115,7 +97,7 @@ pub fn optimize(
 
     // If there are no locals to coalesce, return.
     if locals_by_type.is_empty() {
-        return locals;
+        return None;
     };
 
     let mut rename_map = BTreeMap::new();
@@ -127,19 +109,20 @@ pub fn optimize(
             .enumerate()
             .map(|(n, v)| (*v, n))
             .collect::<BTreeMap<_, _>>();
-        for var in local_set {
-            match conflict_graph.get_conflicts(var) {
-                None => {
-                    continue;
-                }
-                Some(conflicts::Conflicts::Set(vars)) => {
+        for (var, conflict) in local_set.iter().filter_map(|var| {
+            conflict_graph
+                .get_conflicts(var)
+                .map(|conflict| (var, conflict))
+        }) {
+            match conflict {
+                conflicts::Conflicts::Set(vars) => {
                     let index = var_index_map.get(var).unwrap();
                     let relevant_vars = vars.intersection(local_set).collect::<BTreeSet<_>>();
                     for var in relevant_vars {
                         graph.add_edge(*index, *var_index_map.get(var).unwrap());
                     }
                 }
-                Some(conflicts::Conflicts::All) => unreachable!(),
+                conflicts::Conflicts::All => unreachable!(),
             }
         }
 
@@ -208,14 +191,7 @@ pub fn optimize(
         print!("New locals: ");
         println!(
             "{}",
-            format_oxford_list!(
-                "and",
-                "{}",
-                new_locals
-                    .key_cloned_iter()
-                    .map(|(key, _)| key.value())
-                    .collect::<Vec<_>>()
-            )
+            format_oxford_list!("and", "{}", new_locals.key_cloned().collect::<Vec<_>>())
         );
     }
 
@@ -223,14 +199,59 @@ pub fn optimize(
         if DEBUG_COALESCE {
             println!("-- false ---------------------------");
         }
-        locals
+        None
     } else {
         coalesce(cfg, &rename_map);
         if DEBUG_COALESCE {
             println!("-- done (new locals: {:000})--------", new_locals.len());
         }
-        new_locals
+        Some(new_locals)
     }
+}
+
+/// Collect everything that _must_ keep its name, and can't be coalesced. This includes:
+/// - All parameters, as they are not locals.
+/// - Any local that was marked as Conflits::All in the conflict graph, indicating it is
+///   borrowed at some point in the function. We don't have enough information (here) to
+///   determine if coalescing is valid, so we simply do not.
+/// - Any local that is not used, but whose type does not have `drop`. These are things that
+///   should have been dropped by the function, but were not for some reason. In some cases this
+///   is acceptable (if the block ends in an abort), but coalescing will result in attempting to
+///   store to a local with a non-droppable value, which is an error.
+fn uncoalescable_vars(
+    conflict_graph: &conflicts::Graph,
+    parameters: &[(Mutability, Var, SingleType)],
+    locals: &UniqueMap<Var, (Mutability, SingleType)>,
+) -> BTreeSet<Var> {
+    let param_set = parameters
+        .iter()
+        .map(|(_, var, _)| var)
+        .collect::<BTreeSet<_>>();
+
+    let is_param = |var: &Var| param_set.contains(var);
+    let is_borrowed = |var: &Var| {
+        matches!(
+            conflict_graph.get_conflicts(var),
+            Some(conflicts::Conflicts::All)
+        )
+    };
+    let is_unused_without_drop = |var: &Var, ty: &SingleType| {
+        let result =
+            !conflict_graph.used(var) && !ty.value.abilities(ty.loc).has_ability_(Ability_::Drop);
+        if DEBUG_COALESCE && result {
+            println!("{} is unused without drop", var);
+        }
+        result
+    };
+
+    // Set of things that cannot be coalesced.
+    locals
+        .key_cloned_iter()
+        .filter(|(var, (_mut, ty))| {
+            is_param(var) || is_borrowed(var) || is_unused_without_drop(var, ty)
+        })
+        .map(|(var, _)| var)
+        .collect::<BTreeSet<_>>()
 }
 
 //**************************************************************************************************
@@ -284,7 +305,7 @@ mod conflicts {
 
             for (lbl, commands) in cfg.blocks() {
                 let per_command_states = per_command_states.get(lbl).unwrap();
-                assert!(commands.len() == per_command_states.len());
+                assert_eq!(commands.len(), per_command_states.len());
                 for (cmd, lives) in commands.iter().zip(per_command_states) {
                     command(&mut graph, &lives.live_set, cmd);
                 }

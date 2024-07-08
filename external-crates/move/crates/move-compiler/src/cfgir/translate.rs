@@ -11,7 +11,6 @@ use crate::{
     },
     diag,
     diagnostics::Diagnostics,
-    editions::FeatureGate,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName},
@@ -462,7 +461,7 @@ fn constant_(
     full_loc: Loc,
     attributes: &Attributes,
     signature: H::BaseType,
-    locals: UniqueMap<Var, (Mutability, H::SingleType)>,
+    mut locals: UniqueMap<Var, (Mutability, H::SingleType)>,
     body: H::Block,
 ) -> Option<H::Exp> {
     use H::Command_ as C;
@@ -501,11 +500,11 @@ fn constant_(
         "{}",
         ICE_MSG
     );
-    cfgir::optimize(
+    cfgir::optimize::optimize_constant(
         context.env,
         context.current_package,
         &fake_signature,
-        &locals,
+        &mut locals,
         constant_values,
         &mut cfg,
     );
@@ -665,34 +664,15 @@ fn function_body(
             cfgir::refine_inference_and_verify(context.env, &function_context, &mut cfg);
             // do not optimize if there are errors, warnings are okay
             if !context.env.has_errors() {
-                cfgir::optimize(
+                cfgir::optimize::optimize_function(
                     context.env,
                     context.current_package,
                     signature,
-                    &locals,
+                    &infinite_loop_starts,
+                    &mut locals,
                     &UniqueMap::new(),
                     &mut cfg,
                 );
-                if context
-                    .env
-                    .supports_feature(context.current_package, FeatureGate::Move2024Optimizations)
-                {
-                    locals = cfgir::optimize::coalesce_locals::optimize(
-                        signature,
-                        &infinite_loop_starts,
-                        locals,
-                        &mut cfg,
-                    );
-                    cfg.recompute();
-                    cfgir::optimize(
-                        context.env,
-                        context.current_package,
-                        signature,
-                        &locals,
-                        &UniqueMap::new(),
-                        &mut cfg,
-                    );
-                }
             }
 
             let block_info = block_info

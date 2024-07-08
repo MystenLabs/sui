@@ -22,7 +22,6 @@ use crate::{
 use cfg::*;
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
-use optimize::optimize;
 use std::collections::BTreeSet;
 
 pub struct CFGContext<'a> {

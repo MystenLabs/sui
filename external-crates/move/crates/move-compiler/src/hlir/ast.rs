@@ -582,8 +582,13 @@ impl UnannotatedExp_ {
 
     /// Returns the set of variables free in the expression.
     pub fn free_vars(&self) -> BTreeSet<Var> {
-        fn free_vars_recur(set: &mut BTreeSet<Var>, e: &UnannotatedExp_) {
-            use UnannotatedExp_ as UE;
+        use UnannotatedExp_ as UE;
+
+        let mut set = BTreeSet::new();
+
+        let mut work_queue = vec![self];
+
+        while let Some(e) = work_queue.pop() {
             match e {
                 UE::Unit { .. }
                 | UE::Value(_)
@@ -599,11 +604,11 @@ impl UnannotatedExp_ {
                 | UE::Cast(e, _)
                 | UE::Dereference(e)
                 | UE::UnaryExp(_, e) => {
-                    free_vars_recur(set, &e.exp.value);
+                    work_queue.push(&e.exp.value);
                 }
                 UE::BinopExp(e0, _, e1) => {
-                    free_vars_recur(set, &e0.exp.value);
-                    free_vars_recur(set, &e1.exp.value);
+                    work_queue.push(&e0.exp.value);
+                    work_queue.push(&e1.exp.value);
                 }
                 UE::ModuleCall(call) => {
                     let ModuleCall {
@@ -612,23 +617,18 @@ impl UnannotatedExp_ {
                         type_arguments: _,
                         arguments,
                     } = &**call;
-                    arguments
-                        .iter()
-                        .for_each(|e| free_vars_recur(set, &e.exp.value));
+                    arguments.iter().for_each(|e| work_queue.push(&e.exp.value));
                 }
                 UE::Pack(_, _, fields) | UE::PackVariant(_, _, _, fields) => {
                     fields
                         .iter()
-                        .for_each(|(_, _, e)| free_vars_recur(set, &e.exp.value));
+                        .for_each(|(_, _, e)| work_queue.push(&e.exp.value));
                 }
                 UE::Vector(_, _, _, es) | UE::Multiple(es) => {
-                    es.iter().for_each(|e| free_vars_recur(set, &e.exp.value));
+                    es.iter().for_each(|e| work_queue.push(&e.exp.value));
                 }
             }
         }
-
-        let mut set = BTreeSet::new();
-        free_vars_recur(&mut set, self);
         set
     }
 }
@@ -941,6 +941,12 @@ impl std::fmt::Display for Visibility {
 }
 
 impl std::fmt::Display for Label {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for Var {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }

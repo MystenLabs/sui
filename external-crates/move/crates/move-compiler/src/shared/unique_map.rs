@@ -222,6 +222,11 @@ impl<K: TName, V> UniqueMap<K, V> {
         }
         Ok(m)
     }
+
+    pub fn key_cloned(&self) -> impl Iterator<Item = K> + '_ {
+        self.into_iter()
+            .map(|(loc, k_, _)| K::add_loc(loc, k_.clone()))
+    }
 }
 
 impl<K: TName, V: PartialEq> PartialEq for UniqueMap<K, V> {
