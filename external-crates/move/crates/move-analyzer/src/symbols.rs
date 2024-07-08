@@ -348,7 +348,7 @@ pub struct CallInfo {
 }
 
 impl CallInfo {
-    pub fn new(dot_call: bool, args: &Vec<P::Exp>) -> Self {
+    pub fn new(dot_call: bool, args: &[P::Exp]) -> Self {
         Self {
             dot_call,
             arg_locs: args.iter().map(|e| e.loc).collect(),
@@ -3071,8 +3071,7 @@ pub fn type_def_loc(
             let mod_ident_str = expansion_mod_ident_to_map_key(mod_ident);
             mod_outer_defs
                 .get(&mod_ident_str)
-                .map(|mod_defs| find_datatype(mod_defs, &struct_name.value()))
-                .flatten()
+                .and_then(|mod_defs| find_datatype(mod_defs, &struct_name.value()))
         }
         _ => None,
     }

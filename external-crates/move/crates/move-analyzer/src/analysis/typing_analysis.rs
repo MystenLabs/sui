@@ -72,15 +72,13 @@ fn def_info_to_type_def_loc(
             let mod_ident_str = expansion_mod_ident_to_map_key(mod_ident);
             mod_outer_defs
                 .get(&mod_ident_str)
-                .map(|mod_defs| find_datatype(mod_defs, name))
-                .flatten()
+                .and_then(|mod_defs| find_datatype(mod_defs, name))
         }
         DefInfo::Enum(mod_ident, name, ..) => {
             let mod_ident_str = expansion_mod_ident_to_map_key(mod_ident);
             mod_outer_defs
                 .get(&mod_ident_str)
-                .map(|mod_defs| find_datatype(mod_defs, name))
-                .flatten()
+                .and_then(|mod_defs| find_datatype(mod_defs, name))
         }
         DefInfo::Variant(..) => None,
         DefInfo::Field(.., t, _) => type_def_loc(mod_outer_defs, t),
