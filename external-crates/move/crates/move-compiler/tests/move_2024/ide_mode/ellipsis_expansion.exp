@@ -1,14 +1,12 @@
 warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:1:9
   │
-1 │ #[allow(ide_path_autocomplete)]
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
   │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
 
-error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:2:3
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/ellipsis_expansion.move:1:31
   │
-1 │ #[allow(ide_path_autocomplete)]
-  │   ----- Attribute previously given here
-2 │ #[allow(ide_dot_autocomplete)]
-  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │                               ^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_dot_autocomplete'
 

@@ -1,37 +1,29 @@
-error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:2:3
-  │
-1 │ #[allow(ide_path_autocomplete)]
-  │   ----- Attribute previously given here
-2 │ #[allow(ide_dot_autocomplete)]
-  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
-
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:5:16
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:4:16
   │
-5 │         match (true) {
+4 │         match (true) {
   │                ^^^^ Pattern 'false' not covered
 
 note[I15004]: IDE missing match arms
-  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:5:22
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:4:22
   │  
-5 │           match (true) {
+4 │           match (true) {
   │ ╭──────────────────────^
-6 │ │             true => 0
-7 │ │         }
+5 │ │             true => 0
+6 │ │         }
   │ ╰─────────^ Missing arms: 'false'
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:11:16
+   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:10:16
    │
-11 │         match (true) {
+10 │         match (true) {
    │                ^^^^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:11:22
+   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:10:22
    │  
-11 │           match (true) {
+10 │           match (true) {
    │ ╭──────────────────────^
-12 │ │         }
+11 │ │         }
    │ ╰─────────^ Missing arms: 'false' and 'true'
 

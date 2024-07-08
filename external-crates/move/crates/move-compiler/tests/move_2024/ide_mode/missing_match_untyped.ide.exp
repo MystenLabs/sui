@@ -1,55 +1,47 @@
-error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:2:3
-  │
-1 │ #[allow(ide_path_autocomplete)]
-  │   ----- Attribute previously given here
-2 │ #[allow(ide_dot_autocomplete)]
-  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
-
 error[E03009]: unbound variable
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:5:16
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:4:16
   │
-5 │         match (e) {
+4 │         match (e) {
   │                ^ Unbound variable 'e'
 
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:5:16
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:4:16
   │
-5 │         match (e) {
+4 │         match (e) {
   │                ^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:5:19
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:4:19
   │  
-5 │           match (e) {
+4 │           match (e) {
   │ ╭───────────────────^
-6 │ │         }
+5 │ │         }
   │ ╰─────────^ Missing arms: '_'
 
 error[E03009]: unbound variable
-   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:16
-   │
-10 │         match (e) {
-   │                ^ Unbound variable 'e'
+  ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:16
+  │
+9 │         match (e) {
+  │                ^ Unbound variable 'e'
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:19
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:19
    │  
-10 │           match (e) {
+ 9 │           match (e) {
    │ ╭───────────────────^
-11 │ │             E::Two(n) => n
-12 │ │         }
+10 │ │             E::Two(n) => n
+11 │ │         }
    │ ╰─────────^ Missing arms: '_'
 
 error[E03006]: unexpected name in this position
-   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:11:13
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:13
    │
-11 │             E::Two(n) => n
+10 │             E::Two(n) => n
    │             ^ Could not resolve the name 'E'
 
 error[E03009]: unbound variable
-   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:11:26
+   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:26
    │
-11 │             E::Two(n) => n
+10 │             E::Two(n) => n
    │                          ^ Unbound variable 'n'
 

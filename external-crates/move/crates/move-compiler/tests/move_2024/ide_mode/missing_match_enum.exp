@@ -1,38 +1,36 @@
 warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:1:9
   │
-1 │ #[allow(ide_path_autocomplete)]
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
   │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
 
-error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:2:3
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:1:31
   │
-1 │ #[allow(ide_path_autocomplete)]
-  │   ----- Attribute previously given here
-2 │ #[allow(ide_dot_autocomplete)]
-  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │                               ^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_dot_autocomplete'
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:11:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:10:16
    │
-11 │         match (e) {
+10 │         match (e) {
    │                ^ Pattern '_' not covered
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:16:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:15:16
    │
-16 │         match (e) {
+15 │         match (e) {
    │                ^ Pattern 'E::One' not covered
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:22:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:21:16
    │
-22 │         match (e) {
+21 │         match (e) {
    │                ^ Pattern 'E::Three { x: _ }' not covered
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:29:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:28:16
    │
-29 │         match (e) {
+28 │         match (e) {
    │                ^ Pattern 'E::One' not covered
 

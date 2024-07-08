@@ -33,118 +33,44 @@ note[I15006]: IDE path autocomplete
 6 │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
   │                                                                                   ^^^^^^^ Possible in-scope names: 'Option -> std::option::Option', 'vborrow -> std::vector::vborrow', 'vborrow_mut -> std::vector::vborrow_mut', or 'Element'
 
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:10:3
-   │
- 9 │ #[allow(ide_path_autocomplete)]
-   │   ----- Attribute previously given here
-10 │ #[allow(ide_dot_autocomplete)]
-   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
-
 warning[W09009]: unused struct field
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:15:23
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:14:23
    │
-15 │     public struct C { c: u64, d: u64 } has drop;
+14 │     public struct C { c: u64, d: u64 } has drop;
    │                       ^ The 'c' field of the 'C' type is unused
    │
    = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09009]: unused struct field
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:15:31
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:14:31
    │
-15 │     public struct C { c: u64, d: u64 } has drop;
+14 │     public struct C { c: u64, d: u64 } has drop;
    │                               ^ The 'd' field of the 'C' type is unused
    │
    = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:18:21
-   │
-18 │         let _ = &in.0.0[1]. ;
-   │                     ^ Possible dot names: 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
-
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:18:23
-   │
-18 │         let _ = &in.0.0[1]. ;
-   │                       ^ Possible dot names: '0'
-
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:18:27
-   │
-18 │         let _ = &in.0.0[1]. ;
-   │                           ^ Possible dot names: '0'
-
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:18:29
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:17:29
    │
-18 │         let _ = &in.0.0[1]. ;
+17 │         let _ = &in.0.0[1]. ;
    │                             ^
    │                             │
    │                             Unexpected ';'
    │                             Expected an identifier or a decimal number
 
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:21
-   │
-22 │         let _ = &in.0.0[1].0[0]. ;
-   │                     ^ Possible dot names: 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
-
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:23
-   │
-22 │         let _ = &in.0.0[1].0[0]. ;
-   │                       ^ Possible dot names: '0'
-
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:28
-   │
-22 │         let _ = &in.0.0[1].0[0]. ;
-   │                            ^ Possible dot names: '0'
-
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:32
-   │
-22 │         let _ = &in.0.0[1].0[0]. ;
-   │                                ^ Possible dot names: 
-
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:22:34
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:21:34
    │
-22 │         let _ = &in.0.0[1].0[0]. ;
+21 │         let _ = &in.0.0[1].0[0]. ;
    │                                  ^
    │                                  │
    │                                  Unexpected ';'
    │                                  Expected an identifier or a decimal number
 
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:21
-   │
-26 │         let _ = &in.0.0[1].0[0]. ;
-   │                     ^ Possible dot names: 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
-
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:23
-   │
-26 │         let _ = &in.0.0[1].0[0]. ;
-   │                       ^ Possible dot names: '0'
-
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:28
-   │
-26 │         let _ = &in.0.0[1].0[0]. ;
-   │                            ^ Possible dot names: '0'
-
-note[I15001]: IDE dot autocomplete
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:32
-   │
-26 │         let _ = &in.0.0[1].0[0]. ;
-   │                                ^ Possible dot names: 'c' or 'd'
-
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:26:34
+   ┌─ tests/move_2024/ide_mode/index_autocomplete.move:25:34
    │
-26 │         let _ = &in.0.0[1].0[0]. ;
+25 │         let _ = &in.0.0[1].0[0]. ;
    │                                  ^
    │                                  │
    │                                  Unexpected ';'

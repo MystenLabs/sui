@@ -1,5 +1,4 @@
-#[allow(ide_path_autocomplete)]
-#[allow(ide_dot_autocomplete)]
+#[allow(ide_path_autocomplete,ide_dot_autocomplete)]
 module 0x42::m {
     public enum E {
         One,

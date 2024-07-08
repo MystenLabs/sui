@@ -1,39 +1,31 @@
-error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:2:3
-  │
-1 │ #[allow(ide_path_autocomplete)]
-  │   ----- Attribute previously given here
-2 │ #[allow(ide_dot_autocomplete)]
-  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
-
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:5:16
+  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:4:16
   │
-5 │         match (0) {
+4 │         match (0) {
   │                ^ Pattern '_0' not covered
   │
   = When '_0' is not 1
 
 note[I15004]: IDE missing match arms
-  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:5:19
+  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:4:19
   │  
-5 │           match (0) {
+4 │           match (0) {
   │ ╭───────────────────^
-6 │ │             1 => 0
-7 │ │         }
+5 │ │             1 => 0
+6 │ │         }
   │ ╰─────────^ Missing arms: '_'
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:11:16
+   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:10:16
    │
-11 │         match (0) {
+10 │         match (0) {
    │                ^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:11:19
+   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:10:19
    │  
-11 │           match (0) {
+10 │           match (0) {
    │ ╭───────────────────^
-12 │ │         }
+11 │ │         }
    │ ╰─────────^ Missing arms: '_'
 

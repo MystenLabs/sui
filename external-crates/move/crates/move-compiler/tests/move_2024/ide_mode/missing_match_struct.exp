@@ -1,32 +1,30 @@
 warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:1:9
   │
-1 │ #[allow(ide_path_autocomplete)]
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
   │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
 
-error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:2:3
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:1:31
   │
-1 │ #[allow(ide_path_autocomplete)]
-  │   ----- Attribute previously given here
-2 │ #[allow(ide_dot_autocomplete)]
-  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │                               ^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_dot_autocomplete'
 
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:8:16
+  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:7:16
   │
-8 │         match (s) {
+7 │         match (s) {
   │                ^ Pattern '_' not covered
 
 error[E04016]: too few arguments
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:14:13
+   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:13:13
    │
-14 │             S { } => 0
+13 │             S { } => 0
    │             ^^^^^ Missing pattern for field 'x' in '0x42::m::S'
 
 error[E04016]: too few arguments
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:14:13
+   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:13:13
    │
-14 │             S { } => 0
+13 │             S { } => 0
    │             ^^^^^ Missing pattern for field 'y' in '0x42::m::S'
 
