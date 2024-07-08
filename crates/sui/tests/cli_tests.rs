@@ -1491,7 +1491,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
     let expect = expect![[r#"
         Err(
             ModulePublishFailure {
-                error: "Package dependency \"Unpublished\" does not specify a published address (the Move.toml manifest for \"Unpublished\" does not contain a published-at field).\nIf this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain).",
+                error: "Package dependency \"Unpublished\" does not specify a published address (the Move.toml manifest for \"Unpublished\" does not contain a 'published-at' field, nor is there a 'published-id' in the Move.lock).\nIf this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain).",
             },
         )
     "#]];
@@ -1586,7 +1586,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let expect = expect![[r#"
         Err(
             ModulePublishFailure {
-                error: "Package dependency \"Invalid\" does not specify a valid published address: could not parse value \"mystery\" for published-at field.",
+                error: "Package dependency \"Invalid\" does not specify a valid published address: could not parse value \"mystery\" for 'published-at' field in Move.toml or 'published-id' in Move.lock file.",
             },
         )
     "#]];
