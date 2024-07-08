@@ -26,6 +26,10 @@ const MAX_TYPE_ARGUMENT_WIDTH: u32 = 32;
 const MAX_TYPE_NODES: u32 = 256;
 const MAX_MOVE_VALUE_DEPTH: u32 = 128;
 
+/// Filter-specific limits, such as the number of transaction ids that can be specified for the
+/// `TransactionBlockFilter`.
+const MAX_TRANSACTION_IDS: u32 = 1000;
+
 pub(crate) const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
 /// The time to wait for a transaction to be executed such that the effects can be returned to the
@@ -146,6 +150,8 @@ pub struct Limits {
     pub max_type_nodes: u32,
     #[serde(default)]
     pub max_move_value_depth: u32,
+    #[serde(default)]
+    pub max_transaction_ids: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -350,6 +356,11 @@ impl ServiceConfig {
     async fn max_move_value_depth(&self) -> u32 {
         self.limits.max_move_value_depth
     }
+
+    /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter``.
+    async fn max_transaction_ids(&self) -> u32 {
+        self.limits.max_transaction_ids
+    }
 }
 
 impl TxExecFullNodeConfig {
@@ -508,6 +519,7 @@ impl Default for Limits {
             max_type_argument_width: MAX_TYPE_ARGUMENT_WIDTH,
             max_type_nodes: MAX_TYPE_NODES,
             max_move_value_depth: MAX_MOVE_VALUE_DEPTH,
+            max_transaction_ids: MAX_TRANSACTION_IDS,
         }
     }
 }
@@ -582,6 +594,7 @@ mod tests {
                 max_type_argument_width: 64,
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -667,6 +680,7 @@ mod tests {
                 max_type_argument_width: 64,
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
+                ..Default::default()
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },

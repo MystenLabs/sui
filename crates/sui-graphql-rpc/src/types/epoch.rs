@@ -235,6 +235,7 @@ impl Epoch {
         last: Option<u64>,
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
+        scan_limit: Option<u64>,
     ) -> Result<TransactionBlockConnection> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
@@ -252,22 +253,9 @@ impl Epoch {
             return Ok(TransactionBlockConnection::new(false, false));
         };
 
-        let scan_limit = self
-            .stored
-            .last_checkpoint_id
-            .map(|id| id as u64)
-            .unwrap_or(self.checkpoint_viewed_at)
-            - (self.stored.first_checkpoint_id as u64);
-
-        TransactionBlock::paginate(
-            ctx,
-            page,
-            filter,
-            self.checkpoint_viewed_at,
-            Some(scan_limit),
-        )
-        .await
-        .extend()
+        TransactionBlock::paginate(ctx, page, filter, self.checkpoint_viewed_at, scan_limit)
+            .await
+            .extend()
     }
 }
 

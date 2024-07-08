@@ -608,15 +608,9 @@ impl ObjectImpl<'_> {
             return Ok(TransactionBlockConnection::new(false, false));
         };
 
-        TransactionBlock::paginate(
-            ctx,
-            page,
-            filter,
-            self.0.checkpoint_viewed_at,
-            Some(scan_limit.unwrap_or(10000000)),
-        )
-        .await
-        .extend()
+        TransactionBlock::paginate(ctx, page, filter, self.0.checkpoint_viewed_at, scan_limit)
+            .await
+            .extend()
     }
 
     pub(crate) async fn bcs(&self) -> Result<Option<Base64>> {

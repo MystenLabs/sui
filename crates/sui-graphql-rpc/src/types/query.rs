@@ -327,7 +327,7 @@ impl Query {
             page,
             filter.unwrap_or_default(),
             checkpoint,
-            Some(scan_limit.unwrap_or(10000000)),
+            scan_limit,
         )
         .await
         .extend()

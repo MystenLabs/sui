@@ -166,15 +166,9 @@ impl Address {
             return Ok(TransactionBlockConnection::new(false, false));
         };
 
-        TransactionBlock::paginate(
-            ctx,
-            page,
-            filter,
-            self.checkpoint_viewed_at,
-            Some(scan_limit.unwrap_or(10000000)),
-        )
-        .await
-        .extend()
+        TransactionBlock::paginate(ctx, page, filter, self.checkpoint_viewed_at, scan_limit)
+            .await
+            .extend()
     }
 }
 

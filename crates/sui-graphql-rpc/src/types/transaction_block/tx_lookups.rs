@@ -221,7 +221,6 @@ impl TransactionBlockFilter {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        // consider rename .. is_empty or something
         matches!(self.before_checkpoint, Some(0))
             || matches!((self.after_checkpoint, self.before_checkpoint), (Some(after), Some(before)) if after >= before)
             || matches!((self.after_checkpoint, self.at_checkpoint), (Some(after), Some(at)) if after >= at)

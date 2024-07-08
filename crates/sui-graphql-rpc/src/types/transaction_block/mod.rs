@@ -26,6 +26,7 @@ use tx_cursor::TxLookup;
 use tx_lookups::{subqueries, TxBounds};
 
 use crate::{
+    config::ServiceConfig,
     connection::Connection,
     data::{self, DataLoader, Db, DbConnection, QueryExecutor},
     error::Error,
@@ -277,6 +278,22 @@ impl TransactionBlock {
             return Ok(Connection::new(false, false));
         }
 
+        if filter.has_complex_filters() && scan_limit.is_none() {
+            return Err(Error::Client(
+                "A scan limit must be specified for filter combinations involving `function`, `kind`, `recvAddress`, `inputObject`, or `changedObject`".to_string(),
+            ));
+        }
+
+        let limits = ctx.data_unchecked::<ServiceConfig>().limits;
+        if let Some(tx_ids) = filter.transaction_ids.as_ref() {
+            if tx_ids.len() > limits.max_transaction_ids as usize {
+                return Err(Error::Client(format!(
+                    "Transaction ids exceed max limit of {}",
+                    limits.max_transaction_ids
+                )));
+            }
+        }
+
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
         let db: &Db = ctx.data_unchecked();
@@ -345,10 +362,6 @@ impl TransactionBlock {
                 Ok::<_, diesel::result::Error>((prev, next, transactions, Some(tx_bounds)))
             })
             .await?;
-
-        // hmmm.. the start_cursor and end_cursor are created from self.edges.first() and
-        // self.edges.last() how can we produce the cursors for when scan_limit doesn't yield a
-        // result but a user is still able to paginate forward and backwards?
 
         let mut conn = Connection::new(prev, next);
 

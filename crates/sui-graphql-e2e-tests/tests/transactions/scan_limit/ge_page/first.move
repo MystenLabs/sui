@@ -1,14 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tx | func            | checkpoint |
-// ---+-----------------+------------+
-//  0 |                 |         0  |
-//  1 | create obj(3,0) |         1  |
-//  2 | create obj(3,0) |         2  |
-//  3 | create obj(5,)  |         3  |
-//  4 | swap and send   |         4  |
-
 //# init --protocol-version 48 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
