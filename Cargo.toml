@@ -443,7 +443,7 @@ rustls-pemfile = "1.0.2"
 rustversion = "1.0.9"
 rustyline = "9.1.2"
 rustyline-derive = "0.7.0"
-schemars = { version = "0.8.10", features = ["either"] }
+schemars = { version = "0.8.21", features = ["either"] }
 scopeguard = "1.1"
 serial_test = "2.0.0"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
@@ -577,7 +577,7 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9a
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
 
 # core-types with json format for REST api
-sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "bb224b9e6b6edf5eeedcdf71c750a30b68073057", features = ["serde"] }
+sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "dad0b49a9e4f27bc76457a9c92b8a6a7004b6706", features = ["serde", "schemars"] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

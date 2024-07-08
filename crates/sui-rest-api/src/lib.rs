@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{
-    routing::{get, post},
-    Router,
-};
+use axum::Router;
+use mysten_network::callback::CallbackLayer;
+use openapi::ApiEndpoint;
+use reader::StateReader;
+use std::sync::Arc;
+use sui_types::storage::RestStateReader;
+use tap::Pipe;
 
 pub mod accept;
 mod accounts;
@@ -18,6 +21,7 @@ mod health;
 mod info;
 mod metrics;
 mod objects;
+pub mod openapi;
 mod reader;
 mod response;
 mod system;
@@ -27,19 +31,14 @@ pub mod types;
 pub use client::Client;
 pub use error::{RestError, Result};
 pub use metrics::RestMetrics;
-use mysten_network::callback::CallbackLayer;
-use reader::StateReader;
-use std::sync::Arc;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-use sui_types::storage::RestStateReader;
-use tap::Pipe;
 pub use transactions::{ExecuteTransactionQueryParameters, TransactionExecutor};
 
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";
 pub const APPLICATION_JSON: &str = "application/json";
 
-#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Direction {
     Ascending,
@@ -64,6 +63,28 @@ impl<T: serde::Serialize, C: std::fmt::Display> axum::response::IntoResponse for
     }
 }
 
+const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
+    &info::GetNodeInfo,
+    &health::HealthCheck,
+    &accounts::ListAccountObjects,
+    &objects::GetObject,
+    &objects::GetObjectWithVersion,
+    &objects::ListDynamicFields,
+    &checkpoints::ListCheckpoints,
+    &checkpoints::GetCheckpoint,
+    &checkpoints::GetCheckpointFull,
+    &transactions::GetTransaction,
+    &transactions::ListTransactions,
+    &committee::GetCommittee,
+    &committee::GetLatestCommittee,
+    &system::GetSystemStateSummary,
+    &system::GetCurrentProtocolConfig,
+    &system::GetProtocolConfig,
+    &system::GetGasInfo,
+    &transactions::ExecuteTransaction,
+    &coins::GetCoinInfo,
+];
+
 #[derive(Clone)]
 pub struct RestService {
     reader: StateReader,
@@ -76,6 +97,12 @@ pub struct RestService {
 impl axum::extract::FromRef<RestService> for StateReader {
     fn from_ref(input: &RestService) -> Self {
         input.reader.clone()
+    }
+}
+
+impl axum::extract::FromRef<RestService> for Option<Arc<dyn TransactionExecutor>> {
+    fn from_ref(input: &RestService) -> Self {
+        input.executor.clone()
     }
 }
 
@@ -112,72 +139,14 @@ impl RestService {
     }
 
     pub fn into_router(self) -> Router {
-        let executor = self.executor.clone();
         let metrics = self.metrics.clone();
 
-        Router::new()
-            .route("/", get(info::node_info))
-            .route(health::HEALTH_PATH, get(health::health))
-            .route(
-                accounts::LIST_ACCOUNT_OWNED_OBJECTS_PATH,
-                get(accounts::list_account_owned_objects),
-            )
-            .route(
-                transactions::GET_TRANSACTION_PATH,
-                get(transactions::get_transaction),
-            )
-            .route(
-                transactions::LIST_TRANSACTIONS_PATH,
-                get(transactions::list_transactions),
-            )
-            .route(
-                committee::GET_LATEST_COMMITTEE_PATH,
-                get(committee::get_latest_committee),
-            )
-            .route(committee::GET_COMMITTEE_PATH, get(committee::get_committee))
-            .route(
-                system::GET_SYSTEM_STATE_SUMMARY_PATH,
-                get(system::get_system_state_summary),
-            )
-            .route(
-                system::GET_CURRENT_PROTOCOL_CONFIG_PATH,
-                get(system::get_current_protocol_config),
-            )
-            .route(
-                system::GET_PROTOCOL_CONFIG_PATH,
-                get(system::get_protocol_config),
-            )
-            .route(system::GET_GAS_INFO_PATH, get(system::get_gas_info))
-            .route(coins::GET_COIN_INFO_PATH, get(coins::get_coin_info))
-            .route(
-                checkpoints::LIST_CHECKPOINT_PATH,
-                get(checkpoints::list_checkpoints),
-            )
-            .route(
-                checkpoints::GET_CHECKPOINT_PATH,
-                get(checkpoints::get_checkpoint),
-            )
-            .route(
-                checkpoints::GET_FULL_CHECKPOINT_PATH,
-                get(checkpoints::get_full_checkpoint),
-            )
-            .route(objects::GET_OBJECT_PATH, get(objects::get_object))
-            .route(
-                objects::GET_OBJECT_WITH_VERSION_PATH,
-                get(objects::get_object_with_version),
-            )
-            .route(
-                objects::LIST_DYNAMIC_FIELDS_PATH,
-                get(objects::list_dynamic_fields),
-            )
+        let mut api = openapi::Api::new(info());
+
+        api.register_endpoints(ENDPOINTS.to_owned());
+
+        api.to_router()
             .with_state(self.clone())
-            .pipe(|router| {
-                if let Some(executor) = executor {
-                    router.merge(execution_router(executor))
-                } else {
-                    router
-                }
-            })
             .layer(axum::middleware::map_response_with_state(
                 self,
                 response::append_info_headers,
@@ -207,11 +176,86 @@ impl RestService {
     }
 }
 
-fn execution_router(executor: Arc<dyn TransactionExecutor>) -> Router {
-    Router::new()
-        .route(
-            transactions::POST_EXECUTE_TRANSACTION_PATH,
-            post(transactions::execute_transaction),
-        )
-        .with_state(executor)
+fn info() -> openapiv3::v3_1::Info {
+    use openapiv3::v3_1::Contact;
+    use openapiv3::v3_1::License;
+
+    openapiv3::v3_1::Info {
+        title: "Sui Node Api".to_owned(),
+        description: Some("REST Api for interacting with the Sui Blockchain".to_owned()),
+        contact: Some(Contact {
+            name: Some("Mysten Labs".to_owned()),
+            url: Some("https://github.com/MystenLabs/sui".to_owned()),
+            ..Default::default()
+        }),
+        license: Some(License {
+            name: "Apache 2.0".to_owned(),
+            url: Some("https://www.apache.org/licenses/LICENSE-2.0.html".to_owned()),
+            ..Default::default()
+        }),
+        version: "0.0.0".to_owned(),
+        ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn openapi_spec() {
+        const OPENAPI_SPEC_FILE: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/openapi/openapi.json");
+
+        let openapi = {
+            let mut api = openapi::Api::new(info());
+
+            api.register_endpoints(ENDPOINTS.to_owned());
+            api.openapi()
+        };
+
+        let mut actual = serde_json::to_string_pretty(&openapi).unwrap();
+        actual.push('\n');
+
+        // Update the expected format
+        if std::env::var_os("UPDATE").is_some() {
+            std::fs::write(OPENAPI_SPEC_FILE, &actual).unwrap();
+        }
+
+        let expected = std::fs::read_to_string(OPENAPI_SPEC_FILE).unwrap();
+
+        let diff = diffy::create_patch(&expected, &actual);
+
+        if !diff.hunks().is_empty() {
+            let formatter = if std::io::IsTerminal::is_terminal(&std::io::stderr()) {
+                diffy::PatchFormatter::new().with_color()
+            } else {
+                diffy::PatchFormatter::new()
+            };
+            let header = "Generated and checked-in openapi spec does not match. \
+                          Re-run with `UPDATE=1` to update expected format";
+            panic!("{header}\n\n{}", formatter.fmt_patch(&diff));
+        }
+    }
+
+    #[tokio::test]
+    async fn openapi_explorer() {
+        // Unless env var is set, just early return
+        if std::env::var_os("OPENAPI_EXPLORER").is_none() {
+            return;
+        }
+
+        let openapi = {
+            let mut api = openapi::Api::new(info());
+            api.register_endpoints(ENDPOINTS.to_owned());
+            api.openapi()
+        };
+
+        let router = openapi::OpenApiDocument::new(openapi).into_router();
+
+        axum::Server::bind(&"127.0.0.1:8000".parse().unwrap())
+            .serve(router.into_make_service())
+            .await
+            .unwrap();
+    }
 }
