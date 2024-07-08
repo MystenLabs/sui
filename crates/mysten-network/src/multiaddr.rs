@@ -101,6 +101,17 @@ impl Multiaddr {
         Ok(SocketAddr::new(ip, tcp_port))
     }
 
+    // Returns Ok(true) if the Multiaddr is a valid TCP address.
+    pub fn is_tcp_addr(&self) -> Result<bool> {
+        let mut iter = self.iter();
+        iter.next(); // Skip the ip/dns part
+        Ok(matches!(
+            iter.next()
+                .ok_or_else(|| eyre!("multiaddr ends unexpectedly"))?,
+            Protocol::Tcp(_)
+        ))
+    }
+
     /// Set the ip address to `0.0.0.0`. For instance, it converts the following address
     /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/0.0.0.0/tcp/1500/http`.
     /// This is useful when starting a server and you want to listen on all interfaces.
@@ -374,6 +385,26 @@ mod test {
         let _ = multi_addr_dns
             .to_socket_addr()
             .expect_err("DNS is unsupported");
+    }
+
+    #[test]
+    fn test_is_tcp_address() {
+        let multi_addr_ipv4 = Multiaddr(multiaddr!(Ip4([127, 0, 0, 1]), Tcp(10500u16)));
+        assert!(multi_addr_ipv4.is_tcp_addr().unwrap());
+        let multi_addr_ipv6 = Multiaddr(multiaddr!(Ip6([172, 0, 0, 1, 1, 1, 1, 1]), Tcp(10500u16)));
+        assert!(multi_addr_ipv6.is_tcp_addr().unwrap());
+        let multi_addr_dns = Multiaddr(multiaddr!(Dnsaddr("mysten.sui"), Tcp(10500u16)));
+        assert!(multi_addr_dns.is_tcp_addr().unwrap());
+
+        let multi_addr_ipv4 = Multiaddr(multiaddr!(Ip4([127, 0, 0, 1]), Udp(10500u16)));
+        assert!(!multi_addr_ipv4.is_tcp_addr().unwrap());
+        let multi_addr_ipv6 = Multiaddr(multiaddr!(Ip6([172, 0, 0, 1, 1, 1, 1, 1]), Udp(10500u16)));
+        assert!(!multi_addr_ipv6.is_tcp_addr().unwrap());
+        let multi_addr_dns = Multiaddr(multiaddr!(Dnsaddr("mysten.sui"), Udp(10500u16)));
+        assert!(!multi_addr_dns.is_tcp_addr().unwrap());
+
+        let invalid_multi_addr_ipv4 = Multiaddr(multiaddr!(Ip4([127, 0, 0, 1])));
+        let _ = invalid_multi_addr_ipv4.is_tcp_addr().unwrap_err();
     }
 
     #[test]
