@@ -7,7 +7,7 @@ Generating pseudo-random values in Move is similar to solutions in other languag
 
 ```move
 entry fun roll_dice(r: &Random, ctx: &mut TxContext): Dice {
-  let generator = new_generator(r, ctx); // generator is a PRG
+  let mut generator = new_generator(r, ctx); // generator is a PRG
   Dice { value: random::generate_u8_in_range(&mut generator, 1, 6) }
 }
 ```
