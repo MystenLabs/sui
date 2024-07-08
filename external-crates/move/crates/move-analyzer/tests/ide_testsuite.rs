@@ -264,7 +264,7 @@ impl HintTest {
         use_file_path: &Path,
     ) -> anyhow::Result<()> {
         let inlay_hints = inlay_hints_internal(
-            &symbols,
+            symbols,
             use_file_path.to_path_buf(),
             /* type_hints */ true,
             /* param_hints */ true,
