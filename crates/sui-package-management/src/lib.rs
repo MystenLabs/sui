@@ -159,13 +159,8 @@ pub fn resolve_published_id(
     // Find the environment and ManagedPackage data for this chain_id.
     let id_in_lock_for_chain_id = managed_packages.and_then(|m| {
         let chain_id = chain_id.as_ref()?;
-        m.into_iter().find_map(|(_, v)| {
-            if v.chain_id == *chain_id {
-                Some(v.latest_published_id)
-            } else {
-                None
-            }
-        })
+        m.into_iter()
+            .find_map(|(_, v)| (v.chain_id == *chain_id).then_some(v.latest_published_id))
     });
 
     let package_id = match (id_in_lock_for_chain_id, published_id_in_manifest) {
