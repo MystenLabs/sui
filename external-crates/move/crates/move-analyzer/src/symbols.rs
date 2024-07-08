@@ -96,7 +96,7 @@ use move_compiler::{
     expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeName_, Type_, VariantFields},
-    parser::ast::{self as P},
+    parser::ast::{self as P, NameAccessChain, NameAccessChain_},
     shared::{
         files::{FileId, MappedFiles},
         unique_map::UniqueMap,
@@ -335,6 +335,28 @@ pub struct LocalDef {
     pub def_type: Type,
 }
 
+/// Information about call sites relevant to the IDE
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
+pub struct CallInfo {
+    /// Is it a dot call?
+    pub dot_call: bool,
+    /// Locations of arguments
+    pub arg_locs: Vec<Loc>,
+    /// Definition of function being called (as an Option as its computed after
+    /// this struct is created)
+    pub def_loc: Option<Loc>,
+}
+
+impl CallInfo {
+    pub fn new(dot_call: bool, args: &Vec<P::Exp>) -> Self {
+        Self {
+            dot_call,
+            arg_locs: args.iter().map(|e| e.loc).collect(),
+            def_loc: None,
+        }
+    }
+}
+
 /// Module-level definitions
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct ModuleDefs {
@@ -354,6 +376,8 @@ pub struct ModuleDefs {
     pub functions: BTreeMap<Symbol, MemberDef>,
     /// Definitions where the type is not explicitly specified
     pub untyped_defs: BTreeSet<Loc>,
+    /// Information about calls in this module
+    pub call_infos: BTreeMap<Loc, CallInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -1729,11 +1753,12 @@ pub fn get_symbols(
 
     let mut compiler_info = compiler_info.unwrap();
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
-        mod_outer_defs: &mod_outer_defs,
+        mod_outer_defs: &mut mod_outer_defs,
         files: &mapped_files,
         references: &mut references,
         def_info: &mut def_info,
         use_defs: UseDefMap::new(),
+        current_mod_ident_str: None,
         alias_lengths: &BTreeMap::new(),
         traverse_only: false,
         compiler_info: &mut compiler_info,
@@ -2261,6 +2286,7 @@ fn get_mod_outer_defs(
         constants,
         functions,
         untyped_defs: BTreeSet::new(),
+        call_infos: BTreeMap::new(),
     };
 
     // insert use of the module name in the definition itself
@@ -2538,6 +2564,19 @@ impl<'a> ParsingSymbolicator<'a> {
     /// Get symbols for an expression
     fn exp_symbols(&mut self, exp: &P::Exp) {
         use P::Exp_ as E;
+        fn last_chain_symbol_loc(sp!(_, chain): &NameAccessChain) -> Loc {
+            use NameAccessChain_ as NA;
+            match chain {
+                NA::Single(entry) => entry.name.loc,
+                NA::Path(path) => {
+                    if path.entries.is_empty() {
+                        path.root.name.loc
+                    } else {
+                        path.entries.last().unwrap().name.loc
+                    }
+                }
+            }
+        }
 
         // If the cursor is in this item, mark that down.
         // This may be overridden by the recursion below.
@@ -2550,6 +2589,16 @@ impl<'a> ParsingSymbolicator<'a> {
             E::Call(chain, v) => {
                 self.chain_symbols(chain);
                 v.value.iter().for_each(|e| self.exp_symbols(e));
+                assert!(self.current_mod_ident_str.is_some());
+                if let Some(mod_defs) = self
+                    .mod_outer_defs
+                    .get_mut(&self.current_mod_ident_str.clone().unwrap())
+                {
+                    mod_defs.call_infos.insert(
+                        last_chain_symbol_loc(chain),
+                        CallInfo::new(/* do_call */ false, &v.value),
+                    );
+                };
             }
             E::Pack(chain, v) => {
                 self.chain_symbols(chain);
@@ -2623,12 +2672,21 @@ impl<'a> ParsingSymbolicator<'a> {
             }
             E::Borrow(_, e) => self.exp_symbols(e),
             E::Dot(e, _) => self.exp_symbols(e),
-            E::DotCall(e, _, _, vo, v) => {
+            E::DotCall(e, name, _, vo, v) => {
                 self.exp_symbols(e);
                 if let Some(v) = vo {
                     v.iter().for_each(|t| self.type_symbols(t));
                 }
                 v.value.iter().for_each(|e| self.exp_symbols(e));
+                assert!(self.current_mod_ident_str.is_some());
+                if let Some(mod_defs) = self
+                    .mod_outer_defs
+                    .get_mut(&self.current_mod_ident_str.clone().unwrap())
+                {
+                    mod_defs
+                        .call_infos
+                        .insert(name.loc, CallInfo::new(/* do_call */ true, &v.value));
+                };
             }
             E::Index(e, v) => {
                 self.exp_symbols(e);
@@ -2779,7 +2837,6 @@ impl<'a> ParsingSymbolicator<'a> {
         };
         if let Some(mut ud) = add_member_use_def(
             &name.value,
-            self.mod_outer_defs,
             self.files,
             mod_defs,
             &name.value,
@@ -2808,7 +2865,6 @@ impl<'a> ParsingSymbolicator<'a> {
         }
         if let Some(mut ud) = add_member_use_def(
             &name.value,
-            self.mod_outer_defs,
             self.files,
             mod_defs,
             &name.value,
@@ -2945,7 +3001,6 @@ impl<'a> ParsingSymbolicator<'a> {
 /// Add use of a function, method, struct or enum identifier
 pub fn add_member_use_def(
     member_def_name: &Symbol, // may be different from use_name for methods
-    mod_outer_defs: &BTreeMap<String, ModuleDefs>,
     files: &MappedFiles,
     mod_defs: &ModuleDefs,
     use_name: &Symbol,
@@ -2970,7 +3025,13 @@ pub fn add_member_use_def(
         .or_else(|| mod_defs.enums.get(member_def_name))
     {
         let member_info = def_info.get(&member_def.name_loc).unwrap();
-        let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, member_info);
+        // type def location exists only for structs and enums (and not for functions)
+        let ident_type_def_loc = match member_info {
+            DefInfo::Struct(_, name, ..) | DefInfo::Enum(_, name, ..) => {
+                find_datatype(mod_defs, name)
+            }
+            _ => None,
+        };
         let ud = UseDef::new(
             references,
             alias_lengths,
@@ -2984,23 +3045,6 @@ pub fn add_member_use_def(
         return Some(ud);
     }
     None
-}
-
-pub fn def_info_to_type_def_loc(
-    mod_outer_defs: &BTreeMap<String, ModuleDefs>,
-    def_info: &DefInfo,
-) -> Option<Loc> {
-    match def_info {
-        DefInfo::Type(t) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Function(..) => None,
-        DefInfo::Struct(mod_ident, name, ..) => find_datatype(mod_outer_defs, mod_ident, name),
-        DefInfo::Enum(mod_ident, name, ..) => find_datatype(mod_outer_defs, mod_ident, name),
-        DefInfo::Variant(..) => None,
-        DefInfo::Field(.., t, _) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Local(_, t, _, _, _) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Const(_, _, t, _, _) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Module(..) => None,
-    }
 }
 
 pub fn def_info_doc_string(def_info: &DefInfo) -> Option<String> {
@@ -3024,22 +3068,17 @@ pub fn type_def_loc(
     match t {
         Type_::Ref(_, r) => type_def_loc(mod_outer_defs, r),
         Type_::Apply(_, sp!(_, TypeName_::ModuleType(sp!(_, mod_ident), struct_name)), _) => {
-            find_datatype(mod_outer_defs, mod_ident, &struct_name.value())
+            let mod_ident_str = expansion_mod_ident_to_map_key(mod_ident);
+            mod_outer_defs
+                .get(&mod_ident_str)
+                .map(|mod_defs| find_datatype(mod_defs, &struct_name.value()))
+                .flatten()
         }
         _ => None,
     }
 }
 
-fn find_datatype(
-    mod_outer_defs: &BTreeMap<String, ModuleDefs>,
-    mod_ident: &ModuleIdent_,
-    datatype_name: &Symbol,
-) -> Option<Loc> {
-    let mod_ident_str = expansion_mod_ident_to_map_key(mod_ident);
-    let mod_defs = match mod_outer_defs.get(&mod_ident_str) {
-        Some(v) => v,
-        None => return None,
-    };
+pub fn find_datatype(mod_defs: &ModuleDefs, datatype_name: &Symbol) -> Option<Loc> {
     mod_defs.structs.get(datatype_name).map_or_else(
         || {
             mod_defs

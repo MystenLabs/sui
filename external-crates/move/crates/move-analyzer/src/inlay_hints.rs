@@ -3,7 +3,9 @@
 
 use crate::{
     context::Context,
-    symbols::{on_hover_markup, type_to_ide_string, DefInfo, SymbolicatorRunner, Symbols},
+    symbols::{
+        on_hover_markup, type_to_ide_string, DefInfo, ModuleDefs, SymbolicatorRunner, Symbols,
+    },
 };
 use lsp_server::Request;
 use lsp_types::{
@@ -21,10 +23,10 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request) {
 
     let fpath = parameters.text_document.uri.to_file_path().unwrap();
     eprintln!(
-        "inlay_hints_request (types: {}): {:?}",
-        context.inlay_type_hints, fpath
+        "inlay_hints_request (types: {}, params: {}): {:?}",
+        context.inlay_type_hints, context.inlay_param_hints, fpath
     );
-    let hints = if context.inlay_type_hints {
+    let hints = if context.inlay_type_hints || context.inlay_param_hints {
         inlay_hints(context, fpath).unwrap_or_default()
     } else {
         vec![]
@@ -44,44 +46,112 @@ fn inlay_hints(context: &Context, fpath: PathBuf) -> Option<Vec<InlayHint>> {
     let symbols_map = &context.symbols.lock().ok()?;
     let symbols =
         SymbolicatorRunner::root_dir(&fpath).and_then(|pkg_path| symbols_map.get(&pkg_path))?;
-    inlay_hints_internal(symbols, fpath)
+    inlay_hints_internal(
+        symbols,
+        fpath,
+        context.inlay_type_hints,
+        context.inlay_param_hints,
+    )
 }
 
-fn inlay_hints_internal(symbols: &Symbols, fpath: PathBuf) -> Option<Vec<InlayHint>> {
+fn inlay_type_hints_internal(symbols: &Symbols, mod_defs: &ModuleDefs, hints: &mut Vec<InlayHint>) {
+    for untyped_def_loc in mod_defs.untyped_defs() {
+        let start_position = symbols.files.start_position(untyped_def_loc);
+        if let Some(DefInfo::Local(n, t, _, _, _)) = symbols.def_info(untyped_def_loc) {
+            let position = Position {
+                line: start_position.line_offset() as u32,
+                character: start_position.column_offset() as u32 + n.len() as u32,
+            };
+            let colon_label = InlayHintLabelPart {
+                value: ": ".to_string(),
+                tooltip: None,
+                location: None,
+                command: None,
+            };
+            let type_label = InlayHintLabelPart {
+                value: type_to_ide_string(t, /* verbose */ true),
+                tooltip: None,
+                location: None,
+                command: None,
+            };
+            let h = InlayHint {
+                position,
+                label: InlayHintLabel::LabelParts(vec![colon_label, type_label]),
+                kind: Some(InlayHintKind::TYPE),
+                text_edits: None,
+                tooltip: additional_hint_info(t, symbols),
+                padding_left: None,
+                padding_right: None,
+                data: None,
+            };
+            hints.push(h);
+        }
+    }
+}
+
+fn inlay_param_hints_internal(
+    symbols: &Symbols,
+    mod_defs: &ModuleDefs,
+    hints: &mut Vec<InlayHint>,
+) {
+    for call_info in mod_defs.call_infos.values() {
+        let Some(def_loc) = call_info.def_loc else {
+            continue;
+        };
+        let Some(DefInfo::Function(.., args, _, _, _)) = symbols.def_info.get(&def_loc) else {
+            continue;
+        };
+        if call_info.dot_call && args.is_empty() {
+            // methods should have at least one argument
+            continue;
+        };
+        for (name, loc) in args
+            .iter()
+            .skip(if call_info.dot_call { 1 } else { 0 })
+            .zip(&call_info.arg_locs)
+        {
+            let name_label = InlayHintLabelPart {
+                value: name.to_string(),
+                tooltip: None,
+                location: None,
+                command: None,
+            };
+            let colon_label = InlayHintLabelPart {
+                value: ": ".to_string(),
+                tooltip: None,
+                location: None,
+                command: None,
+            };
+            let position = symbols.files.start_position(loc);
+            let h = InlayHint {
+                position: position.into(),
+                label: InlayHintLabel::LabelParts(vec![name_label, colon_label]),
+                kind: Some(InlayHintKind::PARAMETER),
+                text_edits: None,
+                tooltip: None,
+                padding_left: None,
+                padding_right: None,
+                data: None,
+            };
+            hints.push(h);
+        }
+    }
+}
+
+pub fn inlay_hints_internal(
+    symbols: &Symbols,
+    fpath: PathBuf,
+    type_hints: bool,
+    param_hints: bool,
+) -> Option<Vec<InlayHint>> {
     let mut hints: Vec<InlayHint> = vec![];
     let file_defs = symbols.file_mods.get(&fpath)?;
     for mod_defs in file_defs {
-        for untyped_def_loc in mod_defs.untyped_defs() {
-            let start_position = symbols.files.start_position(untyped_def_loc);
-            if let DefInfo::Local(n, t, _, _, _) = symbols.def_info(untyped_def_loc)? {
-                let position = Position {
-                    line: start_position.line_offset() as u32,
-                    character: start_position.column_offset() as u32 + n.len() as u32,
-                };
-                let colon_label = InlayHintLabelPart {
-                    value: ": ".to_string(),
-                    tooltip: None,
-                    location: None,
-                    command: None,
-                };
-                let type_label = InlayHintLabelPart {
-                    value: type_to_ide_string(t, /* verbose */ true),
-                    tooltip: None,
-                    location: None,
-                    command: None,
-                };
-                let h = InlayHint {
-                    position,
-                    label: InlayHintLabel::LabelParts(vec![colon_label, type_label]),
-                    kind: Some(InlayHintKind::TYPE),
-                    text_edits: None,
-                    tooltip: additional_hint_info(t, symbols),
-                    padding_left: None,
-                    padding_right: None,
-                    data: None,
-                };
-                hints.push(h);
-            }
+        if type_hints {
+            inlay_type_hints_internal(symbols, mod_defs, &mut hints);
+        }
+        if param_hints {
+            inlay_param_hints_internal(symbols, mod_defs, &mut hints);
         }
     }
     Some(hints)
@@ -120,65 +190,4 @@ fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayH
     Some(InlayHintTooltip::MarkupContent(on_hover_markup(
         struct_def_info,
     )))
-}
-
-#[cfg(test)]
-fn validate_type_hint(hints: &[InlayHint], path: &std::path::Path, line: u32, col: u32, ty: &str) {
-    let lsp_line = line - 1; // 0th based
-    let Some(label_parts) = hints.iter().find_map(|h| {
-        if h.position.line == lsp_line && h.position.character == col {
-            if let InlayHintLabel::LabelParts(parts) = &h.label {
-                return Some(parts);
-            }
-        }
-        None
-    }) else {
-        panic!("hint not found at line {line} and col {col} in {path:?}");
-    };
-
-    let found_ty = &label_parts[1].value;
-    assert!(
-        found_ty == ty,
-        "incorrect type of hint (found '{}' instead of expected '{}') at line {} and col {} in {:?}",
-            found_ty, ty, line, col, path
-    );
-}
-
-#[test]
-/// Tests if inlay type hints are generated correctly.
-fn inlay_type_test() {
-    use crate::symbols::get_symbols;
-    use move_compiler::linters::LintLevel;
-    use std::{
-        collections::BTreeMap,
-        sync::{Arc, Mutex},
-    };
-    use vfs::{impls::memory::MemoryFS, VfsPath};
-
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-    path.push("tests/inlay-hints");
-
-    let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(
-        Arc::new(Mutex::new(BTreeMap::new())),
-        ide_files_layer,
-        path.as_path(),
-        LintLevel::None,
-        /* cursor */ None,
-    )
-    .unwrap();
-    let symbols = symbols_opt.unwrap();
-
-    let mut fpath = path.clone();
-    fpath.push("sources/type_hints.move");
-    let cpath = dunce::canonicalize(&fpath).unwrap();
-
-    let hints = inlay_hints_internal(&symbols, cpath).unwrap();
-    validate_type_hint(&hints, &path, 8, 22, "u64");
-    validate_type_hint(&hints, &path, 9, 24, "InlayHints::type_hints::SomeStruct");
-    validate_type_hint(&hints, &path, 25, 23, "u64");
-    validate_type_hint(&hints, &path, 26, 25, "InlayHints::type_hints::SomeStruct");
-    validate_type_hint(&hints, &path, 27, 27, "u64");
-    validate_type_hint(&hints, &path, 28, 29, "InlayHints::type_hints::SomeStruct");
 }

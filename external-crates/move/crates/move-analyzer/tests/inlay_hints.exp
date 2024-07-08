@@ -1,0 +1,22 @@
+== param_hints.move ========================================================
+-- test 0 -------------------
+INLAY PARAM HINT: first_param
+-- test 1 -------------------
+INLAY PARAM HINT: second_param
+-- test 2 -------------------
+INLAY PARAM HINT: first_param
+-- test 3 -------------------
+INLAY PARAM HINT: second_param
+== type_hints.move ========================================================
+-- test 0 -------------------
+INLAY TYPE HINT : u64
+-- test 1 -------------------
+INLAY TYPE HINT : InlayHints::type_hints::SomeStruct
+-- test 2 -------------------
+INLAY TYPE HINT : u64
+-- test 3 -------------------
+INLAY TYPE HINT : InlayHints::type_hints::SomeStruct
+-- test 4 -------------------
+INLAY TYPE HINT : u64
+-- test 5 -------------------
+INLAY TYPE HINT : InlayHints::type_hints::SomeStruct
