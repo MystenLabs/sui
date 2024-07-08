@@ -13,7 +13,7 @@ const { networkConfig, useNetworkVariable } = createNetworkConfig({
 	localnet: {
 		url: getFullnodeUrl('localnet'),
 		variables: {
-			explorer: (id: string) => `https://suiscan.xyz/custom/object/${id}/?network=0.0.0.0%3A9000`,
+			explorer: (id: string) => `https://explorer.polymedia.app/object/${id}/?network=local`,
 			...LocalnetPackage,
 		},
 	},
