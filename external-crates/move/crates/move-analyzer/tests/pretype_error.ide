@@ -6,7 +6,7 @@
     "M2.move": [
       {
         "UseDefTest": {
-          "use_line": 2,
+          "use_line": 3,
           "use_ndx": 0
         }
       }

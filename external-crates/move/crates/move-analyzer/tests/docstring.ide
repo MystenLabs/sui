@@ -6,74 +6,62 @@
     "M6.move": [
       {
         "UseDefTest": {
-          "use_line": 4,
+          "use_line": 5,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 10,
+          "use_line": 11,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 14,
+          "use_line": 15,
           "use_ndx": 2
         }
       },
       {
         "UseDefTest": {
-          "use_line": 15,
+          "use_line": 16,
           "use_ndx": 0
         }
       },
       {
         "UseDefTest": {
-          "use_line": 15,
+          "use_line": 16,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 15,
+          "use_line": 16,
           "use_ndx": 3
         }
       },
       {
         "UseDefTest": {
-          "use_line": 26,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 31,
-          "use_ndx": 0
-        }
-      },
-      {
-        "UseDefTest": {
-          "use_line": 26,
-          "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
           "use_line": 27,
-          "use_ndx": 1
+          "use_ndx": 0
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 32,
+          "use_ndx": 0
         }
       },
       {
@@ -84,19 +72,31 @@
       },
       {
         "UseDefTest": {
-          "use_line": 38,
+          "use_line": 28,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 43,
+          "use_line": 28,
+          "use_ndx": 2
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 39,
           "use_ndx": 1
         }
       },
       {
         "UseDefTest": {
-          "use_line": 43,
+          "use_line": 44,
+          "use_ndx": 1
+        }
+      },
+      {
+        "UseDefTest": {
+          "use_line": 44,
           "use_ndx": 2
         }
       }
