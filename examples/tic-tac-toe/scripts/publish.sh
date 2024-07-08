@@ -24,13 +24,7 @@ fi
 ENV=$1
 $SUI client switch --env $ENV
 
-MOVE_PACKAGE_PATH=../move
-PUBLISH=$(
-    $SUI client ptb                                                \
-         --publish ../move --assign cap                            \
-         --transfer-objects [cap] "@$($SUI client active-address)" \
-         --json
-)
+PUBLISH=$($SUI client publish --json ../move)
 
 STATUS=$(
     echo $PUBLISH |
@@ -57,7 +51,7 @@ UPGRADE_CAP=$(
 )
 
 CONFIG="$(readlink -f ../ui/src)/env.$ENV.ts"
-cat > $CONFIG <<-EOF
+cat > $CONFIG <<EOF
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
