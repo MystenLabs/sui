@@ -310,7 +310,7 @@ async fn test_custom_property_check_unpublished_dependencies() {
     };
 
     let expected = expect![[r#"
-        Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a published-at field).
+        Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a 'published-at' field, nor is there a 'published-id' in the Move.lock).
         If this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain)."#]];
     expected.assert_eq(&error)
 }
