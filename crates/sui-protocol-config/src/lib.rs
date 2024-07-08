@@ -2450,6 +2450,10 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.enable_coin_deny_list_v2 = true;
                     }
+
+                    cfg.max_accumulated_txn_cost_per_object_in_checkpoint = Some(10);
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalTxCount;
                 }
                 52 => {
                     if chain != Chain::Mainnet {

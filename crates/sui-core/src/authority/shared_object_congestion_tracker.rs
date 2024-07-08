@@ -147,6 +147,14 @@ impl SharedObjectCongestionTracker {
             }
         }
     }
+
+    pub fn max_cost(&self) -> u64 {
+        self.object_execution_cost
+            .values()
+            .max()
+            .copied()
+            .unwrap_or(0)
+    }
 }
 
 #[cfg(test)]
