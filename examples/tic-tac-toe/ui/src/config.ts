@@ -4,10 +4,10 @@
 import { createNetworkConfig } from '@mysten/dapp-kit';
 import { getFullnodeUrl } from '@mysten/sui/client';
 
+import DevnetPackage from './env.devnet.ts';
 import LocalnetPackage from './env.localnet.ts';
+import MainnetPackage from './env.mainnet.ts';
 import TestnetPackage from './env.testnet.ts';
-
-const NoPackage = { packageId: null, upgradeCap: null };
 
 const { networkConfig, useNetworkVariable } = createNetworkConfig({
 	localnet: {
@@ -21,7 +21,7 @@ const { networkConfig, useNetworkVariable } = createNetworkConfig({
 		url: getFullnodeUrl('devnet'),
 		variables: {
 			explorer: (id: string) => `https://suiscan.xyz/devnet/object/${id}/`,
-			...NoPackage,
+			...DevnetPackage,
 		},
 	},
 	testnet: {
@@ -35,7 +35,7 @@ const { networkConfig, useNetworkVariable } = createNetworkConfig({
 		url: getFullnodeUrl('mainnet'),
 		variables: {
 			explorer: (id: string) => `https://suiscan.xyz/mainnet/object/${id}/`,
-			...NoPackage,
+			...MainnetPackage,
 		},
 	},
 });
