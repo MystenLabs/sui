@@ -5,6 +5,7 @@ import { createNetworkConfig } from '@mysten/dapp-kit';
 import { getFullnodeUrl } from '@mysten/sui/client';
 
 import LocalnetPackage from './env.localnet.ts';
+import TestnetPackage from './env.testnet.ts';
 
 const NoPackage = { packageId: null, upgradeCap: null };
 
@@ -27,7 +28,7 @@ const { networkConfig, useNetworkVariable } = createNetworkConfig({
 		url: getFullnodeUrl('testnet'),
 		variables: {
 			explorer: (id: string) => `https://suiscan.xyz/testnet/object/${id}/`,
-			...NoPackage,
+			...TestnetPackage,
 		},
 	},
 	mainnet: {
