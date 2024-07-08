@@ -8,7 +8,6 @@ import {
 } from "@docusaurus/theme-common/internal";
 import NavbarItem from "@theme/NavbarItem";
 import ThemeToggle from "@site/src/components/ThemeToggle";
-//import NavbarColorModeToggle from "@theme/Navbar/ColorModeToggle";
 import SearchBar from "@theme/SearchBar";
 import NavbarMobileSidebarToggle from "@theme/Navbar/MobileSidebar/Toggle";
 import NavbarLogo from "@theme/Navbar/Logo";
