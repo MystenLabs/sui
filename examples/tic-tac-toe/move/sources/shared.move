@@ -108,10 +108,7 @@ module tic_tac_toe::shared {
         assert!(game.ended() == TROPHY_NONE, EAlreadyFinished);
         assert!(row < 3 && col < 3, EInvalidLocation);
 
-        // Confirm that the mark is from the player we expect -- it should not
-        // be possible to hit this assertion, because the `Mark`s can only be
-        // created by the address that owns the `TurnCap` which cannot be
-        // transferred, and is always held by `game.next_player()`.
+        // Confirm that the mark is from the player we expect.
         let (me, them, sentinel) = game.next_player();
         assert!(me == ctx.sender(), EWrongPlayer);
 
@@ -122,8 +119,7 @@ module tic_tac_toe::shared {
         *(&mut game[row, col]) = sentinel;
         game.turn = game.turn + 1;
 
-        // Check win condition -- if there is a winner, send them the trophy,
-        // otherwise, create a new turn cap and send that to the next player.
+        // Check win condition -- if there is a winner, send them the trophy.
         let end = game.ended();
         if (end == TROPHY_WIN) {
             transfer::transfer(game.mint_trophy(end, them, ctx), me);
