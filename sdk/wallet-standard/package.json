@@ -38,7 +38,7 @@
 	},
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
-		"typescript": "^5.3.3",
-		"typescript-json-schema": "^0.63.0"
+		"typescript": "^5.5.3",
+		"typescript-json-schema": "^0.64.0"
 	}
 }

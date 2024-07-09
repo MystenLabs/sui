@@ -57,6 +57,7 @@ use crate::{
     traffic_controller::metrics::TrafficControllerMetrics,
 };
 use nonempty::{nonempty, NonEmpty};
+use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
 use tonic::transport::server::TcpConnectInfo;
 
 #[cfg(test)]
@@ -102,10 +103,10 @@ pub struct AuthorityServer {
 
 impl AuthorityServer {
     pub fn new_for_test_with_consensus_adapter(
-        address: Multiaddr,
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
     ) -> Self {
+        let address = new_local_tcp_address_for_testing();
         let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
 
         Self {
@@ -116,11 +117,8 @@ impl AuthorityServer {
         }
     }
 
-    pub fn new_for_test(
-        address: Multiaddr,
-        state: Arc<AuthorityState>,
-        consensus_address: Multiaddr,
-    ) -> Self {
+    pub fn new_for_test(state: Arc<AuthorityState>) -> Self {
+        let consensus_address = new_local_tcp_address_for_testing();
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(LazyNarwhalClient::new(consensus_address)),
             state.name,
@@ -132,7 +130,7 @@ impl AuthorityServer {
             ConsensusAdapterMetrics::new_test(),
             state.epoch_store_for_testing().protocol_config().clone(),
         ));
-        Self::new_for_test_with_consensus_adapter(address, state, consensus_adapter)
+        Self::new_for_test_with_consensus_adapter(state, consensus_adapter)
     }
 
     pub async fn spawn_for_test(self) -> Result<AuthorityServerHandle, io::Error> {
@@ -357,7 +355,7 @@ impl ValidatorService {
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
-        Self::transaction_validity_check(&epoch_store, &transaction)?;
+        transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
@@ -633,7 +631,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<SubmitCertificateResponse> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        Self::transaction_validity_check(&epoch_store, certificate.data())?;
+        certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
         self.handle_certificates(
@@ -663,7 +661,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<HandleCertificateResponseV2> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        Self::transaction_validity_check(&epoch_store, certificate.data())?;
+        certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
         self.handle_certificates(
@@ -697,7 +695,9 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<HandleCertificateResponseV3> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let request = request.into_inner();
-        Self::transaction_validity_check(&epoch_store, request.certificate.data())?;
+        request
+            .certificate
+            .validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         let span = error_span!("handle_certificate_v3", tx_digest = ?request.certificate.digest());
         self.handle_certificates(
@@ -818,11 +818,8 @@ impl ValidatorService {
         let certificates = NonEmpty::from_vec(request.certificates)
             .ok_or_else(|| SuiError::NoCertificateProvidedError)?;
         for certificate in &certificates {
-            // CRITICAL: DO NOT USE `certificates` BEFORE THIS CHECK.
-            // This must be the first thing to check before anything else, because the transaction
-            // may not even be valid to access for any other checks.
             // We need to check this first because we haven't verified the cert signature.
-            Self::transaction_validity_check(&epoch_store, certificate.data())?;
+            certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
         }
 
         // Now that individual certificates are valid, we check if the bundle is valid.
@@ -849,28 +846,6 @@ impl ValidatorService {
                 spam_weight,
             )
         })
-    }
-
-    fn transaction_validity_check(
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        transaction: &SenderSignedData,
-    ) -> SuiResult<()> {
-        let config = epoch_store.protocol_config();
-        transaction.validity_check(config, epoch_store.epoch())?;
-        // TODO: The following check should be moved into
-        // TransactionData::check_version_and_features_supported.
-        // However that's blocked by some tests that uses randomness features
-        // even when the protocol feature is not enabled.
-        if !epoch_store.randomness_state_enabled()
-            && transaction.transaction_data().uses_randomness()
-        {
-            return Err(SuiError::UserInputError {
-                error: UserInputError::Unsupported(
-                    "randomness is not enabled on this network".to_string(),
-                ),
-            });
-        }
-        Ok(())
     }
 
     async fn object_info_impl(

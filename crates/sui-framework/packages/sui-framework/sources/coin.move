@@ -267,6 +267,22 @@ module sui::coin {
         (treasury_cap, deny_cap, metadata)
     }
 
+    public fun migrate_regulated_currency_to_v2<T>(
+        deny_list: &mut DenyList,
+        cap: DenyCap<T>,
+        allow_global_pause: bool,
+        ctx: &mut TxContext,
+    ): DenyCapV2<T> {
+        let DenyCap { id } = cap;
+        object::delete(id);
+        let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
+        deny_list.migrate_v1_to_v2(DENY_LIST_COIN_INDEX, ty, ctx);
+        DenyCapV2 {
+            id: object::new(ctx),
+            allow_global_pause,
+        }
+    }
+
     /// Create a coin worth `value` and increase the total supply
     /// in `cap` accordingly.
     public fun mint<T>(
@@ -479,6 +495,7 @@ module sui::coin {
     /// This creates a new currency, via `create_currency`, but with an extra capability that
     /// allows for specific addresses to have their coins frozen. Those addresses cannot interact
     /// with the coin as input objects.
+    #[deprecated(note = b"For new coins, use `create_regulated_currency_v2`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2`")]
     public fun create_regulated_currency<T: drop>(
         witness: T,
         decimals: u8,
@@ -514,6 +531,7 @@ module sui::coin {
 
     /// Adds the given address to the deny list, preventing it
     /// from interacting with the specified coin type as an input to a transaction.
+    #[deprecated(note = b"Use `migrate_regulated_currency_to_v2` to migrate to v2 and then use `deny_list_v2_add`")]
     public fun deny_list_add<T>(
        deny_list: &mut DenyList,
        _deny_cap: &mut DenyCap<T>,
@@ -531,6 +549,7 @@ module sui::coin {
 
     /// Removes an address from the deny list.
     /// Aborts with `ENotFrozen` if the address is not already in the list.
+    #[deprecated(note = b"Use `migrate_regulated_currency_to_v2` to migrate to v2 and then use `deny_list_v2_remove`")]
     public fun deny_list_remove<T>(
        deny_list: &mut DenyList,
        _deny_cap: &mut DenyCap<T>,
@@ -548,6 +567,7 @@ module sui::coin {
 
     /// Returns true iff the given address is denied for the given coin type. It will
     /// return false if given a non-coin type.
+    #[deprecated(note = b"Use `migrate_regulated_currency_to_v2` to migrate to v2 and then use `deny_list_v2_contains_next_epoch` or `deny_list_v2_contains_current_epoch`")]
     public fun deny_list_contains<T>(
        deny_list: &DenyList,
        addr: address,

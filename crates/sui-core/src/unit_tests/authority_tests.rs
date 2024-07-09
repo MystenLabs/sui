@@ -1192,13 +1192,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
         rgp,
     );
 
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-
-    let server = AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority_state.clone(),
-        consensus_address,
-    );
+    let server = AuthorityServer::new_for_test(authority_state.clone());
     let _metrics = server.metrics.clone();
 
     let server_handle = server.spawn_for_test().await.unwrap();

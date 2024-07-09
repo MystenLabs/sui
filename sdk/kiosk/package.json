@@ -43,11 +43,11 @@
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
 		"cross-env": "^7.0.3",
-		"tmp": "^0.2.1",
-		"ts-retry-promise": "^0.7.0",
-		"typescript": "^5.3.3",
-		"vite": "^4.4.4",
-		"vitest": "^1.6.0",
-		"wait-on": "^7.0.1"
+		"tmp": "^0.2.3",
+		"ts-retry-promise": "^0.8.1",
+		"typescript": "^5.5.3",
+		"vite": "^5.3.3",
+		"vitest": "^2.0.1",
+		"wait-on": "^7.2.0"
 	}
 }

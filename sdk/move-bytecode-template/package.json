@@ -15,8 +15,8 @@
 	"devDependencies": {
 		"@mysten/bcs": "workspace:*",
 		"@mysten/build-scripts": "workspace:*",
-		"typescript": "^5.3.3",
-		"vitest": "^1.6.0",
-		"wasm-pack": "^0.12.1"
+		"typescript": "^5.5.3",
+		"vitest": "^2.0.1",
+		"wasm-pack": "^0.13.0"
 	}
 }

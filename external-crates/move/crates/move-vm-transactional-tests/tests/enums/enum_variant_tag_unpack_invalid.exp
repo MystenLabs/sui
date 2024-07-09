@@ -1,0 +1,109 @@
+processed 14 tasks
+
+task 2 'run'. lines 222-222:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(4), 1)],
+}
+
+task 3 'run'. lines 224-224:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(5), 1)],
+}
+
+task 4 'run'. lines 226-226:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(3), 1)],
+}
+
+task 5 'run'. lines 228-228:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(1), 1)],
+}
+
+task 6 'run'. lines 230-230:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(2), 1)],
+}
+
+task 7 'run'. lines 232-232:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 8 'run'. lines 234-234:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(10), 1)],
+}
+
+task 9 'run'. lines 236-236:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(11), 1)],
+}
+
+task 10 'run'. lines 238-238:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(9), 1)],
+}
+
+task 11 'run'. lines 240-240:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(7), 1)],
+}
+
+task 12 'run'. lines 242-242:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(8), 1)],
+}
+
+task 13 'run'. lines 244-244:
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(6), 1)],
+}

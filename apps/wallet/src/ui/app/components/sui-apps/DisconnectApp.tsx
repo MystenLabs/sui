@@ -105,9 +105,9 @@ function DisconnectApp({
 							connectedAccounts.length === 1
 								? 'Disconnect'
 								: accountsToDisconnect.length === 0 ||
-								  connectedAccounts.length === accountsToDisconnect.length
-								? 'Disconnect All'
-								: 'Disconnect Selected'
+									  connectedAccounts.length === accountsToDisconnect.length
+									? 'Disconnect All'
+									: 'Disconnect Selected'
 						}
 						loading={disconnectMutation.isPending}
 						onClick={() => disconnectMutation.mutate()}

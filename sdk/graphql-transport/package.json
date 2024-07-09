@@ -43,24 +43,24 @@
 	},
 	"homepage": "https://github.com/mystenlabs/sui#readme",
 	"devDependencies": {
-		"@graphql-codegen/add": "^5.0.2",
+		"@graphql-codegen/add": "^5.0.3",
 		"@graphql-codegen/cli": "^5.0.2",
-		"@graphql-codegen/typed-document-node": "^5.0.4",
-		"@graphql-codegen/typescript": "4.0.4",
-		"@graphql-codegen/typescript-document-nodes": "4.0.4",
-		"@graphql-codegen/typescript-operations": "^4.1.2",
+		"@graphql-codegen/typed-document-node": "^5.0.9",
+		"@graphql-codegen/typescript": "4.0.9",
+		"@graphql-codegen/typescript-document-nodes": "4.0.9",
+		"@graphql-codegen/typescript-operations": "^4.2.3",
 		"@mysten/build-scripts": "workspace:*",
-		"@parcel/watcher": "^2.3.0",
-		"@types/node": "^20.4.2",
+		"@parcel/watcher": "^2.4.1",
+		"@types/node": "^20.14.10",
 		"graphql-config": "^5.0.3",
-		"typescript": "^5.3.3",
-		"vitest": "^1.6.0",
-		"wait-on": "^7.0.1"
+		"typescript": "^5.5.3",
+		"vitest": "^2.0.1",
+		"wait-on": "^7.2.0"
 	},
 	"dependencies": {
 		"@graphql-typed-document-node/core": "^3.2.0",
 		"@mysten/bcs": "workspace:*",
 		"@mysten/sui": "workspace:*",
-		"graphql": "^16.8.1"
+		"graphql": "^16.9.0"
 	}
 }

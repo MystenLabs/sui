@@ -960,10 +960,17 @@ impl ProgrammableTransaction {
             command.validity_check(config)?;
         }
 
+        // If randomness is used, it must be enabled by protocol config.
         // A command that uses Random can only be followed by TransferObjects or MergeCoins.
         if let Some(random_index) = inputs.iter().position(|obj| {
             matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
         }) {
+            fp_ensure!(
+                config.random_beacon(),
+                UserInputError::Unsupported(
+                    "randomness is not enabled on this network".to_string(),
+                )
+            );
             let mut used_random_object = false;
             let random_index = random_index.try_into().unwrap();
             for command in commands {

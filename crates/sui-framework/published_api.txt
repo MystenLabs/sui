@@ -1942,17 +1942,20 @@ v2_is_global_pause_enabled_current_epoch
 v2_is_global_pause_enabled_next_epoch
 	public(package) fun
 	0x2::deny_list
-add_per_type_config
+migrate_v1_to_v2
 	public(package) fun
+	0x2::deny_list
+add_per_type_config
+	fun
 	0x2::deny_list
 borrow_per_type_config_mut
-	public(package) fun
+	fun
 	0x2::deny_list
 borrow_per_type_config
-	public(package) fun
+	fun
 	0x2::deny_list
 per_type_exists
-	public(package) fun
+	fun
 	0x2::deny_list
 v1_add
 	public(package) fun
@@ -2051,6 +2054,9 @@ create_currency
 	public fun
 	0x2::coin
 create_regulated_currency_v2
+	public fun
+	0x2::coin
+migrate_regulated_currency_to_v2
 	public fun
 	0x2::coin
 mint

@@ -1117,7 +1117,9 @@ fn unique_attributes(
             Some(known) => {
                 debug_assert!(known.name() == sym.as_str());
                 if is_nested {
-                    let msg = "Known attribute '{}' is not expected in a nested attribute position";
+                    let msg = format!(
+                        "Known attribute '{known}' is not expected in a nested attribute position"
+                    );
                     context
                         .env()
                         .add_diag(diag!(Declarations::InvalidAttribute, (nloc, msg)));

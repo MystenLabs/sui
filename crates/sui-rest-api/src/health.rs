@@ -1,26 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, SystemTime};
-
+use crate::{
+    openapi::{ApiEndpoint, RouteHandler},
+    reader::StateReader,
+    RestService, Result,
+};
 use axum::{
     extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
+use std::time::{Duration, SystemTime};
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
-use crate::{reader::StateReader, Result};
+pub struct HealthCheck;
 
-pub const HEALTH_PATH: &str = "/health";
+impl ApiEndpoint<RestService> for HealthCheck {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/health"
+    }
+
+    fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
+        RouteHandler::new(self.method(), health)
+    }
+}
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Threshold {
     pub threshold_seconds: Option<u32>,
 }
 
-pub async fn health(
+async fn health(
     Query(Threshold { threshold_seconds }): Query<Threshold>,
     State(state): State<StateReader>,
 ) -> Result<impl IntoResponse> {

@@ -1,0 +1,160 @@
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    i(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            &mut X.One { x: x } = copy(e);
+            *move(e) = X.One { x: 0 };  // ERROR
+            *move(y) = 3;
+            *move(x) = 2;
+            return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    i(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            &mut X.One { x: x } = copy(e); 
+            Self.overwrite(move(e));// ERROR
+            *move(y) = 3;
+            *move(x) = 2;
+            return;
+    }
+
+    overwrite(e: &mut Self.X) {
+        label b0:
+            *move(e) = X.One { x: 0 }; 
+            return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    j(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(e) = X.One { x: 0 }; // ERROR
+            &mut X.One { x: x } = move(e);
+            *move(y) = 3;
+            *move(x) = 2;
+            return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    j(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            Self.overwrite(copy(e));
+            &mut X.One { x: x } = move(e);
+            *move(y) = 3;
+            *move(x) = 2;
+            return;
+    }
+
+    overwrite(e: &mut Self.X) {
+        label b0:
+            *move(e) = X.One { x: 0 }; 
+            return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    k(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(e) = X.One { x: 0 }; // ERROR since z lives across the assignment
+            *move(y) = 3;
+            return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    k(e: &mut Self.X) {
+        let x: &u64;
+        let y: &u64;
+        let t: u64;
+        label b0:
+            &X.Two { x: x, y: y} = freeze(copy(e));
+            _ = move(x);
+            *move(e) = X.One { x: 0 }; // ERROR since z lives across the assignment
+            t = *move(y);
+            abort move(t);
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    k(e: &mut Self.X) {
+        let x: &u64;
+        let y: &u64;
+        let t: u64;
+        label b0:
+            &X.Two { x: x, y: y} = freeze(copy(e));
+            _ = move(x);
+            Self.overwrite(move(e));
+            t = *move(y);
+            abort move(t);
+    }
+
+    overwrite(e: &mut Self.X) {
+        label b0:
+            *move(e) = X.One { x: 0 }; 
+            return;
+    }
+}

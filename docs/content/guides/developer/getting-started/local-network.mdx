@@ -24,7 +24,11 @@ This command:
 Each time you start the network by passing `--force-regenesis`, the local network starts from a random genesis with no previous data, and the local network is not persisted. If you'd like to persist data, skip passing the `--force-regenesis` flag. For more details, see the [Persist local network state](#persist-local-network) section.
 :::
 
-To customize your local Sui network, such as starting other services or changing default ports and hosts, include additional flags or options in the `sui start` command. Note that `with-indexer` and `with-graphql` requires you to use the `sui-pg` binary from the GitHub release archive, or to build the `sui` binary the indexer feature enabled: `cargo build --bin sui --features indexer`.
+To customize your local Sui network, such as starting other services or changing default ports and hosts, include additional flags or options in the `sui start` command.
+
+:::info
+Options and flags like `with-indexer`,  `with-graphql`, and related require you to use the `sui-pg` binary from the [GitHub release archive](https://github.com/MystenLabs/sui/releases), or to build the `sui` binary with the indexer feature enabled: `cargo build --bin sui --features indexer`.
+:::
 
 The following is a list of possible options and flags to pass to `sui start`:
 ```

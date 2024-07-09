@@ -33,6 +33,7 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 -  [Function `destroy_zero`](#0x2_coin_destroy_zero)
 -  [Function `create_currency`](#0x2_coin_create_currency)
 -  [Function `create_regulated_currency_v2`](#0x2_coin_create_regulated_currency_v2)
+-  [Function `migrate_regulated_currency_to_v2`](#0x2_coin_migrate_regulated_currency_to_v2)
 -  [Function `mint`](#0x2_coin_mint)
 -  [Function `mint_balance`](#0x2_coin_mint_balance)
 -  [Function `burn`](#0x2_coin_burn)
@@ -921,6 +922,42 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
         deny_cap_object: <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&deny_cap),
     });
     (treasury_cap, deny_cap, metadata)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_migrate_regulated_currency_to_v2"></a>
+
+## Function `migrate_regulated_currency_to_v2`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_migrate_regulated_currency_to_v2">migrate_regulated_currency_to_v2</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, cap: <a href="../sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_migrate_regulated_currency_to_v2">migrate_regulated_currency_to_v2</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
+    cap: <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
+    allow_global_pause: bool,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt; {
+    <b>let</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a> { id } = cap;
+    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id);
+    <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.migrate_v1_to_v2(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx);
+    <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a> {
+        id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
+        allow_global_pause,
+    }
 }
 </code></pre>
 

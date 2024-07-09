@@ -95,9 +95,7 @@ impl From<crate::object::Owner> for Owner {
             crate::object::Owner::ObjectOwner(object_id) => Self::Object(object_id.into()),
             crate::object::Owner::Shared {
                 initial_shared_version,
-            } => Self::Shared {
-                initial_shared_version: initial_shared_version.value(),
-            },
+            } => Self::Shared(initial_shared_version.value()),
             crate::object::Owner::Immutable => Self::Immutable,
         }
     }
@@ -108,9 +106,7 @@ impl From<Owner> for crate::object::Owner {
         match value {
             Owner::Address(address) => crate::object::Owner::AddressOwner(address.into()),
             Owner::Object(object_id) => crate::object::Owner::ObjectOwner(object_id.into()),
-            Owner::Shared {
-                initial_shared_version,
-            } => crate::object::Owner::Shared {
+            Owner::Shared(initial_shared_version) => crate::object::Owner::Shared {
                 initial_shared_version: initial_shared_version.into(),
             },
             Owner::Immutable => crate::object::Owner::Immutable,

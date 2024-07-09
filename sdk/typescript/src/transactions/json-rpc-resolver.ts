@@ -391,7 +391,7 @@ async function normalizeInputs(
 						UnresolvedObject: {
 							objectId: inputValue,
 						},
-				  }
+					}
 				: input;
 
 			inputs[arg.Input] = unresolvedObject;

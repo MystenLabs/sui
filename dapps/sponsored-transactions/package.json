@@ -14,20 +14,20 @@
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
 	},
 	"dependencies": {
-		"@tanstack/react-query": "^5.0.0",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0"
+		"@tanstack/react-query": "^5.50.1",
+		"react": "^18.3.1",
+		"react-dom": "^18.3.1"
 	},
 	"devDependencies": {
 		"@mysten/dapp-kit": "workspace:*",
 		"@mysten/sui": "workspace:*",
-		"@types/react": "^18.2.15",
-		"@types/react-dom": "^18.2.7",
-		"@vitejs/plugin-react": "^4.0.3",
-		"autoprefixer": "^10.4.14",
-		"postcss": "^8.4.31",
-		"tailwindcss": "^3.3.3",
-		"typescript": "^5.3.3",
-		"vite": "^4.4.4"
+		"@types/react": "^18.3.3",
+		"@types/react-dom": "^18.3.0",
+		"@vitejs/plugin-react": "^4.3.1",
+		"autoprefixer": "^10.4.19",
+		"postcss": "^8.4.39",
+		"tailwindcss": "^3.4.4",
+		"typescript": "^5.5.3",
+		"vite": "^5.3.3"
 	}
 }
