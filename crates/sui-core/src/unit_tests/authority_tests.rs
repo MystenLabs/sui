@@ -6124,9 +6124,10 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         ]
     );
 
-    // Test get_congested_objects.
-    let congested_objects = input_objects.get_congested_objects().unwrap();
-    assert_eq!(congested_objects, vec![shared_objects[0].id()]);
+    // Test get_cancelled_objects.
+    let (cancelled_objects, cancellation_reason) = input_objects.get_cancelled_objects().unwrap();
+    assert_eq!(cancelled_objects, vec![shared_objects[0].id()]);
+    assert_eq!(cancellation_reason, SequenceNumber::CONGESTED);
 
     // Consensus commit prologue contains cancelled txn shared object version assignment.
     if let TransactionKind::ConsensusCommitPrologueV3(prologue_txn) =

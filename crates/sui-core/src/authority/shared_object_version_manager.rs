@@ -156,13 +156,25 @@ impl SharedObjVerManager {
             // For cancelled transaction due to congestion, assign special versions to all shared objects.
             // Note that new lamport version does not depend on any shared objects.
             for SharedInputObject { id, .. } in shared_input_objects.iter() {
-                let assigned_version = if congested_objects_info
-                    .as_ref()
-                    .is_some_and(|info| info.contains(id))
-                {
-                    SequenceNumber::CONGESTED
-                } else {
-                    SequenceNumber::CANCELLED_READ
+                let assigned_version = match cancellation_info {
+                    Some(CancelConsensusCertificateReason::CongestionOnObjects(_)) => {
+                        if congested_objects_info
+                            .as_ref()
+                            .is_some_and(|info| info.contains(id))
+                        {
+                            SequenceNumber::CONGESTED
+                        } else {
+                            SequenceNumber::CANCELLED_READ
+                        }
+                    }
+                    Some(CancelConsensusCertificateReason::DkgFailed) => {
+                        if id == &SUI_RANDOMNESS_STATE_OBJECT_ID {
+                            SequenceNumber::RANDOMNESS_UNAVAILABLE
+                        } else {
+                            SequenceNumber::CANCELLED_READ
+                        }
+                    }
+                    None => unreachable!("cancelled transaction should have cancellation info"),
                 };
                 assigned_versions.push((*id, assigned_version));
                 is_mutable_input.push(false);
