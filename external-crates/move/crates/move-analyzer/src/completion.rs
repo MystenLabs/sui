@@ -554,7 +554,7 @@ pub fn on_completion_request(
 
     let pos = parameters.text_document_position.position;
     let items = completions_with_context(context, ide_files_root, pkg_dependencies, &path, pos)
-        .unwrap_or(vec![]);
+        .unwrap_or_default();
 
     let result = serde_json::to_value(items).expect("could not serialize completion response");
     eprintln!("about to send completion response");
@@ -575,7 +575,7 @@ pub fn completions_with_context(
     path: &Path,
     pos: Position,
 ) -> Option<Vec<CompletionItem>> {
-    let Some(pkg_path) = SymbolicatorRunner::root_dir(&path) else {
+    let Some(pkg_path) = SymbolicatorRunner::root_dir(path) else {
         eprintln!("failed completion for {:?} (package root not found)", path);
         return None;
     };
@@ -585,7 +585,7 @@ pub fn completions_with_context(
         current_symbols,
         ide_files_root,
         pkg_dependencies,
-        &path,
+        path,
         pos,
     ))
 }
@@ -598,7 +598,7 @@ pub fn completion_items(
     pos: Position,
 ) -> Vec<CompletionItem> {
     compute_cursor_completion_items(ide_files_root, pkg_dependencies, path, pos)
-        .unwrap_or_else(|| compute_completion_items(&current_symbols, path, pos))
+        .unwrap_or_else(|| compute_completion_items(current_symbols, path, pos))
 }
 
 fn compute_cursor_completion_items(

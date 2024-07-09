@@ -173,12 +173,13 @@ impl CompletionTest {
         use_file_path: &Path,
     ) -> anyhow::Result<()> {
         let lsp_use_line = self.use_line - 1; // 0th-based
+        let lsp_use_col = self.use_col - 1; // 0th-based
         let use_pos = Position {
             line: lsp_use_line,
-            character: self.use_col,
+            character: lsp_use_col,
         };
         let items = completion_items(
-            &symbols,
+            symbols,
             ide_files_root,
             pkg_dependencies,
             use_file_path,
@@ -221,23 +222,22 @@ impl CursorTest {
             character,
             description,
         } = self;
+        let line = line - 1; // 0th-based
+        let character = character - 1; // 0th-based
 
         let (symbols_opt, _) = get_symbols(
             pkg_dependencies,
             ide_files_root,
             path,
             LintLevel::None,
-            Some((
-                &path.to_path_buf(),
-                Position {
-                    line: *line,
-                    character: *character,
-                },
-            )),
+            Some((&path.to_path_buf(), Position { line, character })),
         )?;
         let symbols = symbols_opt.unwrap();
 
-        writeln!(output, "-- test {test_ndx} @ {line}:{character} ------------")?;
+        writeln!(
+            output,
+            "-- test {test_ndx} @ {line}:{character} ------------"
+        )?;
         writeln!(output, "expected: {description}")?;
         writeln!(output, "{}", symbols.cursor_context.unwrap())?;
         Ok(())
@@ -353,7 +353,14 @@ fn completion_test_suite(
         let cpath = dunce::canonicalize(&fpath).unwrap();
 
         for (idx, test) in tests.iter().enumerate() {
-            test.test(idx, ide_files_root.clone(), pkg_deps.clone(), &symbols, writer, &cpath)?;
+            test.test(
+                idx,
+                ide_files_root.clone(),
+                pkg_deps.clone(),
+                &symbols,
+                writer,
+                &cpath,
+            )?;
         }
     }
 
@@ -381,7 +388,13 @@ fn cursor_test_suite(
         fpath.push(format!("sources/{file}"));
         let cpath = dunce::canonicalize(&fpath).unwrap();
         for (idx, test) in tests.iter().enumerate() {
-            test.test(idx, ide_files_root.clone(), pkg_deps.clone(), writer, &cpath)?;
+            test.test(
+                idx,
+                ide_files_root.clone(),
+                pkg_deps.clone(),
+                writer,
+                &cpath,
+            )?;
         }
     }
 
