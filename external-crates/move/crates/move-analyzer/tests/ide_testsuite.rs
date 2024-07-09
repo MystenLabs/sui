@@ -10,7 +10,7 @@ use std::{
 };
 
 use json_comments::StripComments;
-use lsp_types::{InlayHintKind, InlayHintLabel, Position};
+use lsp_types::{InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
 use move_analyzer::{
     completion::completion_items,
     inlay_hints::inlay_hints_internal,
@@ -285,6 +285,11 @@ impl HintTest {
             return Ok(());
         };
 
+        let tooltip = hint.tooltip.as_ref().map(|tip| match tip {
+            InlayHintTooltip::String(s) => s.clone(),
+            InlayHintTooltip::MarkupContent(m) => m.value.clone(),
+        });
+
         match hint.kind {
             Some(InlayHintKind::TYPE) => {
                 writeln!(output, "INLAY TYPE HINT : {}", label_parts[1].value)?
@@ -293,6 +298,9 @@ impl HintTest {
                 writeln!(output, "INLAY PARAM HINT: {}", label_parts[0].value)?
             }
             _ => writeln!(output, "INLAY HINT OF UNKNOWN TYPE")?,
+        }
+        if let Some(tip) = tooltip {
+            writeln!(output, "ON HOVER:\n{}", tip)?;
         }
 
         Ok(())

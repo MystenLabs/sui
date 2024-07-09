@@ -123,12 +123,10 @@ fn inlay_param_hints_internal(
                 command: None,
             };
             let position = symbols.files.start_position(use_loc);
-            let tooltip = symbols.def_info(def_loc).and_then(|arg_def_info| {
+            let tooltip = symbols.def_info(def_loc).map(|arg_def_info| {
                 // see doc comment for `additional_type_hint_info` to see
                 // why we only support on hover tooltip for now
-                Some(InlayHintTooltip::MarkupContent(on_hover_markup(
-                    arg_def_info,
-                )))
+                InlayHintTooltip::MarkupContent(on_hover_markup(arg_def_info))
             });
             let h = InlayHint {
                 position: position.into(),
