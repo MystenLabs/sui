@@ -37,7 +37,7 @@ use super::{
     gas::GasEffects,
     object_change::ObjectChange,
     transaction_block::{TransactionBlock, TransactionBlockInner},
-    uint::UInt,
+    uint53::UInt53,
     unchanged_shared_object::UnchangedSharedObject,
 };
 
@@ -111,7 +111,7 @@ impl TransactionBlockEffects {
 
     /// The latest version of all objects (apart from packages) that have been created or modified
     /// by this transaction, immediately following this transaction.
-    async fn lamport_version(&self) -> UInt {
+    async fn lamport_version(&self) -> UInt53 {
         self.native().lamport_version().value().into()
     }
 

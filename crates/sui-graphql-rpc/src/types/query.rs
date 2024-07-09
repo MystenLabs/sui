@@ -13,7 +13,7 @@ use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
 use super::suins_registration::NameService;
-use super::uint::UInt;
+use super::uint53::UInt53;
 use super::{
     address::Address,
     available_range::AvailableRange,
@@ -190,7 +190,7 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         address: SuiAddress,
-        version: Option<UInt>,
+        version: Option<UInt53>,
     ) -> Result<Option<Object>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
@@ -227,7 +227,7 @@ impl Query {
     }
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
-    async fn epoch(&self, ctx: &Context<'_>, id: Option<UInt>) -> Result<Option<Epoch>> {
+    async fn epoch(&self, ctx: &Context<'_>, id: Option<UInt53>) -> Result<Option<Epoch>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
         Epoch::query(ctx, id.map(|id| id.into()), checkpoint)
             .await
@@ -383,7 +383,7 @@ impl Query {
     async fn protocol_config(
         &self,
         ctx: &Context<'_>,
-        protocol_version: Option<UInt>,
+        protocol_version: Option<UInt53>,
     ) -> Result<ProtocolConfigs> {
         ProtocolConfigs::query(ctx.data_unchecked(), protocol_version.map(|v| v.into()))
             .await

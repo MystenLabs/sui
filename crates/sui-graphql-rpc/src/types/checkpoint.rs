@@ -11,7 +11,7 @@ use super::{
     epoch::Epoch,
     gas::GasCostSummary,
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
-    uint::UInt,
+    uint53::UInt53,
 };
 use crate::consistency::Checkpointed;
 use crate::{
@@ -33,7 +33,7 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 #[derive(Default, InputObject)]
 pub(crate) struct CheckpointId {
     pub digest: Option<Digest>,
-    pub sequence_number: Option<UInt>,
+    pub sequence_number: Option<UInt53>,
 }
 
 /// DataLoader key for fetching a `Checkpoint` by its sequence number, constrained by a consistency
@@ -91,7 +91,7 @@ impl Checkpoint {
 
     /// This checkpoint's position in the total order of finalized checkpoints, agreed upon by
     /// consensus.
-    async fn sequence_number(&self) -> UInt {
+    async fn sequence_number(&self) -> UInt53 {
         self.sequence_number_impl().into()
     }
 
@@ -116,7 +116,7 @@ impl Checkpoint {
     }
 
     /// The total number of transaction blocks in the network by the end of this checkpoint.
-    async fn network_total_transactions(&self) -> Option<UInt> {
+    async fn network_total_transactions(&self) -> Option<UInt53> {
         Some(self.network_total_transactions_impl().into())
     }
 
@@ -158,7 +158,7 @@ impl Checkpoint {
         let Some(filter) = filter
             .unwrap_or_default()
             .intersect(TransactionBlockFilter {
-                at_checkpoint: Some(UInt::from(self.stored.sequence_number as u64)),
+                at_checkpoint: Some(UInt53::from(self.stored.sequence_number as u64)),
                 ..Default::default()
             })
         else {

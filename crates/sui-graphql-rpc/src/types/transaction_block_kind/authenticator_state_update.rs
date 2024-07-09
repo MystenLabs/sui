@@ -16,7 +16,7 @@ use crate::{
     types::{
         cursor::{JsonCursor, Page},
         epoch::Epoch,
-        uint::UInt,
+        uint53::UInt53,
     },
 };
 
@@ -47,7 +47,7 @@ impl AuthenticatorStateUpdateTransaction {
     }
 
     /// Consensus round of the authenticator state update.
-    async fn round(&self) -> UInt {
+    async fn round(&self) -> UInt53 {
         self.native.round.into()
     }
 
@@ -88,7 +88,7 @@ impl AuthenticatorStateUpdateTransaction {
     }
 
     /// The initial version of the authenticator object that it was shared at.
-    async fn authenticator_obj_initial_shared_version(&self) -> UInt {
+    async fn authenticator_obj_initial_shared_version(&self) -> UInt53 {
         self.native
             .authenticator_obj_initial_shared_version
             .value()

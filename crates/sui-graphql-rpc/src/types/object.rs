@@ -21,7 +21,7 @@ use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block;
 use super::transaction_block::TransactionBlockFilter;
 use super::type_filter::{ExactTypeFilter, TypeFilter};
-use super::uint::UInt;
+use super::uint53::UInt53;
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
 use crate::consistency::{build_objects_query, Checkpointed, View};
 use crate::data::package_resolver::PackageResolver;
@@ -102,7 +102,7 @@ pub(crate) struct ObjectRef {
     /// ID of the object.
     pub address: SuiAddress,
     /// Version or sequence number of the object.
-    pub version: UInt,
+    pub version: UInt53,
     /// Digest of the object.
     pub digest: Digest,
 }
@@ -138,7 +138,7 @@ pub(crate) struct ObjectFilter {
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ObjectKey {
     pub object_id: SuiAddress,
-    pub version: UInt,
+    pub version: UInt53,
 }
 
 /// The object's owner type: Immutable, Shared, Parent, or Address.
@@ -162,7 +162,7 @@ pub(crate) struct Immutable {
 /// Unlike owned objects, once an object is shared, it stays mutable and is accessible by anyone.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct Shared {
-    initial_shared_version: UInt,
+    initial_shared_version: UInt53,
 }
 
 /// If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
@@ -216,7 +216,7 @@ pub(crate) struct HistoricalObjectCursor {
 #[derive(Interface)]
 #[graphql(
     name = "IObject",
-    field(name = "version", ty = "UInt"),
+    field(name = "version", ty = "UInt53"),
     field(
         name = "status",
         ty = "ObjectStatus",
@@ -396,7 +396,7 @@ impl Object {
             .await
     }
 
-    pub(crate) async fn version(&self) -> UInt {
+    pub(crate) async fn version(&self) -> UInt53 {
         ObjectImpl(self).version().await
     }
 
@@ -525,7 +525,7 @@ impl Object {
 }
 
 impl ObjectImpl<'_> {
-    pub(crate) async fn version(&self) -> UInt {
+    pub(crate) async fn version(&self) -> UInt53 {
         self.0.version_impl().into()
     }
 

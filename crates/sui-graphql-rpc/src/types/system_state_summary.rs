@@ -3,7 +3,7 @@
 
 use super::{
     big_int::BigInt, gas::GasCostSummary, safe_mode::SafeMode, stake_subsidy::StakeSubsidy,
-    storage_fund::StorageFund, system_parameters::SystemParameters, uint::UInt,
+    storage_fund::StorageFund, system_parameters::SystemParameters, uint53::UInt53,
 };
 use async_graphql::*;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary as NativeSystemStateSummary;
@@ -47,7 +47,7 @@ impl SystemStateSummary {
     /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.  This
     /// version changes whenever the fields contained in the system state object (held in a dynamic
     /// field attached to `0x5`) change.
-    async fn system_state_version(&self) -> Option<UInt> {
+    async fn system_state_version(&self) -> Option<UInt53> {
         Some(self.native.system_state_version.into())
     }
 

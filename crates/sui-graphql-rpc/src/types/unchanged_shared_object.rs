@@ -4,7 +4,7 @@
 use async_graphql::*;
 use sui_types::effects::InputSharedObject as NativeInputSharedObject;
 
-use super::{object_read::ObjectRead, sui_address::SuiAddress, uint::UInt};
+use super::{object_read::ObjectRead, sui_address::SuiAddress, uint53::UInt53};
 
 /// Details pertaining to shared objects that are referenced by but not changed by a transaction.
 /// This information is considered part of the effects, because although the transaction specifies
@@ -33,7 +33,7 @@ pub(crate) struct SharedObjectDelete {
 
     /// The version of the shared object that was assigned to this transaction during by consensus,
     /// during sequencing.
-    version: UInt,
+    version: UInt53,
 
     /// Whether this transaction intended to use this shared object mutably or not. See
     /// `SharedInput.mutable` for further details.
@@ -47,7 +47,7 @@ pub(crate) struct SharedObjectCancelled {
     address: SuiAddress,
 
     /// The assigned shared object version. It is a special version indicating transaction cancellation reason.
-    version: UInt,
+    version: UInt53,
 }
 
 /// Error for converting from an `InputSharedObject`.

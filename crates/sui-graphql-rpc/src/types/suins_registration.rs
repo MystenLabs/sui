@@ -22,7 +22,7 @@ use super::{
     sui_address::SuiAddress,
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
     type_filter::ExactTypeFilter,
-    uint::UInt,
+    uint53::UInt53,
 };
 use crate::{
     consistency::{build_objects_query, View},
@@ -196,7 +196,7 @@ impl SuinsRegistration {
             .await
     }
 
-    pub(crate) async fn version(&self) -> UInt {
+    pub(crate) async fn version(&self) -> UInt53 {
         ObjectImpl(&self.super_.super_).version().await
     }
 
