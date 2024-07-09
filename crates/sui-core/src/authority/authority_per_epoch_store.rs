@@ -97,7 +97,7 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
 use sui_types::messages_consensus::{
-    check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey,
+    check_total_jwk_size, AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKey,
     ConsensusTransactionKind,
 };
 use sui_types::messages_consensus::{VersionedDkgConfimation, VersionedDkgMessage};
@@ -486,7 +486,7 @@ pub struct AuthorityEpochTables {
     pub running_root_accumulators: DBMap<CheckpointSequenceNumber, Accumulator>,
 
     /// Record of the capabilities advertised by each authority.
-    authority_capabilities: DBMap<AuthorityName, AuthorityCapabilities>,
+    authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
 
     /// Contains a single key, which overrides the value of
     /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
@@ -2114,7 +2114,7 @@ impl AuthorityPerEpochStore {
     }
 
     /// Record most recently advertised capabilities of all authorities
-    pub fn record_capabilities(&self, capabilities: &AuthorityCapabilities) -> SuiResult {
+    pub fn record_capabilities(&self, capabilities: &AuthorityCapabilitiesV1) -> SuiResult {
         info!("received capabilities {:?}", capabilities);
         let authority = &capabilities.authority;
 
@@ -2134,8 +2134,8 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn get_capabilities(&self) -> SuiResult<Vec<AuthorityCapabilities>> {
-        let result: Result<Vec<AuthorityCapabilities>, TypedStoreError> = self
+    pub fn get_capabilities(&self) -> SuiResult<Vec<AuthorityCapabilitiesV1>> {
+        let result: Result<Vec<AuthorityCapabilitiesV1>, TypedStoreError> = self
             .tables()?
             .authority_capabilities
             .values()

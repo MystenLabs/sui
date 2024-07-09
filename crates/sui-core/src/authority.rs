@@ -72,7 +72,6 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEvents, TransactionFilter,
 };
 use sui_macros::{fail_point, fail_point_async, fail_point_if};
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
@@ -102,7 +101,7 @@ use sui_types::messages_checkpoint::{
     CheckpointResponseV2, CheckpointSequenceNumber, CheckpointSummary, CheckpointSummaryResponse,
     CheckpointTimestamp, ECMHLiveObjectSetDigest, VerifiedCheckpoint,
 };
-use sui_types::messages_consensus::AuthorityCapabilities;
+use sui_types::messages_consensus::AuthorityCapabilitiesV1;
 use sui_types::messages_grpc::{
     HandleTransactionResponse, LayoutGenerationOption, ObjectInfoRequest, ObjectInfoRequestKind,
     ObjectInfoResponse, TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
@@ -115,6 +114,7 @@ use sui_types::storage::{
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
+use sui_types::supported_protocol_versions::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -4287,7 +4287,7 @@ impl AuthorityState {
         proposed_protocol_version: ProtocolVersion,
         protocol_config: &ProtocolConfig,
         committee: &Committee,
-        capabilities: Vec<AuthorityCapabilities>,
+        capabilities: Vec<AuthorityCapabilitiesV1>,
         mut buffer_stake_bps: u64,
     ) -> Option<(ProtocolVersion, Vec<ObjectRef>)> {
         if proposed_protocol_version > current_protocol_version + 1
@@ -4373,7 +4373,7 @@ impl AuthorityState {
         current_protocol_version: ProtocolVersion,
         protocol_config: &ProtocolConfig,
         committee: &Committee,
-        capabilities: Vec<AuthorityCapabilities>,
+        capabilities: Vec<AuthorityCapabilitiesV1>,
         buffer_stake_bps: u64,
     ) -> (ProtocolVersion, Vec<ObjectRef>) {
         let mut next_protocol_version = current_protocol_version;

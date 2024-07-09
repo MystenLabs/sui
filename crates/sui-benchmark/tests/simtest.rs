@@ -30,9 +30,7 @@ mod test {
         clear_fail_point, nondeterministic, register_fail_point_arg, register_fail_point_async,
         register_fail_point_if, register_fail_points, sim_test,
     };
-    use sui_protocol_config::{
-        PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion, SupportedProtocolVersions,
-    };
+    use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
@@ -41,6 +39,7 @@ mod test {
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
+    use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::transaction::{
         DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
     };

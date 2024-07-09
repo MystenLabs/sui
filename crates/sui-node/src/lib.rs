@@ -112,7 +112,7 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
-use sui_protocol_config::{Chain, ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_snapshot::uploader::StateSnapshotUploader;
 use sui_storage::{
     http_key_value_store::HttpKVStore,
@@ -125,12 +125,13 @@ use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::{
-    check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction,
+    check_total_jwk_size, AuthorityCapabilitiesV1, ConsensusTransaction,
 };
 use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
 
@@ -1487,8 +1488,8 @@ impl SuiNode {
 
                 let config = cur_epoch_store.protocol_config();
                 let binary_config = to_binary_config(config);
-                let transaction =
-                    ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
+                let transaction = ConsensusTransaction::new_capability_notification(
+                    AuthorityCapabilitiesV1::new(
                         self.state.name,
                         self.config
                             .supported_protocol_versions
@@ -1496,7 +1497,8 @@ impl SuiNode {
                         self.state
                             .get_available_system_packages(&binary_config)
                             .await,
-                    ));
+                    ),
+                );
                 info!(?transaction, "submitting capabilities to consensus");
                 components
                     .consensus_adapter
