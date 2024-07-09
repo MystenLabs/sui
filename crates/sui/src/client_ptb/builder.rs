@@ -934,7 +934,7 @@ impl<'a> PTBBuilder<'a> {
                     .map_err(|e| err!(pkg_loc, "{e}"))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
                     sui_package_management::set_package_id(
-                        &package_path,
+                        package_path,
                         build_config.install_dir.clone(),
                         chain_id,
                         AccountAddress::ZERO,
@@ -954,7 +954,7 @@ impl<'a> PTBBuilder<'a> {
                 // Restore original ID, then check result.
                 if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
                     let _ = sui_package_management::set_package_id(
-                        &package_path,
+                        package_path,
                         build_config.install_dir.clone(),
                         &chain_id,
                         previous_id,
@@ -1001,7 +1001,7 @@ impl<'a> PTBBuilder<'a> {
                     .map_err(|e| err!(path_loc, "{e}"))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
                     sui_package_management::set_package_id(
-                        &package_path,
+                        package_path,
                         build_config.install_dir.clone(),
                         chain_id,
                         AccountAddress::ZERO,
@@ -1013,7 +1013,7 @@ impl<'a> PTBBuilder<'a> {
                 let upgrade_result = upgrade_package(
                     self.reader,
                     build_config.clone(),
-                    &package_path,
+                    package_path,
                     ObjectID::from_address(upgrade_cap_id.into_inner()),
                     false, /* with_unpublished_dependencies */
                     false, /* skip_dependency_verification */
@@ -1023,7 +1023,7 @@ impl<'a> PTBBuilder<'a> {
                 // Restore original ID, then check result.
                 if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
                     let _ = sui_package_management::set_package_id(
-                        &package_path,
+                        package_path,
                         build_config.install_dir.clone(),
                         &chain_id,
                         previous_id,
