@@ -325,13 +325,9 @@ impl VersionedDkgMessage {
         dkg_version: u64,
         party: Arc<dkg::Party<bls12381::G2Element, bls12381::G2Element>>,
     ) -> FastCryptoResult<VersionedDkgMessage> {
-        match dkg_version {
-            1 => {
-                let msg = party.create_message_v1(&mut rand::thread_rng())?;
-                Ok(VersionedDkgMessage::V1(msg))
-            }
-            _ => panic!("BUG: invalid DKG version"),
-        }
+        assert_eq!(dkg_version, 1, "BUG: invalid DKG version");
+        let msg = party.create_message_v1(&mut rand::thread_rng())?;
+        Ok(VersionedDkgMessage::V1(msg))
     }
 
     pub fn unwrap_v1(self) -> dkg_v1::Message<bls12381::G2Element, bls12381::G2Element> {

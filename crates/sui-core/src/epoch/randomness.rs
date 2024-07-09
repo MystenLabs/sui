@@ -70,42 +70,29 @@ impl VersionedProcessedMessage {
     }
 
     pub fn process(
-        dkg_version: u64,
         party: Arc<dkg::Party<PkG, EncG>>,
         message: VersionedDkgMessage,
     ) -> FastCryptoResult<VersionedProcessedMessage> {
         // All inputs are verified in add_message, so we can assume they are of the correct version.
-        match dkg_version {
-            1 => {
-                let processed =
-                    party.process_message_v1(message.unwrap_v1(), &mut rand::thread_rng())?;
-                Ok(VersionedProcessedMessage::V1(processed))
-            }
-            _ => panic!("BUG: invalid DKG version"),
-        }
+        let processed = party.process_message_v1(message.unwrap_v1(), &mut rand::thread_rng())?;
+        Ok(VersionedProcessedMessage::V1(processed))
     }
 
     pub fn merge(
-        dkg_version: u64,
         party: Arc<dkg::Party<PkG, EncG>>,
         messages: Vec<Self>,
     ) -> FastCryptoResult<(VersionedDkgConfirmation, VersionedUsedProcessedMessages)> {
         // All inputs were created by this validator, so we can assume they are of the correct version.
-        match dkg_version {
-            1 => {
-                let (conf, msgs) = party.merge_v1(
-                    &messages
-                        .into_iter()
-                        .map(|vm| vm.unwrap_v1())
-                        .collect::<Vec<_>>(),
-                )?;
-                Ok((
-                    VersionedDkgConfirmation::V1(conf),
-                    VersionedUsedProcessedMessages::V1(msgs),
-                ))
-            }
-            _ => panic!("BUG: invalid DKG version"),
-        }
+        let (conf, msgs) = party.merge_v1(
+            &messages
+                .into_iter()
+                .map(|vm| vm.unwrap_v1())
+                .collect::<Vec<_>>(),
+        )?;
+        Ok((
+            VersionedDkgConfirmation::V1(conf),
+            VersionedUsedProcessedMessages::V1(msgs),
+        ))
     }
 }
 
@@ -123,19 +110,17 @@ impl VersionedUsedProcessedMessages {
     ) -> FastCryptoResult<Output<PkG, EncG>> {
         // All inputs are verified in add_confirmation, so we can assume they are of the correct version.
         let rng = &mut StdRng::from_rng(OsRng).expect("RNG construction should not fail");
-        match self {
-            VersionedUsedProcessedMessages::V0() => {
-                panic!("BUG: invalid VersionedUsedProcessedMessages version")
-            }
-            VersionedUsedProcessedMessages::V1(msg) => party.complete_v1(
-                msg,
-                &confirmations
-                    .map(|vm| vm.unwrap_v1())
-                    .cloned()
-                    .collect::<Vec<_>>(),
-                rng,
-            ),
-        }
+        let VersionedUsedProcessedMessages::V1(msg) = self else {
+            panic!("BUG: invalid VersionedUsedProcessedMessages version")
+        };
+        party.complete_v1(
+            msg,
+            &confirmations
+                .map(|vm| vm.unwrap_v1())
+                .cloned()
+                .collect::<Vec<_>>(),
+            rng,
+        )
     }
 }
 
@@ -457,7 +442,6 @@ impl RandomnessManager {
     /// sending out a dkg::Confirmation and generating final output.
     pub async fn advance_dkg(&mut self, batch: &mut DBBatch, round: Round) -> SuiResult {
         let epoch_store = self.epoch_store()?;
-        let dkg_version = epoch_store.protocol_config().dkg_version();
 
         // Once we have enough Messages, send a Confirmation.
         if !self.dkg_output.initialized() && !self.used_messages.initialized() {
@@ -478,7 +462,6 @@ impl RandomnessManager {
 
             // Attempt to generate the Confirmation.
             match VersionedProcessedMessage::merge(
-                dkg_version,
                 self.party.clone(),
                 self.processed_messages
                     .values()
@@ -632,7 +615,7 @@ impl RandomnessManager {
         self.enqueued_messages.insert(
             msg.sender(),
             tokio::task::spawn_blocking(move || {
-                match VersionedProcessedMessage::process(dkg_version, party, msg) {
+                match VersionedProcessedMessage::process(party, msg) {
                     Ok(processed) => Some(processed),
                     Err(err) => {
                         debug!("random beacon: error while processing DKG Message: {err:?}");
