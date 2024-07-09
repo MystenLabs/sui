@@ -115,7 +115,7 @@ pub enum PatternSuggestion {
 pub enum EllipsisMatchEntries {
     /// A number of wildcards inserted for the ellipsis for a positional match.
     Positional(Vec<Symbol>),
-    /// A list of symbols mappec to wildcards that  are added to a named match.
+    /// A list of symbols mapped to wildcards that are added to a named match.
     Named(Vec<Symbol>),
 }
 

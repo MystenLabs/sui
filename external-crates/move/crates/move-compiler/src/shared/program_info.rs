@@ -373,6 +373,21 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
             N::VariantFields::Defined(is_positional, _m) => *is_positional,
         }
     }
+
+    // -- Optional Versions of Accessorrs for use with IDE
+
+    pub fn struct_definition_opt(
+        &self,
+        m: &ModuleIdent,
+        n: &DatatypeName,
+    ) -> Option<&StructDefinition> {
+        let minfo = self.module_opt(m)?;
+        minfo.structs.get(n)
+    }
+
+    pub fn module_opt(&self, m: &ModuleIdent) -> Option<&ModuleInfo> {
+        self.modules.get(m)
+    }
 }
 
 impl Display for NamedMemberKind {
