@@ -192,13 +192,13 @@ impl CompletionTest {
         )?;
         for i in items {
             writeln!(output, "{:?} '{}'", i.kind.unwrap(), i.label)?;
-            writeln!(output, "\tINSERT TEXT: '{}'", i.insert_text.unwrap())?;
+            writeln!(output, "    INSERT TEXT: '{}'", i.insert_text.unwrap())?;
             if let Some(label_details) = i.label_details {
                 if let Some(detail) = label_details.detail {
-                    writeln!(output, "\tTARGET     : '{}'", detail.trim())?;
+                    writeln!(output, "    TARGET     : '{}'", detail.trim())?;
                 }
                 if let Some(description) = label_details.description {
-                    writeln!(output, "\tTYPE       : '{description}'")?;
+                    writeln!(output, "    TYPE       : '{description}'")?;
                 }
             }
         }
@@ -213,7 +213,6 @@ impl CursorTest {
         test_ndx: usize,
         ide_files_root: VfsPath,
         pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
-        symbols: &Symbols,
         output: &mut dyn std::io::Write,
         path: &Path,
     ) -> anyhow::Result<()> {
@@ -303,7 +302,7 @@ fn use_def_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<UseDefTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, ide_files_layer, _, symbols) = initial_symbols(project)?;
+    let (project_path, _, _, symbols) = initial_symbols(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -352,10 +351,6 @@ fn completion_test_suite(
 
         fpath.push(format!("sources/{file}"));
         let cpath = dunce::canonicalize(&fpath).unwrap();
-        let mod_symbols = symbols
-            .file_use_defs
-            .get(&cpath)
-            .ok_or(format!("NO SYMBOLS FOR {}", cpath.to_str().unwrap()))?;
 
         for (idx, test) in tests.iter().enumerate() {
             test.test(idx, ide_files_root.clone(), pkg_deps.clone(), &symbols, writer, &cpath)?;
@@ -370,7 +365,7 @@ fn cursor_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<CursorTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, ide_files_root, pkg_deps, symbols) = initial_symbols(project)?;
+    let (project_path, ide_files_root, pkg_deps, _) = initial_symbols(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -385,13 +380,8 @@ fn cursor_test_suite(
 
         fpath.push(format!("sources/{file}"));
         let cpath = dunce::canonicalize(&fpath).unwrap();
-        let mod_symbols = symbols
-            .file_use_defs
-            .get(&cpath)
-            .ok_or(format!("NO SYMBOLS FOR {}", cpath.to_str().unwrap()))?;
-
         for (idx, test) in tests.iter().enumerate() {
-            test.test(idx, ide_files_root.clone(), pkg_deps.clone(), &symbols, writer, &cpath)?;
+            test.test(idx, ide_files_root.clone(), pkg_deps.clone(), writer, &cpath)?;
         }
     }
 

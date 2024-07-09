@@ -296,13 +296,17 @@ fn call_completion_item(
 fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<CompletionItem> {
     let mut completions = vec![];
     let Some(fhash) = symbols.file_hash(use_fpath) else {
+        eprintln!("missing file");
         return completions;
     };
-    let Some(byte_idx) = utils::lsp_position_to_byte_index(&symbols.files, fhash, position) else {
+    let Some(loc) = utils::lsp_position_to_loc(&symbols.files, fhash, position) else {
+        eprintln!("missing loc");
         return completions;
     };
-    let loc = Loc::new(fhash, byte_idx, byte_idx);
     let Some(info) = symbols.compiler_info.get_autocomplete_info(fhash, &loc) else {
+        eprintln!("compiler info: {:#?}", symbols.compiler_info);
+        eprintln!("loc: {:#?}", loc);
+        eprintln!("no compiler autocomplete info");
         return completions;
     };
     for AutocompleteMethod {
@@ -335,6 +339,7 @@ fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<Completi
             // this shouldn't really happen as we should be able to get
             // `DefInfo` for a function but if for some reason we cannot,
             // let's generate simpler autotompletion value
+            eprintln!("incomplete dot item");
             CompletionItem {
                 label: format!("{method_name}()"),
                 kind: Some(CompletionItemKind::METHOD),
@@ -685,7 +690,7 @@ fn cursor_completion_items(
             eprintln!("found period");
             let items = dot(symbols, path, &pos);
             let items_is_empty = items.is_empty();
-            eprintln!("found items: {items_is_empty}");
+            eprintln!("found items: {}", !items_is_empty);
             (items, !items_is_empty)
         }
         // TODO: consider using `cursor.position` for this instead

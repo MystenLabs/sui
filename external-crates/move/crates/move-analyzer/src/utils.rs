@@ -52,7 +52,7 @@ pub fn lsp_position_to_loc(
     pos: &Position,
 ) -> Option<Loc> {
     let line_offset = pos.line;
-    let char_offset = pos.character;
+    let char_offset = pos.character-1;
     files.line_char_offset_to_loc_opt(file_hash, line_offset, char_offset)
 }
 

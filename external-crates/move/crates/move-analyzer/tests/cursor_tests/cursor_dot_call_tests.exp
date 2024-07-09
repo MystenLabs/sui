@@ -28,8 +28,7 @@ expected: at a struct field type
 cursor info:
 - module: Move2024::M1
 - definition: struct SomeStruct
-- position: type
-- value: Apply(Single(PathEntry { name: "u64", tyargs: None, is_macro: None }))
+- position: unknown
 
 -- test 4 @ 6:21 ------------
 expected: at a struct field type
@@ -52,7 +51,8 @@ expected: in a struct definition at nowhere in particular
 cursor info:
 - module: Move2024::M1
 - definition: struct SomeStruct
-- position: unknown
+- position: type
+- value: Apply(Single(PathEntry { name: "u64", tyargs: None, is_macro: None }))
 
 -- test 7 @ 17:45 ------------
 expected: at a function return type
@@ -81,7 +81,7 @@ expected: at a function definition name
 cursor info:
 - module: Move2024::M2
 - definition: function baz
-- position: defn name
+- position: unknown
 
 -- test 11 @ 28:16 ------------
 expected: at a function definition name
@@ -102,7 +102,7 @@ expected: at a function definition at nowhere in particular
 cursor info:
 - module: Move2024::M2
 - definition: function baz
-- position: unknown
+- position: defn name
 
 -- test 14 @ 28:19 ------------
 expected: at a function definition at nowhere in particular
