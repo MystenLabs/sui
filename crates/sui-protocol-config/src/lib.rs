@@ -1139,7 +1139,8 @@ pub struct ProtocolConfig {
     /// Minimum interval between consecutive rounds of generated randomness.
     random_beacon_min_round_interval_ms: Option<u64>,
 
-    /// Version of the random beacon DKG protocol, 0 when not set.
+    /// Version of the random beacon DKG protocol.
+    /// 0 was deprecated (and currently not supported), 1 is the default version.
     random_beacon_dkg_version: Option<u64>,
 
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
@@ -1352,7 +1353,8 @@ impl ProtocolConfig {
     }
 
     pub fn dkg_version(&self) -> u64 {
-        self.random_beacon_dkg_version.unwrap_or(0)
+        // 0 was a deprecated value, so we default to 1 if not set.
+        self.random_beacon_dkg_version.unwrap_or(1)
     }
 
     pub fn enable_bridge(&self) -> bool {
