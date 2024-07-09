@@ -14,6 +14,7 @@ rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 serde_with.workspace = true
 tap.workspace = true
 thiserror.workspace = true
@@ -21,11 +22,15 @@ async-trait.workspace = true
 itertools.workspace = true
 sui-sdk2.workspace = true
 prometheus.workspace = true
+openapiv3 = { git = "https://github.com/bmwill/openapiv3.git", rev = "ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963" }
+schemars.workspace = true
 
 fastcrypto.workspace = true
 sui-types.workspace = true
 mysten-network.workspace = true
 sui-protocol-config.workspace = true
 
+
 [dev-dependencies]
 tokio.workspace = true
+diffy = "0.3"

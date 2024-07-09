@@ -202,7 +202,7 @@ impl<'a> ObjectRuntime<'a> {
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
         // and then re-added in a single transaction. In that case, we also skip adding it
         // to new_ids.
-        let was_present = self.state.deleted_ids.remove(&id);
+        let was_present = self.state.deleted_ids.shift_remove(&id);
         if !was_present {
             // mark the id as new
             self.state.new_ids.insert(id);
@@ -230,7 +230,7 @@ impl<'a> ObjectRuntime<'a> {
                 ));
         };
 
-        let was_new = self.state.new_ids.remove(&id);
+        let was_new = self.state.new_ids.shift_remove(&id);
         if !was_new {
             self.state.deleted_ids.insert(id);
         }
@@ -432,14 +432,14 @@ impl<'a> ObjectRuntime<'a> {
         }
     }
 
-    pub(super) fn config_setting_cache_insert(
+    pub(super) fn config_setting_cache_update(
         &mut self,
         config_id: ObjectID,
         name_df_id: ObjectID,
         setting_value_object_type: MoveObjectType,
-        value: Value,
+        value: Option<Value>,
     ) {
-        self.child_object_store.config_setting_cache_insert(
+        self.child_object_store.config_setting_cache_update(
             config_id,
             name_df_id,
             setting_value_object_type,

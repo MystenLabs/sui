@@ -726,7 +726,7 @@ pub fn check_unpublished_dependencies(unpublished: &BTreeSet<Symbol>) -> Result<
         .map(|name| {
             format!(
                 "Package dependency \"{name}\" does not specify a published address \
-		 (the Move.toml manifest for \"{name}\" does not contain a published-at field).",
+		 (the Move.toml manifest for \"{name}\" does not contain a 'published-at' field, nor is there a 'published-id' in the Move.lock).",
             )
         })
         .collect::<Vec<_>>();
@@ -753,7 +753,8 @@ pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<
         .map(|(name, value)| {
             format!(
                 "Package dependency \"{name}\" does not specify a valid published \
-		 address: could not parse value \"{value}\" for published-at field."
+		 address: could not parse value \"{value}\" for 'published-at' field in Move.toml \
+                 or 'published-id' in Move.lock file."
             )
         })
         .collect::<Vec<_>>();

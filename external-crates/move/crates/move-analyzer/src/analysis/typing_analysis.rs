@@ -649,6 +649,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         sdef: &mut N::StructDefinition,
     ) {
         self.reset_for_module_member();
+
         let file_hash = struct_name.loc().file_hash();
         // enter self-definition for struct name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&struct_name.loc());

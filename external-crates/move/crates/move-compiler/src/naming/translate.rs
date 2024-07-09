@@ -2119,7 +2119,7 @@ fn struct_def(
         warning_filter,
         index,
         attributes,
-        loc: _loc,
+        loc,
         abilities,
         type_parameters,
         fields,
@@ -2131,6 +2131,7 @@ fn struct_def(
     N::StructDefinition {
         warning_filter,
         index,
+        loc,
         attributes,
         abilities,
         type_parameters,
@@ -2176,7 +2177,7 @@ fn enum_def(
         warning_filter,
         index,
         attributes,
-        loc: _loc,
+        loc,
         abilities,
         type_parameters,
         variants,
@@ -2188,6 +2189,7 @@ fn enum_def(
     N::EnumDefinition {
         warning_filter,
         index,
+        loc,
         attributes,
         abilities,
         type_parameters,

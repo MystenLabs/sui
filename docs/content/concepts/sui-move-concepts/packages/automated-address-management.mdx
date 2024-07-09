@@ -27,7 +27,21 @@ Previously a `published-at` entry was **mandatory** in the `Move.toml` file, whi
       - `ORIGINAL-ADDRESS` should be the address your package was first published at. If you never upgraded your package, this the same address as your `published-at` address in the `Move.toml`
       - `LATEST-ADDRESS` should be the latest package address. If you never upgraded your package, it is the same as `ORIGINAL-ADDRESS`. If you upgraded your package, this is the same address as your current `published-at` address in the `Move.toml`.
       - `VERSION-NUMBER` is `1` if you never upgraded your package. Otherwise, it is a number greater than `1` depending on how many times you upgraded your package. In this case, look up the package at `LATEST-ADDRESS` to determine the version number.
-1. Delete the `published-at` line in your `Move.toml`. Your package is now tracked. You can repeat the above steps to track addresses for additional environments.
+1. Delete the `published-at` line in your `Move.toml`.
+1. Set your package's address to `0x0` in the `[addresses]` section. For example:
+
+```toml
+[package]
+name = "Kiosk"
+
+[dependencies]
+# ... your dependencies ...
+
+[addresses]
+kiosk = "0x0"
+```
+
+Your package is now tracked. You can repeat the above steps to track addresses for additional environments.
 
 ## Package upgrade guidance
 
@@ -44,7 +58,7 @@ For example, you might have an existing package with a `published-at` value in t
 Here are steps to remediate conflicting addresses:
 
 - If the conflict is in a package you maintain:
-  - Delete the `published-at` value in your `Move.toml` if this published address is no longer needed
+  - Delete the `published-at` value in your `Move.toml` if this published address is no longer needed. Then set the package's address to `0x0` in the `[addresses]` section.
   - Alternatively, follow the steps to [adopt automated address management](#adopting-automated-address-management-for-published-packages)
 
 - If the conflict is in a package that you do not maintain (such as a dependency), consider fixing the issue locally with the steps above, or contacting the maintainer to upstream changes.

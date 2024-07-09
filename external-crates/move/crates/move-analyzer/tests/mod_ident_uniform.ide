@@ -3,8 +3,10 @@
 // keys used for insertion/retrieval being different. There are no actual tests as a potential
 // problem would manifest itself in the symbolication algorithm itself.
 {
-  "project": "tests/mod-ident-uniform",
-  "file_tests": {
-    "M1.move": []
+  "UseDef": {
+    "project": "tests/mod-ident-uniform",
+    "file_tests": {
+      "M1.move": []
+    }
   }
 }

@@ -165,6 +165,7 @@ fn inlay_type_test() {
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
+        /* cursor */ None,
     )
     .unwrap();
     let symbols = symbols_opt.unwrap();

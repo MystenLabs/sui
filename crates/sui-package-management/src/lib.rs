@@ -157,21 +157,20 @@ pub fn resolve_published_id(
     };
     let managed_packages = ManagedPackage::read(&mut lock_file).ok();
     // Find the environment and ManagedPackage data for this chain_id.
-    let env_for_chain_id = managed_packages
-        .and_then(|m| {
-            let chain_id = chain_id.as_ref()?;
-            m.into_iter().find(|(_, v)| v.chain_id == *chain_id)
-        })
-        .map(|(k, v)| (k, v.latest_published_id));
+    let id_in_lock_for_chain_id = managed_packages.and_then(|m| {
+        let chain_id = chain_id.as_ref()?;
+        m.into_iter()
+            .find_map(|(_, v)| (v.chain_id == *chain_id).then_some(v.latest_published_id))
+    });
 
-    let package_id = match (env_for_chain_id, published_id_in_manifest) {
-        (Some((_env, id_lock)), Some(id_manifest)) if id_lock != id_manifest => {
+    let package_id = match (id_in_lock_for_chain_id, published_id_in_manifest) {
+        (Some(id_lock), Some(id_manifest)) if id_lock != id_manifest => {
             return Err(PublishedAtError::Conflict {
                 id_lock,
                 id_manifest,
             })
         }
-        (Some((_, id_lock)), _) => id_lock,
+        (Some(id_lock), _) => id_lock,
         (None, Some(id_manifest)) => id_manifest, /* No info in Move.lock: Fall back to manifest */
         _ => return Err(PublishedAtError::NotPresent), /* Neither in Move.toml nor Move.lock */
     };

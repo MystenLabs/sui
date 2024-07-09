@@ -1,15 +1,43 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{accept::AcceptFormat, reader::StateReader, response::ResponseContent, Result};
+use crate::{
+    accept::AcceptFormat,
+    openapi::{ApiEndpoint, RouteHandler},
+    reader::StateReader,
+    response::ResponseContent,
+    RestService, Result,
+};
 use axum::extract::{Path, State};
 use sui_sdk2::types::{EpochId, ValidatorCommittee};
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
-pub const GET_LATEST_COMMITTEE_PATH: &str = "/committee";
+pub struct GetLatestCommittee;
 
-pub async fn get_latest_committee(
+impl ApiEndpoint<RestService> for GetLatestCommittee {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/committee"
+    }
+
+    fn operation(
+        &self,
+        generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        generator.subschema_for::<ValidatorCommittee>();
+        openapiv3::v3_1::Operation::default()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), get_latest_committee)
+    }
+}
+
+async fn get_latest_committee(
     accept: AcceptFormat,
     State(state): State<StateReader>,
 ) -> Result<ResponseContent<ValidatorCommittee>> {
@@ -25,9 +53,31 @@ pub async fn get_latest_committee(
     .pipe(Ok)
 }
 
-pub const GET_COMMITTEE_PATH: &str = "/committee/:epoch";
+pub struct GetCommittee;
 
-pub async fn get_committee(
+impl ApiEndpoint<RestService> for GetCommittee {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/committee/{epoch}"
+    }
+
+    fn operation(
+        &self,
+        generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        generator.subschema_for::<ValidatorCommittee>();
+        openapiv3::v3_1::Operation::default()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), get_committee)
+    }
+}
+
+async fn get_committee(
     Path(epoch): Path<EpochId>,
     accept: AcceptFormat,
     State(state): State<StateReader>,
