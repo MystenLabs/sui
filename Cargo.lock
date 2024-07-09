@@ -12665,6 +12665,7 @@ dependencies = [
  "serde",
  "sui-move-build",
  "sui-types",
+ "tempfile",
  "tracing",
 ]
 

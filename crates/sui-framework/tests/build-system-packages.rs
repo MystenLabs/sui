@@ -10,17 +10,31 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
 };
-
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 
+const CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
+const COMPILED_PACKAGES_DIR: &str = "packages_compiled";
 const DOCS_DIR: &str = "docs";
-const PUBLISHED_API_DIR: &str = "published_api.txt";
+const PUBLISHED_API_FILE: &str = "published_api.txt";
 
-/// Save revision info to environment variable
-fn main() {
+#[test]
+fn build_system_packages() {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let packages_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("packages");
+    let tempdir = tempfile::tempdir().unwrap();
+    let out_dir = if std::env::var_os("UPDATE").is_some() {
+        let crate_root = Path::new(CRATE_ROOT);
+        let _ = std::fs::remove_dir_all(crate_root.join(COMPILED_PACKAGES_DIR));
+        let _ = std::fs::remove_dir_all(crate_root.join(DOCS_DIR));
+        let _ = std::fs::remove_file(crate_root.join(PUBLISHED_API_FILE));
+        crate_root
+    } else {
+        tempdir.path()
+    };
+
+    std::fs::create_dir_all(out_dir.join(COMPILED_PACKAGES_DIR)).unwrap();
+    std::fs::create_dir_all(out_dir.join(DOCS_DIR)).unwrap();
+
+    let packages_path = Path::new(CRATE_ROOT).join("packages");
 
     let bridge_path = packages_path.join("bridge");
     let deepbook_path = packages_path.join("deepbook");
@@ -34,50 +48,34 @@ fn main() {
         &sui_system_path,
         &sui_framework_path,
         &move_stdlib_path,
-        &out_dir,
+        out_dir,
     );
 
-    println!("cargo:rerun-if-changed=build.rs");
-    println!(
-        "cargo:rerun-if-changed={}",
-        deepbook_path.join("Move.toml").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        deepbook_path.join("sources").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        bridge_path.join("Move.toml").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        bridge_path.join("sources").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        sui_system_path.join("Move.toml").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        sui_system_path.join("sources").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        sui_framework_path.join("Move.toml").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        sui_framework_path.join("sources").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        move_stdlib_path.join("Move.toml").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        move_stdlib_path.join("sources").display()
-    );
+    check_diff(Path::new(CRATE_ROOT), out_dir)
+}
+
+// Verify that checked-in values are the same as the generated ones
+fn check_diff(checked_in: &Path, built: &Path) {
+    for path in [COMPILED_PACKAGES_DIR, DOCS_DIR, PUBLISHED_API_FILE] {
+        let output = std::process::Command::new("diff")
+            .args(["--brief", "--recursive"])
+            .arg(checked_in.join(path))
+            .arg(built.join(path))
+            .output()
+            .unwrap();
+        if !output.status.success() {
+            let header =
+                "Generated and checked-in sui-framework packages and/or docs do not match.\n\
+                 Re-run with `UPDATE=1` to update checked-in packages and docs. e.g.\n\n\
+                 UPDATE=1 cargo test -p sui-framework --test build-system-packages";
+
+            panic!(
+                "{header}\n\n{}\n\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
 }
 
 fn build_packages(
@@ -110,31 +108,6 @@ fn build_packages(
         "sui-framework",
         "move-stdlib",
         config,
-        true,
-    );
-    let config = MoveBuildConfig {
-        generate_docs: true,
-        test_mode: true,
-        warnings_are_errors: true,
-        install_dir: Some(PathBuf::from(".")),
-        lint_flag: LintFlag::LEVEL_NONE,
-        default_edition: Some(Edition::E2024_BETA),
-        ..Default::default()
-    };
-    build_packages_with_move_config(
-        bridge_path,
-        deepbook_path,
-        sui_system_path,
-        sui_framework_path,
-        stdlib_path,
-        out_dir,
-        "bridge-test",
-        "deepbook-test",
-        "sui-system-test",
-        "sui-framework-test",
-        "move-stdlib-test",
-        config,
-        false,
     );
 }
 
@@ -151,7 +124,6 @@ fn build_packages_with_move_config(
     framework_dir: &str,
     stdlib_dir: &str,
     config: MoveBuildConfig,
-    write_docs: bool,
 ) {
     let stdlib_pkg = BuildConfig {
         config: config.clone(),
@@ -200,61 +172,59 @@ fn build_packages_with_move_config(
     let deepbook = deepbook_pkg.get_deepbook_modules();
     let bridge = bridge_pkg.get_bridge_modules();
 
+    let compiled_packages_dir = out_dir.join(COMPILED_PACKAGES_DIR);
+
     let sui_system_members =
-        serialize_modules_to_file(sui_system, &out_dir.join(system_dir)).unwrap();
+        serialize_modules_to_file(sui_system, &compiled_packages_dir.join(system_dir)).unwrap();
     let sui_framework_members =
-        serialize_modules_to_file(sui_framework, &out_dir.join(framework_dir)).unwrap();
+        serialize_modules_to_file(sui_framework, &compiled_packages_dir.join(framework_dir))
+            .unwrap();
     let deepbook_members =
-        serialize_modules_to_file(deepbook, &out_dir.join(deepbook_dir)).unwrap();
-    let bridge_members = serialize_modules_to_file(bridge, &out_dir.join(bridge_dir)).unwrap();
-    let stdlib_members = serialize_modules_to_file(move_stdlib, &out_dir.join(stdlib_dir)).unwrap();
+        serialize_modules_to_file(deepbook, &compiled_packages_dir.join(deepbook_dir)).unwrap();
+    let bridge_members =
+        serialize_modules_to_file(bridge, &compiled_packages_dir.join(bridge_dir)).unwrap();
+    let stdlib_members =
+        serialize_modules_to_file(move_stdlib, &compiled_packages_dir.join(stdlib_dir)).unwrap();
 
     // write out generated docs
-    if write_docs {
-        // Remove the old docs directory -- in case there was a module that was deleted (could
-        // happen during development).
-        if Path::new(DOCS_DIR).exists() {
-            std::fs::remove_dir_all(DOCS_DIR).unwrap();
-        }
-        let mut files_to_write = BTreeMap::new();
-        relocate_docs(
-            deepbook_dir,
-            &deepbook_pkg.package.compiled_docs.unwrap(),
-            &mut files_to_write,
-        );
-        relocate_docs(
-            system_dir,
-            &system_pkg.package.compiled_docs.unwrap(),
-            &mut files_to_write,
-        );
-        relocate_docs(
-            framework_dir,
-            &framework_pkg.package.compiled_docs.unwrap(),
-            &mut files_to_write,
-        );
-        relocate_docs(
-            bridge_dir,
-            &bridge_pkg.package.compiled_docs.unwrap(),
-            &mut files_to_write,
-        );
-        for (fname, doc) in files_to_write {
-            let mut dst_path = PathBuf::from(DOCS_DIR);
-            dst_path.push(fname);
-            fs::create_dir_all(dst_path.parent().unwrap()).unwrap();
-            fs::write(dst_path, doc).unwrap();
-        }
-
-        let published_api = [
-            sui_system_members.join("\n"),
-            sui_framework_members.join("\n"),
-            deepbook_members.join("\n"),
-            bridge_members.join("\n"),
-            stdlib_members.join("\n"),
-        ]
-        .join("\n");
-
-        fs::write(PUBLISHED_API_DIR, published_api).unwrap();
+    let docs_dir = out_dir.join(DOCS_DIR);
+    let mut files_to_write = BTreeMap::new();
+    relocate_docs(
+        deepbook_dir,
+        &deepbook_pkg.package.compiled_docs.unwrap(),
+        &mut files_to_write,
+    );
+    relocate_docs(
+        system_dir,
+        &system_pkg.package.compiled_docs.unwrap(),
+        &mut files_to_write,
+    );
+    relocate_docs(
+        framework_dir,
+        &framework_pkg.package.compiled_docs.unwrap(),
+        &mut files_to_write,
+    );
+    relocate_docs(
+        bridge_dir,
+        &bridge_pkg.package.compiled_docs.unwrap(),
+        &mut files_to_write,
+    );
+    for (fname, doc) in files_to_write {
+        let dst_path = docs_dir.join(fname);
+        fs::create_dir_all(dst_path.parent().unwrap()).unwrap();
+        fs::write(dst_path, doc).unwrap();
     }
+
+    let published_api = [
+        sui_system_members.join("\n"),
+        sui_framework_members.join("\n"),
+        deepbook_members.join("\n"),
+        bridge_members.join("\n"),
+        stdlib_members.join("\n"),
+    ]
+    .join("\n");
+
+    fs::write(out_dir.join(PUBLISHED_API_FILE), published_api).unwrap();
 }
 
 /// Post process the generated docs so that they are in a format that can be consumed by
