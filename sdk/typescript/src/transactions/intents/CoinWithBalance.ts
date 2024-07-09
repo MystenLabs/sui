@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { Input } from 'valibot';
+import type { InferInput } from 'valibot';
 import { bigint, object, parse, string } from 'valibot';
 
 import { bcs } from '../../bcs/index.js';
@@ -38,7 +38,7 @@ export function coinWithBalance({
 				data: {
 					type: coinType === SUI_TYPE && useGasCoin ? 'gas' : coinType,
 					balance: BigInt(balance),
-				} satisfies Input<typeof CoinWithBalanceData>,
+				} satisfies InferInput<typeof CoinWithBalanceData>,
 			}),
 		);
 	};

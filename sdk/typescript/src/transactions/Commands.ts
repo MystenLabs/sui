@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB64 } from '@mysten/bcs';
-import type { Input } from 'valibot';
+import type { InferInput } from 'valibot';
 import { parse } from 'valibot';
 
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
@@ -11,8 +11,8 @@ import type { CallArg, Command } from './data/internal.js';
 import type { Transaction } from './Transaction.js';
 
 export type TransactionArgument =
-	| Input<typeof Argument>
-	| ((tx: Transaction) => Input<typeof Argument>);
+	| InferInput<typeof Argument>
+	| ((tx: Transaction) => InferInput<typeof Argument>);
 export type TransactionInput = CallArg;
 
 // Keep in sync with constants in
@@ -62,8 +62,8 @@ export const Commands = {
 	},
 
 	TransferObjects(
-		objects: Input<typeof Argument>[],
-		address: Input<typeof Argument>,
+		objects: InferInput<typeof Argument>[],
+		address: InferInput<typeof Argument>,
 	): TransactionShape<'TransferObjects'> {
 		return {
 			$kind: 'TransferObjects',
@@ -74,8 +74,8 @@ export const Commands = {
 		};
 	},
 	SplitCoins(
-		coin: Input<typeof Argument>,
-		amounts: Input<typeof Argument>[],
+		coin: InferInput<typeof Argument>,
+		amounts: InferInput<typeof Argument>[],
 	): TransactionShape<'SplitCoins'> {
 		return {
 			$kind: 'SplitCoins',
@@ -86,8 +86,8 @@ export const Commands = {
 		};
 	},
 	MergeCoins(
-		destination: Input<typeof Argument>,
-		sources: Input<typeof Argument>[],
+		destination: InferInput<typeof Argument>,
+		sources: InferInput<typeof Argument>[],
 	): TransactionShape<'MergeCoins'> {
 		return {
 			$kind: 'MergeCoins',
@@ -123,7 +123,7 @@ export const Commands = {
 		modules: number[][] | string[];
 		dependencies: string[];
 		package: string;
-		ticket: Input<typeof Argument>;
+		ticket: InferInput<typeof Argument>;
 	}): TransactionShape<'Upgrade'> {
 		return {
 			$kind: 'Upgrade',
@@ -142,7 +142,7 @@ export const Commands = {
 		elements,
 	}: {
 		type?: string;
-		elements: Input<typeof Argument>[];
+		elements: InferInput<typeof Argument>[];
 	}): TransactionShape<'MakeMoveVec'> {
 		return {
 			$kind: 'MakeMoveVec',
@@ -158,7 +158,7 @@ export const Commands = {
 		data = {},
 	}: {
 		name: string;
-		inputs?: Record<string, Input<typeof Argument> | Input<typeof Argument>[]>;
+		inputs?: Record<string, InferInput<typeof Argument> | InferInput<typeof Argument>[]>;
 		data?: Record<string, unknown>;
 	}): TransactionShape<'$Intent'> {
 		return {

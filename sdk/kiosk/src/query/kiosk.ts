@@ -54,7 +54,7 @@ export async function fetchKiosk(
 		options.withListingPrices
 			? getAllObjects(client, kioskData.listingIds, {
 					showContent: true,
-			  })
+				})
 			: Promise.resolve([]),
 		options.withObjects
 			? getAllObjects(client, kioskData.itemIds, options.objectOptions || { showDisplay: true })

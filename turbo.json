@@ -1,6 +1,6 @@
 {
 	"$schema": "https://turbo.build/schema.json",
-	"pipeline": {
+	"tasks": {
 		"lint": {},
 		"test": {
 			"dependsOn": ["^build", "build"],
@@ -13,7 +13,14 @@
 		},
 		"build": {
 			"dependsOn": ["^build"],
-			"outputs": ["build/**", "dist/**", "storybook-static/**", ".next/**", "!.next/cache/**", "pkg/**"]
+			"outputs": [
+				"build/**",
+				"dist/**",
+				"storybook-static/**",
+				".next/**",
+				"!.next/cache/**",
+				"pkg/**"
+			]
 		}
 	},
 	"globalEnv": ["VERCEL_ENV", "VITE_NETWORK", "VITE_VERCEL_ANALYTICS_ID", "VITE_SENTRY_SAMPLE_RATE"]

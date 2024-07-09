@@ -26,7 +26,7 @@ use codespan_reporting::{
     },
 };
 use csr::files::Files;
-use move_command_line_common::env::read_env_var;
+use move_command_line_common::{env::read_env_var, files::FileHash};
 use move_ir_types::location::*;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -121,7 +121,7 @@ enum MigrationChange {
 // All of the migration changes
 pub struct Migration {
     mapped_files: MappedFiles,
-    changes: BTreeMap<FileId, Vec<(ByteSpan, MigrationChange)>>,
+    changes: BTreeMap<FileHash, Vec<(ByteSpan, MigrationChange)>>,
 }
 
 //**************************************************************************************************
@@ -1000,7 +1000,10 @@ impl Migration {
         const ADDRESS_REMOVE: u8 = codes::Migration::AddressRemove as u8;
         const ADDRESS_ADD: u8 = codes::Migration::AddressAdd as u8;
 
-        let FileByteSpan { file_id, byte_span } = self.find_file_location(&diag);
+        let FileByteSpan {
+            file_hash: file_id,
+            byte_span,
+        } = self.find_file_location(&diag);
         let file_change_entry = self.changes.entry(file_id).or_default();
         let change = match (diag.info().category(), diag.info().code()) {
             (CAT, NEEDS_MUT) => MigrationChange::AddMut,
@@ -1100,12 +1103,14 @@ impl Migration {
         let mut names = self
             .changes
             .keys()
-            .map(|id| (*id, *self.mapped_files.files().get(*id).unwrap().name()))
+            .cloned()
+            .map(|hash| (hash, self.mapped_files.file_hash_to_file_id(&hash).unwrap()))
+            .map(|(hash, id)| (hash, id, *self.mapped_files.files().get(id).unwrap().name()))
             .collect::<Vec<_>>();
-        names.sort_by_key(|(_, name)| *name);
-        for (file_id, name) in names {
+        names.sort_by_key(|(_, _, name)| *name);
+        for (file_hash, file_id, name) in names {
             let original = self.get_file_contents(file_id);
-            let file_changes = self.changes.get_mut(&file_id).unwrap();
+            let file_changes = self.changes.get_mut(&file_hash).unwrap();
             Self::ensure_unique_changes(file_changes);
             let migrated = Self::render_changes(original.clone(), file_changes);
             let diff = similar::TextDiff::from_lines(&original, &migrated);
@@ -1132,12 +1137,14 @@ impl Migration {
         let mut names = self
             .changes
             .keys()
-            .map(|id| (*id, *self.mapped_files.files().get(*id).unwrap().name()))
+            .cloned()
+            .map(|hash| (hash, self.mapped_files.file_hash_to_file_id(&hash).unwrap()))
+            .map(|(hash, id)| (hash, id, *self.mapped_files.files().get(id).unwrap().name()))
             .collect::<Vec<_>>();
-        names.sort_by_key(|(_, name)| *name);
-        for (file_id, name) in names {
+        names.sort_by_key(|(_, _, name)| *name);
+        for (file_hash, file_id, name) in names {
             let original = self.get_file_contents(file_id);
-            let file_changes = self.changes.get_mut(&file_id).unwrap();
+            let file_changes = self.changes.get_mut(&file_hash).unwrap();
             Self::ensure_unique_changes(file_changes);
             let migrated = Self::render_changes(original.clone(), file_changes);
             let path = PathBuf::from(name.to_string());
