@@ -114,7 +114,7 @@ function SharedGame({
 	invalidateTrophy: InvalidateTrophyQuery;
 }): ReactElement {
 	const account = useCurrentAccount();
-	const signAndExecute = useExecutor();
+	const { mutate: signAndExecute } = useExecutor();
 	const tx = useTransactions()!!;
 
 	const { id, board, turn, x, o } = game;
@@ -168,8 +168,8 @@ function OwnedGame({
 	const adminKey = game.admin ? new MultiSigPublicKey(new Uint8Array(game.admin)) : null;
 
 	const client = useSuiClient();
-	const signAndExecute = useExecutor();
-	const multiSignAndExecute = useExecutor({
+	const { mutate: signAndExecute } = useExecutor();
+	const { mutate: multiSignAndExecute } = useExecutor({
 		execute: ({ bytes, signature }) => {
 			// SAFETY: We check below whether the admin key is available,
 			// and only allow moves to be submitted when it is.

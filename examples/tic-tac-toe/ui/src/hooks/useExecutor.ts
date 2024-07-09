@@ -8,7 +8,9 @@ import { Transaction } from '@mysten/sui/transactions';
 type Options = Omit<Parameters<SuiClient['getTransactionBlock']>[0], 'digest'> & {
 	tx: Transaction;
 };
+
 type ExecuteResponse = { digest: string; rawEffects?: number[] };
+
 type ExecuteCallback = ({
 	bytes,
 	signature,
@@ -16,18 +18,37 @@ type ExecuteCallback = ({
 	bytes: string;
 	signature: string;
 }) => Promise<ExecuteResponse>;
+
 type ResponseCallback = (tx: SuiTransactionBlockResponse) => void | Promise<void>;
 type Executor = (options: Options, then: ResponseCallback) => void;
+
+type ExecutorResult = {
+	mutate: Executor;
+	status: string;
+	isIdle: boolean;
+	isPending: boolean;
+	isSuccess: boolean;
+	isError: boolean;
+	isPaused: boolean;
+};
 
 /**
  * Hook encapsulating running a transaction, waiting for its effects
  * and then doing something with them.
  */
-export function useExecutor({ execute }: { execute?: ExecuteCallback } = {}): Executor {
+export function useExecutor({ execute }: { execute?: ExecuteCallback } = {}): ExecutorResult {
 	const client = useSuiClient();
-	const { mutate: signAndExecute } = useSignAndExecuteTransaction({ execute });
+	const {
+		mutate: signAndExecute,
+		status,
+		isIdle,
+		isPending,
+		isSuccess,
+		isError,
+		isPaused,
+	} = useSignAndExecuteTransaction({ execute });
 
-	return ({ tx, ...options }, then) => {
+	const mutate: Executor = ({ tx, ...options }, then) => {
 		signAndExecute(
 			{
 				transaction: tx,
@@ -42,5 +63,15 @@ export function useExecutor({ execute }: { execute?: ExecuteCallback } = {}): Ex
 				},
 			},
 		);
+	};
+
+	return {
+		mutate,
+		status,
+		isIdle,
+		isPending,
+		isSuccess,
+		isError,
+		isPaused,
 	};
 }

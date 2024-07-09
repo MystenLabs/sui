@@ -6,7 +6,7 @@ import { PublicKey } from '@mysten/sui/cryptography';
 import { fromB64, toB64 } from '@mysten/sui/utils';
 import { publicKeyFromRawBytes } from '@mysten/sui/verify';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
-import { Box, Button, Em, Flex, Separator, Text, TextField } from '@radix-ui/themes';
+import { Box, Button, Em, Flex, Separator, Spinner, Text, TextField } from '@radix-ui/themes';
 import { ComputedField } from 'components/ComputedField';
 import { useExecutor } from 'hooks/useExecutor';
 import { useTransactions } from 'hooks/useTransactions';
@@ -15,11 +15,11 @@ import { ReactElement, useState } from 'react';
 /**
  * Form for creating a new multi-sig game.
  */
-export function NewMultiSigGame() {
+export function NewMultiSigGame(): ReactElement {
 	// SAFETY: <App /> tests that a package exists, so Transactions
 	// builder should be available.
 	const tx = useTransactions()!!;
-	const signAndExecute = useExecutor();
+	const { mutate: signAndExecute, isPending } = useExecutor();
 
 	const { address, publicKey: bytes } = useCurrentAccount() || {};
 	const [opponent, setOpponent] = useState<PublicKey | null>(null);
@@ -67,8 +67,8 @@ export function NewMultiSigGame() {
 			/>
 			<Flex justify="between" mt="4">
 				<Validation hasPlayer={hasPlayer} hasOpponent={hasOpponent} />
-				<Button variant="outline" disabled={!(publicKey && opponent)} onClick={onClick}>
-					Play
+				<Button variant="outline" disabled={!(publicKey && opponent) || isPending} onClick={onClick}>
+					{isPending ? <Spinner /> : null} Play
 				</Button>
 			</Flex>
 			<Separator orientation="horizontal" my="4" style={{ width: '100%' }} />
@@ -102,16 +102,18 @@ function Validation({
 				<Text color="red">Wallet not connected.</Text>
 			</Flex>
 		);
-	} else if (!hasOpponent) {
+	}
+
+	if (!hasOpponent) {
 		return (
 			<Flex align="center" gap="2">
 				<ExclamationTriangleIcon color="red" />
 				<Text color="red">Invalid opponent public key.</Text>
 			</Flex>
 		);
-	} else {
-		return <Box />;
 	}
+
+	return <Box />;
 }
 
 /**

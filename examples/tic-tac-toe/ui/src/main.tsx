@@ -23,10 +23,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 			<QueryClientProvider client={queryClient}>
 				<SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
 					<WalletProvider autoConnect>
-						<div>
+						<>
 							<Toaster position="top-center" />
 							<App />
-						</div>
+						</>
 					</WalletProvider>
 				</SuiClientProvider>
 			</QueryClientProvider>

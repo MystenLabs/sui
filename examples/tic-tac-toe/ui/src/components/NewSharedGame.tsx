@@ -4,7 +4,7 @@
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { isValidSuiAddress, normalizeSuiAddress } from '@mysten/sui/utils';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
-import { Box, Button, Em, Flex, Separator, Text, TextField } from '@radix-ui/themes';
+import { Box, Button, Em, Flex, Separator, Spinner, Text, TextField } from '@radix-ui/themes';
 import { useExecutor } from 'hooks/useExecutor';
 import { useTransactions } from 'hooks/useTransactions';
 import { ReactElement, useState } from 'react';
@@ -14,11 +14,11 @@ import { ComputedField } from './ComputedField';
 /**
  * Form for creating a new shared game.
  */
-export function NewSharedGame() {
+export function NewSharedGame(): ReactElement {
 	// SAFETY: <App /> tests that a package exists, so Transactions
 	// builder should be available.
 	const tx = useTransactions()!!;
-	const signAndExecute = useExecutor();
+	const { mutate: signAndExecute, isPending } = useExecutor();
 
 	const player = useCurrentAccount()?.address;
 	const [opponent, setOpponent] = useState<string | null>(null);
@@ -57,8 +57,8 @@ export function NewSharedGame() {
 			/>
 			<Flex justify="between" mt="4">
 				<Validation hasPlayer={hasPlayer} hasOpponent={hasOpponent} />
-				<Button variant="outline" disabled={!(player && opponent)} onClick={onClick}>
-					Play
+				<Button variant="outline" disabled={!(player && opponent) || isPending} onClick={onClick}>
+					{isPending ? <Spinner /> : null} Play
 				</Button>
 			</Flex>
 			<Separator orientation="horizontal" my="4" style={{ width: '100%' }} />
@@ -86,16 +86,18 @@ function Validation({
 				<Text color="red">Wallet not connected.</Text>
 			</Flex>
 		);
-	} else if (!hasOpponent) {
+	}
+
+	if (!hasOpponent) {
 		return (
 			<Flex align="center" gap="2">
 				<ExclamationTriangleIcon color="red" />
 				<Text color="red">Invalid opponent address.</Text>
 			</Flex>
 		);
-	} else {
-		return <Box />;
 	}
+
+	return <Box />;
 }
 
 /**
@@ -108,7 +110,7 @@ function normalizedAddress(address?: string): string | null {
 	}
 
 	address = address.trim();
-	if (address == '') {
+	if (address === '') {
 		return null;
 	}
 
