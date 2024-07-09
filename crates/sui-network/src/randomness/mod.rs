@@ -616,6 +616,7 @@ impl RandomnessEventLoop {
             }
         }
 
+        // TODO: ignore future messages from peers sending bad signatures.
         if let Err(e) =
             ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
         {
@@ -720,7 +721,7 @@ impl RandomnessEventLoop {
 
                 debug!("sending partial sigs for epoch {epoch}, round {round}");
                 (
-                    spawn_monitored_task!(RandomnessEventLoop::send_partial_signatures_task(
+                    spawn_monitored_task!(RandomnessEventLoop::send_signatures_task(
                         name,
                         network,
                         retry_interval,
@@ -764,7 +765,7 @@ impl RandomnessEventLoop {
         }
     }
 
-    async fn send_partial_signatures_task(
+    async fn send_signatures_task(
         name: AuthorityName,
         network: anemo::Network,
         retry_interval: Duration,
