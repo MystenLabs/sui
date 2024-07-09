@@ -4,7 +4,7 @@ This is an end-to-end example for on-chain tic-tac-toe. It includes:
 
 - A [Move package](./move), containing two protocols for running a game of
   tic-tac-toe. One that uses shared objects and consensus and another
-  that uses owned objects, and the fast path.
+  that uses owned objects, and the fast path (no consensus).
 - A [React front-end](./ui), in TypeScript built on top of
   `create-react-dapp`, using the TS SDK and `dapp-kit`.
 - A [Rust CLI](./cli), using the Rust SDK.
@@ -14,10 +14,10 @@ This is an end-to-end example for on-chain tic-tac-toe. It includes:
 ## Shared tic tac toe
 
 In the shared protocol, player X creates the `Game` as a shared object
-and players take it in turns to place marks. Once the final move is
-made, a `Trophy` is sent to any winning player (if there is one).
-After the game has ended, anyone can `burn` the finished game to
-reclaim the storage rebate (either of the players, or a third party).
+and players take turns to place marks. Once the final move is made, a
+`Trophy` is sent to any winning player (if there is one). After the
+game has ended, anyone can `burn` the finished game to reclaim the
+storage rebate (either of the players, or a third party).
 
 Validation rules in the Move package ensure that the sender of each
 move corresponds to the address of the next player, and the game can
@@ -82,7 +82,7 @@ sequenceDiagram
     Admin->>Game: burn
 ```
 
-## Multi-sig tic-tac-toe
+## Multisig tic-tac-toe
 
 The owned protocol avoids consensus, but it requires trusting a third
 party for liveness (The third party cannot make a false move, but it
@@ -91,34 +91,33 @@ may also need to run a service that keeps track of marks sent to games
 in order to apply them promptly, which adds complexity.
 
 There is an alternative approach, which leverages Sui's support for
-**multi-sigs** and **sponsored transactions**. Instead of entrusting
+**multisigs** and **sponsored transactions**. Instead of entrusting
 the Game to a third party, it is sent to an address owned by a 1-of-2
 multisig, signed for by Player X and Player O.
 
 Play proceeds as in the owned protocol, except that the Admin is the
-multi-sig account. On each turn, the current player runs a transaction
+multisig account. On each turn, the current player runs a transaction
 as themselves to send the mark, and then runs a transaction on behalf
-of the multi-sig to place it.
+of the multisig to place it.
 
 Once play has finished, either player can run a transaction on behalf
-of the multi-sig account to `burn` the game. As the player is the
+of the multisig account to `burn` the game. As the player is the
 sponsor, they will receive the storage rebate for performing the
 clean-up.
 
-The multi-sig account does not own anything other than the game object
+The multisig account does not own anything other than the game object
 (it does not have any gas coins of its own), so the player sponsors
 the transaction, using one of its own gas coins.
 
 Sharing a resource while avoiding consensus by transfering it to a
-multi-sig account can be generalised from two accounts to up to ten
+multisig account can be generalized from two accounts to a max of ten
 (the limit being the number of keys that can be associated with one
-multi-sig).
+multisig).
 
-In order to create a multi-sig, the public keys of all the signers
+In order to create a multisig, the public keys of all the signers
 needs to be known. Each account address on Sui is the hash of a public
 key, but this operation cannot be reversed, so in order to start a
-multi-sig game, players must exchange public keys instead of
-addresses.
+multisig game, players must exchange public keys instead of addresses.
 
 ## Pros and cons
 
@@ -126,10 +125,10 @@ The shared protocol's main benefit is that its on-chain logic and
 client integration are straightforward, and its main downside is that
 it relies on consensus for ordering.
 
-In contrast, the owned protocol uses only fast-path transactions (no
-consensus), but its on-chain logic is more complicated because it
-needs to manage the `TurnCap`, and its off-chain logic is complicated
-either by a third party service to act as an Admin, or a multi-sig and
-sponsored transaction set-up. When using multi-sig, care also needs to
-be taken to avoid equivocation, where the two players both try to
-execute a transaction involving the `Game`.
+In contrast, the owned protocol uses only fast-path transactions, but
+its on-chain logic is more complicated because it needs to manage the
+`TurnCap`, and its off-chain logic is complicated either by a third
+party service to act as an Admin, or a multisig and sponsored
+transaction setup. When using multisig, care also needs to be taken to
+avoid equivocation, where the two players both try to execute a
+transaction involving the `Game`.
