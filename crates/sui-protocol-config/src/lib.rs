@@ -147,6 +147,7 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             Prepose consensus commit prologue in checkpoints.
 //             Set number of leaders per round for Mysticeti commits.
 // Version 51: Switch to DKG V1.
+//             Enable deny list v2 on devnet.
 // Version 52: Emit `CommitteeMemberUrlUpdateEvent` when updating bridge node url.
 //             std::config native functions.
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
@@ -157,6 +158,8 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 // Version 53: Enable consensus commit prologue V3 in testnet.
 //             Enable enums on testnet.
 //             Add support for passkey in devnet.
+//             Enable deny list v2 on testnet and mainnet.
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -2494,6 +2497,7 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.passkey_auth = true;
                     }
+                    cfg.feature_flags.enable_coin_deny_list_v2 = true;
                 }
                 // Use this template when making changes:
                 //
