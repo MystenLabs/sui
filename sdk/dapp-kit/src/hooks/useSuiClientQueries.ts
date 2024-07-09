@@ -11,18 +11,18 @@ type SuiClientQueryOptions = SuiRpcMethods[keyof SuiRpcMethods] extends infer Me
 	? Method extends {
 			name: infer M extends keyof SuiRpcMethods;
 			params?: infer P;
-	  }
+		}
 		? undefined extends P
 			? {
 					method: M;
 					params?: P;
 					options?: UseSuiClientQueryOptions<M, unknown>;
-			  }
+				}
 			: {
 					method: M;
 					params: P;
 					options?: UseSuiClientQueryOptions<M, unknown>;
-			  }
+				}
 		: never
 	: never;
 

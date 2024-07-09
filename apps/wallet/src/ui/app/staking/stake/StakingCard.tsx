@@ -244,7 +244,7 @@ function StakingCard() {
 								state: {
 									response,
 								},
-						  }
+							}
 						: undefined,
 				);
 			} catch (error) {

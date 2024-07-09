@@ -13,10 +13,10 @@ export function mapGraphQLOwnerToRpcOwner(
 			return owner.owner?.asObject
 				? {
 						ObjectOwner: owner.owner?.asObject.address!,
-				  }
+					}
 				: {
 						AddressOwner: owner.owner?.asAddress?.address!,
-				  };
+					};
 		case 'Parent':
 			return {
 				ObjectOwner: owner.parent?.address,
