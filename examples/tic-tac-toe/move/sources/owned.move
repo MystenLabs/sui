@@ -101,20 +101,25 @@ module tic_tac_toe::owned {
 
     // === Errors ===
 
-    /// Move was for a position that doesn't exist on the board.
-    const EInvalidLocation: u64 = 0;
+    #[error]
+    const EInvalidLocation: vector<u8> =
+        b"Move was for a position that doesn't exist on the board";
 
-    /// Game expected a move from another player.
-    const EWrongPlayer: u64 = 1;
+    #[error]
+    const EWrongPlayer: vector<u8> =
+        b"Game expected a move from another player";
 
-    /// Game has not reached an end condition.
-    const ENotFinished: u64 = 2;
+    #[error]
+    const ENotFinished: vector<u8> =
+        b"Game has not reached an end condition";
 
-    /// Can't place a mark on a finished game.
-    const EAlreadyFinished: u64 = 3;
+    #[error]
+    const EAlreadyFinished: vector<u8> =
+        b"Can't place a mark on a finished game";
 
-    /// Game reached an end state that wasn't expected.
-    const EInvalidEndState: u64 = 4;
+    #[error]
+    const EInvalidEndState: vector<u8> =
+        b"Game reached an end state that wasn't expected";
 
     // === Public Functions ===
 
