@@ -17,7 +17,7 @@ use fastcrypto::secp256r1::{Secp256r1PublicKey, Secp256r1Signature};
 use fastcrypto::traits::VerifyingKey;
 use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
 use once_cell::sync::OnceCell;
-use passkey::types::webauthn::{ClientDataType, CollectedClientData};
+use passkey_types::webauthn::{ClientDataType, CollectedClientData};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use shared_crypto::intent::Intent;
@@ -234,8 +234,8 @@ impl AuthenticatorTrait for PasskeyAuthenticator {
     where
         T: Serialize,
     {
-        // Check the intent and tx_digest is consisted from what's parsed from client_data_json.challenge
-        if intent_msg.intent != self.intent || to_tx_digest(intent_msg) != self.digest {
+        // Check the intent and signing is consisted from what's parsed from client_data_json.challenge
+        if intent_msg.intent != self.intent || to_signing_digest(intent_msg) != self.digest {
             return Err(SuiError::InvalidSignature {
                 error: "Invalid challenge".to_string(),
             });
@@ -296,12 +296,14 @@ pub fn to_signing_message<T: Serialize>(
 ) -> [u8; INTENT_PREFIX_LENGTH + DefaultHash::OUTPUT_SIZE] {
     let mut extended = [0; INTENT_PREFIX_LENGTH + DefaultHash::OUTPUT_SIZE];
     extended[..INTENT_PREFIX_LENGTH].copy_from_slice(&intent_msg.intent.to_bytes());
-    extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&to_tx_digest(intent_msg));
+    extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&to_signing_digest(intent_msg));
     extended
 }
 
 /// Compute the hash(tx_data) from the intent msg.
-pub fn to_tx_digest<T: Serialize>(intent_msg: &IntentMessage<T>) -> [u8; DefaultHash::OUTPUT_SIZE] {
+pub fn to_signing_digest<T: Serialize>(
+    intent_msg: &IntentMessage<T>,
+) -> [u8; DefaultHash::OUTPUT_SIZE] {
     let mut hasher = DefaultHash::default();
     bcs::serialize_into(&mut hasher, &intent_msg.value)
         .expect("Message serialization should not fail");

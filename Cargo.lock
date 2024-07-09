@@ -8902,18 +8902,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "passkey"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e9e5c923aa4c0d4ea363c9f15d5f79bc803bb9709eda4ce247ae6bb59dc1e3c"
-dependencies = [
- "passkey-authenticator",
- "passkey-client",
- "passkey-transports",
- "passkey-types",
-]
-
-[[package]]
 name = "passkey-authenticator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8944,12 +8932,6 @@ dependencies = [
  "typeshare",
  "url",
 ]
-
-[[package]]
-name = "passkey-transports"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e04110fadc73577990f04153a2508989242d9c90a645aeaad98ef30e0decfbb"
 
 [[package]]
 name = "passkey-types"
@@ -12632,7 +12614,9 @@ dependencies = [
  "move-package",
  "mysten-metrics",
  "p256",
- "passkey",
+ "passkey-authenticator",
+ "passkey-client",
+ "passkey-types",
  "prometheus",
  "rand 0.8.5",
  "serde",
@@ -14421,7 +14405,9 @@ dependencies = [
  "once_cell",
  "p256",
  "parking_lot 0.12.1",
- "passkey",
+ "passkey-authenticator",
+ "passkey-client",
+ "passkey-types",
  "prometheus",
  "proptest",
  "proptest-derive",

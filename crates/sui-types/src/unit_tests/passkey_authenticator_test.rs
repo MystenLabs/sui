@@ -20,20 +20,18 @@ use fastcrypto::hash::HashFunction;
 use fastcrypto::rsa::{Base64UrlUnpadded, Encoding as _};
 use fastcrypto::{encoding::Base64, traits::ToFromBytes};
 use p256::pkcs8::DecodePublicKey;
-use passkey::{
-    authenticator::{Authenticator, UserValidationMethod},
-    client::Client,
-    types::{
-        ctap2::Aaguid,
-        rand::random_vec,
-        webauthn::{
-            AttestationConveyancePreference, CredentialCreationOptions, CredentialRequestOptions,
-            PublicKeyCredentialCreationOptions, PublicKeyCredentialParameters,
-            PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity,
-            PublicKeyCredentialType, PublicKeyCredentialUserEntity, UserVerificationRequirement,
-        },
-        Bytes, Passkey,
+use passkey_authenticator::{Authenticator, UserValidationMethod};
+use passkey_client::Client;
+use passkey_types::{
+    ctap2::Aaguid,
+    rand::random_vec,
+    webauthn::{
+        AttestationConveyancePreference, CredentialCreationOptions, CredentialRequestOptions,
+        PublicKeyCredentialCreationOptions, PublicKeyCredentialParameters,
+        PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
+        PublicKeyCredentialUserEntity, UserVerificationRequirement,
     },
+    Bytes, Passkey,
 };
 use shared_crypto::intent::{Intent, IntentMessage, INTENT_PREFIX_LENGTH};
 use url::Url;

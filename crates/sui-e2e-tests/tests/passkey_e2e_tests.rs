@@ -2,20 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 use fastcrypto::{hash::HashFunction, traits::ToFromBytes};
 use p256::pkcs8::DecodePublicKey;
-use passkey::{
-    authenticator::{Authenticator, UserValidationMethod},
-    client::Client,
-    types::{
-        ctap2::Aaguid,
-        rand::random_vec,
-        webauthn::{
-            AttestationConveyancePreference, CredentialCreationOptions, CredentialRequestOptions,
-            PublicKeyCredentialCreationOptions, PublicKeyCredentialParameters,
-            PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity,
-            PublicKeyCredentialType, PublicKeyCredentialUserEntity, UserVerificationRequirement,
-        },
-        Bytes, Passkey,
+use passkey_authenticator::{Authenticator, UserValidationMethod};
+use passkey_client::Client;
+use passkey_types::{
+    ctap2::Aaguid,
+    rand::random_vec,
+    webauthn::{
+        AttestationConveyancePreference, CredentialCreationOptions, CredentialRequestOptions,
+        PublicKeyCredentialCreationOptions, PublicKeyCredentialParameters,
+        PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
+        PublicKeyCredentialUserEntity, UserVerificationRequirement,
     },
+    Bytes, Passkey,
 };
 use shared_crypto::intent::{Intent, IntentMessage, INTENT_PREFIX_LENGTH};
 use std::net::SocketAddr;
@@ -34,7 +32,7 @@ use sui_types::{
 };
 use sui_types::{
     crypto::{DefaultHash, Signature},
-    passkey_authenticator::to_tx_digest,
+    passkey_authenticator::to_signing_digest,
 };
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -164,7 +162,7 @@ async fn create_credential_and_sign_test_tx(
     let mut extended = [0; INTENT_PREFIX_LENGTH + DefaultHash::OUTPUT_SIZE];
     let passkey_digest = if change_intent {
         extended[..INTENT_PREFIX_LENGTH].copy_from_slice(&Intent::personal_message().to_bytes());
-        extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&to_tx_digest(&intent_msg));
+        extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&to_signing_digest(&intent_msg));
         extended
     } else if change_tx {
         extended[..INTENT_PREFIX_LENGTH].copy_from_slice(&intent_msg.intent.to_bytes());
