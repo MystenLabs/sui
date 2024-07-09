@@ -79,7 +79,7 @@ fn inlay_type_hints_internal(symbols: &Symbols, mod_defs: &ModuleDefs, hints: &m
                 label: InlayHintLabel::LabelParts(vec![colon_label, type_label]),
                 kind: Some(InlayHintKind::TYPE),
                 text_edits: None,
-                tooltip: additional_hint_info(t, symbols),
+                tooltip: additional_type_hint_info(t, symbols),
                 padding_left: None,
                 padding_right: None,
                 data: None,
@@ -105,7 +105,7 @@ fn inlay_param_hints_internal(
             // methods should have at least one argument
             continue;
         };
-        for (name, loc) in args
+        for (sp!(def_loc, name), use_loc) in args
             .iter()
             .skip(if call_info.dot_call { 1 } else { 0 })
             .zip(&call_info.arg_locs)
@@ -122,13 +122,20 @@ fn inlay_param_hints_internal(
                 location: None,
                 command: None,
             };
-            let position = symbols.files.start_position(loc);
+            let position = symbols.files.start_position(use_loc);
+            let tooltip = symbols.def_info(def_loc).and_then(|arg_def_info| {
+                // see doc comment for `additional_type_hint_info` to see
+                // why we only support on hover tooltip for now
+                Some(InlayHintTooltip::MarkupContent(on_hover_markup(
+                    arg_def_info,
+                )))
+            });
             let h = InlayHint {
                 position: position.into(),
                 label: InlayHintLabel::LabelParts(vec![name_label, colon_label]),
                 kind: Some(InlayHintKind::PARAMETER),
                 text_edits: None,
-                tooltip: None,
+                tooltip,
                 padding_left: None,
                 padding_right: None,
                 data: None,
@@ -166,9 +173,9 @@ pub fn inlay_hints_internal(
 /// are resolved (the main problem is that adding it enables a drop-down menu
 /// containing options that are not supported for the type definition, such
 /// as go-to-declaration, and which jump to weird locations in the file).
-fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayHintTooltip> {
+fn additional_type_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayHintTooltip> {
     if let N::Type_::Ref(_, t) = t {
-        return additional_hint_info(t, symbols);
+        return additional_type_hint_info(t, symbols);
     }
     let N::Type_::Apply(_, sp!(_, type_name), _) = t else {
         return None;

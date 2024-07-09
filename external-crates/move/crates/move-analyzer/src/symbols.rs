@@ -175,7 +175,7 @@ pub enum DefInfo {
         /// Type args
         Vec<Type>,
         /// Arg names
-        Vec<Symbol>,
+        Vec<Name>,
         /// Arg types
         Vec<Type>,
         /// Ret type
@@ -195,7 +195,7 @@ pub enum DefInfo {
         /// Abilities
         AbilitySet,
         /// Field names
-        Vec<Symbol>,
+        Vec<Name>,
         /// Field types
         Vec<Type>,
         /// Doc string
@@ -227,7 +227,7 @@ pub enum DefInfo {
         /// Positional fields?
         bool,
         /// Field names
-        Vec<Symbol>,
+        Vec<Name>,
         /// Field types
         Vec<Type>,
         /// Doc string
@@ -818,7 +818,7 @@ fn datatype_type_args_to_ide_string(type_args: &[(Type, bool)], verbose: bool) -
 }
 
 fn typed_id_list_to_ide_string(
-    names: &[Symbol],
+    names: &[Name],
     types: &[Type],
     separate_lines: bool,
     verbose: bool,
@@ -828,9 +828,9 @@ fn typed_id_list_to_ide_string(
         .zip(types.iter())
         .map(|(n, t)| {
             if separate_lines {
-                format!("\t{}: {}", n, type_to_ide_string(t, verbose))
+                format!("\t{}: {}", n.value, type_to_ide_string(t, verbose))
             } else {
-                format!("{}: {}", n, type_to_ide_string(t, verbose))
+                format!("{}: {}", n.value, type_to_ide_string(t, verbose))
             }
         })
         .collect::<Vec<_>>()
@@ -2098,7 +2098,7 @@ fn get_mod_outer_defs(
         };
 
         // process the struct itself
-        let field_names = field_defs.iter().map(|f| f.name).collect();
+        let field_names = field_defs.iter().map(|f| sp(f.loc, f.name)).collect();
         structs.insert(
             *name,
             MemberDef {
@@ -2154,7 +2154,7 @@ fn get_mod_outer_defs(
                 }
                 VariantFields::Empty => (vec![], vec![], false),
             };
-            let field_names = field_defs.iter().map(|f| f.name).collect();
+            let field_names = field_defs.iter().map(|f| sp(f.loc, f.name)).collect();
             def_info_variants.push(VariantInfo {
                 name: *vname,
                 empty: field_defs.is_empty(),
@@ -2246,7 +2246,7 @@ fn get_mod_outer_defs(
             fun.signature
                 .parameters
                 .iter()
-                .map(|(_, n, _)| n.value.name)
+                .map(|(_, n, _)| sp(n.loc, n.value.name))
                 .collect(),
             fun.signature
                 .parameters

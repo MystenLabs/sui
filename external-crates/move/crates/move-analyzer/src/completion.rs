@@ -27,7 +27,7 @@ use move_compiler::{
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
     },
-    shared::{ide::AutocompleteMethod, Identifier},
+    shared::{ide::AutocompleteMethod, Identifier, Name},
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
@@ -239,7 +239,7 @@ fn call_completion_item(
     method_name: &Symbol,
     function_name: &Symbol,
     type_args: &[Type],
-    arg_names: &[Symbol],
+    arg_names: &[Name],
     arg_types: &[Type],
     ret_type: &Type,
 ) -> CompletionItem {
