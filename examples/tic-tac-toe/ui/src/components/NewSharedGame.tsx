@@ -5,8 +5,8 @@ import { useCurrentAccount } from '@mysten/dapp-kit';
 import { isValidSuiAddress, normalizeSuiAddress } from '@mysten/sui/utils';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { Box, Button, Em, Flex, Separator, Spinner, Text, TextField } from '@radix-ui/themes';
-import { useExecutor } from 'hooks/useExecutor';
 import { useTransactions } from 'hooks/useTransactions';
+import { useExecutor } from 'mutations/useExecutor';
 import { ReactElement, useState } from 'react';
 
 import { ComputedField } from './ComputedField';

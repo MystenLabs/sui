@@ -8,8 +8,8 @@ import { publicKeyFromRawBytes } from '@mysten/sui/verify';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { Box, Button, Em, Flex, Separator, Spinner, Text, TextField } from '@radix-ui/themes';
 import { ComputedField } from 'components/ComputedField';
-import { useExecutor } from 'hooks/useExecutor';
 import { useTransactions } from 'hooks/useTransactions';
+import { useExecutor } from 'mutations/useExecutor';
 import { ReactElement, useState } from 'react';
 
 /**
@@ -67,7 +67,11 @@ export function NewMultiSigGame(): ReactElement {
 			/>
 			<Flex justify="between" mt="4">
 				<Validation hasPlayer={hasPlayer} hasOpponent={hasOpponent} />
-				<Button variant="outline" disabled={!(publicKey && opponent) || isPending} onClick={onClick}>
+				<Button
+					variant="outline"
+					disabled={!(publicKey && opponent) || isPending}
+					onClick={onClick}
+				>
 					{isPending ? <Spinner /> : null} Play
 				</Button>
 			</Flex>

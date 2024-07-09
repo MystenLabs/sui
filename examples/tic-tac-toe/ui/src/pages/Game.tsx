@@ -11,11 +11,11 @@ import { Board } from 'components/Board';
 import { Error } from 'components/Error';
 import { IDLink } from 'components/IDLink';
 import { Loading } from 'components/Loading';
-import { useExecutor } from 'hooks/useExecutor';
 import { Game as GameData, InvalidateGameQuery, Mark, useGameQuery } from 'hooks/useGameQuery';
 import { useTransactions } from 'hooks/useTransactions';
 import { InvalidateTrophyQuery, Trophy, useTrophyQuery } from 'hooks/useTrophyQuery';
 import { useTurnCapQuery } from 'hooks/useTurnCapQuery';
+import { useExecutor } from 'mutations/useExecutor';
 import { ReactElement } from 'react';
 
 type Props = {
