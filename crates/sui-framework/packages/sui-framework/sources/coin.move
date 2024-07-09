@@ -327,9 +327,9 @@ module sui::coin {
         cap.total_supply.decrease_supply(balance)
     }
 
-    /// Adds the given address to the deny list, preventing it
-    /// from interacting with the specified coin type as an input to a transaction. Additionally at
-    /// the start of the next epoch, the address will be unable to receive objects of this coin type.
+    /// Adds the given address to the deny list, preventing it from interacting with the specified
+    /// coin type as an input to a transaction. Additionally at the start of the next epoch, the
+    /// address will be unable to receive objects of this coin type.
     public fun deny_list_v2_add<T>(
         deny_list: &mut DenyList,
         _deny_cap: &mut DenyCapV2<T>,
@@ -364,10 +364,9 @@ module sui::coin {
         deny_list.v2_contains_current_epoch(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
-    /// Check if the deny list contains the given address for the next epoch. Denied addresses
-    /// in the next epoch will immediately be unable to use objects of this coin type as inputs.
-    /// At the start of the next epoch, the address will be unable to receive objects of this coin
-    /// type.
+    /// Check if the deny list contains the given address for the next epoch. Denied addresses in
+    /// the next epoch will immediately be unable to use objects of this coin type as inputs. At the
+    /// start of the next epoch, the address will be unable to receive objects of this coin type.
     public fun deny_list_v2_contains_next_epoch<T>(
         deny_list: &DenyList,
         addr: address,
@@ -391,8 +390,8 @@ module sui::coin {
     }
 
     /// Disable the global pause for the given coin type. This will immediately allow all addresses
-    /// to resume using objects of this coin type as inputs. However,
-    /// receiving objects of this coin type will still be paused until the start of the next epoch.
+    /// to resume using objects of this coin type as inputs. However, receiving objects of this coin
+    /// type will still be paused until the start of the next epoch.
     #[allow(unused_mut_parameter)]
     public fun deny_list_v2_disable_global_pause<T>(
         deny_list: &mut DenyList,
