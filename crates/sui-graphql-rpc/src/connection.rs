@@ -47,11 +47,19 @@ where
 {
     /// Information to aid in pagination.
     async fn page_info(&self) -> PageInfo {
+        // Unlike the default implementation, this Connection will use `start_cursor` and
+        // `end_cursor` if they are `Some`.
         PageInfo {
             has_previous_page: self.has_previous_page,
             has_next_page: self.has_next_page,
-            start_cursor: self.edges.first().map(|edge| edge.cursor.encode_cursor()),
-            end_cursor: self.edges.last().map(|edge| edge.cursor.encode_cursor()),
+            start_cursor: self
+                .start_cursor
+                .clone()
+                .or_else(|| self.edges.first().map(|edge| edge.cursor.encode_cursor())),
+            end_cursor: self
+                .end_cursor
+                .clone()
+                .or_else(|| self.edges.last().map(|edge| edge.cursor.encode_cursor())),
         }
     }
 

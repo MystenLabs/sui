@@ -324,14 +324,11 @@ impl TransactionBlock {
                     return Ok::<_, diesel::result::Error>((false, false, Vec::new(), None));
                 };
 
-                println!("filter: {:?}", filter);
-                println!("tx_bounds: {:?}", tx_bounds);
-
-                // There are three potential types of queries we may construct. If no filters are
-                // selected, or if the filter is composed of only checkpoint filters, we can
-                // directly query the main `transactions` table. Otherwise, we first fetch the set
-                // of `tx_sequence_number` from a join over relevant lookup tables, and then issue a
-                // query against the `transactions` table to fetch the remaining contents.
+                // If no filters are selected, or if the filter is composed of only checkpoint
+                // filters, we can directly query the main `transactions` table. Otherwise, we first
+                // fetch the set of `tx_sequence_number` from a join over relevant lookup tables,
+                // and then issue a query against the `transactions` table to fetch the remaining
+                // contents.
                 let (prev, next, transactions) = if !filter.has_filters() {
                     let (prev, next, iter) = page.paginate_query::<StoredTransaction, _, _, _>(
                         conn,
@@ -385,28 +382,28 @@ impl TransactionBlock {
 
         if scan_limit.is_some() {
             if !prev {
-                println!("no previous page");
                 conn.has_previous_page = tx_bounds.scan_has_prev_page();
-                println!("scan prev page?: {}", conn.has_previous_page);
-                conn.start_cursor = Some(
-                    Cursor::new(tx_cursor::TransactionBlockCursor {
-                        checkpoint_viewed_at,
-                        tx_sequence_number: tx_bounds.scan_lo(),
-                    })
-                    .encode_cursor(),
-                );
+                if conn.has_previous_page {
+                    conn.start_cursor = Some(
+                        Cursor::new(tx_cursor::TransactionBlockCursor {
+                            checkpoint_viewed_at,
+                            tx_sequence_number: tx_bounds.scan_lo(),
+                        })
+                        .encode_cursor(),
+                    );
+                }
             }
             if !next {
-                println!("no next page");
                 conn.has_next_page = tx_bounds.scan_has_next_page();
-                println!("scan next page?: {}", conn.has_next_page);
-                conn.end_cursor = Some(
-                    Cursor::new(tx_cursor::TransactionBlockCursor {
-                        checkpoint_viewed_at,
-                        tx_sequence_number: tx_bounds.scan_hi(),
-                    })
-                    .encode_cursor(),
-                );
+                if conn.has_next_page {
+                    conn.end_cursor = Some(
+                        Cursor::new(tx_cursor::TransactionBlockCursor {
+                            checkpoint_viewed_at,
+                            tx_sequence_number: tx_bounds.scan_hi(),
+                        })
+                        .encode_cursor(),
+                    );
+                }
             }
         }
 

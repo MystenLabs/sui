@@ -102,6 +102,18 @@ type Address implements IOwner {
 	"""
 	Similar behavior to the `transactionBlocks` in Query but supporting the additional
 	`AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
@@ -413,8 +425,20 @@ type Checkpoint {
 	epoch: Epoch
 	"""
 	Transactions in this checkpoint.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
 type CheckpointConnection {
@@ -521,6 +545,18 @@ type Coin implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
 	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
@@ -680,6 +716,18 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
 	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
@@ -1096,8 +1144,20 @@ type Epoch {
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
 	The epoch's corresponding transaction blocks.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
 type Event {
@@ -1975,6 +2035,18 @@ type MoveObject implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
 	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
@@ -2164,6 +2236,18 @@ type MovePackage implements IObject & IOwner {
 	The transaction blocks that sent objects to this package.
 	
 	Note that objects that have been sent to a package become inaccessible.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
 	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
@@ -2495,6 +2579,18 @@ type Object implements IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
 	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
@@ -3060,6 +3156,18 @@ type Query {
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
 	The transaction blocks that exist in the network.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
@@ -3265,6 +3373,10 @@ type ServiceConfig {
 	Maximum nesting allowed in struct fields when calculating the layout of a single Move Type.
 	"""
 	maxMoveValueDepth: Int!
+	"""
+	Maximum number of transaction ids that can be passed to a `TransactionBlockFilter``.
+	"""
+	maxTransactionIds: Int!
 }
 
 """
@@ -3482,6 +3594,18 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
 	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
@@ -3684,6 +3808,18 @@ type SuinsRegistration implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	The `scanLimit`` restricts the number of candidate transactions scanned for potential
+	results. This can result in pages that have fewer than the requested `first` results when
+	paginating forward (last when paginating backwards) but still have a next (or previous)
+	page, indicating the scan limit was reached before the set page size. In this case the
+	`endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+	if it is not a result). Requesting the next (or previous) page after this cursor will resume
+	the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+	This process will continue until the full transaction range is exhausted. If no other
+	filters are provided, the transaction range will consist of all transactions that occurred
+	on chain since genesis. It can be restricted using the before and after pagination cursors,
+	as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
 	"""
 	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""

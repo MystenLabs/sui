@@ -32,11 +32,11 @@ pub(crate) struct StoredTxBounds {
 
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct TxBounds {
-    /// The unmodified lower bound tx_sequence_number corresponding to the first tx_sequence_number
-    /// of the lower checkpoint bound.
+    /// The lower bound tx_sequence_number corresponding to the first tx_sequence_number of the
+    /// lower checkpoint bound before applying `after` cursor and `scan_limit`.
     pub lo: u64,
-    /// The unmodified upper bound tx_sequence_number corresponding to the last tx_sequence_number
-    /// of the upper checkpoint bound.
+    /// The upper bound tx_sequence_number corresponding to the last tx_sequence_number of the upper
+    /// checkpoint bound before applying `before` cursor and `scan_limit`.
     pub hi: u64,
     pub after: Option<u64>,
     pub before: Option<u64>,
@@ -63,14 +63,11 @@ impl TxBounds {
         }
     }
 
-    /// The default checkpoint lower bound is 0 and the default checkpoint upper bound is
-    /// `checkpoint_viewed_at`. The two ends are then further adjusted, selecting the greatest
-    /// between `after_cp` and `at_cp`, and the smallest among `before_cp`, `at_cp`, and
-    /// `checkpoint_viewed_at`. By incrementing `after` by 1 and decrementing `before` by 1, we can
-    /// construct the tx_sequence_number equivalent by selecting the smallest `tx_sequence_number`
-    /// from `lo_cp` and the largest `tx_sequence_number` from `hi_cp`. Finally, cursors and the
-    /// scan limit are applied. If the after cursor exceeds rhs, or before cursor is below lhs, or
-    /// other inconsistency, return None.
+    /// Determines the `tx_sequence_number` range from the checkpoint bounds for a transaction block
+    /// query. If no checkpoint range is specified, the default is between 0 and the
+    /// `checkpoint_viewed_at`. The corresponding `tx_sequence_number` range is fetched from db, and
+    /// further adjusted by cursors and scan limit. If the after cursor exceeds rhs, or before
+    /// cursor is below lhs, or other inconsistency, return None.
     pub(crate) fn query(
         conn: &mut Conn,
         after_cp: Option<u64>,
@@ -90,22 +87,8 @@ impl TxBounds {
         let from_db: StoredTxBounds =
             conn.result(move || tx_bounds_query(lo_cp, hi_cp).into_boxed())?;
 
-        println!("StoredTxBounds: {:?}", from_db);
-
         let lo = from_db.lo as u64;
         let hi = from_db.hi as u64;
-
-        println!("checkpoint_viewed_at: {}", checkpoint_viewed_at);
-
-        println!("before: {:?}", page.before().map(|x| x.tx_sequence_number));
-
-        println!(
-            "TxBounds::Query: lo: {}, hi: {}, scan_limit: {}, is_from_front: {}",
-            lo,
-            hi,
-            scan_limit.unwrap_or(0),
-            page.is_from_front()
-        );
 
         if page.after().map_or(false, |x| x.tx_sequence_number >= hi)
             || page.before().map_or(false, |x| x.tx_sequence_number <= lo)
@@ -123,16 +106,14 @@ impl TxBounds {
         )))
     }
 
-    /// The lower bound tx_sequence_number to scan within. This defaults to the min
+    /// The lower bound `tx_sequence_number`` of the range to scan within. This defaults to the min
     /// tx_sequence_number of the checkpoint bound. If a cursor is provided, the lower bound is
-    /// adjusted to the larger of the two, and this gets added to the scan limit if provided.
+    /// adjusted to the larger of the two. The resulting value is additionally modified by the
+    /// `scan_limit` if `is_from_front` is false.
     pub(crate) fn scan_lo(&self) -> u64 {
-        // if the cursor exceeds scan_hi then we probably don't even need to run the query?
         let adjusted_lo = self.after.map_or(self.lo, |a| std::cmp::max(self.lo, a));
 
-        println!("true lo: {}, adjusted_lo: {}", self.lo, adjusted_lo);
-
-        let final_lo = if self.is_from_front {
+        if self.is_from_front {
             adjusted_lo
         } else {
             std::cmp::max(
@@ -140,22 +121,17 @@ impl TxBounds {
                 self.scan_hi()
                     .saturating_sub(self.scan_limit.unwrap_or(self.hi)),
             )
-        };
-
-        println!("after applying scan_limit: {}", final_lo);
-
-        final_lo
+        }
     }
 
-    /// The upper bound tx_sequence_number to scan within. This defaults to the max
+    /// The upper bound `tx_sequence_number` of the range to scan within. This defaults to the max
     /// tx_sequence_number of the checkpoint bound. If a cursor is provided, the upper bound is
-    /// adjusted to the smaller of the two, and this gets added to the scan limit if provided.
+    /// adjusted to the smaller of the two. The resulting value is additionally modified by the
+    /// `scan_limit` if `is_from_front` is true.
     pub(crate) fn scan_hi(&self) -> u64 {
         let adjusted_hi = self.before.map_or(self.hi, |b| std::cmp::min(self.hi, b));
 
-        println!("true hi: {}, adjusted_hi: {}", self.hi, adjusted_hi);
-
-        let final_hi = if self.is_from_front {
+        if self.is_from_front {
             std::cmp::min(
                 adjusted_hi,
                 self.scan_lo()
@@ -163,11 +139,7 @@ impl TxBounds {
             )
         } else {
             adjusted_hi
-        };
-
-        println!("after applying scan_limit: {}", final_hi);
-
-        final_hi
+        }
     }
 
     /// If the query result does not have a previous page, check whether the scan limit is within

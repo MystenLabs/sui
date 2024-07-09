@@ -425,6 +425,18 @@ impl Object {
     }
 
     /// The transaction blocks that sent objects to this object.
+    ///
+    /// The `scanLimit`` restricts the number of candidate transactions scanned for potential
+    /// results. This can result in pages that have fewer than the requested `first` results when
+    /// paginating forward (last when paginating backwards) but still have a next (or previous)
+    /// page, indicating the scan limit was reached before the set page size. In this case the
+    /// `endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
+    /// if it is not a result). Requesting the next (or previous) page after this cursor will resume
+    /// the search, scanning the next `scanLimit` many transactions in the direction of pagination.
+    /// This process will continue until the full transaction range is exhausted. If no other
+    /// filters are provided, the transaction range will consist of all transactions that occurred
+    /// on chain since genesis. It can be restricted using the before and after pagination cursors,
+    /// as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
     pub(crate) async fn received_transaction_blocks(
         &self,
         ctx: &Context<'_>,
@@ -596,7 +608,8 @@ impl ObjectImpl<'_> {
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
     ) -> Result<TransactionBlockConnection> {
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?
+            .with_scan_limit(scan_limit);
 
         let Some(filter) = filter
             .unwrap_or_default()
