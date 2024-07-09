@@ -123,12 +123,14 @@ impl Handle {
         authority_name: AuthorityName,
         round: RandomnessRound,
         sigs: Vec<RandomnessPartialSignature>,
+        result_channel: oneshot::Sender<Result<()>>,
     ) {
         self.sender
             .try_send(RandomnessMessage::AdminInjectPartialSignatures(
                 authority_name,
                 round,
                 sigs,
+                result_channel,
             ))
             .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
@@ -177,6 +179,7 @@ enum RandomnessMessage {
         AuthorityName,
         RandomnessRound,
         Vec<RandomnessPartialSignature>,
+        oneshot::Sender<Result<()>>,
     ),
     AdminInjectFullSignature(RandomnessRound, RandomnessSignature),
 }
@@ -254,8 +257,17 @@ impl RandomnessEventLoop {
             RandomnessMessage::AdminGetPartialSignatures(round, tx) => {
                 self.admin_get_partial_signatures(round, tx)
             }
-            RandomnessMessage::AdminInjectPartialSignatures(authority_name, round, sigs) => {
-                self.admin_inject_partial_signatures(authority_name, round, sigs)
+            RandomnessMessage::AdminInjectPartialSignatures(
+                authority_name,
+                round,
+                sigs,
+                result_channel,
+            ) => {
+                let _ = result_channel.send(self.admin_inject_partial_signatures(
+                    authority_name,
+                    round,
+                    sigs,
+                ));
             }
             RandomnessMessage::AdminInjectFullSignature(round, sig) => {
                 self.admin_inject_full_signature(round, sig)
@@ -856,22 +868,15 @@ impl RandomnessEventLoop {
         authority_name: AuthorityName,
         round: RandomnessRound,
         sigs: Vec<RandomnessPartialSignature>,
-    ) {
-        let peer_id = match self
+    ) -> Result<()> {
+        let peer_id = self
             .authority_info
             .get(&authority_name)
             .map(|(peer_id, _)| *peer_id)
-        {
-            Some(peer_id) => peer_id,
-            None => {
-                warn!(
-                    "ignoring admin request to inject partial sigs: unknown AuthorityName {authority_name:?}"
-                );
-                return;
-            }
-        };
+            .ok_or(anyhow::anyhow!("unknown AuthorityName {authority_name:?}"))?;
         self.received_partial_sigs.insert((round, peer_id), sigs);
         self.maybe_aggregate_partial_signatures(self.epoch, round);
+        Ok(())
     }
 
     fn admin_inject_full_signature(&mut self, round: RandomnessRound, sig: RandomnessSignature) {

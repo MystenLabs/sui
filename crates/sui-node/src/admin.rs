@@ -65,7 +65,7 @@ use tracing::info;
 //
 //  $ curl 'http://127.0.0.1:1337/randomness-inject-partial-sigs?authority_name=hexencodedname&round=123&sigs=base64encodedsigs'
 //
-// Inject a partial signature from another node, bypassing validity checks.
+// Inject a full signature from another node, bypassing validity checks.
 //
 //  $ curl 'http://127.0.0.1:1337/randomness-inject-full-sig?round=123&sigs=base64encodedsig'
 
@@ -384,12 +384,17 @@ async fn randomness_inject_partial_sigs(
         Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()),
     };
 
+    let (tx_result, rx_result) = oneshot::channel();
     state
         .node
         .randomness_handle()
-        .admin_inject_partial_signatures(authority_name, RandomnessRound(round), sigs);
+        .admin_inject_partial_signatures(authority_name, RandomnessRound(round), sigs, tx_result);
 
-    (StatusCode::OK, "partial signatures injected\n".to_string())
+    match rx_result.await {
+        Ok(Ok(())) => (StatusCode::OK, "partial signatures injected\n".to_string()),
+        Ok(Err(e)) => (StatusCode::BAD_REQUEST, e.to_string()),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
 }
 
 #[derive(Deserialize)]
