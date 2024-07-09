@@ -50,10 +50,10 @@ describe('CachingTransactionExecutor', async () => {
 		const y = x.effects?.created!.map((o) => getOwnerAddress(o))!;
 		receiveObjectId = x.effects?.created!.filter(
 			(o) => !y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
-		)[0];
+		)[0]!;
 		parentObjectId = x.effects?.created!.filter(
 			(o) => y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
-		)[0];
+		)[0]!;
 	});
 
 	afterEach(() => {

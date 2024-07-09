@@ -41,11 +41,11 @@ describe('Transfer to Object', () => {
 		const y = x.effects?.created!.map((o) => getOwnerAddress(o))!;
 		receiveObjectId = x.effects?.created!.filter(
 			(o) => !y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
-		)[0];
+		)[0]!;
 		parentObjectId = x.effects?.created!.filter(
 			(o) => y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
-		)[0];
-		const sharedObject = x.effects?.created!.filter((o) => getOwnerAddress(o) === undefined)[0];
+		)[0]!;
+		const sharedObject = x.effects?.created!.filter((o) => getOwnerAddress(o) === undefined)[0]!;
 		sharedObjectId = sharedObject.reference.objectId;
 	});
 
