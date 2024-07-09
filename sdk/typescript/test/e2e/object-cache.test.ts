@@ -47,11 +47,11 @@ describe('CachingTransactionExecutor', async () => {
 
 		await toolbox.client.waitForTransaction({ digest: x.digest });
 
-		const y = (x.effects?.created)!.map((o) => getOwnerAddress(o))!;
-		receiveObjectId = (x.effects?.created)!.filter(
+		const y = x.effects?.created!.map((o) => getOwnerAddress(o))!;
+		receiveObjectId = x.effects?.created!.filter(
 			(o) => !y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
 		)[0];
-		parentObjectId = (x.effects?.created)!.filter(
+		parentObjectId = x.effects?.created!.filter(
 			(o) => y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
 		)[0];
 	});

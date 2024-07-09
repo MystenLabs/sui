@@ -18,13 +18,13 @@ beforeAll(async () => {
 	toolbox = await setup();
 	const packagePath = __dirname + '/./data/serializer';
 	({ packageId, publishTxn } = await publishPackage(packagePath));
-	const sharedObject = (publishTxn.effects?.created)!.filter(
+	const sharedObject = publishTxn.effects?.created!.filter(
 		(o) =>
 			typeof o.owner === 'object' &&
 			'Shared' in o.owner &&
 			o.owner.Shared.initial_shared_version !== undefined,
 	)[0];
-	sharedObjectId = sharedObject.reference.objectId;
+	sharedObjectId = sharedObject!.reference.objectId;
 });
 
 describe('Transaction bcs Serialization and deserialization', () => {

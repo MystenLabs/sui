@@ -224,8 +224,8 @@ export class Transaction {
 					is(NormalizedCallArg, value)
 						? parse(NormalizedCallArg, value)
 						: value instanceof Uint8Array
-						? Inputs.Pure(value)
-						: { $kind: 'UnresolvedPure', UnresolvedPure: { value } },
+							? Inputs.Pure(value)
+							: { $kind: 'UnresolvedPure', UnresolvedPure: { value } },
 				);
 			}),
 		});
@@ -272,9 +272,9 @@ export class Transaction {
 						? {
 								$kind: 'UnresolvedObject',
 								UnresolvedObject: { objectId: normalizeSuiAddress(value) },
-						  }
+							}
 						: value,
-			  );
+				);
 	}
 
 	/**

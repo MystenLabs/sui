@@ -211,22 +211,22 @@ export function serializeV1TransactionData(
 						Object: input.Object.ImmOrOwnedObject
 							? {
 									ImmOrOwned: input.Object.ImmOrOwnedObject,
-							  }
+								}
 							: input.Object.Receiving
-							? {
-									Receiving: {
-										digest: input.Object.Receiving.digest,
-										version: input.Object.Receiving.version,
-										objectId: input.Object.Receiving.objectId,
+								? {
+										Receiving: {
+											digest: input.Object.Receiving.digest,
+											version: input.Object.Receiving.version,
+											objectId: input.Object.Receiving.objectId,
+										},
+									}
+								: {
+										Shared: {
+											mutable: input.Object.SharedObject.mutable,
+											initialSharedVersion: input.Object.SharedObject.initialSharedVersion,
+											objectId: input.Object.SharedObject.objectId,
+										},
 									},
-							  }
-							: {
-									Shared: {
-										mutable: input.Object.SharedObject.mutable,
-										initialSharedVersion: input.Object.SharedObject.initialSharedVersion,
-										objectId: input.Object.SharedObject.objectId,
-									},
-							  },
 					},
 					type: 'object',
 				};
@@ -271,8 +271,8 @@ export function serializeV1TransactionData(
 			transactionData.expiration?.$kind === 'Epoch'
 				? { Epoch: Number(transactionData.expiration.Epoch) }
 				: transactionData.expiration
-				? { None: true }
-				: null,
+					? { None: true }
+					: null,
 		gasConfig: {
 			owner: transactionData.gasData.owner ?? undefined,
 			budget: transactionData.gasData.budget ?? undefined,
