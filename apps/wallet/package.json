@@ -76,6 +76,7 @@
 		"cross-env": "^7.0.3",
 		"css-loader": "^6.7.3",
 		"dotenv-webpack": "^8.0.0",
+		"eslint": "^8.45.0",
 		"eslint-webpack-plugin": "^4.0.1",
 		"git-rev-sync": "^3.0.2",
 		"happy-dom": "^14.11.0",

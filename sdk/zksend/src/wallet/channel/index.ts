@@ -124,7 +124,7 @@ export class StashedHost {
 						key,
 						value.replace(/ /g, '+'),
 					]),
-			  )
+				)
 			: {};
 
 		const request = parse(StashedRequest, {
