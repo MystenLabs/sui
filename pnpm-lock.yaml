@@ -157,7 +157,7 @@ importers:
         version: 8.4.39
       tailwindcss:
         specifier: ^3.4.4
-        version: 3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+        version: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -539,7 +539,7 @@ importers:
         version: 7.1.0
       tailwindcss:
         specifier: ^3.4.4
-        version: 3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+        version: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))
@@ -630,7 +630,7 @@ importers:
         version: 8.4.39
       tailwindcss:
         specifier: ^3.4.4
-        version: 3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+        version: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -661,6 +661,12 @@ importers:
       '@hookform/resolvers':
         specifier: ^3.9.0
         version: 3.9.0(react-hook-form@7.52.1(react@18.3.1))
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../sdk/dapp-kit
+      '@mysten/sui':
+        specifier: workspace:*
+        version: link:../../sdk/typescript
       '@radix-ui/react-dialog':
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -716,12 +722,6 @@ importers:
         specifier: ^3.23.8
         version: 3.23.8
     devDependencies:
-      '@mysten/dapp-kit':
-        specifier: workspace:*
-        version: link:../../sdk/dapp-kit
-      '@mysten/sui':
-        specifier: workspace:*
-        version: link:../../sdk/typescript
       '@tailwindcss/forms':
         specifier: ^0.5.7
         version: 0.5.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))
@@ -745,7 +745,7 @@ importers:
         version: 8.4.39
       tailwindcss:
         specifier: ^3.4.4
-        version: 3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+        version: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))
@@ -794,7 +794,7 @@ importers:
         version: 8.4.39
       tailwindcss:
         specifier: ^3.4.4
-        version: 3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+        version: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -926,7 +926,7 @@ importers:
         version: 3.3.2
       tailwindcss:
         specifier: ^3.4.4
-        version: 3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+        version: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
       typescript:
         specifier: ^5.5.3
         version: 5.5.3
@@ -17272,7 +17272,7 @@ snapshots:
 
   '@headlessui/tailwindcss@0.1.3(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))':
     dependencies:
-      tailwindcss: 3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+      tailwindcss: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
 
   '@hookform/resolvers@3.9.0(react-hook-form@7.52.1(react@18.3.1))':
     dependencies:
@@ -20277,12 +20277,12 @@ snapshots:
 
   '@tailwindcss/aspect-ratio@0.4.2(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))':
     dependencies:
-      tailwindcss: 3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+      tailwindcss: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
 
   '@tailwindcss/forms@0.5.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)))':
     dependencies:
       mini-svg-data-uri: 1.4.4
-      tailwindcss: 3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+      tailwindcss: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
 
   '@tanstack/eslint-plugin-query@5.50.1(eslint@8.45.0)(typescript@5.5.3)':
     dependencies:
@@ -27504,7 +27504,7 @@ snapshots:
       '@csstools/utilities': 1.0.0(postcss@8.4.39)
       postcss: 8.4.39
 
-  postcss-load-config@4.0.2(postcss@8.4.39)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)):
+  postcss-load-config@4.0.2(postcss@8.4.39)(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)):
     dependencies:
       lilconfig: 3.1.2
       yaml: 2.4.5
@@ -29073,9 +29073,9 @@ snapshots:
 
   tailwindcss-animate@1.0.7(tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))):
     dependencies:
-      tailwindcss: 3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+      tailwindcss: 3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
 
-  tailwindcss@3.4.4(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3)):
+  tailwindcss@3.4.4(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3)):
     dependencies:
       '@alloc/quick-lru': 5.2.0
       arg: 5.0.2
@@ -29094,7 +29094,7 @@ snapshots:
       postcss: 8.4.39
       postcss-import: 15.1.0(postcss@8.4.39)
       postcss-js: 4.0.1(postcss@8.4.39)
-      postcss-load-config: 4.0.2(postcss@8.4.39)(ts-node@10.9.2(@types/node@20.14.10)(typescript@5.5.3))
+      postcss-load-config: 4.0.2(postcss@8.4.39)(ts-node@10.9.2(@swc/core@1.6.13(@swc/helpers@0.5.5))(@types/node@20.14.10)(typescript@5.5.3))
       postcss-nested: 6.0.1(postcss@8.4.39)
       postcss-selector-parser: 6.1.0
       resolve: 1.22.8
