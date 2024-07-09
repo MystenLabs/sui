@@ -205,9 +205,6 @@ pub enum ExecutionFailureStatus {
     #[error("Certificate is cancelled due to congestion on shared objects: {congested_objects}")]
     ExecutionCancelledDueToSharedObjectCongestion { congested_objects: CongestedObjects },
 
-    #[error("Certificate is cancelled because randomness could not be generated this epoch")]
-    ExecutionCancelledDueToRandomnessUnavailable,
-
     #[error("Address {address:?} is denied for coin {coin_type}")]
     AddressDeniedForCoin {
         address: SuiAddress,
@@ -216,6 +213,9 @@ pub enum ExecutionFailureStatus {
 
     #[error("Coin type is globally paused for use: {coin_type}")]
     CoinTypeGlobalPause { coin_type: String },
+
+    #[error("Certificate is cancelled because randomness could not be generated this epoch")]
+    ExecutionCancelledDueToRandomnessUnavailable,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
