@@ -67,14 +67,17 @@ async fn run_thread<F, Fut>(
         let gas = test_env.get_latest_object_ref(&gas_id).await;
         let tx_data = tx_creation_func(test_env.clone(), gas).await;
         let tx = test_env.test_cluster.sign_transaction(&tx_data);
-        let effects = test_env
+        let Ok(effects) = test_env
             .test_cluster
             .wallet
             .execute_transaction_may_fail(tx)
             .await
-            .unwrap()
-            .effects
-            .unwrap();
+            .map(|r| r.effects.unwrap())
+        else {
+            // When epochs are short, it is possible that some transactions
+            // keep getting sent at epoch boundaries and timeout eventually.
+            continue;
+        };
         if effects.status().is_ok() {
             num_tx_succeeded += 1;
         } else {
