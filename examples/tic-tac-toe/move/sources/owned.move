@@ -26,19 +26,14 @@ module tic_tac_toe::owned {
     /// The state of an active game of tic-tac-toe.
     public struct Game has key, store {
         id: UID,
-
         /// Marks on the board.
         board: vector<u8>,
-
         /// The next turn to be played.
         turn: u8,
-
         /// The address expected to send moves on behalf of X.
         x: address,
-
         /// The address expected to send moves on behalf of O.
         o: address,
-
         /// Public key of the admin address.
         admin: vector<u8>,
     }
@@ -62,16 +57,12 @@ module tic_tac_toe::owned {
     /// is one, or to both players in the case of a draw.
     public struct Trophy has key {
         id: UID,
-
         /// Whether the game was won or drawn.
         status: u8,
-
         /// The state of the board at the end of the game.
         board: vector<u8>,
-
         /// The number of turns played
         turn: u8,
-
         /// The other player (relative to the player who owns this Trophy).
         other: address,
     }
@@ -135,7 +126,6 @@ module tic_tac_toe::owned {
                 MARK__, MARK__, MARK__,
                 MARK__, MARK__, MARK__,
             ],
-
             turn: 0,
             x,
             o,
