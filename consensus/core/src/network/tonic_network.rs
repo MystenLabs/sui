@@ -101,8 +101,8 @@ impl TonicClient {
         // TODO: Gate via protocol config
         if true {
             client = client
-                .send_compressed(CompressionEncoding::Zstd)
-                .accept_compressed(CompressionEncoding::Zstd);
+                .send_compressed(CompressionEncoding::Gzip)
+                .accept_compressed(CompressionEncoding::Gzip);
         }
         Ok(client)
     }
@@ -698,8 +698,8 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                 // TODO: Gate via protocol config
                 if true {
                     service = service
-                        .send_compressed(CompressionEncoding::Zstd)
-                        .accept_compressed(CompressionEncoding::Zstd);
+                        .send_compressed(CompressionEncoding::Gzip)
+                        .accept_compressed(CompressionEncoding::Gzip);
                 }
                 service
             })

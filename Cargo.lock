@@ -15390,6 +15390,7 @@ dependencies = [
  "axum",
  "base64 0.21.2",
  "bytes",
+ "flate2",
  "h2",
  "http",
  "http-body",
@@ -15404,7 +15405,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
- "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]

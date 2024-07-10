@@ -490,7 +490,7 @@ toml_edit = { version = "0.19.10" }
 # NOTE: do not enable the `tls` feature on tonic. It will break custom TLS handling
 # for self signed certificates. Unit tests under consensus/core and other integration
 # tests will fail.
-tonic = { version = "0.11", features = ["zstd", "transport"] }
+tonic = { version = "0.11", features = ["gzip", "transport"] }
 tonic-build = { version = "0.11", features = ["prost", "transport"] }
 tonic-health = "0.11"
 tower = { version = "0.4.12", features = [
