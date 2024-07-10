@@ -10,7 +10,7 @@ At a high level, the DeepBook design follows the following flow, which revolves 
   - `PoolRegistry`: Used only during pool creation, it makes sure that duplicate pools are not created and maintains package versioning.
   - `BalanceManager`: Used to source a user's funds when placing orders. A single `BalanceManager` can be used between all pools. See [BalanceManager](./balance-manager.mdx) to learn more.
 
-![1](./images/DBv3Architecture.png)
+<p class="flex justify-center">![1](./images/DBv3Architecture.png)</p>
 
 ## Pool shared object {#pool}
 
@@ -21,7 +21,7 @@ All public facing functions take in the `Pool` shared object as a mutable or imm
 
 Logic is isolated between components and each component builds on top of the previous one. By maintaining a book, then state, then vault relationship, DeepBook can provide data availability guarantees, improve code readability, and help make maintaining and upgrading the protocol easier. 
 
-![Pool Modules](./images/pool.png)
+<p class="flex justify-center">![Pool Modules](./images/pool.png)</p>
 
 ### Book
 
@@ -49,11 +49,11 @@ Every epoch, users with non zero stake can submit a proposal to change these par
 
 Users can also vote on live proposals. When a proposal exceeds the quorum, the new trade parameters are queued to go live from the following epoch and onwards.  Proposals and votes are reset every epoch. Users can start submitting and voting on proposals the epoch following their stake. Quorum is equivalent to half of the total voting power. A user's voting power is calculated with the following formula where ${V}$ is the voting power, ${S}$ is the amount staked, and ${V_c}$ is the voting power cutoff. ${V_c}$ is currently set to 100,000 DEEP.
 
-$\LARGE V=\min\lparen S,V_c \rparen + \max\lparen \sqrt{S} - \sqrt{V_c} ,0 \rparen$
+<p class="flex justify-center">$\LARGE V=\min\lparen S,V_c \rparen + \max\lparen \sqrt{S} - \sqrt{V_c} ,0 \rparen$</p>
 
 The following diagram helps visualize the governance lifecycle.
 
-![DeepBook Governance Timeline](./images/governance.png)
+<p class="flex justify-center">![DeepBook Governance Timeline](./images/governance.png)</p>
 
 #### History
 
@@ -76,7 +76,7 @@ point ${p}$ is the “phaseout” point, at which – if total liquidity provide
 point – incentives are zero for the maker in that epoch. This point ${p}$ is constant for all makers in
 a pool and epoch.
 
-$\LARGE \textsf {Incentives }  \textsf {for } \textsf {Maker } i = \max\Bigg\lbrack F_i\Bigg\lparen 1 + \large\cfrac{\sum_{j \in \bar{M}} F_j} {\sum_{j \in M} F_j} \Bigg\rparen\Bigg\lparen \LARGE 1 - \large\cfrac{\sum_{j \in M \cup \bar{M}} L_j - L_i}{p}\Bigg\rparen \LARGE ,0 \Bigg\rbrack$ (3)
+<p class="flex justify-center">$\LARGE \textsf {Incentives }  \textsf {for } \textsf {Maker } i = \max\Bigg\lbrack F_i\Bigg\lparen 1 + \large\cfrac{\sum_{j \in \bar{M}} F_j} {\sum_{j \in M} F_j} \Bigg\rparen\Bigg\lparen \LARGE 1 - \large\cfrac{\sum_{j \in M \cup \bar{M}} L_j - L_i}{p}\Bigg\rparen \LARGE ,0 \Bigg\rbrack$ (3)</p>
 
 </blockquote>
 
@@ -108,7 +108,7 @@ Nodes in the B+ Tree are stored as individual dynamic fields hanging off the `Bi
 
 The following diagram of the lifecycle of an order placement action helps visualize the book, then state, then vault flow.
 
-![Place limit order flow](./images/placeorder.png)
+<p class="flex justify-center">![Place limit order flow](./images/placeorder.png)</p>
 
 ### Pool
 
