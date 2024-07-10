@@ -300,7 +300,10 @@ pub fn to_signing_message<T: Serialize>(
     extended
 }
 
-/// Compute the hash(tx_data) from the intent msg.
+/// Compute the BCS hash of the value in intent message. In the case of transaction data,
+/// this is the BCS hash of `struct TransactionData`, different from the transaction digest
+/// itself that computes the BCS hash of the Rust type prefix and `struct TransactionData`.
+/// (See `fn digest` in `impl Message for SenderSignedData`).
 pub fn to_signing_digest<T: Serialize>(
     intent_msg: &IntentMessage<T>,
 ) -> [u8; DefaultHash::OUTPUT_SIZE] {

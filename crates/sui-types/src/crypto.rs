@@ -725,8 +725,13 @@ impl Signature {
     where
         T: Serialize,
     {
+        // Compute the BCS hash of the value in intent message. In the case of transaction data,
+        // this is the BCS hash of `struct TransactionData`, different from the transaction digest
+        // itself that computes the BCS hash of the Rust type prefix and `struct TransactionData`.
+        // (See `fn digest` in `impl Message for SenderSignedData`).
         let mut hasher = DefaultHash::default();
         hasher.update(&bcs::to_bytes(&value).expect("Message serialization should not fail"));
+
         Signer::sign(secret, &hasher.finalize().digest)
     }
 }

@@ -2364,6 +2364,7 @@ impl Message for SenderSignedData {
     type DigestType = TransactionDigest;
     const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
 
+    /// Computes the tx digest that encodes the Rust type prefix from Signable trait.
     fn digest(&self) -> Self::DigestType {
         TransactionDigest::new(default_hash(&self.intent_message().value))
     }

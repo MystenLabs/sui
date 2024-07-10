@@ -2486,15 +2486,13 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
                     }
-<<<<<<< HEAD
-
                     // Turn on enums in testnet and devnet
                     if chain != Chain::Mainnet {
                         cfg.move_binary_format_version = Some(7);
-=======
+                    }
+
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.passkey_auth = true;
->>>>>>> 5f83522619 (rebase 0705)
                     }
                 }
                 // Use this template when making changes:
