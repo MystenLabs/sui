@@ -149,8 +149,8 @@ impl TestTransactionBuilder {
     pub fn call_nft_create(self, package_id: ObjectID) -> Self {
         self.move_call(
             package_id,
-            "devnet_nft",
-            "mint",
+            "testnet_nft",
+            "mint_to_sender",
             vec![
                 CallArg::Pure(bcs::to_bytes("example_nft_name").unwrap()),
                 CallArg::Pure(bcs::to_bytes("example_nft_description").unwrap()),
@@ -164,7 +164,7 @@ impl TestTransactionBuilder {
     pub fn call_nft_delete(self, package_id: ObjectID, nft_to_delete: ObjectRef) -> Self {
         self.move_call(
             package_id,
-            "devnet_nft",
+            "testnet_nft",
             "burn",
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(nft_to_delete))],
         )
@@ -264,7 +264,7 @@ impl TestTransactionBuilder {
             path
         } else {
             let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.extend(["..", "..", "sui_programmability", "examples", subpath]);
+            path.extend(["..", "..", "examples", "move", subpath]);
             path
         };
         self.publish(path)
@@ -661,7 +661,7 @@ pub async fn publish_nfts_package(
     let gas_price = context.get_reference_gas_price().await.unwrap();
     let txn = context.sign_transaction(
         &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .publish_examples("nfts")
+            .publish_examples("nft")
             .build(),
     );
     let resp = context.execute_transaction_must_succeed(txn).await;
@@ -672,7 +672,7 @@ pub async fn publish_nfts_package(
 /// Pre-requisite: `publish_nfts_package` must be called before this function.  Executes a
 /// transaction to create an NFT and returns the sender address, the object id of the NFT, and the
 /// digest of the transaction.
-pub async fn create_devnet_nft(
+pub async fn create_nft(
     context: &WalletContext,
     package_id: ObjectID,
 ) -> (SuiAddress, ObjectID, TransactionDigest) {
@@ -700,7 +700,7 @@ pub async fn create_devnet_nft(
 }
 
 /// Executes a transaction to delete the given NFT.
-pub async fn delete_devnet_nft(
+pub async fn delete_nft(
     context: &WalletContext,
     sender: SuiAddress,
     package_id: ObjectID,

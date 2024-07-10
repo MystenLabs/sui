@@ -5,10 +5,12 @@ use crate::operations::Operations;
 use crate::types::{ConstructionMetadata, OperationStatus, OperationType};
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
 use rand::seq::{IteratorRandom, SliceRandom};
 use serde_json::json;
 use shared_crypto::intent::Intent;
 use signature::rand_core::OsRng;
+use sui_types::TypeTag;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -141,9 +143,9 @@ async fn test_publish_and_move_call() {
     path.extend([
         "..",
         "..",
-        "sui_programmability",
         "examples",
-        "fungible_tokens",
+        "move",
+        "coin",
     ]);
     let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
     let compiled_modules_bytes =
@@ -181,8 +183,18 @@ async fn test_publish_and_move_call() {
         })
         .unwrap();
 
-    // TODO: Improve tx response to make it easier to find objects.
-    let treasury = find_module_object(&object_changes, "::TreasuryCap");
+    let treasury = find_module_object(&object_changes, |type_| {
+        if type_.name.as_str() != "TreasuryCap" {
+            return false;
+        }
+
+        let Some(TypeTag::Struct(otw)) = type_.type_params.first() else {
+            return false;
+        };
+
+        otw.name.as_str() == "MY_COIN"
+    });
+
     let treasury = treasury.clone().reference.to_object_ref();
     let recipient = *addresses.choose(&mut OsRng).unwrap();
     let pt = {
@@ -190,7 +202,7 @@ async fn test_publish_and_move_call() {
         builder
             .move_call(
                 *package,
-                Identifier::from_str("managed").unwrap(),
+                Identifier::from_str("my_coin").unwrap(),
                 Identifier::from_str("mint").unwrap(),
                 vec![],
                 vec![
@@ -630,7 +642,10 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn find_module_object(changes: &[ObjectChange], object_type_name: &str) -> OwnedObjectRef {
+fn find_module_object(
+    changes: &[ObjectChange],
+    type_pred: impl Fn(&StructTag) -> bool,
+) -> OwnedObjectRef {
     let mut results: Vec<_> = changes
         .iter()
         .filter_map(|change| {
@@ -643,7 +658,7 @@ fn find_module_object(changes: &[ObjectChange], object_type_name: &str) -> Owned
                 ..
             } = change
             {
-                if object_type.to_string().contains(object_type_name) {
+                if type_pred(object_type) {
                     return Some(OwnedObjectRef {
                         owner: *owner,
                         reference: SuiObjectRef {
