@@ -9,58 +9,14 @@ This guide covers three different implementations of the game tic-tac-toe on Sui
 In this first example of tic-tac-toe, the game object, including the game board, is controlled by a game admin.
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Game noComments}
-```move
-public struct Game has key, store {
-    id: UID,
-    board: vector<u8>,
-    turn: u8,
-    x: address,
-    o: address,
-    admin: vector<u8>,
-}
-```
 
 Because the players don’t own the game board, they cannot directly mutate it. Instead, they indicate their move by creating a `Mark` object with their intended placement and send it to the game object using transfer to object:
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Mark noComments}
-```move
-public struct Mark has key, store {
-    id: UID,
-    player: address,
-    row: u8,
-    col: u8,
-}
-```
 
 Games are created with the `new` function:
 
 {@inject: examples/tic-tac-toe/move/sources/owned.move#fun=new noComments}
-```move
-public fun new(x: address, o: address, admin: vector<u8>, ctx: &mut TxContext): Game {
-    let game = Game {
-        id: object::new(ctx),
-        board: vector[
-            MARK__, MARK__, MARK__,
-            MARK__, MARK__, MARK__,
-            MARK__, MARK__, MARK__,
-        ],
-
-        turn: 0,
-        x,
-        o,
-        admin,
-    };
-
-    let turn = TurnCap {
-        id: object::new(ctx),
-        game: object::id(&game),
-    };
-
-    // X is the first player, so send the capability to them.
-    transfer::transfer(turn, x);
-    game
-}
-```
 
 Some things to note:
 - The game is created and returned by this function, it is up to its creator to send it to the game admin to own.
@@ -69,68 +25,7 @@ Some things to note:
 
 When playing the game, the admin operates a service that keeps track of marks using events. When a request is received (`send_mark`), the admin tries to place the marker on the board (`place_mark`). Each move requires two steps (thus two transactions): one from the player and one from the admin. This setup relies on the admin's service to keep the game moving.
 
-{@inject: examples/tic-tac-toe/move/sources/owned.move#fun=send_mark,place_mark}
-```move
-public fun send_mark(cap: TurnCap, row: u8, col: u8, ctx: &mut TxContext) {
-    assert!(row < 3 && col < 3, EInvalidLocation);
-
-    let TurnCap { id, game } = cap;
-    id.delete();
-
-    let mark = Mark {
-        id: object::new(ctx),
-        player: ctx.sender(),
-        row,
-        col,
-    };
-
-    event::emit(MarkSent { game, mark: object::id(&mark) });
-    transfer::transfer(mark, game.to_address());
-}
-
-public fun place_mark(
-    game: &mut Game,
-    mark: Receiving<Mark>,
-    ctx: &mut TxContext,
-) {
-    assert!(game.ended() == TROPHY_NONE, EAlreadyFinished);
-
-    // Fetch the mark on behalf of the game -- only works if the mark in
-    // question was sent to this game.
-    let Mark { id, row, col, player } = transfer::receive(&mut game.id, mark);
-    id.delete();
-
-    // Confirm that the mark is from the player we expect -- it should not
-    // be possible to hit this assertion, because the `Mark`s can only be
-    // created by the address that owns the `TurnCap` which cannot be
-    // transferred, and is always held by `game.next_player()`.
-    let (me, them, sentinel) = game.next_player();
-    assert!(me == player, EWrongPlayer);
-
-    if (game[row, col] == MARK__) {
-        *(&mut game[row, col]) = sentinel;
-        game.turn = game.turn + 1;
-    };
-
-    // Check win condition -- if there is a winner, send them the trophy,
-    // otherwise, create a new turn cap and send that to the next player.
-    let end = game.ended();
-    if (end == TROPHY_WIN) {
-        transfer::transfer(game.mint_trophy(end, them, ctx), me);
-        event::emit(GameEnd { game: object::id(game) });
-    } else if (end == TROPHY_DRAW) {
-        transfer::transfer(game.mint_trophy(end, them, ctx), me);
-        transfer::transfer(game.mint_trophy(end, me, ctx), them);
-        event::emit(GameEnd { game: object::id(game) });
-    } else if (end == TROPHY_NONE) {
-        let cap = TurnCap { id: object::new(ctx), game: object::id(game) };
-        let (to, _, _) = game.next_player();
-        transfer::transfer(cap, to);
-    } else {
-        abort EInvalidEndState
-    }
-}
-```
+{@inject: examples/tic-tac-toe/move/sources/owned.move#fun=send_mark,place_mark noComments}
 
 To view the entire source code, see the [owned.move source file](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/move/sources/owned.move). You can find the rest of the logic, including how to check for a winner, as well as deleting the gameboard after the game concludes there.
 
@@ -151,72 +46,14 @@ In the previous version, the admin owned the game object, preventing players fro
 As the following code demonstrates, the `Game` object in this example is almost identical to the one before it. The only differences are that it does not include an `admin` field, which is only relevant for the multisig version of the game, and it does not have `store`, because it only ever exists as a shared object (so it cannot be transferred or wrapped).
 
 {@inject: examples/tic-tac-toe/move/sources/shared.move#struct=Game noComments}
-```move
-public struct Game has key {
-    id: UID,
-    board: vector<u8>,
-    turn: u8,
-    x: address,
-    o: address,
-}
-```
 
 Take a look at the `new` function:
 
 {@inject: examples/tic-tac-toe/move/sources/shared.move#fun=new noComments}
-```move
-public fun new(x: address, o: address, ctx: &mut TxContext) {
-    transfer::share_object(Game {
-        id: object::new(ctx),
-        board: vector[
-            MARK__, MARK__, MARK__,
-            MARK__, MARK__, MARK__,
-            MARK__, MARK__, MARK__,
-        ],
-
-        turn: 0,
-        x,
-        o,
-    });
-}
-```
 
 Instead of the game being sent to the game admin, it is instantiated as a shared object. The other notable difference is that there is no need to mint a `TurnCap` because the only two addresses that can play this game are `x` and `o`, and this is checked in the next function, `place_mark`:
 
-{@inject: examples/tic-tac-toe/move/sources/shared.move#fun=place_mark}
-```move
-public fun place_mark(
-    game: &mut Game,
-    row: u8,
-    col: u8,
-    ctx: &mut TxContext,
-) {
-    assert!(game.ended() == TROPHY_NONE, EAlreadyFinished);
-    assert!(row < 3 && col < 3, EInvalidLocation);
-
-    // Confirm that the mark is from the player we expect.
-    let (me, them, sentinel) = game.next_player();
-    assert!(me == ctx.sender(), EWrongPlayer);
-
-    if (game[row, col] != MARK__) {
-        abort EAlreadyFilled
-    };
-
-    *(&mut game[row, col]) = sentinel;
-    game.turn = game.turn + 1;
-
-    // Check win condition -- if there is a winner, send them the trophy.
-    let end = game.ended();
-    if (end == TROPHY_WIN) {
-        transfer::transfer(game.mint_trophy(end, them, ctx), me);
-    } else if (end == TROPHY_DRAW) {
-        transfer::transfer(game.mint_trophy(end, them, ctx), me);
-        transfer::transfer(game.mint_trophy(end, me, ctx), them);
-    } else if (end != TROPHY_NONE) {
-        abort EInvalidEndState
-    }
-}
-```
+{@inject: examples/tic-tac-toe/move/sources/shared.move#fun=place_mark noComments}
 
 <details>
 <summary>
