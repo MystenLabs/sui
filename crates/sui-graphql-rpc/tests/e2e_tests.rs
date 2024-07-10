@@ -843,15 +843,10 @@ mod tests {
         let _guard = telemetry_subscribers::TelemetryConfig::new()
             .with_env()
             .init();
-        let connection_config = ConnectionConfig::ci_integration_test_cfg_with_db_name(
-            "sui_graphql_rpc_e2e_tests".to_string(),
-            5432,
-            9184,
-        );
         let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
+                .await;
 
-        println!("Cluster started");
         cluster
             .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
             .await;
