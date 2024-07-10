@@ -8,7 +8,7 @@ jobs:
         uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v2.4.0
+      - uses: pnpm/action-setup@v4
         with:
           version: 8
       - name: Install Nodejs
