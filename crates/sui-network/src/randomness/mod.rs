@@ -155,8 +155,13 @@ struct RandomnessEventLoop {
     dkg_output: Option<dkg::Output<bls12381::G2Element, bls12381::G2Element>>,
     aggregation_threshold: u16,
     highest_requested_round: BTreeMap<EpochId, RandomnessRound>,
-    send_tasks:
-        BTreeMap<RandomnessRound, (tokio::task::JoinHandle<()>, OnceCell<RandomnessSignature>)>,
+    send_tasks: BTreeMap<
+        RandomnessRound,
+        (
+            tokio::task::JoinHandle<()>,
+            Arc<OnceCell<RandomnessSignature>>,
+        ),
+    >,
     round_request_time: BTreeMap<(EpochId, RandomnessRound), time::Instant>,
     future_epoch_partial_sigs: BTreeMap<(EpochId, RandomnessRound, PeerId), Vec<Vec<u8>>>,
     received_partial_sigs: BTreeMap<(RandomnessRound, PeerId), Vec<RandomnessPartialSignature>>,
@@ -698,7 +703,7 @@ impl RandomnessEventLoop {
                 break; // limit concurrent tasks
             }
 
-            let full_sig_cell = OnceCell::new();
+            let full_sig_cell = Arc::new(OnceCell::new());
             self.send_tasks.entry(round).or_insert_with(|| {
                 let name = self.name;
                 let network = self.network.clone();
@@ -774,7 +779,7 @@ impl RandomnessEventLoop {
         epoch: EpochId,
         round: RandomnessRound,
         partial_sigs: Vec<RandomnessPartialSignature>,
-        full_sig: OnceCell<RandomnessSignature>,
+        full_sig: Arc<OnceCell<RandomnessSignature>>,
     ) {
         // For simtests, we may test not sending partial signatures.
         #[allow(unused_mut)]
