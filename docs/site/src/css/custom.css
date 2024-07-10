@@ -113,7 +113,7 @@
 [data-theme='dark'] img.balance-coin-token {
   filter: invert(1);
 }
- 
+
 /** navbar overrides */
 .navbar-sidebar .menu__link {
   color: var(--ifm-navbar-sidebar-link-color);
@@ -138,8 +138,9 @@ html[data-theme=light] .navbar-sidebar button.clean-btn.menu__caret {
 
 /** setup global style overrides */
 
-body { 
+body {
   font-family: var(--primaryFont);
+  tab-size: 2;
 }
 
 h1 {
@@ -148,7 +149,6 @@ h1 {
   font-family: var(--primaryFont);
   font-weight: 500;
   letter-spacing: -0.04em;
-  
 }
 
 .h1 {
