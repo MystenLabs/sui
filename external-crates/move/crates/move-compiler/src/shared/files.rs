@@ -280,7 +280,7 @@ impl MappedFiles {
             .line_range(*file_id, line_offset as usize)
             .ok()?;
         let offset = line_range.start as u32 + char_offset;
-        Some(Loc::new(file_hash, offset, offset))
+        Some(Loc::new(file_hash, offset, offset + 1))
     }
 
     /// Given a line number (1-indexed) in the file return the `Loc` for the line.

@@ -141,23 +141,18 @@ fn identifiers(buffer: &str, symbols: &Symbols, path: &Path) -> Vec<CompletionIt
         .collect()
 }
 
-/// Returns the token corresponding to the "trigger character" that precedes the user's cursor,
-/// if it is one of `.`, `:`, '{', or `::`. Otherwise, returns `None`.
+/// Returns the token corresponding to the "trigger character" if it is one of `.`, `:`, '{', or
+/// `::`. Otherwise, returns `None` (position points at the potential trigger character itself).
 fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
-    // If the cursor is at the start of a new line, it cannot be preceded by a trigger character.
-    if position.character == 0 {
-        return None;
-    }
-
     let line = match buffer.lines().nth(position.line as usize) {
         Some(line) => line,
         None => return None, // Our buffer does not contain the line, and so must be out of date.
     };
-    match line.chars().nth(position.character as usize - 1) {
+    match line.chars().nth(position.character as usize) {
         Some('.') => Some(Tok::Period),
         Some(':') => {
-            if position.character > 1
-                && line.chars().nth(position.character as usize - 2) == Some(':')
+            if position.character > 0
+                && line.chars().nth(position.character as usize - 1) == Some(':')
             {
                 Some(Tok::ColonColon)
             } else {
@@ -490,10 +485,6 @@ fn is_definition(
 /// locations.
 fn preceding_strings(buffer: &str, position: &Position) -> Vec<(String, u32)> {
     let mut strings = vec![];
-    // If the cursor is at the start of a new line, it cannot be preceded by a trigger character.
-    if position.character == 0 {
-        return strings;
-    }
     let line = match buffer.lines().nth(position.line as usize) {
         Some(line) => line,
         None => return strings, // Our buffer does not contain the line, and so must be out of date.
@@ -503,7 +494,7 @@ fn preceding_strings(buffer: &str, position: &Position) -> Vec<(String, u32)> {
     let mut cur_col = 0;
     let mut cur_str_start = 0;
     let mut cur_str = "".to_string();
-    while cur_col < position.character {
+    while cur_col <= position.character {
         let Some(c) = chars.next() else {
             return strings;
         };
@@ -550,7 +541,12 @@ pub fn on_completion_request(
         .to_file_path()
         .unwrap();
 
-    let pos = parameters.text_document_position.position;
+    let mut pos = parameters.text_document_position.position;
+    if pos.character != 0 {
+        // adjust column to be at the character that has just been inserted rather than right after
+        // it (unless we are at the very first column)
+        pos = Position::new(pos.line, pos.character - 1);
+    }
     let items = completions_with_context(context, ide_files_root, pkg_dependencies, &path, pos)
         .unwrap_or_default();
 
