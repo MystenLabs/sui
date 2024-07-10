@@ -19,7 +19,7 @@ All public facing functions take in the `Pool` shared object as a mutable or imm
   - [`State`](#state)
   - [`Vault`](#vault)
 
-Logic is isolated between components and each component builds on top of the previous one. By maintaining a book, then state, then vault relationship, DeepBook can provide data availablility guarantees, improve code readability, and help make maintaining and upgrading the protocol easier. 
+Logic is isolated between components and each component builds on top of the previous one. By maintaining a book, then state, then vault relationship, DeepBook can provide data availability guarantees, improve code readability, and help make maintaining and upgrading the protocol easier. 
 
 ![Pool Modules](./images/pool.png)
 
@@ -84,7 +84,7 @@ In essence, if the total volume during an epoch is greater than the median volum
 
 #### Account
 
-`Account` represents a single user and their relavant data. Everything related to volumes, stake, voted proposal, unclaimed rebates, and balances to be transfered. There is a one to one relationship between a `BalanceManager` and an `Account`.
+`Account` represents a single user and their relevant data. Everything related to volumes, stake, voted proposal, unclaimed rebates, and balances to be transferred. There is a one to one relationship between a `BalanceManager` and an `Account`.
 
 Every epoch, the first action that a user performs will update their account, triggering a calculation of any potential rebates from the previous epoch, as well as resetting their volumes for the current epoch. Any new stakes from the previous epoch become active.
 
@@ -94,7 +94,7 @@ Each account has settled and owed balances. Settled balances are what the pool o
 
 Every transaction that a user performs on DeepBook resets their settled and owed balances. The vault then processes these balances for the user, deducting or adding to funds to their `BalanceManager`.
 
-The vault also stores the `DeepPrice` struct. This object holds up to 100 data points representing the conversion rate between the pool's base or quote asset and DEEP. These data points are sourced from a whitelisted pool, DEEP/USDC or DEEP/SUI. This conversion rate is used to determine the quantity of DEEP tokens requried to pay for trading fees.
+The vault also stores the `DeepPrice` struct. This object holds up to 100 data points representing the conversion rate between the pool's base or quote asset and DEEP. These data points are sourced from a whitelisted pool, DEEP/USDC or DEEP/SUI. This conversion rate is used to determine the quantity of DEEP tokens required to pay for trading fees.
 
 ### `BigVector`
 
