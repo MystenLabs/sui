@@ -490,7 +490,7 @@ toml_edit = { version = "0.19.10" }
 # NOTE: do not enable the `tls` feature on tonic. It will break custom TLS handling
 # for self signed certificates. Unit tests under consensus/core and other integration
 # tests will fail.
-tonic = { version = "0.11", features = ["transport"] }
+tonic = { version = "0.11", features = ["zstd", "transport"] }
 tonic-build = { version = "0.11", features = ["prost", "transport"] }
 tonic-health = "0.11"
 tower = { version = "0.4.12", features = [
@@ -569,7 +569,9 @@ move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538" }
 fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538", features = ["experimental"] }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538", features = [
+  "experimental",
+] }
 passkey-types = { version = "0.2.0" }
 passkey-client = { version = "0.2.0" }
 passkey-authenticator = { version = "0.2.0" }
@@ -583,7 +585,10 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9a
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
 
 # core-types with json format for REST api
-sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "be6a30039723bf8fabd64a8869b7e89596141551", features = ["serde", "schemars"] }
+sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "be6a30039723bf8fabd64a8869b7e89596141551", features = [
+  "serde",
+  "schemars",
+] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

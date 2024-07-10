@@ -30,7 +30,7 @@ use tokio::{
 };
 use tokio_rustls::TlsAcceptor;
 use tokio_stream::{iter, Iter};
-use tonic::{transport::Server, Request, Response, Streaming};
+use tonic::{codec::CompressionEncoding, transport::Server, Request, Response, Streaming};
 use tower_http::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
     ServiceBuilderExt,
@@ -95,9 +95,16 @@ impl TonicClient {
             .channel_pool
             .get_channel(self.network_keypair.clone(), peer, timeout)
             .await?;
-        Ok(ConsensusServiceClient::new(channel)
+        let mut client = ConsensusServiceClient::new(channel)
             .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit))
+            .max_decoding_message_size(config.message_size_limit);
+        // TODO: Gate via protocol config
+        if true {
+            client = client
+                .send_compressed(CompressionEncoding::Zstd)
+                .accept_compressed(CompressionEncoding::Zstd);
+        }
+        Ok(client)
     }
 }
 
@@ -683,11 +690,19 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             .http2_keepalive_interval(Some(config.keepalive_interval))
             .http2_keepalive_timeout(Some(config.keepalive_interval))
             // tcp keepalive is unsupported by msim
-            .add_service(
-                ConsensusServiceServer::new(service)
+            .add_service({
+                let mut service = ConsensusServiceServer::new(service)
                     .max_encoding_message_size(config.message_size_limit)
-                    .max_decoding_message_size(config.message_size_limit),
-            )
+                    .max_decoding_message_size(config.message_size_limit);
+
+                // TODO: Gate via protocol config
+                if true {
+                    service = service
+                        .send_compressed(CompressionEncoding::Zstd)
+                        .accept_compressed(CompressionEncoding::Zstd);
+                }
+                service
+            })
             .into_service();
 
         let inbound_metrics = self.context.metrics.network_metrics.inbound.clone();
