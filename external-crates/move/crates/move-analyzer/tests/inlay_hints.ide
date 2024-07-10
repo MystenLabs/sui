@@ -7,27 +7,27 @@
       "type_hints.move": [
         {
           "use_line": 8,
-          "use_col": 22
-        },
-        {
-          "use_line": 9,
-          "use_col": 24
-        },
-        {
-          "use_line": 25,
           "use_col": 23
         },
         {
-          "use_line": 26,
+          "use_line": 9,
           "use_col": 25
         },
         {
+          "use_line": 25,
+          "use_col": 24
+        },
+        {
+          "use_line": 26,
+          "use_col": 26
+        },
+        {
           "use_line": 27,
-          "use_col": 27
+          "use_col": 28
         },
         {
           "use_line": 28,
-          "use_col": 29
+          "use_col": 30
         }
       ],
       // tests inlay param hints
@@ -35,22 +35,22 @@
         // first arg, same line
         {
           "use_line": 11,
-          "use_col": 12
+          "use_col": 13
         },
         // second arg, same line
         {
           "use_line": 11,
-          "use_col": 16
+          "use_col": 17
         },
         // first arg, first line
         {
           "use_line": 15,
-          "use_col": 12
+          "use_col": 13
         },
         // second arg, second line
         {
           "use_line": 16,
-          "use_col": 12
+          "use_col": 13
         }
       ]
     }

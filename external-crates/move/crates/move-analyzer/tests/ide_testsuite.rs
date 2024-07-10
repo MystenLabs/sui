@@ -271,10 +271,11 @@ impl HintTest {
         )
         .unwrap();
         let lsp_line = self.use_line - 1; // 0th-based
+        let lsp_col = self.use_col - 1; // 0th-based
 
         writeln!(output, "-- test {test_idx} -------------------")?;
         let Some((hint, label_parts)) = inlay_hints.iter().find_map(|h| {
-            if h.position.line == lsp_line && h.position.character == self.use_col {
+            if h.position.line == lsp_line && h.position.character == lsp_col {
                 if let InlayHintLabel::LabelParts(parts) = &h.label {
                     return Some((h, parts));
                 }
