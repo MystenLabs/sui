@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tests finding UIDs for dynamic field access
+// tests finding UIDs for dynamic object field access
 
 //# init --addresses test=0x0 --accounts A
 
 //# publish
 
 module test::m {
-    use sui::dynamic_field as field;
+    use sui::dynamic_object_field as ofield;
 
     public struct S has key, store {
         id: UID,
@@ -23,7 +23,18 @@ module test::m {
     }
 
     public enum EnumWrapper has store {
-        Wrapped(UID),
+        A(Inner),
+        B(Inner),
+    }
+
+    public enum Inner has store {
+        A(UID),
+        B(UID),
+    }
+
+    public struct Value has key, store {
+        id: UID,
+        value: u64,
     }
 
     const KEY: u64 = 0;
@@ -34,35 +45,56 @@ module test::m {
     public fun new(ctx: &mut TxContext): S {
         let mut s = S {
             id: object::new(ctx),
-            other: EnumWrapper::Wrapped(object::new(ctx)),
-            wrapped: wrapped(ctx),
-            many: vector[wrapped(ctx), wrapped(ctx)],
+            other: EnumWrapper::A(Inner::A(object::new(ctx))),
+            wrapped: wrapped_a(ctx),
+            many: vector[wrapped_a(ctx), wrapped_b(ctx)],
         };
-        field::add(&mut s.id, KEY, 0);
-        field::add(s.other.get_wrapped_uid(), KEY, 0);
+        ofield::add(&mut s.id, KEY, value(0, ctx));
+        ofield::add(s.other.get_wrapped_uid(), KEY, value(0, ctx));
         s
     }
 
-    fun wrapped(ctx: &mut TxContext): Wrapped {
+    fun wrapped_a(ctx: &mut TxContext): Wrapped {
         let mut w = Wrapped {
             id: object::new(ctx),
-            other: EnumWrapper::Wrapped(object::new(ctx)),
+            other: EnumWrapper::A(Inner::A(object::new(ctx))),
         };
-        field::add(&mut w.id, KEY, 0);
-        field::add(w.other.get_wrapped_uid(), KEY, 0);
+        ofield::add(&mut w.id, KEY, value(0, ctx));
+        ofield::add(w.other.get_wrapped_uid(), KEY, value(0, ctx));
+        w
+    }
+
+    fun wrapped_b(ctx: &mut TxContext): Wrapped {
+        let mut w = Wrapped {
+            id: object::new(ctx),
+            other: EnumWrapper::B(Inner::B(object::new(ctx))),
+        };
+        ofield::add(&mut w.id, KEY, value(0, ctx));
+        ofield::add(w.other.get_wrapped_uid(), KEY, value(0, ctx));
         w
     }
 
 
+    fun value(value: u64, ctx: &mut TxContext): Value {
+        Value {
+            id: object::new(ctx),
+            value
+        }
+    }
+
     fun get_wrapped_uid(w: &mut EnumWrapper): &mut UID {
         match (w) {
-            EnumWrapper::Wrapped(id) => id,
+            EnumWrapper::A(Inner::A(id)) => id,
+            EnumWrapper::B(Inner::B(id)) => id,
+            EnumWrapper::A(Inner::B(_)) | EnumWrapper::B(Inner::A(_)) => abort 0,
         }
     }
 
     fun get_wrapped_uid_ref(w: &EnumWrapper): &UID {
         match (w) {
-            EnumWrapper::Wrapped(id) => id,
+            EnumWrapper::A(Inner::A(id)) => id,
+            EnumWrapper::B(Inner::B(id)) => id,
+            EnumWrapper::A(Inner::B(_)) | EnumWrapper::B(Inner::A(_)) => abort 0,
         }
     }
 
@@ -84,7 +116,7 @@ module test::m {
     }
 
     fun set_(id: &mut UID, value: u64) {
-        *field::borrow_mut(id, KEY) = value;
+        ofield::borrow_mut<u64, Value>(id, KEY).value = value;
     }
 
     //////////////////////////////////////////////////////////////
@@ -104,7 +136,8 @@ module test::m {
     }
 
     fun remove_(id: &mut UID) {
-        field::remove<u64, u64>(id, KEY);
+        let Value { id, .. } = ofield::remove(id, KEY);
+        object::delete(id);
     }
 
     //////////////////////////////////////////////////////////////
@@ -125,10 +158,10 @@ module test::m {
 
     fun check_(id: &UID, expected: Option<u64>) {
         if (option::is_some(&expected)) {
-            let f = field::borrow(id, KEY);
-            assert!(f == option::borrow(&expected), 0);
+            let Value { value, .. } = ofield::borrow(id, KEY);
+            assert!(value == option::borrow(&expected), 0);
         } else {
-            assert!(!field::exists_with_type<u64, u64>(id, KEY), 0);
+            assert!(!ofield::exists_with_type<u64, Value>(id, KEY), 0);
         }
     }
 }
@@ -173,3 +206,4 @@ module test::m {
 // Should fail since at the version of the object we're passing in the field exists still
 //# programmable --sender A --inputs object(2,8)@2 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1))
+
