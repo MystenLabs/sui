@@ -156,7 +156,7 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             Turn on count based shared object congestion control in devnet.
 // Version 53: Enable consensus commit prologue V3 in testnet.
 //             Enable enums on testnet.
-
+//             Add support for passkey in devnet.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -520,6 +520,10 @@ struct FeatureFlags {
     // If true, enable the coin deny list V2.
     #[serde(skip_serializing_if = "is_false")]
     enable_coin_deny_list_v2: bool,
+
+    // Enable passkey auth (SIP-9)
+    #[serde(skip_serializing_if = "is_false")]
+    passkey_auth: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1476,6 +1480,10 @@ impl ProtocolConfig {
 
     pub fn soft_bundle(&self) -> bool {
         self.feature_flags.soft_bundle
+    }
+
+    pub fn passkey_auth(&self) -> bool {
+        self.feature_flags.passkey_auth
     }
 }
 
@@ -2478,10 +2486,13 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
                     }
-
                     // Turn on enums in testnet and devnet
                     if chain != Chain::Mainnet {
                         cfg.move_binary_format_version = Some(7);
+                    }
+
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.passkey_auth = true;
                     }
                 }
                 // Use this template when making changes:
@@ -2643,6 +2654,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_soft_bundle_for_testing(&mut self, val: bool) {
         self.feature_flags.soft_bundle = val;
+    }
+
+    pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
+        self.feature_flags.passkey_auth = val
     }
 }
 
