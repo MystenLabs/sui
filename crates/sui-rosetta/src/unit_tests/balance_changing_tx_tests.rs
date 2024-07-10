@@ -10,7 +10,6 @@ use rand::seq::{IteratorRandom, SliceRandom};
 use serde_json::json;
 use shared_crypto::intent::Intent;
 use signature::rand_core::OsRng;
-use sui_types::TypeTag;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -36,6 +35,7 @@ use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
     TEST_ONLY_GAS_UNIT_FOR_STAKING, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
+use sui_types::TypeTag;
 use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
@@ -140,13 +140,7 @@ async fn test_publish_and_move_call() {
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend([
-        "..",
-        "..",
-        "examples",
-        "move",
-        "coin",
-    ]);
+    path.extend(["..", "..", "examples", "move", "coin"]);
     let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
     let compiled_modules_bytes =
         compiled_package.get_package_bytes(/* with_unpublished_deps */ false);

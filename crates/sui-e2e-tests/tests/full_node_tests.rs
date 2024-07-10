@@ -1011,8 +1011,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let response =
-        delete_nft(&test_cluster.wallet, recipient, package_id, object_ref_v2).await;
+    let response = delete_nft(&test_cluster.wallet, recipient, package_id, object_ref_v2).await;
     assert_eq!(
         *response.effects.unwrap().status(),
         SuiExecutionStatus::Success
