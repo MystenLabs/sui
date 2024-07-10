@@ -8,6 +8,7 @@ use sui_types::traffic_control::RemoteFirewallConfig;
 
 use axum::extract::{ConnectInfo, Json, State};
 use futures::StreamExt;
+use hyper::header::HeaderValue;
 use hyper::HeaderMap;
 use jsonrpsee::core::server::helpers::BoundedSubscriptions;
 use jsonrpsee::core::server::helpers::MethodResponse;
@@ -129,11 +130,19 @@ pub async fn json_rpc_handler<L: Logger>(
     headers: HeaderMap,
     Json(raw_request): Json<Box<RawValue>>,
 ) -> impl axum::response::IntoResponse {
+    let headers_clone = headers.clone();
     // Get version from header.
     let api_version = headers
         .get(CLIENT_TARGET_API_VERSION_HEADER)
         .and_then(|h| h.to_str().ok());
-    let response = process_raw_request(&service, api_version, raw_request.get(), client_addr).await;
+    let response = process_raw_request(
+        &service,
+        api_version,
+        raw_request.get(),
+        client_addr,
+        headers_clone,
+    )
+    .await;
 
     ok_response(response.result)
 }
@@ -143,16 +152,39 @@ async fn process_raw_request<L: Logger>(
     api_version: Option<&str>,
     raw_request: &str,
     client_addr: SocketAddr,
+    headers: HeaderMap,
 ) -> MethodResponse {
     let client = match service.client_id_source {
         Some(ClientIdSource::SocketAddr) => Some(client_addr.ip()),
         Some(ClientIdSource::XForwardedFor) => {
-            // TODO - implement this later. Will need to read header at axum layer.
-            error!(
-                "X-Forwarded-For client ID source not yet supported on json \
-                rpc servers. Skipping traffic controller request handling.",
-            );
-            None
+            let do_header_parse = |header: &HeaderValue| {
+                header.to_str().map(|s| {
+                    match s.parse::<SocketAddr>() {
+                        Ok(addr) => Some(addr.ip()),
+                        Err(err) => {
+                            error!(
+                                "Failed to parse x-forwarded-for header value of {:?} to ip address: {:?}. \
+                                Please ensure that your proxy is configured to resolve client domains to an \
+                                IP address before writing header",
+                                s,
+                                err,
+                            );
+                            None
+                        }
+                    }
+                }).unwrap_or_else(|_| {
+                    error!("Failed to parse x-forwarded-for header value of {:?} to string", header);
+                    None
+                })
+            };
+            if let Some(header) = headers.get("x-forwarded-for") {
+                do_header_parse(header)
+            } else if let Some(header) = headers.get("X-Forwarded-For") {
+                do_header_parse(header)
+            } else {
+                error!("X-Forwarded-For header not found in request. Skipping traffic controller request handling.");
+                None
+            }
         }
         None => None,
     };
