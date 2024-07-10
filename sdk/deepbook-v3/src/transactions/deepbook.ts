@@ -351,7 +351,7 @@ export class DeepBookContract {
 			baseCoinId: string,
 			deepAmount: number,
 			deepCoinId: string,
-			recepient: string,
+			recipient: string,
 		) =>
 		(tx: Transaction) => {
 			const {
@@ -375,9 +375,9 @@ export class DeepBookContract {
 				arguments: [tx.object(pool.address), baseCoin, deepCoin, tx.object(SUI_CLOCK_OBJECT_ID)],
 				typeArguments: [baseType, quoteCoin.type],
 			});
-			tx.transferObjects([baseOut], recepient);
-			tx.transferObjects([quoteOut], recepient);
-			tx.transferObjects([deepOut], recepient);
+			tx.transferObjects([baseOut], recipient);
+			tx.transferObjects([quoteOut], recipient);
+			tx.transferObjects([deepOut], recipient);
 		};
 
 	swapExactQuoteForBase =
@@ -387,7 +387,7 @@ export class DeepBookContract {
 			quoteCoinId: string,
 			deepAmount: number,
 			deepCoinId: string,
-			recepient: string,
+			recipient: string,
 		) =>
 		(tx: Transaction) => {
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
@@ -413,8 +413,8 @@ export class DeepBookContract {
 				arguments: [tx.object(pool.address), quoteCoin, deepCoin, tx.object(SUI_CLOCK_OBJECT_ID)],
 				typeArguments: [baseCoin.type, quoteType],
 			});
-			tx.transferObjects([baseOut], recepient);
-			tx.transferObjects([quoteOut], recepient);
-			tx.transferObjects([deepOut], recepient);
+			tx.transferObjects([baseOut], recipient);
+			tx.transferObjects([quoteOut], recipient);
+			tx.transferObjects([deepOut], recipient);
 		};
 }
