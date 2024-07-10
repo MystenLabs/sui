@@ -1,0 +1,58 @@
+// Tests dot completions
+{
+  "Hint": {
+    "project": "tests/inlay-hints",
+    "file_tests": {
+      // tests inlay type hints
+      "type_hints.move": [
+        {
+          "use_line": 8,
+          "use_col": 22
+        },
+        {
+          "use_line": 9,
+          "use_col": 24
+        },
+        {
+          "use_line": 25,
+          "use_col": 23
+        },
+        {
+          "use_line": 26,
+          "use_col": 25
+        },
+        {
+          "use_line": 27,
+          "use_col": 27
+        },
+        {
+          "use_line": 28,
+          "use_col": 29
+        }
+      ],
+      // tests inlay param hints
+      "param_hints.move": [
+        // first arg, same line
+        {
+          "use_line": 11,
+          "use_col": 12
+        },
+        // second arg, same line
+        {
+          "use_line": 11,
+          "use_col": 16
+        },
+        // first arg, first line
+        {
+          "use_line": 15,
+          "use_col": 12
+        },
+        // second arg, second line
+        {
+          "use_line": 16,
+          "use_col": 12
+        }
+      ]
+    }
+  }
+}

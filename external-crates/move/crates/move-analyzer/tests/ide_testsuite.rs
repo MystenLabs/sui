@@ -10,9 +10,10 @@ use std::{
 };
 
 use json_comments::StripComments;
-use lsp_types::Position;
+use lsp_types::{InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
 use move_analyzer::{
     completion::completion_items,
+    inlay_hints::inlay_hints_internal,
     symbols::{
         def_info_doc_string, get_symbols, maybe_convert_for_guard, PrecompiledPkgDeps, Symbols,
         UseDefMap,
@@ -43,6 +44,10 @@ enum TestSuite {
         project: String,
         file_tests: BTreeMap<String, Vec<CursorTest>>,
     },
+    Hint {
+        project: String,
+        file_tests: BTreeMap<String, Vec<HintTest>>,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -62,6 +67,12 @@ struct CursorTest {
     line: u32,
     character: u32,
     description: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct HintTest {
+    use_line: u32,
+    use_col: u32,
 }
 
 //**************************************************************************************************
@@ -244,6 +255,58 @@ impl CursorTest {
     }
 }
 
+impl HintTest {
+    fn test(
+        &self,
+        test_idx: usize,
+        symbols: &Symbols,
+        output: &mut dyn std::io::Write,
+        use_file_path: &Path,
+    ) -> anyhow::Result<()> {
+        let inlay_hints = inlay_hints_internal(
+            symbols,
+            use_file_path.to_path_buf(),
+            /* type_hints */ true,
+            /* param_hints */ true,
+        )
+        .unwrap();
+        let lsp_line = self.use_line - 1; // 0th-based
+
+        writeln!(output, "-- test {test_idx} -------------------")?;
+        let Some((hint, label_parts)) = inlay_hints.iter().find_map(|h| {
+            if h.position.line == lsp_line && h.position.character == self.use_col {
+                if let InlayHintLabel::LabelParts(parts) = &h.label {
+                    return Some((h, parts));
+                }
+            }
+            None
+        }) else {
+            writeln!(output, "NO INLAY HINT FOUND")?;
+            return Ok(());
+        };
+
+        let tooltip = hint.tooltip.as_ref().map(|tip| match tip {
+            InlayHintTooltip::String(s) => s.clone(),
+            InlayHintTooltip::MarkupContent(m) => m.value.clone(),
+        });
+
+        match hint.kind {
+            Some(InlayHintKind::TYPE) => {
+                writeln!(output, "INLAY TYPE HINT : {}", label_parts[1].value)?
+            }
+            Some(InlayHintKind::PARAMETER) => {
+                writeln!(output, "INLAY PARAM HINT: {}", label_parts[0].value)?
+            }
+            _ => writeln!(output, "INLAY HINT OF UNKNOWN TYPE")?,
+        }
+        if let Some(tip) = tooltip {
+            writeln!(output, "ON HOVER:\n{}", tip)?;
+        }
+
+        Ok(())
+    }
+}
+
 //**************************************************************************************************
 // Test Suite Runner Code
 //**************************************************************************************************
@@ -402,6 +465,35 @@ fn cursor_test_suite(
     Ok(result)
 }
 
+fn hint_test_suite(
+    project: String,
+    file_tests: BTreeMap<String, Vec<HintTest>>,
+) -> datatest_stable::Result<String> {
+    let (project_path, _, _, symbols) = initial_symbols(project)?;
+
+    let mut output: BufWriter<_> = BufWriter::new(Vec::new());
+    let writer: &mut dyn io::Write = output.get_mut();
+
+    for (file, tests) in file_tests {
+        writeln!(
+            writer,
+            "== {file} ========================================================"
+        )?;
+
+        let mut fpath = project_path.clone();
+
+        fpath.push(format!("sources/{file}"));
+        let cpath = dunce::canonicalize(&fpath).unwrap();
+
+        for (idx, test) in tests.iter().enumerate() {
+            test.test(idx, &symbols, writer, &cpath)?;
+        }
+    }
+
+    let result: String = String::from_utf8(output.into_inner().unwrap()).unwrap();
+    Ok(result)
+}
+
 fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
     let stripped = StripComments::new(suite_file);
@@ -420,6 +512,10 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
             project,
             file_tests,
         } => cursor_test_suite(project, file_tests),
+        TestSuite::Hint {
+            project,
+            file_tests,
+        } => hint_test_suite(project, file_tests),
     }?;
 
     let exp_string = test_path
