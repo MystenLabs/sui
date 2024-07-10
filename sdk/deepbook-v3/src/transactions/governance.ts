@@ -3,78 +3,84 @@
 import type { Transaction } from '@mysten/sui/transactions';
 
 import type { BalanceManager, Pool } from '../types/index.js';
-import { DEEP_SCALAR, DEEPBOOK_PACKAGE_ID, FLOAT_SCALAR } from '../utils/config.js';
-import { generateProof } from './balanceManager.js';
+import type { DeepBookConfig } from '../utils/config.js';
+import { DEEP_SCALAR, FLOAT_SCALAR } from '../utils/config.js';
 
-export const stake = (
-	pool: Pool,
-	balanceManager: BalanceManager,
-	stakeAmount: number,
-	txb: Transaction,
-) => {
-	const tradeProof = generateProof(balanceManager, txb);
+export class GovernanceContract {
+	#config: DeepBookConfig;
 
-	txb.moveCall({
-		target: `${DEEPBOOK_PACKAGE_ID}::pool::stake`,
-		arguments: [
-			txb.object(pool.address),
-			txb.object(balanceManager.address),
-			tradeProof,
-			txb.pure.u64(stakeAmount * DEEP_SCALAR),
-		],
-		typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
-	});
-};
+	constructor(config: DeepBookConfig) {
+		this.#config = config;
+	}
 
-export const unstake = (pool: Pool, balanceManager: BalanceManager, txb: Transaction) => {
-	const tradeProof = generateProof(balanceManager, txb);
+	stake =
+		(pool: Pool, balanceManager: BalanceManager, stakeAmount: number) => (tx: Transaction) => {
+			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+			const baseCoin = this.#config.getCoin(pool.baseCoin);
+			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
-	txb.moveCall({
-		target: `${DEEPBOOK_PACKAGE_ID}::pool::unstake`,
-		arguments: [txb.object(pool.address), txb.object(balanceManager.address), tradeProof],
-		typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
-	});
-};
+			return tx.moveCall({
+				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::stake`,
+				arguments: [
+					tx.object(pool.address),
+					tx.object(balanceManager.address),
+					tradeProof,
+					tx.pure.u64(stakeAmount * DEEP_SCALAR),
+				],
+				typeArguments: [baseCoin.type, quoteCoin.type],
+			});
+		};
 
-export const submitProposal = (
-	pool: Pool,
-	balanceManager: BalanceManager,
-	takerFee: number,
-	makerFee: number,
-	stakeRequired: number,
-	txb: Transaction,
-) => {
-	const tradeProof = generateProof(balanceManager, txb);
+	unstake = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
-	txb.moveCall({
-		target: `${DEEPBOOK_PACKAGE_ID}::pool::submit_proposal`,
-		arguments: [
-			txb.object(pool.address),
-			txb.object(balanceManager.address),
-			tradeProof,
-			txb.pure.u64(takerFee * FLOAT_SCALAR),
-			txb.pure.u64(makerFee * FLOAT_SCALAR),
-			txb.pure.u64(stakeRequired * DEEP_SCALAR),
-		],
-		typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
-	});
-};
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::unstake`,
+			arguments: [tx.object(pool.address), tx.object(balanceManager.address), tradeProof],
+			typeArguments: [baseCoin.type, quoteCoin.type],
+		});
+	};
 
-export const vote = (
-	pool: Pool,
-	balanceManager: BalanceManager,
-	proposal_id: string,
-	txb: Transaction,
-) => {
-	const tradeProof = generateProof(balanceManager, txb);
+	submitProposal =
+		(
+			pool: Pool,
+			balanceManager: BalanceManager,
+			takerFee: number,
+			makerFee: number,
+			stakeRequired: number,
+		) =>
+		(tx: Transaction) => {
+			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+			const baseCoin = this.#config.getCoin(pool.baseCoin);
+			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
-	txb.moveCall({
-		target: `${DEEPBOOK_PACKAGE_ID}::pool::vote`,
-		arguments: [
-			txb.object(pool.address),
-			txb.object(balanceManager.address),
-			tradeProof,
-			txb.pure.id(proposal_id),
-		],
-	});
-};
+			tx.moveCall({
+				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::submit_proposal`,
+				arguments: [
+					tx.object(pool.address),
+					tx.object(balanceManager.address),
+					tradeProof,
+					tx.pure.u64(takerFee * FLOAT_SCALAR),
+					tx.pure.u64(makerFee * FLOAT_SCALAR),
+					tx.pure.u64(stakeRequired * DEEP_SCALAR),
+				],
+				typeArguments: [baseCoin.type, quoteCoin.type],
+			});
+		};
+
+	vote = (pool: Pool, balanceManager: BalanceManager, proposal_id: string) => (tx: Transaction) => {
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::vote`,
+			arguments: [
+				tx.object(pool.address),
+				tx.object(balanceManager.address),
+				tradeProof,
+				tx.pure.id(proposal_id),
+			],
+		});
+	};
+}
