@@ -419,7 +419,7 @@ async function createMethodParam(method: OpenRpcMethod, param: OpenRpcParam) {
 				paramOptions.typeAlias ? ts.factory.createTypeReferenceNode(paramOptions.typeAlias) : type,
 				ts.factory.createLiteralTypeNode(ts.factory.createNull()),
 				ts.factory.createToken(ts.SyntaxKind.UndefinedKeyword),
-		  ]);
+			]);
 }
 
 async function createObjectMembers(
@@ -666,7 +666,7 @@ async function generateUnionType(
 								},
 								required: [...(base.required ?? []), ...(item.required ?? [])],
 								additionalProperties: base.additionalProperties,
-						  }
+							}
 						: item,
 				);
 			}),
@@ -679,7 +679,7 @@ async function generateUnionType(
 						? {
 								description: undefined,
 								...item,
-						  }
+							}
 						: item,
 				),
 			),

@@ -28,13 +28,13 @@ describe('Transaction Builders', () => {
 	beforeAll(async () => {
 		const packagePath = __dirname + '/./data/serializer';
 		({ packageId, publishTxn } = await publishPackage(packagePath));
-		const sharedObject = (publishTxn.effects?.created)!.filter(
+		const sharedObject = publishTxn.effects?.created!.filter(
 			(o) =>
 				typeof o.owner === 'object' &&
 				'Shared' in o.owner &&
 				o.owner.Shared.initial_shared_version !== undefined,
 		)[0];
-		sharedObjectId = sharedObject.reference.objectId;
+		sharedObjectId = sharedObject!.reference.objectId;
 	});
 
 	beforeEach(async () => {
@@ -176,12 +176,12 @@ describe('Transaction Builders', () => {
 
 			expect(capId).toBeTruthy();
 
-			const sharedObjectId = (publishTxn.effects?.created)!.filter(
+			const sharedObjectId = publishTxn.effects?.created!.filter(
 				(o) =>
 					typeof o.owner === 'object' &&
 					'Shared' in o.owner &&
 					o.owner.Shared.initial_shared_version !== undefined,
-			)[0].reference.objectId;
+			)[0].reference.objectId!;
 
 			// Step 2. Confirm that its functions work as expected in its
 			// first version

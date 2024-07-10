@@ -2,20 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { EnumInputShape, EnumOutputShape } from '@mysten/bcs';
-import type { BaseSchema, Input, Output } from 'valibot';
+import type { GenericSchema, InferInput, InferOutput } from 'valibot';
 import {
 	array,
 	boolean,
-	custom,
+	check,
 	integer,
+	lazy,
 	literal,
 	nullable,
 	nullish,
 	number,
 	object,
 	optional,
+	pipe,
 	record,
-	recursive,
 	string,
 	transform,
 	tuple,
@@ -27,45 +28,49 @@ import { isValidSuiAddress, normalizeSuiAddress } from '../../utils/sui-types.js
 
 type Merge<T> = T extends object ? { [K in keyof T]: T[K] } : never;
 
-type EnumSchema<T extends Record<string, BaseSchema<any>>> = BaseSchema<
+type EnumSchema<T extends Record<string, GenericSchema<any>>> = GenericSchema<
 	EnumInputShape<
 		Merge<{
-			[K in keyof T]: Input<T[K]>;
+			[K in keyof T]: InferInput<T[K]>;
 		}>
 	>,
 	EnumOutputShape<
 		Merge<{
-			[K in keyof T]: Output<T[K]>;
+			[K in keyof T]: InferOutput<T[K]>;
 		}>
 	>
 >;
 
-export function safeEnum<T extends Record<string, BaseSchema<any>>>(options: T): EnumSchema<T> {
+export function safeEnum<T extends Record<string, GenericSchema<any>>>(options: T): EnumSchema<T> {
 	const unionOptions = Object.entries(options).map(([key, value]) => object({ [key]: value }));
 
-	return transform(union(unionOptions), (value) => ({
-		...value,
-		$kind: Object.keys(value)[0] as keyof typeof value,
-	})) as EnumSchema<T>;
+	return pipe(
+		union(unionOptions),
+		transform((value) => ({
+			...value,
+			$kind: Object.keys(value)[0] as keyof typeof value,
+		})),
+	) as EnumSchema<T>;
 }
 
-export const SuiAddress = transform(string(), (value) => normalizeSuiAddress(value), [
-	custom(isValidSuiAddress),
-]);
+export const SuiAddress = pipe(
+	string(),
+	transform((value) => normalizeSuiAddress(value)),
+	check(isValidSuiAddress),
+);
 export const ObjectID = SuiAddress;
 export const BCSBytes = string();
-export const JsonU64 = union(
-	[string(), number([integer()])],
-	[
-		custom((val) => {
-			try {
-				BigInt(val);
-				return BigInt(val) >= 0 && BigInt(val) <= 18446744073709551615n;
-			} catch {
-				return false;
-			}
-		}, 'Invalid u64'),
-	],
+export const JsonU64 = pipe(
+	union([string(), pipe(number(), integer())]),
+
+	check((val) => {
+		try {
+			BigInt(val);
+			return BigInt(val) >= 0 && BigInt(val) <= 18446744073709551615n;
+		} catch {
+			return false;
+		}
+	}, 'Invalid u64'),
 );
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/base_types.rs#L138
 // Implemented as a tuple in rust
@@ -74,23 +79,23 @@ export const ObjectRef = object({
 	version: JsonU64,
 	digest: string(),
 });
-export type ObjectRef = Output<typeof ObjectRef>;
+export type ObjectRef = InferOutput<typeof ObjectRef>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L690-L702
-export const Argument = transform(
+export const Argument = pipe(
 	union([
 		object({ GasCoin: literal(true) }),
-		object({ Input: number([integer()]), type: optional(literal('pure')) }),
-		object({ Input: number([integer()]), type: optional(literal('object')) }),
-		object({ Result: number([integer()]) }),
-		object({ NestedResult: tuple([number([integer()]), number([integer()])]) }),
+		object({ Input: pipe(number(), integer()), type: optional(literal('pure')) }),
+		object({ Input: pipe(number(), integer()), type: optional(literal('object')) }),
+		object({ Result: pipe(number(), integer()) }),
+		object({ NestedResult: tuple([pipe(number(), integer()), pipe(number(), integer())]) }),
 	]),
-	(value) => ({
+	transform((value) => ({
 		...value,
 		$kind: Object.keys(value)[0] as keyof typeof value,
-	}),
+	})),
 	// Defined manually to add `type?: 'pure' | 'object'` to Input
-) as BaseSchema<
+) as GenericSchema<
 	// Input
 	| { GasCoin: true }
 	| { Input: number; type?: 'pure' | 'object' }
@@ -104,7 +109,7 @@ export const Argument = transform(
 	| { $kind: 'NestedResult'; NestedResult: [number, number] }
 >;
 
-export type Argument = Output<typeof Argument>;
+export type Argument = InferOutput<typeof Argument>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L1387-L1392
 export const GasData = object({
@@ -113,7 +118,7 @@ export const GasData = object({
 	owner: nullable(SuiAddress),
 	payment: nullable(array(ObjectRef)),
 });
-export type GasData = Output<typeof GasData>;
+export type GasData = InferOutput<typeof GasData>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/external-crates/move/crates/move-core-types/src/language_storage.rs#L140-L147
 export const StructTag = object({
@@ -123,7 +128,7 @@ export const StructTag = object({
 	// type_params in rust, should be updated to use camelCase
 	typeParams: array(string()),
 });
-export type StructTag = Output<typeof StructTag>;
+export type StructTag = InferOutput<typeof StructTag>;
 
 // https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-graphql-rpc/schema/current_progress_schema.graphql#L1614-L1627
 export type OpenMoveTypeSignatureBody =
@@ -146,7 +151,7 @@ export type OpenMoveTypeSignatureBody =
 	  }
 	| { typeParameter: number };
 
-export const OpenMoveTypeSignatureBody: BaseSchema<OpenMoveTypeSignatureBody> = union([
+export const OpenMoveTypeSignatureBody: GenericSchema<OpenMoveTypeSignatureBody> = union([
 	literal('address'),
 	literal('bool'),
 	literal('u8'),
@@ -155,16 +160,16 @@ export const OpenMoveTypeSignatureBody: BaseSchema<OpenMoveTypeSignatureBody> = 
 	literal('u64'),
 	literal('u128'),
 	literal('u256'),
-	object({ vector: recursive(() => OpenMoveTypeSignatureBody) }),
+	object({ vector: lazy(() => OpenMoveTypeSignatureBody) }),
 	object({
 		datatype: object({
 			package: string(),
 			module: string(),
 			type: string(),
-			typeParameters: array(recursive(() => OpenMoveTypeSignatureBody)),
+			typeParameters: array(lazy(() => OpenMoveTypeSignatureBody)),
 		}),
 	}),
-	object({ typeParameter: number([integer()]) }),
+	object({ typeParameter: pipe(number(), integer()) }),
 ]);
 
 // https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-graphql-rpc/schema/current_progress_schema.graphql#L1609-L1612
@@ -172,7 +177,7 @@ export const OpenMoveTypeSignature = object({
 	ref: nullable(union([literal('&'), literal('&mut')])),
 	body: OpenMoveTypeSignatureBody,
 });
-export type OpenMoveTypeSignature = Output<typeof OpenMoveTypeSignature>;
+export type OpenMoveTypeSignature = InferOutput<typeof OpenMoveTypeSignature>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L707-L718
 const ProgrammableMoveCall = object({
@@ -184,7 +189,7 @@ const ProgrammableMoveCall = object({
 	arguments: array(Argument),
 	_argumentTypes: optional(nullable(array(OpenMoveTypeSignature))),
 });
-export type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
+export type ProgrammableMoveCall = InferOutput<typeof ProgrammableMoveCall>;
 
 export const $Intent = object({
 	name: string(),
@@ -294,7 +299,7 @@ const CallArg = safeEnum({
 		initialSharedVersion: optional(nullable(JsonU64)),
 	}),
 });
-export type CallArg = Output<typeof CallArg>;
+export type CallArg = InferOutput<typeof CallArg>;
 
 export const NormalizedCallArg = safeEnum({
 	Object: ObjectArg,
@@ -308,7 +313,7 @@ export const TransactionExpiration = safeEnum({
 	Epoch: JsonU64,
 });
 
-export type TransactionExpiration = Output<typeof TransactionExpiration>;
+export type TransactionExpiration = InferOutput<typeof TransactionExpiration>;
 
 export const TransactionData = object({
 	version: literal(2),
@@ -318,4 +323,4 @@ export const TransactionData = object({
 	inputs: array(CallArg),
 	commands: array(Command),
 });
-export type TransactionData = Output<typeof TransactionData>;
+export type TransactionData = InferOutput<typeof TransactionData>;

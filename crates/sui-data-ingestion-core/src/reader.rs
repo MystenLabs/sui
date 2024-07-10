@@ -220,25 +220,28 @@ impl CheckpointReader {
         })
         .await?;
 
+        let mut read_source: &str = "local";
         if self.remote_store_url.is_some()
             && (checkpoints.is_empty()
                 || checkpoints[0].checkpoint_summary.sequence_number
                     > self.current_checkpoint_number)
         {
             checkpoints = self.remote_fetch();
+            read_source = "remote";
         } else {
             // cancel remote fetcher execution because local reader has made progress
             self.remote_fetcher_receiver = None;
         }
 
         info!(
-            "Reader. Current checkpoint number: {}, pruning watermark: {}, new updates: {:?}",
+            "Read from {}. Current checkpoint number: {}, pruning watermark: {}, new updates: {:?}",
+            read_source,
             self.current_checkpoint_number,
             self.last_pruned_watermark,
             checkpoints.len(),
         );
         for checkpoint in checkpoints {
-            if self.remote_store_url.is_none()
+            if read_source == "local"
                 && checkpoint.checkpoint_summary.sequence_number > self.current_checkpoint_number
             {
                 break;

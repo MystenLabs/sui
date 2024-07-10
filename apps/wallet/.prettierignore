@@ -6,4 +6,5 @@ yarn-error.log*
 .next/
 .swc/
 out/
+playwright-report/
 CHANGELOG.md

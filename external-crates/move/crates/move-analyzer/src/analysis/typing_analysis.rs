@@ -4,9 +4,8 @@
 use crate::{
     compiler_info::CompilerInfo,
     symbols::{
-        add_member_use_def, def_info_to_type_def_loc, expansion_mod_ident_to_map_key, type_def_loc,
-        DefInfo, DefMap, FieldDef, LocalDef, MemberDefInfo, ModuleDefs, References, UseDef,
-        UseDefMap,
+        add_member_use_def, expansion_mod_ident_to_map_key, find_datatype, type_def_loc, DefInfo,
+        DefMap, LocalDef, MemberDefInfo, ModuleDefs, References, UseDef, UseDefMap,
     },
     utils::{ignored_function, loc_start_to_lsp_position_opt},
 };
@@ -34,7 +33,7 @@ pub struct TypingAnalysisContext<'a> {
     /// Outermost definitions in a module (structs, consts, functions), keyd on a ModuleIdent
     /// string so that we can access it regardless of the ModuleIdent representation
     /// (e.g., in the parsing AST or in the typing AST)
-    pub mod_outer_defs: &'a BTreeMap<String, ModuleDefs>,
+    pub mod_outer_defs: &'a mut BTreeMap<String, ModuleDefs>,
     /// Mapped file information for translating locations into positions
     pub files: &'a MappedFiles,
     /// Associates uses for a given definition to allow displaying all references
@@ -44,6 +43,9 @@ pub struct TypingAnalysisContext<'a> {
     /// A UseDefMap for a given module (needs to be appropriately set before the module
     /// processing starts)
     pub use_defs: UseDefMap,
+    /// Current module identifier string (needs to be appropriately set before the module
+    /// processing starts)
+    pub current_mod_ident_str: Option<String>,
     /// Alias lengths in access paths for a given module (needs to be appropriately
     /// set before the module processing starts)
     pub alias_lengths: &'a BTreeMap<Position, usize>,
@@ -57,6 +59,33 @@ pub struct TypingAnalysisContext<'a> {
     pub expression_scope: OrdMap<Symbol, LocalDef>,
     /// IDE Annotation Information from the Compiler
     pub compiler_info: &'a mut CompilerInfo,
+}
+
+fn def_info_to_type_def_loc(
+    mod_outer_defs: &BTreeMap<String, ModuleDefs>,
+    def_info: &DefInfo,
+) -> Option<Loc> {
+    match def_info {
+        DefInfo::Type(t) => type_def_loc(mod_outer_defs, t),
+        DefInfo::Function(..) => None,
+        DefInfo::Struct(mod_ident, name, ..) => {
+            let mod_ident_str = expansion_mod_ident_to_map_key(mod_ident);
+            mod_outer_defs
+                .get(&mod_ident_str)
+                .and_then(|mod_defs| find_datatype(mod_defs, name))
+        }
+        DefInfo::Enum(mod_ident, name, ..) => {
+            let mod_ident_str = expansion_mod_ident_to_map_key(mod_ident);
+            mod_outer_defs
+                .get(&mod_ident_str)
+                .and_then(|mod_defs| find_datatype(mod_defs, name))
+        }
+        DefInfo::Variant(..) => None,
+        DefInfo::Field(.., t, _) => type_def_loc(mod_outer_defs, t),
+        DefInfo::Local(_, t, _, _, _) => type_def_loc(mod_outer_defs, t),
+        DefInfo::Const(_, _, t, _, _) => type_def_loc(mod_outer_defs, t),
+        DefInfo::Module(..) => None,
+    }
 }
 
 impl TypingAnalysisContext<'_> {
@@ -241,17 +270,28 @@ impl TypingAnalysisContext<'_> {
         fun_def_name: &Symbol, // may be different from use_name for methods
         use_name: &Symbol,
         use_pos: &Loc,
-    ) {
+    ) -> Option<UseDef> {
         if self.traverse_only {
-            return;
+            return None;
         }
-        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
-        let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-            return;
+        let mod_name = module_ident.value.module;
+        let mod_name_start_opt = self.file_start_position_opt(&mod_name.loc());
+
+        let Some(mod_defs) = self
+            .mod_outer_defs
+            .get_mut(&expansion_mod_ident_to_map_key(&module_ident.value))
+        else {
+            // this should not happen but due to a fix in unifying generation of mod ident map keys,
+            // but just in case - it's better to report it than to crash the analyzer due to
+            // unchecked unwrap
+            eprintln!(
+                "WARNING: could not locate module {:?} when processing a call to {}{}",
+                module_ident.value, module_ident.value, fun_def_name
+            );
+            return None;
         };
         // insert use of the functions's module
-        let mod_name = module_ident.value.module;
-        if let Some(mod_name_start) = self.file_start_position_opt(&mod_name.loc()) {
+        if let Some(mod_name_start) = mod_name_start_opt {
             // a module will not be present if a function belongs to an implicit module
             self.use_defs.insert(
                 mod_name_start.line,
@@ -271,7 +311,6 @@ impl TypingAnalysisContext<'_> {
         let mut refs = std::mem::take(self.references);
         let result = add_member_use_def(
             fun_def_name,
-            self.mod_outer_defs,
             self.files,
             mod_defs,
             use_name,
@@ -287,6 +326,7 @@ impl TypingAnalysisContext<'_> {
         if result.is_none() {
             debug_assert!(false);
         }
+        result
     }
 
     /// Add use of a datatype identifier
@@ -320,7 +360,6 @@ impl TypingAnalysisContext<'_> {
         let mut refs = std::mem::take(self.references);
         add_member_use_def(
             &use_name.value(),
-            self.mod_outer_defs,
             self.files,
             mod_defs,
             &use_name.value(),
@@ -349,71 +388,10 @@ impl TypingAnalysisContext<'_> {
                 sp!(_, N::TypeName_::ModuleType(sp!(_, mod_ident), struct_name)),
                 _,
             ) => {
-                self.add_struct_field_use_def(mod_ident, &struct_name.value(), use_name, use_pos);
+                self.add_field_use_def(mod_ident, &struct_name.value(), None, use_name, use_pos);
             }
             _ => (),
         }
-    }
-
-    fn add_field_use_def_internal(
-        &mut self,
-        field_defs: &[FieldDef],
-        use_name: &Symbol,
-        use_loc: &Loc,
-        use_pos: &Position,
-    ) {
-        for fdef in field_defs {
-            if fdef.name == *use_name {
-                let field_info = self.def_info.get(&fdef.loc).unwrap();
-                let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, field_info);
-                self.use_defs.insert(
-                    use_pos.line,
-                    UseDef::new(
-                        self.references,
-                        self.alias_lengths,
-                        use_loc.file_hash(),
-                        *use_pos,
-                        fdef.loc,
-                        use_name,
-                        ident_type_def_loc,
-                    ),
-                );
-            }
-        }
-    }
-
-    /// Add use of a struct field identifier
-    fn add_struct_field_use_def(
-        &mut self,
-        module_ident: &E::ModuleIdent_,
-        struct_name: &Symbol,
-        use_name: &Symbol,
-        use_pos: &Loc,
-    ) {
-        if self.traverse_only {
-            return;
-        }
-        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
-        let Some(name_start) = self.file_start_position_opt(use_pos) else {
-            debug_assert!(false);
-            return;
-        };
-        let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-            return;
-        };
-        // get the struct
-        let Some(def) = mod_defs.structs.get(struct_name) else {
-            return;
-        };
-        // get variant's fields
-        let MemberDefInfo::Struct {
-            field_defs,
-            positional: _,
-        } = &def.info
-        else {
-            return;
-        };
-        self.add_field_use_def_internal(field_defs, use_name, use_pos, &name_start);
     }
 
     fn add_variant_use_def(
@@ -464,11 +442,11 @@ impl TypingAnalysisContext<'_> {
     }
 
     /// Add use of a variant field identifier
-    fn add_variant_field_use_def(
+    fn add_field_use_def(
         &mut self,
         module_ident: &E::ModuleIdent_,
-        enum_name: &Symbol,
-        variant_name: &Symbol,
+        datatype_name: &Symbol,
+        variant_name_opt: Option<&Symbol>,
         use_name: &Symbol,
         use_loc: &Loc,
     ) {
@@ -484,19 +462,56 @@ impl TypingAnalysisContext<'_> {
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
         };
-        // get the enum
-        let Some(def) = mod_defs.enums.get(enum_name) else {
-            return;
+
+        let field_defs = if let Some(variant_name) = variant_name_opt {
+            // get the enum
+            let Some(def) = mod_defs.enums.get(datatype_name) else {
+                return;
+            };
+
+            // get variants info
+            let MemberDefInfo::Enum { variants_info } = &def.info else {
+                return;
+            };
+            // get variant's fields
+            let Some((_, field_defs, _)) = variants_info.get(variant_name) else {
+                return;
+            };
+            field_defs
+        } else {
+            // get the struct
+            let Some(def) = mod_defs.structs.get(datatype_name) else {
+                return;
+            };
+            // get variant's fields
+            let MemberDefInfo::Struct {
+                field_defs,
+                positional: _,
+            } = &def.info
+            else {
+                return;
+            };
+            field_defs
         };
-        // get variants info
-        let MemberDefInfo::Enum { variants_info } = &def.info else {
-            return;
-        };
-        // get variant's fields
-        let Some((_, field_defs, _)) = variants_info.get(variant_name) else {
-            return;
-        };
-        self.add_field_use_def_internal(field_defs, use_name, use_loc, &name_start);
+
+        for fdef in field_defs {
+            if fdef.name == *use_name {
+                let field_info = self.def_info.get(&fdef.loc).unwrap();
+                let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, field_info);
+                self.use_defs.insert(
+                    name_start.line,
+                    UseDef::new(
+                        self.references,
+                        self.alias_lengths,
+                        use_loc.file_hash(),
+                        name_start,
+                        fdef.loc,
+                        use_name,
+                        ident_type_def_loc,
+                    ),
+                );
+            }
+        }
     }
 
     fn process_module_call(
@@ -507,34 +522,31 @@ impl TypingAnalysisContext<'_> {
         tyargs: &mut [N::Type],
         args: Option<&mut Box<T::Exp>>,
     ) {
-        let Some(mod_def) = self
-            .mod_outer_defs
-            .get(&expansion_mod_ident_to_map_key(&module.value))
-        else {
-            // this should not happen but due to a fix in unifying generation of mod ident map keys,
-            // but just in case - it's better to report it than to crash the analyzer due to
-            // unchecked unwrap
-            eprintln!(
-                "WARNING: could not locate module {:?} when processing a call to {}{}",
-                module, module, name
-            );
-            return;
-        };
-
-        if mod_def.functions.get(&name.value()).is_none() {
-            return;
-        }
-
         let fun_name = name.value();
         // a function name (same as fun_name) or method name (different from fun_name)
         let fun_use = method_name.unwrap_or_else(|| sp(name.loc(), name.value()));
-        self.add_fun_use_def(module, &fun_name, &fun_use.value, &fun_use.loc);
+        let call_use_def = self.add_fun_use_def(module, &fun_name, &fun_use.value, &fun_use.loc);
         // handle type parameters
         for t in tyargs.iter_mut() {
             self.visit_type(None, t);
         }
         if let Some(args) = args {
             self.visit_exp(args);
+        }
+
+        // populate call info obtained during parsing with the location of the call site's target function
+        let Some(use_def) = call_use_def else {
+            return;
+        };
+        assert!(self.current_mod_ident_str.is_some());
+        let Some(callsite_mod_defs) = self
+            .mod_outer_defs
+            .get_mut(&self.current_mod_ident_str.clone().unwrap())
+        else {
+            return;
+        };
+        if let Some(info) = callsite_mod_defs.call_infos.get_mut(&fun_use.loc) {
+            info.def_loc = Some(use_def.def_loc());
         }
     }
 
@@ -550,10 +562,10 @@ impl TypingAnalysisContext<'_> {
                 tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
                 for (fpos, fname, (_, (_, pat))) in fields.iter_mut() {
                     if self.compiler_info.ellipsis_binders.get(&fpos).is_none() {
-                        self.add_variant_field_use_def(
+                        self.add_field_use_def(
                             &mident.value,
                             &name.value(),
-                            &vname.value(),
+                            Some(&vname.value()),
                             fname,
                             &fpos,
                         );
@@ -567,7 +579,7 @@ impl TypingAnalysisContext<'_> {
                 tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
                 for (fpos, fname, (_, (_, pat))) in fields.iter_mut() {
                     if self.compiler_info.ellipsis_binders.get(&fpos).is_none() {
-                        self.add_struct_field_use_def(&mident.value, &name.value(), fname, &fpos);
+                        self.add_field_use_def(&mident.value, &name.value(), None, fname, &fpos);
                     }
                     self.process_match_patterm(pat);
                 }
@@ -644,11 +656,13 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
 
     fn visit_struct(
         &mut self,
-        _module: move_compiler::expansion::ast::ModuleIdent,
+        module: move_compiler::expansion::ast::ModuleIdent,
         struct_name: P::DatatypeName,
         sdef: &mut N::StructDefinition,
     ) {
         self.reset_for_module_member();
+        assert!(self.current_mod_ident_str.is_none());
+        self.current_mod_ident_str = Some(expansion_mod_ident_to_map_key(&module.value));
         let file_hash = struct_name.loc().file_hash();
         // enter self-definition for struct name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&struct_name.loc());
@@ -698,6 +712,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 }
             }
         }
+        self.current_mod_ident_str = None;
     }
 
     fn visit_enum_custom(
@@ -707,6 +722,8 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         edef: &mut N::EnumDefinition,
     ) -> bool {
         self.reset_for_module_member();
+        assert!(self.current_mod_ident_str.is_none());
+        self.current_mod_ident_str = Some(expansion_mod_ident_to_map_key(&module.value));
         let file_hash = enum_name.loc().file_hash();
         // enter self-definition for enum name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&enum_name.loc());
@@ -731,6 +748,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         for (vname, vdef) in edef.variants.key_cloned_iter_mut() {
             self.visit_variant(&module, &enum_name, vname, vdef);
         }
+        self.current_mod_ident_str = None;
         true
     }
 
@@ -790,11 +808,13 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
 
     fn visit_constant(
         &mut self,
-        _module: move_compiler::expansion::ast::ModuleIdent,
+        module: move_compiler::expansion::ast::ModuleIdent,
         constant_name: P::ConstantName,
         cdef: &mut T::Constant,
     ) {
         self.reset_for_module_member();
+        assert!(self.current_mod_ident_str.is_none());
+        self.current_mod_ident_str = Some(expansion_mod_ident_to_map_key(&module.value));
         let loc = constant_name.loc();
         // enter self-definition for const name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&loc);
@@ -813,11 +833,12 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
             ),
         );
         self.visit_exp(&mut cdef.value);
+        self.current_mod_ident_str = None;
     }
 
     fn visit_function(
         &mut self,
-        _module: move_compiler::expansion::ast::ModuleIdent,
+        module: move_compiler::expansion::ast::ModuleIdent,
         function_name: P::FunctionName,
         fdef: &mut T::Function,
     ) {
@@ -825,6 +846,8 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         if ignored_function(function_name.value()) {
             return;
         }
+        assert!(self.current_mod_ident_str.is_none());
+        self.current_mod_ident_str = Some(expansion_mod_ident_to_map_key(&module.value));
         let loc = function_name.loc();
         // first, enter self-definition for function name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&loc);
@@ -872,6 +895,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
 
         // clear type params from the scope
         self.type_params.clear();
+        self.current_mod_ident_str = None;
     }
 
     fn visit_lvalue(&mut self, kind: &LValueKind, lvalue: &mut T::LValue) {
@@ -908,7 +932,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     self.add_datatype_use_def(mident, name);
                     tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
                     for (fpos, fname, (_, (_, lvalue))) in fields {
-                        self.add_struct_field_use_def(&mident.value, &name.value(), fname, &fpos);
+                        self.add_field_use_def(&mident.value, &name.value(), None, fname, &fpos);
                         lvalue_queue.push(lvalue);
                     }
                 }
@@ -918,10 +942,10 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     self.add_datatype_use_def(mident, name);
                     tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
                     for (fpos, fname, (_, (_, lvalue))) in fields {
-                        self.add_variant_field_use_def(
+                        self.add_field_use_def(
                             &mident.value,
                             &name.value(),
-                            &vname.value(),
+                            Some(&vname.value()),
                             fname,
                             &fpos,
                         );
@@ -983,12 +1007,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 TE::Pack(mident, name, tyargs, fields) => {
                     visitor.add_datatype_use_def(mident, name);
                     for (fpos, fname, (_, (_, init_exp))) in fields.iter_mut() {
-                        visitor.add_struct_field_use_def(
-                            &mident.value,
-                            &name.value(),
-                            fname,
-                            &fpos,
-                        );
+                        visitor.add_field_use_def(&mident.value, &name.value(), None, fname, &fpos);
                         visitor.visit_exp(init_exp);
                     }
                     tyargs
@@ -1004,10 +1023,10 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 TE::PackVariant(mident, name, vname, tyargs, fields) => {
                     visitor.add_datatype_use_def(mident, name);
                     for (fpos, fname, (_, (_, init_exp))) in fields.iter_mut() {
-                        visitor.add_variant_field_use_def(
+                        visitor.add_field_use_def(
                             &mident.value,
                             &name.value(),
-                            &vname.value(),
+                            Some(&vname.value()),
                             fname,
                             &fpos,
                         );

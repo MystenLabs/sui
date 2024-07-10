@@ -1,44 +1,34 @@
 // Tests if partial dot chains are symbolicated correctly.
 {
-  "project": "tests/partial-dot",
-  "file_tests": {
-    "M1.move": [
-      {
-        "UseDefTest": {
+  "UseDef": {
+    "project": "tests/partial-dot",
+    "file_tests": {
+      "M1.move": [
+        {
           "use_line": 11,
           "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
+        },
+        {
           "use_line": 12,
           "use_ndx": 1
-        }
-      },
-      {
-        "UseDefTest": {
+        },
+        {
           "use_line": 12,
           "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
+        },
+        {
           "use_line": 13,
           "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
+        },
+        {
           "use_line": 15,
           "use_ndx": 2
-        }
-      },
-      {
-        "UseDefTest": {
+        },
+        {
           "use_line": 16,
           "use_ndx": 1
         }
-      }
-    ]
+      ]
+    }
   }
 }

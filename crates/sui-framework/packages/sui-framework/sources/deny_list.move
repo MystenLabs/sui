@@ -55,17 +55,25 @@ module sui::deny_list {
 
     // === V2 ===
 
+    /// The capability used to write to the deny list config. Ensures that the Configs for the
+    /// DenyList are modified only by this module.
     public struct ConfigWriteCap() has drop;
 
+    /// The dynamic object field key used to store the `Config` for a given type, essentially a
+    /// `(per_type_index, per_type_key)` pair.
     public struct ConfigKey has copy, drop, store {
         per_type_index: u64,
         per_type_key: vector<u8>,
     }
 
+    /// The setting key used to store the deny list for a given address in the `Config`.
     public struct AddressKey(address) has copy, drop, store;
 
+    /// The setting key used to store the global pause setting in the `Config`.
     public struct GlobalPauseKey() has copy, drop, store;
 
+    /// The event emitted when a new `Config` is created for a given type. This can be useful for
+    /// tracking the `ID` of a type's `Config` object.
     public struct PerTypeConfigCreated has copy, drop, store {
         key: ConfigKey,
         config_id: ID,
@@ -162,13 +170,11 @@ module sui::deny_list {
     ) {
         let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
         let setting_name = GlobalPauseKey();
-        let next_epoch_entry = per_type_config.entry!<_, GlobalPauseKey, bool>(
+        per_type_config.remove_for_next_epoch<_, GlobalPauseKey, bool>(
             &mut ConfigWriteCap(),
             setting_name,
-            |_deny_list, _cap, _ctx| false,
             ctx,
         );
-        *next_epoch_entry = false;
     }
 
     public(package) fun v2_is_global_pause_enabled_current_epoch(
@@ -200,7 +206,38 @@ module sui::deny_list {
     //    // TODO can read from the config directly once the ID is set
     // }
 
-    public(package) fun add_per_type_config(
+    public(package) fun migrate_v1_to_v2(
+        deny_list: &mut DenyList,
+        per_type_index: u64,
+        per_type_key: vector<u8>,
+        ctx: &mut TxContext,
+    ) {
+        let bag_entry: &mut PerTypeList = &mut deny_list.lists[per_type_index];
+        let elements =
+            if (!bag_entry.denied_addresses.contains(per_type_key)) vector[]
+            else bag_entry.denied_addresses.remove(per_type_key).into_keys();
+        elements.do_ref!(|addr| {
+            let addr = *addr;
+            let denied_count = &mut bag_entry.denied_count[addr];
+            *denied_count = *denied_count - 1;
+            if (*denied_count == 0) {
+                bag_entry.denied_count.remove(addr);
+            }
+        });
+        let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
+        elements.do!(|addr|  {
+            let setting_name = AddressKey(addr);
+            let next_epoch_entry = per_type_config.entry!<_,AddressKey, bool>(
+                &mut ConfigWriteCap(),
+                setting_name,
+                |_deny_list, _cap, _ctx| true,
+                ctx,
+            );
+            *next_epoch_entry = true;
+        });
+    }
+
+    fun add_per_type_config(
         deny_list: &mut DenyList,
         per_type_index: u64,
         per_type_key: vector<u8>,
@@ -213,7 +250,7 @@ module sui::deny_list {
         sui::event::emit(PerTypeConfigCreated { key, config_id });
     }
 
-    public(package) fun borrow_per_type_config_mut(
+    fun borrow_per_type_config_mut(
         deny_list: &mut DenyList,
         per_type_index: u64,
         per_type_key: vector<u8>,
@@ -222,7 +259,7 @@ module sui::deny_list {
         ofield::internal_borrow_mut(&mut deny_list.id, key)
     }
 
-    public(package) fun borrow_per_type_config(
+    fun borrow_per_type_config(
         deny_list: &DenyList,
         per_type_index: u64,
         per_type_key: vector<u8>,
@@ -231,7 +268,7 @@ module sui::deny_list {
         ofield::internal_borrow(&deny_list.id, key)
     }
 
-    public(package) fun per_type_exists(
+    fun per_type_exists(
         deny_list: &DenyList,
         per_type_index: u64,
         per_type_key: vector<u8>,
@@ -240,7 +277,7 @@ module sui::deny_list {
         ofield::exists_(&deny_list.id, key)
     }
 
-    public(package) macro fun per_type_config_entry(
+    macro fun per_type_config_entry(
         $deny_list: &mut DenyList,
         $per_type_index: u64,
         $per_type_key: vector<u8>,

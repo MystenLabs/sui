@@ -488,7 +488,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 												coinBalance?.coinType
 													? `?${new URLSearchParams({
 															type: coinBalance.coinType,
-													  }).toString()}`
+														}).toString()}`
 													: ''
 											}`}
 											disabled={!tokenBalance}
@@ -503,7 +503,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 												coinBalance?.coinType
 													? `?${new URLSearchParams({
 															type: coinBalance.coinType,
-													  }).toString()}`
+														}).toString()}`
 													: ''
 											}`}
 											onClick={() => {

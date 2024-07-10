@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB58 } from '@mysten/bcs';
-import type { Input } from 'valibot';
+import type { InferInput } from 'valibot';
 import { parse } from 'valibot';
 
 import { bcs } from '../bcs/index.js';
@@ -68,7 +68,9 @@ export class TransactionDataBuilder implements TransactionData {
 	}
 
 	static restore(
-		data: Input<typeof SerializedTransactionDataV2> | Input<typeof SerializedTransactionDataV1>,
+		data:
+			| InferInput<typeof SerializedTransactionDataV2>
+			| InferInput<typeof SerializedTransactionDataV1>,
 	) {
 		if (data.version === 2) {
 			return new TransactionDataBuilder(parse(TransactionData, data));

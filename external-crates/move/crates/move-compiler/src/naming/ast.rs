@@ -166,6 +166,7 @@ pub struct StructDefinition {
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
+    pub loc: Loc,
     pub attributes: Attributes,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTypeParameter>,
@@ -183,6 +184,7 @@ pub struct EnumDefinition {
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
+    pub loc: Loc,
     pub attributes: Attributes,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTypeParameter>,
@@ -1251,6 +1253,7 @@ impl AstDebug for (DatatypeName, &StructDefinition) {
             StructDefinition {
                 warning_filter,
                 index,
+                loc: _,
                 attributes,
                 abilities,
                 type_parameters,
@@ -1287,6 +1290,7 @@ impl AstDebug for (DatatypeName, &EnumDefinition) {
             name,
             EnumDefinition {
                 index,
+                loc: _,
                 attributes,
                 abilities,
                 type_parameters,

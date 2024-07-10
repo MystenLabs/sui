@@ -96,7 +96,7 @@ fn check_packages_recursively(path: &Path) -> io::Result<()> {
 fn run_examples_move_unit_tests() -> io::Result<()> {
     let examples = {
         let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.extend(["..", "..", "examples", "move"]);
+        buf.extend(["..", "..", "examples"]);
         buf
     };
 

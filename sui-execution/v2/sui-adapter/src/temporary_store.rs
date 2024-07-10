@@ -376,6 +376,7 @@ impl<'backing> TemporaryStore<'backing> {
             gas_cost_summary,
             // TODO: Provide the list of read-only shared objects directly.
             shared_object_refs,
+            BTreeSet::new(),
             *transaction_digest,
             lamport_version,
             object_changes,
@@ -1168,7 +1169,7 @@ impl<'backing> Storage for TemporaryStore<'backing> {
     fn check_coin_deny_list(
         &self,
         _written_objects: &BTreeMap<ObjectID, Object>,
-    ) -> Result<(), ExecutionError> {
+    ) -> (Result<(), ExecutionError>, u64) {
         unreachable!("Coin denylist v2 is not supported in sui-execution v2");
     }
 }

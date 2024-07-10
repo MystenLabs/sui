@@ -51,6 +51,7 @@ feature_flags:
   mysticeti_use_committed_subdag_digest: true
   fresh_vm_on_framework_upgrade: true
   mysticeti_num_leaders_per_round: 1
+  enable_coin_deny_list_v2: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -275,3 +276,4 @@ random_beacon_dkg_version: 1
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
 max_deferral_rounds_for_congestion_control: 10
+

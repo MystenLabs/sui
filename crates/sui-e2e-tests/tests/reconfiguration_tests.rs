@@ -713,8 +713,6 @@ async fn do_test_reconfig_with_committee_change_stress() {
 #[cfg(msim)]
 #[sim_test]
 async fn test_epoch_flag_upgrade() {
-    use std::any;
-
     use std::sync::Mutex;
     use sui_core::authority::epoch_start_configuration::EpochFlag;
     use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;

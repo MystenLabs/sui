@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{accept::AcceptFormat, reader::StateReader, RestError, Result};
+use crate::{
+    accept::AcceptFormat,
+    openapi::{ApiEndpoint, RouteHandler},
+    reader::StateReader,
+    RestError, RestService, Result,
+};
 use axum::{
     extract::{Path, State},
     Json,
@@ -11,9 +16,30 @@ use std::collections::BTreeMap;
 use sui_protocol_config::{ProtocolConfig, ProtocolConfigValue, ProtocolVersion};
 use sui_sdk2::types::{Address, ObjectId};
 
-pub const GET_SYSTEM_STATE_SUMMARY_PATH: &str = "/system";
+pub struct GetSystemStateSummary;
 
-pub async fn get_system_state_summary(
+impl ApiEndpoint<RestService> for GetSystemStateSummary {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/system"
+    }
+
+    fn operation(
+        &self,
+        _generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        openapiv3::v3_1::Operation::default()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), get_system_state_summary)
+    }
+}
+
+async fn get_system_state_summary(
     accept: AcceptFormat,
     State(state): State<StateReader>,
 ) -> Result<Json<SystemStateSummary>> {
@@ -441,9 +467,30 @@ impl From<sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateS
     }
 }
 
-pub const GET_CURRENT_PROTOCOL_CONFIG_PATH: &str = "/system/protocol";
+pub struct GetCurrentProtocolConfig;
 
-pub async fn get_current_protocol_config(
+impl ApiEndpoint<RestService> for GetCurrentProtocolConfig {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/system/protocol"
+    }
+
+    fn operation(
+        &self,
+        _generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        openapiv3::v3_1::Operation::default()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), get_current_protocol_config)
+    }
+}
+
+async fn get_current_protocol_config(
     accept: AcceptFormat,
     State(state): State<StateReader>,
 ) -> Result<(SupportedProtocolHeaders, Json<ProtocolConfigResponse>)> {
@@ -468,9 +515,30 @@ pub async fn get_current_protocol_config(
     Ok((supported_protocol_headers(), Json(config.into())))
 }
 
-pub const GET_PROTOCOL_CONFIG_PATH: &str = "/system/protocol/:version";
+pub struct GetProtocolConfig;
 
-pub async fn get_protocol_config(
+impl ApiEndpoint<RestService> for GetProtocolConfig {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/system/protocol/{version}"
+    }
+
+    fn operation(
+        &self,
+        _generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        openapiv3::v3_1::Operation::default()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), get_protocol_config)
+    }
+}
+
+async fn get_protocol_config(
     Path(version): Path<u64>,
     accept: AcceptFormat,
     State(state): State<StateReader>,
@@ -572,9 +640,23 @@ impl From<ProtocolConfig> for ProtocolConfigResponse {
     }
 }
 
-pub const GET_GAS_INFO_PATH: &str = "/system/gas";
+pub struct GetGasInfo;
 
-pub async fn get_gas_info(
+impl ApiEndpoint<RestService> for GetGasInfo {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/system/gas"
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), get_gas_info)
+    }
+}
+
+async fn get_gas_info(
     accept: AcceptFormat,
     State(state): State<StateReader>,
 ) -> Result<Json<GasInfo>> {

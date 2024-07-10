@@ -41,7 +41,7 @@ module games::dice {
     assert!(coin::value(&fee) == 1000000, EInvalidAmount);
     transfer::public_transfer(fee, CREATOR_ADDRESS);
     // Roll the dice
-    let generator = new_generator(r, ctx);
+    let mut generator = new_generator(r, ctx);
     if (guess == random::generate_u8_in_range(&mut generator, 1, 6)) {
       option::some(GuessedCorrectly {})
     } else {
@@ -113,8 +113,8 @@ Developers should be aware that some resources that are available to transaction
 // Insecure implementation, do not use.
 entry fun insecure_play(r: &Random, payment: Coin<SUI>, ...) {
   ...
-  let generator = new_generator(r, ctx);
-  let win = random::generate_bool(generator);
+  let mut generator = new_generator(r, ctx);
+  let win = random::generate_bool(&mut generator);
   if (win) { // happy flow
     ... cheap computation ...
   } else {

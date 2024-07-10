@@ -208,10 +208,11 @@ pub trait Storage {
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     );
 
+    /// Check coin denylist during execution, and returns the number of regulated transfers.
     fn check_coin_deny_list(
         &self,
         written_objects: &BTreeMap<ObjectID, Object>,
-    ) -> Result<(), ExecutionError>;
+    ) -> (Result<(), ExecutionError>, u64);
 }
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
