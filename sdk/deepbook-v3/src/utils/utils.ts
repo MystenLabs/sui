@@ -6,7 +6,7 @@ import { homedir } from 'os';
 import path from 'path';
 import type { SuiObjectResponse } from '@mysten/sui/client';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-import type { Keypair } from '@mysten/sui/cryptography';
+import type { Signer } from '@mysten/sui/cryptography';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Secp256k1Keypair } from '@mysten/sui/keypairs/secp256k1';
@@ -69,12 +69,12 @@ export const getClient = (network: Network) => {
 };
 
 /// A helper to sign & execute a transaction.
-export const signAndExecute = async (txb: Transaction, network: Network) => {
+export const signAndExecute = async (tx: Transaction, network: Network) => {
 	const client = getClient(network);
 	const signer = getSigner();
 
 	return client.signAndExecuteTransaction({
-		transaction: txb,
+		transaction: tx,
 		signer,
 		options: {
 			showEffects: true,
@@ -84,12 +84,12 @@ export const signAndExecute = async (txb: Transaction, network: Network) => {
 };
 
 export const signAndExecuteWithClientAndSigner = async (
-	txb: Transaction,
+	tx: Transaction,
 	client: SuiClient,
-	signer: Keypair,
+	signer: Signer,
 ) => {
 	return client.signAndExecuteTransaction({
-		transaction: txb,
+		transaction: tx,
 		signer,
 		options: {
 			showEffects: true,

@@ -10,30 +10,16 @@ export interface Coin {
 	address: string;
 	type: string;
 	scalar: number;
-	coinId: string;
 }
 
 export interface Pool {
 	address: string;
-	baseCoin: Coin;
-	quoteCoin: Coin;
+	baseCoin: CoinKey;
+	quoteCoin: CoinKey;
 }
 
-export enum CoinKey {
-	'DEEP',
-	'SUI',
-	'DBUSDC',
-	'DBWETH',
-	'USDC',
-	'WETH',
-}
-
-export enum PoolKey {
-	'DEEP_SUI',
-	'SUI_DBUSDC',
-	'DEEP_DBWETH',
-	'DBWETH_DBUSDC',
-}
+export type CoinKey = 'DEEP' | 'SUI' | 'DBUSDC' | 'DBWETH' | 'USDC' | 'WETH';
+export type PoolKey = 'DEEP_SUI' | 'SUI_DBUSDC' | 'DEEP_DBWETH' | 'DBWETH_DBUSDC';
 
 // Trading constants
 export enum OrderType {
@@ -104,4 +90,4 @@ export interface Config {
 	DEEP_TREASURY_ID: string;
 }
 
-export type Environment = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
+export type Environment = 'mainnet' | 'testnet';
