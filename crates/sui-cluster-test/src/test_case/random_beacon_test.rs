@@ -23,7 +23,7 @@ impl TestCaseImpl for RandomBeaconTest {
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
         let wallet_context: &WalletContext = ctx.get_wallet();
         // Test only if the beacon is enabled.
-        if Self::is_beacon_enabled(wallet_context).await {
+        if !Self::is_beacon_enabled(wallet_context).await {
             info!("Random beacon is not enabled. Skipping test.");
             return Ok(());
         }
