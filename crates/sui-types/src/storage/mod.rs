@@ -190,6 +190,12 @@ pub trait ChildObjectResolver {
     ) -> SuiResult<Option<Object>>;
 }
 
+pub struct DenyListResult {
+    pub result: Result<(), ExecutionError>,
+    pub deny_list_checked: bool,
+    pub regulated_coin_types_checked: u64,
+}
+
 /// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
 pub trait Storage {
     fn reset(&mut self);
@@ -208,11 +214,9 @@ pub trait Storage {
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     );
 
-    /// Check coin denylist during execution, and returns the number of regulated transfers.
-    fn check_coin_deny_list(
-        &self,
-        written_objects: &BTreeMap<ObjectID, Object>,
-    ) -> (Result<(), ExecutionError>, u64);
+    /// Check coin denylist during execution,
+    /// and returns the number of regulated coin types checked.
+    fn check_coin_deny_list(&self, written_objects: &BTreeMap<ObjectID, Object>) -> DenyListResult;
 }
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;

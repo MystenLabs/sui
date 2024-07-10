@@ -10,7 +10,7 @@ use crate::dynamic_field::{get_dynamic_field_from_store, DOFWrapper};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::id::UID;
 use crate::object::Object;
-use crate::storage::ObjectStore;
+use crate::storage::{DenyListResult, ObjectStore};
 use crate::transaction::{CheckedInputObjects, ReceivingObjects};
 use crate::{MoveTypeTagTrait, SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use move_core_types::ident_str;
@@ -19,6 +19,31 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+
+// esitmate of the size of the objects read for a deny list check
+pub const CONFIG_READ_BYTES_SIZE_ESTIMATE: usize = {
+    let address_size = 32usize;
+    let id_size = address_size;
+    let uid_size = id_size;
+    let type_name_size = address_size;
+    let bool_size = 1usize;
+    let u64_size = 8usize;
+    let option_some_bool_size = bool_size + 1usize;
+
+    let config_key_size = u64_size + type_name_size;
+    let address_key_size = address_size;
+
+    let dof_field_size = uid_size + config_key_size + id_size;
+
+    let config_size = uid_size;
+
+    let setting_data_size = u64_size + option_some_bool_size + option_some_bool_size;
+    let option_some_setting_data_size = setting_data_size + 1;
+    let setting_size = option_some_setting_data_size;
+    let setting_field_size = uid_size + address_key_size + setting_size;
+
+    dof_field_size + config_size + setting_field_size
+};
 
 /// Rust representation of the Move type 0x2::coin::DenyCapV2.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -119,13 +144,14 @@ pub fn check_coin_deny_list_v2_during_signing(
     Ok(())
 }
 
-/// Returns 1) whether the coin deny list check passed, and 2) the number of regulated transfers.
+/// Returns 1) whether the coin deny list check passed,
+///         2) whether the deny list object was checked at all, and
+///         3) the number of regulated coin types checked.
 pub fn check_coin_deny_list_v2_during_execution(
     written_objects: &BTreeMap<ObjectID, Object>,
     cur_epoch: EpochId,
     object_store: &dyn ObjectStore,
-) -> (Result<(), ExecutionError>, u64) {
-    let mut num_regulated_transfers = 0;
+) -> DenyListResult {
     let mut new_coin_owners = BTreeMap::new();
     for obj in written_objects.values() {
         if obj.is_gas_coin() {
@@ -141,37 +167,52 @@ pub fn check_coin_deny_list_v2_during_execution(
             .entry(coin_type.to_canonical_string(false))
             .or_insert_with(BTreeSet::new)
             .insert(owner);
-        num_regulated_transfers += 1;
     }
-    for (coin_type, owners) in new_coin_owners {
-        let Some(deny_list) = get_per_type_coin_deny_list_v2(&coin_type, object_store) else {
-            continue;
-        };
+    let deny_list_checked = !new_coin_owners.is_empty();
+    let new_regulated_coin_owners = new_coin_owners
+        .into_iter()
+        .filter_map(|(coin_type, owners)| {
+            let deny_list_config = get_per_type_coin_deny_list_v2(&coin_type, object_store)?;
+            Some((coin_type, (deny_list_config, owners)))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let regulated_coin_types_checked = new_regulated_coin_owners.len() as u64;
+    let result =
+        check_new_regulated_coin_owners(new_regulated_coin_owners, cur_epoch, object_store);
+    DenyListResult {
+        result,
+        deny_list_checked,
+        regulated_coin_types_checked,
+    }
+}
+
+fn check_new_regulated_coin_owners(
+    new_regulated_coin_owners: BTreeMap<String, (Config, BTreeSet<SuiAddress>)>,
+    cur_epoch: EpochId,
+    object_store: &dyn ObjectStore,
+) -> Result<(), ExecutionError> {
+    for (coin_type, (deny_list, owners)) in new_regulated_coin_owners {
         if check_global_pause(&deny_list, object_store, Some(cur_epoch)) {
-            return (
-                Err(ExecutionError::new(
-                    ExecutionErrorKind::CoinTypeGlobalPause { coin_type },
-                    None,
-                )),
-                num_regulated_transfers,
-            );
+            return Err(ExecutionError::new(
+                ExecutionErrorKind::CoinTypeGlobalPause {
+                    coin_type: coin_type.clone(),
+                },
+                None,
+            ));
         }
         for owner in owners {
             if check_address_denied_by_config(&deny_list, owner, object_store, Some(cur_epoch)) {
-                return (
-                    Err(ExecutionError::new(
-                        ExecutionErrorKind::AddressDeniedForCoin {
-                            address: owner,
-                            coin_type,
-                        },
-                        None,
-                    )),
-                    num_regulated_transfers,
-                );
+                return Err(ExecutionError::new(
+                    ExecutionErrorKind::AddressDeniedForCoin {
+                        address: owner,
+                        coin_type,
+                    },
+                    None,
+                ));
             }
         }
     }
-    (Ok(()), num_regulated_transfers)
+    Ok(())
 }
 
 pub fn get_per_type_coin_deny_list_v2(

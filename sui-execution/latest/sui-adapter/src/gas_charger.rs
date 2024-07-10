@@ -10,6 +10,7 @@ pub mod checked {
     use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::temporary_store::TemporaryStore;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::deny_list_v2::CONFIG_READ_BYTES_SIZE_ESTIMATE;
     use sui_types::gas::{deduct_gas, GasCostSummary, SuiGasStatus};
     use sui_types::gas_model::gas_predicates::{
         charge_upgrades, dont_charge_budget_on_storage_oog,
@@ -242,6 +243,15 @@ pub mod checked {
                 .map(|(_, obj)| obj.object_size_for_gas_metering())
                 .sum();
             self.gas_status.charge_storage_read(total_size)
+        }
+
+        pub fn charge_regulated_transfers(
+            &mut self,
+            regulated_coin_types_checked: u64,
+        ) -> Result<(), ExecutionError> {
+            let cost_per_type = CONFIG_READ_BYTES_SIZE_ESTIMATE * 2;
+            self.gas_status
+                .charge_storage_read(cost_per_type * (regulated_coin_types_checked as usize))
         }
 
         /// Resets any mutations, deletions, and events recorded in the store, as well as any storage costs and

@@ -40,7 +40,7 @@ mod checked {
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution::ExecutionResults;
-    use sui_types::storage::PackageObject;
+    use sui_types::storage::{DenyListResult, PackageObject};
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
@@ -830,9 +830,12 @@ mod checked {
             }
 
             if protocol_config.enable_coin_deny_list_v2() {
-                let (result, _num_regulated_transfers) =
-                    state_view.check_coin_deny_list(&written_objects);
-                // TODO: Charge gas based on the number of regulated transfers.
+                let DenyListResult {
+                    result,
+                    deny_list_checked: _,
+                    regulated_coin_types_checked,
+                } = state_view.check_coin_deny_list(&written_objects);
+                gas_charger.charge_regulated_transfers(regulated_coin_types_checked)?;
                 result?;
             }
 
