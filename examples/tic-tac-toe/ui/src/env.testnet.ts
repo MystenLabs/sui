@@ -2,6 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export default {
-	packageId: '0xd35ada3fa1a85b111c72865e5f60edc692aa98401e2f95a7449365bbb6d3f1a0',
-	upgradeCap: '0x42a239e01cfdf5b7176e9d9de434f4490e01621f04156d1992c67b3f3d431b4f',
+	packageId: '0x1812951b018fcd9f2262d160acdaff5b432011c58fae80eb981c7be3370167da',
+	upgradeCap: '0x71a69d9d7319c0c86e0a5266746f85481840064e19fdb491ce83843851f5fe9d',
 };
