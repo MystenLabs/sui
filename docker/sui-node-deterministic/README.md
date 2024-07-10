@@ -7,7 +7,7 @@
     * `docker use --bootstrap stagex`
 
 ## MacOS Requirements
-* ensure previous requirements should look like:
+* ensure previous requirements, `Builders` should look like:
 ![alt text](./images/image-2.png)
 
 * in `General`, Enable `containerd for pulling and storing images`
