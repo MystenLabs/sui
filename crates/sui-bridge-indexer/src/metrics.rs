@@ -18,9 +18,8 @@ pub struct BridgeIndexerMetrics {
     pub(crate) total_eth_token_transfer_claimed: IntCounter,
     pub(crate) total_eth_bridge_txn_other: IntCounter,
     pub(crate) last_committed_sui_checkpoint: IntGauge,
-    pub(crate) last_committed_eth_block: IntGauge,
-    pub(crate) last_synced_unfinalized_eth_block: IntGauge,
-    pub(crate) last_committed_unfinalized_eth_block: IntGauge,
+    pub(crate) latest_committed_eth_block: IntGauge,
+    pub(crate) last_synced_eth_block: IntGauge,
 }
 
 impl BridgeIndexerMetrics {
@@ -86,21 +85,15 @@ impl BridgeIndexerMetrics {
                 registry,
             )
             .unwrap(),
-            last_committed_eth_block: register_int_gauge_with_registry!(
+            latest_committed_eth_block: register_int_gauge_with_registry!(
                 "last_committed_eth_block",
                 "The latest eth block that indexer committed to DB",
                 registry,
             )
             .unwrap(),
-            last_synced_unfinalized_eth_block: register_int_gauge_with_registry!(
-                "last_synced_unfinalized_eth_block",
-                "The latest unfinalized block that indexer synced",
-                registry,
-            )
-            .unwrap(),
-            last_committed_unfinalized_eth_block: register_int_gauge_with_registry!(
-                "last_committed_unfinalized_eth_block",
-                "The latest unfinalized block that indexer comitted to DB",
+            last_synced_eth_block: register_int_gauge_with_registry!(
+                "last_synced_eth_block",
+                "The last eth block that indexer committed to DB",
                 registry,
             )
             .unwrap(),
