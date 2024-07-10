@@ -1250,6 +1250,40 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
 
+  sdk/deepbook-v3:
+    dependencies:
+      '@mysten/sui':
+        specifier: workspace:*
+        version: link:../typescript
+    devDependencies:
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.14.10
+      tmp:
+        specifier: ^0.2.3
+        version: 0.2.3
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@swc/core@1.6.13)(@types/node@20.14.10)(typescript@5.5.3)
+      ts-retry-promise:
+        specifier: ^0.8.1
+        version: 0.8.1
+      typescript:
+        specifier: ^5.5.3
+        version: 5.5.3
+      vite:
+        specifier: ^5.3.3
+        version: 5.3.3(@types/node@20.14.10)(sass@1.77.6)(terser@5.31.1)
+      vitest:
+        specifier: ^2.0.1
+        version: 2.0.1(@types/node@20.14.10)(happy-dom@14.12.3)(jsdom@24.1.0)(sass@1.77.6)(terser@5.31.1)
+      wait-on:
+        specifier: ^7.2.0
+        version: 7.2.0
+
   sdk/docs:
     dependencies:
       '@mysten/bcs':
@@ -17397,7 +17431,7 @@ snapshots:
     dependencies:
       '@jridgewell/set-array': 1.1.2
       '@jridgewell/sourcemap-codec': 1.4.15
-      '@jridgewell/trace-mapping': 0.3.22
+      '@jridgewell/trace-mapping': 0.3.25
 
   '@jridgewell/gen-mapping@0.3.5':
     dependencies:
