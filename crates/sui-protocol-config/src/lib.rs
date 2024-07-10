@@ -1353,7 +1353,7 @@ impl ProtocolConfig {
     }
 
     pub fn dkg_version(&self) -> u64 {
-        // 0 was a deprecated value, so we default to 1 if not set.
+        // Version 0 was deprecated and removed, the default is 1 if not set.
         self.random_beacon_dkg_version.unwrap_or(1)
     }
 
