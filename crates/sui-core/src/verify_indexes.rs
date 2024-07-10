@@ -10,6 +10,7 @@ use tracing::info;
 use typed_store::traits::Map;
 
 use crate::{authority::authority_store_tables::LiveObject, state_accumulator::AccumulatorStore};
+use crate::authority::AuthorityState;
 
 /// This is a very expensive function that verifies some of the secondary indexes. This is done by
 /// iterating through the live object set and recalculating these secodary indexes.
@@ -86,5 +87,32 @@ pub fn verify_indexes(store: &dyn AccumulatorStore, indexes: Arc<IndexStore>) ->
 
     info!("Finished running index verification checks");
 
+    Ok(())
+}
+
+pub async fn fix_indexes(authority_state: Arc<AuthorityState>) -> Result<()> {
+    let mut batch = vec![];
+    if let Some(indexes) = &authority_state.indexes {
+        tracing::info!("Starting fixing coin index");
+
+        for (coin_index_key, _) in indexes.tables().coin_index().unbounded_iter() {
+            let mut is_violation = true;
+            if let Some(object) = authority_state.get_object_store().get_object(&coin_index_key.2)? {
+                if let Owner::AddressOwner(real_owner_id) = object.owner {
+                    if coin_index_key.0 == real_owner_id {
+                        is_violation = false;
+                    }
+                }
+            }
+            if is_violation {
+                batch.push(coin_index_key);
+            }
+        }
+
+        let mut wb = indexes.tables().coin_index().batch();
+        wb.delete_batch(&indexes.tables().coin_index(), batch)?;
+        wb.write()?;
+        tracing::info!("Finished fix for the coin index");
+    }
     Ok(())
 }

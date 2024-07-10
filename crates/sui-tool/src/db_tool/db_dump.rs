@@ -24,6 +24,8 @@ use sui_core::rest_index::RestIndexStore;
 use sui_storage::mutex_table::RwLockTable;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::object::Owner;
+use sui_types::storage::ObjectKey;
 use tracing::info;
 use typed_store::rocks::{default_db_options, MetricConf};
 use typed_store::rocksdb::MultiThreaded;
@@ -307,6 +309,82 @@ pub fn dump_table(
         }
     }
     .map_err(|err| anyhow!(err.to_string()))
+}
+
+pub fn fix_index(db_path: PathBuf) -> anyhow::Result<()> {
+    let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path.join("store"));
+    let db = IndexStoreTables::get_read_only_handle(
+        db_path.join("indexes"),
+        None,
+        None,
+        MetricConf::default(),
+    );
+    let iter = db.coin_index.unbounded_iter();
+    let mut processed = 0;
+    let mut violations = vec![];
+    for (coin_index_key, _) in iter {
+        let object_id = coin_index_key.2;
+        let owner_id = coin_index_key.0;
+        let mut is_violation = true;
+        let mut obj_iterator = perpetual_tables
+            .objects
+            .unbounded_iter()
+            .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
+
+        if let Some((object_key, value)) = obj_iterator.next() {
+            if object_key.0 == object_id {
+                if let StoreObject::Value(object) = value.migrate().into_inner() {
+                    if matches!(object.owner, Owner::AddressOwner(real_owner_id) | Owner::ObjectOwner(real_owner_id) if coin_index_key.0 == real_owner_id)
+                    {
+                        is_violation = false;
+                    }
+                }
+            }
+        }
+        if is_violation {
+            eprintln!("object id {:?} owner id {:?}", object_id, owner_id);
+            violations.push(coin_index_key);
+        }
+        processed += 1;
+        if processed % 10000 == 0 {
+            eprintln!(
+                "processed {} rows, violations: {}",
+                processed,
+                violations.len()
+            );
+        }
+    }
+    let mut num_violations = 0;
+    for coin_index_key in violations.clone() {
+        let object_id = coin_index_key.2;
+        let mut is_violation = true;
+        let mut obj_iterator = perpetual_tables
+            .objects
+            .unbounded_iter()
+            .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
+
+        if let Some((object_key, value)) = obj_iterator.next() {
+            if object_key.0 == object_id {
+                if let StoreObject::Value(object) = value.migrate().into_inner() {
+                    if matches!(object.owner, Owner::AddressOwner(real_owner_id) | Owner::ObjectOwner(real_owner_id) if coin_index_key.0 == real_owner_id)
+                    {
+                        is_violation = false;
+                    }
+                }
+            }
+        }
+        if is_violation {
+            if db.coin_index.get(&coin_index_key)?.is_some() {
+                num_violations += 1;
+            }
+        }
+    }
+    eprintln!(
+        "finished the job. Num of violations {} {}",
+        violations.len(),
+        num_violations
+    );
+    Ok(())
 }
 
 #[cfg(test)]
