@@ -43,7 +43,7 @@ export class BalanceManagerContract {
 		};
 
 	withdrawFromManager =
-		(managerId: string, amountToWithdraw: number, coin: Coin, recepient: string) =>
+		(managerId: string, amountToWithdraw: number, coin: Coin, recipient: string) =>
 		(tx: Transaction) => {
 			const coinObject = tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::withdraw`,
@@ -51,18 +51,18 @@ export class BalanceManagerContract {
 				typeArguments: [coin.type],
 			});
 
-			tx.transferObjects([coinObject], recepient);
+			tx.transferObjects([coinObject], recipient);
 		};
 
 	withdrawAllFromManager =
-		(managerId: string, coin: Coin, recepient: string) => (tx: Transaction) => {
+		(managerId: string, coin: Coin, recipient: string) => (tx: Transaction) => {
 			const coinObject = tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::withdraw_all`,
 				arguments: [tx.object(managerId)],
 				typeArguments: [coin.type],
 			});
 
-			tx.transferObjects([coinObject], recepient);
+			tx.transferObjects([coinObject], recipient);
 		};
 
 	checkManagerBalance = (managerId: string, coin: Coin) => (tx: Transaction) =>
