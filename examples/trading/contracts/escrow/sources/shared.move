@@ -32,14 +32,14 @@ module escrow::shared {
         dynamic_object_field::{Self as dof}
     };
 
-    use escrow::lock::{Self, Locked, Key};
+    use escrow::lock::{Locked, Key};
 
     /// The `name` of the DOF that holds the Escrowed object.
     /// Allows easy discoverability for the escrowed object.
     public struct EscrowedObjectKey has copy, store, drop {}
 
     /// An object held in escrow
-    /// 
+    ///
     /// The escrowed object is added as a Dynamic Object Field so it can still be looked-up.
     public struct Escrow<phantom T: key + store> has key, store {
         id: UID,
@@ -172,6 +172,8 @@ module escrow::shared {
     #[test_only] use sui::coin::{Self, Coin};
     #[test_only] use sui::sui::SUI;
     #[test_only] use sui::test_scenario::{Self as ts, Scenario};
+
+    #[test_only] use escrow::lock;
 
     #[test_only] const ALICE: address = @0xA;
     #[test_only] const BOB: address = @0xB;
