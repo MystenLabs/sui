@@ -1,7 +1,9 @@
 processed 4 tasks
 
-task 2 'run'. lines 26-26:
+task 2, line 26:
+//# run 42::m::t --args true
 return values: [2, 8, 16]
 
-task 3 'run'. lines 28-28:
+task 3, line 28:
+//# run 42::m::t --args false
 return values: [0, 4, 16]

@@ -3,7 +3,8 @@ processed 9 tasks
 init:
 A: object(0,0)
 
-task 1 'run-graphql'. lines 6-54:
+task 1, lines 6-54:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -135,17 +136,41 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
 task 2 'publish'. lines 56-66:
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 0, non_refundable_storage_fee: 0
+||||||| parent of a57c9da547 (update tests)
+task 2 'publish'. lines 56-66:
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: UNKNOWN_VERSION, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
+=======
+task 2, lines 56-66:
+//# publish --upgradeable --sender A
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: UNKNOWN_VERSION, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
+>>>>>>> a57c9da547 (update tests)
 
-task 3 'create-checkpoint'. lines 68-68:
+task 3, line 68:
+//# create-checkpoint
 Checkpoint created: 1
 
+<<<<<<< HEAD
 task 4 'view-object'. lines 70-70:
 2,0::m
+||||||| parent of a57c9da547 (update tests)
+task 4 'view-object'. lines 70-70:
+Error: task 4, lines 70-70. Unbound fake id 2,0
+=======
+task 4, line 70:
+//# view-object 2,0
+Error: task 4, lines 70-70
+//# view-object 2,0
+. Unbound fake id 2,0
+>>>>>>> a57c9da547 (update tests)
 
+<<<<<<< HEAD
 task 5 'run-graphql'. lines 72-96:
 Response: {
   "data": {
@@ -178,8 +203,63 @@ Response: {
       }
     }
   }
+||||||| parent of a57c9da547 (update tests)
+task 5 'run-graphql'. lines 72-96:
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "P0": "0x0",
+    "P0_opt": "0x0",
+    "P1": "0x0",
+    "P1_opt": "0x0",
+    "bridge": "0xb",
+    "bridge_opt": "0xb",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+=======
+task 5, lines 72-96:
+//# run-graphql
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "P0": "0x0",
+    "P0_opt": "0x0",
+    "P1": "0x0",
+    "P1_opt": "0x0",
+    "bridge": "0xb",
+    "bridge_opt": "0xb",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+>>>>>>> a57c9da547 (update tests)
 }
 
+<<<<<<< HEAD
 task 6 'run-graphql'. lines 98-143:
 Response: {
   "data": {
@@ -282,8 +362,63 @@ Response: {
       }
     }
   }
+||||||| parent of a57c9da547 (update tests)
+task 6 'run-graphql'. lines 98-143:
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "P0": "0x0",
+    "P0_opt": "0x0",
+    "P1": "0x0",
+    "P1_opt": "0x0",
+    "bridge": "0xb",
+    "bridge_opt": "0xb",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+=======
+task 6, lines 98-143:
+//# run-graphql
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "P0": "0x0",
+    "P0_opt": "0x0",
+    "P1": "0x0",
+    "P1_opt": "0x0",
+    "bridge": "0xb",
+    "bridge_opt": "0xb",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+>>>>>>> a57c9da547 (update tests)
 }
 
+<<<<<<< HEAD
 task 7 'run-graphql'. lines 145-174:
 Response: {
   "data": {
@@ -346,8 +481,63 @@ Response: {
       }
     }
   }
+||||||| parent of a57c9da547 (update tests)
+task 7 'run-graphql'. lines 145-174:
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "P0": "0x0",
+    "P0_opt": "0x0",
+    "P1": "0x0",
+    "P1_opt": "0x0",
+    "bridge": "0xb",
+    "bridge_opt": "0xb",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+=======
+task 7, lines 145-174:
+//# run-graphql
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "P0": "0x0",
+    "P0_opt": "0x0",
+    "P1": "0x0",
+    "P1_opt": "0x0",
+    "bridge": "0xb",
+    "bridge_opt": "0xb",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+>>>>>>> a57c9da547 (update tests)
 }
 
+<<<<<<< HEAD
 task 8 'run-graphql'. lines 176-206:
 Response: {
   "data": {
@@ -364,4 +554,58 @@ Response: {
       }
     }
   }
+||||||| parent of a57c9da547 (update tests)
+task 8 'run-graphql'. lines 176-206:
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "P0": "0x0",
+    "P0_opt": "0x0",
+    "P1": "0x0",
+    "P1_opt": "0x0",
+    "bridge": "0xb",
+    "bridge_opt": "0xb",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+=======
+task 8, lines 176-206:
+//# run-graphql
+Error: Unknown variable: obj_2_0
+Allowed variable mappings are {
+    "A": "@A",
+    "A_opt": "@A",
+    "P0": "0x0",
+    "P0_opt": "0x0",
+    "P1": "0x0",
+    "P1_opt": "0x0",
+    "bridge": "0xb",
+    "bridge_opt": "0xb",
+    "deepbook": "0xdee9",
+    "deepbook_opt": "0xdee9",
+    "obj_0_0": "object(0,0)",
+    "obj_0_0_opt": "object(0,0)",
+    "obj_0_1": "object(0,1)",
+    "obj_0_1_opt": "object(0,1)",
+    "std": "0x1",
+    "std_opt": "0x1",
+    "sui": "0x2",
+    "sui_opt": "0x2",
+    "sui_system": "0x3",
+    "sui_system_opt": "0x3",
+    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+>>>>>>> a57c9da547 (update tests)
 }

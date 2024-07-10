@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 0 'print-bytecode'. lines 1-24:
+task 0, lines 1-24:
+//# print-bytecode
 // Move bytecode v7
 module 1.MonomorphicEnums {
 
@@ -36,7 +37,8 @@ Jump tables:
 }
 }
 
-task 1 'publish'. lines 26-49:
+task 1, lines 26-49:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::MonomorphicEnums'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,

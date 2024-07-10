@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'publish'. lines 1-25:
+task 0, lines 1-25:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Token'. Got VMError: {
     major_status: BORROWFIELD_TYPE_MISMATCH_ERROR,
     sub_status: None,

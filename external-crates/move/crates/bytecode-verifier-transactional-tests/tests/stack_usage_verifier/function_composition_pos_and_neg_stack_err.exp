@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 1 'run'. lines 23-40:
+task 1, lines 23-40:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
     sub_status: None,

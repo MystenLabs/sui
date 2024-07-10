@@ -3,22 +3,53 @@ processed 20 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+<<<<<<< HEAD
 task 1 'publish'. lines 9-22:
+||||||| parent of a57c9da547 (update tests)
+task 1 'publish'. lines 9-24:
+=======
+task 1, lines 9-24:
+//# publish
+>>>>>>> a57c9da547 (update tests)
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5677200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
+<<<<<<< HEAD
 task 2 'programmable'. lines 24-28:
+||||||| parent of a57c9da547 (update tests)
+task 2 'programmable'. lines 26-30:
+=======
+task 2, lines 26-30:
+//# programmable --sender A --inputs 100000 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+// let's get ourselves a coin worth 1000
+>>>>>>> a57c9da547 (update tests)
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
+<<<<<<< HEAD
 task 3 'run'. lines 29-29:
+||||||| parent of a57c9da547 (update tests)
+task 3 'run'. lines 31-31:
+=======
+task 3, line 31:
+//# run sui::pay::split_and_transfer --type-args sui::sui::SUI --args object(2,0) 1000 @A --sender A
+>>>>>>> a57c9da547 (update tests)
 created: object(3,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
+<<<<<<< HEAD
 task 4 'view-object'. lines 31-33:
+||||||| parent of a57c9da547 (update tests)
+task 4 'view-object'. lines 33-35:
+=======
+task 4, lines 33-35:
+//# view-object 3,0
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( A )
 Version: 3
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -32,12 +63,28 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 5 'programmable'. lines 34-36:
+||||||| parent of a57c9da547 (update tests)
+task 5 'programmable'. lines 36-38:
+=======
+task 5, lines 36-38:
+//# programmable --sender A --inputs object(3,0) 100 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([NestedResult(0,0)], Input(2));
+>>>>>>> a57c9da547 (update tests)
 created: object(5,0)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
+<<<<<<< HEAD
 task 6 'view-object'. lines 38-38:
+||||||| parent of a57c9da547 (update tests)
+task 6 'view-object'. lines 40-40:
+=======
+task 6, line 40:
+//# view-object 3,0
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( A )
 Version: 4
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -51,7 +98,14 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 7 'view-object'. lines 40-43:
+||||||| parent of a57c9da547 (update tests)
+task 7 'view-object'. lines 42-45:
+=======
+task 7, lines 42-45:
+//# view-object 5,0
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( B )
 Version: 4
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -65,12 +119,28 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 8 'programmable'. lines 44-46:
+||||||| parent of a57c9da547 (update tests)
+task 8 'programmable'. lines 46-48:
+=======
+task 8, lines 46-48:
+//# programmable --sender A --inputs object(3,0) 100 @B
+//> 0: SplitCoins(Input(0), [Input(1), Input(1)]);
+//> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(2));
+>>>>>>> a57c9da547 (update tests)
 created: object(8,0), object(8,1)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
+<<<<<<< HEAD
 task 9 'view-object'. lines 48-48:
+||||||| parent of a57c9da547 (update tests)
+task 9 'view-object'. lines 50-50:
+=======
+task 9, line 50:
+//# view-object 3,0
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( A )
 Version: 5
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -84,7 +154,14 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 10 'view-object'. lines 50-50:
+||||||| parent of a57c9da547 (update tests)
+task 10 'view-object'. lines 52-52:
+=======
+task 10, line 52:
+//# view-object 8,0
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( B )
 Version: 5
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -98,7 +175,14 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 11 'view-object'. lines 52-54:
+||||||| parent of a57c9da547 (update tests)
+task 11 'view-object'. lines 54-56:
+=======
+task 11, lines 54-56:
+//# view-object 8,1
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( B )
 Version: 5
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -112,12 +196,29 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 12 'programmable'. lines 55-58:
+||||||| parent of a57c9da547 (update tests)
+task 12 'programmable'. lines 57-60:
+=======
+task 12, lines 57-60:
+//# programmable --sender A --inputs object(3,0) 100 @B
+//> 0: test::m1::ret_one_amount();
+//> 1: SplitCoins(Input(0), [Result(0), Input(1)]);
+//> TransferObjects([NestedResult(1,0), NestedResult(1,1)], Input(2));
+>>>>>>> a57c9da547 (update tests)
 created: object(12,0), object(12,1)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
+<<<<<<< HEAD
 task 13 'view-object'. lines 60-60:
+||||||| parent of a57c9da547 (update tests)
+task 13 'view-object'. lines 62-62:
+=======
+task 13, line 62:
+//# view-object 3,0
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( A )
 Version: 6
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -131,7 +232,14 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 14 'view-object'. lines 62-62:
+||||||| parent of a57c9da547 (update tests)
+task 14 'view-object'. lines 64-64:
+=======
+task 14, line 64:
+//# view-object 12,0
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( B )
 Version: 6
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -145,7 +253,14 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 15 'view-object'. lines 64-67:
+||||||| parent of a57c9da547 (update tests)
+task 15 'view-object'. lines 66-69:
+=======
+task 15, lines 66-69:
+//# view-object 12,1
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( B )
 Version: 6
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -159,12 +274,30 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 16 'programmable'. lines 68-72:
+||||||| parent of a57c9da547 (update tests)
+task 16 'programmable'. lines 70-74:
+=======
+task 16, lines 70-74:
+//# programmable --sender A --inputs object(3,0) 100 @B
+//> 0: test::m1::ret_one_amount();
+//> 1: SplitCoins(Input(0), [Result(0), Input(1)]);
+//> 2: MakeMoveVec<sui::coin::Coin<sui::sui::SUI>>([NestedResult(1,0), NestedResult(1,1)]);
+//> test::m1::transfer_(Result(2), Input(2));
+>>>>>>> a57c9da547 (update tests)
 created: object(16,0), object(16,1)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
+<<<<<<< HEAD
 task 17 'view-object'. lines 74-74:
+||||||| parent of a57c9da547 (update tests)
+task 17 'view-object'. lines 76-76:
+=======
+task 17, line 76:
+//# view-object 3,0
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( A )
 Version: 7
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -178,7 +311,14 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 18 'view-object'. lines 76-76:
+||||||| parent of a57c9da547 (update tests)
+task 18 'view-object'. lines 78-78:
+=======
+task 18, line 78:
+//# view-object 16,0
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( B )
 Version: 7
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -192,7 +332,14 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
+<<<<<<< HEAD
 task 19 'view-object'. lines 78-78:
+||||||| parent of a57c9da547 (update tests)
+task 19 'view-object'. lines 80-80:
+=======
+task 19, line 80:
+//# view-object 16,1
+>>>>>>> a57c9da547 (update tests)
 Owner: Account Address ( B )
 Version: 7
 Contents: sui::coin::Coin<sui::sui::SUI> {

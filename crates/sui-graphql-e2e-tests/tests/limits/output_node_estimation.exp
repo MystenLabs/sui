@@ -1,6 +1,7 @@
 processed 16 tasks
 
-task 1 'run-graphql'. lines 6-14:
+task 1, lines 6-14:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
@@ -21,7 +22,8 @@ Response: {
   }
 }
 
-task 2 'run-graphql'. lines 16-26:
+task 2, lines 16-26:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
@@ -46,7 +48,8 @@ Response: {
   }
 }
 
-task 3 'run-graphql'. lines 28-42:
+task 3, lines 28-42:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "checkpoints": {
@@ -77,7 +80,8 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 44-65:
+task 4, lines 44-65:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "checkpoints": {
@@ -117,7 +121,8 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 67-88:
+task 5, lines 67-88:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "checkpoints": {
@@ -151,7 +156,8 @@ Response: {
   }
 }
 
-task 6 'run-graphql'. lines 90-100:
+task 6, lines 90-100:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
@@ -176,7 +182,8 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 102-112:
+task 7, lines 102-112:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
@@ -201,7 +208,8 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 114-142:
+task 8, lines 114-142:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
@@ -228,7 +236,14 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
 task 9 'run-graphql'. lines 144-171:
+||||||| parent of a57c9da547 (update tests)
+task 9 'run-graphql'. lines 144-170:
+=======
+task 9, lines 144-170:
+//# run-graphql --show-usage
+>>>>>>> a57c9da547 (update tests)
 Response: {
   "data": {
     "transactionBlocks": {
@@ -253,7 +268,14 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
 task 10 'run-graphql'. lines 173-222:
+||||||| parent of a57c9da547 (update tests)
+task 10 'run-graphql'. lines 172-221:
+=======
+task 10, lines 172-221:
+//# run-graphql --show-usage
+>>>>>>> a57c9da547 (update tests)
 Response: {
   "data": {
     "transactionBlocks": {
@@ -283,7 +305,14 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
 task 11 'run-graphql'. lines 224-249:
+||||||| parent of a57c9da547 (update tests)
+task 11 'run-graphql'. lines 223-248:
+=======
+task 11, lines 223-248:
+//# run-graphql --show-usage
+>>>>>>> a57c9da547 (update tests)
 Response: {
   "data": {
     "transactionBlocks": {
@@ -309,6 +338,7 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
 task 12 'run-graphql'. lines 251-272:
 Response: {
   "data": {
@@ -340,6 +370,12 @@ Response: {
 }
 
 task 13 'run-graphql'. lines 274-286:
+||||||| parent of a57c9da547 (update tests)
+task 12 'run-graphql'. lines 250-260:
+=======
+task 12, lines 250-260:
+//# run-graphql --show-usage
+>>>>>>> a57c9da547 (update tests)
 Response: {
   "data": null,
   "extensions": {
@@ -371,7 +407,14 @@ Response: {
   ]
 }
 
+<<<<<<< HEAD
 task 14 'run-graphql'. lines 288-298:
+||||||| parent of a57c9da547 (update tests)
+task 13 'run-graphql'. lines 262-272:
+=======
+task 13, lines 262-272:
+//# run-graphql --show-usage
+>>>>>>> a57c9da547 (update tests)
 Response: {
   "data": null,
   "extensions": {

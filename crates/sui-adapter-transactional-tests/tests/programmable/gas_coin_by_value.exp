@@ -3,11 +3,14 @@ processed 3 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'programmable'. lines 8-9:
+task 1, lines 8-9:
+//# programmable --sender A --inputs @B
+//> TransferObjects([Gas], Input(0))
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'view-object'. lines 11-11:
+task 2, line 11:
+//# view-object 0,0
 Owner: Account Address ( B )
 Version: 2
 Contents: sui::coin::Coin<sui::sui::SUI> {

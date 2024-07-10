@@ -3,39 +3,56 @@ processed 17 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 17-34:
+task 1, lines 17-34:
+//# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5479600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 36-37:
+task 2, lines 36-37:
+//# programmable --sender A --inputs 0 1 @A
+//> 0: Test::M1::create(Input(0), Input(2));
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'create-checkpoint'. lines 39-39:
+task 3, line 39:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 4 'programmable'. lines 41-44:
+task 4, lines 41-44:
+//# programmable --sender A --inputs object(2,0) 100 2 3 @A
+//> Test::M1::set_value(Input(0), Input(1));
+//> Test::M1::create(Input(2), Input(4));
+//> Test::M1::create(Input(3), Input(4));
 created: object(4,0), object(4,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 4932400,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 5 'create-checkpoint'. lines 46-46:
+task 5, line 46:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 6 'programmable'. lines 48-52:
+task 6, lines 48-52:
+//# programmable --sender A --inputs object(2,0) 200 4 5 6 @A
+//> Test::M1::set_value(Input(0), Input(1));
+//> Test::M1::create(Input(2), Input(5));
+//> Test::M1::create(Input(3), Input(5));
+//> Test::M1::create(Input(4), Input(5));
 created: object(6,0), object(6,1), object(6,2)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 7 'create-checkpoint'. lines 54-54:
+task 7, line 54:
+//# create-checkpoint
 Checkpoint created: 3
 
-task 9 'create-checkpoint'. lines 58-58:
+task 9, line 58:
+//# create-checkpoint
 Checkpoint created: 4
 
-task 10 'run-graphql'. lines 60-134:
+task 10, lines 60-134:
+//# run-graphql
 Response: {
   "data": {
     "address_at_latest_checkpoint_4": {
@@ -360,7 +377,8 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 136-180:
+task 11, lines 136-180:
+//# run-graphql
 Response: {
   "data": {
     "all_transactions": {
@@ -871,13 +889,16 @@ Response: {
   }
 }
 
-task 12 'force-object-snapshot-catchup'. lines 182-182:
+task 12, line 182:
+//# force-object-snapshot-catchup --start-cp 0 --end-cp 3
 Objects snapshot updated to [0 to 3)
 
-task 13 'create-checkpoint'. lines 184-184:
+task 13, line 184:
+//# create-checkpoint
 Checkpoint created: 5
 
-task 14 'run-graphql'. lines 186-260:
+task 14, lines 186-260:
+//# run-graphql
 Response: {
   "data": {
     "address_at_latest_checkpoint_4": {
@@ -1202,10 +1223,12 @@ Response: {
   }
 }
 
-task 15 'create-checkpoint'. lines 262-262:
+task 15, line 262:
+//# create-checkpoint
 Checkpoint created: 6
 
-task 16 'run-graphql'. lines 264-299:
+task 16, lines 264-299:
+//# run-graphql
 Response: {
   "data": {
     "all_transactions": {

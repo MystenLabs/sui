@@ -3,7 +3,8 @@ processed 10 tasks
 init:
 A: object(0,0)
 
-task 1 'run-graphql'. lines 6-38:
+task 1, lines 6-38:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -72,15 +73,18 @@ Response: {
   }
 }
 
-task 2 'publish'. lines 40-44:
+task 2, lines 40-44:
+//# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5183200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'create-checkpoint'. lines 46-46:
+task 3, line 46:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 48-86:
+task 4, lines 48-86:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -149,15 +153,18 @@ Response: {
   }
 }
 
-task 5 'upgrade'. lines 88-93:
+task 5, lines 88-93:
+//# upgrade --package P0 --upgrade-capability 2,1 --sender A
 created: object(5,0)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 5418800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 6 'create-checkpoint'. lines 95-95:
+task 6, line 95:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 7 'run-graphql'. lines 97-136:
+task 7, lines 97-136:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -243,7 +250,8 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 138-173:
+task 8, lines 138-173:
+//# run-graphql --cursors {"n":"consensus_commit_prologue","c":2} {"n":"timestamp_ms","c":2}
 Response: {
   "data": {
     "object": {
@@ -390,7 +398,8 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 175-246:
+task 9, lines 175-246:
+//# run-graphql --cursors {"n":"consensus_commit_prologue","c":2} {"n":"timestamp_ms","c":2}
 Response: {
   "data": {
     "object": {

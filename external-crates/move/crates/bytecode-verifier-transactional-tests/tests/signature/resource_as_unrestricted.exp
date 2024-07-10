@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'publish'. lines 1-12:
+task 0, lines 1-12:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
