@@ -296,17 +296,15 @@ fn call_completion_item(
 fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<CompletionItem> {
     let mut completions = vec![];
     let Some(fhash) = symbols.file_hash(use_fpath) else {
-        eprintln!("missing file");
+        eprintln!("no dot completions due to missing file");
         return completions;
     };
     let Some(loc) = utils::lsp_position_to_loc(&symbols.files, fhash, position) else {
-        eprintln!("missing loc");
+        eprintln!("no dot completions due to missing loc");
         return completions;
     };
     let Some(info) = symbols.compiler_info.get_autocomplete_info(fhash, &loc) else {
-        eprintln!("compiler info: {:#?}", symbols.compiler_info);
-        eprintln!("loc: {:#?}", loc);
-        eprintln!("no compiler autocomplete info");
+        eprintln!("no dot completions due to no compiler autocomplete info");
         return completions;
     };
     for AutocompleteMethod {
@@ -691,7 +689,12 @@ fn cursor_completion_items(
             let items = dot(symbols, path, &pos);
             let items_is_empty = items.is_empty();
             eprintln!("found items: {}", !items_is_empty);
-            (items, !items_is_empty)
+            // whether completions have been found for the dot or not
+            // it makes no sense to try offering "dumb" autocompletion
+            // options here as they will not fit (an example would
+            // be dot completion of u64 variable without any methods
+            // with u64 receiver being visible)
+            (items, true)
         }
         // TODO: consider using `cursor.position` for this instead
         Some(Tok::ColonColon) => {

@@ -280,7 +280,7 @@ impl MappedFiles {
             .line_range(*file_id, line_offset as usize)
             .ok()?;
         let offset = line_range.start as u32 + char_offset;
-        Some(Loc::new(file_hash, offset, offset + 1))
+        Some(Loc::new(file_hash, offset, offset))
     }
 
     /// Given a line number (1-indexed) in the file return the `Loc` for the line.
@@ -419,7 +419,7 @@ impl Position {
         self.line_offset + 1
     }
 
-    /// User-facing (1-indexed) coulmn
+    /// User-facing (1-indexed) column
     pub fn user_column(&self) -> usize {
         self.column_offset + 1
     }

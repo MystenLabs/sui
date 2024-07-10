@@ -184,10 +184,9 @@ impl CompletionTest {
         use_file_path: &Path,
     ) -> anyhow::Result<()> {
         let lsp_use_line = self.use_line - 1; // 0th-based
-        let lsp_use_col = self.use_col - 1; // 0th-based
         let use_pos = Position {
             line: lsp_use_line,
-            character: lsp_use_col,
+            character: self.use_col,
         };
         let items = completion_items(
             symbols,
