@@ -227,8 +227,7 @@ export class DeepBookContract {
 		return adjusted_mid_price;
 	};
 
-	whitelisted = async (pool: Pool) => {
-		const tx = new Transaction();
+	whitelisted = (pool: Pool) => (tx: Transaction) => {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
@@ -236,25 +235,13 @@ export class DeepBookContract {
 			arguments: [tx.object(pool.address)],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
-		const res = await this.#config.client.devInspectTransactionBlock({
-			sender: normalizeSuiAddress('0xa'),
-			transactionBlock: tx,
-		});
-
-		const bytes = res.results![0].returnValues![0][0];
-		const whitelisted = bcs.Bool.parse(new Uint8Array(bytes));
-
-		return whitelisted;
 	};
 
-	getQuoteQuantityOut = async (pool: Pool, baseQuantity: number) => {
+	getQuoteQuantityOut = (pool: Pool, baseQuantity: number) => (tx: Transaction) => {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-		const quoteScalar = quoteCoin.scalar;
 
-		const tx = new Transaction();
-
-		tx.moveCall({
+		return tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_quote_quantity_out`,
 			arguments: [
 				tx.object(pool.address),
@@ -263,28 +250,14 @@ export class DeepBookContract {
 			],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
-		const res = await this.#config.client.devInspectTransactionBlock({
-			sender: normalizeSuiAddress('0xa'),
-			transactionBlock: tx,
-		});
-
-		const baseOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
-		const quoteOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
-		const deepRequired = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
-
-		console.log(
-			`For ${baseQuantity} base in, you will get ${baseOut / baseCoin.scalar} base, ${quoteOut / quoteScalar} quote, and requires ${deepRequired / DEEP_SCALAR} deep`,
-		);
 	};
 
-	getBaseQuantityOut = async (pool: Pool, quoteQuantity: number) => {
+	getBaseQuantityOut = (pool: Pool, quoteQuantity: number) => (tx: Transaction) => {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const quoteScalar = quoteCoin.scalar;
 
-		const tx = new Transaction();
-
-		tx.moveCall({
+		return tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_base_quantity_out`,
 			arguments: [
 				tx.object(pool.address),
@@ -293,184 +266,82 @@ export class DeepBookContract {
 			],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
-		const res = await this.#config.client.devInspectTransactionBlock({
-			sender: normalizeSuiAddress('0xa'),
-			transactionBlock: tx,
-		});
-
-		const baseOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
-		const quoteOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
-		const deepRequired = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
-
-		console.log(
-			`For ${quoteQuantity} quote in, you will get ${baseOut / baseCoin.scalar} base, ${quoteOut / quoteScalar} quote, and requires ${deepRequired / DEEP_SCALAR} deep`,
-		);
 	};
 
-	getQuantityOut = async (pool: Pool, basequantity: number, quoteQuantity: number) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-		const quoteScalar = quoteCoin.scalar;
+	getQuantityOut =
+		(pool: Pool, baseQuantity: number, quoteQuantity: number) => (tx: Transaction) => {
+			const baseCoin = this.#config.getCoin(pool.baseCoin);
+			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+			const quoteScalar = quoteCoin.scalar;
 
-		const tx = new Transaction();
+			return tx.moveCall({
+				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_quantity_out`,
+				arguments: [
+					tx.object(pool.address),
+					tx.pure.u64(baseQuantity * baseCoin.scalar),
+					tx.pure.u64(quoteQuantity * quoteScalar),
+					tx.object(SUI_CLOCK_OBJECT_ID),
+				],
+				typeArguments: [baseCoin.type, quoteCoin.type],
+			});
+		};
 
-		tx.moveCall({
-			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_quantity_out`,
-			arguments: [
-				tx.object(pool.address),
-				tx.pure.u64(basequantity * baseCoin.scalar),
-				tx.pure.u64(quoteQuantity * quoteScalar),
-				tx.object(SUI_CLOCK_OBJECT_ID),
-			],
-			typeArguments: [baseCoin.type, quoteCoin.type],
-		});
-		const res = await this.#config.client.devInspectTransactionBlock({
-			sender: normalizeSuiAddress('0xa'),
-			transactionBlock: tx,
-		});
-
-		const baseOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
-		const quoteOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
-		const deepRequired = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
-
-		console.log(
-			`For ${basequantity} base and ${quoteQuantity} quote in, you will get ${baseOut / baseCoin.scalar} base, ${quoteOut / quoteScalar} quote, and requires ${deepRequired / DEEP_SCALAR} deep`,
-		);
-	};
-
-	accountOpenOrders = async (pool: Pool, managerId: string) => {
+	accountOpenOrders = (pool: Pool, managerId: string) => (tx: Transaction) => {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
-		const tx = new Transaction();
-
-		tx.moveCall({
+		return tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::account_open_orders`,
 			arguments: [tx.object(pool.address), tx.pure.id(managerId)],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
-
-		const res = await this.#config.client.devInspectTransactionBlock({
-			sender: normalizeSuiAddress('0xa'),
-			transactionBlock: tx,
-		});
-
-		const order_ids = res.results![0].returnValues![0][0];
-		const VecSet = bcs.struct('VecSet', {
-			constants: bcs.vector(bcs.U128),
-		});
-
-		let parsed_order_ids = VecSet.parse(new Uint8Array(order_ids)).constants;
-
-		console.log(parsed_order_ids);
 	};
 
-	getLevel2Range = async (pool: Pool, priceLow: number, priceHigh: number, isBid: boolean) => {
+	getLevel2Range =
+		(pool: Pool, priceLow: number, priceHigh: number, isBid: boolean) => (tx: Transaction) => {
+			const baseCoin = this.#config.getCoin(pool.baseCoin);
+			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+
+			return tx.moveCall({
+				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_level2_range`,
+				arguments: [
+					tx.object(pool.address),
+					tx.pure.u64((priceLow * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar),
+					tx.pure.u64((priceHigh * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar),
+					tx.pure.bool(isBid),
+				],
+				typeArguments: [baseCoin.type, quoteCoin.type],
+			});
+		};
+
+	getLevel2TicksFromMid = (pool: Pool, tickFromMid: number) => (tx: Transaction) => {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
-		const tx = new Transaction();
-
-		tx.moveCall({
-			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_level2_range`,
-			arguments: [
-				tx.object(pool.address),
-				tx.pure.u64((priceLow * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar),
-				tx.pure.u64((priceHigh * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar),
-				tx.pure.bool(isBid),
-			],
-			typeArguments: [baseCoin.type, quoteCoin.type],
-		});
-
-		const res = await this.#config.client.devInspectTransactionBlock({
-			sender: normalizeSuiAddress('0xa'),
-			transactionBlock: tx,
-		});
-
-		const prices = res.results![0].returnValues![0][0];
-		const parsed_prices = bcs.vector(bcs.u64()).parse(new Uint8Array(prices));
-		const quantities = res.results![0].returnValues![1][0];
-		const parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(quantities));
-		console.log(res.results![0].returnValues![0]);
-		console.log(parsed_prices);
-		console.log(parsed_quantities);
-		return [parsed_prices, parsed_quantities];
-	};
-
-	getLevel2TicksFromMid = async (pool: Pool, tickFromMid: number) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-		const tx = new Transaction();
-
-		tx.moveCall({
+		return tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_level2_tick_from_mid`,
 			arguments: [tx.object(pool.address), tx.pure.u64(tickFromMid)],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
-
-		const res = await this.#config.client.devInspectTransactionBlock({
-			sender: normalizeSuiAddress('0xa'),
-			transactionBlock: tx,
-		});
-
-		const prices = res.results![0].returnValues![0][0];
-		const parsed_prices = bcs.vector(bcs.u64()).parse(new Uint8Array(prices));
-		const quantities = res.results![0].returnValues![1][0];
-		const parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(quantities));
-		console.log(res.results![0].returnValues![0]);
-		console.log(parsed_prices);
-		console.log(parsed_quantities);
-		return [parsed_prices, parsed_quantities];
 	};
 
-	vaultBalances = async (pool: Pool) => {
-		const tx = new Transaction();
+	vaultBalances = (pool: Pool) => (tx: Transaction) => {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-		const quoteScalar = quoteCoin.scalar;
 
-		tx.moveCall({
+		return tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::vault_balances`,
 			arguments: [tx.object(pool.address)],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
-
-		const res = await this.#config.client.devInspectTransactionBlock({
-			sender: normalizeSuiAddress('0xa'),
-			transactionBlock: tx,
-		});
-
-		const baseInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
-		const quoteInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
-		const deepInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
-		console.log(
-			`Base in vault: ${baseInVault / baseCoin.scalar}, Quote in vault: ${quoteInVault / quoteScalar}, Deep in vault: ${deepInVault / DEEP_SCALAR}`,
-		);
-
-		return [baseInVault / baseCoin.scalar, quoteInVault / quoteScalar, deepInVault / DEEP_SCALAR];
 	};
 
-	getPoolIdByAssets = async (baseType: string, quoteType: string) => {
-		const tx = new Transaction();
-
+	getPoolIdByAssets = (baseType: string, quoteType: string) => (tx: Transaction) => {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_pool_id_by_asset`,
 			arguments: [tx.object(this.#config.REGISTRY_ID)],
 			typeArguments: [baseType, quoteType],
 		});
-
-		const res = await this.#config.client.devInspectTransactionBlock({
-			sender: normalizeSuiAddress('0xa'),
-			transactionBlock: tx,
-		});
-
-		const ID = bcs.struct('ID', {
-			bytes: bcs.Address,
-		});
-		const address = ID.parse(new Uint8Array(res.results![0].returnValues![0][0]))['bytes'];
-		console.log(`Pool ID base ${baseType} and quote ${quoteType} is ${address}`);
-
-		return address;
 	};
 
 	swapExactBaseForQuote =

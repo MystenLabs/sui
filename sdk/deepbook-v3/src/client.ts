@@ -24,7 +24,7 @@ import type {
 	SwapParams,
 } from './types/index.js';
 import { OrderType, SelfMatchingOptions } from './types/index.js';
-import { DeepBookConfig, MAX_TIMESTAMP } from './utils/config.js';
+import { DEEP_SCALAR, DeepBookConfig, MAX_TIMESTAMP } from './utils/config.js';
 import { getSignerFromPK } from './utils/utils.js';
 
 /// DeepBook Client. If a private key is provided, then all transactions
@@ -308,55 +308,201 @@ export class DeepBookClient {
 		return this.#deepBook.midPrice(pool);
 	}
 
-	whitelisted(poolKey: PoolKey): Promise<boolean> {
+	async whitelisted(poolKey: PoolKey): Promise<boolean> {
 		const pool = this.#config.getPool(poolKey);
 
-		return this.#deepBook.whitelisted(pool);
+		const tx = new Transaction();
+		tx.add(this.#deepBook.whitelisted(pool));
+		const res = await this.#config.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress('0xa'),
+			transactionBlock: tx,
+		});
+
+		const bytes = res.results![0].returnValues![0][0];
+		const whitelisted = bcs.Bool.parse(new Uint8Array(bytes));
+
+		return whitelisted;
 	}
 
-	getQuoteQuantityOut(poolKey: PoolKey, baseQuantity: number) {
+	async getQuoteQuantityOut(poolKey: PoolKey, baseQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+		const tx = new Transaction();
 
-		return this.#deepBook.getQuoteQuantityOut(pool, baseQuantity);
+		tx.add(this.#deepBook.getQuoteQuantityOut(pool, baseQuantity));
+
+		const res = await this.#config.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress('0xa'),
+			transactionBlock: tx,
+		});
+
+		const baseOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const quoteOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const deepRequired = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
+
+		return {
+			baseQuantity,
+			base: baseOut / baseCoin.scalar,
+			quote: quoteOut / quoteCoin.scalar,
+			deep: deepRequired / DEEP_SCALAR,
+		};
 	}
 
-	getBaseQuantityOut(poolKey: PoolKey, quoteQuantity: number) {
+	async getBaseQuantityOut(poolKey: PoolKey, baseQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+		const tx = new Transaction();
 
-		return this.#deepBook.getBaseQuantityOut(pool, quoteQuantity);
+		tx.add(this.#deepBook.getBaseQuantityOut(pool, baseQuantity));
+
+		const res = await this.#config.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress('0xa'),
+			transactionBlock: tx,
+		});
+
+		const baseOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const quoteOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const deepRequired = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
+
+		return {
+			baseQuantity,
+			base: baseOut / baseCoin.scalar,
+			quote: quoteOut / quoteCoin.scalar,
+			deep: deepRequired / DEEP_SCALAR,
+		};
 	}
 
-	accountOpenOrders(poolKey: PoolKey, managerKey: string) {
+	async getQuantityOut(poolKey: PoolKey, baseQuantity: number, quoteQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+		const tx = new Transaction();
 
-		return this.#deepBook.accountOpenOrders(pool, managerKey);
+		tx.add(this.#deepBook.getQuantityOut(pool, baseQuantity, quoteQuantity));
+
+		const res = await this.#config.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress('0xa'),
+			transactionBlock: tx,
+		});
+
+		const baseOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const quoteOut = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const deepRequired = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
+
+		return {
+			baseQuantity,
+			quoteQuantity,
+			base: baseOut / baseCoin.scalar,
+			quote: quoteOut / quoteCoin.scalar,
+			deep: deepRequired / DEEP_SCALAR,
+		};
 	}
 
-	getLevel2Range(
-		poolKey: PoolKey,
-		priceLow: number,
-		priceHigh: number,
-		isBid: boolean,
-	): Promise<string[][]> {
+	async accountOpenOrders(poolKey: PoolKey, managerKey: string) {
 		const pool = this.#config.getPool(poolKey);
+		const tx = new Transaction();
 
-		return this.#deepBook.getLevel2Range(pool, priceLow, priceHigh, isBid);
+		tx.add(this.#deepBook.accountOpenOrders(pool, managerKey));
+
+		const res = await this.#config.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress('0xa'),
+			transactionBlock: tx,
+		});
+
+		const order_ids = res.results![0].returnValues![0][0];
+		const VecSet = bcs.struct('VecSet', {
+			constants: bcs.vector(bcs.U128),
+		});
+
+		return VecSet.parse(new Uint8Array(order_ids)).constants;
 	}
 
-	getLevel2TicksFromMid(poolKey: PoolKey, ticks: number): Promise<string[][]> {
+	async getLevel2Range(poolKey: PoolKey, priceLow: number, priceHigh: number, isBid: boolean) {
 		const pool = this.#config.getPool(poolKey);
+		const tx = new Transaction();
 
-		return this.#deepBook.getLevel2TicksFromMid(pool, ticks);
+		tx.add(this.#deepBook.getLevel2Range(pool, priceLow, priceHigh, isBid));
+
+		const res = await this.#config.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress('0xa'),
+			transactionBlock: tx,
+		});
+
+		const prices = res.results![0].returnValues![0][0];
+		const parsed_prices = bcs.vector(bcs.u64()).parse(new Uint8Array(prices));
+		const quantities = res.results![0].returnValues![1][0];
+		const parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(quantities));
+
+		return {
+			prices: parsed_prices,
+			quantities: parsed_quantities,
+		};
 	}
 
-	vaultBalances(poolKey: PoolKey): Promise<number[]> {
+	async getLevel2TicksFromMid(poolKey: PoolKey, ticks: number) {
 		const pool = this.#config.getPool(poolKey);
+		const tx = new Transaction();
 
-		return this.#deepBook.vaultBalances(pool);
+		tx.add(this.#deepBook.getLevel2TicksFromMid(pool, ticks));
+
+		const res = await this.#config.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress('0xa'),
+			transactionBlock: tx,
+		});
+
+		const prices = res.results![0].returnValues![0][0];
+		const parsed_prices = bcs.vector(bcs.u64()).parse(new Uint8Array(prices));
+		const quantities = res.results![0].returnValues![1][0];
+		const parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(quantities));
+
+		return {
+			prices: parsed_prices,
+			quantities: parsed_quantities,
+		};
 	}
 
-	getPoolIdByAssets(baseType: string, quoteType: string): Promise<string> {
-		return this.#deepBook.getPoolIdByAssets(baseType, quoteType);
+	async vaultBalances(poolKey: PoolKey) {
+		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+		const tx = new Transaction();
+
+		tx.add(this.#deepBook.vaultBalances(pool));
+
+		const res = await this.#config.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress('0xa'),
+			transactionBlock: tx,
+		});
+
+		const baseInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const quoteInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const deepInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
+
+		return {
+			base: baseInVault / baseCoin.scalar,
+			quote: quoteInVault / quoteCoin.scalar,
+			deep: deepInVault / DEEP_SCALAR,
+		};
+	}
+
+	async getPoolIdByAssets(baseType: string, quoteType: string) {
+		const tx = new Transaction();
+
+		tx.add(this.#deepBook.getPoolIdByAssets(baseType, quoteType));
+
+		const res = await this.#config.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress('0xa'),
+			transactionBlock: tx,
+		});
+
+		const ID = bcs.struct('ID', {
+			bytes: bcs.Address,
+		});
+		const address = ID.parse(new Uint8Array(res.results![0].returnValues![0][0]))['bytes'];
+
+		return address;
 	}
 
 	/// DeepBook Admin
