@@ -326,6 +326,31 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     Ok(())
 }
 
+#[sim_test]
+async fn test_ptb_publish() -> Result<(), anyhow::Error> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let context = &mut test_cluster.wallet;
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("ptb_complex_args_test_functions");
+
+    let publish_ptb_string = format!(
+        r#"
+         --move-call sui::tx_context::sender
+         --assign sender
+         --publish {}
+         --assign upgrade_cap
+         --transfer-objects "[upgrade_cap]" sender
+        "#,
+        package_path.display()
+    );
+    let args = shlex::split(&publish_ptb_string).unwrap();
+    sui::client_ptb::ptb::PTB { args: args.clone() }
+        .execute(context)
+        .await?;
+    Ok(())
+}
+
 // fixing issue https://github.com/MystenLabs/sui/issues/6546
 #[tokio::test]
 async fn test_regression_6546() -> Result<(), anyhow::Error> {
