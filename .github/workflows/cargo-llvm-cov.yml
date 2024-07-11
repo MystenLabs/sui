@@ -38,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
         with:
-          ref: caf04b13b1608a459bd2819c1abfc93237d7959d
+          ref: efc886f18aa2feec823a1dfd70375b9172e78d08
 
       - uses: bmwill/rust-cache@v1
 
