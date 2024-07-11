@@ -7,3 +7,15 @@ publish = false
 edition = "2021"
 
 [dependencies]
+anyhow.workspace = true
+clap.workspace = true
+tokio = { workspace = true, features = ["full"] }
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+http.workspace = true
+uuid.workspace = true
+
+sui-faucet.workspace = true
+sui-cluster-test.workspace = true
+telemetry-subscribers.workspace = true
