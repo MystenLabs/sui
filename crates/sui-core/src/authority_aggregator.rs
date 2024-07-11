@@ -607,7 +607,7 @@ impl<A: Clone> AuthorityAggregator<A> {
 
         // TODO: It's likely safer to do the following operations atomically, in case this function
         // gets called from different threads. It cannot happen today, but worth the caution.
-        let new_committee = committee.committee;
+        let new_committee = committee.committee().clone();
         if disallow_missing_intermediate_committees {
             fp_ensure!(
                 self.committee.epoch + 1 == new_committee.epoch,
@@ -737,7 +737,7 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         let authority_clients =
             make_network_authority_clients_with_network_config(&committee, &net_config)?;
         Ok(Self::new_with_metrics(
-            committee.committee,
+            committee.committee().clone(),
             committee_store.clone(),
             authority_clients,
             safe_client_metrics_base,
@@ -1957,11 +1957,11 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         let committee_store = if let Some(committee_store) = self.committee_store {
             committee_store
         } else {
-            Arc::new(CommitteeStore::new_for_testing(&committee.committee))
+            Arc::new(CommitteeStore::new_for_testing(committee.committee()))
         };
         Ok((
             AuthorityAggregator::new(
-                committee.committee,
+                committee.committee().clone(),
                 committee_store,
                 auth_clients.clone(),
                 registry,

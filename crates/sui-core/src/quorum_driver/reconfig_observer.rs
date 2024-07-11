@@ -96,7 +96,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
                     let committee = system_state.get_current_epoch_committee();
                     info!(
                         "Got reconfig message. New committee: {}",
-                        committee.committee
+                        committee.committee()
                     );
                     if committee.epoch() > quorum_driver.current_epoch() {
                         let authority_agg =

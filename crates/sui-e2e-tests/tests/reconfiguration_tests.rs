@@ -572,7 +572,7 @@ async fn test_inactive_validator_pool_read() {
         assert_eq!(
             system_state
                 .get_current_epoch_committee()
-                .committee
+                .committee()
                 .num_members(),
             4
         );

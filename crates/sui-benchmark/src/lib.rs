@@ -274,7 +274,7 @@ impl LocalValidatorAggregatorProxy {
             registry,
             reconfig_fullnode_rpc_url,
             clients,
-            committee.committee,
+            committee.committee().clone(),
         )
         .await
     }

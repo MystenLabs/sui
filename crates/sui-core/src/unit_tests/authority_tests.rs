@@ -3215,7 +3215,10 @@ async fn test_genesis_sui_system_state_object() {
         .get_sui_system_state_object_for_testing()
         .unwrap();
     assert_eq!(
-        &sui_system_state.get_current_epoch_committee().committee,
+        &sui_system_state
+            .get_current_epoch_committee()
+            .committee()
+            .clone(),
         authority_state
             .epoch_store_for_testing()
             .committee()
