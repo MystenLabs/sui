@@ -6,7 +6,6 @@ import { Transaction } from '@mysten/sui/transactions';
 
 import { BalanceManagerContract } from '../transactions/balanceManager.js';
 import type { Environment } from '../types/index.js';
-import type { CoinMap, PoolMap } from './constants.js';
 import {
 	mainnetCoins,
 	mainnetPackageIds,
@@ -14,7 +13,7 @@ import {
 	testnetCoins,
 	testnetPackageIds,
 	testnetPools,
-} from './constants';
+} from './constants.js';
 
 export const FLOAT_SCALAR = 1000000000;
 export const POOL_CREATION_FEE = 10000 * 1000000;
@@ -23,8 +22,8 @@ export const GAS_BUDGET = 0.5 * 500000000; // Adjust based on benchmarking
 export const DEEP_SCALAR = 1000000;
 
 export class DeepBookConfig {
-	#coins: CoinMap = testnetCoins;
-	#pools: PoolMap = testnetPools;
+	#coins = testnetCoins;
+	#pools = testnetPools;
 	#coinIds = new Map<string, string>();
 	#signer: Signer;
 	client: SuiClient;
