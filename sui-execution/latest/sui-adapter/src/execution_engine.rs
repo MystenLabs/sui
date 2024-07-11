@@ -399,24 +399,25 @@ mod checked {
         advance_epoch_gas_summary: Option<(u64, u64)>,
     ) -> Result<(), ExecutionError> {
         let mut result: std::result::Result<(), sui_types::error::ExecutionError> = Ok(());
-        if !is_genesis_tx && !Mode::skip_conservation_checks() {
+        if !is_genesis_tx {
+            info!("running conservation checks on {}", tx_ctx.digest());
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
             let conservation_result = {
                 temporary_store
                     .check_sui_conserved(simple_conservation_checks, cost_summary)
                     .and_then(|()| {
-                        if enable_expensive_checks {
-                            // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-                            let mut layout_resolver =
-                                TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
-                            temporary_store.check_sui_conserved_expensive(
-                                cost_summary,
-                                advance_epoch_gas_summary,
-                                &mut layout_resolver,
-                            )
-                        } else {
-                            Ok(())
-                        }
+                        // if enable_expensive_checks {
+                        // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
+                        let mut layout_resolver =
+                            TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
+                        temporary_store.check_sui_conserved_expensive(
+                            cost_summary,
+                            advance_epoch_gas_summary,
+                            &mut layout_resolver,
+                        )
+                        // } else {
+                        //     Ok(())
+                        // }
                     })
             };
             if let Err(conservation_err) = conservation_result {

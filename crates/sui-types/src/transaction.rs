@@ -3021,6 +3021,7 @@ impl InputObjects {
             .any(|obj| obj.is_deleted_shared_object())
     }
 
+    // Todo make a better name or explain this
     pub fn get_cancelled_objects(&self) -> Option<(Vec<ObjectID>, SequenceNumber)> {
         let mut contains_cancelled = false;
         let mut cancel_reason = None;

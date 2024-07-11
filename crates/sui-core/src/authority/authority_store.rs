@@ -1512,56 +1512,57 @@ impl AuthorityStore {
         let executor = old_epoch_store.executor();
         info!("Starting SUI conservation check. This may take a while..");
         let cur_time = Instant::now();
-        let mut pending_objects = vec![];
+        // let mut pending_objects = vec![];
         let mut count = 0;
         let mut size = 0;
-        let (mut total_sui, mut total_storage_rebate) = thread::scope(|s| {
-            let pending_tasks = FuturesUnordered::new();
-            for o in self.iter_live_object_set(false) {
-                match o {
-                    LiveObject::Normal(object) => {
-                        size += object.object_size_for_gas_metering();
-                        count += 1;
-                        pending_objects.push(object);
-                        if count % 1_000_000 == 0 {
-                            let mut task_objects = vec![];
-                            mem::swap(&mut pending_objects, &mut task_objects);
-                            pending_tasks.push(s.spawn(move || {
-                                let mut layout_resolver =
-                                    executor.type_layout_resolver(Box::new(type_layout_store));
-                                let mut total_storage_rebate = 0;
-                                let mut total_sui = 0;
-                                for object in task_objects {
-                                    total_storage_rebate += object.storage_rebate;
-                                    // get_total_sui includes storage rebate, however all storage rebate is
-                                    // also stored in the storage fund, so we need to subtract it here.
-                                    total_sui +=
-                                        object.get_total_sui(layout_resolver.as_mut()).unwrap()
-                                            - object.storage_rebate;
-                                }
-                                if count % 50_000_000 == 0 {
-                                    info!("Processed {} objects", count);
-                                }
-                                (total_sui, total_storage_rebate)
-                            }));
-                        }
-                    }
-                    LiveObject::Wrapped(_) => {
-                        unreachable!("Explicitly asked to not include wrapped tombstones")
-                    }
+        let mut total_sui = 0;
+        let mut total_storage_rebate = 0;
+        // let (mut total_sui, mut total_storage_rebate) = thread::scope(|s| {
+        // let pending_tasks = FuturesUnordered::new();
+        for o in self.iter_live_object_set(false) {
+            match o {
+                LiveObject::Normal(object) => {
+                    size += object.object_size_for_gas_metering();
+                    count += 1;
+                    // pending_objects.push(object);
+                    // if count % 1_000_000 == 0 {
+                    //     let mut task_objects = vec![];
+                    //     mem::swap(&mut pending_objects, &mut task_objects);
+                    //     pending_tasks.push(s.spawn(move || {
+                    let mut layout_resolver =
+                        executor.type_layout_resolver(Box::new(type_layout_store));
+                    // for object in task_objects {
+                    total_storage_rebate += object.storage_rebate;
+                    // get_total_sui includes storage rebate, however all storage rebate is
+                    // also stored in the storage fund, so we need to subtract it here.
+                    let gts = object.get_total_sui(layout_resolver.as_mut()).unwrap();
+                    info!("Object {count}: {:?}, total_sui: {gts}", object.id());
+                    total_sui += object.get_total_sui(layout_resolver.as_mut()).unwrap()
+                        - object.storage_rebate;
+                    // }
+                    // if count % 50_000_000 == 0 {
+                    //     info!("Processed {} objects", count);
+                    // }
+                    // (total_sui, total_storage_rebate)
+                    // }));
+                }
+                // }
+                LiveObject::Wrapped(_) => {
+                    unreachable!("Explicitly asked to not include wrapped tombstones")
                 }
             }
-            pending_tasks.into_iter().fold((0, 0), |init, result| {
-                let result = result.join().unwrap();
-                (init.0 + result.0, init.1 + result.1)
-            })
-        });
-        let mut layout_resolver = executor.type_layout_resolver(Box::new(type_layout_store));
-        for object in pending_objects {
-            total_storage_rebate += object.storage_rebate;
-            total_sui +=
-                object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
         }
+        // pending_tasks.into_iter().fold((0, 0), |init, result| {
+        //     let result = result.join().unwrap();
+        //     (init.0 + result.0, init.1 + result.1)
+        // })
+        // });
+        let mut layout_resolver = executor.type_layout_resolver(Box::new(type_layout_store));
+        // for object in pending_objects {
+        //     total_storage_rebate += object.storage_rebate;
+        //     total_sui +=
+        //         object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
+        // }
         info!(
             "Scanned {} live objects, took {:?}",
             count,

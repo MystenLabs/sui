@@ -441,18 +441,21 @@ mod test {
         let max_deferral_rounds;
         {
             let mut rng = thread_rng();
-            mode = if rng.gen_bool(0.5) {
-                PerObjectCongestionControlMode::TotalGasBudget
-            } else {
-                PerObjectCongestionControlMode::TotalTxCount
-            };
+            // mode = if rng.gen_bool(0.5) {
+            //     PerObjectCongestionControlMode::TotalGasBudget
+            // } else {
+            //     PerObjectCongestionControlMode::TotalTxCount
+            // };
             checkpoint_budget_factor = rng.gen_range(1..20);
-            txn_count_limit = rng.gen_range(1..=10);
-            max_deferral_rounds = if rng.gen_bool(0.5) {
-                rng.gen_range(0..20) // Short deferral round (testing cancellation)
-            } else {
-                rng.gen_range(1000..10000) // Large deferral round (testing liveness)
-            }
+            // txn_count_limit = rng.gen_range(1..=10);
+            // max_deferral_rounds = if rng.gen_bool(0.5) {
+            //     rng.gen_range(0..20) // Short deferral round (testing cancellation)
+            // } else {
+            //     rng.gen_range(1000..10000) // Large deferral round (testing liveness)
+            // }
+            mode = PerObjectCongestionControlMode::TotalTxCount;
+            txn_count_limit = 1;
+            max_deferral_rounds = 0;
         }
 
         info!(
@@ -486,10 +489,11 @@ mod test {
         {
             let mut rng = thread_rng();
             simulated_load_config.shared_counter_weight = if rng.gen_bool(0.5) { 5 } else { 50 };
-            simulated_load_config.num_shared_counters = match rng.gen_range(0..=2) {
-                0 => None, // shared_counter_hotness_factor is in play in this case.
-                n => Some(n),
-            };
+            // simulated_load_config.num_shared_counters = match rng.gen_range(0..=2) {
+            //     0 => None, // shared_counter_hotness_factor is in play in this case.
+            //     n => Some(n),
+            // };
+            simulated_load_config.num_shared_counters = Some(1);
             simulated_load_config.shared_counter_hotness_factor = rng.gen_range(50..=100);
 
             // Use shared_counter_max_tip to make transactions to have different gas prices.
@@ -509,8 +513,109 @@ mod test {
             config
         });
 
-        let test_cluster = build_test_cluster(4, 30_000).await;
-        test_simulated_load(test_cluster, 120).await;
+        let test_cluster: Arc<TestCluster> = init_test_cluster_builder(2, 30_000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                // Disable system overload checks for the test - during tests with crashes,
+                // it is possible for overload protection to trigger due to validators
+                // having queued certs which are missing dependencies.
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_submit_delay_step_override_millis(3000)
+            .build()
+            .await
+            .into();
+
+        let sender = test_cluster.get_address_0();
+        let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+        let genesis = test_cluster.swarm.config().genesis.clone();
+        let primary_gas = test_cluster
+            .wallet
+            .get_one_gas_object_owned_by_address(sender)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let ed25519_keypair =
+            Arc::new(get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap());
+        let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
+
+        let registry = prometheus::Registry::new();
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
+            Arc::new(LocalValidatorAggregatorProxy::from_genesis(&genesis, &registry, None).await);
+
+        let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
+        let system_state_observer = {
+            let mut system_state_observer = SystemStateObserver::new(proxy.clone());
+            if let Ok(_) = system_state_observer.state.changed().await {
+                info!("Got the new state (reference gas price and/or protocol config) from system state object");
+            }
+            Arc::new(system_state_observer)
+        };
+
+        // The default test parameters are somewhat conservative in order to keep the running time
+        // of the test reasonable in CI.
+        let config = SimulatedLoadConfig::default();
+        let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
+        let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
+        let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
+        let batch_payment_size = get_var("SIM_BATCH_PAYMENT_SIZE", 15);
+        let shared_counter_weight = config.shared_counter_weight;
+        let transfer_object_weight = config.transfer_object_weight;
+        let num_transfer_accounts = config.num_transfer_accounts;
+        let delegation_weight = config.delegation_weight;
+        let batch_payment_weight = config.batch_payment_weight;
+        let shared_object_deletion_weight = config.shared_deletion_weight;
+
+        // Run random payloads at 100% load
+        let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
+        let duration = Interval::from_str("unbounded").unwrap();
+
+        // TODO: re-enable this when we figure out why it is causing connection errors and making
+        // TODO: move adversarial cfg to TestSimulatedLoadConfig once enabled.
+        // tests run for ever
+        let adversarial_weight = 0;
+
+        let shared_counter_hotness_factor = config.shared_counter_hotness_factor;
+        let num_shared_counters = config.num_shared_counters;
+        let shared_counter_max_tip = if config.use_shared_counter_max_tip {
+            config.shared_counter_max_tip
+        } else {
+            0
+        };
+        let gas_request_chunk_size = 100;
+
+        let test_duration = Duration::from_secs(40);
+
+        let surfer_task = tokio::spawn(async move {
+            // now do a sui-surfer test
+            let mut test_packages_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            test_packages_dir.extend(["..", "..", "crates", "sui-surfer", "tests", "random"]);
+            let test_package_paths: Vec<PathBuf> = std::fs::read_dir(test_packages_dir)
+                .unwrap()
+                .flat_map(|entry| {
+                    let entry = entry.unwrap();
+                    entry.metadata().unwrap().is_dir().then_some(entry.path())
+                })
+                .collect();
+            info!("using sui_surfer test packages: {test_package_paths:?}");
+
+            let surf_strategy = SurfStrategy::new(Duration::from_millis(40000000000));
+            let results = sui_surfer::run_with_test_cluster_and_strategy(
+                surf_strategy,
+                test_duration,
+                test_package_paths,
+                test_cluster,
+                4, // skip first account for use by bench_task
+            )
+            .await;
+            info!("sui_surfer test complete with results: {results:?}");
+            assert!(results.num_successful_transactions > 0);
+            assert!(!results.unique_move_functions_called.is_empty());
+        });
+
+        let _ = futures::join!(surfer_task);
     }
 
     #[sim_test(config = "test_config()")]

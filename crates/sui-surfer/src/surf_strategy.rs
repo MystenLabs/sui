@@ -40,7 +40,8 @@ impl SurfStrategy {
         state: &mut SurferState,
         mut entry_functions: Vec<EntryFunction>,
     ) {
-        entry_functions.shuffle(&mut state.rng);
+        // entry_functions.shuffle(&mut state.rng);
+        // entry_functions.reverse();
         for entry in entry_functions {
             let next_tx_time = Instant::now() + self.min_tx_interval;
             let Some(args) = Self::choose_function_call_args(state, entry.parameters).await else {

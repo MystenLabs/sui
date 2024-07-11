@@ -366,7 +366,7 @@ mod checked {
         advance_epoch_gas_summary: Option<(u64, u64)>,
     ) -> Result<(), ExecutionError> {
         let mut result: std::result::Result<(), sui_types::error::ExecutionError> = Ok(());
-        if !is_genesis_tx && !Mode::skip_conservation_checks() {
+        if !is_genesis_tx {
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
             let conservation_result = {
                 temporary_store

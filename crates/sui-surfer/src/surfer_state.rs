@@ -195,6 +195,17 @@ impl SurferState {
             function,
             effects.status()
         );
+        if matches!(
+            effects.status(),
+            sui_json_rpc_types::SuiExecutionStatus::Failure {
+                ref error
+            } if error == "ExecutionCancelledDueToRandomnessUnavailable"
+        ) {
+            info!(
+                "Logging additional effects info for RandomnessUnavailable tx cancellation: {:#?}",
+                effects
+            );
+        }
         self.stats.record_transaction(
             use_shared_object,
             effects.status().is_ok(),
