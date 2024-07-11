@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 53;
+const MAX_PROTOCOL_VERSION: u64 = 52;
 
 // Record history of protocol version allocations here:
 //
@@ -157,7 +157,7 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             Enable Mysticeti on mainnet.
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus on mainnet.
 //             Turn on count based shared object congestion control in devnet.
-// Version 53: Enable consensus commit prologue V3 in testnet.
+//             Enable consensus commit prologue V3 in testnet.
 //             Enable enums on testnet.
 //             Add support for passkey in devnet.
 //             Enable deny list v2 on testnet and mainnet.
@@ -2490,8 +2490,7 @@ impl ProtocolConfig {
                     // Enable checkpoint batching on mainnet.
                     cfg.checkpoint_summary_version_specific_data = Some(1);
                     cfg.min_checkpoint_interval_ms = Some(200);
-                }
-                53 => {
+
                     // Enable consensus commit prologue V3 in testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags
