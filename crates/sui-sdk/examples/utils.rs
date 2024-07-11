@@ -40,6 +40,7 @@ struct FaucetResponse {
 
 pub const SUI_FAUCET: &str = "https://faucet.testnet.sui.io/v1/gas"; // testnet faucet
 
+// if you use the sui-test-validator and use the local network; if it does not work, try with port 5003.
 // const SUI_FAUCET: &str = "http://127.0.0.1:9123/gas";
 
 /// Return a sui client to interact with the APIs,

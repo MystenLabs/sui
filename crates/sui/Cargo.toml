@@ -7,55 +7,45 @@ publish = false
 edition = "2021"
 
 [dependencies]
+json_to_table.workspace = true
+tabled.workspace = true
 anemo.workspace = true
 anyhow.workspace = true
-async-recursion.workspace = true
-async-trait.workspace = true
-axum.workspace = true
-bcs.workspace = true
-bin-version.workspace = true
-bip32.workspace = true
-camino.workspace = true
-clap.workspace = true
-datatest-stable.workspace = true
-futures.workspace = true
-http.workspace = true
-im.workspace = true
-inquire.workspace = true
-insta.workspace = true
-json_to_table.workspace = true
-miette.workspace = true
-num-bigint.workspace = true
-prometheus.workspace = true
-rand.workspace = true
-regex.workspace = true
-reqwest.workspace = true
-rusoto_core.workspace = true
-rusoto_kms.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
-serde.workspace = true
-shlex.workspace = true
 signature.workspace = true
-tabled.workspace = true
-tap.workspace = true
-thiserror.workspace = true
+camino.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tower.workspace = true
-tower-http.workspace = true
+async-trait.workspace = true
 tracing.workspace = true
-diesel.workspace = true
-uuid.workspace = true
+bcs.workspace = true
+clap.workspace = true
+bip32.workspace = true
+rand.workspace = true
+tap.workspace = true
 url.workspace = true
+inquire.workspace = true
+rusoto_core.workspace = true
+rusoto_kms.workspace = true
+prometheus.workspace = true
+bin-version.workspace = true
+num-bigint.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+im.workspace = true
+async-recursion.workspace = true
+thiserror.workspace = true
+miette.workspace = true
+datatest-stable.workspace = true
+insta.workspace = true
+shlex.workspace = true
+futures.workspace = true
 
 sui-config.workspace = true
 sui-bridge.workspace = true
-sui-cluster-test.workspace = true
 sui-execution = { path = "../../sui-execution" }
-sui-faucet.workspace = true
 sui-swarm-config.workspace = true
-sui-graphql-rpc = {workspace = true, optional = true}
-sui-indexer = { workspace = true, optional = true }
 sui-genesis-builder.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true
@@ -72,7 +62,6 @@ shared-crypto.workspace = true
 sui-replay.workspace = true
 sui-transaction-builder.workspace = true
 move-binary-format.workspace = true
-test-cluster.workspace = true
 
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
@@ -131,4 +120,3 @@ gas-profiler = [
     "sui-types/gas-profiler",
     "sui-execution/gas-profiler",
 ]
-indexer = ["dep:sui-indexer", "dep:sui-graphql-rpc"]

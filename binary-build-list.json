@@ -4,11 +4,11 @@
         "sui-node",
         "sui-tool",
         "sui-faucet",
+        "sui-test-validator",
         "sui-data-ingestion",
         "sui-bridge",
         "sui-bridge-cli",
         "sui-graphql-rpc",
-        "sui-test-validator",
         "move-analyzer"
     ],
     "internal_binaries": [

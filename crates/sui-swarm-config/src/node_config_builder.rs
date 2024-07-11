@@ -273,7 +273,6 @@ pub struct FullnodeConfigBuilder {
     run_with_range: Option<RunWithRange>,
     policy_config: Option<PolicyConfig>,
     fw_config: Option<RemoteFirewallConfig>,
-    data_ingestion_dir: Option<PathBuf>,
 }
 
 impl FullnodeConfigBuilder {
@@ -381,11 +380,6 @@ impl FullnodeConfigBuilder {
         self
     }
 
-    pub fn with_data_ingestion_dir(mut self, path: Option<PathBuf>) -> Self {
-        self.data_ingestion_dir = path;
-        self
-    }
-
     pub fn build<R: rand::RngCore + rand::CryptoRng>(
         self,
         rng: &mut R,
@@ -449,11 +443,6 @@ impl FullnodeConfigBuilder {
             format!("{}:{}", ip, rpc_port).parse().unwrap()
         });
 
-        let checkpoint_executor_config = CheckpointExecutorConfig {
-            data_ingestion_dir: self.data_ingestion_dir,
-            ..Default::default()
-        };
-
         NodeConfig {
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator_config.key_pair),
             account_key_pair: KeyPairWithPath::new(validator_config.account_key_pair),
@@ -488,7 +477,7 @@ impl FullnodeConfigBuilder {
             authority_store_pruning_config: AuthorityStorePruningConfig::default(),
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
-            checkpoint_executor_config,
+            checkpoint_executor_config: Default::default(),
             metrics: None,
             supported_protocol_versions: self.supported_protocol_versions,
             db_checkpoint_config: self.db_checkpoint_config.unwrap_or_default(),

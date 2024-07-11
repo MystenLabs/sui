@@ -14,8 +14,6 @@ use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildCo
 use serde_json::json;
 use sui::client_ptb::ptb::PTB;
 use sui::key_identity::{get_identity_address, KeyIdentity};
-#[cfg(feature = "indexer")]
-use sui::sui_commands::IndexerFeatureArgs;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
@@ -68,14 +66,8 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
     // Start network without authorities
     let start = SuiCommand::Start {
-        config_dir: Some(config),
-        force_regenesis: false,
-        with_faucet: None,
-        fullnode_rpc_port: 9000,
-        epoch_duration_ms: None,
+        config: Some(config),
         no_full_node: false,
-        #[cfg(feature = "indexer")]
-        indexer_feature_args: IndexerFeatureArgs::for_testing(),
     }
     .execute()
     .await;
