@@ -23,6 +23,7 @@ CREATE TABLE tx_input_objects (
     object_id                   BYTEA        NOT NULL,
     PRIMARY KEY(object_id, tx_sequence_number, cp_sequence_number)
 );
+CREATE INDEX tx_input_objects_tx_sequence_number_index ON tx_input_objects (tx_sequence_number);
 
 CREATE TABLE tx_changed_objects (
     cp_sequence_number          BIGINT       NOT NULL,
@@ -31,6 +32,7 @@ CREATE TABLE tx_changed_objects (
     object_id                   BYTEA        NOT NULL,
     PRIMARY KEY(object_id, tx_sequence_number, cp_sequence_number)
 );
+CREATE INDEX tx_changed_objects_tx_sequence_number_index ON tx_changed_objects (tx_sequence_number);
 
 CREATE TABLE tx_calls (
     cp_sequence_number          BIGINT       NOT NULL,
@@ -52,3 +54,4 @@ CREATE TABLE tx_digests (
     cp_sequence_number          BIGINT       NOT NULL,
     tx_sequence_number          BIGINT       NOT NULL
 );
+CREATE INDEX tx_digests_tx_sequence_number ON tx_digests (tx_sequence_number);
