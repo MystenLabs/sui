@@ -129,14 +129,14 @@ function SharedGame({
   const tx = useTransactions()!!;
 
   const { id, board, turn, x, o } = game;
-  const [mark, curr, next] = turn % 2 == 0 ? [Mark.X, x, o] : [Mark.O, o, x];
+  const [mark, curr, next] = turn % 2 === 0 ? [Mark.X, x, o] : [Mark.O, o, x];
 
   // If it's the current account's turn, then empty cells should show
   // the current player's mark on hover. Otherwise show nothing, and
   // disable interactivity.
   const player = whoseTurn({ curr, next, addr: account?.address });
   const winner = whoWon({ curr, next, addr: account?.address, turn, trophy });
-  const empty = Turn.Yours == player && trophy === Trophy.None ? mark : Mark._;
+  const empty = Turn.Yours === player && trophy === Trophy.None ? mark : Mark._;
 
   const onMove = (row: number, col: number) => {
     signAndExecute({ tx: tx.placeMark(game, row, col) }, () => {
@@ -231,14 +231,14 @@ function OwnedGame({
   }
 
   const { id, board, turn, x, o } = game;
-  const [mark, curr, next] = turn % 2 == 0 ? [Mark.X, x, o] : [Mark.O, o, x];
+  const [mark, curr, next] = turn % 2 === 0 ? [Mark.X, x, o] : [Mark.O, o, x];
 
   // If it's the current account's turn, then empty cells should show
   // the current player's mark on hover. Otherwise show nothing, and
   // disable interactivity.
   const player = whoseTurn({ curr, next, addr: account?.address });
   const winner = whoWon({ curr, next, addr: account?.address, turn, trophy });
-  const empty = Turn.Yours == player && trophy === Trophy.None ? mark : Mark._;
+  const empty = Turn.Yours === player && trophy === Trophy.None ? mark : Mark._;
 
   const onMove = (row: number, col: number) => {
     signAndExecute(
@@ -337,7 +337,7 @@ function whoWon({
   curr,
   next,
   addr,
-  turn: turn,
+  turn,
   trophy,
 }: {
   curr: string;
@@ -360,7 +360,7 @@ function whoWon({
         return Winner.You;
       } else if (addr === curr) {
         return Winner.Them;
-      } else if (turn % 2 == 0) {
+      } else if (turn % 2 === 0) {
         return Winner.O;
       } else {
         return Winner.X;

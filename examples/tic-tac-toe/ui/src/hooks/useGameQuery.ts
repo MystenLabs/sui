@@ -70,7 +70,7 @@ export function useGameQuery(
   );
 
   // Wait for the query to succeed before doing any further work.
-  if (response.status != "success") {
+  if (response.status !== "success") {
     return [response as UseGameQueryResult, invalidate];
   }
 
@@ -87,7 +87,7 @@ export function useGameQuery(
     !type ||
     !(mType = type.match(reType)) ||
     !content ||
-    content.dataType != "moveObject"
+    content.dataType !== "moveObject"
   ) {
     return [toError(response, "Object is not a Game"), invalidate];
   }
