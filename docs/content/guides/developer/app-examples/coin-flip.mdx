@@ -2,33 +2,53 @@
 title: Coin Flip
 ---
 
-This guide demonstrates writing a module (smart contract) in Move, deploying it on Devnet, and adding a TypeScript frontend to communicate with the module.
+This example walks you through building a coin flip dApp, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. This coin flip dApp utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
 
-Satoshi Coin Flip is a dApp that utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
+The guide is split into two parts:
 
-This guide assumes you have [installed Sui](../getting-started/sui-install.mdx) and understand Sui fundamentals.
+1. [Smart Contracts](#smart-contracts): The Move code that sets up the coin flip logic.
+1. [Frontend](#frontend): A UI that enables the players to place bets and take profits, and the admin to manage the house. 
 
-## Backend
+:::tip Additional resources
 
-As with all Sui dApps, a Move package on chain powers the logic of Satoshi Coin Flip. The following instruction walks you through creating and publishing the module.
+The source code for the smart contracts and frontend can be found here: 
+- [Move package repository](https://github.com/MystenLabs/satoshi-coin-flip)
+- [Frontend repository](https://github.com/sui-foundation/satoshi-coin-flip-frontend-example)
+
+:::
+
+## What the guide teaches
+
+- **Shared objects:** The guide teaches you how to use [shared objects](concepts/object-ownership/shared.mdx), in this case to create a globally accessible `HouseData` object.
+- **One-time Witnesses:** The guide teaches you how to use [one-time witnesses](concepts/sui-move-concepts.mdx#one-time-witness) to ensure only a single instance of the `HouseData` object ever exists.
+- **Asserts:** The guide teaches you how to use [asserts](https://move-book.com/move-basics/assert-and-abort.html?highlight=asserts#assert) to abort functions due to certain conditions not being met.
+- **Address-owned objects:** The guide teaches you how to use [address-owned objects](concepts/object-ownership/address-owned.mdx) when necessary.
+- **Events:** The guide teaches you how to emit [events](concepts/events.mdx)[events] in your contracts which can be used to track off-chain.
+- **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics/storage-fund.mdx#incentives).
+- **MEV attack protection:** The guide introduces you to [MEV attacks](https://github.com/MystenLabs/satoshi-coin-flip?tab=readme-ov-file#mev-attack-resistant-single-player-satoshi-smart-contract-flow), how to make your contracts MEV-resistant, and the trade-offs between protection and user experience.
+
+
+## What you need
+
+Before getting started, make sure you have:
+
+- [Installed the latest version of Sui](../getting-started/sui-install.mdx).
+
+## Smart contracts {#smart-contracts}
+
+In this part of the guide, you write the Move contracts that manage the house and set up the coin flip logic. The first step is to [set up a Move package](../first-app/write-package.mdx) for storing your Move modules.
+
+:::info
+
+To follow along with this guide, set your new Move package to `satoshi_flip`.
+
+:::
 
 ### House module
 
 This example uses several modules to create a package for the Satoshi Coin Flip game. The first module is `house_data.move`. You need to store the game’s data somewhere, and in this module you create a [shared object](concepts/object-ownership/shared.mdx) for all house data.
 
-:::info
-
-The full source code for the Move modules, including comments and on overview of its cryptography, is available at the [Satoshi Coin Flip repository](https://github.com/MystenLabs/satoshi-coin-flip).
-
-:::
-
-Before you get started, you must initialize a Move package. Open a terminal or console in the directory you want to store the example and run the following command to create an empty package with the name `satoshi_flip`:
-
-```shell
-sui move new satoshi_flip
-```
-
-With that done, it's time to jump into some code. Create a new file in the `sources` directory with the name `house_data.move` and populate the file with the following code:
+Create a new file in the `sources` directory with the name `house_data.move` and populate the file with the following code:
 
 ```move title='house_data.move'
 module satoshi_flip::house_data {
@@ -573,21 +593,79 @@ The rest of the functions are accessors and helper functions used to retrieve va
 }
 ```
 
+## Finished package
+
 This represents a basic example of a coin flip backend in Move. The game module, `single_player_satoshi`, is prone to MEV attacks, but the user experience for the player is streamlined. Another example game module, `mev_attack_resistant_single_player_satoshi`, exists that is MEV-resistant, but has a slightly downgraded user experience (two player-transactions per game).
 
 You can read more about both versions of the game, and view the full source code for all the modules in the [Satoshi Coin Flip repository](https://github.com/MystenLabs/satoshi-coin-flip).
 
 Now that you have written our contracts, it's time to deploy them.
 
-## Deployment
+### Deployment {#deployment}
 
 {@include: ../../../snippets/initialize-sui-client-cli.mdx}
 
+Next, configure the Sui CLI to use `testnet` as the active environment, as well. If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
+
+```bash
+sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
+```
+
+Run the following command to activate the `testnet` environment:
+
+```bash
+sui client switch --env testnet
+```
+
 {@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
 
-The package should successfully deploy. Now, it's time to create a frontend that can interact with it.
+The output of this command contains a `packageID` value that you need to save to use the package.
 
-## Frontend
+Partial snippet of CLI deployment output.
+
+```bash
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Object Changes                                                                                   │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Created Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0x7530c33e4cf3345236601d69303e3fab84efc294194a810dc1cfea13c009e77f                  │
+│  │ Sender: 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654                    │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 ) │
+│  │ ObjectType: 0x2::package::UpgradeCap                                                          │
+│  │ Version: 47482286                                                                             │
+│  │ Digest: 5aEez7HkJ82Xs5ZArPHJF6Ty38UtprsCvEiyy22hBVRE                                          │
+│  └──                                                                                             │
+│ Mutated Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0x0fcc6d770d80aa409a9645e78ac4810be6400919ac7f507bddd2f9d279da509f                  │
+│  │ Sender: 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654                    │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 ) │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                    │
+│  │ Version: 47482286                                                                             │
+│  │ Digest: A6TH6ja5TM4S6nZBwB14AB17ZgixCijYX1aNMGHF3syv                                          │
+│  └──                                                                                             │
+│ Published Objects:                                                                               │
+│  ┌──                                                                                             │
+│  │ PackageID: 0x7b6a8f5782e57cd948dc75ee098b73046a79282183d51eefb83d31ec95c312aa                 │
+│  │ Version: 1                                                                                    │
+│  │ Digest: FKAZc1cmQ9FUYudDQBjZPTb1uXDnekKRUbAALuVnwURC                                          │
+│  │ Modules: counter                                                                              │
+│  └──                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+Store the `PackageID` value you receive in your own response to [connect to your frontend](#connecting-your-package).
+
+### Next steps
+
+Well done. You have written and deployed the Move package! 🚀
+
+To turn this into a complete dApp, you need to [create a frontend](#frontend).
+
+## Frontend {#frontend}
+
+In this final part of the app example, you build a frontend (UI) that allows end users to place bets and take profits, and let's the admin manage the house.
 
 :::info
 
