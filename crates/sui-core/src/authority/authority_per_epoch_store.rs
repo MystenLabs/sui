@@ -2775,15 +2775,18 @@ impl AuthorityPerEpochStore {
             self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
 
             // Generate pending checkpoint for user tx with randomness.
-            // Note if randomness is not generated for this commit, we will skip the
-            // checkpoint with the associated height. Therefore checkpoint heights may
-            // not be contiguous.
+            // - If randomness is not generated for this commit, we will skip the
+            //   checkpoint with the associated height. Therefore checkpoint heights may
+            //   not be contiguous.
+            // - Exception: if DKG fails, we always need to write out a PendingCheckpoint
+            //   for randomness tx that are canceled.
             if let Some(randomness_round) = randomness_round {
                 randomness_roots.insert(TransactionKey::RandomnessRound(
                     self.epoch(),
                     randomness_round,
                 ));
-
+            }
+            if randomness_round.is_some() || (dkg_failed && !randomness_roots.is_empty()) {
                 let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
                     roots: randomness_roots.into_iter().collect(),
                     details: PendingCheckpointInfo {

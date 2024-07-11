@@ -3021,6 +3021,8 @@ impl InputObjects {
             .any(|obj| obj.is_deleted_shared_object())
     }
 
+    // Returns IDs of objects responsible for a tranaction being cancelled, and the corresponding
+    // reason for cancellation.
     pub fn get_cancelled_objects(&self) -> Option<(Vec<ObjectID>, SequenceNumber)> {
         let mut contains_cancelled = false;
         let mut cancel_reason = None;
