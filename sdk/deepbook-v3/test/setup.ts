@@ -2,22 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
-import type {
+import {
 	DevInspectResults,
 	SuiObjectChangePublished,
 	SuiTransactionBlockResponse,
-} from '@mysten/sui/client';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { Transaction } from '@mysten/sui/transactions';
+	getFullnodeUrl,
+	SuiClient
+} from '../../typescript/src/client/index.js';
+import {
+	FaucetRateLimitError,
+	getFaucetHost,
+	requestSuiFromFaucetV0
+} from '../../typescript/src/faucet';
+import { Ed25519Keypair } from '../../typescript/src/keypairs/ed25519';
+import { Transaction } from '../../typescript/src/transactions';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
 
 
-const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
-const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
-const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
+const DEFAULT_FAUCET_URL = process.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
+const DEFAULT_FULLNODE_URL = process.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
+const SUI_BIN = process.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
 export const DEFAULT_TICK_SIZE = 1n;
 export const DEFAULT_LOT_SIZE = 1n;
