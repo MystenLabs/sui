@@ -167,23 +167,10 @@ impl Interpreter {
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> VMResult<Vec<Value>> {
-        let mut locals = Locals::new(function.local_count());
-        for (i, value) in args.into_iter().enumerate() {
-            locals
-                .store_loc(
-                    i,
-                    value,
-                    loader
-                        .vm_config()
-                        .enable_invariant_violation_check_in_swap_loc,
-                )
-                .map_err(|e| self.set_location(e))?;
-        }
+        let locals = Locals::new_from(args, function.local_count());
 
         let link_context = data_store.link_context();
-        let mut current_frame = self
-            .make_new_frame(function, ty_args, locals)
-            .map_err(|err| self.set_location(err))?;
+        let mut current_frame = self.make_new_frame(function, ty_args, locals);
         loop {
             let resolver = current_frame.resolver(link_context, loader);
             let exit_code = current_frame //self
@@ -240,7 +227,7 @@ impl Interpreter {
                         continue;
                     }
                     let frame = self
-                        .make_call_frame(loader, func, vec![])
+                        .make_call_frame(func, vec![])
                         .map_err(|e| self.set_location(e))
                         .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
                     self.call_stack.push(current_frame).map_err(|frame| {
@@ -283,7 +270,7 @@ impl Interpreter {
                         continue;
                     }
                     let frame = self
-                        .make_call_frame(loader, func, ty_args)
+                        .make_call_frame(func, ty_args)
                         .map_err(|e| self.set_location(e))
                         .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
                     self.call_stack.push(current_frame).map_err(|frame| {
@@ -304,39 +291,26 @@ impl Interpreter {
     /// function are incorrectly attributed to the caller.
     fn make_call_frame(
         &mut self,
-        loader: &Loader,
         func: Arc<Function>,
         ty_args: Vec<Type>,
     ) -> PartialVMResult<Frame> {
-        let mut locals = Locals::new(func.local_count());
-        let arg_count = func.arg_count();
-        for i in 0..arg_count {
-            locals.store_loc(
-                arg_count - i - 1,
-                self.operand_stack.pop()?,
-                loader
-                    .vm_config()
-                    .enable_invariant_violation_check_in_swap_loc,
-            )?;
-        }
-        self.make_new_frame(func, ty_args, locals)
+        // The values are on the stack, in order.
+        let args = self.operand_stack.popn(func.arg_count() as u16)?;
+        let locals = Locals::new_from(args, func.local_count());
+        Ok(self.make_new_frame(func, ty_args, locals))
     }
 
     /// Create a new `Frame` given a `Function` and the function `Locals`.
     ///
     /// The locals must be loaded before calling this.
-    fn make_new_frame(
-        &self,
-        function: Arc<Function>,
-        ty_args: Vec<Type>,
-        locals: Locals,
-    ) -> PartialVMResult<Frame> {
-        Ok(Frame {
+    #[inline]
+    fn make_new_frame(&self, function: Arc<Function>, ty_args: Vec<Type>, locals: Locals) -> Frame {
+        Frame {
             pc: 0,
             locals,
             function,
             ty_args,
-        })
+        }
     }
 
     /// Call a native functions.

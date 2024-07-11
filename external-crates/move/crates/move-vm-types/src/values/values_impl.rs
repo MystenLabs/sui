@@ -1205,10 +1205,22 @@ impl SignerRef {
  *
  **************************************************************************************/
 impl Locals {
-    pub fn new(n: usize) -> Self {
-        Self(Rc::new(RefCell::new(
-            iter::repeat_with(|| ValueImpl::Invalid).take(n).collect(),
-        )))
+    // Legacy -- will be deprecated.
+    pub fn new(size: usize) -> Self {
+        Locals::new_from(vec![], size)
+    }
+
+    /// Creates a new Locals set from a set of parameter values and a total size.
+    /// - `params` is initial params, **in order** (ordered `0, 1, ..., n`).
+    /// - `size` is total size, which should include `params` size.
+    pub fn new_from(params: Vec<Value>, size: usize) -> Self {
+        let invalids_len = size - params.len();
+        let local_values = params
+            .into_iter()
+            .map(|v| v.0)
+            .chain(iter::repeat_with(|| ValueImpl::Invalid).take(invalids_len))
+            .collect();
+        Self(Rc::new(RefCell::new(local_values)))
     }
 
     pub fn copy_loc(&self, idx: usize) -> PartialVMResult<Value> {
@@ -1227,6 +1239,7 @@ impl Locals {
         }
     }
 
+    #[inline]
     fn swap_loc(&mut self, idx: usize, x: Value, violation_check: bool) -> PartialVMResult<Value> {
         let mut v = self.0.borrow_mut();
         match v.get_mut(idx) {
