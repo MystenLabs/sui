@@ -144,7 +144,7 @@ export class DeepBookClient {
 	}
 
 	/// DeepBook
-	placeLimitOrder(params: PlaceLimitOrderParams) {
+	placeLimitOrder(params: PlaceLimitOrderParams, tx: Transaction = new Transaction()) {
 		const {
 			poolKey,
 			managerKey,
@@ -176,6 +176,7 @@ export class DeepBookClient {
 			orderType,
 			selfMatchingOption,
 			payWithDeep,
+			tx,
 		)
 	}
 
