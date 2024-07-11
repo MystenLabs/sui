@@ -37,7 +37,7 @@
 	},
 	"dependencies": {
 		"@mysten/sui": "workspace:*",
-		"turbo": "2.0.6"
+		"turbo": "^2.0.6"
 	},
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
