@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::connection::ScanConnection;
 use crate::error::Error;
 use crate::{context_data::db_data_provider::PgManager, data::Db};
 
@@ -15,9 +16,7 @@ use super::move_value::MoveValue;
 use super::object::{Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
 use super::owner::OwnerImpl;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
-use super::transaction_block::{
-    self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
-};
+use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use super::{
     big_int::BigInt, epoch::Epoch, move_object::MoveObject, object, sui_address::SuiAddress,
@@ -223,7 +222,7 @@ impl StakedSui {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<TransactionBlockConnection> {
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         ObjectImpl(&self.super_.super_)
             .received_transaction_blocks(ctx, first, after, last, before, filter, scan_limit)
             .await

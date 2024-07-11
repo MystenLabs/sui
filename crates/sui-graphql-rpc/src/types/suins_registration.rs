@@ -20,12 +20,11 @@ use super::{
     stake::StakedSui,
     string_input::impl_string_input,
     sui_address::SuiAddress,
-    transaction_block::{
-        self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
-    },
+    transaction_block::{self, TransactionBlock, TransactionBlockFilter},
     type_filter::ExactTypeFilter,
 };
 use crate::{
+    connection::ScanConnection,
     consistency::{build_objects_query, View},
     data::{Db, DbConnection, QueryExecutor},
     error::Error,
@@ -260,7 +259,7 @@ impl SuinsRegistration {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<TransactionBlockConnection> {
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         ObjectImpl(&self.super_.super_)
             .received_transaction_blocks(ctx, first, after, last, before, filter, scan_limit)
             .await

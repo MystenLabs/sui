@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::connection::ScanConnection;
+
 use super::{
     balance::{self, Balance},
     coin::Coin,
@@ -11,9 +13,7 @@ use super::{
     stake::StakedSui,
     sui_address::SuiAddress,
     suins_registration::{DomainFormat, SuinsRegistration},
-    transaction_block::{
-        self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
-    },
+    transaction_block::{self, TransactionBlock, TransactionBlockFilter},
     type_filter::ExactTypeFilter,
 };
 use async_graphql::{connection::Connection, *};
@@ -159,7 +159,7 @@ impl Address {
         relation: Option<AddressTransactionBlockRelationship>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<TransactionBlockConnection> {
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         use AddressTransactionBlockRelationship as R;
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?
             .with_scan_limit(scan_limit);
@@ -176,7 +176,7 @@ impl Address {
                 ..Default::default()
             },
         }) else {
-            return Ok(TransactionBlockConnection::new(false, false));
+            return Ok(ScanConnection::new(false, false));
         };
 
         TransactionBlock::paginate(ctx, page, filter, self.checkpoint_viewed_at, scan_limit)

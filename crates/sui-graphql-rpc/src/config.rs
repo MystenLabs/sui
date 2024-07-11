@@ -357,7 +357,7 @@ impl ServiceConfig {
         self.limits.max_move_value_depth
     }
 
-    /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter``.
+    /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
     async fn max_transaction_ids(&self) -> u32 {
         self.limits.max_transaction_ids
     }

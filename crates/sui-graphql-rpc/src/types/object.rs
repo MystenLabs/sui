@@ -18,10 +18,11 @@ use super::move_package::MovePackage;
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
+use super::transaction_block;
 use super::transaction_block::TransactionBlockFilter;
-use super::transaction_block::{self, TransactionBlockConnection};
 use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
+use crate::connection::ScanConnection;
 use crate::consistency::{build_objects_query, Checkpointed, View};
 use crate::data::package_resolver::PackageResolver;
 use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
@@ -242,7 +243,7 @@ pub(crate) struct HistoricalObjectCursor {
         arg(name = "before", ty = "Option<transaction_block::Cursor>"),
         arg(name = "filter", ty = "Option<TransactionBlockFilter>"),
         arg(name = "scan_limit", ty = "Option<u64>"),
-        ty = "TransactionBlockConnection",
+        ty = "ScanConnection<String, TransactionBlock>",
         desc = "The transaction blocks that sent objects to this object."
     ),
     field(
@@ -446,7 +447,7 @@ impl Object {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<TransactionBlockConnection> {
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         ObjectImpl(self)
             .received_transaction_blocks(ctx, first, after, last, before, filter, scan_limit)
             .await
@@ -607,7 +608,7 @@ impl ObjectImpl<'_> {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<TransactionBlockConnection> {
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?
             .with_scan_limit(scan_limit);
 
@@ -618,7 +619,7 @@ impl ObjectImpl<'_> {
                 ..Default::default()
             })
         else {
-            return Ok(TransactionBlockConnection::new(false, false));
+            return Ok(ScanConnection::new(false, false));
         };
 
         TransactionBlock::paginate(ctx, page, filter, self.0.checkpoint_viewed_at, scan_limit)

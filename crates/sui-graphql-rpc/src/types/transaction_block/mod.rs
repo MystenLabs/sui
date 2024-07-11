@@ -27,7 +27,7 @@ use tx_lookups::{subqueries, TxBounds};
 
 use crate::{
     config::ServiceConfig,
-    connection::Connection,
+    connection::ScanConnection,
     data::{self, DataLoader, Db, DbConnection, QueryExecutor},
     error::Error,
     server::watermark_task::Watermark,
@@ -48,8 +48,6 @@ use super::{
 mod filter;
 mod tx_cursor;
 mod tx_lookups;
-
-pub(crate) type TransactionBlockConnection = Connection<String, TransactionBlock>;
 
 /// Wraps the actual transaction block data with the checkpoint sequence number at which the data
 /// was viewed, for consistent results on paginating through and resolving nested types.
@@ -273,9 +271,9 @@ impl TransactionBlock {
         filter: TransactionBlockFilter,
         checkpoint_viewed_at: u64,
         scan_limit: Option<u64>,
-    ) -> Result<Connection<String, TransactionBlock>, Error> {
+    ) -> Result<ScanConnection<String, TransactionBlock>, Error> {
         if filter.is_empty() {
-            return Ok(Connection::new(false, false));
+            return Ok(ScanConnection::new(false, false));
         }
 
         // If there is more than one `complex_filter` specified, then the caller has provided some
@@ -289,10 +287,10 @@ impl TransactionBlock {
         }
 
         let limits = ctx.data_unchecked::<ServiceConfig>().limits;
-        if let Some(tx_ids) = filter.transaction_ids.as_ref() {
+        if let Some(tx_ids) = &filter.transaction_ids {
             if tx_ids.len() > limits.max_transaction_ids as usize {
                 return Err(Error::Client(format!(
-                    "Transaction ids exceed max limit of {}",
+                    "Transaction IDs exceed max limit of '{}'",
                     limits.max_transaction_ids
                 )));
             }
@@ -364,7 +362,7 @@ impl TransactionBlock {
             })
             .await?;
 
-        let mut conn = Connection::new(prev, next);
+        let mut conn = ScanConnection::new(prev, next);
 
         let Some(tx_bounds) = tx_bounds else {
             return Ok(conn);
@@ -380,6 +378,7 @@ impl TransactionBlock {
             conn.edges.push(Edge::new(cursor, transaction));
         }
 
+        //
         if scan_limit.is_some() {
             if !prev {
                 conn.has_previous_page = tx_bounds.scan_has_prev_page();

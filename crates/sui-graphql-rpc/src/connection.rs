@@ -10,7 +10,7 @@ use async_graphql::connection::{
 };
 use async_graphql::{Object, ObjectType, OutputType, TypeName};
 
-pub(crate) struct Connection<
+pub(crate) struct ScanConnection<
     Cursor,
     Node,
     EdgeFields = EmptyFields,
@@ -37,7 +37,7 @@ pub(crate) struct Connection<
 
 #[Object(name_type)]
 impl<Cursor, Node, EdgeFields, Name, EdgeName>
-    Connection<Cursor, Node, EdgeFields, Name, EdgeName, EnableNodesField>
+    ScanConnection<Cursor, Node, EdgeFields, Name, EdgeName, EnableNodesField>
 where
     Cursor: CursorType + Send + Sync,
     Node: OutputType,
@@ -76,7 +76,7 @@ where
 }
 
 impl<Cursor, Node, NodesField, EdgeFields, Name, EdgeName>
-    Connection<Cursor, Node, EdgeFields, Name, EdgeName, NodesField>
+    ScanConnection<Cursor, Node, EdgeFields, Name, EdgeName, NodesField>
 where
     Cursor: CursorType + Send + Sync,
     Node: OutputType,
@@ -88,7 +88,7 @@ where
     /// Create a new connection.
     #[inline]
     pub fn new(has_previous_page: bool, has_next_page: bool) -> Self {
-        Connection {
+        ScanConnection {
             _mark1: PhantomData,
             _mark2: PhantomData,
             _mark3: PhantomData,
@@ -102,7 +102,7 @@ where
 }
 
 impl<Cursor, Node, EdgeFields, Name, EdgeName, NodesField> TypeName
-    for Connection<Cursor, Node, EdgeFields, Name, EdgeName, NodesField>
+    for ScanConnection<Cursor, Node, EdgeFields, Name, EdgeName, NodesField>
 where
     Cursor: CursorType + Send + Sync,
     Node: OutputType,

@@ -3,7 +3,7 @@
 
 use crate::{
     data::{Conn, DbConnection},
-    filter, inner_join, max_option, min_option, query,
+    filter, inner_join, query,
     raw_query::RawQuery,
     types::{
         cursor::Page,
@@ -77,12 +77,12 @@ impl TxBounds {
         scan_limit: Option<u64>,
         page: &Page<Cursor>,
     ) -> Result<Option<Self>, diesel::result::Error> {
-        let lo_cp = max_option!(after_cp.map(|x| x.saturating_add(1)), at_cp).unwrap_or(0);
-        let hi_cp = min_option!(
+        let lo_cp = max_option([after_cp.map(|x| x.saturating_add(1)), at_cp]).unwrap_or(0);
+        let hi_cp = min_option([
             before_cp.map(|x| x.saturating_sub(1)),
             at_cp,
-            Some(checkpoint_viewed_at)
-        )
+            Some(checkpoint_viewed_at),
+        ])
         .unwrap();
         let from_db: StoredTxBounds =
             conn.result(move || tx_bounds_query(lo_cp, hi_cp).into_boxed())?;
@@ -90,8 +90,8 @@ impl TxBounds {
         let lo = from_db.lo as u64;
         let hi = from_db.hi as u64;
 
-        if page.after().map_or(false, |x| x.tx_sequence_number >= hi)
-            || page.before().map_or(false, |x| x.tx_sequence_number <= lo)
+        if page.after().is_some_and(|x| x.tx_sequence_number >= hi)
+            || page.before().is_some_and(|x| x.tx_sequence_number <= lo)
         {
             return Ok(None);
         }
@@ -111,16 +111,16 @@ impl TxBounds {
     /// adjusted to the larger of the two. The resulting value is additionally modified by the
     /// `scan_limit` if `is_from_front` is false.
     pub(crate) fn scan_lo(&self) -> u64 {
-        let adjusted_lo = self.after.map_or(self.lo, |a| std::cmp::max(self.lo, a));
+        let adjusted_lo = max_option([self.after, Some(self.lo)]).unwrap();
 
         if self.is_from_front {
             adjusted_lo
         } else {
-            std::cmp::max(
-                adjusted_lo,
-                self.scan_hi()
-                    .saturating_sub(self.scan_limit.unwrap_or(self.hi)),
-            )
+            if let Some(scan_limit) = self.scan_limit {
+                adjusted_lo.max(self.scan_hi().saturating_sub(scan_limit))
+            } else {
+                adjusted_lo
+            }
         }
     }
 
@@ -174,8 +174,8 @@ impl TransactionBlockFilter {
             self.input_object.is_some(),
             self.changed_object.is_some(),
         ]
-        .iter()
-        .filter(|&is_set| *is_set)
+        .into_iter()
+        .filter(|is_set| *is_set)
         .count()
     }
 
@@ -249,23 +249,13 @@ pub(crate) fn tx_bounds_query(lo_cp: u64, hi_cp: u64) -> RawQuery {
 }
 
 /// Determines the maximum value in an arbitrary number of Option<u64>.
-#[macro_export]
-macro_rules! max_option {
-    ($($x:expr),+ $(,)?) => {{
-        [$($x),*].iter()
-            .filter_map(|&x| x)
-            .max()
-    }};
+fn max_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
+    xs.into_iter().flatten().max()
 }
 
 /// Determines the minimum value in an arbitrary number of Option<u64>.
-#[macro_export]
-macro_rules! min_option {
-    ($($x:expr),+ $(,)?) => {{
-        [$($x),*].iter()
-            .filter_map(|&x| x)
-            .min()
-    }};
+fn min_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
+    xs.into_iter().flatten().min()
 }
 
 /// Constructs a `RawQuery` as a join over all relevant side tables, filtered on their own filter
@@ -313,11 +303,9 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
         subqueries.push((select_ids(txs, tx_bounds), "tx_digests"));
     }
 
-    if subqueries.is_empty() {
+    let Some((mut subquery, _)) = subqueries.pop() else {
         return None;
-    }
-
-    let mut subquery = subqueries.pop().unwrap().0;
+    };
 
     if !subqueries.is_empty() {
         subquery = query!("SELECT tx_sequence_number FROM ({}) AS initial", subquery);

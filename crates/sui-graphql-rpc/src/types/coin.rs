@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::connection::ScanConnection;
 use crate::consistency::{build_objects_query, View};
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
@@ -21,9 +22,7 @@ use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
-use super::transaction_block::{
-    self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
-};
+use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use async_graphql::*;
 
@@ -215,7 +214,7 @@ impl Coin {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<TransactionBlockConnection> {
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         ObjectImpl(&self.super_.super_)
             .received_transaction_blocks(ctx, first, after, last, before, filter, scan_limit)
             .await

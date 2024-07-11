@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use crate::connection::ScanConnection;
 use crate::context_data::db_data_provider::{convert_to_validators, PgManager};
 use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
@@ -14,9 +15,7 @@ use super::cursor::Page;
 use super::date_time::DateTime;
 use super::protocol_config::ProtocolConfigs;
 use super::system_state_summary::SystemStateSummary;
-use super::transaction_block::{
-    self, TransactionBlock, TransactionBlockConnection, TransactionBlockFilter,
-};
+use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::dataloader::Loader;
@@ -248,7 +247,7 @@ impl Epoch {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<TransactionBlockConnection> {
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?
             .with_scan_limit(scan_limit);
 
@@ -263,7 +262,7 @@ impl Epoch {
                 ..Default::default()
             })
         else {
-            return Ok(TransactionBlockConnection::new(false, false));
+            return Ok(ScanConnection::new(false, false));
         };
 
         TransactionBlock::paginate(ctx, page, filter, self.checkpoint_viewed_at, scan_limit)

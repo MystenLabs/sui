@@ -179,7 +179,7 @@ macro_rules! or_filter {
     }};
 }
 
-/// Accepts two `Rawquery` instances and a third expression consisting of which columns to join on.
+/// Accepts two `RawQuery` instances and a third expression consisting of which columns to join on.
 #[macro_export]
 macro_rules! inner_join {
     ($lhs:expr, $alias:expr => $rhs_query:expr, using: [$using:expr $(, $more_using:expr)*]) => {{

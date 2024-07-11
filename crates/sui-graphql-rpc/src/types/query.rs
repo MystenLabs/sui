@@ -13,7 +13,6 @@ use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
 use super::suins_registration::NameService;
-use super::transaction_block::TransactionBlockConnection;
 use super::{
     address::Address,
     available_range::AvailableRange,
@@ -36,6 +35,7 @@ use super::{
     transaction_metadata::TransactionMetadata,
     type_filter::ExactTypeFilter,
 };
+use crate::connection::ScanConnection;
 use crate::server::watermark_task::Watermark;
 use crate::types::base64::Base64 as GraphQLBase64;
 use crate::types::zklogin_verify_signature::verify_zklogin_signature;
@@ -327,7 +327,7 @@ impl Query {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
-    ) -> Result<TransactionBlockConnection> {
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?
