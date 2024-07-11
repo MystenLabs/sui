@@ -129,7 +129,6 @@ pub fn check_coin_deny_list_v2_during_execution(
     cur_epoch: EpochId,
     object_store: &dyn ObjectStore,
 ) -> DenyListResult {
-    let mut num_non_gas_coin_owners = 0;
     let mut new_coin_owners = BTreeMap::new();
     for obj in written_objects.values() {
         if obj.is_gas_coin() {
@@ -145,8 +144,8 @@ pub fn check_coin_deny_list_v2_during_execution(
             .entry(coin_type.to_canonical_string(false))
             .or_insert_with(BTreeSet::new)
             .insert(owner);
-        num_non_gas_coin_owners += 1;
     }
+    let num_non_gas_coin_owners = new_coin_owners.iter().map(|(_, v)| v.len() as u64).sum();
     let new_regulated_coin_owners = new_coin_owners
         .into_iter()
         .filter_map(|(coin_type, owners)| {
