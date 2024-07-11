@@ -821,6 +821,76 @@ importers:
         specifier: ^5.5.3
         version: 5.5.3
 
+  examples/tic-tac-toe/ui:
+    dependencies:
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../../sdk/dapp-kit
+      '@mysten/sui':
+        specifier: workspace:*
+        version: link:../../../sdk/typescript
+      '@radix-ui/colors':
+        specifier: ^3.0.0
+        version: 3.0.0
+      '@radix-ui/react-icons':
+        specifier: ^1.3.0
+        version: 1.3.0(react@18.3.1)
+      '@radix-ui/themes':
+        specifier: ^3.1.1
+        version: 3.1.1(@types/react-dom@18.3.0)(@types/react@18.3.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tanstack/react-query':
+        specifier: ^5.50.1
+        version: 5.50.1(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      react-hot-toast:
+        specifier: ^2.4.1
+        version: 2.4.1(csstype@3.1.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+    devDependencies:
+      '@tanstack/react-query-devtools':
+        specifier: ^5.0.0
+        version: 5.51.1(@tanstack/react-query@5.50.1(react@18.3.1))(react@18.3.1)
+      '@types/react':
+        specifier: ^18.3.3
+        version: 18.3.3
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.0
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^6.1.0
+        version: 6.1.0(@typescript-eslint/parser@6.1.0(eslint@8.45.0)(typescript@5.5.3))(eslint@8.45.0)(typescript@5.5.3)
+      '@typescript-eslint/parser':
+        specifier: ^6.1.0
+        version: 6.1.0(eslint@8.45.0)(typescript@5.5.3)
+      '@vitejs/plugin-react-swc':
+        specifier: ^3.7.0
+        version: 3.7.0(@swc/helpers@0.5.5)(vite@5.3.3(@types/node@20.14.10)(sass@1.77.6)(terser@5.31.1))
+      eslint:
+        specifier: ^8.45.0
+        version: 8.45.0
+      eslint-plugin-react-hooks:
+        specifier: ^4.6.2
+        version: 4.6.2(eslint@8.45.0)
+      eslint-plugin-react-refresh:
+        specifier: ^0.4.7
+        version: 0.4.7(eslint@8.45.0)
+      prettier:
+        specifier: ^3.3.2
+        version: 3.3.2
+      typescript:
+        specifier: ^5.5.3
+        version: 5.5.3
+      vite:
+        specifier: ^5.3.3
+        version: 5.3.3(@types/node@20.14.10)(sass@1.77.6)(terser@5.31.1)
+      vite-tsconfig-paths:
+        specifier: ^4.3.2
+        version: 4.3.2(typescript@5.5.3)(vite@5.3.3(@types/node@20.14.10)(sass@1.77.6)(terser@5.31.1))
+
   examples/trading/api:
     dependencies:
       '@mysten/sui':
@@ -6114,8 +6184,17 @@ packages:
   '@tanstack/query-core@5.50.1':
     resolution: {integrity: sha512-lpfhKPrJlyV2DSVcQb/HuozH3Av3kws4ge22agx+lNGpFkS4vLZ7St0l3GLwlAD+bqB+qXGex3JdRKUNtMviEQ==}
 
+  '@tanstack/query-devtools@5.51.1':
+    resolution: {integrity: sha512-rehG0WmL3EXER6MAI2uHQia/n0b5c3ZROohpYm7u3G7yg4q+HsfQy6nuAo6uy40NzHUe3FmnfWCZQ0Vb/3lE6g==}
+
   '@tanstack/query-persist-client-core@4.29.25':
     resolution: {integrity: sha512-jC1JlZxUaO4bJdeN0GcLwnNIbtsdzkL54hZP1rjTbp2tzfEHNQFkMjaIMZtnsxgdrU9LclXz8loOd1ufQ6C44w==}
+
+  '@tanstack/react-query-devtools@5.51.1':
+    resolution: {integrity: sha512-bRShIVKGpUOHpwziGKT8Aq1Ty0lIlGmNI7E0KbGYtmyOaImErpdElTdxfES1bRaI7i/j+mf2hLy+E6q7SrCwPg==}
+    peerDependencies:
+      '@tanstack/react-query': ^5.51.1
+      react: ^18 || ^19
 
   '@tanstack/react-query-persist-client@4.29.25':
     resolution: {integrity: sha512-Vm4E+iPZ7rPGfN0jhsK35vZ5EUFvKyE3Kg0uthlqmqmy2rzm43f1EIFpA1++j0dWST/swIOj3pfiSBxJ/6s5zA==}
@@ -16847,7 +16926,7 @@ snapshots:
       '@graphql-tools/utils': 10.0.13(graphql@16.9.0)
       auto-bind: 4.0.0
       graphql: 16.9.0
-      tslib: 2.6.2
+      tslib: 2.6.3
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -16938,7 +17017,7 @@ snapshots:
       graphql: 16.9.0
       graphql-tag: 2.12.6(graphql@16.9.0)
       parse-filepath: 1.0.2
-      tslib: 2.6.2
+      tslib: 2.6.3
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -16975,7 +17054,7 @@ snapshots:
       '@graphql-tools/utils': 10.0.13(graphql@16.9.0)
       dataloader: 2.2.2
       graphql: 16.9.0
-      tslib: 2.6.2
+      tslib: 2.6.3
       value-or-promise: 1.0.12
 
   '@graphql-tools/code-file-loader@8.1.0(graphql@16.9.0)':
@@ -16997,13 +17076,13 @@ snapshots:
       '@graphql-tools/utils': 10.0.13(graphql@16.9.0)
       dataloader: 2.2.2
       graphql: 16.9.0
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   '@graphql-tools/documents@1.0.0(graphql@16.9.0)':
     dependencies:
       graphql: 16.9.0
       lodash.sortby: 4.7.0
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   '@graphql-tools/executor-graphql-ws@1.1.0(graphql@16.9.0)':
     dependencies:
@@ -17012,7 +17091,7 @@ snapshots:
       graphql: 16.9.0
       graphql-ws: 5.14.3(graphql@16.9.0)
       isomorphic-ws: 5.0.0(ws@8.18.0)
-      tslib: 2.6.2
+      tslib: 2.6.3
       ws: 8.18.0
     transitivePeerDependencies:
       - bufferutil
@@ -17026,7 +17105,7 @@ snapshots:
       extract-files: 11.0.0
       graphql: 16.9.0
       meros: 1.3.0(@types/node@20.14.10)
-      tslib: 2.6.2
+      tslib: 2.6.3
       value-or-promise: 1.0.12
     transitivePeerDependencies:
       - '@types/node'
@@ -17037,7 +17116,7 @@ snapshots:
       '@types/ws': 8.5.10
       graphql: 16.9.0
       isomorphic-ws: 5.0.0(ws@8.18.0)
-      tslib: 2.6.2
+      tslib: 2.6.3
       ws: 8.18.0
     transitivePeerDependencies:
       - bufferutil
@@ -17049,7 +17128,7 @@ snapshots:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.9.0)
       '@repeaterjs/repeater': 3.0.5
       graphql: 16.9.0
-      tslib: 2.6.2
+      tslib: 2.6.3
       value-or-promise: 1.0.12
 
   '@graphql-tools/git-loader@8.0.4(graphql@16.9.0)':
@@ -17097,7 +17176,7 @@ snapshots:
       '@babel/types': 7.23.9
       '@graphql-tools/utils': 10.0.13(graphql@16.9.0)
       graphql: 16.9.0
-      tslib: 2.6.2
+      tslib: 2.6.3
     transitivePeerDependencies:
       - supports-color
 
@@ -17106,7 +17185,7 @@ snapshots:
       '@graphql-tools/utils': 10.0.13(graphql@16.9.0)
       graphql: 16.9.0
       resolve-from: 5.0.0
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   '@graphql-tools/json-file-loader@8.0.0(graphql@16.9.0)':
     dependencies:
@@ -17133,7 +17212,7 @@ snapshots:
   '@graphql-tools/optimize@2.0.0(graphql@16.9.0)':
     dependencies:
       graphql: 16.9.0
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   '@graphql-tools/prisma-loader@8.0.2(@types/node@20.14.10)(graphql@16.9.0)':
     dependencies:
@@ -17168,7 +17247,7 @@ snapshots:
       '@ardatan/relay-compiler': 12.0.0(graphql@16.9.0)
       '@graphql-tools/utils': 10.0.13(graphql@16.9.0)
       graphql: 16.9.0
-      tslib: 2.6.2
+      tslib: 2.6.3
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -17188,7 +17267,7 @@ snapshots:
       '@graphql-tools/merge': 9.0.1(graphql@16.9.0)
       '@graphql-tools/utils': 10.0.13(graphql@16.9.0)
       graphql: 16.9.0
-      tslib: 2.6.2
+      tslib: 2.6.3
       value-or-promise: 1.0.12
 
   '@graphql-tools/url-loader@8.0.1(@types/node@20.14.10)(graphql@16.9.0)':
@@ -17235,7 +17314,7 @@ snapshots:
       '@graphql-tools/schema': 10.0.2(graphql@16.9.0)
       '@graphql-tools/utils': 10.0.13(graphql@16.9.0)
       graphql: 16.9.0
-      tslib: 2.6.2
+      tslib: 2.6.3
       value-or-promise: 1.0.12
 
   '@graphql-typed-document-node/core@3.2.0(graphql@16.9.0)':
@@ -17908,18 +17987,18 @@ snapshots:
     dependencies:
       asn1js: 3.0.5
       pvtsutils: 1.3.5
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   '@peculiar/json-schema@1.1.12':
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   '@peculiar/webcrypto@1.4.5':
     dependencies:
       '@peculiar/asn1-schema': 2.3.8
       '@peculiar/json-schema': 1.1.12
       pvtsutils: 1.3.5
-      tslib: 2.6.2
+      tslib: 2.6.3
       webcrypto-core: 1.7.8
 
   '@phenomnomnominal/tsquery@3.0.0(typescript@3.9.10)':
@@ -20296,9 +20375,17 @@ snapshots:
 
   '@tanstack/query-core@5.50.1': {}
 
+  '@tanstack/query-devtools@5.51.1': {}
+
   '@tanstack/query-persist-client-core@4.29.25':
     dependencies:
       '@tanstack/query-core': 4.29.25
+
+  '@tanstack/react-query-devtools@5.51.1(@tanstack/react-query@5.50.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@tanstack/query-devtools': 5.51.1
+      '@tanstack/react-query': 5.50.1(react@18.3.1)
+      react: 18.3.1
 
   '@tanstack/react-query-persist-client@4.29.25(@tanstack/react-query@5.50.1(react@18.3.1))':
     dependencies:
@@ -20849,7 +20936,7 @@ snapshots:
       '@typescript-eslint/utils': 6.1.0(eslint@8.45.0)(typescript@5.5.3)
       debug: 4.3.5(supports-color@8.1.1)
       eslint: 8.45.0
-      ts-api-utils: 1.0.1(typescript@5.5.3)
+      ts-api-utils: 1.3.0(typescript@5.5.3)
     optionalDependencies:
       typescript: 5.5.3
     transitivePeerDependencies:
@@ -20913,7 +21000,7 @@ snapshots:
       globby: 11.1.0
       is-glob: 4.0.3
       semver: 7.6.2
-      ts-api-utils: 1.0.1(typescript@5.5.3)
+      ts-api-utils: 1.3.0(typescript@5.5.3)
     optionalDependencies:
       typescript: 5.5.3
     transitivePeerDependencies:
@@ -20951,7 +21038,7 @@ snapshots:
 
   '@typescript-eslint/utils@5.33.1(eslint@8.45.0)(typescript@5.5.3)':
     dependencies:
-      '@types/json-schema': 7.0.14
+      '@types/json-schema': 7.0.15
       '@typescript-eslint/scope-manager': 5.33.1
       '@typescript-eslint/types': 5.33.1
       '@typescript-eslint/typescript-estree': 5.33.1(typescript@5.5.3)
@@ -21343,7 +21430,7 @@ snapshots:
       busboy: 1.6.0
       fast-querystring: 1.1.2
       fast-url-parser: 1.1.3
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   '@whatwg-node/node-fetch@0.5.5':
     dependencies:
@@ -21351,7 +21438,7 @@ snapshots:
       '@whatwg-node/events': 0.1.1
       busboy: 1.6.0
       fast-querystring: 1.1.2
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   '@xtuc/ieee754@1.2.0': {}
 
@@ -21702,7 +21789,7 @@ snapshots:
     dependencies:
       pvtsutils: 1.3.5
       pvutils: 1.1.3
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   assert-plus@1.0.0: {}
 
@@ -22105,7 +22192,7 @@ snapshots:
   camel-case@4.1.2:
     dependencies:
       pascal-case: 3.1.2
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   camelcase-css@2.0.1: {}
 
@@ -22120,7 +22207,7 @@ snapshots:
   capital-case@1.0.4:
     dependencies:
       no-case: 3.0.4
-      tslib: 2.6.2
+      tslib: 2.6.3
       upper-case-first: 2.0.2
 
   cardinal@2.1.1:
@@ -22192,7 +22279,7 @@ snapshots:
       path-case: 3.0.4
       sentence-case: 3.0.4
       snake-case: 3.0.4
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   character-entities-html4@2.1.0: {}
 
@@ -22519,7 +22606,7 @@ snapshots:
   constant-case@3.0.4:
     dependencies:
       no-case: 3.0.4
-      tslib: 2.6.2
+      tslib: 2.6.3
       upper-case: 2.0.2
 
   constants-browserify@1.0.0: {}
@@ -22609,7 +22696,7 @@ snapshots:
 
   cross-inspect@1.0.0:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   cross-spawn@5.1.0:
     dependencies:
@@ -23156,7 +23243,7 @@ snapshots:
   dot-case@3.0.4:
     dependencies:
       no-case: 3.0.4
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   dot-prop@5.3.0:
     dependencies:
@@ -24973,7 +25060,7 @@ snapshots:
   header-case@2.0.4:
     dependencies:
       capital-case: 1.0.4
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   headers-polyfill@4.0.3: {}
 
@@ -25343,7 +25430,7 @@ snapshots:
 
   is-lower-case@2.0.2:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   is-mergeable-object@1.1.1: {}
 
@@ -25455,7 +25542,7 @@ snapshots:
 
   is-upper-case@2.0.2:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   is-utf8@0.2.1: {}
 
@@ -25907,11 +25994,11 @@ snapshots:
 
   lower-case-first@2.0.2:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   lower-case@2.0.2:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   lowercase-keys@3.0.0: {}
 
@@ -26808,7 +26895,7 @@ snapshots:
   no-case@3.0.4:
     dependencies:
       lower-case: 2.0.2
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   node-abort-controller@3.1.1: {}
 
@@ -27133,7 +27220,7 @@ snapshots:
   param-case@3.0.4:
     dependencies:
       dot-case: 3.0.4
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   parent-module@1.0.1:
     dependencies:
@@ -27205,7 +27292,7 @@ snapshots:
   pascal-case@3.1.2:
     dependencies:
       no-case: 3.0.4
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   password-prompt@1.1.3:
     dependencies:
@@ -27217,7 +27304,7 @@ snapshots:
   path-case@3.0.4:
     dependencies:
       dot-case: 3.0.4
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   path-equal@1.2.5: {}
 
@@ -27817,7 +27904,7 @@ snapshots:
 
   pvtsutils@1.3.5:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   pvutils@1.1.3: {}
 
@@ -27980,9 +28067,9 @@ snapshots:
   react-remove-scroll@2.5.5(@types/react@18.3.3)(react@18.3.1):
     dependencies:
       react: 18.3.1
-      react-remove-scroll-bar: 2.3.4(@types/react@18.3.3)(react@18.3.1)
+      react-remove-scroll-bar: 2.3.6(@types/react@18.3.3)(react@18.3.1)
       react-style-singleton: 2.2.1(@types/react@18.3.3)(react@18.3.1)
-      tslib: 2.6.0
+      tslib: 2.6.3
       use-callback-ref: 1.3.0(@types/react@18.3.3)(react@18.3.1)
       use-sidecar: 1.1.2(@types/react@18.3.3)(react@18.3.1)
     optionalDependencies:
@@ -28553,7 +28640,7 @@ snapshots:
   sentence-case@3.0.4:
     dependencies:
       no-case: 3.0.4
-      tslib: 2.6.2
+      tslib: 2.6.3
       upper-case-first: 2.0.2
 
   serialize-javascript@6.0.2:
@@ -28789,7 +28876,7 @@ snapshots:
 
   sponge-case@1.0.1:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   sprintf-js@1.0.3: {}
 
@@ -29050,7 +29137,7 @@ snapshots:
 
   swap-case@2.0.2:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   swc-loader@0.2.6(@swc/core@1.6.13(@swc/helpers@0.5.5))(webpack@5.92.1(@swc/core@1.6.13(@swc/helpers@0.5.5))(webpack-cli@5.1.4(webpack@5.92.1))):
     dependencies:
@@ -29222,7 +29309,7 @@ snapshots:
 
   title-case@3.0.3:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   title@3.5.3:
     dependencies:
@@ -29748,15 +29835,15 @@ snapshots:
 
   upper-case-first@2.0.2:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   upper-case@2.0.2:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   uri-js@4.4.1:
     dependencies:
-      punycode: 2.3.0
+      punycode: 2.3.1
 
   url-parse@1.5.10:
     dependencies:
@@ -29775,7 +29862,7 @@ snapshots:
   use-callback-ref@1.3.0(@types/react@18.3.3)(react@18.3.1):
     dependencies:
       react: 18.3.1
-      tslib: 2.6.0
+      tslib: 2.6.3
     optionalDependencies:
       '@types/react': 18.3.3
 
@@ -29813,7 +29900,7 @@ snapshots:
     dependencies:
       detect-node-es: 1.1.0
       react: 18.3.1
-      tslib: 2.6.0
+      tslib: 2.6.3
     optionalDependencies:
       '@types/react': 18.3.3
 
@@ -30103,7 +30190,7 @@ snapshots:
       '@peculiar/json-schema': 1.1.12
       asn1js: 3.0.5
       pvtsutils: 1.3.5
-      tslib: 2.6.2
+      tslib: 2.6.3
 
   webextension-polyfill@0.10.0: {}
 
