@@ -63,17 +63,22 @@ const DEFAULT_FAUCET_MIST_AMOUNT: u64 = 200_000_000_000; // 200 SUI
 #[cfg(feature = "indexer")]
 #[derive(Args)]
 pub struct IndexerFeatureArgs {
-    /// Start an indexer with default host and port: 0.0.0.0:9124, or on the port provided.
+    /// Start an indexer with default host and port: 127.0.0.1:9124, or on the port provided.
     /// When providing a specific value, please use the = sign between the flag and value:
     /// `--with-indexer=6124`.
     /// The indexer will be started in writer mode and reader mode.
     #[clap(long,
+            default_value = "9124",
             default_missing_value = "9124",
             num_args = 0..=1,
             require_equals = true,
             value_name = "INDEXER_PORT"
         )]
     with_indexer: Option<u16>,
+
+    /// Set the indexer host. Default host is 127.0.0.1
+    #[clap(long, default_value = "127.0.0.1")]
+    indexer_host: String,
 
     /// Start a GraphQL server on localhost and port: 127.0.0.1:9125, or on the port provided.
     /// When providing a specific value, please use the = sign between the flag and value:
@@ -82,12 +87,17 @@ pub struct IndexerFeatureArgs {
     /// `--with-indexer` flag is not set.
     #[clap(
             long,
+            default_value = "9125",
             default_missing_value = "9125",
             num_args = 0..=1,
             require_equals = true,
             value_name = "GRAPHQL_PORT"
         )]
     with_graphql: Option<u16>,
+
+    /// Set the GraphQL host. Default host is 127.0.0.1
+    #[clap(long, default_value = "127.0.0.1")]
+    graphql_host: String,
 
     /// Port for the Indexer Postgres DB. Default port is 5432.
     #[clap(long, default_value = "5432")]
@@ -115,7 +125,9 @@ impl IndexerFeatureArgs {
     pub fn for_testing() -> Self {
         Self {
             with_indexer: None,
+            indexer_host: "127.0.0.1".to_string(),
             with_graphql: None,
+            graphql_host: "127.0.0.1".to_string(),
             pg_port: 5432,
             pg_host: "localhost".to_string(),
             pg_db_name: "sui_indexer".to_string(),
@@ -161,12 +173,17 @@ pub enum SuiCommand {
         /// `--with-faucet=6123`.
         #[clap(
             long,
+            default_value = "9123",
             default_missing_value = "9123",
             num_args = 0..=1,
             require_equals = true,
             value_name = "FAUCET_PORT"
         )]
         with_faucet: Option<u16>,
+
+        /// Set the faucet host. Default is 127.0.0.1.
+        #[clap(long, default_value = "127.0.0.1")]
+        faucet_host: String,
 
         #[cfg(feature = "indexer")]
         #[clap(flatten)]
@@ -345,6 +362,7 @@ impl SuiCommand {
                 fullnode_rpc_port,
                 no_full_node,
                 epoch_duration_ms,
+                faucet_host,
             } => {
                 start(
                     config_dir.clone(),
@@ -355,6 +373,7 @@ impl SuiCommand {
                     epoch_duration_ms,
                     fullnode_rpc_port,
                     no_full_node,
+                    faucet_host,
                 )
                 .await?;
 
@@ -539,6 +558,7 @@ async fn start(
     epoch_duration_ms: Option<u64>,
     fullnode_rpc_port: u16,
     no_full_node: bool,
+    faucet_host: String,
 ) -> Result<(), anyhow::Error> {
     if force_regenesis {
         ensure!(
@@ -556,6 +576,8 @@ async fn start(
         pg_db_name,
         pg_user,
         pg_password,
+        indexer_host,
+        graphql_host,
     } = indexer_feature_args;
 
     #[cfg(feature = "indexer")]
@@ -581,14 +603,14 @@ async fn start(
 
     #[cfg(feature = "indexer")]
     if let Some(indexer_rpc_port) = with_indexer {
-        tracing::info!("Starting the indexer service at 0.0.0.0:{indexer_rpc_port}");
+        tracing::info!("Starting the indexer service at {indexer_host}:{indexer_rpc_port}");
     }
     #[cfg(feature = "indexer")]
     if let Some(graphql_port) = with_graphql {
-        tracing::info!("Starting the GraphQL service at 127.0.0.1:{graphql_port}");
+        tracing::info!("Starting the GraphQL service at {graphql_host}:{graphql_port}");
     }
     if let Some(faucet_port) = with_faucet {
-        tracing::info!("Starting the faucet service at 127.0.0.1:{faucet_port}");
+        tracing::info!("Starting the faucet service at {faucet_host}:{faucet_port}");
     }
 
     let mut swarm_builder = Swarm::builder();
@@ -675,8 +697,8 @@ async fn start(
     let pg_address = format!("postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}");
 
     #[cfg(feature = "indexer")]
-    if with_indexer.is_some() {
-        let indexer_address = format!("0.0.0.0:{}", with_indexer.unwrap_or_default());
+    if let Some(port) = with_indexer {
+        let indexer_address = format!("{indexer_host}:{port}");
         // Start in writer mode
         start_test_indexer::<diesel::PgConnection>(
             Some(pg_address.clone()),
@@ -699,10 +721,10 @@ async fn start(
     }
 
     #[cfg(feature = "indexer")]
-    if with_graphql.is_some() {
+    if let Some(port) = with_graphql {
         let graphql_connection_config = ConnectionConfig::new(
-            Some(with_graphql.unwrap_or_default()),
-            None,
+            Some(port),
+            Some(graphql_host),
             Some(pg_address),
             None,
             None,
@@ -716,7 +738,8 @@ async fn start(
         .await;
         info!("GraphQL started");
     }
-    if with_faucet.is_some() {
+
+    if let Some(port) = with_faucet {
         let config_dir = if force_regenesis {
             tempdir()?.into_path()
         } else {
@@ -727,7 +750,7 @@ async fn start(
         };
 
         let config = FaucetConfig {
-            port: with_faucet.unwrap_or_default(),
+            port,
             num_coins: DEFAULT_FAUCET_NUM_COINS,
             amount: DEFAULT_FAUCET_MIST_AMOUNT,
             ..Default::default()
