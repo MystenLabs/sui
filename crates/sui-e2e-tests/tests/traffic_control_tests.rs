@@ -603,7 +603,7 @@ async fn test_traffic_sketch_with_slow_blocks() {
     assert!(metrics.num_requests < expected_requests + 200);
     // due to averaging, we will take 4 seconds to start blocking, then
     // will be in blocklist for 1 second (roughly)
-    assert!(metrics.num_blocked > (expected_requests / 4) - 1_000);
+    assert!(metrics.num_blocked as f64 > (expected_requests as f64 / 4.0) * 0.90);
     // 10 clients, blocked at least every 5 sceonds, over 20 seconds
     assert!(metrics.num_blocklist_adds >= 40);
     assert!(metrics.abs_time_to_first_block.unwrap() < Duration::from_secs(5));
