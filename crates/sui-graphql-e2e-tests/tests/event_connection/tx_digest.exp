@@ -1,0 +1,72 @@
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 10-26:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4795600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 28-28:
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'run'. lines 30-30:
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'create-checkpoint'. lines 32-32:
+Checkpoint created: 1
+
+task 5 'run-graphql'. lines 34-41:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "digest": "4U25VGAB2VkWrQVcYHmhcJ1auBMoR6wGJ1XkAVWThvRR"
+        },
+        {
+          "digest": "8f5zsvxPTNvfW9HoQReViqMC8aWKfwQvP2UFt2uWxQs3"
+        },
+        {
+          "digest": "5qVugAqZ6ANMTadHevvJaUyU2c65paKm1n6UGCJHTAbD"
+        },
+        {
+          "digest": "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"
+        }
+      ]
+    }
+  }
+}
+
+task 6 'run-graphql'. lines 43-50:
+Response: {
+  "data": {
+    "events": {
+      "nodes": []
+    }
+  }
+}
+
+task 7 'run-graphql'. lines 52-59:
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "json": {
+            "new_value": "2"
+          }
+        },
+        {
+          "json": {
+            "new_value": "3"
+          }
+        }
+      ]
+    }
+  }
+}
