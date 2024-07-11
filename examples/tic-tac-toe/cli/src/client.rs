@@ -40,7 +40,7 @@ use crate::{
 
 #[derive(Parser, Debug)]
 pub struct Connection {
-    /// The Sui CLI config directory, (default: ~/.sui/sui_config/client.yaml)
+    /// The Sui CLI config file, (default: ~/.sui/sui_config/client.yaml)
     #[clap(long)]
     config: Option<PathBuf>,
 
@@ -64,7 +64,10 @@ impl Client {
             default.extend([".sui", "sui_config", "client.yaml"]);
             Some(default)
         }) else {
-            bail!("Can't find Wallet config");
+            bail!(
+                "Cannot find wallet config. No config was supplied, and the default path \
+                 (~/.sui/sui_config/client.yaml) does not exist.",
+            );
         };
 
         let wallet = WalletContext::new(&config, None, None)?;
@@ -90,7 +93,7 @@ impl Client {
                 },
             )
             .await
-            .context("Error fetching game over RPC")?;
+            .context("Error fetching game over RPC.")?;
 
         if let Some(err) = response.error {
             bail!(err);
@@ -106,37 +109,37 @@ impl Client {
             ..
         }) = response.data
         else {
-            bail!("No data for game");
+            bail!("INTERNAL ERROR: No data for game.");
         };
 
         let Some(raw) = raw.try_as_move() else {
-            bail!("It is a package, not a object.");
+            bail!("It is a package, not an object.");
         };
 
         if raw.type_.name.as_str() != "Game" {
-            bail!("It is not a Game object, it has type {}", raw.type_);
+            bail!("It is not a Game object, it has type {}.", raw.type_);
         }
 
         let package = ObjectID::from(raw.type_.address);
         if package != self.package {
             bail!(
-                "It is expected to be from package {} but has type {}",
+                "It is expected to be from package {} but is from package {}.",
                 self.package,
-                raw.type_,
+                package,
             );
         }
 
         // (3) Deserialize contents
         let kind = match raw.type_.module.as_str() {
             "shared" => GameKind::Shared(
-                bcs::from_bytes(&raw.bcs_bytes).context("Failed to deserialize contents")?,
+                bcs::from_bytes(&raw.bcs_bytes).context("Failed to deserialize contents.")?,
             ),
 
             "owned" => GameKind::Owned(
-                bcs::from_bytes(&raw.bcs_bytes).context("Failed to deserialize contents")?,
+                bcs::from_bytes(&raw.bcs_bytes).context("Failed to deserialize contents.")?,
             ),
 
-            kind => bail!("{id} has unrecognised Game kind: {kind}"),
+            kind => bail!("{id} has unrecognised Game kind: {kind}."),
         };
 
         // (4) Check whether the game has ended or not.
@@ -175,7 +178,7 @@ impl Client {
                 }),
             )
             .await
-            .context("Error checking game winner")?;
+            .context("Error checking game winner.")?;
 
         fn extract_winner(results: &DevInspectResults) -> Option<Winner> {
             match *results
@@ -195,7 +198,7 @@ impl Client {
         }
 
         let Some(winner) = extract_winner(&results) else {
-            bail!("Error checking game winner");
+            bail!("Error checking game winner.");
         };
 
         Ok(Game {
@@ -232,7 +235,7 @@ impl Client {
                 .read_api()
                 .get_owned_objects(player, query.clone(), cursor, None)
                 .await
-                .context("Error fetching TurnCaps from RPC")?;
+                .context("Error fetching TurnCaps from RPC.")?;
 
             for SuiObjectResponse { data, error } in response.data {
                 if let Some(err) = error {
@@ -258,8 +261,8 @@ impl Client {
                     continue;
                 }
 
-                let turn_cap: TurnCap =
-                    bcs::from_bytes(&raw.bcs_bytes).context("Failed to deserialize TurnCap")?;
+                let turn_cap: TurnCap = bcs::from_bytes(&raw.bcs_bytes)
+                    .context("INTERNAL ERROR: Failed to deserialize TurnCap.")?;
 
                 if turn_cap.game == game_id {
                     return Ok((object_id, version, digest));
@@ -268,7 +271,7 @@ impl Client {
 
             cursor = response.next_cursor;
             if !response.has_next_page {
-                bail!("Could not find TurnCap");
+                bail!("Could not find TurnCap. Is it your turn?");
             }
         }
     }
@@ -310,7 +313,8 @@ impl Client {
         // this address once it is created.
         let admin_key = combine_keys(vec![player_key, opponent_key])?;
         let admin = SuiAddress::from(&admin_key);
-        let admin_bytes = bcs::to_bytes(&admin_key).context("Encoding admin key")?;
+        let admin_bytes =
+            bcs::to_bytes(&admin_key).context("INTERNAL ERROR: Failed to encode admin key.")?;
 
         let mut builder = ProgrammableTransactionBuilder::new();
         let x = builder.pure(player)?;
@@ -482,9 +486,9 @@ impl Client {
         } = self
             .execute_transaction(tx)
             .await
-            .context("Failed to send mark")?
+            .context("Failed to send mark.")?
         else {
-            bail!("Can't find Mark");
+            bail!("Can't find Mark.");
         };
 
         let Some(mark) = object_changes.into_iter().find_map(|change| {
@@ -546,8 +550,7 @@ impl Client {
         Ok(())
     }
 
-    /// Execute a PTB, expecting it to create a shared or owned Game, and return that Game's
-    /// ObjectID.
+    /// Execute a PTB, expecting it to create a shared or owned Game, and return its ObjectID.
     async fn execute_for_game(&self, data: TransactionData) -> Result<ObjectID> {
         let tx = self.wallet.sign_transaction(&data);
         let SuiTransactionBlockResponse {
@@ -641,10 +644,11 @@ impl Client {
 
         let budget = overhead + (net_used.max(0) as u64).max(computation);
 
-        let payment = self
+        let gas_coin = self
             .select_coins(sponsor.unwrap_or(sender), budget, &tx_kind)
             .await?;
 
+        let payment = vec![gas_coin];
         Ok(if let Some(sponsor) = sponsor {
             TransactionData::new_with_gas_coins_allow_sponsor(
                 tx_kind, sender, payment, budget, gas_price, sponsor,
@@ -673,10 +677,8 @@ impl Client {
         owner: SuiAddress,
         balance: u64,
         tx: &TransactionKind,
-    ) -> Result<Vec<ObjectRef>> {
-        let client = self.client().await?;
-        let coins = client.coin_read_api();
-        let exclude: Vec<_> = tx
+    ) -> Result<ObjectRef> {
+        let exclude = tx
             .input_objects()?
             .into_iter()
             .filter_map(|input| match input {
@@ -686,12 +688,12 @@ impl Client {
             })
             .collect();
 
-        Ok(coins
-            .select_coins(owner, None, balance as u128, exclude)
+        Ok(self
+            .wallet
+            .gas_for_owner_budget(owner, balance, exclude)
             .await?
-            .into_iter()
-            .map(|coin| coin.object_ref())
-            .collect())
+            .1
+            .object_ref())
     }
 
     /// Sign the transaction as `sender` by itself (as the sponsor) and as part of the multi-sig,

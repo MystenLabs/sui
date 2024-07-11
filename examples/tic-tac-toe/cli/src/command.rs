@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
 use sui_types::base_types::{ObjectID, SuiAddress};
 
@@ -22,7 +22,7 @@ pub enum Command {
         shared: bool,
 
         /// Use the multi-sig version of the game.
-        #[clap(long, short)]
+        #[clap(long, short, conflicts_with("shared"))]
         multi_sig: bool,
 
         /// For a shared game, this is the opponent's address. For a multi-sig game, it is their
@@ -39,11 +39,11 @@ pub enum Command {
         game: ObjectID,
 
         /// The row to place the move in.
-        #[clap(long, short)]
+        #[clap(long, short, value_parser = clap::value_parser!(u8).range(0..3))]
         row: u8,
 
         /// The column to place the move in.
-        #[clap(long, short)]
+        #[clap(long, short, value_parser = clap::value_parser!(u8).range(0..3))]
         col: u8,
 
         #[clap(flatten)]
@@ -61,7 +61,7 @@ pub enum Command {
 
     /// Delete a finished game.
     Delete {
-        /// ID of the game to view.
+        /// ID of the game to delete.
         game: ObjectID,
 
         #[clap(flatten)]
@@ -70,45 +70,19 @@ pub enum Command {
 }
 
 impl Command {
-    /// Ensure the parameters for the command are valid.
-    fn validate(&mut self) -> Result<()> {
+    pub async fn execute(self) -> Result<()> {
         match self {
             Command::New {
-                shared, multi_sig, ..
-            } => {
-                ensure!(
-                    !*shared || !*multi_sig,
-                    "Cannot specify both shared and multi-sig"
-                );
-                if !*shared && !*multi_sig {
-                    *shared = true;
-                }
-            }
-
-            Command::Move { row, col, .. } => {
-                ensure!(*row < 3, "Row must be between 0 and 2");
-                ensure!(*col < 3, "Column must be between 0 and 2");
-            }
-
-            Command::View { .. } => {}
-            Command::Delete { .. } => {}
-        }
-
-        Ok(())
-    }
-
-    pub async fn execute(mut self) -> Result<()> {
-        self.validate()?;
-        match self {
-            Command::New {
-                shared,
+                shared: _,
                 multi_sig,
                 opponent,
                 conn,
             } => {
                 let mut client = Client::new(conn)?;
 
-                let game = if shared {
+                let game = if !multi_sig
+                /* shared */
+                {
                     assert!(!multi_sig);
                     let opponent = SuiAddress::from_str(&opponent)
                         .with_context(|| format!("Invalid opponent address {opponent}"))?;
@@ -117,7 +91,6 @@ impl Command {
                         format!("Error starting new shared game against {opponent}")
                     })?
                 } else {
-                    assert!(multi_sig);
                     let opponent_key = public_key_from_base64(&opponent).with_context(|| {
                         format!("Failed to decode opponent public key: {opponent}")
                     })?;
