@@ -155,6 +155,12 @@ pub fn check_coin_deny_list_v2_during_execution(
         .collect::<BTreeMap<_, _>>();
     let result =
         check_new_regulated_coin_owners(new_regulated_coin_owners, cur_epoch, object_store);
+    // `num_non_gas_coin_owners` is used to charge for gas. As such we must be extremely careful
+    // to not use a number that is not consistent across all validators. For example, relying on
+    // the number of coins with a deny list is _not_ consistent since the deny list is created
+    // on the first addition to the deny list. But the total number of coins/owners denied would
+    // be consistent since we rely on the results from the last epoch (i.e. relying on the Config's
+    // internal invariants)
     DenyListResult {
         result,
         num_non_gas_coin_owners,
@@ -169,9 +175,7 @@ fn check_new_regulated_coin_owners(
     for (coin_type, (deny_list, owners)) in new_regulated_coin_owners {
         if check_global_pause(&deny_list, object_store, Some(cur_epoch)) {
             return Err(ExecutionError::new(
-                ExecutionErrorKind::CoinTypeGlobalPause {
-                    coin_type: coin_type.clone(),
-                },
+                ExecutionErrorKind::CoinTypeGlobalPause { coin_type },
                 None,
             ));
         }
