@@ -2058,8 +2058,7 @@ async fn diagnose_split_brain(
         .get_sui_committee_with_network_metadata();
     let network_config = default_mysten_network_config();
     let network_clients =
-        make_network_authority_clients_with_network_config(&committee, &network_config)
-            .expect("Failed to make authority clients from committee {committee}");
+        make_network_authority_clients_with_network_config(&committee, &network_config);
 
     // Query all disagreeing validators
     let response_futures = digest_to_validator
