@@ -74,6 +74,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         fullnode_rpc_port: 9000,
         epoch_duration_ms: None,
         no_full_node: false,
+        faucet_host: "127.0.0.1".to_string(),
         #[cfg(feature = "indexer")]
         indexer_feature_args: IndexerFeatureArgs::for_testing(),
     }
