@@ -106,18 +106,27 @@ impl TxBounds {
         )))
     }
 
+    pub(crate) fn tx_lo(&self) -> u64 {
+        max_option([self.after, Some(self.lo)]).unwrap()
+    }
+
+    pub(crate) fn tx_hi(&self) -> u64 {
+        min_option([self.before, Some(self.hi)]).unwrap()
+    }
+
     /// The lower bound `tx_sequence_number`` of the range to scan within. This defaults to the min
     /// tx_sequence_number of the checkpoint bound. If a cursor is provided, the lower bound is
     /// adjusted to the larger of the two. The resulting value is additionally modified by the
     /// `scan_limit` if `is_from_front` is false.
     pub(crate) fn scan_lo(&self) -> u64 {
-        let adjusted_lo = max_option([self.after, Some(self.lo)]).unwrap();
+        let adjusted_lo = self.tx_lo();
 
         if self.is_from_front {
             adjusted_lo
         } else {
+            // If not from the front, then the scan_limit must only be applied to the lower bound
             if let Some(scan_limit) = self.scan_limit {
-                adjusted_lo.max(self.scan_hi().saturating_sub(scan_limit))
+                adjusted_lo.max(self.tx_hi().saturating_sub(scan_limit))
             } else {
                 adjusted_lo
             }
@@ -129,14 +138,14 @@ impl TxBounds {
     /// adjusted to the smaller of the two. The resulting value is additionally modified by the
     /// `scan_limit` if `is_from_front` is true.
     pub(crate) fn scan_hi(&self) -> u64 {
-        let adjusted_hi = self.before.map_or(self.hi, |b| std::cmp::min(self.hi, b));
+        let adjusted_hi = self.tx_hi();
 
         if self.is_from_front {
-            std::cmp::min(
-                adjusted_hi,
-                self.scan_lo()
-                    .saturating_add(self.scan_limit.unwrap_or(adjusted_hi)),
-            )
+            if let Some(scan_limit) = self.scan_limit {
+                adjusted_hi.min(self.tx_lo().saturating_add(scan_limit))
+            } else {
+                adjusted_hi
+            }
         } else {
             adjusted_hi
         }
