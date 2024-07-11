@@ -44,16 +44,21 @@ jobs:
       - name: Install Rust
         run: rustup update stable
 
-      - name: Install cross-compilation tools
-        uses: taiki-e/setup-cross-toolchain-action@v1
-        with:
-          target: aarch64-unknown-linux-gnu
+      # - name: Install cross-compilation tools
+      #   uses: taiki-e/setup-cross-toolchain-action@v1
+      #   with:
+      #     target: aarch64-unknown-linux-gnu
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
     
       - name: Install nextest
         uses: taiki-e/install-action@nextest
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "10.0"  
 
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
