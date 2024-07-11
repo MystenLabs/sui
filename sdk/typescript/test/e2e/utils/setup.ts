@@ -153,7 +153,6 @@ export async function setupWithFundedAddress(
 		},
 	);
 
-	execSync(`${SUI_BIN} client --yes --client.config ${configPath}`, { encoding: 'utf-8' });
 	return new TestToolbox(keypair, rpcURL, configPath);
 }
 
