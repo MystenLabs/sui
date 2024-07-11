@@ -25,7 +25,7 @@ export const DEEP_SCALAR = 1000000;
 export class DeepBookConfig {
 	#coins: CoinMap = testnetCoins;
 	#pools: PoolMap = testnetPools;
-	#coinIds = new Map<CoinKey, string>();
+	#coinIds = new Map<string, string>();
 	#signer: Signer;
 	client: SuiClient;
 
@@ -196,6 +196,14 @@ export class DeepBookConfig {
 				coinId: null,
 			};
 		}
+	}
+
+	getCoinId(key: string) {
+		if (!this.#coinIds.has(key)) {
+			throw new Error(`Coin ID not initialized for key: ${key}`);
+		}
+
+		return this.#coinIds.get(key)!;
 	}
 
 	getPool(key: string) {

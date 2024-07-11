@@ -3,8 +3,8 @@
 
 import type { Coin, Pool } from '../types/index.js';
 
-export type CoinMap = Partial<Record<string, Coin>> & { SUI: Coin; DEEP: Coin };
-export type PoolMap = Partial<Record<string, Pool>> & { DEEP_SUI: Pool };
+export type CoinMap = Record<string, Coin>;
+export type PoolMap = Record<string, Pool>;
 export interface DeepbookPackageIds {
 	DEEPBOOK_PACKAGE_ID: string;
 	REGISTRY_ID: string;
@@ -80,30 +80,30 @@ export const mainnetCoins: CoinMap = {
 export const testnetPools: PoolMap = {
 	DEEP_SUI: {
 		address: `0x67800bae6808206915c7f09203a00031ce9ce8550008862dda3083191e3954ca`,
-		baseCoin: 'DEEP',
-		quoteCoin: 'SUI',
+		baseCoin: testnetCoins.DEEP,
+		quoteCoin: testnetCoins.SUI,
 	},
 	SUI_DBUSDC: {
 		address: `0x9442afa775e90112448f26a8d58ca76f66cf46e4b77e74d6d85cea30bedc289c`,
-		baseCoin: 'SUI',
-		quoteCoin: 'DBUSDC',
+		baseCoin: testnetCoins.SUI,
+		quoteCoin: testnetCoins.DBUSDC,
 	},
 	DEEP_DBWETH: {
 		address: `0xe8d0f3525518aaaae64f3832a24606a9eadde8572d058c45626a4ab2cbfae1eb`,
-		baseCoin: 'DEEP',
-		quoteCoin: 'DBWETH',
+		baseCoin: testnetCoins.DEEP,
+		quoteCoin: testnetCoins.DBWETH,
 	},
 	DBWETH_DBUSDC: {
 		address: `0x31d41c00e99672b9f7896950fe24e4993f88fb30a8e05dcd75a24cefe7b7d2d1`,
-		baseCoin: 'DBWETH',
-		quoteCoin: 'DBUSDC',
+		baseCoin: testnetCoins.DBWETH,
+		quoteCoin: testnetCoins.DBUSDC,
 	},
 };
 
 export const mainnetPools: PoolMap = {
 	DEEP_SUI: {
 		address: ``,
-		baseCoin: 'DEEP',
-		quoteCoin: 'SUI',
+		baseCoin: testnetCoins.DEEP,
+		quoteCoin: testnetCoins.SUI,
 	},
 };
