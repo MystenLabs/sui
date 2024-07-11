@@ -253,7 +253,9 @@ pub mod checked {
             // times two for the global pause and per-address settings
             // this "overcharges" slightly since it does not check the global pause for each owner
             // but rather each coin type.
-            let bytes_read_per_owner = CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS * 2;
+            let bytes_read_per_owner = CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS;
+            // associate the cost with dynamic field access so that it will increase if/when this
+            // cost increases
             let cost_per_byte =
                 protocol_config.dynamic_field_borrow_child_object_type_cost_per_byte() as usize;
             let cost_per_owner = bytes_read_per_owner * cost_per_byte;
