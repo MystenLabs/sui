@@ -2975,6 +2975,10 @@ impl AuthorityState {
             cur_epoch_store.epoch()
         );
 
+        if cfg!(debug_assertions) {
+            cur_epoch_store.check_all_executed_transactions_in_checkpoint();
+        }
+
         if let Err(err) = self
             .get_reconfig_api()
             .expensive_check_sui_conservation(cur_epoch_store)
@@ -4727,6 +4731,7 @@ impl AuthorityState {
                 continue;
             }
             info!("Reverting {:?} at the end of epoch", digest);
+            epoch_store.revert_executed_transaction(&digest)?;
             self.get_reconfig_api().revert_state_update(&digest)?;
         }
         info!("All uncommitted local transactions reverted");
