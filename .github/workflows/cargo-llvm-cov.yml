@@ -41,13 +41,7 @@ jobs:
           fetch-depth: 0
           ref: 2bb6bc1be2120a661256ce285ceb60e5ccab9136
 
-      - name: Install Rust
-        run: rustup update stable
-
-      # - name: Install cross-compilation tools
-      #   uses: taiki-e/setup-cross-toolchain-action@v1
-      #   with:
-      #     target: aarch64-unknown-linux-gnu
+      - uses: bmwill/rust-cache@v1
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -55,15 +49,13 @@ jobs:
       - name: Install nextest
         uses: taiki-e/install-action@nextest
 
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "10.0"  
-
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
+
+      - name: Install Rust
+        run: rustup update stable
         
       - name: Run code coverage for nextest
         run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
