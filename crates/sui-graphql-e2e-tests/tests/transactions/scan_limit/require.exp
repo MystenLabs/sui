@@ -264,7 +264,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "A scan limit must be specified for filter combinations involving `function`, `kind`, `recvAddress`, `inputObject`, or `changedObject`",
+      "message": "A scan limit must be specified for the given filter combination",
       "locations": [
         {
           "line": 3,
@@ -382,7 +382,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "A scan limit must be specified for filter combinations involving `function`, `kind`, `recvAddress`, `inputObject`, or `changedObject`",
+      "message": "A scan limit must be specified for the given filter combination",
       "locations": [
         {
           "line": 3,
@@ -500,7 +500,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "A scan limit must be specified for filter combinations involving `function`, `kind`, `recvAddress`, `inputObject`, or `changedObject`",
+      "message": "A scan limit must be specified for the given filter combination",
       "locations": [
         {
           "line": 3,
@@ -537,7 +537,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "A scan limit must be specified for filter combinations involving `function`, `kind`, `recvAddress`, `inputObject`, or `changedObject`",
+      "message": "A scan limit must be specified for the given filter combination",
       "locations": [
         {
           "line": 3,

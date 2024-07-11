@@ -185,7 +185,7 @@ impl TransactionBlockFilter {
         .into_iter()
         .filter(|is_set| *is_set)
         .count()
-            > 2
+            > 1
     }
 
     pub(crate) fn requires_explicit_sender(&self) -> bool {

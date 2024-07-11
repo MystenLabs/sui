@@ -282,7 +282,7 @@ impl TransactionBlock {
         // an error.
         if filter.requires_scan_limit() && scan_limit.is_none() {
             return Err(Error::Client(
-                "A scan limit must be specified for filter combinations involving `function`, `kind`, `recvAddress`, `inputObject`, or `changedObject`".to_string(),
+                "A scan limit must be specified for the given filter combination".to_string(),
             ));
         }
 
