@@ -31,7 +31,7 @@ env:
 jobs:
   cargo-llvm-cov:
     name: Generate code coverage
-    runs-on: [ self-hosted, self-hosted-arc ]
+    runs-on: [ubuntu-latest]
     timeout-minutes: 120
     env:
       CARGO_TERM_COLOR: always
@@ -45,10 +45,10 @@ jobs:
       - name: Install nextest
         uses: taiki-e/install-action@nextest
 
-      # - name: Set Swap Space
-      #   uses: pierotofy/set-swap-space@master
-      #   with:
-      #     swap-size-gb: 256
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
 
       - name: Install Rust
         run: rustup update stable
