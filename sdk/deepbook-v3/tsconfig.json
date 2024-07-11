@@ -2,10 +2,14 @@
 	"extends": "../build-scripts/tsconfig.shared.json",
 	"include": ["src"],
 	"compilerOptions": {
-		"module": "ES2022",
+		"module": "CommonJS",
 		"outDir": "dist/cjs",
 		"isolatedModules": true,
-		"rootDir": "src"
+		"rootDir": "src",
+		"paths": {
+			"@mysten/sui/client": ["../../typescrupt/src/client"],
+			"@mysten/sui/transactions": ["../../typescript/src/transactions"]
+		}
 	},
-	"references": [{ "path": "../typescript" }]
+	"references": [{ "path": "../wallet-standard" }, { "path": "../typescript" }]
 }
