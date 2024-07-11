@@ -10,9 +10,7 @@ pub mod checked {
     use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::temporary_store::TemporaryStore;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::deny_list_v2::{
-        CONFIG_DYNAMIC_OBJECT_FIELD_SIZE, CONFIG_SETTING_DYNAMIC_FIELD_SIZE,
-    };
+    use sui_types::deny_list_v2::CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS;
     use sui_types::gas::{deduct_gas, GasCostSummary, SuiGasStatus};
     use sui_types::gas_model::gas_predicates::{
         charge_upgrades, dont_charge_budget_on_storage_oog,
@@ -247,20 +245,20 @@ pub mod checked {
             self.gas_status.charge_storage_read(total_size)
         }
 
-        pub fn charge_regulated_transfers(
+        pub fn charge_coin_transfers(
             &mut self,
-            num_deny_lists_checked: u64,
-            num_regulated_coin_owners: u64,
+            protocol_config: &ProtocolConfig,
+            num_non_gas_coin_owners: u64,
         ) -> Result<(), ExecutionError> {
-            let cost_per_deny_list = CONFIG_DYNAMIC_OBJECT_FIELD_SIZE;
-            let deny_list_cost = cost_per_deny_list * (num_deny_lists_checked as usize);
             // times two for the global pause and per-address settings
-            // we add the cost for the global pause per-address to minimize overcharging for
-            // non-regulated coins
-            let cost_per_owner = CONFIG_SETTING_DYNAMIC_FIELD_SIZE * 2;
-            let owner_cost = cost_per_owner * (num_regulated_coin_owners as usize);
-            self.gas_status
-                .charge_storage_read(deny_list_cost + owner_cost)
+            // this "overcharges" slightly since it does not check the global pause for each owner
+            // but rather each coin type.
+            let bytes_read_per_owner = CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS * 2;
+            let cost_per_byte =
+                protocol_config.dynamic_field_borrow_child_object_type_cost_per_byte() as usize;
+            let cost_per_owner = bytes_read_per_owner * cost_per_byte;
+            let owner_cost = cost_per_owner * (num_non_gas_coin_owners as usize);
+            self.gas_status.charge_storage_read(owner_cost)
         }
 
         /// Resets any mutations, deletions, and events recorded in the store, as well as any storage costs and

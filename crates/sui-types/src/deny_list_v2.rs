@@ -20,32 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-pub(super) mod constants {
-    const ADDRESS: usize = 32;
-    const ID: usize = ADDRESS;
-    const UID: usize = ID;
-    const STR: usize = 128;
-    const TYPE_NAME: usize = ADDRESS + STR + STR + 4;
-    const BOOL: usize = 1;
-    const U64: usize = 8;
-    const OPTION_SOME_BOOL: usize = BOOL + 1;
-    const OBJECT_METADATA: usize = 9 + TYPE_NAME;
-
-    const CONFIG_KEY: usize = U64 + TYPE_NAME;
-    const ADDRESS_KEY: usize = ADDRESS;
-
-    // config dynamic object field
-    pub const CONFIG_DOF_FIELD: usize = OBJECT_METADATA + UID + CONFIG_KEY + ID;
-
-    // setting dynamic field
-    const SETTING_DATA: usize = U64 + OPTION_SOME_BOOL + OPTION_SOME_BOOL;
-    const OPTION_SOME_SETTING_DATA: usize = SETTING_DATA + 1;
-    const SETTING: usize = OPTION_SOME_SETTING_DATA;
-    pub const SETTING_FIELD: usize = OBJECT_METADATA + UID + ADDRESS_KEY + SETTING;
-}
-
-pub const CONFIG_DYNAMIC_OBJECT_FIELD_SIZE: usize = constants::CONFIG_DOF_FIELD;
-pub const CONFIG_SETTING_DYNAMIC_FIELD_SIZE: usize = constants::SETTING_FIELD;
+pub const CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS: usize = 1000;
 
 /// Rust representation of the Move type 0x2::coin::DenyCapV2.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -154,6 +129,7 @@ pub fn check_coin_deny_list_v2_during_execution(
     cur_epoch: EpochId,
     object_store: &dyn ObjectStore,
 ) -> DenyListResult {
+    let mut num_non_gas_coin_owners = 0;
     let mut new_coin_owners = BTreeMap::new();
     for obj in written_objects.values() {
         if obj.is_gas_coin() {
@@ -169,8 +145,8 @@ pub fn check_coin_deny_list_v2_during_execution(
             .entry(coin_type.to_canonical_string(false))
             .or_insert_with(BTreeSet::new)
             .insert(owner);
+        num_non_gas_coin_owners += 1;
     }
-    let num_deny_lists_checked = new_coin_owners.len() as u64;
     let new_regulated_coin_owners = new_coin_owners
         .into_iter()
         .filter_map(|(coin_type, owners)| {
@@ -178,16 +154,11 @@ pub fn check_coin_deny_list_v2_during_execution(
             Some((coin_type, (deny_list_config, owners)))
         })
         .collect::<BTreeMap<_, _>>();
-    let num_regulated_coin_owners = new_regulated_coin_owners
-        .values()
-        .map(|(_deny_list, owners)| owners.len() as u64)
-        .sum();
     let result =
         check_new_regulated_coin_owners(new_regulated_coin_owners, cur_epoch, object_store);
     DenyListResult {
         result,
-        num_deny_lists_checked,
-        num_regulated_coin_owners,
+        num_non_gas_coin_owners,
     }
 }
 

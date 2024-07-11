@@ -190,17 +190,12 @@ pub trait ChildObjectResolver {
     ) -> SuiResult<Option<Object>>;
 }
 
-// Note that tracking the deny lists separately from the coin owners lets us minimize the gas
-// cost on non-regulated coins. We need to check for the deny list for all coins, but only for
-// the config settings for regulated coin owners
 pub struct DenyListResult {
     /// Ok if all regulated coin owners are allowed.
     /// Err if any regulated coin owner is denied (returning the error for first one denied).
     pub result: Result<(), ExecutionError>,
-    /// The number of deny lists checked
-    pub num_deny_lists_checked: u64,
-    /// The number of regulated coin owners in the transaction results
-    pub num_regulated_coin_owners: u64,
+    /// The number of non-gas-coin owners in the transaction results
+    pub num_non_gas_coin_owners: u64,
 }
 
 /// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
@@ -222,7 +217,7 @@ pub trait Storage {
     );
 
     /// Check coin denylist during execution,
-    /// and the number of deny lists checked and regulated coin owners checked.
+    /// and the number of non-gas-coin owners.
     fn check_coin_deny_list(&self, written_objects: &BTreeMap<ObjectID, Object>) -> DenyListResult;
 }
 
