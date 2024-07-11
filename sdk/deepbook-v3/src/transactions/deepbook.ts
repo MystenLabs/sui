@@ -344,77 +344,21 @@ export class DeepBookContract {
 		});
 	};
 
-	swapExactBaseForQuote =
-		(
-			pool: Pool,
-			baseAmount: number,
-			baseCoinId: string,
-			deepAmount: number,
-			deepCoinId: string,
-			recipient: string,
-		) =>
-		(tx: Transaction) => {
-			const {
-				key: baseCoinKey,
-				scalar: baseScalar,
-				type: baseType,
-			} = this.#config.getCoin(pool.baseCoin);
-			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+	swapExactBaseForQuote = (pool: Pool, baseCoin: any, deepCoin: any) => (tx: Transaction) => {
+		const [baseOut, quoteOut, deepOut] = tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_base_for_quote`,
+			arguments: [tx.object(pool.address), baseCoin, deepCoin, tx.object(SUI_CLOCK_OBJECT_ID)],
+			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
+		});
+		return [baseOut, quoteOut, deepOut];
+	};
 
-			let baseCoin;
-			if (baseCoinKey === 'SUI') {
-				[baseCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(baseAmount * baseScalar)]);
-			} else {
-				[baseCoin] = tx.splitCoins(tx.object(baseCoinId), [tx.pure.u64(baseAmount * baseScalar)]);
-			}
-			const [deepCoin] = tx.splitCoins(tx.object(deepCoinId), [
-				tx.pure.u64(deepAmount * DEEP_SCALAR),
-			]);
-			let [baseOut, quoteOut, deepOut] = tx.moveCall({
-				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_base_for_quote`,
-				arguments: [tx.object(pool.address), baseCoin, deepCoin, tx.object(SUI_CLOCK_OBJECT_ID)],
-				typeArguments: [baseType, quoteCoin.type],
-			});
-			tx.transferObjects([baseOut], recipient);
-			tx.transferObjects([quoteOut], recipient);
-			tx.transferObjects([deepOut], recipient);
-		};
-
-	swapExactQuoteForBase =
-		(
-			pool: Pool,
-			quoteAmount: number,
-			quoteCoinId: string,
-			deepAmount: number,
-			deepCoinId: string,
-			recipient: string,
-		) =>
-		(tx: Transaction) => {
-			const baseCoin = this.#config.getCoin(pool.baseCoin);
-			const {
-				key: quoteCoinKey,
-				scalar: quoteScalar,
-				type: quoteType,
-			} = this.#config.getCoin(pool.quoteCoin);
-
-			let quoteCoin;
-			if (quoteCoinKey === 'SUI') {
-				[quoteCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(quoteAmount * quoteScalar)]);
-			} else {
-				[quoteCoin] = tx.splitCoins(tx.object(quoteCoinId), [
-					tx.pure.u64(quoteAmount * quoteScalar),
-				]);
-			}
-			const [deepCoin] = tx.splitCoins(tx.object(deepCoinId), [
-				tx.pure.u64(deepAmount * DEEP_SCALAR),
-			]);
-			let [baseOut, quoteOut, deepOut] = tx.moveCall({
-				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_quote_for_base`,
-				arguments: [tx.object(pool.address), quoteCoin, deepCoin, tx.object(SUI_CLOCK_OBJECT_ID)],
-				typeArguments: [baseCoin.type, quoteType],
-			});
-			tx.transferObjects([baseOut], recipient);
-			tx.transferObjects([quoteOut], recipient);
-			tx.transferObjects([deepOut], recipient);
-		};
+	swapExactQuoteForBase = (pool: Pool, quoteCoin: any, deepCoin: any) => (tx: Transaction) => {
+		const [baseOut, quoteOut, deepOut] = tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_quote_for_base`,
+			arguments: [tx.object(pool.address), quoteCoin, deepCoin, tx.object(SUI_CLOCK_OBJECT_ID)],
+			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
+		});
+		return [baseOut, quoteOut, deepOut];
+	};
 }
