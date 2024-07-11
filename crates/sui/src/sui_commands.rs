@@ -59,13 +59,17 @@ const CONCURRENCY_LIMIT: usize = 30;
 const DEFAULT_EPOCH_DURATION_MS: u64 = 60_000;
 const DEFAULT_FAUCET_NUM_COINS: usize = 5; // 5 coins per request was the default in sui-test-validator
 const DEFAULT_FAUCET_MIST_AMOUNT: u64 = 200_000_000_000; // 200 SUI
+const DEFAULT_FAUCET_PORT: u16 = 9123;
+#[cfg(feature = "indexer")]
+const DEFAULT_GRAPHQL_PORT: u16 = 9125;
+#[cfg(feature = "indexer")]
+const DEFAULT_INDEXER_PORT: u16 = 9124;
 
 #[cfg(feature = "indexer")]
 #[derive(Args)]
 pub struct IndexerFeatureArgs {
-    /// Start an indexer with default host and port: 127.0.0.1:9124. This flag accepts a port,
-    /// a host, or both.
-    ///
+    /// Start an indexer with default host and port: 127.0.0.1:9124. This flag accepts also a port,
+    /// a host, or both (e.g., 127.0.0.1:9124).
     /// When providing a specific value, please use the = sign between the flag and value:
     /// `--with-indexer=6124` or `--with-indexer=0.0.0.0`, or `--with-indexer=0.0.0.0:9124`
     /// The indexer will be started in writer mode and reader mode.
@@ -78,9 +82,10 @@ pub struct IndexerFeatureArgs {
         )]
     with_indexer: Option<String>,
 
-    /// Start a GraphQL server on localhost and port: 127.0.0.1:9125, or on the port provided.
+    /// Start a GraphQL server on localhost and port: 127.0.0.1:9125. This flag accepts also a port,
+    /// a host, or both (e.g., 127.0.0.1:9125).
     /// When providing a specific value, please use the = sign between the flag and value:
-    /// `--with-graphql=6125`.
+    /// `--with-graphql=6124` or `--with-graphql=0.0.0.0`, or `--with-graphql=0.0.0.0:9125`
     /// Note that GraphQL requires a running indexer, which will be enabled by default if the
     /// `--with-indexer` flag is not set.
     #[clap(
@@ -159,9 +164,10 @@ pub enum SuiCommand {
         #[clap(long)]
         force_regenesis: bool,
 
-        /// Start a faucet with default host and port: 127.0.0.1:9123.
+        /// Start a faucet with default host and port: 127.0.0.1:9123. This flag accepts also a
+        /// port, a host, or both (e.g., 127.0.0.1:9123).
         /// When providing a specific value, please use the = sign between the flag and value:
-        /// `--with-faucet=6123`.
+        /// `--with-faucet=6124` or `--with-faucet=0.0.0.0`, or `--with-faucet=0.0.0.0:9123`
         #[clap(
             long,
             default_missing_value = "127.0.0.1:9123",
@@ -667,7 +673,7 @@ async fn start(
 
     #[cfg(feature = "indexer")]
     if let Some(input) = with_indexer {
-        let indexer_address = parse_host_port(Some(input), 9124)
+        let indexer_address = parse_host_port(Some(input), DEFAULT_INDEXER_PORT)
             .map_err(|_| anyhow!("Invalid indexer host and port"))?;
         tracing::info!("Starting the indexer service at {indexer_address}");
         // Start in writer mode
@@ -693,12 +699,12 @@ async fn start(
 
     #[cfg(feature = "indexer")]
     if let Some(input) = with_graphql {
-        let graphql_address = parse_host_port(Some(input), 9125)
+        let graphql_address = parse_host_port(Some(input), DEFAULT_GRAPHQL_PORT)
             .map_err(|_| anyhow!("Invalid graphql host and port"))?;
         tracing::info!("Starting the GraphQL service at {graphql_address}");
         let graphql_connection_config = ConnectionConfig::new(
-            Some(graphql_address.ip().to_string()),
             Some(graphql_address.port()),
+            Some(graphql_address.ip().to_string()),
             Some(pg_address),
             None,
             None,
@@ -714,9 +720,9 @@ async fn start(
     }
 
     if let Some(input) = with_faucet {
-        let faucet_address = parse_host_port(Some(input), 9123)
+        let faucet_address = parse_host_port(Some(input), DEFAULT_FAUCET_PORT)
             .map_err(|_| anyhow!("Invalid faucet host and port"))?;
-        tracing::error!("Starting the faucet service at {faucet_address}");
+        tracing::info!("Starting the faucet service at {faucet_address}");
         let config_dir = if force_regenesis {
             tempdir()?.into_path()
         } else {
@@ -738,6 +744,7 @@ async fn start(
             amount: DEFAULT_FAUCET_MIST_AMOUNT,
             ..Default::default()
         };
+
         let prometheus_registry = prometheus::Registry::new();
         if force_regenesis {
             let kp = swarm.config_mut().account_keys.swap_remove(0);
@@ -1149,14 +1156,16 @@ fn read_line() -> Result<String, anyhow::Error> {
     Ok(s.trim_end().to_string())
 }
 
-fn parse_host_port(input: Option<String>, port: u16) -> Result<SocketAddr, AddrParseError> {
+pub fn parse_host_port(input: Option<String>, port: u16) -> Result<SocketAddr, AddrParseError> {
     if let Some(input) = input {
         if input.contains(':') {
             input.parse::<SocketAddr>()
         } else if input.contains('.') {
-            format!("{}:{}", input, port).parse::<SocketAddr>()
-        } else {
+            format!("{input}:{port}").parse::<SocketAddr>()
+        } else if input.is_empty() {
             format!("127.0.0.1:{port}").parse::<SocketAddr>()
+        } else {
+            format!("127.0.0.1:{input}").parse::<SocketAddr>()
         }
     } else {
         format!("127.0.0.1:{port}").parse::<SocketAddr>()

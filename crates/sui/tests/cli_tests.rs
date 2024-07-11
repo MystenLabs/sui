@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::io::Read;
+use std::net::SocketAddr;
 use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
@@ -15,7 +16,7 @@ use serde_json::json;
 use sui::client_ptb::ptb::PTB;
 use sui::key_identity::{get_identity_address, KeyIdentity};
 #[cfg(feature = "indexer")]
-use sui::sui_commands::IndexerFeatureArgs;
+use sui::sui_commands::{parse_host_port, IndexerFeatureArgs};
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
@@ -31,6 +32,7 @@ use sui::{
         estimate_gas_budget, Opts, OptsWithGas, SuiClientCommandResult, SuiClientCommands,
         SwitchResponse,
     },
+    sui_commands::parse_host_port,
     sui_commands::SuiCommand,
 };
 use sui_config::{
@@ -74,7 +76,6 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         fullnode_rpc_port: 9000,
         epoch_duration_ms: None,
         no_full_node: false,
-        faucet_host: "127.0.0.1".to_string(),
         #[cfg(feature = "indexer")]
         indexer_feature_args: IndexerFeatureArgs::for_testing(),
     }
@@ -3932,4 +3933,40 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
 
     insta::assert_snapshot!(error_string);
     Ok(())
+}
+
+#[tokio::test]
+async fn test_parse_host_port() {
+    let input = "127.0.0.0";
+    let result = parse_host_port(Some(input.to_string()), 9123).unwrap();
+    assert_eq!(result, SocketAddr::from_str("127.0.0.0:9123").unwrap());
+
+    let input = "127.0.0.5:9124";
+    let result = parse_host_port(Some(input.to_string()), 9123).unwrap();
+    assert_eq!(result, SocketAddr::from_str("127.0.0.5:9124").unwrap());
+
+    let input = "9090";
+    let result = parse_host_port(Some(input.to_string()), 9123).unwrap();
+    assert_eq!(result, SocketAddr::from_str("127.0.0.1:9090").unwrap());
+
+    let input = "";
+    let result = parse_host_port(Some(input.to_string()), 9123).unwrap();
+    assert_eq!(result, SocketAddr::from_str("127.0.0.1:9123").unwrap());
+
+    let result = parse_host_port(None, 9123).unwrap();
+    assert_eq!(result, SocketAddr::from_str("127.0.0.1:9123").unwrap());
+
+    let result = parse_host_port(None, 9899).unwrap();
+    assert_eq!(result, SocketAddr::from_str("127.0.0.1:9899").unwrap());
+
+    let input = "asg";
+    assert!(parse_host_port(Some(input.to_string()), 9123).is_err());
+    let input = "127.0.0:900";
+    assert!(parse_host_port(Some(input.to_string()), 9123).is_err());
+    let input = "127.0.0";
+    assert!(parse_host_port(Some(input.to_string()), 9123).is_err());
+    let input = "127.";
+    assert!(parse_host_port(Some(input.to_string()), 9123).is_err());
+    let input = "127.9.0.1:asb";
+    assert!(parse_host_port(Some(input.to_string()), 9123).is_err());
 }
