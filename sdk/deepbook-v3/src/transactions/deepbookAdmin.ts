@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import type { Transaction } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
 import type { Coin, Pool } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
@@ -31,8 +31,8 @@ export class DeepBookAdminContract {
 			minSize: number,
 			whitelisted: boolean,
 			stablePool: boolean,
-		) =>
-		(tx: Transaction) => {
+			tx: Transaction = new Transaction()
+		) => {
 			const [creationFee] = tx.splitCoins(tx.object(deepCoinId), [tx.pure.u64(POOL_CREATION_FEE)]);
 
 			const baseScalar = baseCoin.scalar;
@@ -56,20 +56,22 @@ export class DeepBookAdminContract {
 				],
 				typeArguments: [baseCoin.type, quoteCoin.type],
 			});
+
+			return tx;
 		};
 
-	unregisterPoolAdmin = (pool: Pool) => (tx: Transaction) => {
-
+	unregisterPoolAdmin = (pool: Pool, tx: Transaction = new Transaction()) => {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::unregister_pool_admin`,
 			arguments: [tx.object(this.#config.REGISTRY_ID), tx.object(this.#adminCap())],
 			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
 		});
+
+		return tx;
 	};
 
 	// TODO: Needs to be revised after move code is updated
-	updateDisabledVersions = (pool: Pool) => (tx: Transaction) => {
-
+	updateDisabledVersions = (pool: Pool, tx: Transaction = new Transaction()) => {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::update_disabled_versions`,
 			arguments: [
@@ -79,5 +81,7 @@ export class DeepBookAdminContract {
 			],
 			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
 		});
+
+		return tx;
 	};
 }
