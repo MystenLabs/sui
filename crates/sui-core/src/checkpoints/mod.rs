@@ -1432,7 +1432,10 @@ impl CheckpointBuilder {
                     )
                     .await?;
 
-                let committee = system_state_obj.get_current_epoch_committee().committee;
+                let committee = system_state_obj
+                    .get_current_epoch_committee()
+                    .committee()
+                    .clone();
 
                 // This must happen after the call to augment_epoch_last_checkpoint,
                 // otherwise we will not capture the change_epoch tx.
