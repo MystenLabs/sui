@@ -14,7 +14,10 @@ use crate::{
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName},
-    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv},
+    shared::{
+        ast_debug::AstDebug, program_info::TypingProgramInfo, string_utils::debug_print,
+        unique_map::UniqueMap, CompilationEnv,
+    },
     FullyCompiledProgram,
 };
 use cfgir::ast::LoopInfo;
@@ -41,8 +44,13 @@ enum NamedBlockType {
     Named,
 }
 
+struct CFGIRDebugFlags {
+    function_translation: bool,
+}
+
 struct Context<'env> {
     env: &'env mut CompilationEnv,
+    debug: CFGIRDebugFlags,
     info: &'env TypingProgramInfo,
     current_package: Option<Symbol>,
     label_count: usize,
@@ -53,8 +61,12 @@ struct Context<'env> {
 
 impl<'env> Context<'env> {
     pub fn new(env: &'env mut CompilationEnv, info: &'env TypingProgramInfo) -> Self {
+        let debug = CFGIRDebugFlags {
+            function_translation: false,
+        };
         Context {
             env,
+            debug,
             info,
             current_package: None,
             label_count: 0,
@@ -449,7 +461,7 @@ fn constant_(
     full_loc: Loc,
     attributes: &Attributes,
     signature: H::BaseType,
-    locals: UniqueMap<Var, (Mutability, H::SingleType)>,
+    mut locals: UniqueMap<Var, (Mutability, H::SingleType)>,
     body: H::Block,
 ) -> Option<H::Exp> {
     use H::Command_ as C;
@@ -488,11 +500,11 @@ fn constant_(
         "{}",
         ICE_MSG
     );
-    cfgir::optimize(
+    cfgir::optimize::optimize_constant(
         context.env,
         context.current_package,
         &fake_signature,
-        &locals,
+        &mut locals,
         constant_values,
         &mut cfg,
     );
@@ -580,6 +592,10 @@ fn function(
         body,
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
+    debug_print!(
+        context.debug.function_translation,
+        (msg format!("-- {name} @ {index} ------------"))
+    );
     let body = function_body(
         context,
         module,
@@ -619,7 +635,11 @@ fn function_body(
     assert!(context.named_blocks.is_empty());
     let b_ = match tb_ {
         HB::Native => GB::Native,
-        HB::Defined { locals, body } => {
+        HB::Defined { mut locals, body } => {
+            debug_print!(
+                context.debug.function_translation,
+                (lines "body" => &body)
+            );
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
@@ -644,11 +664,12 @@ fn function_body(
             cfgir::refine_inference_and_verify(context.env, &function_context, &mut cfg);
             // do not optimize if there are errors, warnings are okay
             if !context.env.has_errors() {
-                cfgir::optimize(
+                cfgir::optimize::optimize_function(
                     context.env,
                     context.current_package,
                     signature,
-                    &locals,
+                    &infinite_loop_starts,
+                    &mut locals,
                     &UniqueMap::new(),
                     &mut cfg,
                 );
@@ -658,6 +679,10 @@ fn function_body(
                 .into_iter()
                 .filter(|(lbl, _info)| blocks.contains_key(lbl))
                 .collect();
+            debug_print!(
+                context.debug.function_translation,
+                (lines "translated" => &blocks)
+            );
             GB::Defined {
                 locals,
                 start,

@@ -185,7 +185,7 @@ pub enum BaseType_ {
 }
 pub type BaseType = Spanned<BaseType_>;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
 pub enum SingleType_ {
     Base(BaseType),
     Ref(bool, BaseType),
@@ -564,6 +564,11 @@ impl Exp {
     pub fn is_unreachable(&self) -> bool {
         self.exp.value.is_unreachable()
     }
+
+    /// Returns the set of variables free in the expression.
+    pub fn free_vars(&self) -> BTreeSet<Var> {
+        self.exp.value.free_vars()
+    }
 }
 
 impl UnannotatedExp_ {
@@ -573,6 +578,58 @@ impl UnannotatedExp_ {
 
     pub fn is_unreachable(&self) -> bool {
         matches!(self, UnannotatedExp_::Unreachable)
+    }
+
+    /// Returns the set of variables free in the expression.
+    pub fn free_vars(&self) -> BTreeSet<Var> {
+        use UnannotatedExp_ as UE;
+
+        let mut set = BTreeSet::new();
+
+        let mut work_queue = vec![self];
+
+        while let Some(e) = work_queue.pop() {
+            match e {
+                UE::Unit { .. }
+                | UE::Value(_)
+                | UE::Constant(_)
+                | UE::ErrorConstant { .. }
+                | UE::Unreachable
+                | UE::UnresolvedError => (),
+                UE::BorrowLocal(_, var) | UE::Move { var, .. } | UE::Copy { var, .. } => {
+                    set.insert(*var);
+                }
+                UE::Freeze(e)
+                | UE::Borrow(_, e, _, _)
+                | UE::Cast(e, _)
+                | UE::Dereference(e)
+                | UE::UnaryExp(_, e) => {
+                    work_queue.push(&e.exp.value);
+                }
+                UE::BinopExp(e0, _, e1) => {
+                    work_queue.push(&e0.exp.value);
+                    work_queue.push(&e1.exp.value);
+                }
+                UE::ModuleCall(call) => {
+                    let ModuleCall {
+                        module: _,
+                        name: _,
+                        type_arguments: _,
+                        arguments,
+                    } = &**call;
+                    arguments.iter().for_each(|e| work_queue.push(&e.exp.value));
+                }
+                UE::Pack(_, _, fields) | UE::PackVariant(_, _, _, fields) => {
+                    fields
+                        .iter()
+                        .for_each(|(_, _, e)| work_queue.push(&e.exp.value));
+                }
+                UE::Vector(_, _, _, es) | UE::Multiple(es) => {
+                    es.iter().for_each(|e| work_queue.push(&e.exp.value));
+                }
+            }
+        }
+        set
     }
 }
 
@@ -884,6 +941,12 @@ impl std::fmt::Display for Visibility {
 }
 
 impl std::fmt::Display for Label {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for Var {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }

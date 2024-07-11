@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 53;
+const MAX_PROTOCOL_VERSION: u64 = 54;
 
 // Record history of protocol version allocations here:
 //
@@ -159,6 +159,7 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             Enable enums on testnet.
 //             Add support for passkey in devnet.
 //             Enable deny list v2 on testnet and mainnet.
+// Version 54: Bump to allow variable coalescing optimization.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2499,6 +2500,7 @@ impl ProtocolConfig {
                     }
                     cfg.feature_flags.enable_coin_deny_list_v2 = true;
                 }
+                54 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
