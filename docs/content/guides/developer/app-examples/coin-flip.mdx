@@ -671,7 +671,9 @@ Partial snippet of CLI deployment output.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-Store the `PackageID` value you receive in your own response to [connect to your frontend](#connecting-your-package).
+Save the `PackageID` and the `ObjectID` of the `HouseCap` object you receive in your own response to [connect to your frontend](#connecting-your-package).
+
+In this case, the `PackageID` would be `0x4120b39e5d94845aa539d4b830743a7433fd8511bdcf3841f98080080f327ca8` and the `HouseCap` ID would be `0xfa1f6edad697afca055749fedbdee420b6cdba3edc2f7fd4927ed42f98a7e63a`.
 
 ### Next steps
 
@@ -685,38 +687,26 @@ In this final part of the app example, you build a frontend (UI) that allows end
 
 :::info
 
-The full source code for the frontend is available at the [Satoshi Coin Flip Frontend Example repository](https://github.com/sui-foundation/satoshi-coin-flip-frontend-example).
+To skip building the frontend and test out your newly deployed package, use the provided [Satoshi Coin Flip Frontend Example repository](https://github.com/sui-foundation/satoshi-coin-flip-frontend-example) and follow the instructions in the example's `README.md` file
 
 :::
 
-To expose the backend you have created to your users, you need a frontend (UI). In this section, you create a React frontend project using the [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) and the [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) that interacts with the deployed smart contracts.
+### Prerequisites
 
-### Initialize the project
+Before getting started, make sure you have:
 
-:::info
+- [Deployed the complete `satoshi_flip` Move package](#smart-contracts) and understand its design.
+- Installed [`pnpm`](https://pnpm.io/installation) or [`yarn`](https://classic.yarnpkg.com/lang/en/docs/install/#mac-stable) to use as the package manager.
 
-The following instructions are using `pnpm` as the package manager. Follow the [`pnpm` install instructions](https://pnpm.io/installation), if needed.
+:::tip Additional resources
+
+- Tooling: [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui using Typescript.
+- Tooling: [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
+- Tooling: [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui dApp.
 
 :::
 
-First, initialize your frontend project. To do this rapidly, use the [`create-dapp` tool](https://sdk.mystenlabs.com/dapp-kit/create-dapp) to bootstrap the project using [dApp Kit](https://sdk.mystenlabs.com/dapp-kit). Run the following command in your terminal or console:
-
-```
-pnpm create @mysten/dapp
-```
-
-This CLI command prompts you through a couple of steps:
-
-1. It asks you the starter template that you want to use. Currently, there are two variants:
-
-   1. `react-client-dapp`: This starter template contains the minimum dApp Kit template code that you can start with. This variant is meant for developers already familiar with the dApp Kit and who don't want unnecessary template code.
-   1. `react-e2e-counter`: This starter template contains a simple counter Sui Move smart contract with the frontend template code interacting with it. This variant is meant for developers trying to learn how to use dApp Kit.
-
-1. It prompts you to name your project folder.
-
-Done. Your project has all necessary code to get you started. Lastly, `cd` into your project folder and run `pnpm install` to install all dependencies.
-
-### User interface layout design
+### Overview
 
 The user interface (UI) of this frontend example demonstrates how to use the dApp Kit instead of serving as a production-grade product, so the Player and the House features are in the same UI to simplify the process. In a production solution, your frontend would only contain functionality dedicated to the Player, with a backend service carrying out the interactions with House functions in the smart contracts.
 
@@ -725,9 +715,34 @@ The UI has two columns:
 - First column is dedicated to the Player, and all Player-related features live there
 - Second column is dedicated to the House, and all House-related features live there
 
+### Scaffold a new app
+
+The first step is to set up the client app. Run the following command to scaffold a new app.
+
+```bash
+pnpm create @mysten/dapp --template react-client-dapp
+```
+
+or
+
+```bash
+yarn create @mysten/dapp --template react-client-dapp
+```
+
 ### Project folder structure
 
 Structure the project folder according to the UI layout, meaning that all Player-related React components reside in the `containers/Player` folder, while all House-related React components reside in the `containers/House` folder.
+
+### Connecting your deployed package {#connecting-your-package}
+
+Add the `packageId` value you saved from [deploying your package](#deployment) to a new `src/constants.ts` file in your project:
+
+```ts
+export const PACKAGE_ID =
+  "0x4120b39e5d94845aa539d4b830743a7433fd8511bdcf3841f98080080f327ca8";
+export const HOUSECAP_ID =
+  "0xfa1f6edad697afca055749fedbdee420b6cdba3edc2f7fd4927ed42f98a7e63a";
+```
 
 ### Exploring the code
 
@@ -751,56 +766,56 @@ import { HouseSesh } from './containers/House/HouseSesh';
 import { PlayerSesh } from './containers/Player/PlayerSesh';
 
 function App() {
-	const account = useCurrentAccount();
-	return (
-		<>
-			<Flex
-				position="sticky"
-				px="4"
-				py="2"
-				justify="between"
-				style={{
-					borderBottom: '1px solid var(--gray-a2)',
-				}}
-			>
-				<Box>
-					<Heading>Satoshi Coin Flip Single Player</Heading>
-				</Box>
+  const account = useCurrentAccount();
+  return (
+    <>
+      <Flex
+        position="sticky"
+        px="4"
+        py="2"
+        justify="between"
+        style={{
+          borderBottom: '1px solid var(--gray-a2)',
+        }}
+      >
+        <Box>
+          <Heading>Satoshi Coin Flip Single Player</Heading>
+        </Box>
 
-				<Box>
-					<ConnectButton />
-				</Box>
-			</Flex>
-			<Container>
-				<Heading size="4" m={'2'}>
-					Package ID: {PACKAGE_ID}
-				</Heading>
-				<Heading size="4" m={'2'}>
-					HouseCap ID: {HOUSECAP_ID}
-				</Heading>
+        <Box>
+          <ConnectButton />
+        </Box>
+      </Flex>
+      <Container>
+        <Heading size="4" m={'2'}>
+          Package ID: {PACKAGE_ID}
+        </Heading>
+        <Heading size="4" m={'2'}>
+          HouseCap ID: {HOUSECAP_ID}
+        </Heading>
 
-				<Callout.Root mb="2">
-					<Callout.Icon>
-						<InfoCircledIcon />
-					</Callout.Icon>
-					<Callout.Text>
-						You need to connect to wallet that publish the smart contract package
-					</Callout.Text>
-				</Callout.Root>
+        <Callout.Root mb="2">
+          <Callout.Icon>
+            <InfoCircledIcon />
+          </Callout.Icon>
+          <Callout.Text>
+            You need to connect to wallet that publish the smart contract package
+          </Callout.Text>
+        </Callout.Root>
 
-				{!account ? (
-					<Heading size="4" align="center">
-						Please connect wallet to continue
-					</Heading>
-				) : (
-					<Grid columns="2" gap={'3'} width={'auto'}>
-						<PlayerSesh />
-						<HouseSesh />
-					</Grid>
-				)}
-			</Container>
-		</>
-	);
+        {!account ? (
+          <Heading size="4" align="center">
+            Please connect wallet to continue
+          </Heading>
+        ) : (
+          <Grid columns="2" gap={'3'} width={'auto'}>
+            <PlayerSesh />
+            <HouseSesh />
+          </Grid>
+        )}
+      </Container>
+    </>
+  );
 }
 
 export default App;
@@ -809,8 +824,6 @@ export default App;
 Like other dApps, you need a "connect wallet" button to enable connecting users' wallets. dApp Kit contains a pre-made `ConnectButton` React component that you can reuse to help users onboard.
 
 `useCurrentAccount()` is a React hook the dApp Kit also provides to query the current connected wallet; returning `null` if there isn't a wallet connection. Leverage this behavior to prevent a user from proceeding further if they haven’t connected their wallet yet.
-
-There are two constants that you need to put into `constants.ts` to make the app work – `PACKAGE_ID` and `HOUSECAP_ID`. You can get these from the terminal or console after running the Sui CLI command to publish the package.
 
 After ensuring that the user has connected their wallet, you can display the two columns described in the previous section: `PlayerSesh` and `HouseSesh` components.
 
@@ -913,44 +926,44 @@ import { PACKAGE_ID } from '../../constants';
 // This hook is to demonstrate how to use `@mysten/dapp-kit` React hook to query data
 // besides using SuiClient directly
 export function useFetchCounterNft() {
-	const account = useCurrentAccount();
+  const account = useCurrentAccount();
 
-	if (!account) {
-		return { data: [] };
-	}
+  if (!account) {
+    return { data: [] };
+  }
 
-	// Fetch CounterNFT owned by current connected wallet
-	// Only fetch the 1st one
-	const { data, isLoading, isError, error, refetch } = useSuiClientQuery(
-		'getOwnedObjects',
-		{
-			owner: account.address,
-			limit: 1,
-			filter: {
-				MatchAll: [
-					{
-						StructType: `${PACKAGE_ID}::counter_nft::Counter`,
-					},
-					{
-						AddressOwner: account.address,
-					},
-				],
-			},
-			options: {
-				showOwner: true,
-				showType: true,
-			},
-		},
-		{ queryKey: ['CounterNFT'] },
-	);
+  // Fetch CounterNFT owned by current connected wallet
+  // Only fetch the 1st one
+  const { data, isLoading, isError, error, refetch } = useSuiClientQuery(
+    'getOwnedObjects',
+    {
+      owner: account.address,
+      limit: 1,
+      filter: {
+        MatchAll: [
+          {
+            StructType: `${PACKAGE_ID}::counter_nft::Counter`,
+          },
+          {
+            AddressOwner: account.address,
+          },
+        ],
+      },
+      options: {
+        showOwner: true,
+        showType: true,
+      },
+    },
+    { queryKey: ['CounterNFT'] },
+  );
 
-	return {
-		data: data && data.data.length > 0 ? data?.data : [],
-		isLoading,
-		isError,
-		error,
-		refetch,
-	};
+  return {
+    data: data && data.data.length > 0 ? data?.data : [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  };
 }
 ```
 
@@ -964,39 +977,39 @@ That’s it, now put the hook into the UI component `PlayerListCounterNft.tsx` a
 
 ```typescript title='containers/Player/PlayerListCounterNft.tsx'
 export function PlayerListCounterNft() {
-	const { data, isLoading, error, refetch } = useFetchCounterNft();
-	const { mutate: execCreateCounterNFT } = useSignAndExecuteTransaction();
+  const { data, isLoading, error, refetch } = useFetchCounterNft();
+  const { mutate: execCreateCounterNFT } = useSignAndExecuteTransaction();
 
-	return (
-		<Container mb={'4'}>
-			<Heading size="3" mb="2">
-				Counter NFTs
-			</Heading>
+  return (
+    <Container mb={'4'}>
+      <Heading size="3" mb="2">
+        Counter NFTs
+      </Heading>
 
-			{error && <Text>Error: {error.message}</Text>}
+      {error && <Text>Error: {error.message}</Text>}
 
-			<Box mb="3">
-				{data.length > 0 ? (
-					data.map((it) => {
-						return (
-							<Box key={it.data?.objectId}>
-								<Text as="div" weight="bold">
-									Object ID:
-								</Text>
-								<Text as="div">{it.data?.objectId}</Text>
-								<Text as="div" weight="bold">
-									Object Type:
-								</Text>
-								<Text as="div">{it.data?.type}</Text>
-							</Box>
-						);
-					})
-				) : (
-					<Text>No CounterNFT Owned</Text>
-				)}
-			</Box>
-		</Container>
-	);
+      <Box mb="3">
+        {data.length > 0 ? (
+          data.map((it) => {
+            return (
+              <Box key={it.data?.objectId}>
+                <Text as="div" weight="bold">
+                  Object ID:
+                </Text>
+                <Text as="div">{it.data?.objectId}</Text>
+                <Text as="div" weight="bold">
+                  Object Type:
+                </Text>
+                <Text as="div">{it.data?.type}</Text>
+              </Box>
+            );
+          })
+        ) : (
+          <Text>No CounterNFT Owned</Text>
+        )}
+      </Box>
+    </Container>
+  );
 }
 ```
 
@@ -1007,26 +1020,26 @@ As you might recall with `Transaction`, outputs from the transaction can be inpu
 ```typescript title='containers/Player/PlayerListCounterNft.tsx'
 const txb = new Transaction();
 const [counterNft] = txb.moveCall({
-	target: `${PACKAGE_ID}::counter_nft::mint`,
+  target: `${PACKAGE_ID}::counter_nft::mint`,
 });
 txb.moveCall({
-	target: `${PACKAGE_ID}::counter_nft::transfer_to_sender`,
-	arguments: [counterNft],
+  target: `${PACKAGE_ID}::counter_nft::transfer_to_sender`,
+  arguments: [counterNft],
 });
 
 execCreateCounterNFT(
-	{
-		transaction: txb,
-	},
-	{
-		onError: (err) => {
-			toast.error(err.message);
-		},
-		onSuccess: (result) => {
-			toast.success(`Digest: ${result.digest}`);
-			refetch?.();
-		},
-	},
+  {
+    transaction: txb,
+  },
+  {
+    onError: (err) => {
+      toast.error(err.message);
+    },
+    onSuccess: (result) => {
+      toast.success(`Digest: ${result.digest}`);
+      refetch?.();
+    },
+  },
 );
 ```
 
@@ -1041,27 +1054,27 @@ const [stakeCoin] = txb.splitCoins(txb.gas, [MIST_PER_SUI * BigInt(stake)]);
 
 // Create the game with CounterNFT
 txb.moveCall({
-	target: `${PACKAGE_ID}::single_player_satoshi::start_game`,
-	arguments: [
-		txb.pure.string(guess),
-		txb.object(counterNFTData[0].data?.objectId!),
-		stakeCoin,
-		txb.object(houseDataId),
-	],
+  target: `${PACKAGE_ID}::single_player_satoshi::start_game`,
+  arguments: [
+    txb.pure.string(guess),
+    txb.object(counterNFTData[0].data?.objectId!),
+    stakeCoin,
+    txb.object(houseDataId),
+  ],
 });
 
 execCreateGame(
-	{
-		transaction: txb,
-	},
-	{
-		onError: (err) => {
-			toast.error(err.message);
-		},
-		onSuccess: (result: SuiTransactionBlockResponse) => {
-			toast.success(`Digest: ${result.digest}`);
-		},
-	},
+  {
+    transaction: txb,
+  },
+  {
+    onError: (err) => {
+      toast.error(err.message);
+    },
+    onSuccess: (result: SuiTransactionBlockResponse) => {
+      toast.success(`Digest: ${result.digest}`);
+    },
+  },
 );
 ```
 
@@ -1075,70 +1088,70 @@ All of this logic is in `HouseFinishGame.tsx`:
 ```typescript title='containers/House/HouseFinishGame.tsx'
 // This component will help the House to automatically finish the game whenever new game is started
 export function HouseFinishGame() {
-	const suiClient = useSuiClient();
-	const { mutate: execFinishGame } = useSignAndExecuteTransactionBlock();
+  const suiClient = useSuiClient();
+  const { mutate: execFinishGame } = useSignAndExecuteTransactionBlock();
 
-	const [housePrivHex] = useContext(HouseKeypairContext);
-	const [houseDataId] = useContext(HouseDataContext);
+  const [housePrivHex] = useContext(HouseKeypairContext);
+  const [houseDataId] = useContext(HouseDataContext);
 
-	useEffect(() => {
-		// Subscribe to NewGame event
-		const unsub = suiClient.subscribeEvent({
-			filter: {
-				MoveEventType: `${PACKAGE_ID}::single_player_satoshi::NewGame`,
-			},
-			onMessage(event) {
-				console.log(event);
-				const { game_id, vrf_input } = event.parsedJson as {
-					game_id: string;
-					vrf_input: number[];
-				};
+  useEffect(() => {
+    // Subscribe to NewGame event
+    const unsub = suiClient.subscribeEvent({
+      filter: {
+        MoveEventType: `${PACKAGE_ID}::single_player_satoshi::NewGame`,
+      },
+      onMessage(event) {
+        console.log(event);
+        const { game_id, vrf_input } = event.parsedJson as {
+          game_id: string;
+          vrf_input: number[];
+        };
 
-				toast.info(`NewGame started ID: ${game_id}`);
+        toast.info(`NewGame started ID: ${game_id}`);
 
-				console.log(housePrivHex);
+        console.log(housePrivHex);
 
-				try {
-					const houseSignedInput = bls.sign(
-						new Uint8Array(vrf_input),
-						curveUtils.hexToBytes(housePrivHex),
-					);
+        try {
+          const houseSignedInput = bls.sign(
+            new Uint8Array(vrf_input),
+            curveUtils.hexToBytes(housePrivHex),
+          );
 
-					// Finish the game immediately after new game started
-					const txb = new Transaction();
-					txb.moveCall({
-						target: `${PACKAGE_ID}::single_player_satoshi::finish_game`,
-						arguments: [
-							txb.pure.id(game_id),
-							txb.pure(bcs.vector(bcs.U8).serialize(houseSignedInput)),
-							txb.object(houseDataId),
-						],
-					});
-					execFinishGame(
-						{
-							transaction: txb,
-						},
-						{
-							onError: (err) => {
-								toast.error(err.message);
-							},
-							onSuccess: (result: SuiTransactionBlockResponse) => {
-								toast.success(`Digest: ${result.digest}`);
-							},
-						},
-					);
-				} catch (err) {
-					console.error(err);
-				}
-			},
-		});
+          // Finish the game immediately after new game started
+          const txb = new Transaction();
+          txb.moveCall({
+            target: `${PACKAGE_ID}::single_player_satoshi::finish_game`,
+            arguments: [
+              txb.pure.id(game_id),
+              txb.pure(bcs.vector(bcs.U8).serialize(houseSignedInput)),
+              txb.object(houseDataId),
+            ],
+          });
+          execFinishGame(
+            {
+              transaction: txb,
+            },
+            {
+              onError: (err) => {
+                toast.error(err.message);
+              },
+              onSuccess: (result: SuiTransactionBlockResponse) => {
+                toast.success(`Digest: ${result.digest}`);
+              },
+            },
+          );
+        } catch (err) {
+          console.error(err);
+        }
+      },
+    });
 
-		return () => {
-			(async () => (await unsub)())();
-		};
-	}, [housePrivHex, houseDataId, suiClient]);
+    return () => {
+      (async () => (await unsub)())();
+    };
+  }, [housePrivHex, houseDataId, suiClient]);
 
-	return null;
+  return null;
 }
 ```
 
