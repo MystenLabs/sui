@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { bcs } from '@mysten/sui/bcs';
-import { SuiClient } from '@mysten/sui/client';
+import type { SuiClient } from '@mysten/sui/client';
 import type { Signer } from '@mysten/sui/cryptography';
 import { Transaction } from '@mysten/sui/transactions';
 import { normalizeSuiAddress } from '@mysten/sui/utils';
@@ -90,14 +90,29 @@ export class DeepBookClient {
 		return this.#config.balanceManager.createAndShareBalanceManager(tx);
 	}
 
-	depositIntoManager(managerKey: string, amountToDeposit: number, coinKey: string, tx: Transaction = new Transaction()) {
+	depositIntoManager(
+		managerKey: string,
+		amountToDeposit: number,
+		coinKey: string,
+		tx: Transaction = new Transaction(),
+	) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
-		return this.#config.balanceManager.depositIntoManager(balanceManager.address, amountToDeposit, coin, tx);
+		return this.#config.balanceManager.depositIntoManager(
+			balanceManager.address,
+			amountToDeposit,
+			coin,
+			tx,
+		);
 	}
 
-	withdrawFromManager(managerKey: string, amountToWithdraw: number, coinKey: string, tx: Transaction = new Transaction()) {
+	withdrawFromManager(
+		managerKey: string,
+		amountToWithdraw: number,
+		coinKey: string,
+		tx: Transaction = new Transaction(),
+	) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
@@ -109,7 +124,7 @@ export class DeepBookClient {
 			coin,
 			recipient,
 			tx,
-		)
+		);
 	}
 
 	withdrawAllFromManager(managerKey: string, coinKey: string, tx: Transaction = new Transaction()) {
@@ -117,10 +132,14 @@ export class DeepBookClient {
 		const coin = this.#config.getCoin(coinKey);
 
 		const recipient = this.getActiveAddress();
-		return this.#balanceManager.withdrawAllFromManager(balanceManager.address, coin, recipient, tx)
+		return this.#balanceManager.withdrawAllFromManager(balanceManager.address, coin, recipient, tx);
 	}
 
-	async checkManagerBalance(managerKey: string, coinKey: string, tx: Transaction = new Transaction()) {
+	async checkManagerBalance(
+		managerKey: string,
+		coinKey: string,
+		tx: Transaction = new Transaction(),
+	) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
@@ -177,7 +196,7 @@ export class DeepBookClient {
 			selfMatchingOption,
 			payWithDeep,
 			tx,
-		)
+		);
 	}
 
 	placeMarketOrder(params: PlaceMarketOrderParams, tx: Transaction = new Transaction()) {
@@ -207,14 +226,19 @@ export class DeepBookClient {
 			selfMatchingOption,
 			payWithDeep,
 			tx,
-		)
+		);
 	}
 
-	cancelOrder(poolKey: string, managerKey: string, clientOrderId: number, tx: Transaction = new Transaction()) {
+	cancelOrder(
+		poolKey: string,
+		managerKey: string,
+		clientOrderId: number,
+		tx: Transaction = new Transaction(),
+	) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const pool = this.#config.getPool(poolKey);
 
-		return this.#deepBook.cancelOrder(pool, balanceManager, clientOrderId, tx)
+		return this.#deepBook.cancelOrder(pool, balanceManager, clientOrderId, tx);
 	}
 
 	cancelAllOrders(poolKey: string, managerKey: string, tx: Transaction = new Transaction()) {
@@ -224,10 +248,7 @@ export class DeepBookClient {
 		return this.#deepBook.cancelAllOrders(pool, balanceManager, tx);
 	}
 
-	swapExactBaseForQuote(
-		params: SwapParams,
-		tx: Transaction = new Transaction(),
-	) {
+	swapExactBaseForQuote(params: SwapParams, tx: Transaction = new Transaction()) {
 		const [baseOut, quoteOut, deepOut] = this.#deepBook.swapExactBaseForQuote(params, tx);
 		console.log(baseOut, quoteOut, deepOut);
 		tx.transferObjects([baseOut, quoteOut, deepOut], this.getActiveAddress());
@@ -235,10 +256,7 @@ export class DeepBookClient {
 		return tx;
 	}
 
-	swapExactQuoteForBase(
-		params: SwapParams,
-		tx: Transaction = new Transaction(),
-	) {
+	swapExactQuoteForBase(params: SwapParams, tx: Transaction = new Transaction()) {
 		const [baseOut, quoteOut, deepOut] = this.#deepBook.swapExactQuoteForBase(params, tx);
 		console.log(baseOut, quoteOut, deepOut);
 		tx.transferObjects([baseOut, quoteOut, deepOut], this.getActiveAddress());
@@ -246,7 +264,11 @@ export class DeepBookClient {
 		return tx;
 	}
 
-	addDeepPricePoint(targetPoolKey: string, referencePoolKey: string, tx: Transaction = new Transaction()) {
+	addDeepPricePoint(
+		targetPoolKey: string,
+		referencePoolKey: string,
+		tx: Transaction = new Transaction(),
+	) {
 		const targetPool = this.#config.getPool(targetPoolKey);
 		const referencePool = this.#config.getPool(referencePoolKey);
 
@@ -287,11 +309,15 @@ export class DeepBookClient {
 
 		return {
 			transaction: tx,
-			whitelisted
+			whitelisted,
 		};
 	}
 
-	async getQuoteQuantityOut(poolKey: string, baseQuantity: number, tx: Transaction = new Transaction()) {
+	async getQuoteQuantityOut(
+		poolKey: string,
+		baseQuantity: number,
+		tx: Transaction = new Transaction(),
+	) {
 		const pool = this.#config.getPool(poolKey);
 
 		this.#deepBook.getQuoteQuantityOut(pool, baseQuantity, tx);
@@ -314,7 +340,11 @@ export class DeepBookClient {
 		};
 	}
 
-	async getBaseQuantityOut(poolKey: string, baseQuantity: number, tx: Transaction = new Transaction()) {
+	async getBaseQuantityOut(
+		poolKey: string,
+		baseQuantity: number,
+		tx: Transaction = new Transaction(),
+	) {
 		const pool = this.#config.getPool(poolKey);
 
 		this.#deepBook.getBaseQuantityOut(pool, baseQuantity, tx);
@@ -337,7 +367,12 @@ export class DeepBookClient {
 		};
 	}
 
-	async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: number, tx: Transaction = new Transaction()) {
+	async getQuantityOut(
+		poolKey: string,
+		baseQuantity: number,
+		quoteQuantity: number,
+		tx: Transaction = new Transaction(),
+	) {
 		const pool = this.#config.getPool(poolKey);
 
 		this.#deepBook.getQuantityOut(pool, baseQuantity, quoteQuantity, tx);
@@ -361,7 +396,11 @@ export class DeepBookClient {
 		};
 	}
 
-	async accountOpenOrders(poolKey: string, managerKey: string, tx: Transaction = new Transaction()) {
+	async accountOpenOrders(
+		poolKey: string,
+		managerKey: string,
+		tx: Transaction = new Transaction(),
+	) {
 		const pool = this.#config.getPool(poolKey);
 
 		this.#deepBook.accountOpenOrders(pool, managerKey, tx);
@@ -378,11 +417,17 @@ export class DeepBookClient {
 
 		return {
 			transaction: tx,
-			openOrders: VecSet.parse(new Uint8Array(order_ids)).constants
+			openOrders: VecSet.parse(new Uint8Array(order_ids)).constants,
 		};
 	}
 
-	async getLevel2Range(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean, tx: Transaction = new Transaction()) {
+	async getLevel2Range(
+		poolKey: string,
+		priceLow: number,
+		priceHigh: number,
+		isBid: boolean,
+		tx: Transaction = new Transaction(),
+	) {
 		const pool = this.#config.getPool(poolKey);
 
 		this.#deepBook.getLevel2Range(pool, priceLow, priceHigh, isBid, tx);
@@ -448,7 +493,11 @@ export class DeepBookClient {
 		};
 	}
 
-	async getPoolIdByAssets(baseType: string, quoteType: string, tx: Transaction = new Transaction()) {
+	async getPoolIdByAssets(
+		baseType: string,
+		quoteType: string,
+		tx: Transaction = new Transaction(),
+	) {
 		this.#deepBook.getPoolIdByAssets(baseType, quoteType, tx);
 
 		const res = await this.#config.client.devInspectTransactionBlock({
@@ -463,7 +512,7 @@ export class DeepBookClient {
 
 		return {
 			transaction: tx,
-			address
+			address,
 		};
 	}
 
@@ -485,8 +534,8 @@ export class DeepBookClient {
 			minSize,
 			whitelisted,
 			stablePool,
-			tx
-		)
+			tx,
+		);
 	}
 
 	unregisterPoolAdmin(poolKey: string, tx: Transaction = new Transaction()) {
@@ -521,10 +570,22 @@ export class DeepBookClient {
 		const pool = this.#config.getPool(poolKey);
 
 		const balanceManager = this.#getBalanceManager(managerKey);
-		return this.#governance.submitProposal(pool, balanceManager, takerFee, makerFee, stakeRequired, tx);
+		return this.#governance.submitProposal(
+			pool,
+			balanceManager,
+			takerFee,
+			makerFee,
+			stakeRequired,
+			tx,
+		);
 	}
 
-	vote(poolKey: string, managerKey: string, proposal_id: string, tx: Transaction = new Transaction()) {
+	vote(
+		poolKey: string,
+		managerKey: string,
+		proposal_id: string,
+		tx: Transaction = new Transaction(),
+	) {
 		const pool = this.#config.getPool(poolKey);
 
 		const balanceManager = this.#getBalanceManager(managerKey);
@@ -543,7 +604,7 @@ export class DeepBookClient {
 		return {
 			transaction: tx,
 			baseCoin: baseCoinResult,
-			flashLoan
+			flashLoan,
 		};
 	};
 
@@ -570,7 +631,7 @@ export class DeepBookClient {
 		return {
 			transaction: tx,
 			quoteCoin: quoteCoinResult,
-			flashLoan
+			flashLoan,
 		};
 	};
 
