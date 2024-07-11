@@ -2,7 +2,7 @@
 	"extends": "../build-scripts/tsconfig.shared.json",
 	"include": ["src"],
 	"compilerOptions": {
-		"module": "CommonJS",
+		"module": "ES2022",
 		"outDir": "dist/cjs",
 		"isolatedModules": true,
 		"rootDir": "src"
