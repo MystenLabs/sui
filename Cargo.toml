@@ -455,7 +455,7 @@ serde_json = { version = "1.0.95", features = [
 ] }
 serde_repr = "0.1"
 serde_test = "1.0.147"
-serde_with = { version = "2.1.0", features = ["hex"] }
+serde_with = "3.8"
 # serde_yaml = "0.9.21"
 serde_yaml = "0.8.26"
 shell-words = "1.1.0"
@@ -565,10 +565,10 @@ move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "55e7e568842939e01c8545a71d72e2402ad74538", features = ["experimental"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "729145c130be00908d40804bb0eececa46e84340" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "729145c130be00908d40804bb0eececa46e84340" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "729145c130be00908d40804bb0eececa46e84340", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "729145c130be00908d40804bb0eececa46e84340", features = ["experimental"] }
 passkey-types = { version = "0.2.0" }
 passkey-client = { version = "0.2.0" }
 passkey-authenticator = { version = "0.2.0" }
