@@ -1,0 +1,40 @@
+---
+title: DeepBookV3
+description: A central limit order book that offers features and functionality for marketplaces on Sui. Token exchanges leveraging the layer can feature transparency, a full range of trading options, and customer privacy.
+---
+
+{@include: ../snippets/deepbook.mdx}
+
+DeepBook is a next-generation decentralized central limit order book (CLOB) built on Sui. DeepBook leverages Sui's parallel execution and low transaction fees to bring a highly performant, low-latency exchange on chain. 
+
+The latest version delivers new features including flash loans, governance, improved account abstraction, and enhancements to the existing matching engine. This version also introduces its own tokenomics with the [DEEP token](https://suiscan.xyz/mainnet/coin/0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP/txs), which you can stake for additional benefits. 
+
+DeepBook does not include an end-user interface for token trading. Rather, it offers built-in trading functionality that can support token trades from decentralized exchanges, wallets, or other apps. The available SDK abstracts away a lot of the complexities of interacting with the chain and building programmable transaction blocks, lowering the barrier of entry for active market making.
+
+## DeepBook tokenomics  
+
+The DEEP token is used to pay for trading fees on the exchange. Future upgrades will allow users to pay trading fees using the input token, but owning, using, and staking DEEP will continue to provide benefits to active DeepBook traders on the Sui network.
+
+Users that stake DEEP can enjoy taker and maker incentives. Taker incentives can reduce trading fees by half, dropping them to as low as 0.25 basis points (bps) on stable pairs and 2.5 bps on volatile pairs. Maker incentives are rebates earned based on maker volume generated.
+
+## Liquidity support
+
+Similar to order books for other market places, DeepBook's CLOB architecture enables you to enter market and limit orders. You can sell SUI tokens, referred to as an "ask," can set your price, referred to as a limit order, or sell at the market's going rate. If you are seeking to buy SUI, referred to as a "bid," you can pay the current market price or set a limit price. Limit orders only get fulfilled if the CLOB finds a match between a buyer and seller.
+
+If you put in a limit order for 1,000 SUI, and no single seller is currently offering that quantity of tokens, DeepBook automatically pools the current asks to meet the quantity of your bid.
+
+## Transparency and privacy
+
+As a CLOB, DeepBook works like a digital ledger, logging bids and asks in chronological order and automatically finding matches between the two sides. It takes into account user parameters on trades such as prices.
+
+The digital ledger is open so people can view the trades and prices, giving clear proof of fairness. You can use this transparency to create metrics and dashboards to monitor trading activity.
+
+## Documentation
+
+This documentation outlines the design of DeepBook, its public endpoints, and provides guidance for integrations. The SDK abstracts away a lot of the complexities of interacting with the chain and building programmable transaction blocks, lowering the barrier of entry for active market making.
+
+## Open source
+
+DeepBook is open for community development. You can use the [Sui Improvement Proposals](https://github.com/sui-foundation/sips?ref=blog.sui.io) (SIPs) process to suggest changes to make DeepBook better.
+
+[DeepBook repository on GitHub](https://github.com/MystenLabs/deepbookv3).

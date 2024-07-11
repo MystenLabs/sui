@@ -11,6 +11,7 @@ gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate:
 task 2 'programmable'. lines 22-24:
 created: object(2,0)
 mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
 task 3 'view-object'. lines 26-26:
@@ -31,4 +32,5 @@ task 4 'programmable'. lines 28-34:
 created: object(4,0)
 mutated: object(0,0), object(1,2)
 deleted: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 3972672, non_refundable_storage_fee: 40128

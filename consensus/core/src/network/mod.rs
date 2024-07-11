@@ -46,7 +46,7 @@ pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
 mod metrics_layer;
-#[cfg(test)]
+#[cfg(all(test, not(msim)))]
 mod network_tests;
 #[cfg(test)]
 pub(crate) mod test_network;
