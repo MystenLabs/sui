@@ -16,7 +16,7 @@ export class GovernanceContract {
 	stake =
 		(pool: Pool, balanceManager: BalanceManager, stakeAmount: number) => (tx: Transaction) => {
 			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
-			const baseCoin = this.#config.getCoin(pool.baseCoin);
+			const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 			return tx.moveCall({

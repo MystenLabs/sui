@@ -14,12 +14,10 @@ import { FlashLoanContract } from './transactions/flashLoans.js';
 import { GovernanceContract } from './transactions/governance.js';
 import type {
 	BalanceManager,
-	CoinKey,
 	CreatePoolAdminParams,
 	Environment,
 	PlaceLimitOrderParams,
 	PlaceMarketOrderParams,
-	PoolKey,
 	ProposalParams,
 	SwapParams,
 } from './types/index.js';
@@ -96,7 +94,7 @@ export class DeepBookClient {
 		return this.#signAndExecuteCommand(this.#config.balanceManager.createAndShareBalanceManager());
 	}
 
-	depositIntoManager(managerKey: string, amountToDeposit: number, coinKey: CoinKey) {
+	depositIntoManager(managerKey: string, amountToDeposit: number, coinKey: string) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
@@ -105,7 +103,7 @@ export class DeepBookClient {
 		);
 	}
 
-	withdrawFromManager(managerKey: string, amountToWithdraw: number, coinKey: CoinKey) {
+	withdrawFromManager(managerKey: string, amountToWithdraw: number, coinKey: string) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
@@ -121,7 +119,7 @@ export class DeepBookClient {
 		);
 	}
 
-	withdrawAllFromManager(managerKey: string, coinKey: CoinKey) {
+	withdrawAllFromManager(managerKey: string, coinKey: string) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
@@ -131,7 +129,7 @@ export class DeepBookClient {
 		);
 	}
 
-	async checkManagerBalance(managerKey: string, coinKey: CoinKey) {
+	async checkManagerBalance(managerKey: string, coinKey: string) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
@@ -223,7 +221,7 @@ export class DeepBookClient {
 		);
 	}
 
-	cancelOrder(poolKey: PoolKey, managerKey: string, clientOrderId: number) {
+	cancelOrder(poolKey: string, managerKey: string, clientOrderId: number) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const pool = this.#config.getPool(poolKey);
 
@@ -232,7 +230,7 @@ export class DeepBookClient {
 		);
 	}
 
-	cancelAllOrders(poolKey: PoolKey, managerKey: string) {
+	cancelAllOrders(poolKey: string, managerKey: string) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const pool = this.#config.getPool(poolKey);
 
@@ -281,14 +279,14 @@ export class DeepBookClient {
 	// 	);
 	// }
 
-	addDeepPricePoint(targetPoolKey: PoolKey, referencePoolKey: PoolKey) {
+	addDeepPricePoint(targetPoolKey: string, referencePoolKey: string) {
 		const targetPool = this.#config.getPool(targetPoolKey);
 		const referencePool = this.#config.getPool(referencePoolKey);
 
 		return this.#signAndExecuteCommand(this.#deepBook.addDeepPricePoint(targetPool, referencePool));
 	}
 
-	claimRebates(poolKey: PoolKey, managerKey: string) {
+	claimRebates(poolKey: string, managerKey: string) {
 		const balanceManager = this.#getBalanceManager(managerKey);
 
 		const pool = this.#config.getPool(poolKey);
@@ -296,19 +294,19 @@ export class DeepBookClient {
 		return this.#signAndExecuteCommand(this.#deepBook.claimRebates(pool, balanceManager));
 	}
 
-	burnDeep(poolKey: PoolKey) {
+	burnDeep(poolKey: string) {
 		const pool = this.#config.getPool(poolKey);
 
 		return this.#signAndExecuteCommand(this.#deepBook.burnDeep(pool));
 	}
 
-	midPrice(poolKey: PoolKey): Promise<number> {
+	midPrice(poolKey: string): Promise<number> {
 		const pool = this.#config.getPool(poolKey);
 
 		return this.#deepBook.midPrice(pool);
 	}
 
-	async whitelisted(poolKey: PoolKey): Promise<boolean> {
+	async whitelisted(poolKey: string): Promise<boolean> {
 		const pool = this.#config.getPool(poolKey);
 
 		const tx = new Transaction();
@@ -324,7 +322,7 @@ export class DeepBookClient {
 		return whitelisted;
 	}
 
-	async getQuoteQuantityOut(poolKey: PoolKey, baseQuantity: number) {
+	async getQuoteQuantityOut(poolKey: string, baseQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
 		const tx = new Transaction();
 
@@ -347,7 +345,7 @@ export class DeepBookClient {
 		};
 	}
 
-	async getBaseQuantityOut(poolKey: PoolKey, baseQuantity: number) {
+	async getBaseQuantityOut(poolKey: string, baseQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
 		const tx = new Transaction();
 
@@ -370,10 +368,8 @@ export class DeepBookClient {
 		};
 	}
 
-	async getQuantityOut(poolKey: PoolKey, baseQuantity: number, quoteQuantity: number) {
+	async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
-		const baseCoin = this.#config.getCoin(pool.baseCoin);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const tx = new Transaction();
 
 		tx.add(this.#deepBook.getQuantityOut(pool, baseQuantity, quoteQuantity));
@@ -390,13 +386,13 @@ export class DeepBookClient {
 		return {
 			baseQuantity,
 			quoteQuantity,
-			base: baseOut / baseCoin.scalar,
-			quote: quoteOut / quoteCoin.scalar,
+			base: baseOut / pool.baseCoin.scalar,
+			quote: quoteOut / pool.quoteCoin.scalar,
 			deep: deepRequired / DEEP_SCALAR,
 		};
 	}
 
-	async accountOpenOrders(poolKey: PoolKey, managerKey: string) {
+	async accountOpenOrders(poolKey: string, managerKey: string) {
 		const pool = this.#config.getPool(poolKey);
 		const tx = new Transaction();
 
@@ -415,7 +411,7 @@ export class DeepBookClient {
 		return VecSet.parse(new Uint8Array(order_ids)).constants;
 	}
 
-	async getLevel2Range(poolKey: PoolKey, priceLow: number, priceHigh: number, isBid: boolean) {
+	async getLevel2Range(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean) {
 		const pool = this.#config.getPool(poolKey);
 		const tx = new Transaction();
 
@@ -437,7 +433,7 @@ export class DeepBookClient {
 		};
 	}
 
-	async getLevel2TicksFromMid(poolKey: PoolKey, ticks: number) {
+	async getLevel2TicksFromMid(poolKey: string, ticks: number) {
 		const pool = this.#config.getPool(poolKey);
 		const tx = new Transaction();
 
@@ -459,10 +455,8 @@ export class DeepBookClient {
 		};
 	}
 
-	async vaultBalances(poolKey: PoolKey) {
+	async vaultBalances(poolKey: string) {
 		const pool = this.#config.getPool(poolKey);
-		const baseCoin = this.#config.getCoin(pool.baseCoin);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const tx = new Transaction();
 
 		tx.add(this.#deepBook.vaultBalances(pool));
@@ -477,8 +471,8 @@ export class DeepBookClient {
 		const deepInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
 
 		return {
-			base: baseInVault / baseCoin.scalar,
-			quote: quoteInVault / quoteCoin.scalar,
+			base: baseInVault / pool.baseCoin.scalar,
+			quote: quoteInVault / pool.quoteCoin.scalar,
 			deep: deepInVault / DEEP_SCALAR,
 		};
 	}
@@ -524,26 +518,26 @@ export class DeepBookClient {
 		);
 	}
 
-	unregisterPoolAdmin(poolKey: PoolKey) {
+	unregisterPoolAdmin(poolKey: string) {
 		const pool = this.#config.getPool(poolKey);
 
 		return this.#signAndExecuteCommand(this.#deepBookAdmin.unregisterPoolAdmin(pool));
 	}
 
-	updateDisabledVersions(poolKey: PoolKey) {
+	updateDisabledVersions(poolKey: string) {
 		const pool = this.#config.getPool(poolKey);
 
 		return this.#signAndExecuteCommand(this.#deepBookAdmin.updateDisabledVersions(pool));
 	}
 
-	stake(poolKey: PoolKey, managerKey: string, amount: number) {
+	stake(poolKey: string, managerKey: string, amount: number) {
 		const pool = this.#config.getPool(poolKey);
 
 		const balanceManager = this.#getBalanceManager(managerKey);
 		return this.#signAndExecuteCommand(this.#governance.stake(pool, balanceManager, amount));
 	}
 
-	unstake(poolKey: PoolKey, managerKey: string) {
+	unstake(poolKey: string, managerKey: string) {
 		const pool = this.#config.getPool(poolKey);
 
 		const balanceManager = this.#getBalanceManager(managerKey);
@@ -561,7 +555,7 @@ export class DeepBookClient {
 		);
 	}
 
-	vote(poolKey: PoolKey, managerKey: string, proposal_id: string) {
+	vote(poolKey: string, managerKey: string, proposal_id: string) {
 		const pool = this.#config.getPool(poolKey);
 
 		const balanceManager = this.#getBalanceManager(managerKey);
