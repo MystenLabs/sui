@@ -262,17 +262,24 @@ impl MoveObject {
 
     /// The transaction blocks that sent objects to this object.
     ///
-    /// The `scanLimit`` restricts the number of candidate transactions scanned for potential
-    /// results. This can result in pages that have fewer than the requested `first` results when
-    /// paginating forward (last when paginating backwards) but still have a next (or previous)
-    /// page, indicating the scan limit was reached before the set page size. In this case the
-    /// `endCursor`` (or `startCursor``) will point to the last transaction that was scanned (even
-    /// if it is not a result). Requesting the next (or previous) page after this cursor will resume
-    /// the search, scanning the next `scanLimit` many transactions in the direction of pagination.
-    /// This process will continue until the full transaction range is exhausted. If no other
-    /// filters are provided, the transaction range will consist of all transactions that occurred
-    /// on chain since genesis. It can be restricted using the before and after pagination cursors,
-    /// as well as checkpoint bounds (`beforeCheckpoint``, `afterCheckpoint``, and `atCheckpoint`).
+    /// `scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+    /// results. It is required for queries that apply more than two complex filters (on function,
+    /// kind, sender, recipient, input object, changed object, or ids), and can be at most
+    /// `serviceConfig.maxScanLimit`.
+    ///
+    /// When the scan limit is reached the page will be returned even if it has fewer than `first`
+    /// results when paginating forward (`last` when paginating backwards). If there are more
+    /// transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+    /// `true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+    /// transaction that was scanned as opposed to the last (or first) transaction in the page.
+    ///
+    /// Requesting the next (or previous) page after this cursor will resume the search, scanning
+    /// the next `scanLimit` many transactions in the direction of pagination, and so on until all
+    /// transactions in the scanning range have been visited.
+    ///
+    /// By default, the scanning range includes all transactions known to GraphQL, but it can be
+    /// restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+    /// `afterCheckpoint` and `atCheckpoint` filters.
     pub(crate) async fn received_transaction_blocks(
         &self,
         ctx: &Context<'_>,

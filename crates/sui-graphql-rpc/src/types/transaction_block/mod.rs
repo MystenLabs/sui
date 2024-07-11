@@ -276,17 +276,27 @@ impl TransactionBlock {
             return Ok(ScanConnection::new(false, false));
         }
 
+        let limits = ctx.data_unchecked::<ServiceConfig>().limits;
+
         // If there is more than one `complex_filter` specified, then the caller has provided some
         // arbitrary combination of `function`, `kind`, `recvAddress`, `inputObject`, or
         // `changedObject`. Consequently, we require setting a `scanLimit`, or else we will return
         // an error.
-        if filter.requires_scan_limit() && scan_limit.is_none() {
-            return Err(Error::Client(
-                "A scan limit must be specified for the given filter combination".to_string(),
-            ));
+        if filter.requires_scan_limit() {
+            if let Some(scan_limit) = scan_limit {
+                if scan_limit >= limits.max_scan_limit as u64 {
+                    return Err(Error::Client(format!(
+                        "Scan limit exceeds max limit of '{}'",
+                        limits.max_scan_limit
+                    )));
+                }
+            } else {
+                return Err(Error::Client(
+                    "A scan limit must be specified for the given filter combination".to_string(),
+                ));
+            }
         }
 
-        let limits = ctx.data_unchecked::<ServiceConfig>().limits;
         if let Some(tx_ids) = &filter.transaction_ids {
             if tx_ids.len() > limits.max_transaction_ids as usize {
                 return Err(Error::Client(format!(

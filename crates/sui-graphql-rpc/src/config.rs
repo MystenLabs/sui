@@ -29,6 +29,7 @@ const MAX_MOVE_VALUE_DEPTH: u32 = 128;
 /// Filter-specific limits, such as the number of transaction ids that can be specified for the
 /// `TransactionBlockFilter`.
 const MAX_TRANSACTION_IDS: u32 = 1000;
+const MAX_SCAN_LIMIT: u32 = 100_000_000;
 
 pub(crate) const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
@@ -152,6 +153,8 @@ pub struct Limits {
     pub max_move_value_depth: u32,
     #[serde(default)]
     pub max_transaction_ids: u32,
+    #[serde(default)]
+    pub max_scan_limit: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -361,6 +364,11 @@ impl ServiceConfig {
     async fn max_transaction_ids(&self) -> u32 {
         self.limits.max_transaction_ids
     }
+
+    /// Maximum number of candidates to scan when gathering a page of results.
+    async fn max_scan_limit(&self) -> u32 {
+        self.limits.max_scan_limit
+    }
 }
 
 impl TxExecFullNodeConfig {
@@ -520,6 +528,7 @@ impl Default for Limits {
             max_type_nodes: MAX_TYPE_NODES,
             max_move_value_depth: MAX_MOVE_VALUE_DEPTH,
             max_transaction_ids: MAX_TRANSACTION_IDS,
+            max_scan_limit: MAX_SCAN_LIMIT,
         }
     }
 }
