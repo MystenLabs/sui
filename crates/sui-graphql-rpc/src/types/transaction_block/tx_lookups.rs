@@ -173,19 +173,28 @@ impl TxBounds {
 }
 
 impl TransactionBlockFilter {
-    /// Returns the count of `function`, `kind`, `recv_address`, `input_object`, and
-    /// `changed_object`.
-    pub(crate) fn complex_filters(&self) -> usize {
+    pub(crate) fn requires_scan_limit(&self) -> bool {
         [
             self.function.is_some(),
             self.kind.is_some(),
             self.recv_address.is_some(),
             self.input_object.is_some(),
             self.changed_object.is_some(),
+            self.transaction_ids.is_some(),
         ]
         .into_iter()
         .filter(|is_set| *is_set)
         .count()
+            > 2
+    }
+
+    pub(crate) fn requires_explicit_sender(&self) -> bool {
+        self.transaction_ids.is_some()
+            || (self.function.is_none()
+                && self.kind.is_none()
+                && self.recv_address.is_none()
+                && self.input_object.is_none()
+                && self.changed_object.is_none())
     }
 
     /// A TransactionBlockFilter is considered not to have any filters if no filters are specified,
@@ -289,7 +298,7 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
         });
     }
     if let Some(kind) = &filter.kind {
-        subqueries.push((select_kind(*kind, tx_bounds), "tx_kinds"));
+        subqueries.push((select_kind(*kind, sender, tx_bounds), "tx_kinds"));
     }
     if let Some(recv) = &filter.recv_address {
         subqueries.push((select_recipient(recv, sender, tx_bounds), "tx_recipients"));
@@ -304,7 +313,7 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
         ));
     }
     if let Some(sender) = &sender {
-        if filter.complex_filters() == 0 || filter.kind.is_some() {
+        if filter.requires_explicit_sender() {
             subqueries.push((select_sender(sender, tx_bounds), "tx_senders"));
         }
     }
@@ -327,19 +336,19 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
 }
 
 pub(crate) fn select_tx(sender: Option<SuiAddress>, bound: TxBounds, from: &str) -> RawQuery {
-    let mut query = query!(format!("SELECT tx_sequence_number FROM {}", from));
+    let mut query = filter!(
+        query!(format!("SELECT tx_sequence_number FROM {}", from)),
+        format!(
+            "{} <= tx_sequence_number AND tx_sequence_number <= {}",
+            bound.lo, bound.hi
+        )
+    );
 
     if let Some(sender) = sender {
         query = filter!(query, format!("sender = {}", bytea_literal(&sender)));
     }
 
-    filter!(
-        query,
-        format!(
-            "tx_sequence_number >= {} AND tx_sequence_number <= {}",
-            bound.lo, bound.hi
-        )
-    )
+    query
 }
 
 pub(crate) fn select_pkg(
@@ -384,11 +393,24 @@ pub(crate) fn select_fun(
     )
 }
 
-pub(crate) fn select_kind(kind: TransactionBlockKindInput, bound: TxBounds) -> RawQuery {
-    filter!(
-        select_tx(None, bound, "tx_kinds"),
-        format!("tx_kind = {}", kind as i16)
-    )
+/// Returns a RawQuery that selects transactions of a specific kind. If SystemTX is specified, we
+/// ignore the `sender`. If ProgrammableTX is specified, we filter against the `tx_kinds` table if no
+/// `sender` is provided; otherwise, we just query the `tx_senders` table.
+pub(crate) fn select_kind(
+    kind: TransactionBlockKindInput,
+    sender: Option<SuiAddress>,
+    bound: TxBounds,
+) -> RawQuery {
+    match (kind, sender) {
+        // We can simplify the query to just the `tx_senders` table if ProgrammableTX and sender is
+        // specified.
+        (TransactionBlockKindInput::ProgrammableTx, Some(sender)) => select_sender(&sender, bound),
+        // Otherwise, we can ignore the sender always, and just query the `tx_kinds` table.
+        _ => filter!(
+            select_tx(None, bound, "tx_kinds"),
+            format!("tx_kind = {}", kind as i16)
+        ),
+    }
 }
 
 pub(crate) fn select_sender(sender: &SuiAddress, bound: TxBounds) -> RawQuery {
