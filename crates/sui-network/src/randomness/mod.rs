@@ -621,6 +621,15 @@ impl RandomnessEventLoop {
             }
         }
 
+        let highest_requested_round = self.highest_requested_round.get(&epoch);
+        if highest_requested_round.is_none() || round > *highest_requested_round.unwrap() {
+            // Wait for local consensus to catch up if necessary.
+            debug!(
+                "skipping received full signature, local consensus is not caught up to its round"
+            );
+            return;
+        }
+
         // TODO: ignore future messages from peers sending bad signatures.
         if let Err(e) =
             ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
