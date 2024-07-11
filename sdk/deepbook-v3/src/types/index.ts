@@ -6,20 +6,18 @@ export interface BalanceManager {
 }
 
 export interface Coin {
-	key: CoinKey;
+	key: string;
 	address: string;
 	type: string;
 	scalar: number;
+	coinId: string;
 }
 
 export interface Pool {
 	address: string;
-	baseCoin: CoinKey;
-	quoteCoin: CoinKey;
+	baseCoin: Coin;
+	quoteCoin: Coin;
 }
-
-export type CoinKey = 'DEEP' | 'SUI' | 'DBUSDC' | 'DBWETH' | 'USDC' | 'WETH';
-export type PoolKey = 'DEEP_SUI' | 'SUI_DBUSDC' | 'DEEP_DBWETH' | 'DBWETH_DBUSDC';
 
 // Trading constants
 export enum OrderType {
@@ -37,7 +35,7 @@ export enum SelfMatchingOptions {
 }
 
 export interface PlaceLimitOrderParams {
-	poolKey: PoolKey;
+	poolKey: string;
 	managerKey: string;
 	clientOrderId: number;
 	price: number;
@@ -50,7 +48,7 @@ export interface PlaceLimitOrderParams {
 }
 
 export interface PlaceMarketOrderParams {
-	poolKey: PoolKey;
+	poolKey: string;
 	managerKey: string;
 	clientOrderId: number;
 	quantity: number;
@@ -60,7 +58,7 @@ export interface PlaceMarketOrderParams {
 }
 
 export interface ProposalParams {
-	poolKey: PoolKey;
+	poolKey: string;
 	managerKey: string;
 	takerFee: number;
 	makerFee: number;
@@ -68,15 +66,15 @@ export interface ProposalParams {
 }
 
 export interface SwapParams {
-	poolKey: PoolKey;
-	coinKey: CoinKey;
+	poolKey: string;
 	amount: number;
 	deepAmount: number;
+	deepCoin?: any;
 }
 
 export interface CreatePoolAdminParams {
-	baseCoinKey: CoinKey;
-	quoteCoinKey: CoinKey;
+	baseCoinKey: string;
+	quoteCoinKey: string;
 	tickSize: number;
 	lotSize: number;
 	minSize: number;
@@ -90,4 +88,4 @@ export interface Config {
 	DEEP_TREASURY_ID: string;
 }
 
-export type Environment = 'mainnet' | 'testnet';
+export type Environment = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
