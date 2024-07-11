@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { Coin, CoinKey, Pool, PoolKey } from '../types/index.js';
+import type { Coin, Pool } from '../types/index.js';
 
-export type CoinMap = Partial<Record<CoinKey, Coin>> & { SUI: Coin; DEEP: Coin };
-export type PoolMap = Partial<Record<PoolKey, Pool>> & { DEEP_SUI: Pool };
+export type CoinMap = Partial<Record<string, Coin>> & { SUI: Coin; DEEP: Coin };
+export type PoolMap = Partial<Record<string, Pool>> & { DEEP_SUI: Pool };
 export interface DeepbookPackageIds {
 	DEEPBOOK_PACKAGE_ID: string;
 	REGISTRY_ID: string;

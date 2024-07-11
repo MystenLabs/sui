@@ -239,47 +239,47 @@ export class DeepBookClient {
 		return this.#signAndExecuteCommand(this.#deepBook.cancelAllOrders(pool, balanceManager));
 	}
 
-	swapExactBaseForQuote(params: SwapParams) {
-		const { poolKey, coinKey: baseKey, amount: baseAmount, deepAmount } = params;
+	// swapExactBaseForQuote(params: SwapParams) {
+	// 	const { poolKey, amount: baseAmount, deepAmount } = params;
 
-		const pool = this.#config.getPool(poolKey);
-		const baseCoinId = this.#config.getCoinId(baseKey);
-		const deepCoinId = this.#config.getCoinId('DEEP');
+	// 	const pool = this.#config.getPool(poolKey);
+	// 	const baseCoinId = this.#config.getCoinId(baseKey);
+	// 	const deepCoinId = this.#config.getCoinId('DEEP');
 
-		const recipient = this.getActiveAddress();
+	// 	const recipient = this.getActiveAddress();
 
-		return this.#signAndExecuteCommand(
-			this.#deepBook.swapExactBaseForQuote(
-				pool,
-				baseAmount,
-				baseCoinId,
-				deepAmount,
-				deepCoinId,
-				recipient,
-			),
-		);
-	}
+	// 	return this.#signAndExecuteCommand(
+	// 		this.#deepBook.swapExactBaseForQuote(
+	// 			pool,
+	// 			baseAmount,
+	// 			baseCoinId,
+	// 			deepAmount,
+	// 			deepCoinId,
+	// 			recipient,
+	// 		),
+	// 	);
+	// }
 
-	swapExactQuoteForBase(params: SwapParams) {
-		const { poolKey, coinKey: quoteKey, amount: quoteAmount, deepAmount } = params;
+	// swapExactQuoteForBase(params: SwapParams) {
+	// 	const { poolKey, coinKey: quoteKey, amount: quoteAmount, deepAmount } = params;
 
-		const pool = this.#config.getPool(poolKey);
-		const quoteCoinId = this.#config.getCoinId(quoteKey);
-		const deepCoinId = this.#config.getCoinId('DEEP');
+	// 	const pool = this.#config.getPool(poolKey);
+	// 	const quoteCoinId = this.#config.getCoinId(quoteKey);
+	// 	const deepCoinId = this.#config.getCoinId('DEEP');
 
-		const recipient = this.getActiveAddress();
+	// 	const recipient = this.getActiveAddress();
 
-		return this.#signAndExecuteCommand(
-			this.#deepBook.swapExactQuoteForBase(
-				pool,
-				quoteAmount,
-				quoteCoinId,
-				deepAmount,
-				deepCoinId,
-				recipient,
-			),
-		);
-	}
+	// 	return this.#signAndExecuteCommand(
+	// 		this.#deepBook.swapExactQuoteForBase(
+	// 			pool,
+	// 			quoteAmount,
+	// 			quoteCoinId,
+	// 			deepAmount,
+	// 			deepCoinId,
+	// 			recipient,
+	// 		),
+	// 	);
+	// }
 
 	addDeepPricePoint(targetPoolKey: PoolKey, referencePoolKey: PoolKey) {
 		const targetPool = this.#config.getPool(targetPoolKey);
@@ -326,8 +326,6 @@ export class DeepBookClient {
 
 	async getQuoteQuantityOut(poolKey: PoolKey, baseQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
-		const baseCoin = this.#config.getCoin(pool.baseCoin);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const tx = new Transaction();
 
 		tx.add(this.#deepBook.getQuoteQuantityOut(pool, baseQuantity));
@@ -343,16 +341,14 @@ export class DeepBookClient {
 
 		return {
 			baseQuantity,
-			base: baseOut / baseCoin.scalar,
-			quote: quoteOut / quoteCoin.scalar,
+			base: baseOut / pool.baseCoin.scalar,
+			quote: quoteOut / pool.quoteCoin.scalar,
 			deep: deepRequired / DEEP_SCALAR,
 		};
 	}
 
 	async getBaseQuantityOut(poolKey: PoolKey, baseQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
-		const baseCoin = this.#config.getCoin(pool.baseCoin);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const tx = new Transaction();
 
 		tx.add(this.#deepBook.getBaseQuantityOut(pool, baseQuantity));
@@ -368,8 +364,8 @@ export class DeepBookClient {
 
 		return {
 			baseQuantity,
-			base: baseOut / baseCoin.scalar,
-			quote: quoteOut / quoteCoin.scalar,
+			base: baseOut / pool.baseCoin.scalar,
+			quote: quoteOut / pool.quoteCoin.scalar,
 			deep: deepRequired / DEEP_SCALAR,
 		};
 	}
@@ -572,26 +568,25 @@ export class DeepBookClient {
 		return this.#signAndExecuteCommand(this.#governance.vote(pool, balanceManager, proposal_id));
 	}
 
-	// Flash Loans
-	borrowAndReturnBaseAsset = (
-		pool: PoolKey,
-		borrowAmount: number,
-		add: <T>(tx: Transaction, flashLoan: TransactionResult[1]) => T,
-	) => {
-		return this.#signAndExecuteCommand(
-			this.#flashLoans.borrowAndReturnBaseAsset(this.#config.getPool(pool), borrowAmount, add),
-		);
-	};
+	// // Flash Loans
+	// borrowBaseAsset = (
+	// 	pool: PoolKey,
+	// 	borrowAmount: number,
+	// ) => {
+	// 	return this.#signAndExecuteCommand(
+	// 		this.#flashLoans.borrowAndReturnBaseAsset(this.#config.getPool(pool), borrowAmount),
+	// 	);
+	// };
 
-	borrowAndReturnQuoteAsset = (
-		pool: PoolKey,
-		borrowAmount: number,
-		add: <T>(tx: Transaction, flashLoan: TransactionResult[1]) => T,
-	) => {
-		return this.#signAndExecuteCommand(
-			this.#flashLoans.borrowAndReturnQuoteAsset(this.#config.getPool(pool), borrowAmount, add),
-		);
-	};
+	// borrowAndReturnQuoteAsset = (
+	// 	pool: PoolKey,
+	// 	borrowAmount: number,
+	// 	add: <T>(tx: Transaction, flashLoan: TransactionResult[1]) => T,
+	// ) => {
+	// 	return this.#signAndExecuteCommand(
+	// 		this.#flashLoans.borrowAndReturnQuoteAsset(this.#config.getPool(pool), borrowAmount, add),
+	// 	);
+	// };
 
 	#getBalanceManager(managerKey: string): BalanceManager {
 		if (!Object.hasOwn(this.#balanceManagers, managerKey)) {
