@@ -17,7 +17,7 @@ import {
 
 export const FLOAT_SCALAR = 1000000000;
 export const POOL_CREATION_FEE = 10000 * 1000000;
-export const MAX_TIMESTAMP = 1844674407370955161;
+export const MAX_TIMESTAMP = 1844674407370955161n;
 export const GAS_BUDGET = 0.5 * 500000000; // Adjust based on benchmarking
 export const DEEP_SCALAR = 1000000;
 
