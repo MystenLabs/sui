@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data::{Conn, DbConnection},
+    data::{pg::bytea_literal, Conn, DbConnection},
     filter, inner_join, query,
     raw_query::RawQuery,
     types::{
@@ -18,7 +18,7 @@ use diesel::{
     deserialize::{self, FromSql, QueryableByName},
     row::NamedRow,
 };
-use std::fmt::{self, Write};
+use std::fmt::Write;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 use super::{Cursor, TransactionBlockFilter};
@@ -78,6 +78,8 @@ impl TxBounds {
         page: &Page<Cursor>,
     ) -> Result<Option<Self>, diesel::result::Error> {
         let lo_cp = max_option([after_cp.map(|x| x.saturating_add(1)), at_cp]).unwrap_or(0);
+        // Assumes that `before_cp` is greater than 0. In the `TransactionBlock::paginate` flow, we
+        // check if `before_cp` is 0, and if so, short-circuit and produce no results.
         let hi_cp = min_option([
             before_cp.map(|x| x.saturating_sub(1)),
             at_cp,
@@ -345,7 +347,10 @@ pub(crate) fn select_tx(sender: Option<SuiAddress>, bound: TxBounds, from: &str)
     );
 
     if let Some(sender) = sender {
-        query = filter!(query, format!("sender = {}", bytea_literal(&sender)));
+        query = filter!(
+            query,
+            format!("sender = {}", bytea_literal(sender.as_slice()))
+        );
     }
 
     query
@@ -358,7 +363,7 @@ pub(crate) fn select_pkg(
 ) -> RawQuery {
     filter!(
         select_tx(sender, bound, "tx_calls_pkg"),
-        format!("package = {}", bytea_literal(pkg))
+        format!("package = {}", bytea_literal(pkg.as_slice()))
     )
 }
 
@@ -370,7 +375,10 @@ pub(crate) fn select_mod(
 ) -> RawQuery {
     filter!(
         select_tx(sender, bound, "tx_calls_mod"),
-        format!("package = {} and module = {{}}", bytea_literal(pkg)),
+        format!(
+            "package = {} and module = {{}}",
+            bytea_literal(pkg.as_slice())
+        ),
         mod_
     )
 }
@@ -386,7 +394,7 @@ pub(crate) fn select_fun(
         select_tx(sender, bound, "tx_calls_fun"),
         format!(
             "package = {} AND module = {{}} AND func = {{}}",
-            bytea_literal(pkg),
+            bytea_literal(pkg.as_slice()),
         ),
         mod_,
         fun
@@ -424,7 +432,7 @@ pub(crate) fn select_recipient(
 ) -> RawQuery {
     filter!(
         select_tx(sender, bound, "tx_recipients"),
-        format!("recipient = '\\x{}'::bytea", hex::encode(recv.into_vec()))
+        format!("recipient = {}", bytea_literal(recv.as_slice()))
     )
 }
 
@@ -435,7 +443,7 @@ pub(crate) fn select_input(
 ) -> RawQuery {
     filter!(
         select_tx(sender, bound, "tx_input_objects"),
-        format!("object_id = '\\x{}'::bytea", hex::encode(input.into_vec()))
+        format!("object_id = {}", bytea_literal(input.as_slice()))
     )
 }
 
@@ -446,10 +454,7 @@ pub(crate) fn select_changed(
 ) -> RawQuery {
     filter!(
         select_tx(sender, bound, "tx_changed_objects"),
-        format!(
-            "object_id = '\\x{}'::bytea",
-            hex::encode(changed.into_vec())
-        )
+        format!("object_id = {}", bytea_literal(changed.as_slice()))
     )
 }
 
@@ -461,27 +466,10 @@ pub(crate) fn select_ids(ids: &Vec<Digest>, bound: TxBounds) -> RawQuery {
         let mut inner = String::new();
         let mut prefix = "tx_digest IN (";
         for id in ids {
-            write!(
-                &mut inner,
-                "{prefix}'\\x{}'::bytea",
-                hex::encode(id.to_vec())
-            )
-            .unwrap();
+            write!(&mut inner, "{prefix}{}", bytea_literal(id.as_slice())).unwrap();
             prefix = ", ";
         }
         inner.push(')');
         filter!(query, inner)
     }
-}
-
-pub(crate) fn bytea_literal(addr: &SuiAddress) -> impl fmt::Display + '_ {
-    struct ByteaLiteral<'a>(&'a [u8]);
-
-    impl fmt::Display for ByteaLiteral<'_> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "'\\x{}'::bytea", hex::encode(self.0))
-        }
-    }
-
-    ByteaLiteral(addr.as_slice())
 }
