@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { Transaction } from '@mysten/sui/transactions';
+
 import type { Pool } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
-
-import { Transaction } from '@mysten/sui/transactions';
 
 export class FlashLoanContract {
 	#config: DeepBookConfig;
@@ -22,7 +22,12 @@ export class FlashLoanContract {
 		return [baseCoinResult, flashLoan];
 	};
 
-	returnBaseAsset = (pool: Pool, baseCoin: any, flashLoan: any, tx: Transaction = new Transaction()) => {
+	returnBaseAsset = (
+		pool: Pool,
+		baseCoin: any,
+		flashLoan: any,
+		tx: Transaction = new Transaction(),
+	) => {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_base`,
 			arguments: [tx.object(pool.address), baseCoin, flashLoan],
@@ -40,7 +45,12 @@ export class FlashLoanContract {
 		return [quoteCoinResult, flashLoan];
 	};
 
-	returnQuoteAsset = (pool: Pool, quoteCoin: any, flashLoan: any, tx: Transaction = new Transaction()) => {
+	returnQuoteAsset = (
+		pool: Pool,
+		quoteCoin: any,
+		flashLoan: any,
+		tx: Transaction = new Transaction(),
+	) => {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_quote`,
 			arguments: [tx.object(pool.address), quoteCoin, flashLoan],

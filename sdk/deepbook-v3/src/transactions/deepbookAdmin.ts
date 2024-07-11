@@ -21,44 +21,43 @@ export class DeepBookAdminContract {
 		return adminCap;
 	}
 
-	createPoolAdmin =
-		(
-			baseCoin: Coin,
-			quoteCoin: Coin,
-			deepCoinId: string,
-			tickSize: number,
-			lotSize: number,
-			minSize: number,
-			whitelisted: boolean,
-			stablePool: boolean,
-			tx: Transaction = new Transaction()
-		) => {
-			const [creationFee] = tx.splitCoins(tx.object(deepCoinId), [tx.pure.u64(POOL_CREATION_FEE)]);
+	createPoolAdmin = (
+		baseCoin: Coin,
+		quoteCoin: Coin,
+		deepCoinId: string,
+		tickSize: number,
+		lotSize: number,
+		minSize: number,
+		whitelisted: boolean,
+		stablePool: boolean,
+		tx: Transaction = new Transaction(),
+	) => {
+		const [creationFee] = tx.splitCoins(tx.object(deepCoinId), [tx.pure.u64(POOL_CREATION_FEE)]);
 
-			const baseScalar = baseCoin.scalar;
-			const quoteScalar = quoteCoin.scalar;
+		const baseScalar = baseCoin.scalar;
+		const quoteScalar = quoteCoin.scalar;
 
-			const adjustedTickSize = (tickSize * FLOAT_SCALAR * quoteScalar) / baseScalar;
-			const adjustedLotSize = lotSize * baseScalar;
-			const adjustedMinSize = minSize * baseScalar;
+		const adjustedTickSize = (tickSize * FLOAT_SCALAR * quoteScalar) / baseScalar;
+		const adjustedLotSize = lotSize * baseScalar;
+		const adjustedMinSize = minSize * baseScalar;
 
-			tx.moveCall({
-				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::create_pool_admin`,
-				arguments: [
-					tx.object(this.#config.REGISTRY_ID), // registry_id
-					tx.pure.u64(adjustedTickSize), // adjusted tick_size
-					tx.pure.u64(adjustedLotSize), // adjusted lot_size
-					tx.pure.u64(adjustedMinSize), // adjusted min_size
-					creationFee, // 0x2::balance::Balance<0x2::sui::SUI>
-					tx.pure.bool(whitelisted),
-					tx.pure.bool(stablePool),
-					tx.object(this.#adminCap()),
-				],
-				typeArguments: [baseCoin.type, quoteCoin.type],
-			});
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::create_pool_admin`,
+			arguments: [
+				tx.object(this.#config.REGISTRY_ID), // registry_id
+				tx.pure.u64(adjustedTickSize), // adjusted tick_size
+				tx.pure.u64(adjustedLotSize), // adjusted lot_size
+				tx.pure.u64(adjustedMinSize), // adjusted min_size
+				creationFee, // 0x2::balance::Balance<0x2::sui::SUI>
+				tx.pure.bool(whitelisted),
+				tx.pure.bool(stablePool),
+				tx.object(this.#adminCap()),
+			],
+			typeArguments: [baseCoin.type, quoteCoin.type],
+		});
 
-			return tx;
-		};
+		return tx;
+	};
 
 	unregisterPoolAdmin = (pool: Pool, tx: Transaction = new Transaction()) => {
 		tx.moveCall({
