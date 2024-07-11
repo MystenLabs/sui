@@ -20,30 +20,32 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-// esitmate of the size of the objects read for a deny list check
-pub const CONFIG_READ_BYTES_SIZE_ESTIMATE: usize = {
-    let address_size = 32usize;
-    let id_size = address_size;
-    let uid_size = id_size;
-    let type_name_size = address_size;
-    let bool_size = 1usize;
-    let u64_size = 8usize;
-    let option_some_bool_size = bool_size + 1usize;
+pub(super) mod constants {
+    const ADDRESS: usize = 32;
+    const ID: usize = ADDRESS;
+    const UID: usize = ID;
+    const STR: usize = 128;
+    const TYPE_NAME: usize = ADDRESS + STR + STR + 4;
+    const BOOL: usize = 1;
+    const U64: usize = 8;
+    const OPTION_SOME_BOOL: usize = BOOL + 1;
+    const OBJECT_METADATA: usize = 9 + TYPE_NAME;
 
-    let config_key_size = u64_size + type_name_size;
-    let address_key_size = address_size;
+    const CONFIG_KEY: usize = U64 + TYPE_NAME;
+    const ADDRESS_KEY: usize = ADDRESS;
 
-    let dof_field_size = uid_size + config_key_size + id_size;
+    // config dynamic object field
+    pub const CONFIG_DOF_FIELD: usize = OBJECT_METADATA + UID + CONFIG_KEY + ID;
 
-    let config_size = uid_size;
+    // setting dynamic field
+    const SETTING_DATA: usize = U64 + OPTION_SOME_BOOL + OPTION_SOME_BOOL;
+    const OPTION_SOME_SETTING_DATA: usize = SETTING_DATA + 1;
+    const SETTING: usize = OPTION_SOME_SETTING_DATA;
+    pub const SETTING_FIELD: usize = OBJECT_METADATA + UID + ADDRESS_KEY + SETTING;
+}
 
-    let setting_data_size = u64_size + option_some_bool_size + option_some_bool_size;
-    let option_some_setting_data_size = setting_data_size + 1;
-    let setting_size = option_some_setting_data_size;
-    let setting_field_size = uid_size + address_key_size + setting_size;
-
-    dof_field_size + config_size + setting_field_size
-};
+pub const CONFIG_DYNAMIC_OBJECT_FIELD_SIZE: usize = constants::CONFIG_DOF_FIELD;
+pub const CONFIG_SETTING_DYNAMIC_FIELD_SIZE: usize = constants::SETTING_FIELD;
 
 /// Rust representation of the Move type 0x2::coin::DenyCapV2.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -145,8 +147,8 @@ pub fn check_coin_deny_list_v2_during_signing(
 }
 
 /// Returns 1) whether the coin deny list check passed,
-///         2) whether the deny list object was checked at all, and
-///         3) the number of regulated coin types checked.
+///         2) the deny lists checked
+///         2) the number of regulated coin owners checked.
 pub fn check_coin_deny_list_v2_during_execution(
     written_objects: &BTreeMap<ObjectID, Object>,
     cur_epoch: EpochId,
@@ -168,7 +170,7 @@ pub fn check_coin_deny_list_v2_during_execution(
             .or_insert_with(BTreeSet::new)
             .insert(owner);
     }
-    let deny_list_checked = !new_coin_owners.is_empty();
+    let num_deny_lists_checked = new_coin_owners.len() as u64;
     let new_regulated_coin_owners = new_coin_owners
         .into_iter()
         .filter_map(|(coin_type, owners)| {
@@ -176,13 +178,16 @@ pub fn check_coin_deny_list_v2_during_execution(
             Some((coin_type, (deny_list_config, owners)))
         })
         .collect::<BTreeMap<_, _>>();
-    let regulated_coin_types_checked = new_regulated_coin_owners.len() as u64;
+    let num_regulated_coin_owners = new_regulated_coin_owners
+        .values()
+        .map(|(_deny_list, owners)| owners.len() as u64)
+        .sum();
     let result =
         check_new_regulated_coin_owners(new_regulated_coin_owners, cur_epoch, object_store);
     DenyListResult {
         result,
-        deny_list_checked,
-        regulated_coin_types_checked,
+        num_deny_lists_checked,
+        num_regulated_coin_owners,
     }
 }
 

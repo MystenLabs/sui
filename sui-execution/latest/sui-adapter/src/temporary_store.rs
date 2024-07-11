@@ -1029,7 +1029,9 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         );
         // The denylist object is only loaded if there are regulated transfers.
         // And also if we already have it in the input there is no need to commit it again in the effects.
-        if result.deny_list_checked && !self.input_objects.contains_key(&SUI_DENY_LIST_OBJECT_ID) {
+        if result.num_deny_lists_checked > 0
+            && !self.input_objects.contains_key(&SUI_DENY_LIST_OBJECT_ID)
+        {
             self.loaded_per_epoch_config_objects
                 .write()
                 .insert(SUI_DENY_LIST_OBJECT_ID);

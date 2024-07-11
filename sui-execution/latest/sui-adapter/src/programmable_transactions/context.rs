@@ -832,10 +832,13 @@ mod checked {
             if protocol_config.enable_coin_deny_list_v2() {
                 let DenyListResult {
                     result,
-                    deny_list_checked: _,
-                    regulated_coin_types_checked,
+                    num_deny_lists_checked,
+                    num_regulated_coin_owners,
                 } = state_view.check_coin_deny_list(&written_objects);
-                gas_charger.charge_regulated_transfers(regulated_coin_types_checked)?;
+                gas_charger.charge_regulated_transfers(
+                    num_deny_lists_checked,
+                    num_regulated_coin_owners,
+                )?;
                 result?;
             }
 
