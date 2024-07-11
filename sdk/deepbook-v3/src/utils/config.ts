@@ -5,7 +5,7 @@ import type { Signer } from '@mysten/sui/cryptography';
 import { Transaction } from '@mysten/sui/transactions';
 
 import { BalanceManagerContract } from '../transactions/balanceManager.js';
-import type { CoinKey, Environment, PoolKey } from '../types/index.js';
+import type { Environment } from '../types/index.js';
 import type { CoinMap, PoolMap } from './constants.js';
 import {
 	mainnetCoins,
@@ -177,7 +177,7 @@ export class DeepBookConfig {
 	}
 
 	// Getters
-	getCoin(key: CoinKey) {
+	getCoin(key: string) {
 		const coin = this.#coins[key];
 		if (!coin) {
 			throw new Error(`Coin not found for key: ${key}`);
@@ -198,15 +198,7 @@ export class DeepBookConfig {
 		}
 	}
 
-	getCoinId(key: CoinKey) {
-		if (!this.#coinIds.has(key)) {
-			throw new Error(`Coin ID not initialized for key: ${key}`);
-		}
-
-		return this.#coinIds.get(key)!;
-	}
-
-	getPool(key: PoolKey) {
+	getPool(key: string) {
 		const pool = this.#pools[key];
 		if (!pool) {
 			throw new Error(`Pool not found for key: ${key}`);

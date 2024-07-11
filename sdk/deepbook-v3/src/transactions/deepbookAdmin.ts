@@ -69,6 +69,7 @@ export class DeepBookAdminContract {
 		});
 	};
 
+	// TODO: Needs to be revised after move code is updated
 	updateDisabledVersions = (pool: Pool) => (tx: Transaction) => {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);

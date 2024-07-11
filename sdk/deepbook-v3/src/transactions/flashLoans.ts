@@ -12,58 +12,39 @@ export class FlashLoanContract {
 		this.#config = config;
 	}
 
-	borrowAndReturnBaseAsset =
-		(
-			pool: Pool,
-			borrowAmount: number,
-			add: <T>(tx: Transaction, flashLoan: TransactionResult[1]) => T,
-		) =>
-		(tx: Transaction) => {
-			const baseCoin = this.#config.getCoin(pool.baseCoin);
-			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-			const [baseCoinResult, flashLoan] = tx.moveCall({
-				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::borrow_flashloan_base`,
-				arguments: [tx.object(pool.address), tx.pure.u64(borrowAmount * baseCoin.scalar)],
-				typeArguments: [baseCoin.type, quoteCoin.type],
-			});
+	borrowBaseAsset = (pool: Pool, borrowAmount: number) => (tx: Transaction) => {
+		const baseScalar = pool.baseCoin.scalar;
+		const [baseCoinResult, flashLoan] = tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::borrow_flashloan_base`,
+			arguments: [tx.object(pool.address), tx.pure.u64(borrowAmount * baseScalar)],
+			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
+		});
+		return [baseCoinResult, flashLoan];
+	};
 
-			const result = add(tx, flashLoan);
+	returnBaseAsset = (pool: Pool, baseCoin: any, flashLoan: any) => (tx: Transaction) => {
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_base`,
+			arguments: [tx.object(pool.address), baseCoin, flashLoan],
+			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
+		});
+	};
 
-			// Execute other move calls as necessary
+	borrowQuoteAsset = (pool: Pool, borrowAmount: number) => (tx: Transaction) => {
+		const quoteScalar = pool.quoteCoin.scalar;
+		const [quoteCoinResult, flashLoan] = tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::borrow_flashloan_quote`,
+			arguments: [tx.object(pool.address), tx.pure.u64(borrowAmount * quoteScalar)],
+			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
+		});
+		return [quoteCoinResult, flashLoan];
+	};
 
-			tx.moveCall({
-				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_base`,
-				arguments: [tx.object(pool.address), baseCoinResult, flashLoan],
-				typeArguments: [baseCoin.type, quoteCoin.type],
-			});
-
-			return result;
-		};
-
-	borrowAndReturnQuoteAsset =
-		(
-			pool: Pool,
-			borrowAmount: number,
-			add: <T>(tx: Transaction, flashLoan: TransactionResult[1]) => T,
-		) =>
-		(tx: Transaction) => {
-			const baseCoin = this.#config.getCoin(pool.baseCoin);
-			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-
-			const [quoteCoinResult, flashLoan] = tx.moveCall({
-				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::borrow_flashloan_quote`,
-				arguments: [tx.object(pool.address), tx.pure.u64(borrowAmount * quoteCoin.scalar)],
-				typeArguments: [baseCoin.type, quoteCoin.type],
-			});
-
-			const result = add(tx, flashLoan);
-
-			tx.moveCall({
-				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_quote`,
-				arguments: [tx.object(pool.address), quoteCoinResult, flashLoan],
-				typeArguments: [baseCoin.type, quoteCoin.type],
-			});
-
-			return result;
-		};
+	returnQuoteAsset = (pool: Pool, quoteCoin: any, flashLoan: any) => (tx: Transaction) => {
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_quote`,
+			arguments: [tx.object(pool.address), quoteCoin, flashLoan],
+			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
+		});
+	};
 }
