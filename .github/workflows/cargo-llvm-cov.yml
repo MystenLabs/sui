@@ -36,6 +36,9 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
+      - name: Install Rust
+        run: rustup update stable
+        
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: bmwill/rust-cache@v1
 
@@ -49,9 +52,6 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
-
-      - name: Install Rust
-        run: rustup update stable
         
       - name: Run code coverage for nextest
         run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest

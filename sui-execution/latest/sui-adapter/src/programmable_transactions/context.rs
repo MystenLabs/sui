@@ -830,7 +830,10 @@ mod checked {
             }
 
             if protocol_config.enable_coin_deny_list_v2() {
-                state_view.check_coin_deny_list(&written_objects)?;
+                let (result, _num_regulated_transfers) =
+                    state_view.check_coin_deny_list(&written_objects);
+                // TODO: Charge gas based on the number of regulated transfers.
+                result?;
             }
 
             let user_events = user_events

@@ -88,18 +88,28 @@ pub struct Intent {
     pub app_id: AppId,
 }
 
-impl FromStr for Intent {
-    type Err = eyre::Report;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s: Vec<u8> = decode_bytes_hex(s).map_err(|_| eyre!("Invalid Intent"))?;
-        if s.len() != 3 {
+impl Intent {
+    pub fn to_bytes(&self) -> [u8; INTENT_PREFIX_LENGTH] {
+        [self.scope as u8, self.version as u8, self.app_id as u8]
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, eyre::Report> {
+        if bytes.len() != INTENT_PREFIX_LENGTH {
             return Err(eyre!("Invalid Intent"));
         }
         Ok(Self {
-            scope: s[0].try_into()?,
-            version: s[1].try_into()?,
-            app_id: s[2].try_into()?,
+            scope: bytes[0].try_into()?,
+            version: bytes[1].try_into()?,
+            app_id: bytes[2].try_into()?,
         })
+    }
+}
+
+impl FromStr for Intent {
+    type Err = eyre::Report;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes: Vec<u8> = decode_bytes_hex(s).map_err(|_| eyre!("Invalid Intent"))?;
+        Self::from_bytes(bytes.as_slice())
     }
 }
 

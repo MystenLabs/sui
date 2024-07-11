@@ -14,6 +14,7 @@ use move_analyzer::analyzer;
 use move_package::BuildConfig;
 use rand::rngs::OsRng;
 use std::io::{stderr, stdout, Write};
+use std::net::{IpAddr, Ipv4Addr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -1011,9 +1012,22 @@ async fn genesis(
     if client_config.active_address.is_none() {
         client_config.active_address = active_address;
     }
+
+    // On windows, using 0.0.0.0 will usually yield in an networking error. This localnet ip
+    // address must bind to 127.0.0.1 if the default 0.0.0.0 is used.
+    let localnet_ip =
+        if fullnode_config.json_rpc_address.ip() == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
+            "127.0.0.1".to_string()
+        } else {
+            fullnode_config.json_rpc_address.ip().to_string()
+        };
     client_config.add_env(SuiEnv {
         alias: "localnet".to_string(),
-        rpc: format!("http://{}", fullnode_config.json_rpc_address),
+        rpc: format!(
+            "http://{}:{}",
+            localnet_ip,
+            fullnode_config.json_rpc_address.port()
+        ),
         ws: None,
         basic_auth: None,
     });

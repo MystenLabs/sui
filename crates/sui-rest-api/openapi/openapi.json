@@ -4088,6 +4088,42 @@
                 "format": "u64"
               }
             }
+          },
+          {
+            "description": "Shared objects in cancelled transaction. The sequence number embed cancellation reason.",
+            "type": "object",
+            "required": [
+              "kind",
+              "version"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "cancelled"
+                ]
+              },
+              "version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "description": "Read of a per-epoch config object that should remain the same during an epoch.",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "per_epoch_config"
+                ]
+              }
+            }
           }
         ]
       },

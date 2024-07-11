@@ -1,0 +1,25 @@
+---
+title: DeepBookV2
+description: A central limit order book that offers features and functionality for marketplaces on Sui. Token exchanges leveraging the layer can feature transparency, a full range of trading options, and customer privacy.
+---
+
+{@include: ../snippets/deepbook.mdx}
+
+As Sui's first native liquidity layer, DeepBook provides token trading activity. Token exchanges leveraging the layer can feature transparency, a full range of trading options, and customer privacy. DeepBook operates as a decentralized and permissionless environment to support token trades.
+
+DeepBook is open for community development. You can use the [Sui Improvement Proposals](https://github.com/sui-foundation/sips?ref=blog.sui.io) (SIPs) process to suggest changes to make DeepBook better.
+
+DeepBook does not include an end-user interface for token trading. Rather, it offers built-in trading functionality that can support token trades from decentralized exchanges, wallets, or other apps. You can leverage its SDK to build functionality for token trades and price queries.
+
+## Liquidity support
+
+Similar to order books for other market places, DeepBook's central limit order book (CLOB) architecture enables you to enter market and limit orders. You can sell SUI tokens, referred to as an "ask," can set your price, referred to as a limit order, or sell at the market's going rate. If you are seeking to buy SUI, referred to as a "bid," you can pay the current market price or set a limit amount you're willing to pay. Limit orders only get fulfilled if the CLOB finds a match between a buyer and seller.
+
+If you put in a limit order for 1,000 SUI, and no single seller is currently offering that quantity of tokens, DeepBook automatically pools the current asks to meet the quantity of your bid.
+
+## Transparency and privacy
+
+As a CLOB, DeepBook works like a digital ledger, logging bids and asks in chronological order and automatically finding matches between the two sides. It takes into account user parameters on trades such as prices.
+
+The digital ledger is open so people can view the trades and prices, giving clear proof of fairness. You can use this transparency to create metrics and dashboards to monitor trading activity.
+

@@ -6,6 +6,7 @@ A: object(0,0), B: object(0,1)
 task 1 'publish'. lines 13-48:
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 19471200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'view-object'. lines 49-51:
@@ -23,6 +24,7 @@ Contents: sui::coin::DenyCapV2<test::regulated_coin::REGULATED_COIN> {
 task 3 'run'. lines 52-54:
 created: object(3,0)
 mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
 task 4 'run'. lines 55-57:
@@ -54,4 +56,5 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 task 10 'transfer-object'. lines 73-73:
 mutated: object(0,1), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 1459656, non_refundable_storage_fee: 14744

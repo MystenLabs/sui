@@ -2296,6 +2296,15 @@ impl SenderSignedData {
                         });
                     }
                 }
+                GenericSignature::PasskeyAuthenticator(_) => {
+                    if !config.passkey_auth() {
+                        return Err(SuiError::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "passkey is not enabled on this network".to_string(),
+                            ),
+                        });
+                    }
+                }
                 GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
             }
         }
@@ -2355,6 +2364,7 @@ impl Message for SenderSignedData {
     type DigestType = TransactionDigest;
     const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
 
+    /// Computes the tx digest that encodes the Rust type prefix from Signable trait.
     fn digest(&self) -> Self::DigestType {
         TransactionDigest::new(default_hash(&self.intent_message().value))
     }
