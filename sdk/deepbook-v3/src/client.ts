@@ -53,10 +53,10 @@ export class DeepBookClient {
 	}
 
 	async checkManagerBalance(managerKey: string, coinKey: string) {
+		const tx = new Transaction();
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
-		const tx = new Transaction();
 		tx.add(this.#balanceManager.checkManagerBalance(balanceManager.address, coin));
 		const sender = normalizeSuiAddress(this.#signer.getPublicKey().toSuiAddress());
 		const res = await this.#client.devInspectTransactionBlock({
@@ -76,9 +76,9 @@ export class DeepBookClient {
 	}
 
 	async whitelisted(poolKey: string) {
+		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = new Transaction();
 		tx.add(this.#deepBook.whitelisted(pool));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
@@ -92,9 +92,9 @@ export class DeepBookClient {
 	}
 
 	async getQuoteQuantityOut(poolKey: string, baseQuantity: number) {
+		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = new Transaction();
 		tx.add(this.#deepBook.getQuoteQuantityOut(pool, baseQuantity));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
@@ -114,9 +114,9 @@ export class DeepBookClient {
 	}
 
 	async getBaseQuantityOut(poolKey: string, baseQuantity: number) {
+		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = new Transaction();
 		tx.add(this.#deepBook.getBaseQuantityOut(pool, baseQuantity));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
@@ -136,9 +136,9 @@ export class DeepBookClient {
 	}
 
 	async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: number) {
+		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = new Transaction();
 		tx.add(this.#deepBook.getQuantityOut(pool, baseQuantity, quoteQuantity));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
@@ -159,9 +159,9 @@ export class DeepBookClient {
 	}
 
 	async accountOpenOrders(poolKey: string, managerKey: string) {
+		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = new Transaction();
 		tx.add(this.#deepBook.accountOpenOrders(pool, managerKey));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
@@ -177,9 +177,9 @@ export class DeepBookClient {
 	}
 
 	async getLevel2Range(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean) {
+		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = new Transaction();
 		tx.add(this.#deepBook.getLevel2Range(pool, priceLow, priceHigh, isBid));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
@@ -198,9 +198,9 @@ export class DeepBookClient {
 	}
 
 	async getLevel2TicksFromMid(poolKey: string, ticks: number) {
+		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = new Transaction();
 		tx.add(this.#deepBook.getLevel2TicksFromMid(pool, ticks));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
@@ -219,9 +219,9 @@ export class DeepBookClient {
 	}
 
 	async vaultBalances(poolKey: string) {
+		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = new Transaction();
 		tx.add(this.#deepBook.vaultBalances(pool));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
@@ -257,10 +257,10 @@ export class DeepBookClient {
 	}
 
 	async midPrice(poolKey: string) {
-		const pool = this.#config.getPool(poolKey);
-
 		const tx = new Transaction();
+		const pool = this.#config.getPool(poolKey);
 		tx.add(this.#deepBook.midPrice(pool));
+
 		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
 
