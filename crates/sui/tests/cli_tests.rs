@@ -3938,22 +3938,22 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
 async fn test_parse_host_port() {
     let input = "127.0.0.0";
     let result = parse_host_port(input.to_string(), 9123).unwrap();
-    assert_eq!(result, SocketAddr::from_str("127.0.0.0:9123").unwrap());
+    assert_eq!(result, "127.0.0.0:9123".parse::<SocketAddr>().unwrap());
 
     let input = "127.0.0.5:9124";
     let result = parse_host_port(input.to_string(), 9123).unwrap();
-    assert_eq!(result, SocketAddr::from_str("127.0.0.5:9124").unwrap());
+    assert_eq!(result, "127.0.0.5:9124".parse::<SocketAddr>().unwrap());
 
     let input = "9090";
     let result = parse_host_port(input.to_string(), 9123).unwrap();
-    assert_eq!(result, SocketAddr::from_str("0.0.0.0:9090").unwrap());
+    assert_eq!(result, "0.0.0.0:9090".parse::<SocketAddr>().unwrap());
 
     let input = "";
     let result = parse_host_port(input.to_string(), 9123).unwrap();
-    assert_eq!(result, SocketAddr::from_str("0.0.0.0:9123").unwrap());
+    assert_eq!(result, "0.0.0.0:9123".parse::<SocketAddr>().unwrap());
 
     let result = parse_host_port("localhost".to_string(), 9899).unwrap();
-    assert_eq!(result, SocketAddr::from_str("127.0.0.1:9899").unwrap());
+    assert_eq!(result, "127.0.0.1:9899".parse::<SocketAddr>().unwrap());
 
     let input = "asg";
     assert!(parse_host_port(input.to_string(), 9123).is_err());
