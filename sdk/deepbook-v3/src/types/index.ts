@@ -69,7 +69,7 @@ export interface SwapParams {
 	amount: number;
 	deepAmount: number;
 	minOut: number;
-	deepCoin?: any;
+	deepCoin?: { $kind: 'NestedResult'; NestedResult: [number, number] };
 }
 
 export interface CreatePoolAdminParams {
