@@ -1403,6 +1403,7 @@
                 "bls12381_bls12381_min_sig_verify_msg_cost_per_byte": {
                   "u64": "2"
                 },
+                "bridge_should_try_to_finalize_committee": null,
                 "buffer_stake_for_protocol_upgrade_bps": {
                   "u64": "5000"
                 },
@@ -7958,6 +7959,18 @@
             ],
             "properties": {
               "f64": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "bool"
+            ],
+            "properties": {
+              "bool": {
                 "type": "string"
               }
             },

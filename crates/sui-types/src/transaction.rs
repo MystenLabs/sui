@@ -449,10 +449,22 @@ impl EndOfEpochTransactionKind {
                     ));
                 }
             }
-            Self::BridgeStateCreate(_) | Self::BridgeCommitteeInit(_) => {
+            Self::BridgeStateCreate(_) => {
                 if !config.enable_bridge() {
                     return Err(UserInputError::Unsupported(
                         "bridge not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::BridgeCommitteeInit(_) => {
+                if !config.enable_bridge() {
+                    return Err(UserInputError::Unsupported(
+                        "bridge not enabled".to_string(),
+                    ));
+                }
+                if !config.should_try_to_finalize_bridge_committee() {
+                    return Err(UserInputError::Unsupported(
+                        "should not try to finalize committee yet".to_string(),
                     ));
                 }
             }
