@@ -191,7 +191,7 @@ pub fn create_fake_cert_and_effect_digest<'a>(
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
-    compile_example_package("../../sui_programmability/examples/basics")
+    compile_example_package("../../examples/move/basics")
 }
 
 pub fn compile_managed_coin_package() -> CompiledPackage {
