@@ -356,12 +356,8 @@ export class DeepBookContract {
 		} else {
 			[baseCoin] = tx.splitCoins(tx.object(baseCoinId), [tx.pure.u64(baseAmount * baseScalar)]);
 		}
-		var deepCoinInput = deepCoin;
-		if (!deepCoin) {
-			[deepCoinInput] = tx.splitCoins(tx.object(deepCoinId), [
-				tx.pure.u64(deepAmount * DEEP_SCALAR),
-			]);
-		}
+		const deepCoinInput =
+			deepCoin || tx.splitCoins(tx.object(deepCoinId), [tx.pure.u64(deepAmount * DEEP_SCALAR)])[0];
 		const [baseCoinResult, quoteCoinResult, deepCoinResult] = tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_base_for_quote`,
 			arguments: [
@@ -394,12 +390,8 @@ export class DeepBookContract {
 			[quoteCoin] = tx.splitCoins(tx.object(quoteCoinId), [tx.pure.u64(quoteAmount * quoteScalar)]);
 		}
 
-		var deepCoinInput = deepCoin;
-		if (!deepCoin) {
-			[deepCoinInput] = tx.splitCoins(tx.object(deepCoinId), [
-				tx.pure.u64(deepAmount * DEEP_SCALAR),
-			]);
-		}
+		const deepCoinInput =
+			deepCoin || tx.splitCoins(tx.object(deepCoinId), [tx.pure.u64(deepAmount * DEEP_SCALAR)])[0];
 		const [baseCoinResult, quoteCoinResult, deepCoinResult] = tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_quote_for_base`,
 			arguments: [
