@@ -54,7 +54,7 @@ jobs:
           swap-size-gb: 256
         
       - name: Run code coverage for nextest
-        run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
+        run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest -vv
 
       - name: Upload report to Codecov for nextest
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # pin v4.0.1
