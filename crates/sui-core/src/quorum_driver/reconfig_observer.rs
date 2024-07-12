@@ -59,12 +59,6 @@ impl OnsiteReconfigObserver {
             self.safe_client_metrics_base.clone(),
             self.auth_agg_metrics.clone(),
         )
-        .unwrap_or_else(|e| {
-            panic!(
-                "Failed to create AuthorityAggregator from System State: {:?}",
-                e
-            )
-        })
     }
 }
 
