@@ -68,7 +68,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
         reconfig_channel: Receiver<SuiSystemState>,
         parent_path: &Path,
         prometheus_registry: &Registry,
-    ) -> anyhow::Result<Self> {
+    ) -> Self {
         let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let validators = AuthorityAggregator::new_from_local_system_state(
@@ -76,7 +76,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
             validator_state.committee_store(),
             safe_client_metrics_base.clone(),
             auth_agg_metrics.clone(),
-        )?;
+        );
 
         let observer = OnsiteReconfigObserver::new(
             reconfig_channel,
@@ -85,13 +85,13 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
             safe_client_metrics_base,
             auth_agg_metrics,
         );
-        Ok(TransactiondOrchestrator::new(
+        TransactiondOrchestrator::new(
             Arc::new(validators),
             validator_state,
             parent_path,
             prometheus_registry,
             observer,
-        ))
+        )
     }
 }
 

@@ -266,8 +266,7 @@ impl LocalValidatorAggregatorProxy {
             &committee,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
-        )
-        .unwrap();
+        );
 
         Self::new_impl(
             aggregator,
