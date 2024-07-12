@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { coinWithBalance } from '@mysten/sui/transactions';
 import type { Transaction } from '@mysten/sui/transactions';
 
 import type { CreatePoolAdminParams, Pool } from '../types/index.js';
@@ -22,13 +23,14 @@ export class DeepBookAdminContract {
 	}
 
 	createPoolAdmin = (params: CreatePoolAdminParams) => (tx: Transaction) => {
+		tx.setSenderIfNotSet(this.#config.address);
 		const { baseCoinKey, quoteCoinKey, tickSize, lotSize, minSize, whitelisted, stablePool } =
 			params;
 		const baseCoin = this.#config.getCoin(baseCoinKey);
 		const quoteCoin = this.#config.getCoin(quoteCoinKey);
-		const deepCoinId = this.#config.getCoinId('DEEP');
+		const deepCoinType = this.#config.getCoin('DEEP').type;
 
-		const [creationFee] = tx.splitCoins(tx.object(deepCoinId), [tx.pure.u64(POOL_CREATION_FEE)]);
+		const creationFee = coinWithBalance({ type: deepCoinType, balance: POOL_CREATION_FEE });
 		const baseScalar = baseCoin.scalar;
 		const quoteScalar = quoteCoin.scalar;
 

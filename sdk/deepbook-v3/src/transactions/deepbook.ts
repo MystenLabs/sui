@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { coinWithBalance } from '@mysten/sui/transactions';
 import type { Transaction } from '@mysten/sui/transactions';
 import { SUI_CLOCK_OBJECT_ID } from '@mysten/sui/utils';
 
@@ -35,7 +36,7 @@ export class DeepBookContract {
 			payWithDeep = true,
 		} = params;
 
-		tx.setGasBudget(GAS_BUDGET);
+		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
@@ -75,7 +76,7 @@ export class DeepBookContract {
 			payWithDeep = true,
 		} = params;
 
-		tx.setGasBudget(GAS_BUDGET);
+		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
@@ -121,7 +122,7 @@ export class DeepBookContract {
 
 	cancelOrder =
 		(pool: Pool, balanceManager: BalanceManager, orderId: number) => (tx: Transaction) => {
-			tx.setGasBudget(GAS_BUDGET);
+			tx.setGasBudgetIfNotSet(GAS_BUDGET);
 			const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
 			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
@@ -140,7 +141,7 @@ export class DeepBookContract {
 		};
 
 	cancelAllOrders = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
-		tx.setGasBudget(GAS_BUDGET);
+		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
@@ -341,29 +342,28 @@ export class DeepBookContract {
 	};
 
 	swapExactBaseForQuote = (params: SwapParams) => (tx: Transaction) => {
-		tx.setGasBudget(GAS_BUDGET);
-		const { poolKey, amount: baseAmount, deepAmount, minOut: minQuote, deepCoin } = params;
+		tx.setGasBudgetIfNotSet(GAS_BUDGET);
+		tx.setSenderIfNotSet(this.#config.address);
+		const { poolKey, amount: baseAmount, deepAmount, minOut: minQuote } = params;
 
 		let pool = this.#config.getPool(poolKey);
-		let baseCoinId = this.#config.getCoinId(pool.baseCoin.key);
-		let deepCoinId = this.#config.getCoinId('DEEP');
+		let deepCoinType = this.#config.getCoin('DEEP').type;
 		const baseScalar = pool.baseCoin.scalar;
 		const quoteScalar = pool.quoteCoin.scalar;
 
-		let baseCoin;
-		if (pool.baseCoin.key === 'SUI') {
-			[baseCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(baseAmount * baseScalar)]);
-		} else {
-			[baseCoin] = tx.splitCoins(tx.object(baseCoinId), [tx.pure.u64(baseAmount * baseScalar)]);
-		}
-		const deepCoinInput =
-			deepCoin || tx.splitCoins(tx.object(deepCoinId), [tx.pure.u64(deepAmount * DEEP_SCALAR)])[0];
+		const baseCoin =
+			params.baseCoin ??
+			coinWithBalance({ type: pool.baseCoin.type, balance: baseAmount * baseScalar });
+
+		const deepCoin =
+			params.deepCoin ?? coinWithBalance({ type: deepCoinType, balance: deepAmount * DEEP_SCALAR });
+
 		const [baseCoinResult, quoteCoinResult, deepCoinResult] = tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_base_for_quote`,
 			arguments: [
 				tx.object(pool.address),
 				baseCoin,
-				deepCoinInput,
+				deepCoin,
 				tx.pure.u64(quoteScalar * minQuote),
 				tx.object(SUI_CLOCK_OBJECT_ID),
 			],
@@ -374,30 +374,28 @@ export class DeepBookContract {
 	};
 
 	swapExactQuoteForBase = (params: SwapParams) => (tx: Transaction) => {
-		tx.setGasBudget(GAS_BUDGET);
-		const { poolKey, amount: quoteAmount, deepAmount, minOut: minBase, deepCoin } = params;
+		tx.setGasBudgetIfNotSet(GAS_BUDGET);
+		tx.setSenderIfNotSet(this.#config.address);
+		const { poolKey, amount: quoteAmount, deepAmount, minOut: minBase } = params;
 
 		let pool = this.#config.getPool(poolKey);
-		let quoteCoinId = this.#config.getCoinId(pool.quoteCoin.key);
-		let deepCoinId = this.#config.getCoinId('DEEP');
+		let deepCoinType = this.#config.getCoin('DEEP').type;
 		const baseScalar = pool.baseCoin.scalar;
 		const quoteScalar = pool.quoteCoin.scalar;
 
-		let quoteCoin;
-		if (pool.quoteCoin.key === 'SUI') {
-			[quoteCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(quoteAmount * quoteScalar)]);
-		} else {
-			[quoteCoin] = tx.splitCoins(tx.object(quoteCoinId), [tx.pure.u64(quoteAmount * quoteScalar)]);
-		}
+		const quoteCoin =
+			params.quoteCoin ??
+			coinWithBalance({ type: pool.quoteCoin.type, balance: quoteAmount * quoteScalar });
 
-		const deepCoinInput =
-			deepCoin || tx.splitCoins(tx.object(deepCoinId), [tx.pure.u64(deepAmount * DEEP_SCALAR)])[0];
+		const deepCoin =
+			params.deepCoin ?? coinWithBalance({ type: deepCoinType, balance: deepAmount * DEEP_SCALAR });
+
 		const [baseCoinResult, quoteCoinResult, deepCoinResult] = tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_quote_for_base`,
 			arguments: [
 				tx.object(pool.address),
 				quoteCoin,
-				deepCoinInput,
+				deepCoin,
 				tx.pure.u64(baseScalar * minBase),
 				tx.object(SUI_CLOCK_OBJECT_ID),
 			],
