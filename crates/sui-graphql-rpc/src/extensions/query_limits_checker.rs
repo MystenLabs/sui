@@ -446,7 +446,7 @@ fn estimate_output_nodes_for_curr_node(
     }
 }
 
-/// Try to extract a u64 value from the given argument, or return None on failure.
+/// Try to extract a u32 value from the given argument, or return None on failure.
 fn extract_limit(value: Option<&Positioned<GqlValue>>, variables: &Variables) -> Option<u32> {
     if let GqlValue::Variable(var) = &value?.node {
         return match variables.get(var) {
