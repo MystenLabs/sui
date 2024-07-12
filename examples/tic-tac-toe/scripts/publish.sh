@@ -56,10 +56,16 @@ cat > $CONFIG <<EOF
 // SPDX-License-Identifier: Apache-2.0
 
 export default {
-  packageId: "$PACKAGE_ID",
-  upgradeCap: "$UPGRADE_CAP",
+	packageId: '$PACKAGE_ID',
+	upgradeCap: '$UPGRADE_CAP',
 };
 EOF
 
+ENV="$(readlink -f ../cli)/$ENV.env"
+cat > $ENV <<-EOF
+PKG=$PACKAGE_ID
+CAP=$UPGRADE_CAP
+EOF
+
 echo "Contract Deployment finished!"
-echo "Details written to $CONFIG"
+echo "Details written to $CONFIG and $ENV."
