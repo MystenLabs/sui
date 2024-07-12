@@ -4,6 +4,7 @@ import { bcs } from '@mysten/sui/bcs';
 import { Transaction } from '@mysten/sui/transactions';
 import { normalizeSuiAddress, SUI_CLOCK_OBJECT_ID } from '@mysten/sui/utils';
 
+import { OrderType, SelfMatchingOptions } from '../types/index.js';
 import type {
 	BalanceManager,
 	PlaceLimitOrderParams,
@@ -11,7 +12,6 @@ import type {
 	Pool,
 	SwapParams,
 } from '../types/index.js';
-import { OrderType, SelfMatchingOptions } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
 import { DEEP_SCALAR, FLOAT_SCALAR, GAS_BUDGET, MAX_TIMESTAMP } from '../utils/config.js';
 
