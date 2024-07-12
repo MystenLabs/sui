@@ -13,7 +13,7 @@ import type {
 	SwapParams,
 } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
-import { DEEP_SCALAR, FLOAT_SCALAR, MAX_TIMESTAMP } from '../utils/config.js';
+import { DEEP_SCALAR, FLOAT_SCALAR, GAS_BUDGET, MAX_TIMESTAMP } from '../utils/config.js';
 
 export class DeepBookContract {
 	#config: DeepBookConfig;
@@ -36,6 +36,7 @@ export class DeepBookContract {
 			payWithDeep = true,
 		} = params;
 
+		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
@@ -75,6 +76,7 @@ export class DeepBookContract {
 			payWithDeep = true,
 		} = params;
 
+		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
@@ -120,6 +122,7 @@ export class DeepBookContract {
 
 	cancelOrder =
 		(pool: Pool, balanceManager: BalanceManager, orderId: number) => (tx: Transaction) => {
+			tx.setGasBudgetIfNotSet(GAS_BUDGET);
 			const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
 			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
@@ -138,6 +141,7 @@ export class DeepBookContract {
 		};
 
 	cancelAllOrders = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
+		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
@@ -338,6 +342,7 @@ export class DeepBookContract {
 	};
 
 	swapExactBaseForQuote = (params: SwapParams) => (tx: Transaction) => {
+		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		tx.setSenderIfNotSet(this.#config.address);
 		const { poolKey, amount: baseAmount, deepAmount, minOut: minQuote } = params;
 
@@ -369,6 +374,7 @@ export class DeepBookContract {
 	};
 
 	swapExactQuoteForBase = (params: SwapParams) => (tx: Transaction) => {
+		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		tx.setSenderIfNotSet(this.#config.address);
 		const { poolKey, amount: quoteAmount, deepAmount, minOut: minBase } = params;
 
