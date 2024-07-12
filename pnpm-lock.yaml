@@ -1255,9 +1255,6 @@ importers:
       '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
-      turbo:
-        specifier: ^2.0.6
-        version: 2.0.6
     devDependencies:
       '@mysten/build-scripts':
         specifier: workspace:*

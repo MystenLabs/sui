@@ -35,12 +35,12 @@ export enum SelfMatchingOptions {
 
 export interface PlaceLimitOrderParams {
 	poolKey: string;
-	managerKey: string;
+	balanceManager: BalanceManager;
 	clientOrderId: number;
 	price: number;
 	quantity: number;
 	isBid: boolean;
-	expiration?: number;
+	expiration?: number | bigint;
 	orderType?: OrderType;
 	selfMatchingOption?: SelfMatchingOptions;
 	payWithDeep?: boolean;
@@ -48,7 +48,7 @@ export interface PlaceLimitOrderParams {
 
 export interface PlaceMarketOrderParams {
 	poolKey: string;
-	managerKey: string;
+	balanceManager: BalanceManager;
 	clientOrderId: number;
 	quantity: number;
 	isBid: boolean;
@@ -58,7 +58,7 @@ export interface PlaceMarketOrderParams {
 
 export interface ProposalParams {
 	poolKey: string;
-	managerKey: string;
+	balanceManager: BalanceManager;
 	takerFee: number;
 	makerFee: number;
 	stakeRequired: number;
@@ -68,6 +68,7 @@ export interface SwapParams {
 	poolKey: string;
 	amount: number;
 	deepAmount: number;
+	minOut: number;
 	deepCoin?: any;
 }
 
@@ -87,4 +88,4 @@ export interface Config {
 	DEEP_TREASURY_ID: string;
 }
 
-export type Environment = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
+export type Environment = 'mainnet' | 'testnet';

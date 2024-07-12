@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Transaction } from '@mysten/sui/transactions';
 
-import type { BalanceManager, Pool } from '../types/index.js';
+import type { BalanceManager, Pool, ProposalParams } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
 import { DEEP_SCALAR, FLOAT_SCALAR } from '../utils/config.js';
 
@@ -23,7 +23,7 @@ export class GovernanceContract {
 		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
 
-		return tx.moveCall({
+		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::stake`,
 			arguments: [
 				tx.object(pool.address),
@@ -45,18 +45,13 @@ export class GovernanceContract {
 			arguments: [tx.object(pool.address), tx.object(balanceManager.address), tradeProof],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
-
-		return tx;
 	};
 
-	submitProposal = (
-		pool: Pool,
-		balanceManager: BalanceManager,
-		takerFee: number,
-		makerFee: number,
-		stakeRequired: number,
-		tx: Transaction = new Transaction(),
-	) => {
+	submitProposal = (params: ProposalParams, tx: Transaction = new Transaction()) => {
+		const { poolKey, balanceManager, takerFee, makerFee, stakeRequired } = params;
+
+		const pool = this.#config.getPool(poolKey);
+
 		const tradeProof = this.#config.balanceManager.generateProof(balanceManager, tx);
 		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
@@ -73,8 +68,6 @@ export class GovernanceContract {
 			],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
-
-		return tx;
 	};
 
 	vote = (
@@ -94,7 +87,5 @@ export class GovernanceContract {
 				tx.pure.id(proposal_id),
 			],
 		});
-
-		return tx;
 	};
 }
