@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority_client::NetworkAuthorityClient;
@@ -31,18 +30,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let handle = &test_cluster.fullnode_handle.sui_node;
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let registry = Registry::new();
-    // Start orchestrator inside container so that it will be properly shutdown.
-    let orchestrator = handle.with(|node| {
-        TransactiondOrchestrator::new_with_network_clients(
-            node.state(),
-            node.subscribe_to_epoch_change(),
-            temp_dir.path(),
-            &registry,
-        )
-    });
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let txn_count = 4;
     let mut txns = batch_make_transfer_transactions(context, txn_count).await;
@@ -120,19 +108,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
         .await;
 
     let handle = &test_cluster.fullnode_handle.sui_node;
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    tokio::task::yield_now().await;
-    let registry = Registry::new();
-    // Start orchestrator inside container so that it will be properly shutdown.
-    let orchestrator = handle.with(|node| {
-        TransactiondOrchestrator::new_with_network_clients(
-            node.state(),
-            node.subscribe_to_epoch_change(),
-            temp_dir.path(),
-            &registry,
-        )
-    });
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let txn_count = 2;
     let context = &mut test_cluster.wallet;
@@ -335,18 +311,7 @@ async fn execute_transaction_v3() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let handle = &test_cluster.fullnode_handle.sui_node;
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let registry = Registry::new();
-    // Start orchestrator inside container so that it will be properly shutdown.
-    let orchestrator = handle.with(|node| {
-        TransactiondOrchestrator::new_with_network_clients(
-            node.state(),
-            node.subscribe_to_epoch_change(),
-            temp_dir.path(),
-            &registry,
-        )
-    });
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let txn_count = 1;
     let mut txns = batch_make_transfer_transactions(context, txn_count).await;
@@ -404,18 +369,7 @@ async fn execute_transaction_v3_staking_transaction() -> Result<(), anyhow::Erro
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let handle = &test_cluster.fullnode_handle.sui_node;
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let registry = Registry::new();
-    // Start orchestrator inside container so that it will be properly shutdown.
-    let orchestrator = handle.with(|node| {
-        TransactiondOrchestrator::new_with_network_clients(
-            node.state(),
-            node.subscribe_to_epoch_change(),
-            temp_dir.path(),
-            &registry,
-        )
-    });
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let validator_address = context
         .get_client()
