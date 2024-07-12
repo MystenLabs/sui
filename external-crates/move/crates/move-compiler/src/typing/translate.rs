@@ -123,32 +123,33 @@ fn extract_macros(
         macro_use_funs
     }
 
-    fn extract_modules_macros(
-        macros_modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>,
-    ) -> UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>> {
-        macros_modules.ref_map(|_mident, mdef| {
-            mdef.functions.ref_filter_map(|_name, f| {
-                let _macro_loc = f.macro_?;
-                if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
-                    let use_funs = merge_use_funs(&mdef.use_funs, use_funs.clone());
-                    Some((use_funs, body.clone()))
-                } else {
-                    None
-                }
-            })
+    // Prefer local module definitions to previous ones. This is ostensibly an error, but naming
+    // should have already produced that error. To avoid unnecessary error handling, we simply
+    // prefer the non-precompiled definitions.
+    let all_modules: UniqueMap<ModuleIdent, &N::ModuleDefinition> =
+        UniqueMap::maybe_from_iter(modules.key_cloned_iter().chain(
+            pre_compiled_lib.iter().flat_map(|pre_compiled| {
+                pre_compiled
+                    .naming
+                    .inner
+                    .modules
+                    .key_cloned_iter()
+                    .filter(|(mident, _m)| !modules.contains_key(mident))
+            }),
+        ))
+        .unwrap();
+
+    let all_macro_definitions = all_modules.map(|_mident, mdef| {
+        mdef.functions.ref_filter_map(|_name, f| {
+            let _macro_loc = f.macro_?;
+            if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
+                let use_funs = merge_use_funs(&mdef.use_funs, use_funs.clone());
+                Some((use_funs, body.clone()))
+            } else {
+                None
+            }
         })
-    }
-
-    let mut all_macro_definitions = extract_modules_macros(modules);
-
-    // Prefer local bindings to previous ones. This is ostensibly an error, but naming should have
-    // already produced that error. To avoid unnecessary error handling, we simply prefer the
-    // non-precompiled definitions.
-    if let Some(libs) = pre_compiled_lib {
-        let lib_macros = extract_modules_macros(&libs.naming.inner.modules);
-        all_macro_definitions =
-            all_macro_definitions.union_with(&lib_macros, |_key, local, _previous| local.clone());
-    }
+    });
 
     context.set_macros(all_macro_definitions);
 }
