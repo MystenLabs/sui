@@ -161,6 +161,7 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 //             Enable enums on testnet.
 //             Add support for passkey in devnet.
 //             Enable deny list v2 on testnet and mainnet.
+// Version 54: Add feature flag to decide whether to attempt to finalize bridge committee
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1190,6 +1191,11 @@ pub struct ProtocolConfig {
 
     /// The max number of transactions that can be included in a single Soft Bundle.
     max_soft_bundle_size: Option<u64>,
+
+    /// Whether to try to form bridge committee
+    // Note: this is not a feature flag because we want to distinguish between
+    // `None` and `Some(false)`, as committee was already finalized on Testnet.
+    bridge_should_try_to_finalize_committee: Option<bool>,
 }
 
 // feature flags
@@ -1375,6 +1381,14 @@ impl ProtocolConfig {
             assert!(self.feature_flags.end_of_epoch_transaction_supported);
         }
         ret
+    }
+
+    pub fn should_try_to_finalize_bridge_committee(&self) -> bool {
+        if !self.enable_bridge() {
+            return false;
+        }
+        // In the older protocol version, always try to finalize the committee.
+        self.bridge_should_try_to_finalize_committee.unwrap_or(true)
     }
 
     pub fn enable_effects_v2(&self) -> bool {
@@ -1955,6 +1969,8 @@ impl ProtocolConfig {
             checkpoint_summary_version_specific_data: None,
 
             max_soft_bundle_size: None,
+
+            bridge_should_try_to_finalize_committee: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2507,6 +2523,10 @@ impl ProtocolConfig {
                         cfg.feature_flags.passkey_auth = true;
                     }
                     cfg.feature_flags.enable_coin_deny_list_v2 = true;
+                }
+                54 => {
+                    // Do not allow bridge committee to finalize on mainnet.
+                    cfg.bridge_should_try_to_finalize_committee = Some(chain != Chain::Mainnet);
                 }
                 // Use this template when making changes:
                 //

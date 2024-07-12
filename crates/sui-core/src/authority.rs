@@ -4475,6 +4475,13 @@ impl AuthorityState {
             info!("bridge not enabled");
             return None;
         }
+        if !epoch_store
+            .protocol_config()
+            .should_try_to_finalize_bridge_committee()
+        {
+            info!("should not try to finalize bridge committee yet");
+            return None;
+        }
         // Only create this transaction if bridge exists
         if !epoch_store.bridge_exists() {
             return None;
