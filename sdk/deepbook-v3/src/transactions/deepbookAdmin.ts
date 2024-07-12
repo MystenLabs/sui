@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { Transaction } from '@mysten/sui/transactions';
+import type { Transaction } from '@mysten/sui/transactions';
 
 import type { CreatePoolAdminParams, Pool } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
@@ -21,7 +21,7 @@ export class DeepBookAdminContract {
 		return adminCap;
 	}
 
-	createPoolAdmin = (params: CreatePoolAdminParams, tx: Transaction = new Transaction()) => {
+	createPoolAdmin = (params: CreatePoolAdminParams) => (tx: Transaction) => {
 		const { baseCoinKey, quoteCoinKey, tickSize, lotSize, minSize, whitelisted, stablePool } =
 			params;
 		const baseCoin = this.#config.getCoin(baseCoinKey);
@@ -52,7 +52,7 @@ export class DeepBookAdminContract {
 		});
 	};
 
-	unregisterPoolAdmin = (pool: Pool, tx: Transaction = new Transaction()) => {
+	unregisterPoolAdmin = (pool: Pool) => (tx: Transaction) => {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::unregister_pool_admin`,
 			arguments: [tx.object(this.#config.REGISTRY_ID), tx.object(this.#adminCap())],
@@ -60,7 +60,7 @@ export class DeepBookAdminContract {
 		});
 	};
 
-	updateAllowedVersions = (pool: Pool, tx: Transaction = new Transaction()) => {
+	updateAllowedVersions = (pool: Pool) => (tx: Transaction) => {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::update_allowed_versions`,
 			arguments: [
@@ -72,7 +72,7 @@ export class DeepBookAdminContract {
 		});
 	};
 
-	enableVersion = (version: number, tx: Transaction = new Transaction()) => {
+	enableVersion = (version: number) => (tx: Transaction) => {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::regsitry::enable_version`,
 			arguments: [
@@ -83,7 +83,7 @@ export class DeepBookAdminContract {
 		});
 	};
 
-	disableVersion = (version: number, tx: Transaction = new Transaction()) => {
+	disableVersion = (version: number) => (tx: Transaction) => {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::regsitry::enable_version`,
 			arguments: [
