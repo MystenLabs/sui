@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { coinWithBalance } from '@mysten/sui/transactions';
 import type { Transaction } from '@mysten/sui/transactions';
 
 import type { BalanceManager, Coin } from '../types/index.js';
@@ -25,15 +26,11 @@ export class BalanceManagerContract {
 
 	depositIntoManager =
 		(managerId: string, amountToDeposit: number, coin: Coin) => (tx: Transaction) => {
-			let deposit;
-
-			if (coin.key === 'SUI') {
-				[deposit] = tx.splitCoins(tx.gas, [tx.pure.u64(amountToDeposit * coin.scalar)]);
-			} else {
-				[deposit] = tx.splitCoins(tx.object(this.#config.getCoinId(coin.key)), [
-					tx.pure.u64(amountToDeposit * coin.scalar),
-				]);
-			}
+			tx.setSenderIfNotSet(this.#config.address);
+			const deposit = coinWithBalance({
+				type: coin.type,
+				balance: amountToDeposit * coin.scalar,
+			});
 
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::deposit`,
