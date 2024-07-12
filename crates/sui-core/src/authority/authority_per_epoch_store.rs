@@ -1208,6 +1208,15 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {
+        let tables = self.tables()?;
+        let mut batch = tables.effects_signatures.batch();
+        batch.delete_batch(&tables.executed_in_epoch, [*tx_digest])?;
+        batch.delete_batch(&tables.effects_signatures, [*tx_digest])?;
+        batch.write()?;
+        Ok(())
+    }
+
     pub fn insert_effects_digest_and_signature(
         &self,
         tx_digest: &TransactionDigest,
@@ -3913,6 +3922,37 @@ impl AuthorityPerEpochStore {
 
     pub fn clear_signature_cache(&self) {
         self.signature_verifier.clear_signature_cache();
+    }
+
+    pub(crate) fn check_all_executed_transactions_in_checkpoint(&self) {
+        if !self.executed_in_epoch_table_enabled() {
+            error!("Cannot check executed transactions in checkpoint because executed_in_epoch table is not enabled");
+            return;
+        }
+        let tables = self.tables().unwrap();
+
+        info!("Verifying that all executed transactions are in a checkpoint");
+
+        let mut executed_iter = tables.executed_in_epoch.unbounded_iter();
+        let mut checkpointed_iter = tables.executed_transactions_to_checkpoint.unbounded_iter();
+
+        // verify that the two iterators (which are both sorted) are identical
+        loop {
+            let executed = executed_iter.next();
+            let checkpointed = checkpointed_iter.next();
+            match (executed, checkpointed) {
+                (Some((left, ())), Some((right, _))) => {
+                    if left != right {
+                        panic!("Executed transactions and checkpointed transactions do not match: {:?} {:?}", left, right);
+                    }
+                }
+                (None, None) => break,
+                (left, right) => panic!(
+                    "Executed transactions and checkpointed transactions do not match: {:?} {:?}",
+                    left, right
+                ),
+            }
+        }
     }
 }
 
