@@ -145,7 +145,7 @@ pub fn check_coin_deny_list_v2_during_execution(
             .or_insert_with(BTreeSet::new)
             .insert(owner);
     }
-    let num_non_gas_coin_owners = new_coin_owners.iter().values(|v| v.len() as u64).sum();
+    let num_non_gas_coin_owners = new_coin_owners.values().map(|v| v.len() as u64).sum();
     let new_regulated_coin_owners = new_coin_owners
         .into_iter()
         .filter_map(|(coin_type, owners)| {
