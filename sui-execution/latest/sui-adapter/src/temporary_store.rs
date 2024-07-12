@@ -19,7 +19,7 @@ use sui_types::execution::{
 use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -1021,24 +1021,22 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         TemporaryStore::save_wrapped_object_containers(self, wrapped_object_containers)
     }
 
-    fn check_coin_deny_list(
-        &self,
-        written_objects: &BTreeMap<ObjectID, Object>,
-    ) -> (Result<(), ExecutionError>, u64) {
-        let (result, num_regulated_transfers) = check_coin_deny_list_v2_during_execution(
+    fn check_coin_deny_list(&self, written_objects: &BTreeMap<ObjectID, Object>) -> DenyListResult {
+        let result = check_coin_deny_list_v2_during_execution(
             written_objects,
             self.cur_epoch,
             self.store.as_object_store(),
         );
         // The denylist object is only loaded if there are regulated transfers.
         // And also if we already have it in the input there is no need to commit it again in the effects.
-        if num_regulated_transfers > 0 && !self.input_objects.contains_key(&SUI_DENY_LIST_OBJECT_ID)
+        if result.num_non_gas_coin_owners > 0
+            && !self.input_objects.contains_key(&SUI_DENY_LIST_OBJECT_ID)
         {
             self.loaded_per_epoch_config_objects
                 .write()
                 .insert(SUI_DENY_LIST_OBJECT_ID);
         }
-        (result, num_regulated_transfers)
+        result
     }
 }
 
