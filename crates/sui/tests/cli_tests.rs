@@ -16,7 +16,7 @@ use serde_json::json;
 use sui::client_ptb::ptb::PTB;
 use sui::key_identity::{get_identity_address, KeyIdentity};
 #[cfg(feature = "indexer")]
-use sui::sui_commands::{parse_host_port, IndexerFeatureArgs};
+use sui::sui_commands::IndexerFeatureArgs;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
@@ -32,8 +32,7 @@ use sui::{
         estimate_gas_budget, Opts, OptsWithGas, SuiClientCommandResult, SuiClientCommands,
         SwitchResponse,
     },
-    sui_commands::parse_host_port,
-    sui_commands::SuiCommand,
+    sui_commands::{parse_host_port, SuiCommand},
 };
 use sui_config::{
     PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
