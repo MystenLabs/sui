@@ -3,12 +3,13 @@
 import { bcs } from '@mysten/sui/bcs';
 import type { SuiClient } from '@mysten/sui/client';
 import type { Signer } from '@mysten/sui/cryptography';
+import { Transaction } from '@mysten/sui/transactions';
 import { normalizeSuiAddress } from '@mysten/sui/utils';
 
 import { BalanceManagerContract } from './transactions/balanceManager.js';
 import { DeepBookContract } from './transactions/deepbook.js';
 import type { BalanceManager, Environment } from './types/index.js';
-import { DEEP_SCALAR, DeepBookConfig } from './utils/config.js';
+import { DEEP_SCALAR, DeepBookConfig, FLOAT_SCALAR } from './utils/config.js';
 import { getSignerFromPK } from './utils/utils.js';
 
 /// DeepBook Client. If a private key is provided, then all transactions
@@ -55,7 +56,8 @@ export class DeepBookClient {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
-		const tx = this.#balanceManager.checkManagerBalance(balanceManager.address, coin);
+		const tx = new Transaction();
+		tx.add(this.#balanceManager.checkManagerBalance(balanceManager.address, coin));
 		const sender = normalizeSuiAddress(this.#signer.getPublicKey().toSuiAddress());
 		const res = await this.#client.devInspectTransactionBlock({
 			sender: sender,
@@ -76,7 +78,8 @@ export class DeepBookClient {
 	async whitelisted(poolKey: string) {
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = this.#deepBook.whitelisted(pool);
+		const tx = new Transaction();
+		tx.add(this.#deepBook.whitelisted(pool));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
@@ -91,7 +94,8 @@ export class DeepBookClient {
 	async getQuoteQuantityOut(poolKey: string, baseQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = this.#deepBook.getQuoteQuantityOut(pool, baseQuantity);
+		const tx = new Transaction();
+		tx.add(this.#deepBook.getQuoteQuantityOut(pool, baseQuantity));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
@@ -112,7 +116,8 @@ export class DeepBookClient {
 	async getBaseQuantityOut(poolKey: string, baseQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = this.#deepBook.getBaseQuantityOut(pool, baseQuantity);
+		const tx = new Transaction();
+		tx.add(this.#deepBook.getBaseQuantityOut(pool, baseQuantity));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
@@ -133,7 +138,8 @@ export class DeepBookClient {
 	async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: number) {
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = this.#deepBook.getQuantityOut(pool, baseQuantity, quoteQuantity);
+		const tx = new Transaction();
+		tx.add(this.#deepBook.getQuantityOut(pool, baseQuantity, quoteQuantity));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
@@ -155,7 +161,8 @@ export class DeepBookClient {
 	async accountOpenOrders(poolKey: string, managerKey: string) {
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = this.#deepBook.accountOpenOrders(pool, managerKey);
+		const tx = new Transaction();
+		tx.add(this.#deepBook.accountOpenOrders(pool, managerKey));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
@@ -172,7 +179,8 @@ export class DeepBookClient {
 	async getLevel2Range(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean) {
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = this.#deepBook.getLevel2Range(pool, priceLow, priceHigh, isBid);
+		const tx = new Transaction();
+		tx.add(this.#deepBook.getLevel2Range(pool, priceLow, priceHigh, isBid));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
@@ -192,7 +200,8 @@ export class DeepBookClient {
 	async getLevel2TicksFromMid(poolKey: string, ticks: number) {
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = this.#deepBook.getLevel2TicksFromMid(pool, ticks);
+		const tx = new Transaction();
+		tx.add(this.#deepBook.getLevel2TicksFromMid(pool, ticks));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
@@ -212,7 +221,8 @@ export class DeepBookClient {
 	async vaultBalances(poolKey: string) {
 		const pool = this.#config.getPool(poolKey);
 
-		const tx = this.#deepBook.vaultBalances(pool);
+		const tx = new Transaction();
+		tx.add(this.#deepBook.vaultBalances(pool));
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
@@ -230,7 +240,8 @@ export class DeepBookClient {
 	}
 
 	async getPoolIdByAssets(baseType: string, quoteType: string) {
-		const tx = this.#deepBook.getPoolIdByAssets(baseType, quoteType);
+		const tx = new Transaction();
+		tx.add(this.#deepBook.getPoolIdByAssets(baseType, quoteType));
 
 		const res = await this.#config.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
@@ -243,6 +254,27 @@ export class DeepBookClient {
 		const address = ID.parse(new Uint8Array(res.results![0].returnValues![0][0]))['bytes'];
 
 		return address;
+	}
+
+	async midPrice(poolKey: string) {
+		const pool = this.#config.getPool(poolKey);
+
+		const tx = new Transaction();
+		tx.add(this.#deepBook.midPrice(pool));
+		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+
+		const res = await this.#config.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress('0xa'),
+			transactionBlock: tx,
+		});
+
+		const bytes = res.results![0].returnValues![0][0];
+		const parsed_mid_price = Number(bcs.U64.parse(new Uint8Array(bytes)));
+		const adjusted_mid_price =
+			(parsed_mid_price * baseCoin.scalar) / quoteCoin.scalar / FLOAT_SCALAR;
+
+		return adjusted_mid_price;
 	}
 
 	#getBalanceManager(managerKey: string): BalanceManager {
