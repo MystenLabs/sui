@@ -119,9 +119,9 @@ impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
     // Note: blocklisted members are always excluded.
     fn shuffle_by_stake_with_rng(
         &self,
-        // `preferences` is used as a flag here to influence the order of validators to be requested
-        //  if `Some(_)`, then we will request validators in the order of the voting power
-        //  if `None`, we still refer to voting power, but they are shuffled by randomness.
+        // `preferences` is used as a *flag* here to influence the order of validators to be requested.
+        //  * if `Some(_)`, then we will request validators in the order of the voting power
+        //  * if `None`, we still refer to voting power, but they are shuffled by randomness.
         //  to save gas cost.
         preferences: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
         // only attempt from these authorities.

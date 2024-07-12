@@ -144,7 +144,6 @@ impl GetSigsState {
                 sig_info,
             );
             // `BridgeClient` already verified individual signatures
-            // TODO: should we verify again here?
             Ok(Some(VerifiedCertifiedBridgeAction::new_from_verified(
                 certified_action,
             )))
@@ -169,20 +168,22 @@ async fn request_sign_bridge_action_into_certification(
     clients: Arc<BTreeMap<BridgeAuthorityPublicKeyBytes, Arc<BridgeClient>>>,
     state: GetSigsState,
 ) -> BridgeResult<VerifiedCertifiedBridgeAction> {
-    // `preferences` is used as a trick here to influence the order of validators to be requested
-    // if `Some(_)`, then we will request validators in the order of the voting power
-    // if `None`, we still refer to voting power, but they are shuffled by randomness
+    // `preferences` is used as a trick here to influence the order of validators to be requested.
+    // * if `Some(_)`, then we will request validators in the order of the voting power.
+    // * if `None`, we still refer to voting power, but they are shuffled by randomness.
     // Because ethereum gas price is not negligible, when the signatures are to be verified on ethereum,
     // we pass in `Some` to make sure the validators with higher voting power are requested first
     // to save gas cost.
-    let preference = if matches!(action, BridgeAction::SuiToEthBridgeAction(_)) {
-        Some(BTreeSet::new())
-    } else if matches!(action, BridgeAction::EthToSuiBridgeAction(_))
-        || action.chain_id().is_sui_chain()
-    {
-        None
-    } else {
-        Some(BTreeSet::new())
+    let preference = match action {
+        BridgeAction::SuiToEthBridgeAction(_) => Some(BTreeSet::new()),
+        BridgeAction::EthToSuiBridgeAction(_) => None,
+        _ => {
+            if action.chain_id().is_sui_chain() {
+                None
+            } else {
+                Some(BTreeSet::new())
+            }
+        }
     };
     let (result, _) = quorum_map_then_reduce_with_timeout_and_prefs(
         committee,
