@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Transaction } from '@mysten/sui/transactions';
 
-import type { Coin, Pool } from '../types/index.js';
+import type { CreatePoolAdminParams, Pool } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
 import { FLOAT_SCALAR, POOL_CREATION_FEE } from '../utils/config.js';
 
@@ -21,19 +21,14 @@ export class DeepBookAdminContract {
 		return adminCap;
 	}
 
-	createPoolAdmin = (
-		baseCoin: Coin,
-		quoteCoin: Coin,
-		deepCoinId: string,
-		tickSize: number,
-		lotSize: number,
-		minSize: number,
-		whitelisted: boolean,
-		stablePool: boolean,
-		tx: Transaction = new Transaction(),
-	) => {
-		const [creationFee] = tx.splitCoins(tx.object(deepCoinId), [tx.pure.u64(POOL_CREATION_FEE)]);
+	createPoolAdmin = (params: CreatePoolAdminParams, tx: Transaction = new Transaction()) => {
+		const { baseCoinKey, quoteCoinKey, tickSize, lotSize, minSize, whitelisted, stablePool } =
+			params;
+		const baseCoin = this.#config.getCoin(baseCoinKey);
+		const quoteCoin = this.#config.getCoin(quoteCoinKey);
+		const deepCoinId = this.#config.getCoinId('DEEP');
 
+		const [creationFee] = tx.splitCoins(tx.object(deepCoinId), [tx.pure.u64(POOL_CREATION_FEE)]);
 		const baseScalar = baseCoin.scalar;
 		const quoteScalar = quoteCoin.scalar;
 
@@ -55,8 +50,6 @@ export class DeepBookAdminContract {
 			],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
-
-		return tx;
 	};
 
 	unregisterPoolAdmin = (pool: Pool, tx: Transaction = new Transaction()) => {
@@ -65,14 +58,11 @@ export class DeepBookAdminContract {
 			arguments: [tx.object(this.#config.REGISTRY_ID), tx.object(this.#adminCap())],
 			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
 		});
-
-		return tx;
 	};
 
-	// TODO: Needs to be revised after move code is updated
-	updateDisabledVersions = (pool: Pool, tx: Transaction = new Transaction()) => {
+	updateAllowedVersions = (pool: Pool, tx: Transaction = new Transaction()) => {
 		tx.moveCall({
-			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::update_disabled_versions`,
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::update_allowed_versions`,
 			arguments: [
 				tx.object(pool.address),
 				tx.object(this.#config.REGISTRY_ID),
@@ -80,7 +70,27 @@ export class DeepBookAdminContract {
 			],
 			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
 		});
+	};
 
-		return tx;
+	enableVersion = (version: number, tx: Transaction = new Transaction()) => {
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::regsitry::enable_version`,
+			arguments: [
+				tx.object(this.#config.REGISTRY_ID),
+				tx.pure.u64(version),
+				tx.object(this.#adminCap()),
+			],
+		});
+	};
+
+	disableVersion = (version: number, tx: Transaction = new Transaction()) => {
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::regsitry::enable_version`,
+			arguments: [
+				tx.object(this.#config.REGISTRY_ID),
+				tx.pure.u64(version),
+				tx.object(this.#adminCap()),
+			],
+		});
 	};
 }
