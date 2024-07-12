@@ -68,29 +68,29 @@ const DEFAULT_INDEXER_PORT: u16 = 9124;
 #[cfg(feature = "indexer")]
 #[derive(Args)]
 pub struct IndexerFeatureArgs {
-    /// Start an indexer with default host and port: 127.0.0.1:9124. This flag accepts also a port,
-    /// a host, or both (e.g., 127.0.0.1:9124).
+    /// Start an indexer with default host and port: 0.0.0.0:9124. This flag accepts also a port,
+    /// a host, or both (e.g., 0.0.0.0:9124).
     /// When providing a specific value, please use the = sign between the flag and value:
     /// `--with-indexer=6124` or `--with-indexer=0.0.0.0`, or `--with-indexer=0.0.0.0:9124`
     /// The indexer will be started in writer mode and reader mode.
     #[clap(long,
-            default_value = "127.0.0.1:9124",
-            default_missing_value = "127.0.0.1:9124",
+            default_value = "0.0.0.0:9124",
+            default_missing_value = "0.0.0.0:9124",
             num_args = 0..=1,
             require_equals = true,
             value_name = "INDEXER_HOST_PORT",
         )]
     with_indexer: Option<String>,
 
-    /// Start a GraphQL server on localhost and port: 127.0.0.1:9125. This flag accepts also a port,
-    /// a host, or both (e.g., 127.0.0.1:9125).
+    /// Start a GraphQL server with default host and port: 0.0.0.0:9125. This flag accepts also a
+    /// port, a host, or both (e.g., 0.0.0.0:9125).
     /// When providing a specific value, please use the = sign between the flag and value:
     /// `--with-graphql=6124` or `--with-graphql=0.0.0.0`, or `--with-graphql=0.0.0.0:9125`
     /// Note that GraphQL requires a running indexer, which will be enabled by default if the
     /// `--with-indexer` flag is not set.
     #[clap(
             long,
-            default_missing_value = "127.0.0.1:9125",
+            default_missing_value = "0.0.0.0:9125",
             num_args = 0..=1,
             require_equals = true,
             value_name = "GRAPHQL_HOST_PORT"
@@ -164,13 +164,13 @@ pub enum SuiCommand {
         #[clap(long)]
         force_regenesis: bool,
 
-        /// Start a faucet with default host and port: 127.0.0.1:9123. This flag accepts also a
-        /// port, a host, or both (e.g., 127.0.0.1:9123).
+        /// Start a faucet with default host and port: 0.0.0.0:9123. This flag accepts also a
+        /// port, a host, or both (e.g., 0.0.0.0:9123).
         /// When providing a specific value, please use the = sign between the flag and value:
         /// `--with-faucet=6124` or `--with-faucet=0.0.0.0`, or `--with-faucet=0.0.0.0:9123`
         #[clap(
             long,
-            default_missing_value = "127.0.0.1:9123",
+            default_missing_value = "0.0.0.0:9123",
             num_args = 0..=1,
             require_equals = true,
             value_name = "FAUCET_HOST_PORT",
@@ -673,7 +673,7 @@ async fn start(
 
     #[cfg(feature = "indexer")]
     if let Some(input) = with_indexer {
-        let indexer_address = parse_host_port(Some(input), DEFAULT_INDEXER_PORT)
+        let indexer_address = parse_host_port(input, DEFAULT_INDEXER_PORT)
             .map_err(|_| anyhow!("Invalid indexer host and port"))?;
         tracing::info!("Starting the indexer service at {indexer_address}");
         // Start in writer mode
@@ -699,7 +699,7 @@ async fn start(
 
     #[cfg(feature = "indexer")]
     if let Some(input) = with_graphql {
-        let graphql_address = parse_host_port(Some(input), DEFAULT_GRAPHQL_PORT)
+        let graphql_address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
             .map_err(|_| anyhow!("Invalid graphql host and port"))?;
         tracing::info!("Starting the GraphQL service at {graphql_address}");
         let graphql_connection_config = ConnectionConfig::new(
@@ -720,7 +720,7 @@ async fn start(
     }
 
     if let Some(input) = with_faucet {
-        let faucet_address = parse_host_port(Some(input), DEFAULT_FAUCET_PORT)
+        let faucet_address = parse_host_port(input, DEFAULT_FAUCET_PORT)
             .map_err(|_| anyhow!("Invalid faucet host and port"))?;
         tracing::info!("Starting the faucet service at {faucet_address}");
         let config_dir = if force_regenesis {
@@ -1156,18 +1156,25 @@ fn read_line() -> Result<String, anyhow::Error> {
     Ok(s.trim_end().to_string())
 }
 
-pub fn parse_host_port(input: Option<String>, port: u16) -> Result<SocketAddr, AddrParseError> {
-    if let Some(input) = input {
-        if input.contains(':') {
-            input.parse::<SocketAddr>()
-        } else if input.contains('.') {
-            format!("{input}:{port}").parse::<SocketAddr>()
-        } else if input.is_empty() {
-            format!("127.0.0.1:{port}").parse::<SocketAddr>()
-        } else {
-            format!("127.0.0.1:{input}").parse::<SocketAddr>()
-        }
+/// Parse the input string into a SocketAddr, with a default port if none is provided.
+pub fn parse_host_port(
+    input: String,
+    default_port_if_missing: u16,
+) -> Result<SocketAddr, AddrParseError> {
+    let default_host = "0.0.0.0";
+    let mut input = input;
+    if input.contains("localhost") {
+        input = input.replace("localhost", "127.0.0.1");
+    }
+    if input.contains(':') {
+        input.parse::<SocketAddr>()
+    } else if input.contains('.') {
+        format!("{input}:{default_port_if_missing}").parse::<SocketAddr>()
+    } else if input.is_empty() {
+        format!("{default_host}:{default_port_if_missing}").parse::<SocketAddr>()
+    } else if !input.is_empty() {
+        format!("{default_host}:{input}").parse::<SocketAddr>()
     } else {
-        format!("127.0.0.1:{port}").parse::<SocketAddr>()
+        format!("{default_host}:{default_port_if_missing}").parse::<SocketAddr>()
     }
 }

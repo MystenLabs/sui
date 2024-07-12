@@ -3937,35 +3937,32 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_parse_host_port() {
     let input = "127.0.0.0";
-    let result = parse_host_port(Some(input.to_string()), 9123).unwrap();
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
     assert_eq!(result, SocketAddr::from_str("127.0.0.0:9123").unwrap());
 
     let input = "127.0.0.5:9124";
-    let result = parse_host_port(Some(input.to_string()), 9123).unwrap();
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
     assert_eq!(result, SocketAddr::from_str("127.0.0.5:9124").unwrap());
 
     let input = "9090";
-    let result = parse_host_port(Some(input.to_string()), 9123).unwrap();
-    assert_eq!(result, SocketAddr::from_str("127.0.0.1:9090").unwrap());
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, SocketAddr::from_str("0.0.0.0:9090").unwrap());
 
     let input = "";
-    let result = parse_host_port(Some(input.to_string()), 9123).unwrap();
-    assert_eq!(result, SocketAddr::from_str("127.0.0.1:9123").unwrap());
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, SocketAddr::from_str("0.0.0.0:9123").unwrap());
 
-    let result = parse_host_port(None, 9123).unwrap();
-    assert_eq!(result, SocketAddr::from_str("127.0.0.1:9123").unwrap());
-
-    let result = parse_host_port(None, 9899).unwrap();
+    let result = parse_host_port("localhost".to_string(), 9899).unwrap();
     assert_eq!(result, SocketAddr::from_str("127.0.0.1:9899").unwrap());
 
     let input = "asg";
-    assert!(parse_host_port(Some(input.to_string()), 9123).is_err());
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
     let input = "127.0.0:900";
-    assert!(parse_host_port(Some(input.to_string()), 9123).is_err());
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
     let input = "127.0.0";
-    assert!(parse_host_port(Some(input.to_string()), 9123).is_err());
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
     let input = "127.";
-    assert!(parse_host_port(Some(input.to_string()), 9123).is_err());
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
     let input = "127.9.0.1:asb";
-    assert!(parse_host_port(Some(input.to_string()), 9123).is_err());
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
 }
