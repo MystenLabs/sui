@@ -693,6 +693,7 @@ impl SuiNode {
         let transaction_orchestrator = if is_full_node && run_with_range.is_none() {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_network_clients(
+                    epoch_store.epoch_start_state(),
                     state.clone(),
                     end_of_epoch_receiver,
                     &config.db_path(),
@@ -1548,6 +1549,7 @@ impl SuiNode {
 
             cur_epoch_store.record_is_safe_mode_metric(latest_system_state.safe_mode());
             let new_epoch_start_state = latest_system_state.into_epoch_start_state();
+
             let next_epoch_committee = new_epoch_start_state.get_sui_committee();
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);

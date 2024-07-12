@@ -6,9 +6,7 @@ use crate::authority_client::{
     make_authority_clients_with_timeout_config, make_network_authority_clients_with_network_config,
     AuthorityAPI, NetworkAuthorityClient,
 };
-use crate::execution_cache::ObjectCacheRead;
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
-use fastcrypto::traits::ToFromBytes;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::histogram::Histogram;
 use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard};
@@ -28,6 +26,7 @@ use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::quorum_driver_types::{GroupedErrors, QuorumDriverResponse};
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
@@ -38,8 +37,10 @@ use sui_types::{
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn, Instrument};
 
+use crate::epoch::committee_store::CommitteeStore;
+use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    default_registry, register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -56,10 +57,8 @@ use sui_types::messages_grpc::{
     ObjectInfoRequest, TransactionInfoRequest,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use tokio::time::{sleep, timeout};
-
-use crate::epoch::committee_store::CommitteeStore;
-use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 
 pub const DEFAULT_RETRIES: usize = 4;
 
@@ -509,50 +508,10 @@ impl<A: Clone> AuthorityAggregator<A> {
         committee: Committee,
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
-        registry: &Registry,
-        validator_display_names: Arc<HashMap<AuthorityName, String>>,
-    ) -> Self {
-        Self::new_with_timeouts(
-            committee,
-            committee_store,
-            authority_clients,
-            registry,
-            validator_display_names,
-            Default::default(),
-        )
-    }
-
-    pub fn new_with_timeouts(
-        committee: Committee,
-        committee_store: Arc<CommitteeStore>,
-        authority_clients: BTreeMap<AuthorityName, A>,
-        registry: &Registry,
-        validator_display_names: Arc<HashMap<AuthorityName, String>>,
-        timeouts: TimeoutConfig,
-    ) -> Self {
-        let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
-        Self {
-            committee: Arc::new(committee),
-            validator_display_names,
-            authority_clients: create_safe_clients(
-                authority_clients,
-                &committee_store,
-                &safe_client_metrics_base,
-            ),
-            metrics: Arc::new(AuthAggMetrics::new(registry)),
-            safe_client_metrics_base,
-            timeouts,
-            committee_store,
-        }
-    }
-
-    pub fn new_with_metrics(
-        committee: Committee,
-        committee_store: Arc<CommitteeStore>,
-        authority_clients: BTreeMap<AuthorityName, A>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: Arc<AuthAggMetrics>,
         validator_display_names: Arc<HashMap<AuthorityName, String>>,
+        timeouts: TimeoutConfig,
     ) -> Self {
         Self {
             committee: Arc::new(committee),
@@ -563,10 +522,31 @@ impl<A: Clone> AuthorityAggregator<A> {
             ),
             metrics: auth_agg_metrics,
             safe_client_metrics_base,
-            timeouts: Default::default(),
+            timeouts,
             committee_store,
             validator_display_names,
         }
+    }
+
+    pub fn new_for_testing(
+        committee: Committee,
+        authority_clients: BTreeMap<AuthorityName, A>,
+    ) -> Self {
+        let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
+        let registry = default_registry();
+        let safe_client_metrics_base = SafeClientMetricsBase::new(&registry);
+        let auth_agg_metrics = Arc::new(AuthAggMetrics::new(&registry));
+        let validator_display_names = Arc::new(HashMap::new());
+        let timeouts = TimeoutConfig::default();
+        Self::new(
+            committee,
+            committee_store,
+            authority_clients,
+            safe_client_metrics_base,
+            auth_agg_metrics,
+            validator_display_names,
+            timeouts,
+        )
     }
 
     /// This function recreates AuthorityAggregator with the given committee.
@@ -682,43 +662,37 @@ fn create_safe_clients<A: Clone>(
 }
 
 impl AuthorityAggregator<NetworkAuthorityClient> {
-    /// Create a new network authority aggregator by reading the committee and
-    /// network address information from the system state object on-chain.
-    /// This function needs metrics parameters because registry will panic
-    /// if we attempt to register already-registered metrics again.
-    pub fn new_from_local_system_state(
-        store: &Arc<dyn ObjectCacheRead>,
+    /// Create a new network authority aggregator by reading the committee and network addresses
+    /// information from the given epoch start system state.
+    pub fn new_from_epoch_start_state(
+        epoch_start_state: &EpochStartSystemState,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
-        auth_agg_metrics: AuthAggMetrics,
+        auth_agg_metrics: Arc<AuthAggMetrics>,
     ) -> Self {
-        // TODO: We should get the committee from the epoch store instead to ensure consistency.
-        // Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
-        // besides when we are reading fields for the current epoch
-        let sui_system_state = store
-            .get_sui_system_state_object_unsafe()
-            .expect("Get system state object should never fail");
-        let committee = sui_system_state.get_current_epoch_committee();
-        let validator_display_names = sui_system_state
-            .into_sui_system_state_summary()
-            .active_validators
-            .into_iter()
-            .filter_map(|s| {
-                let authority_name =
-                    AuthorityPublicKeyBytes::from_bytes(s.protocol_pubkey_bytes.as_slice());
-                if authority_name.is_err() {
-                    return None;
-                }
-                let human_readable_name = s.name;
-                Some((authority_name.unwrap(), human_readable_name))
-            })
-            .collect();
+        let committee = epoch_start_state.get_sui_committee_with_network_metadata();
+        let validator_display_names = epoch_start_state.get_authority_names_to_hostnames();
         Self::new_from_committee(
             committee,
             committee_store,
             safe_client_metrics_base,
-            Arc::new(auth_agg_metrics),
+            auth_agg_metrics,
             Arc::new(validator_display_names),
+        )
+    }
+
+    /// Create a new AuthorityAggregator using information from the given epoch start system state.
+    /// This is typically used during reconfiguration to create a new AuthorityAggregator with the
+    /// new committee and network addresses.
+    pub fn recreate_with_new_epoch_start_state(
+        &self,
+        epoch_start_state: &EpochStartSystemState,
+    ) -> Self {
+        Self::new_from_epoch_start_state(
+            epoch_start_state,
+            &self.committee_store,
+            self.safe_client_metrics_base.clone(),
+            self.metrics.clone(),
         )
     }
 
@@ -732,13 +706,14 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         let net_config = default_mysten_network_config();
         let authority_clients =
             make_network_authority_clients_with_network_config(&committee, &net_config);
-        Self::new_with_metrics(
+        Self::new(
             committee.committee().clone(),
             committee_store.clone(),
             authority_clients,
             safe_client_metrics_base,
             auth_agg_metrics,
             validator_display_names,
+            Default::default(),
         )
     }
 }
@@ -1955,13 +1930,18 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         } else {
             Arc::new(CommitteeStore::new_for_testing(committee.committee()))
         };
+        let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
+        let auth_agg_metrics = Arc::new(AuthAggMetrics::new(registry));
+
         Ok((
             AuthorityAggregator::new(
                 committee.committee().clone(),
                 committee_store,
                 auth_clients.clone(),
-                registry,
+                safe_client_metrics_base,
+                auth_agg_metrics,
                 Arc::new(HashMap::new()),
+                Default::default(),
             ),
             auth_clients,
         ))

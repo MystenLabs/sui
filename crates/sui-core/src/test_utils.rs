@@ -6,7 +6,7 @@ use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use prometheus::Registry;
+use prometheus::default_registry;
 use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -47,8 +47,9 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 use crate::authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState};
-use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
+use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator, TimeoutConfig};
 use crate::epoch::committee_store::CommitteeStore;
+use crate::safe_client::SafeClientMetricsBase;
 use crate::state_accumulator::StateAccumulator;
 use crate::test_authority_clients::LocalAuthorityClient;
 
@@ -326,11 +327,15 @@ pub async fn init_local_authorities_with_genesis(
         serial_authority_request_interval: Duration::from_secs(1),
     };
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-    AuthorityAggregator::new_with_timeouts(
+    let registry = default_registry();
+    let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
+    let auth_agg_metrics = Arc::new(AuthAggMetrics::new(registry));
+    AuthorityAggregator::new(
         committee,
         committee_store,
         clients,
-        &Registry::new(),
+        safe_client_metrics_base,
+        auth_agg_metrics,
         Arc::new(HashMap::new()),
         timeouts,
     )

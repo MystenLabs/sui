@@ -686,7 +686,7 @@ fn get_genesis_agg<A: Clone>(
     let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
-    AuthorityAggregator::new_with_timeouts(
+    AuthorityAggregator::new(
         committee,
         committee_store,
         clients,

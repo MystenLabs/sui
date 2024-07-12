@@ -504,12 +504,9 @@ mod tests {
                 )
             })
             .collect();
-        let auth_agg = AuthorityAggregator::new(
+        let auth_agg = AuthorityAggregator::new_for_testing(
             network_config.committee_with_network().committee().clone(),
-            authority_states[0].clone_committee_store(),
             clients.clone(),
-            default_registry(),
-            Arc::new(HashMap::new()),
         );
         (authority_states, Arc::new(auth_agg), clients)
     }
