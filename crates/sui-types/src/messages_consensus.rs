@@ -7,6 +7,7 @@ use crate::digests::ConsensusCommitDigest;
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
+use crate::supported_protocol_versions::SupportedProtocolVersions;
 use crate::transaction::CertifiedTransaction;
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::error::FastCryptoResult;
@@ -20,7 +21,6 @@ use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use sui_protocol_config::SupportedProtocolVersions;
 
 /// Only commit_timestamp_ms is passed to the move call currently.
 /// However we include epoch and round to make sure each ConsensusCommitPrologue has a unique tx digest.
@@ -137,7 +137,7 @@ impl Debug for ConsensusTransactionKey {
 /// Used to advertise capabilities of each authority via narwhal. This allows validators to
 /// negotiate the creation of the ChangeEpoch transaction.
 #[derive(Serialize, Deserialize, Clone, Hash)]
-pub struct AuthorityCapabilities {
+pub struct AuthorityCapabilitiesV1 {
     /// Originating authority - must match narwhal transaction source.
     pub authority: AuthorityName,
     /// Generation number set by sending authority. Used to determine which of multiple
@@ -155,7 +155,7 @@ pub struct AuthorityCapabilities {
     pub available_system_packages: Vec<ObjectRef>,
 }
 
-impl Debug for AuthorityCapabilities {
+impl Debug for AuthorityCapabilitiesV1 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AuthorityCapabilities")
             .field("authority", &self.authority.concise())
@@ -169,7 +169,7 @@ impl Debug for AuthorityCapabilities {
     }
 }
 
-impl AuthorityCapabilities {
+impl AuthorityCapabilitiesV1 {
     pub fn new(
         authority: AuthorityName,
         supported_protocol_versions: SupportedProtocolVersions,
@@ -195,7 +195,7 @@ pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
-    CapabilityNotification(AuthorityCapabilities),
+    CapabilityNotification(AuthorityCapabilitiesV1),
     NewJWKFetched(AuthorityName, JwkId, JWK),
     RandomnessStateUpdate(u64, Vec<u8>), // deprecated
     // DKG is used to generate keys for use in the random beacon protocol.
@@ -365,7 +365,7 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn new_capability_notification(capabilities: AuthorityCapabilities) -> Self {
+    pub fn new_capability_notification(capabilities: AuthorityCapabilitiesV1) -> Self {
         let mut hasher = DefaultHasher::new();
         capabilities.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
