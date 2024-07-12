@@ -30,7 +30,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
-    committee::{Committee, ProtocolVersion},
+    committee::Committee,
     error::{SuiError, SuiResult},
     transaction::*,
 };
@@ -40,7 +40,7 @@ use tracing::{debug, error, info, trace, warn, Instrument};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 use prometheus::{
-    default_registry, register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -526,27 +526,6 @@ impl<A: Clone> AuthorityAggregator<A> {
             committee_store,
             validator_display_names,
         }
-    }
-
-    pub fn new_for_testing(
-        committee: Committee,
-        authority_clients: BTreeMap<AuthorityName, A>,
-    ) -> Self {
-        let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-        let registry = default_registry();
-        let safe_client_metrics_base = SafeClientMetricsBase::new(&registry);
-        let auth_agg_metrics = Arc::new(AuthAggMetrics::new(&registry));
-        let validator_display_names = Arc::new(HashMap::new());
-        let timeouts = TimeoutConfig::default();
-        Self::new(
-            committee,
-            committee_store,
-            authority_clients,
-            safe_client_metrics_base,
-            auth_agg_metrics,
-            validator_display_names,
-            timeouts,
-        )
     }
 
     /// This function recreates AuthorityAggregator with the given committee.
@@ -1857,38 +1836,37 @@ where
         .await
     }
 }
+
+#[derive(Default)]
 pub struct AuthorityAggregatorBuilder<'a> {
     network_config: Option<&'a NetworkConfig>,
     genesis: Option<&'a Genesis>,
+    committee: Option<Committee>,
     committee_store: Option<Arc<CommitteeStore>>,
     registry: Option<&'a Registry>,
-    protocol_version: ProtocolVersion,
+    timeouts_config: Option<TimeoutConfig>,
 }
 
 impl<'a> AuthorityAggregatorBuilder<'a> {
     pub fn from_network_config(config: &'a NetworkConfig) -> Self {
         Self {
             network_config: Some(config),
-            genesis: None,
-            committee_store: None,
-            registry: None,
-            protocol_version: ProtocolVersion::MIN,
+            ..Default::default()
         }
     }
 
     pub fn from_genesis(genesis: &'a Genesis) -> Self {
         Self {
-            network_config: None,
             genesis: Some(genesis),
-            committee_store: None,
-            registry: None,
-            protocol_version: ProtocolVersion::MIN,
+            ..Default::default()
         }
     }
 
-    pub fn with_protocol_version(mut self, new_version: ProtocolVersion) -> Self {
-        self.protocol_version = new_version;
-        self
+    pub fn from_committee(committee: Committee) -> Self {
+        Self {
+            committee: Some(committee),
+            ..Default::default()
+        }
     }
 
     pub fn with_committee_store(mut self, committee_store: Arc<CommitteeStore>) -> Self {
@@ -1901,49 +1879,68 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         self
     }
 
-    pub fn build(
-        self,
-    ) -> anyhow::Result<(
-        AuthorityAggregator<NetworkAuthorityClient>,
-        BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>,
-    )> {
+    pub fn with_timeouts_config(mut self, timeouts_config: TimeoutConfig) -> Self {
+        self.timeouts_config = Some(timeouts_config);
+        self
+    }
+
+    fn get_network_committee(&self) -> CommitteeWithNetworkMetadata {
         let genesis = if let Some(network_config) = self.network_config {
             &network_config.genesis
         } else if let Some(genesis) = self.genesis {
             genesis
         } else {
-            anyhow::bail!("need either NetworkConfig or Genesis.");
+            panic!("need either NetworkConfig or Genesis.");
         };
-        let committee = genesis.committee_with_network();
-        let mut registry = &prometheus::Registry::new();
-        if self.registry.is_some() {
-            registry = self.registry.unwrap();
-        }
+        genesis.committee_with_network()
+    }
 
+    fn get_committee(&self) -> Committee {
+        self.committee
+            .clone()
+            .unwrap_or_else(|| self.get_network_committee().committee().clone())
+    }
+
+    pub fn build_network_clients(
+        self,
+    ) -> (
+        AuthorityAggregator<NetworkAuthorityClient>,
+        BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>,
+    ) {
+        let network_committee = self.get_network_committee();
         let auth_clients = make_authority_clients_with_timeout_config(
-            &committee,
+            &network_committee,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
         );
-        let committee_store = if let Some(committee_store) = self.committee_store {
-            committee_store
-        } else {
-            Arc::new(CommitteeStore::new_for_testing(committee.committee()))
-        };
+        let auth_agg = self.build_custom_clients(auth_clients.clone());
+        (auth_agg, auth_clients)
+    }
+
+    pub fn build_custom_clients<C: Clone>(
+        self,
+        authority_clients: BTreeMap<AuthorityName, C>,
+    ) -> AuthorityAggregator<C> {
+        let committee = self.get_committee();
+        let registry = Registry::new();
+        let registry = self.registry.unwrap_or(&registry);
         let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
         let auth_agg_metrics = Arc::new(AuthAggMetrics::new(registry));
 
-        Ok((
-            AuthorityAggregator::new(
-                committee.committee().clone(),
-                committee_store,
-                auth_clients.clone(),
-                safe_client_metrics_base,
-                auth_agg_metrics,
-                Arc::new(HashMap::new()),
-                Default::default(),
-            ),
-            auth_clients,
-        ))
+        let committee_store = self
+            .committee_store
+            .unwrap_or_else(|| Arc::new(CommitteeStore::new_for_testing(&committee)));
+
+        let timeouts_config = self.timeouts_config.unwrap_or_default();
+
+        AuthorityAggregator::new(
+            committee,
+            committee_store,
+            authority_clients,
+            safe_client_metrics_base,
+            auth_agg_metrics,
+            Arc::new(HashMap::new()),
+            timeouts_config,
+        )
     }
 }

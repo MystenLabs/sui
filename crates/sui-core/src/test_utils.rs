@@ -6,9 +6,8 @@ use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use prometheus::default_registry;
 use shared_crypto::intent::{Intent, IntentScope};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -47,9 +46,7 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 use crate::authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState};
-use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator, TimeoutConfig};
-use crate::epoch::committee_store::CommitteeStore;
-use crate::safe_client::SafeClientMetricsBase;
+use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder, TimeoutConfig};
 use crate::state_accumulator::StateAccumulator;
 use crate::test_authority_clients::LocalAuthorityClient;
 
@@ -313,8 +310,6 @@ pub async fn init_local_authorities_with_genesis(
     authorities: Vec<Arc<AuthorityState>>,
 ) -> AuthorityAggregator<LocalAuthorityClient> {
     telemetry_subscribers::init_for_testing();
-    let committee = genesis.committee().unwrap();
-
     let mut clients = BTreeMap::new();
     for state in authorities {
         let name = state.name;
@@ -326,19 +321,9 @@ pub async fn init_local_authorities_with_genesis(
         post_quorum_timeout: Duration::from_secs(5),
         serial_authority_request_interval: Duration::from_secs(1),
     };
-    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-    let registry = default_registry();
-    let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
-    let auth_agg_metrics = Arc::new(AuthAggMetrics::new(registry));
-    AuthorityAggregator::new(
-        committee,
-        committee_store,
-        clients,
-        safe_client_metrics_base,
-        auth_agg_metrics,
-        Arc::new(HashMap::new()),
-        timeouts,
-    )
+    AuthorityAggregatorBuilder::from_genesis(genesis)
+        .with_timeouts_config(timeouts)
+        .build_custom_clients(clients)
 }
 
 pub fn make_transfer_sui_transaction(
