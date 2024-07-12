@@ -47,7 +47,7 @@ async fn setup_test(deny_config: TransactionDenyConfig) -> (NetworkConfig, Arc<A
             .build();
     let state = TestAuthorityBuilder::new()
         .with_transaction_deny_config(deny_config)
-        .with_network_config(&network_config)
+        .with_network_config(&network_config, 0)
         .build()
         .await;
     (network_config, state)
@@ -60,7 +60,7 @@ async fn reload_state_with_new_deny_config(
 ) -> Arc<AuthorityState> {
     TestAuthorityBuilder::new()
         .with_transaction_deny_config(config)
-        .with_network_config(network_config)
+        .with_network_config(network_config, 0)
         .with_store(state.database_for_testing().clone())
         .build()
         .await
@@ -446,7 +446,7 @@ async fn test_certificate_deny() {
     );
     let digest = *tx.digest();
     let state = TestAuthorityBuilder::new()
-        .with_network_config(&network_config)
+        .with_network_config(&network_config, 0)
         .with_certificate_deny_config(
             CertificateDenyConfigBuilder::new()
                 .add_certificate_deny(digest)

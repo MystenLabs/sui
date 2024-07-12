@@ -123,12 +123,12 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
-    /// When providing a network config, we will use the first validator's
+    /// When providing a network config, we will use the \node_idx validator's
     /// key as the keypair for the new node.
-    pub fn with_network_config(self, config: &'a NetworkConfig) -> Self {
+    pub fn with_network_config(self, config: &'a NetworkConfig, node_idx: usize) -> Self {
         self.with_genesis_and_keypair(
             &config.genesis,
-            config.validator_configs()[0].protocol_key_pair(),
+            config.validator_configs()[node_idx].protocol_key_pair(),
         )
     }
 
