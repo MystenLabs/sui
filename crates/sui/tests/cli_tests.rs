@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::io::Read;
+use std::net::SocketAddr;
 use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
@@ -31,7 +32,7 @@ use sui::{
         estimate_gas_budget, Opts, OptsWithGas, SuiClientCommandResult, SuiClientCommands,
         SwitchResponse,
     },
-    sui_commands::SuiCommand,
+    sui_commands::{parse_host_port, SuiCommand},
 };
 use sui_config::{
     PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
@@ -3931,4 +3932,37 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
 
     insta::assert_snapshot!(error_string);
     Ok(())
+}
+
+#[tokio::test]
+async fn test_parse_host_port() {
+    let input = "127.0.0.0";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "127.0.0.0:9123".parse::<SocketAddr>().unwrap());
+
+    let input = "127.0.0.5:9124";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "127.0.0.5:9124".parse::<SocketAddr>().unwrap());
+
+    let input = "9090";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "0.0.0.0:9090".parse::<SocketAddr>().unwrap());
+
+    let input = "";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "0.0.0.0:9123".parse::<SocketAddr>().unwrap());
+
+    let result = parse_host_port("localhost".to_string(), 9899).unwrap();
+    assert_eq!(result, "127.0.0.1:9899".parse::<SocketAddr>().unwrap());
+
+    let input = "asg";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.0.0:900";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.0.0";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.9.0.1:asb";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
 }
