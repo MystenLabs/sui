@@ -255,8 +255,7 @@ impl Epoch {
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
     ) -> Result<ScanConnection<String, TransactionBlock>> {
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?
-            .with_scan_limit(scan_limit);
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         #[allow(clippy::unnecessary_lazy_evaluations)] // rust-lang/rust-clippy#9422
         let Some(filter) = filter

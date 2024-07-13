@@ -337,8 +337,8 @@ impl Query {
     ) -> Result<ScanConnection<String, TransactionBlock>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?
-            .with_scan_limit(scan_limit);
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
         TransactionBlock::paginate(
             ctx,
             page,

@@ -616,8 +616,7 @@ impl ObjectImpl<'_> {
         filter: Option<TransactionBlockFilter>,
         scan_limit: Option<u64>,
     ) -> Result<ScanConnection<String, TransactionBlock>> {
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?
-            .with_scan_limit(scan_limit);
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let Some(filter) = filter
             .unwrap_or_default()

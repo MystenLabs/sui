@@ -171,15 +171,6 @@ impl<C> Page<C> {
         }
     }
 
-    pub(crate) fn with_scan_limit(self, scan_limit: Option<u64>) -> Self {
-        Page {
-            after: self.after,
-            before: self.before,
-            limit: self.limit.min(scan_limit.unwrap_or(self.limit)),
-            end: self.end,
-        }
-    }
-
     pub(crate) fn after(&self) -> Option<&C> {
         self.after.as_ref()
     }
