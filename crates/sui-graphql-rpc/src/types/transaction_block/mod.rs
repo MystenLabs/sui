@@ -395,9 +395,9 @@ impl TransactionBlock {
 
         let mut conn = ScanConnection::new(prev, next);
 
-        let Some(tx_bounds) = tx_bounds else {
+        if tx_bounds.is_none() {
             return Ok(conn);
-        };
+        }
 
         for stored in transactions {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
@@ -409,6 +409,9 @@ impl TransactionBlock {
             conn.edges.push(Edge::new(cursor, transaction));
         }
 
+        // If there is a derived before and/ or after, it means the page is empty. This occurs when
+        // `scan_limit` is specified. Even though there are no matches on the page of candidates, we
+        // can continue to paginate forwards or backwards with the derived cursor.
         if let Some(before) = before {
             conn.has_previous_page = true;
             conn.start_cursor = Some(
@@ -419,7 +422,6 @@ impl TransactionBlock {
                 .encode_cursor(),
             );
         }
-
         if let Some(after) = after {
             conn.has_next_page = true;
             conn.end_cursor = Some(
@@ -430,34 +432,6 @@ impl TransactionBlock {
                 .encode_cursor(),
             );
         }
-
-        //
-        // if scan_limit.is_some() {
-        // if !prev {
-        // conn.has_previous_page = tx_bounds.scan_has_prev_page();
-        // if conn.has_previous_page {
-        // conn.start_cursor = Some(
-        // Cursor::new(tx_cursor::TransactionBlockCursor {
-        // checkpoint_viewed_at,
-        // tx_sequence_number: tx_bounds.scan_lo(),
-        // })
-        // .encode_cursor(),
-        // );
-        // }
-        // }
-        // if !next {
-        // conn.has_next_page = tx_bounds.scan_has_next_page();
-        // if conn.has_next_page {
-        // conn.end_cursor = Some(
-        // Cursor::new(tx_cursor::TransactionBlockCursor {
-        // checkpoint_viewed_at,
-        // tx_sequence_number: tx_bounds.scan_hi(),
-        // })
-        // .encode_cursor(),
-        // );
-        // }
-        // }
-        // }
 
         Ok(conn)
     }
