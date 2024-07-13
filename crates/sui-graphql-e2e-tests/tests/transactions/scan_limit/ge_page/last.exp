@@ -123,7 +123,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 
 task 26 'create-checkpoint'. lines 77-77:
 Checkpoint created: 5
 
-task 27 'run-graphql'. lines 79-97:
+task 27 'run-graphql'. lines 79-100:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -133,36 +133,48 @@ Response: {
         "endCursor": "eyJjIjo1LCJ0IjoyMX0",
         "startCursor": "eyJjIjo1LCJ0IjoyfQ"
       },
-      "nodes": [
+      "edges": [
         {
-          "digest": "CReUjLynvpq4dD4w6zekGxvSyBBQF2e3KG3K2Rs7oD8L",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 2
+          "cursor": "eyJjIjo1LCJ0IjoyfQ",
+          "node": {
+            "digest": "CReUjLynvpq4dD4w6zekGxvSyBBQF2e3KG3K2Rs7oD8L",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
             }
           }
         },
         {
-          "digest": "BB6bMUxrBJX9wANzzptKnJM3bMVFKnD4xtY8DGWthaH9",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 2
+          "cursor": "eyJjIjo1LCJ0IjozfQ",
+          "node": {
+            "digest": "BB6bMUxrBJX9wANzzptKnJM3bMVFKnD4xtY8DGWthaH9",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
             }
           }
         },
         {
-          "digest": "BhW3cLzaCgdRYc6jcmXB6DrQ6KaTfmYmb6vBNiu5xPhg",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 5
+          "cursor": "eyJjIjo1LCJ0IjoxN30",
+          "node": {
+            "digest": "BhW3cLzaCgdRYc6jcmXB6DrQ6KaTfmYmb6vBNiu5xPhg",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
             }
           }
         },
         {
-          "digest": "G7DhbdbJeze8e5kmVLNY6aVKckM7yfrzadaABv71ssjx",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 5
+          "cursor": "eyJjIjo1LCJ0IjoyMX0",
+          "node": {
+            "digest": "G7DhbdbJeze8e5kmVLNY6aVKckM7yfrzadaABv71ssjx",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
             }
           }
         }
@@ -171,7 +183,7 @@ Response: {
   }
 }
 
-task 28 'run-graphql'. lines 100-118:
+task 28 'run-graphql'. lines 103-121:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -195,7 +207,7 @@ Response: {
   }
 }
 
-task 29 'run-graphql'. lines 120-138:
+task 29 'run-graphql'. lines 123-141:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -219,7 +231,7 @@ Response: {
   }
 }
 
-task 30 'run-graphql'. lines 140-158:
+task 30 'run-graphql'. lines 143-161:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -234,7 +246,7 @@ Response: {
   }
 }
 
-task 31 'run-graphql'. lines 160-178:
+task 31 'run-graphql'. lines 163-181:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -249,7 +261,7 @@ Response: {
   }
 }
 
-task 32 'run-graphql'. lines 180-198:
+task 32 'run-graphql'. lines 183-201:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -273,7 +285,7 @@ Response: {
   }
 }
 
-task 33 'run-graphql'. lines 200-218:
+task 33 'run-graphql'. lines 203-221:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -297,7 +309,7 @@ Response: {
   }
 }
 
-task 34 'run-graphql'. lines 220-238:
+task 34 'run-graphql'. lines 223-241:
 Response: {
   "data": {
     "transactionBlocks": {

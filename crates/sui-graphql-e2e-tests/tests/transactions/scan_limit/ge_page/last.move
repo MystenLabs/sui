@@ -85,11 +85,14 @@ module Test::M1 {
       endCursor
       startCursor
     }
-    nodes {
-      digest
-      effects {
-        checkpoint {
-          sequenceNumber
+    edges {
+      cursor
+      node {
+        digest
+        effects {
+          checkpoint {
+            sequenceNumber
+          }
         }
       }
     }

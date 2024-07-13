@@ -1,73 +1,73 @@
-processed 22 tasks
+processed 21 tasks
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 6-27:
+task 1 'publish'. lines 10-31:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5798800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 29-29:
+task 2 'create-checkpoint'. lines 33-33:
 Checkpoint created: 1
 
-task 3 'run'. lines 31-31:
+task 3 'run'. lines 35-35:
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4 'run'. lines 33-33:
+task 4 'run'. lines 37-37:
 created: object(4,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 5 'run'. lines 35-35:
+task 5 'run'. lines 39-39:
 created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6 'run'. lines 37-37:
+task 6 'run'. lines 41-41:
 created: object(6,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7 'run'. lines 39-39:
+task 7 'run'. lines 43-43:
 created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'create-checkpoint'. lines 41-41:
+task 8 'create-checkpoint'. lines 45-45:
 Checkpoint created: 2
 
-task 9 'run'. lines 43-43:
+task 9 'run'. lines 47-47:
 created: object(9,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 10 'run'. lines 45-45:
+task 10 'run'. lines 49-49:
 created: object(10,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 11 'run'. lines 47-47:
+task 11 'run'. lines 51-51:
 created: object(11,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 12 'run'. lines 49-49:
+task 12 'run'. lines 53-53:
 created: object(12,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 13 'run'. lines 51-51:
+task 13 'run'. lines 55-55:
 created: object(13,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 14 'create-checkpoint'. lines 53-53:
+task 14 'create-checkpoint'. lines 57-57:
 Checkpoint created: 3
 
-task 15 'run-graphql'. lines 55-74:
+task 15 'run-graphql'. lines 59-81:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -77,84 +77,114 @@ Response: {
         "endCursor": "eyJjIjozLCJ0IjoxMX0",
         "startCursor": "eyJjIjozLCJ0IjoyfQ"
       },
-      "nodes": [
+      "edges": [
         {
-          "digest": "CReUjLynvpq4dD4w6zekGxvSyBBQF2e3KG3K2Rs7oD8L",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 2
+          "cursor": "eyJjIjozLCJ0IjoyfQ",
+          "node": {
+            "digest": "CReUjLynvpq4dD4w6zekGxvSyBBQF2e3KG3K2Rs7oD8L",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
             }
           }
         },
         {
-          "digest": "FveHd4cC5ykjtknvewFjmf6V1gHYhdkuEoUEBAV3y52h",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 2
+          "cursor": "eyJjIjozLCJ0IjozfQ",
+          "node": {
+            "digest": "FveHd4cC5ykjtknvewFjmf6V1gHYhdkuEoUEBAV3y52h",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
             }
           }
         },
         {
-          "digest": "Hgu3LePqrpyR8Vq3Ve4L2KmvErcdcz92u7YiiotkKJ1N",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 2
+          "cursor": "eyJjIjozLCJ0Ijo0fQ",
+          "node": {
+            "digest": "Hgu3LePqrpyR8Vq3Ve4L2KmvErcdcz92u7YiiotkKJ1N",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
             }
           }
         },
         {
-          "digest": "5pVYLMHazkfshyLvmQyow1UY4vn9V481KWDxUYpX65BZ",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 2
+          "cursor": "eyJjIjozLCJ0Ijo1fQ",
+          "node": {
+            "digest": "5pVYLMHazkfshyLvmQyow1UY4vn9V481KWDxUYpX65BZ",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
             }
           }
         },
         {
-          "digest": "2EwyAHiMofhbM5z5ty7XT1QXs4sNZfHmZLX513Ag8sD3",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 2
+          "cursor": "eyJjIjozLCJ0Ijo2fQ",
+          "node": {
+            "digest": "2EwyAHiMofhbM5z5ty7XT1QXs4sNZfHmZLX513Ag8sD3",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
             }
           }
         },
         {
-          "digest": "FtVAPJKNoPumPcQuyzznmZB99yhYNqdsmC7wKPj17xR3",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 3
+          "cursor": "eyJjIjozLCJ0Ijo3fQ",
+          "node": {
+            "digest": "FtVAPJKNoPumPcQuyzznmZB99yhYNqdsmC7wKPj17xR3",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
             }
           }
         },
         {
-          "digest": "4LUhoFJMmZfG71RHiRkwa9KHovrDv3S3mqUM1vu9JWKJ",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 3
+          "cursor": "eyJjIjozLCJ0Ijo4fQ",
+          "node": {
+            "digest": "4LUhoFJMmZfG71RHiRkwa9KHovrDv3S3mqUM1vu9JWKJ",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
             }
           }
         },
         {
-          "digest": "FasAf1kHei9QkZuPLBSkCdXXMtv13RbCgiywktFzx58m",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 3
+          "cursor": "eyJjIjozLCJ0Ijo5fQ",
+          "node": {
+            "digest": "FasAf1kHei9QkZuPLBSkCdXXMtv13RbCgiywktFzx58m",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
             }
           }
         },
         {
-          "digest": "AnqDERsdbEiE26CACJa6KtJTLsggisgu7yxhMJ6mU1JZ",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 3
+          "cursor": "eyJjIjozLCJ0IjoxMH0",
+          "node": {
+            "digest": "AnqDERsdbEiE26CACJa6KtJTLsggisgu7yxhMJ6mU1JZ",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
             }
           }
         },
         {
-          "digest": "GKKT2n7jc6YyJDcckP3kXhVN5FEZJEk1fN3aFzcgRyRr",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 3
+          "cursor": "eyJjIjozLCJ0IjoxMX0",
+          "node": {
+            "digest": "GKKT2n7jc6YyJDcckP3kXhVN5FEZJEk1fN3aFzcgRyRr",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
             }
           }
         }
@@ -163,7 +193,7 @@ Response: {
   }
 }
 
-task 16 'run-graphql'. lines 77-97:
+task 16 'run-graphql'. lines 84-104:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -195,7 +225,7 @@ Response: {
   }
 }
 
-task 17 'run-graphql'. lines 99-118:
+task 17 'run-graphql'. lines 106-124:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -203,17 +233,9 @@ Response: {
         "hasNextPage": true,
         "hasPreviousPage": true,
         "endCursor": "eyJjIjo0LCJ0Ijo2fQ",
-        "startCursor": "eyJjIjo0LCJ0Ijo0fQ"
+        "startCursor": "eyJjIjo0LCJ0Ijo2fQ"
       },
       "nodes": [
-        {
-          "digest": "Hgu3LePqrpyR8Vq3Ve4L2KmvErcdcz92u7YiiotkKJ1N",
-          "effects": {
-            "checkpoint": {
-              "sequenceNumber": 2
-            }
-          }
-        },
         {
           "digest": "2EwyAHiMofhbM5z5ty7XT1QXs4sNZfHmZLX513Ag8sD3",
           "effects": {
@@ -227,7 +249,7 @@ Response: {
   }
 }
 
-task 18 'run-graphql'. lines 120-139:
+task 18 'run-graphql'. lines 126-144:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -245,7 +267,23 @@ Response: {
               "sequenceNumber": 3
             }
           }
-        },
+        }
+      ]
+    }
+  }
+}
+
+task 19 'run-graphql'. lines 147-165:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": true,
+        "endCursor": "eyJjIjo0LCJ0IjoxMH0",
+        "startCursor": "eyJjIjo0LCJ0IjoxMH0"
+      },
+      "nodes": [
         {
           "digest": "AnqDERsdbEiE26CACJa6KtJTLsggisgu7yxhMJ6mU1JZ",
           "effects": {
@@ -259,7 +297,7 @@ Response: {
   }
 }
 
-task 19 'run-graphql'. lines 141-160:
+task 20 'run-graphql'. lines 167-185:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -268,36 +306,6 @@ Response: {
         "hasPreviousPage": true,
         "endCursor": null,
         "startCursor": "eyJjIjo0LCJ0IjoxMH0"
-      },
-      "nodes": []
-    }
-  }
-}
-
-task 20 'run-graphql'. lines 162-181:
-Response: {
-  "data": {
-    "transactionBlocks": {
-      "pageInfo": {
-        "hasNextPage": false,
-        "hasPreviousPage": false,
-        "endCursor": null,
-        "startCursor": null
-      },
-      "nodes": []
-    }
-  }
-}
-
-task 21 'run-graphql'. lines 183-202:
-Response: {
-  "data": {
-    "transactionBlocks": {
-      "pageInfo": {
-        "hasNextPage": false,
-        "hasPreviousPage": false,
-        "endCursor": null,
-        "startCursor": null
       },
       "nodes": []
     }
