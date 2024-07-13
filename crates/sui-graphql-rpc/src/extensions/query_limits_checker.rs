@@ -8,13 +8,12 @@ use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
 use async_graphql::extensions::{Extension, ExtensionContext, ExtensionFactory};
 use async_graphql::parser::types::{
-    Directive, ExecutableDocument, Field, FragmentDefinition, Selection, SelectionSet,
+    ExecutableDocument, Field, FragmentDefinition, Selection, SelectionSet,
 };
 use async_graphql::{value, Name, Pos, Positioned, Response, ServerResult, Value, Variables};
 use async_graphql_value::Value as GqlValue;
 use axum::http::HeaderName;
-use once_cell::sync::Lazy;
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -254,8 +253,6 @@ fn analyze_selection_set(
 
             match &selection.node {
                 Selection::Field(f) => {
-                    check_directives(&f.node.directives)?;
-
                     let current_count =
                         estimate_output_nodes_for_curr_node(f, variables, limits.default_page_size)
                             * parent_node_count;
@@ -288,7 +285,6 @@ fn analyze_selection_set(
                     // TODO: this is inefficient as we might loop over same fragment multiple times
                     // Ideally web should cache the costs of fragments we've seen before
                     // Will do as enhancement
-                    check_directives(&frag_def.node.directives)?;
                     for selection in frag_def.node.selection_set.node.items.iter() {
                         que.push_back(ToVisit {
                             selection,
@@ -300,7 +296,6 @@ fn analyze_selection_set(
                 }
 
                 Selection::InlineFragment(fs) => {
-                    check_directives(&fs.node.directives)?;
                     for selection in fs.node.selection_set.node.items.iter() {
                         que.push_back(ToVisit {
                             selection,
@@ -380,35 +375,6 @@ fn check_limits(
         ));
     }
 
-    Ok(())
-}
-
-// TODO: make this configurable
-fn allowed_directives() -> &'static BTreeSet<&'static str> {
-    static DIRECTIVES: Lazy<BTreeSet<&str>> =
-        Lazy::new(|| BTreeSet::from_iter(["skip", "include"]));
-
-    Lazy::force(&DIRECTIVES)
-}
-
-fn check_directives(directives: &[Positioned<Directive>]) -> ServerResult<()> {
-    for directive in directives {
-        if !allowed_directives().contains(&directive.node.name.node.as_str()) {
-            return Err(graphql_error_at_pos(
-                code::BAD_USER_INPUT,
-                format!(
-                    "Directive `@{}` is not supported. Supported directives are {}",
-                    directive.node.name.node,
-                    allowed_directives()
-                        .iter()
-                        .map(|s| format!("`@{}`", s))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-                directive.pos,
-            ));
-        }
-    }
     Ok(())
 }
 
