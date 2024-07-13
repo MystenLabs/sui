@@ -187,9 +187,9 @@ impl Query {
     /// from above when querying `Owner.asObject`. This can be used, for example, to get the
     /// contents of a dynamic object field when its parent was at `rootVersion`.
     ///
-    /// If `rootVersion` is left null, dynamic fields will be from a consistent snapshot of
-    /// the Sui state at the latest checkpoint known to the GraphQL RPC. Similarly,
-    /// `Owner.asObject` will return the object's version at the latest checkpoint.
+    /// If `rootVersion` is omitted, dynamic fields will be from a consistent snapshot of the Sui
+    /// state at the latest checkpoint known to the GraphQL RPC. Similarly, `Owner.asObject` will
+    /// return the object's version at the latest checkpoint.
     async fn owner(
         &self,
         ctx: &Context<'_>,
