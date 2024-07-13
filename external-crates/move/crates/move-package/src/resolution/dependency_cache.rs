@@ -66,6 +66,14 @@ impl DependencyCache {
                 if !self.fetched_deps.insert(repository_path.clone()) {
                     return Ok(());
                 }
+
+                // check if install git
+                Command::new("git").arg("--version").output().map_err(|_| {
+                    anyhow::anyhow!(
+                        "Failed to check git version, please install git to use git dependencies"
+                    )
+                })?;
+
                 let git_path = repository_path;
                 let os_git_url = OsStr::new(git_url.as_str());
                 let os_git_rev = OsStr::new(git_rev.as_str());
@@ -80,7 +88,8 @@ impl DependencyCache {
                     // If the cached folder does not exist, download and clone accordingly
                     Command::new("git")
                         .args([OsStr::new("clone"), os_git_url, git_path.as_os_str()])
-                        .output()
+                        .stdout(Stdio::inherit())
+                        .stderr(Stdio::inherit())
                         .map_err(|_| {
                             anyhow::anyhow!(
                                 "Failed to clone Git repository for package '{}'",
@@ -95,7 +104,8 @@ impl DependencyCache {
                             OsStr::new("checkout"),
                             os_git_rev,
                         ])
-                        .output()
+                        .stdout(Stdio::inherit())
+                        .stderr(Stdio::inherit())
                         .map_err(|_| {
                             anyhow::anyhow!(
                                 "Failed to checkout Git reference '{}' for package '{}'",
