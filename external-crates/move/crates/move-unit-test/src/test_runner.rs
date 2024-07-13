@@ -30,6 +30,7 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
+use move_trace_format::{trace_format::MoveTraceBuilder, trace_state_machine::TraceState};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use move_vm_test_utils::{
     gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
@@ -247,6 +248,15 @@ impl SharedTestingConfig {
     ) {
         let move_vm = MoveVM::new(self.native_function_table.clone()).unwrap();
         let extensions = extensions::new_extensions();
+
+        let mut move_tracer = MoveTraceBuilder::new();
+
+        let mut state = TraceState::new();
+        move_tracer.set_tracer(Box::new(state));
+
+        let tracer = Some(&mut move_tracer);
+        // println!("running: {:?}", function_name);
+
         let mut session =
             move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
@@ -262,13 +272,16 @@ impl SharedTestingConfig {
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
 
         let now = Instant::now();
-        let serialized_return_values_result = session.execute_function_bypass_visibility(
-            &test_plan.module_id,
-            IdentStr::new(function_name).unwrap(),
-            vec![], // no ty args, at least for now
-            serialize_values(arguments.iter()),
-            &mut gas_meter,
-        );
+        let serialized_return_values_result = session
+            .execute_function_bypass_visibility_with_tracer(
+                &test_plan.module_id,
+                IdentStr::new(function_name).unwrap(),
+                vec![], // no ty args, at least for now
+                serialize_values(arguments.iter()),
+                &mut gas_meter,
+                tracer,
+            );
+        // println!("{:#}", move_tracer.into_trace().to_json());
         let mut return_result = serialized_return_values_result.map(|res| {
             res.return_values
                 .into_iter()
