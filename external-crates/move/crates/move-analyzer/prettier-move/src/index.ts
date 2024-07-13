@@ -17,6 +17,7 @@ import * as path from 'path';
 import Parser = require('web-tree-sitter');
 import { SyntaxNode } from 'web-tree-sitter';
 import { print } from './printer';
+import { Tree } from './tree';
 import { FormattedNode, preprocess } from './preprocess';
 import {
 	Parser as PrettierParser,
@@ -29,7 +30,7 @@ import {
 /**
  * Alias for easier refactoring if the SyntaxNode is changed.
  */
-export type Node = FormattedNode;
+export type Node = Tree;
 
 export const languages: SupportLanguage[] = [
 	{
@@ -41,15 +42,15 @@ export const languages: SupportLanguage[] = [
 
 export const parsers: { [key: string]: PrettierParser } = {
 	'move-parse': {
-		parse: (text: string): Promise<SyntaxNode> => {
-			return (async (): Promise<SyntaxNode> => {
+		parse: (text: string): Promise<Node> => {
+			return (async (): Promise<Node> => {
 				await Parser.init();
 				const parser = new Parser();
 				const Lang = await Parser.Language.load(
 					path.join(__dirname, '..', 'tree-sitter-move.wasm'),
 				);
 				parser.setLanguage(Lang);
-				return parser.parse(text).rootNode;
+				return new Tree(parser.parse(text).rootNode);
 			})();
 		},
 

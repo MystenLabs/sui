@@ -9,6 +9,7 @@
  * @dev We do not provide a function to read the data inside the {Timelock<T>} to prevent capabilities from being used.
  */
 module suitears::timelock {
+
     fun calculate_pending_rewards<StakeCoin, RewardCoin>(
         acc: &Account<StakeCoin, RewardCoin>,
         stake_factor: u64,

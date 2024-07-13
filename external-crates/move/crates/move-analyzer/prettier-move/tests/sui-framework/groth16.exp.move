@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::groth16 {
+
     #[allow(unused_const)]
     // Error for input is not a valid Arkwork representation of a verifying key.
     const EInvalidVerifyingKey: u64 = 0;

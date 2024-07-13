@@ -5,6 +5,7 @@
 /// a 32-bit fractional part.
 
 module std::fixed_point32 {
+
     /// Define a fixed-point numeric type with 32 fractional bits.
     /// This is just a u64 integer but it is wrapped in a struct to
     /// make a unique type. This is a binary representation, so decimal

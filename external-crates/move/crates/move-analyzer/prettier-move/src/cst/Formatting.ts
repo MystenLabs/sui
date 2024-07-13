@@ -78,7 +78,8 @@ export function isNextLine(node: Node | null): boolean {
  * Comments are handled via the `addLeadingComments` function.
  */
 export function printLineComment(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	throw new Error('Handled by `addLeadingComments`');
+	// throw new Error('Handled by `addLeadingComments`');
+	return '';
 }
 
 /**

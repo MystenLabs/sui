@@ -14,6 +14,7 @@
 import { SyntaxNode } from 'web-tree-sitter';
 import { ParserOptions } from 'prettier';
 import { isNextLine, isFormatting, isComment, isEmptyLine } from './cst/Formatting';
+import { Node } from '.';
 
 export interface FormattedNode extends SyntaxNode {
 	/**
@@ -83,8 +84,9 @@ export interface FormattedNode extends SyntaxNode {
  * @param options
  * @returns
  */
-export function preprocess(ast: SyntaxNode, options: ParserOptions): FormattedNode {
-	return newProxy(ast as FormattedNode) as FormattedNode;
+export function preprocess(ast: Node, options: ParserOptions): Node {
+	return ast;
+	// return newProxy(ast as FormattedNode) as FormattedNode;
 }
 
 /**
@@ -96,153 +98,119 @@ export function preprocess(ast: SyntaxNode, options: ParserOptions): FormattedNo
  * @param node
  * @returns
  */
-function newProxy(node: FormattedNode): FormattedNode {
-	return new Proxy<FormattedNode>(node, {
-		get(target, prop, receiver) {
-			const result: any = Reflect.get(target, prop, receiver);
+// function newProxy(node: FormattedNode): FormattedNode {
+// 	return new Proxy<Node>(node, {
+// 		get(target, prop, receiver) {
+// 			const result: any = Reflect.get(target, prop, receiver);
 
-			// Adding a `startsOnNewLine` property to the `SyntaxNode`. When
-			// `startsOnNewLine` is accessed, it will return `true` if the
-			// previous sibling is a `next_line` node, otherwise it will return
-			// `false`.
-			if (prop === 'startsOnNewLine') {
-				return target.previousSibling?.type === 'next_line';
-			}
+// 			// Adding a `startsOnNewLine` property to the `SyntaxNode`. When
+// 			// `startsOnNewLine` is accessed, it will return `true` if the
+// 			// previous sibling is a `next_line` node, otherwise it will return
+// 			// `false`.
+// 			if (prop === 'startsOnNewLine') {
+// 				return target.previousSibling?.type === 'next_line';
+// 			}
 
-			// Adding a `shouldNewLine` property to the `SyntaxNode`. When
-			// `shouldNewLine` is accessed, it will return `true` if the next
-			// sibling is a `next_line` node, otherwise it will return `false`.
-			if (prop === 'shouldNewLine') {
-				return target.nextSibling?.type === 'next_line';
-			}
 
-			// Adding a `leadingComment` property to the `SyntaxNode`. When
-			// `leadingComment` is accessed, it will return all the comments
-			// that are before the node until the next non-comment node.
-			if (prop === 'leadingComment') {
-				const comments: string[] = [];
-				let node = target;
+// 			// Adding a `leadingComment` property to the `SyntaxNode`. When
+// 			// `leadingComment` is accessed, it will return all the comments
+// 			// that are before the node until the next non-comment node.
+// 			if (prop === 'leadingComment') {
+// 				const comments: string[] = [];
+// 				let node = target;
+// 				// leading comment must have a newline character before it
+// 				// except for the case of an empty line (it's a special case)
+// 				if (
+// 					!isEmptyLine(node) &&
+// 					(!isNextLine(node.previousSibling) ||
+// 						!isComment(node.previousSibling.previousSibling))
+// 				) {
+// 					return comments;
+// 				}
+// 				while (
+// 					(node.previousSibling && isComment(node.previousSibling)) ||
+// 					isNextLine(node.previousSibling)
+// 				) {
+// 					node = node.previousSibling;
+// 					if (isComment(node)) comments.unshift(node.text);
+// 				}
 
-				// leading comment must have a newline character before it
-				// except for the case of an empty line (it's a special case)
-				if (
-					!isEmptyLine(node) &&
-					(!isNextLine(node.previousSibling) ||
-						!isComment(node.previousSibling.previousSibling))
-				) {
-					return comments;
-				}
+// 				// Leading comment is a comment that either is the first node,
+// 				// or starts with a newline character, or the previous node is
+// 				// an empty line node.
+// 				return isNextLine(node) ||
+// 					isEmptyLine(node.previousSibling) ||
+// 					!node.previousSibling
+// 					? comments
+// 					: [];
+// 			}
 
-				while (
-					(node.previousSibling && isComment(node.previousSibling)) ||
-					isNextLine(node.previousSibling)
-				) {
-					node = node.previousSibling;
-					if (isComment(node)) comments.unshift(node.text);
-				}
+// 			// Adding a `isFormatting` property to the `SyntaxNode`. When
+// 			// `isFormatting` is accessed, it will return `true` if the node is
+// 			// a formatting node, otherwise it will return `false`.
+// 			if (prop === 'isFormatting') return isFormatting(target);
+// 			if (prop === 'isEmptyLine') return isEmptyLine(target);
+// 			if (prop === 'isNextLine') return isNextLine(target);
+// 			if (prop === 'isComment') return isComment(target);
+// 			if (prop === 'isBlockComment') return target.type === 'block_comment';
+// 			if (prop === 'isLineComment') return target.type === 'line_comment';
 
-				// Leading comment is a comment that either is the first node,
-				// or starts with a newline character, or the previous node is
-				// an empty line node.
-				return isNextLine(node) ||
-					isEmptyLine(node.previousSibling) ||
-					!node.previousSibling
-					? comments
-					: [];
-			}
 
-			// Adding a `isFormatting` property to the `SyntaxNode`. When
-			// `isFormatting` is accessed, it will return `true` if the node is
-			// a formatting node, otherwise it will return `false`.
-			if (prop === 'isFormatting') return isFormatting(target);
-			if (prop === 'isEmptyLine') return isEmptyLine(target);
-			if (prop === 'isNextLine') return isNextLine(target);
-			if (prop === 'isComment') return isComment(target);
-			if (prop === 'isBlockComment') return target.type === 'block_comment';
-			if (prop === 'isLineComment') return target.type === 'line_comment';
 
-			if (prop === 'isControlFlow') {
-				return [
-					'if_expression',
-					'while_expression',
-					'loop_expression',
-					'abort_expression',
-					'return_expression',
-				].includes(target.type);
-			}
+// 			// Returns all the named children of the node that are not formatting.
+// 			if (prop === 'nonFormattingChildren') {
+// 				return (target.namedChildren as FormattedNode[])
+// 					.filter((e) => !isFormatting(e))
+// 					.map((e) => newProxy(e));
+// 			}
 
-			if (prop === 'isList') {
-				return ['vector_expression', 'expression_list', 'block'].includes(target.type);
-			}
+// 			if (prop === 'namedAndEmptyLineChildren') {
+// 				return (target.namedChildren as FormattedNode[])
+// 					.filter((e) => !isFormatting(e) || isEmptyLine(e))
+// 					.map((e) => newProxy(e));
+// 			}
 
-			if (prop === 'isBreakableExpression') {
-				return [
-					// TODO: consider revisiting `call_expression` and `macro_call_expression`
-					// 'call_expression',
-					// 'macro_call_expression',
-					'dot_expression',
-					'vector_expression',
-					'expression_list',
-					'if_expression',
-					'pack_expression',
-					'block',
-				].includes(target.type);
-			}
+// 			// Adding a `trailingComment` property to the `SyntaxNode`. When
+// 			// `trailingComment` is accessed, it will return the first comment
+// 			// that is after the node. It is important to note that a traling
+// 			// comment must not have a new line before it!
+// 			if (prop === 'trailingComment') {
+// 				return node.nextSibling?.type === 'line_comment' ? node.nextSibling.text : null;
+// 			}
 
-			// Returns all the named children of the node that are not formatting.
-			if (prop === 'nonFormattingChildren') {
-				return (target.namedChildren as FormattedNode[])
-					.filter((e) => !isFormatting(e))
-					.map((e) => newProxy(e));
-			}
+// 			// Adding a `firstNamedChild` property to the `SyntaxNode`. When
+// 			// `firstNamedChild` is accessed, it will return the first named
+// 			// child of the node. If the node has no named children, it will
+// 			// return `null`.
+// 			//
+// 			// Uses the modified `namedChildren` getter to filter out any
+// 			// formatting nodes.
+// 			if (prop === 'firstNamedChild') {
+// 				return (target.namedChildren.length && target.namedChildren[0]) || null;
+// 			}
 
-			if (prop === 'namedAndEmptyLineChildren') {
-				return (target.namedChildren as FormattedNode[])
-					.filter((e) => !isFormatting(e) || isEmptyLine(e))
-					.map((e) => newProxy(e));
-			}
+// 			// Read the `children` property of the `SyntaxNode` and filter out
+// 			// any formatting nodes.
+// 			if (prop === 'children') {
+// 				return (result as FormattedNode[])
+// 					.filter((e) => !isNextLine(e))
+// 					.map((e) => newProxy(e));
+// 			}
 
-			// Adding a `trailingComment` property to the `SyntaxNode`. When
-			// `trailingComment` is accessed, it will return the first comment
-			// that is after the node. It is important to note that a traling
-			// comment must not have a new line before it!
-			if (prop === 'trailingComment') {
-				return node.nextSibling?.type === 'line_comment' ? node.nextSibling.text : null;
-			}
+// 			// Read the `namedChildren` property of the `SyntaxNode` and filter
+// 			// out any formatting nodes.
+// 			if (prop === 'namedChildren') {
+// 				return (result as FormattedNode[])
+// 					.filter((e) => !isNextLine(e))
+// 					.map((e) => newProxy(e));
+// 			}
 
-			// Adding a `firstNamedChild` property to the `SyntaxNode`. When
-			// `firstNamedChild` is accessed, it will return the first named
-			// child of the node. If the node has no named children, it will
-			// return `null`.
-			//
-			// Uses the modified `namedChildren` getter to filter out any
-			// formatting nodes.
-			if (prop === 'firstNamedChild') {
-				return (target.namedChildren.length && target.namedChildren[0]) || null;
-			}
+// 			// very-very weakly typed check for a `SyntaxNode`
+// 			if (typeof result === 'object' && result !== null && result.namedChildren) {
+// 				return newProxy(result);
+// 			}
 
-			// Read the `children` property of the `SyntaxNode` and filter out
-			// any formatting nodes.
-			if (prop === 'children') {
-				return (result as FormattedNode[])
-					.filter((e) => !isNextLine(e))
-					.map((e) => newProxy(e));
-			}
-
-			// Read the `namedChildren` property of the `SyntaxNode` and filter
-			// out any formatting nodes.
-			if (prop === 'namedChildren') {
-				return (result as FormattedNode[])
-					.filter((e) => !isNextLine(e))
-					.map((e) => newProxy(e));
-			}
-
-			// very-very weakly typed check for a `SyntaxNode`
-			if (typeof result === 'object' && result !== null && result.namedChildren) {
-				return newProxy(result);
-			}
-
-			return result;
-		},
-	}) as FormattedNode;
-}
+// 			return result;
+// 		},
+// 	}) as FormattedNode;
+// }

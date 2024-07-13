@@ -3,6 +3,7 @@
 
 /// Priority queue implemented using a max heap.
 module sui::priority_queue {
+
     /// For when heap is empty and there's no data to pop.
     const EPopFromEmptyHeap: u64 = 0;
 

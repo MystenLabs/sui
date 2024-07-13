@@ -3,6 +3,7 @@
 
 /// Module level doc comment.
 module test::constants {
+
     /// This is a constant.
     /// this comment should be attached to the node.
     /// what if there are 3 lines?

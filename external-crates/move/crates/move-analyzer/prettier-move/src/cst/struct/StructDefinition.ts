@@ -127,7 +127,7 @@ export function printAbilityDeclarations(
 	return [
 		' has ',
 		join(', ', path.map(print, 'nonFormattingChildren')),
-		path.next?.namedChild(0)?.type === StructDefinition.PositionalFields ? ' ' : '',
+		path.next?.namedChildren[0]?.type === StructDefinition.PositionalFields ? ' ' : '',
 	];
 }
 

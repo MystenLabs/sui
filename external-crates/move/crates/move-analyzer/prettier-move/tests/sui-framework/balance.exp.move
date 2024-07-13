@@ -5,6 +5,7 @@
 /// module to allow balance operations and can be used to implement
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance {
+
     /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
     public use fun sui::coin::from_balance as Balance.into_coin;
 

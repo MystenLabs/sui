@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::vec_set {
+
     /// This key already exists in the map
     const EKeyAlreadyExists: u64 = 0;
 

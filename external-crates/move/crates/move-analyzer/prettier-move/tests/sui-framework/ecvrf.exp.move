@@ -20,4 +20,5 @@ module sui::ecvrf {
         public_key: &vector<u8>,
         proof: &vector<u8>,
     ): bool;
+
 }

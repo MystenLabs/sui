@@ -9,6 +9,7 @@
 /// This gives Sui programmers the flexibility to extend objects on-the-fly, and it also serves as a
 /// building block for core collection types
 module sui::dynamic_field {
+
     /// The object already has a dynamic field with this name (with the value and type specified)
     const EFieldAlreadyExists: u64 = 0;
     /// Cannot load dynamic field.

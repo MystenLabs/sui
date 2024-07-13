@@ -71,15 +71,8 @@ function printModuleBody(
 	options: ParserOptions & MoveOptions,
 	print: printFn,
 ): Doc {
-	const children = path.node.namedAndEmptyLineChildren;
-	const firstNonEmpty = children.findIndex((e) => !e.isEmptyLine);
-	const lastNonEmpty = children.reverse().findIndex((e) => !e.isEmptyLine);
-	const printed = path
-		.map(print, 'namedAndEmptyLineChildren')
-		.slice(
-			firstNonEmpty !== -1 ? firstNonEmpty : 0,
-			lastNonEmpty !== 0 ? -lastNonEmpty : children.length,
-		);
+	// const children = path.node.namedAndEmptyLineChildren;
+	const printed = path.map(print, 'namedAndEmptyLineChildren');
 
 	return ['{', indent(hardline), indent(join(hardline, printed)), hardline, '}'];
 }

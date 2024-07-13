@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::vdf {
+
     #[allow(unused_const)]
     const EInvalidInput: u64 = 0;
 

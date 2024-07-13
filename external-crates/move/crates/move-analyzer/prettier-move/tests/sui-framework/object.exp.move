@@ -216,4 +216,5 @@ module sui::object {
     public fun last_created(ctx: &TxContext): ID {
         ID { bytes: ctx.last_created_object_id() }
     }
+
 }

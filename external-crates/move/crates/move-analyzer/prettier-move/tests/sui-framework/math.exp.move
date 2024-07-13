@@ -3,6 +3,7 @@
 
 /// DEPRECATED, use the each integer type's individual module instead, e.g. `std::u64`
 module sui::math {
+
     /// DEPRECATED, use `std::u64::max` instead
     public fun max(x: u64, y: u64): u64 {
         x.max(y)

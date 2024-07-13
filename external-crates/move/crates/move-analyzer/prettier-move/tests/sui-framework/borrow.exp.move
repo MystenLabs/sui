@@ -7,6 +7,7 @@
 /// a transaction, use it and put back in the end. Hot-potato `Borrow` makes
 /// sure the object is returned and was not swapped for another one.
 module sui::borrow {
+
     /// The `Borrow` does not match the `Referent`.
     const EWrongBorrow: u64 = 0;
     /// An attempt to swap the `Referent.value` with another object of the same type.

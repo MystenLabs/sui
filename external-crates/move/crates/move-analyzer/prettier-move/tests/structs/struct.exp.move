@@ -1,4 +1,5 @@
 module test::structs {
+
     struct Empty {}
 
     public struct Public {}
@@ -64,4 +65,5 @@ module test::structs {
         PositionalFieldsWithAbilities,
         PositionalFieldsWithAbilities,
     )
+
 }

@@ -3,6 +3,7 @@
 
 /// HEX (Base16) encoding utility.
 module sui::hex {
+
     const EInvalidHexLength: u64 = 0;
     const ENotValidHexCharacter: u64 = 1;
 

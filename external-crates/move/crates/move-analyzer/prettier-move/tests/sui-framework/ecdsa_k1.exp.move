@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::ecdsa_k1 {
+
     #[allow(unused_const)]
     /// Error if the public key cannot be recovered from the signature.
     const EFailToRecoverPubKey: u64 = 0;

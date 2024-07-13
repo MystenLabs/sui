@@ -5,6 +5,7 @@
 /// A variable-sized container that can hold any type. Indexing is 0-based, and
 /// vectors are growable. This module has many native functions.
 module std::vector {
+
     /// Allows calling `.to_string()` on a vector of `u8` to get a utf8 `String`.
     public use fun std::string::utf8 as vector.to_string;
 
